@@ -115,10 +115,11 @@ jobs:
             patchelf
       - run: cargo check --workspace
 
-  # ── Tests (separate jobs to save Linux minutes) ─────────────────────────────────────
+  # ── Tests (staggered to avoid concurrent limit) ─────────────────────────────────────
   test-ubuntu:
     name: Test / Ubuntu
     runs-on: ubuntu-latest
+    needs: [install-smoke]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -139,6 +140,7 @@ jobs:
   test-macos:
     name: Test / macOS
     runs-on: macos-latest
+    needs: [check]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -150,6 +152,7 @@ jobs:
   test-windows:
     name: Test / Windows
     runs-on: windows-latest
+    needs: [test-ubuntu]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
