@@ -90,10 +90,11 @@ if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; the
 fi
 
 DATE=$(date +%Y%m%d)
-TAG="v${VERSION}-${DATE}"
+FULL_VERSION="${VERSION}-${DATE}"
+TAG="v${FULL_VERSION}"
 
 echo ""
-echo "  Version: $CURRENT → $VERSION"
+echo "  Version: $CURRENT → $FULL_VERSION"
 echo "  Tag:     $TAG"
 echo ""
 read -rp "Confirm? [Y/n]: " confirm
@@ -122,7 +123,7 @@ fi
 
 echo ""
 echo "Syncing versions..."
-"$SYNC_SCRIPT" "$VERSION"
+"$SYNC_SCRIPT" "$FULL_VERSION"
 
 # --- Update lockfile if cargo is available ---
 
