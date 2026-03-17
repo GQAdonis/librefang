@@ -5,6 +5,38 @@ All notable changes to LibreFang will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.7] - 2026-03-18
+
+### Added
+
+- Add include_skills and include_tools flags to agent clone API (#366) (@houko)
+- Add event webhooks API for system events (#394) (@houko)
+- Add task queue management API (#395) (@houko)
+- Add agent monitoring and metrics API (#396) (@houko)
+- Add API input validation middleware (#398) (@houko)
+- Add webhooks management API (#400) (@houko)
+- Add 6 new bundled hand templates (#413) (@houko)
+- Add multi-agent orchestration foundation (#323) (#437) (@houko)
+- Add Feishu interactive card approval for agent permission requests (#439) (@houko)
+- Add multi-token fallback with transparent quota rotation (#441) (@houko)
+- Add JWT/service account auth to Google Chat adapter (#443) (@houko)
+- Auto-post release article to GitHub Discussions (#582) (@houko)
+- Add GET /api/integrations/:id endpoint (#1088) (@houko)
+- Add GET /api/approvals/:id endpoint (#1089) (@houko)
+- Add GET /api/sessions/:id endpoint (#1096) (@houko)
+- Telegram streaming output support with progressive typing effect (fixes #317) (#1109) (@houko)
+
+### Fixed
+
+- YAML syntax errors + auto-post release to GitHub Discussions (#567) (@houko)
+- Inherit parent env in MCP subprocess instead of clearing (#1098) (@houko)
+- Send empty object instead of null for parameterless tool calls (fixes #918) (#1108) (@houko)
+- Add missing TokenUsage fields in token rotation test (#1114) (@houko)
+
+### Other
+
+- V0.5.6-20260317 (#566) (@houko)
+
 ## [0.5.6] - 2026-03-17
 
 ### Added
