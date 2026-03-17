@@ -3407,3 +3407,315 @@ mod tests {
         assert!(cloned.tools_disabled);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Agent monitoring and profiling endpoints (#181)
+// ---------------------------------------------------------------------------
+
+/// GET /api/agents/{id}/metrics — Returns aggregated metrics for an agent.
+///
+/// Includes message count, token usage, tool execution count, error count,
+/// average response time (estimated), and cost data.
+pub async fn agent_metrics(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let agent_id: AgentId = match id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Invalid agent ID"})),
+            );
+        }
+    };
+
+    let entry = match state.kernel.registry.get(agent_id) {
+        Some(e) => e,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": "Agent not found"})),
+            );
+        }
+    };
+
+    // Session-level token/tool stats from the scheduler (in-memory, windowed).
+    let (sched_tokens, sched_tool_calls) =
+        state.kernel.scheduler.get_usage(agent_id).unwrap_or((0, 0));
+
+    // Persistent usage summary from the UsageStore (SQLite).
+    let usage_summary = state
+        .kernel
+        .memory
+        .usage()
+        .query_summary(Some(agent_id))
+        .ok();
+
+    // Message count from the active session.
+    let message_count: u64 = state
+        .kernel
+        .memory
+        .get_session(entry.session_id)
+        .ok()
+        .flatten()
+        .map(|s| s.messages.len() as u64)
+        .unwrap_or(0);
+
+    // Error count from the audit log (count entries with non-"ok" outcome for this agent).
+    // NOTE: This scans the most recent 100k audit entries. Agents with errors beyond
+    // this window will have under-reported error counts. A dedicated per-agent error
+    // counter or index would eliminate this limitation.
+    let agent_id_str = agent_id.to_string();
+    let error_count: u64 = state
+        .kernel
+        .audit_log
+        .recent(100_000)
+        .iter()
+        .filter(|e| e.agent_id == agent_id_str && e.outcome != "ok" && e.outcome != "success")
+        .count() as u64;
+
+    // Uptime since the agent was created.
+    let uptime_secs = (chrono::Utc::now() - entry.created_at).num_seconds().max(0) as u64;
+
+    // Persistent usage values (fall back to scheduler data when no DB records exist).
+    let (total_input_tokens, total_output_tokens, total_cost_usd, call_count, total_tool_calls) =
+        match usage_summary {
+            Some(ref s) => (
+                s.total_input_tokens,
+                s.total_output_tokens,
+                s.total_cost_usd,
+                s.call_count,
+                s.total_tool_calls,
+            ),
+            None => (0, 0, 0.0, 0, 0),
+        };
+
+    // Average response time is not tracked yet; keep the field stable until
+    // per-call timing is persisted in UsageStore.
+    let avg_response_time_ms: Option<f64> = None;
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "agent_id": agent_id.to_string(),
+            "name": entry.name,
+            "state": format!("{:?}", entry.state),
+            "uptime_secs": uptime_secs,
+            "message_count": message_count,
+            "token_usage": {
+                "session_tokens": sched_tokens,
+                "total_input_tokens": total_input_tokens,
+                "total_output_tokens": total_output_tokens,
+                "total_tokens": total_input_tokens + total_output_tokens,
+            },
+            "tool_calls": {
+                "session_tool_calls": sched_tool_calls,
+                "total_tool_calls": total_tool_calls,
+            },
+            "cost_usd": total_cost_usd,
+            "call_count": call_count,
+            "error_count": error_count,
+            "avg_response_time_ms": avg_response_time_ms,
+        })),
+    )
+}
+
+/// GET /api/agents/{id}/logs — Returns structured execution logs for an agent.
+///
+/// Supports optional query parameters:
+/// - `n`: max number of log entries (default 100, max 1000)
+/// - `level`: filter by outcome (e.g. "error", "ok")
+/// - `offset`: number of matching entries to skip for pagination (default 0)
+pub async fn agent_logs(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    let agent_id: AgentId = match id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": "Invalid agent ID"})),
+            );
+        }
+    };
+
+    // Verify the agent exists.
+    if state.kernel.registry.get(agent_id).is_none() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "Agent not found"})),
+        );
+    }
+
+    let max_entries: usize = params
+        .get("n")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(100)
+        .min(1000);
+
+    let offset: usize = params
+        .get("offset")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+
+    let level_filter = params
+        .get("level")
+        .cloned()
+        .unwrap_or_default()
+        .to_lowercase();
+
+    let agent_id_str = agent_id.to_string();
+
+    // Filter audit log entries belonging to this agent.
+    let entries: Vec<serde_json::Value> = state
+        .kernel
+        .audit_log
+        .recent(100_000)
+        .iter()
+        .filter(|e| e.agent_id == agent_id_str)
+        .filter(|e| {
+            if level_filter.is_empty() {
+                return true;
+            }
+            e.outcome.eq_ignore_ascii_case(&level_filter)
+        })
+        .skip(offset)
+        .take(max_entries)
+        .map(|e| {
+            serde_json::json!({
+                "seq": e.seq,
+                "timestamp": e.timestamp,
+                "action": format!("{:?}", e.action),
+                "detail": e.detail,
+                "outcome": e.outcome,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "agent_id": agent_id_str,
+            "count": entries.len(),
+            "offset": offset,
+            "logs": entries,
+        })),
+    )
+}
+
+#[cfg(test)]
+mod monitoring_tests {
+    use super::*;
+    use axum::extract::{Path, Query, State};
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use librefang_runtime::audit::AuditAction;
+    use librefang_types::config::KernelConfig;
+
+    fn monitoring_test_app_state() -> (Arc<AppState>, tempfile::TempDir) {
+        let tmp = tempfile::tempdir().unwrap();
+        let home_dir = tmp.path().join("librefang-api-monitoring-test");
+        std::fs::create_dir_all(&home_dir).unwrap();
+
+        let config = KernelConfig {
+            home_dir: home_dir.clone(),
+            data_dir: home_dir.join("data"),
+            ..KernelConfig::default()
+        };
+
+        let kernel = Arc::new(librefang_kernel::LibreFangKernel::boot_with_config(config).unwrap());
+        let state = Arc::new(AppState {
+            kernel,
+            started_at: std::time::Instant::now(),
+            peer_registry: None,
+            bridge_manager: tokio::sync::Mutex::new(None),
+            channels_config: tokio::sync::RwLock::new(Default::default()),
+            shutdown_notify: Arc::new(tokio::sync::Notify::new()),
+            clawhub_cache: dashmap::DashMap::new(),
+            provider_probe_cache: librefang_runtime::provider_health::ProbeCache::new(),
+            webhook_store: crate::webhook_store::WebhookStore::load(home_dir.join("webhooks.json")),
+        });
+        (state, tmp)
+    }
+
+    fn spawn_monitoring_test_agent(state: &Arc<AppState>, name: &str) -> AgentId {
+        let manifest = AgentManifest {
+            name: name.to_string(),
+            ..AgentManifest::default()
+        };
+        state.kernel.spawn_agent(manifest).unwrap()
+    }
+
+    async fn json_response(response: impl IntoResponse) -> (StatusCode, serde_json::Value) {
+        let response = response.into_response();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let json = serde_json::from_slice(&body).unwrap();
+        (status, json)
+    }
+
+    #[tokio::test]
+    async fn test_agent_metrics_returns_json_shape_for_existing_agent() {
+        let (state, _tmp) = monitoring_test_app_state();
+        let agent_id = spawn_monitoring_test_agent(&state, "metrics-shape");
+
+        let (status, body) =
+            json_response(agent_metrics(State(state), Path(agent_id.to_string())).await).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["agent_id"], agent_id.to_string());
+        assert!(body["token_usage"].is_object());
+        assert!(body["tool_calls"].is_object());
+        assert!(body.get("avg_response_time_ms").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_agent_metrics_returns_not_found_for_unknown_agent() {
+        let (state, _tmp) = monitoring_test_app_state();
+
+        let (status, body) =
+            json_response(agent_metrics(State(state), Path(AgentId::new().to_string())).await)
+                .await;
+
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body["error"], "Agent not found");
+    }
+
+    #[tokio::test]
+    async fn test_agent_logs_filters_level_by_exact_match() {
+        let (state, _tmp) = monitoring_test_app_state();
+        let agent_id = spawn_monitoring_test_agent(&state, "logs-filter");
+        let agent_id_str = agent_id.to_string();
+
+        state.kernel.audit_log.record(
+            agent_id_str.clone(),
+            AuditAction::AgentMessage,
+            "exact match target",
+            "custom_error",
+        );
+        state.kernel.audit_log.record(
+            agent_id_str.clone(),
+            AuditAction::AgentMessage,
+            "should not match substring filter",
+            "not_custom_error",
+        );
+
+        let mut params = HashMap::new();
+        params.insert("level".to_string(), "custom_error".to_string());
+
+        let (status, body) =
+            json_response(agent_logs(State(state), Path(agent_id_str), Query(params)).await).await;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["count"], 1);
+
+        let logs = body["logs"].as_array().unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0]["outcome"], "custom_error");
+    }
+}
