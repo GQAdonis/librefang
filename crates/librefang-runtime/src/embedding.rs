@@ -205,6 +205,7 @@ pub struct BedrockEmbeddingDriver {
     model_id: String,
     access_key: Zeroizing<String>,
     secret_key: Zeroizing<String>,
+    session_token: Option<Zeroizing<String>>,
     dims: usize,
 }
 
@@ -237,6 +238,7 @@ impl BedrockEmbeddingDriver {
         let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").map_err(|_| {
             EmbeddingError::MissingApiKey("AWS_SECRET_ACCESS_KEY not set".to_string())
         })?;
+        let session_token = std::env::var("AWS_SESSION_TOKEN").ok().map(Zeroizing::new);
         let region = region
             .or_else(|| std::env::var("AWS_REGION").ok())
             .unwrap_or_else(|| "us-east-1".to_string());
@@ -249,6 +251,7 @@ impl BedrockEmbeddingDriver {
             model_id,
             access_key: Zeroizing::new(access_key),
             secret_key: Zeroizing::new(secret_key),
+            session_token,
             dims,
         })
     }
@@ -294,6 +297,7 @@ fn sigv4_signing_key(secret: &str, date: &str, region: &str, service: &str) -> V
 fn sigv4_auth_header(
     access_key: &str,
     secret_key: &str,
+    session_token: Option<&str>,
     region: &str,
     service: &str,
     host: &str,
@@ -301,16 +305,23 @@ fn sigv4_auth_header(
     payload: &[u8],
     now: &chrono::DateTime<chrono::Utc>,
 ) -> (String, String, String) {
-    let date_stamp = now.format("%Y%m%d").to_string(); // e.g. 20260322
-    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string(); // e.g. 20260322T123456Z
+    let date_stamp = now.format("%Y%m%d").to_string();
+    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
 
     let payload_hash = sha256_hex(payload);
 
-    // Canonical headers (must be sorted).
-    let canonical_headers = format!(
-        "content-type:application/json\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"
-    );
-    let signed_headers = "content-type;host;x-amz-content-sha256;x-amz-date";
+    // Canonical headers (must be sorted). Include security token if present.
+    let (canonical_headers, signed_headers) = if session_token.is_some() {
+        (
+            format!("content-type:application/json\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\nx-amz-security-token:{}\n", session_token.unwrap()),
+            "content-type;host;x-amz-content-sha256;x-amz-date;x-amz-security-token",
+        )
+    } else {
+        (
+            format!("content-type:application/json\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amz_date}\n"),
+            "content-type;host;x-amz-content-sha256;x-amz-date",
+        )
+    };
 
     // Canonical request.
     let canonical_request = format!(
@@ -360,6 +371,7 @@ impl EmbeddingDriver for BedrockEmbeddingDriver {
             let (auth, amz_date, payload_hash) = sigv4_auth_header(
                 &self.access_key,
                 &self.secret_key,
+                self.session_token.as_deref(),
                 &self.region,
                 "bedrock",
                 &host,
@@ -368,14 +380,18 @@ impl EmbeddingDriver for BedrockEmbeddingDriver {
                 &now,
             );
 
-            let resp = self
+            let mut req = self
                 .client
                 .post(&url)
                 .header("Content-Type", "application/json")
                 .header("Host", &host)
                 .header("X-Amz-Date", &amz_date)
                 .header("X-Amz-Content-Sha256", &payload_hash)
-                .header("Authorization", &auth)
+                .header("Authorization", &auth);
+            if let Some(ref token) = self.session_token {
+                req = req.header("X-Amz-Security-Token", token.as_str());
+            }
+            let resp = req
                 .body(body)
                 .send()
                 .await
