@@ -53,6 +53,12 @@ api: dashboard-build
     cd crates/librefang-api/dashboard && pnpm dev &
     cargo run -p librefang-cli -- start --foreground
 
+# Build release CLI and install to ~/.librefang/bin (uses thin LTO to avoid OOM)
+install:
+    cargo build --profile release-local -p librefang-cli
+    mkdir -p ~/.librefang/bin
+    cp target/release-local/librefang ~/.librefang/bin/librefang
+
 # Remove build artifacts
 clean:
     cargo clean

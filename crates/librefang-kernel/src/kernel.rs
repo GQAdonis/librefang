@@ -479,6 +479,62 @@ impl DeliveryTracker {
     }
 }
 
+/// Migrate old directory layout to unified workspaces layout.
+/// Old: ~/.librefang/hands/, ~/.librefang/workspaces/<agent>/
+/// New: ~/.librefang/workspaces/hands/, ~/.librefang/workspaces/agents/<agent>/
+fn migrate_workspaces_layout(home_dir: &Path) -> KernelResult<()> {
+    let workspaces_dir = home_dir.join("workspaces");
+    let agents_dir = workspaces_dir.join("agents");
+    let new_hands_dir = workspaces_dir.join("hands");
+
+    // Migrate old hands/ to workspaces/hands/
+    let old_hands_dir = home_dir.join("hands");
+    if old_hands_dir.is_dir() && !new_hands_dir.exists() {
+        info!("Migrating hands/ → workspaces/hands/");
+        std::fs::create_dir_all(&workspaces_dir).ok();
+        if let Err(e) = std::fs::rename(&old_hands_dir, &new_hands_dir) {
+            warn!("Failed to migrate hands dir: {e}");
+        }
+    }
+
+    // Migrate old workspaces/<agent>/ → workspaces/agents/<agent>/
+    // Detect: if workspaces/ has entries that are NOT "agents" or "hands", they are old agent dirs
+    if workspaces_dir.is_dir() && !agents_dir.exists() {
+        let entries: Vec<_> = std::fs::read_dir(&workspaces_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                let name = e.file_name();
+                let n = name.to_string_lossy();
+                n != "agents" && n != "hands" && e.path().is_dir()
+            })
+            .collect();
+        if !entries.is_empty() {
+            info!(
+                "Migrating {} agent workspace(s) → workspaces/agents/",
+                entries.len()
+            );
+            std::fs::create_dir_all(&agents_dir).map_err(|e| {
+                KernelError::LibreFang(LibreFangError::Internal(format!(
+                    "Failed to create agents dir: {e}"
+                )))
+            })?;
+            for entry in entries {
+                let dest = agents_dir.join(entry.file_name());
+                if let Err(e) = std::fs::rename(entry.path(), &dest) {
+                    warn!(
+                        "Failed to migrate agent workspace {}: {e}",
+                        entry.file_name().to_string_lossy()
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Create workspace directory structure for an agent.
 fn ensure_workspace(workspace: &Path) -> KernelResult<()> {
     for subdir in &["data", "output", "sessions", "skills", "logs", "memory"] {
@@ -1150,6 +1206,9 @@ impl LibreFangKernel {
         // Ensure data directory exists
         std::fs::create_dir_all(&config.data_dir)
             .map_err(|e| KernelError::BootFailed(format!("Failed to create data dir: {e}")))?;
+
+        // Migrate old directory layout (hands/, workspaces/<agent>/) to unified layout
+        migrate_workspaces_layout(&config.home_dir)?;
 
         // Ensure global shared workspace directory exists
         let workspace_dir = config.effective_workspace_dir();
@@ -2213,7 +2272,7 @@ system_prompt = "You are a helpful assistant."
         apply_budget_defaults(&self.config.budget, &mut manifest.resources);
 
         // Create workspace directory for the agent (name-based, so SOUL.md survives recreation)
-        let workspaces_root = self.config.effective_workspaces_dir();
+        let workspaces_root = self.config.effective_agent_workspaces_dir();
         let workspace_dir = resolve_workspace_dir(
             &workspaces_root,
             manifest.workspace.clone(),
@@ -2916,7 +2975,7 @@ system_prompt = "You are a helpful assistant."
         // Lazy backfill: create workspace for existing agents spawned before workspaces
         if manifest.workspace.is_none() {
             let workspace_dir = resolve_workspace_dir(
-                &self.config.effective_workspaces_dir(),
+                &self.config.effective_agent_workspaces_dir(),
                 None,
                 &manifest.name,
                 agent_id,
@@ -3804,7 +3863,7 @@ system_prompt = "You are a helpful assistant."
         // Lazy backfill: create workspace for existing agents spawned before workspaces
         if manifest.workspace.is_none() {
             let workspace_dir = resolve_workspace_dir(
-                &self.config.effective_workspaces_dir(),
+                &self.config.effective_agent_workspaces_dir(),
                 None,
                 &manifest.name,
                 agent_id,
@@ -4990,8 +5049,7 @@ system_prompt = "You are a helpful assistant."
             .join("agent.toml");
         let hands_path = self
             .config
-            .home_dir
-            .join("hands")
+            .effective_hands_dir()
             .join(name)
             .join("agent.toml");
         let toml_path = if agents_path.exists() {
@@ -5435,7 +5493,7 @@ system_prompt = "You are a helpful assistant."
 
             // Write manifest snapshot
             let safe_hand_name = safe_path_component(&manifest.name, "hand");
-            let hand_manifest_dir = self.config.home_dir.join("hands").join(safe_hand_name);
+            let hand_manifest_dir = self.config.effective_hands_dir().join(safe_hand_name);
             let hand_manifest_path = hand_manifest_dir.join("agent.toml");
             if !hand_manifest_path.exists() {
                 if let Err(e) = std::fs::create_dir_all(&hand_manifest_dir) {
@@ -5992,8 +6050,7 @@ system_prompt = "You are a helpful assistant."
                 let hand_agent_name = format!("{}-hand", hand_id);
                 let hand_toml = self
                     .config
-                    .home_dir
-                    .join("hands")
+                    .effective_hands_dir()
                     .join(&hand_agent_name)
                     .join("agent.toml");
                 if hand_toml.exists() {

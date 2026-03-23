@@ -305,7 +305,7 @@ impl HandRegistry {
             )));
         }
 
-        let hand_dir = home_dir.join("hands").join(&def.id);
+        let hand_dir = home_dir.join("workspaces").join("hands").join(&def.id);
         std::fs::create_dir_all(&hand_dir)?;
         std::fs::write(hand_dir.join("HAND.toml"), toml_content)?;
         if !skill_content.is_empty() {

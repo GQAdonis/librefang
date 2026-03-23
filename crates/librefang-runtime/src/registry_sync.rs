@@ -81,7 +81,7 @@ pub fn sync_registry(home_dir: &Path) {
     }
 
     // Clean up stale hand directories (agent.toml without HAND.toml)
-    let hands_dir = home_dir.join("hands");
+    let hands_dir = home_dir.join("workspaces").join("hands");
     if hands_dir.exists() {
         cleanup_stale_dirs(&hands_dir);
     }
@@ -244,7 +244,7 @@ pub fn resolve_home_dir_for_tests() -> std::path::PathBuf {
 
 pub fn needs_sync(home_dir: &Path) -> bool {
     !home_dir.join("providers").exists()
-        || !home_dir.join("hands").exists()
+        || !home_dir.join("workspaces").join("hands").exists()
         || !home_dir.join("agents").exists()
         || !home_dir.join("skills").exists()
         || !home_dir.join("integrations").exists()
@@ -449,7 +449,7 @@ mod tests {
     fn test_needs_sync_when_agents_dir_missing() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("providers")).unwrap();
-        std::fs::create_dir_all(tmp.path().join("hands")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspaces").join("hands")).unwrap();
 
         assert!(needs_sync(tmp.path()));
     }
@@ -458,7 +458,7 @@ mod tests {
     fn test_needs_sync_when_critical_dirs_exist() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join("providers")).unwrap();
-        std::fs::create_dir_all(tmp.path().join("hands")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("workspaces").join("hands")).unwrap();
         std::fs::create_dir_all(tmp.path().join("agents")).unwrap();
         std::fs::create_dir_all(tmp.path().join("skills")).unwrap();
         std::fs::create_dir_all(tmp.path().join("integrations")).unwrap();
@@ -579,7 +579,7 @@ mod tests {
     #[test]
     fn test_cleanup_stale_dirs() {
         let tmp = tempfile::tempdir().unwrap();
-        let hands = tmp.path().join("hands");
+        let hands = tmp.path().join("workspaces").join("hands");
 
         // Stale: has agent.toml but no HAND.toml
         let stale = hands.join("old-hand");
