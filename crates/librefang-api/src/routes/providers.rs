@@ -697,10 +697,10 @@ pub async fn set_provider_key(
             .unwrap_or_else(|e| e.into_inner());
         match guard.as_ref() {
             Some(dm) => (dm.provider.clone(), dm.api_key_env.clone()),
-            None => (
-                state.kernel.config_ref().default_model.provider.clone(),
-                state.kernel.config_ref().default_model.api_key_env.clone(),
-            ),
+            None => {
+                let dm = state.kernel.config_ref().default_model.clone();
+                (dm.provider, dm.api_key_env)
+            }
         }
     };
     let current_has_key = if current_key_env.is_empty() {
@@ -736,7 +736,7 @@ pub async fn set_provider_key(
                     model: model_id,
                     api_key_env: env_var.clone(),
                     base_url: None,
-                    message_timeout_secs: 120,
+                    ..Default::default()
                 };
                 let mut guard = state
                     .kernel
@@ -1171,7 +1171,7 @@ pub async fn set_default_provider(
             model: model_id.clone(),
             api_key_env: env_var.clone(),
             base_url: None,
-            message_timeout_secs: 120,
+            ..Default::default()
         };
         let mut guard = state
             .kernel
@@ -1447,7 +1447,8 @@ pub async fn copilot_oauth_poll(
 /// After syncing, the kernel's in-memory catalog is refreshed.
 #[utoipa::path(post, path = "/api/catalog/update", tag = "models", responses((status = 200, description = "Catalog updated", body = serde_json::Value)))]
 pub async fn catalog_update(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mirror = &state.kernel.config_ref().registry.registry_mirror;
+    let cfg = state.kernel.config_ref();
+    let mirror = &cfg.registry.registry_mirror;
     match librefang_runtime::catalog_sync::sync_catalog_to(state.kernel.home_dir(), mirror).await {
         Ok(result) => {
             // Refresh the in-memory catalog so the new models are available immediately
