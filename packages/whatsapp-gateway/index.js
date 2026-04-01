@@ -1526,10 +1526,28 @@ async function forwardToLibreFang(text, systemPrefix, phone, pushName, isOwner, 
 
           try {
             const data = JSON.parse(body);
+            // Silent completion — agent intentionally chose not to reply (NO_REPLY)
+            if (data.silent) {
+              resolve('');
+              return;
+            }
             // The /api/agents/{id}/message endpoint returns { response: "..." }
-            resolve(data.response || data.message || data.text || '');
+            const responseText = data.response || data.message || data.text || '';
+            // Safety net: strip NO_REPLY token if it leaked through as text
+            const trimmed = responseText.trim();
+            if (trimmed === 'NO_REPLY' || trimmed.endsWith('\nNO_REPLY')) {
+              resolve('');
+              return;
+            }
+            resolve(responseText);
           } catch {
-            resolve(body.trim() || '');
+            // Non-JSON fallback — still check for NO_REPLY
+            const fallback = body.trim() || '';
+            if (fallback === 'NO_REPLY' || fallback.endsWith('\nNO_REPLY')) {
+              resolve('');
+              return;
+            }
+            resolve(fallback);
           }
         });
       },
