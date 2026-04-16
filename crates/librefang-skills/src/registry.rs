@@ -272,6 +272,112 @@ impl SkillRegistry {
         self.skills.len()
     }
 
+    /// Return the skills directory path.
+    pub fn skills_dir(&self) -> &Path {
+        &self.skills_dir
+    }
+
+    /// Reload a single skill from disk (hot-reload after evolution).
+    ///
+    /// Unlike `load_skill`, this works even when frozen — it only refreshes
+    /// an existing entry, never adds a new one.
+    pub fn reload_skill(&mut self, name: &str) -> Result<(), SkillError> {
+        let skill = self
+            .skills
+            .get(name)
+            .ok_or_else(|| SkillError::NotFound(name.to_string()))?;
+        let skill_dir = skill.path.clone();
+
+        // Re-read from disk
+        let manifest_path = skill_dir.join("skill.toml");
+        let toml_str = std::fs::read_to_string(&manifest_path)?;
+        let mut manifest: SkillManifest = toml::from_str(&toml_str)?;
+
+        // Progressive loading of prompt_context.md
+        let needs_prompt_context = manifest
+            .prompt_context
+            .as_ref()
+            .is_none_or(|ctx| ctx.is_empty());
+        if needs_prompt_context {
+            let prompt_path = skill_dir.join("prompt_context.md");
+            if prompt_path.exists() {
+                if let Ok(content) = std::fs::read_to_string(&prompt_path) {
+                    if !content.is_empty() {
+                        manifest.prompt_context = Some(content);
+                    }
+                }
+            }
+        }
+
+        self.skills.insert(
+            name.to_string(),
+            InstalledSkill {
+                manifest,
+                path: skill_dir,
+                enabled: true,
+            },
+        );
+
+        info!("Hot-reloaded skill: {name}");
+        Ok(())
+    }
+
+    /// Update a skill's prompt_context in-memory and on disk via the evolution module.
+    ///
+    /// This is the primary path for agent-driven skill mutation.
+    pub fn evolve_update(
+        &mut self,
+        name: &str,
+        new_prompt_context: &str,
+        changelog: &str,
+    ) -> Result<crate::evolution::EvolutionResult, SkillError> {
+        let skill = self
+            .skills
+            .get(name)
+            .ok_or_else(|| SkillError::NotFound(name.to_string()))?
+            .clone();
+
+        let result = crate::evolution::update_skill(&skill, new_prompt_context, changelog)?;
+        self.reload_skill(name)?;
+        Ok(result)
+    }
+
+    /// Patch a skill's prompt_context using fuzzy find-and-replace.
+    pub fn evolve_patch(
+        &mut self,
+        name: &str,
+        old_str: &str,
+        new_str: &str,
+        changelog: &str,
+        replace_all: bool,
+    ) -> Result<crate::evolution::EvolutionResult, SkillError> {
+        let skill = self
+            .skills
+            .get(name)
+            .ok_or_else(|| SkillError::NotFound(name.to_string()))?
+            .clone();
+
+        let result = crate::evolution::patch_skill(&skill, old_str, new_str, changelog, replace_all)?;
+        self.reload_skill(name)?;
+        Ok(result)
+    }
+
+    /// Rollback a skill to its previous version.
+    pub fn evolve_rollback(
+        &mut self,
+        name: &str,
+    ) -> Result<crate::evolution::EvolutionResult, SkillError> {
+        let skill = self
+            .skills
+            .get(name)
+            .ok_or_else(|| SkillError::NotFound(name.to_string()))?
+            .clone();
+
+        let result = crate::evolution::rollback_skill(&skill)?;
+        self.reload_skill(name)?;
+        Ok(result)
+    }
+
     /// Load workspace-scoped skills that override global/bundled skills.
     ///
     /// Scans subdirectories of `workspace_skills_dir` using the same loading

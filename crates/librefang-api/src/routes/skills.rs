@@ -3393,59 +3393,42 @@ pub async fn create_skill(
         }
     };
 
-    // Validate name (alphanumeric + hyphens only)
-    if !is_safe_component_name(&name) {
-        return ApiErrorResponse::bad_request(
-            "Skill name must contain only letters, numbers, hyphens, and underscores",
-        )
-        .into_json_tuple();
-    }
+    let description = match body["description"].as_str() {
+        Some(d) if !d.trim().is_empty() => d.trim().to_string(),
+        _ => {
+            return ApiErrorResponse::bad_request("Missing or empty 'description' field")
+                .into_json_tuple();
+        }
+    };
 
-    let description = body["description"].as_str().unwrap_or("").to_string();
-    let runtime = body["runtime"].as_str().unwrap_or("prompt_only");
     let prompt_context = body["prompt_context"].as_str().unwrap_or("").to_string();
+    let tags: Vec<String> = body["tags"]
+        .as_array()
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .unwrap_or_default();
 
-    // Only allow prompt_only skills from the web UI for safety
-    if runtime != "prompt_only" {
-        return ApiErrorResponse::bad_request(
-            "Only prompt_only skills can be created from the web UI",
-        )
-        .into_json_tuple();
+    // Use the evolution module for safe, validated skill creation
+    let skills_dir = state.kernel.home_dir().join("skills");
+    match librefang_skills::evolution::create_skill(&skills_dir, &name, &description, &prompt_context, tags) {
+        Ok(result) => {
+            // Hot-reload skills so the new skill is available immediately
+            state.kernel.reload_skills();
+
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "status": "created",
+                    "name": result.skill_name,
+                    "version": result.version,
+                    "message": result.message,
+                })),
+            )
+        }
+        Err(e) => {
+            ApiErrorResponse::bad_request(format!("Failed to create skill: {e}"))
+                .into_json_tuple()
+        }
     }
-
-    // Write skill.toml to ~/.librefang/skills/{name}/
-    let skill_dir = state.kernel.home_dir().join("skills").join(&name);
-    if skill_dir.exists() {
-        return ApiErrorResponse::conflict(format!("Skill '{}' already exists", name))
-            .into_json_tuple();
-    }
-
-    if let Err(e) = std::fs::create_dir_all(&skill_dir) {
-        return ApiErrorResponse::internal(format!("Failed to create skill directory: {e}"))
-            .into_json_tuple();
-    }
-
-    let toml_content = format!(
-        "[skill]\nname = \"{}\"\ndescription = \"{}\"\nruntime = \"prompt_only\"\n\n[prompt]\ncontext = \"\"\"\n{}\n\"\"\"\n",
-        name,
-        description.replace('"', "\\\""),
-        prompt_context
-    );
-
-    let toml_path = skill_dir.join("skill.toml");
-    if let Err(e) = std::fs::write(&toml_path, &toml_content) {
-        return ApiErrorResponse::internal(format!("Failed to write skill.toml: {e}"))
-            .into_json_tuple();
-    }
-
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({
-            "status": "created",
-            "name": name,
-            "note": "Restart the daemon to load the new skill, or it will be available on next boot."
-        })),
-    )
 }
 
 // ── Helper functions for secrets.env management ────────────────────────

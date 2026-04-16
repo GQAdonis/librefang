@@ -3497,6 +3497,20 @@ system_prompt = "You are a helpful assistant."
                     }
                 }
 
+                // Skill evolution: check if any skill_evolve_* tools were used
+                // and hot-reload the registry so new/updated skills take effect
+                // immediately for subsequent messages.
+                let used_evolution_tool = result.decision_traces.iter().any(|t| {
+                    t.tool_name.starts_with("skill_evolve_")
+                });
+                if used_evolution_tool {
+                    tracing::info!(
+                        agent_id = %agent_id,
+                        "Agent used skill evolution tools — reloading skill registry"
+                    );
+                    self.reload_skills();
+                }
+
                 Ok(result)
             }
             Err(e) => {
