@@ -3522,18 +3522,19 @@ system_prompt = "You are a helpful assistant."
                 // to evaluate whether the approach should be saved as a skill.
                 // Runs AFTER the response is delivered so it never competes with
                 // the user's task for model attention.
-                // Cooldown: per-agent, at most one review every 5 minutes.
+                // Cooldown: per-agent, at most one review every SKILL_REVIEW_COOLDOWN_SECS.
                 let now_epoch = chrono::Utc::now().timestamp();
                 let agent_id_str = agent_id.to_string();
-                let last_review = self
-                    .skill_review_cooldowns
-                    .get(&agent_id_str)
-                    .map(|v| *v)
-                    .unwrap_or(0);
-                let cooldown_ok = now_epoch - last_review >= 300;
-                if result.skill_evolution_suggested && !used_evolution_tool && cooldown_ok {
-                    self.skill_review_cooldowns
-                        .insert(agent_id_str.clone(), now_epoch);
+                // Atomic claim: only proceed if we successfully move the
+                // cooldown tick forward for this agent. Closes the
+                // previous check-then-insert race between concurrent
+                // agent loops for the same agent id.
+                let claimed = if result.skill_evolution_suggested && !used_evolution_tool {
+                    self.try_claim_skill_review_slot(&agent_id_str, now_epoch)
+                } else {
+                    false
+                };
+                if claimed {
                     let driver = self.default_driver.clone();
                     let skills_dir = self.home_dir_boot.join("skills");
                     let trace_summary = Self::summarize_traces_for_review(&result.decision_traces);
@@ -3542,11 +3543,20 @@ system_prompt = "You are a helpful assistant."
                     let audit_log = self.audit_log.clone();
                     let agent_id_for_task = agent_id_str.clone();
                     tokio::spawn(async move {
-                        // Retry up to 2 times with exponential backoff
+                        // Retry with exponential backoff, but only for
+                        // transient errors (timeout / LLM driver failure).
+                        // Permanent errors (parse/validation) fail fast —
+                        // retrying the same prompt would only waste tokens.
+                        const MAX_ATTEMPTS: u32 = 3;
                         let mut last_err = String::new();
-                        for attempt in 0..3 {
+                        let mut attempts_used = 0u32;
+                        for attempt in 0..MAX_ATTEMPTS {
+                            attempts_used = attempt + 1;
                             if attempt > 0 {
-                                tokio::time::sleep(std::time::Duration::from_secs(2u64.pow(attempt as u32))).await;
+                                tokio::time::sleep(std::time::Duration::from_secs(
+                                    2u64.pow(attempt),
+                                ))
+                                .await;
                             }
                             match Self::background_skill_review(
                                 driver.clone(),
@@ -3562,26 +3572,35 @@ system_prompt = "You are a helpful assistant."
                                     break;
                                 }
                                 Err(e) => {
-                                    last_err = e;
+                                    let transient = Self::is_transient_review_error(&e);
                                     tracing::debug!(
-                                        attempt = attempt + 1,
-                                        error = %last_err,
+                                        attempt = attempts_used,
+                                        transient,
+                                        error = %e,
                                         "Background skill review attempt failed"
                                     );
+                                    last_err = e;
+                                    if !transient {
+                                        break;
+                                    }
                                 }
                             }
                         }
                         if !last_err.is_empty() {
                             tracing::warn!(
                                 agent_id = %agent_id_for_task,
+                                attempts = attempts_used,
                                 error = %last_err,
-                                "Background skill review failed after 3 attempts"
+                                "Background skill review failed"
                             );
-                            // Record failure in audit log for later investigation
+                            // Record failure in audit log for later
+                            // investigation. record() requires all four
+                            // args: agent_id, action, detail, outcome.
                             audit_log.record(
                                 agent_id_for_task,
                                 librefang_runtime::audit::AuditAction::AgentMessage,
-                                &format!("skill review failed: {last_err}"),
+                                "skill_review",
+                                format!("failed after {attempts_used} attempt(s): {last_err}"),
                             );
                         }
                     });
@@ -9917,20 +9936,104 @@ system_prompt = "You are a helpful assistant."
 
     // ── Background skill review ──────────────────────────────────────
 
+    /// Minimum seconds between background skill reviews for the same agent.
+    /// Prevents spamming LLM calls on busy systems.
+    const SKILL_REVIEW_COOLDOWN_SECS: i64 = 300;
+
+    /// Hard cap on entries retained in `skill_review_cooldowns` to keep
+    /// memory bounded when many ephemeral agents cycle through.
+    const SKILL_REVIEW_COOLDOWN_CAP: usize = 2048;
+
+    /// Attempt to claim a per-agent cooldown slot for a background review.
+    ///
+    /// Returns `true` iff this caller successfully advanced the agent's
+    /// last-review timestamp — meaning no other task is already running a
+    /// review for this agent within the cooldown window. Uses a DashMap
+    /// `entry()` CAS so concurrent agent loops can't both think they
+    /// claimed the slot.
+    ///
+    /// Also opportunistically purges stale entries so the map never grows
+    /// past [`Self::SKILL_REVIEW_COOLDOWN_CAP`] for long-lived kernels.
+    fn try_claim_skill_review_slot(&self, agent_id: &str, now_epoch: i64) -> bool {
+        // Opportunistic purge: if the map has grown past the cap, drop
+        // any entry older than 10× the cooldown (well past the point
+        // where it could still gate a review). Cheap since DashMap's
+        // retain is shard-local.
+        if self.skill_review_cooldowns.len() > Self::SKILL_REVIEW_COOLDOWN_CAP {
+            let cutoff = now_epoch - Self::SKILL_REVIEW_COOLDOWN_SECS.saturating_mul(10);
+            self.skill_review_cooldowns
+                .retain(|_, last| *last >= cutoff);
+        }
+
+        let mut claimed = false;
+        self.skill_review_cooldowns
+            .entry(agent_id.to_string())
+            .and_modify(|last| {
+                if now_epoch - *last >= Self::SKILL_REVIEW_COOLDOWN_SECS {
+                    *last = now_epoch;
+                    claimed = true;
+                }
+            })
+            .or_insert_with(|| {
+                claimed = true;
+                now_epoch
+            });
+        claimed
+    }
+
     /// Summarize decision traces into a compact text for the review LLM.
+    ///
+    /// Favours both ends of the trace timeline — early traces show the
+    /// initial approach, late traces show what converged — while keeping
+    /// the total summary small enough to leave room for a meaningful LLM
+    /// response.
     fn summarize_traces_for_review(traces: &[librefang_types::tool::DecisionTrace]) -> String {
-        let mut summary = String::new();
-        for (i, trace) in traces.iter().enumerate().take(20) {
-            summary.push_str(&format!(
+        const MAX_LINES: usize = 30;
+        const HEAD: usize = 12;
+        const TAIL: usize = 12;
+        const RATIONALE_PREVIEW: usize = 120;
+        const TOOL_NAME_PREVIEW: usize = 96;
+
+        fn push_trace(
+            out: &mut String,
+            index: usize,
+            trace: &librefang_types::tool::DecisionTrace,
+        ) {
+            let tool_name: String = trace.tool_name.chars().take(TOOL_NAME_PREVIEW).collect();
+            out.push_str(&format!(
                 "{}. {} → {}\n",
-                i + 1,
-                trace.tool_name,
+                index,
+                tool_name,
                 if trace.is_error { "ERROR" } else { "ok" },
             ));
             if let Some(rationale) = &trace.rationale {
-                let short = rationale.chars().take(100).collect::<String>();
-                summary.push_str(&format!("   reason: {short}\n"));
+                let short: String = rationale.chars().take(RATIONALE_PREVIEW).collect();
+                out.push_str(&format!("   reason: {short}\n"));
             }
+        }
+
+        let mut summary = String::new();
+        if traces.len() <= MAX_LINES {
+            for (i, trace) in traces.iter().enumerate() {
+                push_trace(&mut summary, i + 1, trace);
+            }
+            return summary;
+        }
+
+        // Big trace: emit the first HEAD, an elision marker, then the
+        // last TAIL — clamped so HEAD + TAIL never exceeds MAX_LINES.
+        let head = HEAD.min(MAX_LINES);
+        let tail = TAIL.min(MAX_LINES - head);
+        for (i, trace) in traces.iter().enumerate().take(head) {
+            push_trace(&mut summary, i + 1, trace);
+        }
+        let skipped = traces.len().saturating_sub(head + tail);
+        if skipped > 0 {
+            summary.push_str(&format!("… (omitted {skipped} intermediate trace(s)) …\n"));
+        }
+        let tail_start = traces.len().saturating_sub(tail);
+        for (offset, trace) in traces[tail_start..].iter().enumerate() {
+            push_trace(&mut summary, tail_start + offset + 1, trace);
         }
         summary
     }
@@ -10009,62 +10112,112 @@ system_prompt = "You are a helpful assistant."
         let parsed: serde_json::Value = serde_json::from_str(&json_str)
             .map_err(|e| format!("Failed to parse review response: {e}"))?;
 
+        // Missing action → behave as "skip". Log at debug since this is
+        // common for badly-formatted responses.
         let action = parsed["action"].as_str().unwrap_or("skip");
-        if action == "skip" {
-            tracing::debug!(
-                reason = parsed["reason"].as_str().unwrap_or(""),
-                "Background skill review: nothing to save"
-            );
-            return Ok(());
-        }
-
-        if action == "create" {
-            let name = parsed["name"]
-                .as_str()
-                .ok_or("Missing 'name' in review response")?;
-            let description = parsed["description"]
-                .as_str()
-                .ok_or("Missing 'description' in review response")?;
-            let prompt_context = parsed["prompt_context"]
-                .as_str()
-                .ok_or("Missing 'prompt_context' in review response")?;
-            let tags: Vec<String> = parsed["tags"]
-                .as_array()
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            match librefang_skills::evolution::create_skill(
-                skills_dir,
-                name,
-                description,
-                prompt_context,
-                tags,
-            ) {
-                Ok(result) => {
-                    tracing::info!(
-                        skill = name,
-                        "💾 Background skill review: created skill '{}'",
-                        result.skill_name
-                    );
-                    // Hot-reload so the new skill is available immediately
-                    if let Some(kernel) = kernel_weak.and_then(|w| w.upgrade()) {
-                        kernel.reload_skills();
-                    }
-                }
-                Err(librefang_skills::SkillError::AlreadyInstalled(_)) => {
-                    tracing::debug!(skill = name, "Skill already exists — skipping creation");
-                }
-                Err(e) => {
-                    tracing::debug!(skill = name, error = %e, "Background skill creation failed");
-                }
+        match action {
+            "skip" => {
+                tracing::debug!(
+                    reason = parsed["reason"].as_str().unwrap_or(""),
+                    "Background skill review: nothing to save"
+                );
+                return Ok(());
+            }
+            "create" => {} // handled below
+            other => {
+                // Unknown action — info-log so the operator can see what
+                // the reviewer returned. Not treated as an error: future
+                // reviewer prompts might add new actions and we should
+                // degrade gracefully.
+                tracing::info!(
+                    action = other,
+                    reason = parsed["reason"].as_str().unwrap_or(""),
+                    "Background skill review: unrecognized action, skipping"
+                );
+                return Ok(());
             }
         }
 
-        Ok(())
+        let name = parsed["name"]
+            .as_str()
+            .ok_or("Missing 'name' in review response")?;
+        let description = parsed["description"]
+            .as_str()
+            .ok_or("Missing 'description' in review response")?;
+        let prompt_context = parsed["prompt_context"]
+            .as_str()
+            .ok_or("Missing 'prompt_context' in review response")?;
+        let tags: Vec<String> = parsed["tags"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        match librefang_skills::evolution::create_skill(
+            skills_dir,
+            name,
+            description,
+            prompt_context,
+            tags,
+        ) {
+            Ok(result) => {
+                tracing::info!(
+                    skill = name,
+                    "💾 Background skill review: created skill '{}'",
+                    result.skill_name
+                );
+                // Hot-reload so the new skill is available immediately
+                if let Some(kernel) = kernel_weak.and_then(|w| w.upgrade()) {
+                    kernel.reload_skills();
+                }
+                Ok(())
+            }
+            Err(librefang_skills::SkillError::AlreadyInstalled(_)) => {
+                tracing::debug!(skill = name, "Skill already exists — skipping creation");
+                Ok(())
+            }
+            Err(librefang_skills::SkillError::SecurityBlocked(msg)) => {
+                // Security-rejected content is a permanent failure — the
+                // reviewer proposed something the scanner blocked. Surface
+                // it so the operator can inspect without triggering retry.
+                Err(format!("security_blocked: {msg}"))
+            }
+            Err(e) => {
+                tracing::debug!(skill = name, error = %e, "Background skill creation failed");
+                Err(format!("create_skill: {e}"))
+            }
+        }
+    }
+
+    /// Classify a background-review error as transient (worth retrying)
+    /// or permanent. Transient errors are network/timeout/driver faults
+    /// that may resolve on a subsequent attempt; permanent errors are
+    /// format/validation/security issues that would recur with the same
+    /// prompt and wastes tokens to retry.
+    fn is_transient_review_error(err: &str) -> bool {
+        let lower = err.to_ascii_lowercase();
+        // Transient markers emitted by our own code …
+        if lower.contains("timed out") || lower.contains("llm call failed") {
+            return true;
+        }
+        // … and common transient substrings bubbled up from drivers.
+        const TRANSIENT_MARKERS: &[&str] = &[
+            "timeout",
+            "timed out",
+            "connection",
+            "network",
+            "rate limit",
+            "rate-limit",
+            "429",
+            "503",
+            "504",
+            "overloaded",
+            "temporar", // "temporary", "temporarily"
+        ];
+        TRANSIENT_MARKERS.iter().any(|m| lower.contains(m))
     }
 
     /// Extract a JSON object from an LLM response using multiple strategies.

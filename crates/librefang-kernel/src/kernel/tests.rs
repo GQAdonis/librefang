@@ -1323,7 +1323,7 @@ fn test_extract_json_from_code_block() {
 ```
 
 That's all."#;
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_some());
     let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     assert_eq!(parsed["action"], "create");
@@ -1333,7 +1333,7 @@ That's all."#;
 #[test]
 fn test_extract_json_bare_object() {
     let text = r#"{"action": "skip", "reason": "nothing interesting"}"#;
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_some());
     let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     assert_eq!(parsed["action"], "skip");
@@ -1341,12 +1341,15 @@ fn test_extract_json_bare_object() {
 
 #[test]
 fn test_extract_json_with_surrounding_text() {
-    let text = r#"I think this should be saved.
+    // Uses r##""## because the JSON body contains `"#` (as in
+    // `"prompt_context": "# Title`) which would otherwise terminate a
+    // single-hash raw string literal early.
+    let text = r##"I think this should be saved.
 
 {"action": "create", "name": "my-skill", "description": "desc", "prompt_context": "# Title\n\nContent with {braces} inside", "tags": ["a", "b"]}
 
-Hope that helps!"#;
-    let result = Kernel::extract_json_from_llm_response(text);
+Hope that helps!"##;
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_some());
     let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     assert_eq!(parsed["action"], "create");
@@ -1359,7 +1362,7 @@ fn test_extract_json_nested_braces_in_strings() {
     let text = r#"```json
 {"action": "create", "prompt_context": "Use {placeholder} syntax for {variables}"}
 ```"#;
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_some());
     let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     assert_eq!(parsed["action"], "create");
@@ -1372,14 +1375,14 @@ fn test_extract_json_nested_braces_in_strings() {
 #[test]
 fn test_extract_json_no_json() {
     let text = "I don't think any skill should be created from this task.";
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_none());
 }
 
 #[test]
 fn test_extract_json_malformed() {
     let text = r#"{"action": "create", "name": }"#;
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     // Should return None because the extracted JSON is invalid
     assert!(result.is_none());
 }
@@ -1396,9 +1399,104 @@ And here's the real one:
 ```json
 {"action": "create", "name": "real-skill"}
 ```"#;
-    let result = Kernel::extract_json_from_llm_response(text);
+    let result = LibreFangKernel::extract_json_from_llm_response(text);
     assert!(result.is_some());
     let parsed: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
     // Should get the first valid JSON block
     assert_eq!(parsed["action"], "skip");
+}
+
+// ── Background review helper tests ──────────────────────────────────
+
+#[test]
+fn test_is_transient_review_error_timeouts() {
+    assert!(LibreFangKernel::is_transient_review_error(
+        "Background skill review timed out (30s)"
+    ));
+    assert!(LibreFangKernel::is_transient_review_error(
+        "LLM call failed: upstream connection closed"
+    ));
+    assert!(LibreFangKernel::is_transient_review_error(
+        "network unreachable"
+    ));
+}
+
+#[test]
+fn test_is_transient_review_error_rate_limits() {
+    assert!(LibreFangKernel::is_transient_review_error(
+        "LLM call failed: 429 too many requests"
+    ));
+    assert!(LibreFangKernel::is_transient_review_error(
+        "provider overloaded, try again"
+    ));
+    assert!(LibreFangKernel::is_transient_review_error(
+        "rate limit exceeded"
+    ));
+}
+
+#[test]
+fn test_is_transient_review_error_permanent() {
+    // Parse/validation errors are permanent — retrying the same prompt
+    // is guaranteed to waste tokens.
+    assert!(!LibreFangKernel::is_transient_review_error(
+        "No valid JSON found in review response"
+    ));
+    assert!(!LibreFangKernel::is_transient_review_error(
+        "Missing 'name' in review response"
+    ));
+    assert!(!LibreFangKernel::is_transient_review_error(
+        "security_blocked: prompt injection detected"
+    ));
+    assert!(!LibreFangKernel::is_transient_review_error(
+        "create_skill: Skill name must start with alphanumeric"
+    ));
+}
+
+fn make_trace(name: &str, rationale: Option<&str>) -> librefang_types::tool::DecisionTrace {
+    librefang_types::tool::DecisionTrace {
+        tool_use_id: format!("{name}_id"),
+        tool_name: name.to_string(),
+        input: serde_json::json!({}),
+        rationale: rationale.map(String::from),
+        recovered_from_text: false,
+        execution_ms: 0,
+        is_error: false,
+        output_summary: String::new(),
+        iteration: 0,
+        timestamp: chrono::Utc::now(),
+    }
+}
+
+#[test]
+fn test_summarize_traces_head_and_tail() {
+    let traces: Vec<_> = (0..60)
+        .map(|i| make_trace(&format!("tool_{i}"), Some(&format!("step {i}"))))
+        .collect();
+
+    let summary = LibreFangKernel::summarize_traces_for_review(&traces);
+
+    // First trace is present, last trace is present, middle ones were elided.
+    assert!(summary.contains("tool_0"));
+    assert!(summary.contains("tool_59"));
+    assert!(summary.contains("omitted"));
+    // Elision keeps the summary bounded.
+    let lines = summary.lines().count();
+    assert!(
+        lines < 60,
+        "summary must be smaller than the raw trace log, got {lines} lines"
+    );
+}
+
+#[test]
+fn test_summarize_traces_short_no_elision() {
+    let traces: Vec<_> = (0..5).map(|i| make_trace(&format!("t{i}"), None)).collect();
+
+    let summary = LibreFangKernel::summarize_traces_for_review(&traces);
+    assert!(!summary.contains("omitted"));
+    for i in 0..5 {
+        assert!(
+            summary.contains(&format!("t{i}")),
+            "missing t{i}: {summary}"
+        );
+    }
 }

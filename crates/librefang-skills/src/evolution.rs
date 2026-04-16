@@ -132,18 +132,45 @@ fn validate_prompt_content(content: &str) -> Result<(), SkillError> {
 
 // ── File locking ────────────────────────────────────────────────────
 
-/// Acquire an exclusive file lock on a skill directory to prevent concurrent
-/// modifications. Returns a `File` handle that holds the lock until dropped.
+/// Subdirectory (next to each skill directory) that holds per-skill lock
+/// files. Keeping the lock file *outside* the skill directory lets
+/// `delete_skill` hold the lock across the `remove_dir_all` call on
+/// Windows, where an open file handle inside the directory would block the
+/// deletion.
+const LOCK_SUBDIR: &str = ".evolution-locks";
+
+/// Acquire an exclusive file lock to serialize mutations on a skill.
 ///
-/// Uses `fs2::FileExt::lock_exclusive()` which is cross-platform (flock on
-/// Unix, LockFileEx on Windows).
+/// The lock file lives at
+/// `{skill_dir.parent}/.evolution-locks/{skill_name}.lock` so it survives
+/// the lifecycle of the skill directory itself and doesn't interfere with
+/// `remove_dir_all` on Windows.
+///
+/// Uses `fs2::FileExt::lock_exclusive()` (flock on Unix, LockFileEx on
+/// Windows).
 fn acquire_skill_lock(skill_dir: &Path) -> Result<std::fs::File, SkillError> {
-    std::fs::create_dir_all(skill_dir)?;
-    let lock_path = skill_dir.join(".evolution.lock");
+    let parent = skill_dir.parent().ok_or_else(|| {
+        SkillError::Io(std::io::Error::other(
+            "skill directory has no parent — cannot locate lock file",
+        ))
+    })?;
+    let skill_name = skill_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| {
+            SkillError::Io(std::io::Error::other(
+                "skill directory has no valid name — cannot locate lock file",
+            ))
+        })?;
+
+    let lock_dir = parent.join(LOCK_SUBDIR);
+    std::fs::create_dir_all(&lock_dir)?;
+    let lock_path = lock_dir.join(format!("{skill_name}.lock"));
+
     let lock_file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .truncate(true)
+        .truncate(false)
         .open(&lock_path)?;
     lock_file.lock_exclusive().map_err(|e| {
         SkillError::Io(std::io::Error::new(
@@ -306,6 +333,11 @@ pub fn fuzzy_find_and_replace(
 }
 
 /// Try to replace using normalized content, mapping positions back to original.
+///
+/// Match counting is line-based (not substring-based) so that a short
+/// `old_str` which happens to appear as a substring of a longer line does
+/// not trigger a false "Multiple matches" error — it simply produces no
+/// line-based match and lets the caller fall through to the next strategy.
 fn try_normalized_replace(
     original: &str,
     normalized_content: &str,
@@ -314,19 +346,12 @@ fn try_normalized_replace(
     replace_all: bool,
     strategy: MatchStrategy,
 ) -> Result<Option<FuzzyReplaceResult>, SkillError> {
+    // Cheap early-out — if the normalized substring isn't even present,
+    // no line-based match is possible either (line match ⇒ substring match).
     if !normalized_content.contains(normalized_old) {
         return Ok(None);
     }
 
-    let count = normalized_content.matches(normalized_old).count();
-    if count > 1 && !replace_all {
-        return Err(SkillError::InvalidManifest(format!(
-            "Multiple matches ({count}) via {strategy:?} — set replace_all=true or provide more context"
-        )));
-    }
-
-    // Map normalized position back to original using line-based approach.
-    // Split both into lines and find the matching line range.
     let orig_lines: Vec<&str> = original.lines().collect();
     let norm_lines: Vec<&str> = normalized_content.lines().collect();
     let old_lines: Vec<&str> = normalized_old.lines().collect();
@@ -335,30 +360,57 @@ fn try_normalized_replace(
         return Ok(None);
     }
 
-    let mut replacements_done = 0;
-    let mut result_lines: Vec<String> = Vec::new();
-    let mut i = 0;
+    // Require orig_lines and norm_lines to be aligned line-for-line (they
+    // are produced by per-line normalization, so this should always hold —
+    // but guard against future changes).
+    debug_assert_eq!(orig_lines.len(), norm_lines.len());
+
+    // First pass: count non-overlapping line-based matches.
+    let mut line_match_count = 0usize;
+    let mut j = 0usize;
+    while j + old_lines.len() <= norm_lines.len() {
+        if norm_lines[j..j + old_lines.len()] == old_lines[..] {
+            line_match_count += 1;
+            j += old_lines.len();
+        } else {
+            j += 1;
+        }
+    }
+
+    if line_match_count == 0 {
+        return Ok(None);
+    }
+
+    if line_match_count > 1 && !replace_all {
+        return Err(SkillError::InvalidManifest(format!(
+            "Multiple matches ({line_match_count}) via {strategy:?} — set replace_all=true or provide more context"
+        )));
+    }
+
+    // Second pass: perform the replacement(s).
+    let mut replacements_done = 0usize;
+    let mut result_lines: Vec<String> = Vec::with_capacity(orig_lines.len());
+    let mut i = 0usize;
 
     while i < norm_lines.len() {
-        if norm_lines[i..].len() >= old_lines.len()
-            && norm_lines[i..i + old_lines.len()] == old_lines[..]
-            && (replace_all || replacements_done == 0)
-        {
-            // Replace this block of original lines with new_str
+        let can_match = i + old_lines.len() <= norm_lines.len()
+            && norm_lines[i..i + old_lines.len()] == old_lines[..];
+        if can_match && (replace_all || replacements_done == 0) {
             result_lines.push(new_str.to_string());
             i += old_lines.len();
             replacements_done += 1;
-        } else if i < orig_lines.len() {
-            result_lines.push(orig_lines[i].to_string());
-            i += 1;
         } else {
+            // orig_lines and norm_lines are aligned, so orig_lines[i] exists.
+            result_lines.push(orig_lines[i].to_string());
             i += 1;
         }
     }
 
-    if replacements_done == 0 {
-        return Ok(None);
-    }
+    // Line-based counting told us we had matches; the second pass must agree.
+    debug_assert_eq!(
+        replacements_done,
+        if replace_all { line_match_count } else { 1 }
+    );
 
     Ok(Some(FuzzyReplaceResult {
         new_content: result_lines.join("\n"),
@@ -530,15 +582,32 @@ fn record_version(
 }
 
 /// Save old prompt_context.md as a rollback snapshot.
+///
+/// Snapshot filenames embed nanosecond precision + the process id so
+/// rapid-fire mutations (patch → rollback → patch) do not collide on a
+/// same-second boundary and silently overwrite each other. If a collision
+/// still somehow occurs we fall back to appending an incrementing suffix.
 fn save_rollback_snapshot(skill_dir: &Path, content: &str) -> Result<(), SkillError> {
     let rollback_dir = skill_dir.join(".rollback");
     std::fs::create_dir_all(&rollback_dir)?;
 
-    let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let snapshot_path = rollback_dir.join(format!("prompt_context_{timestamp}.md"));
+    let now = Utc::now();
+    let base = format!(
+        "prompt_context_{}_{:09}_{}",
+        now.format("%Y%m%d_%H%M%S"),
+        now.timestamp_subsec_nanos(),
+        std::process::id(),
+    );
+    let mut snapshot_path = rollback_dir.join(format!("{base}.md"));
+    // In the unlikely event of a clock-regression collision, disambiguate.
+    let mut dedupe = 0u32;
+    while snapshot_path.exists() {
+        dedupe += 1;
+        snapshot_path = rollback_dir.join(format!("{base}_{dedupe}.md"));
+    }
     std::fs::write(&snapshot_path, content)?;
 
-    // Keep only last MAX_VERSION_HISTORY snapshots
+    // Keep only last MAX_VERSION_HISTORY snapshots.
     let mut snapshots: Vec<_> = std::fs::read_dir(&rollback_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -547,13 +616,15 @@ fn save_rollback_snapshot(skill_dir: &Path, content: &str) -> Result<(), SkillEr
                 .is_some_and(|n| n.to_string_lossy().starts_with("prompt_context_"))
         })
         .collect();
-    snapshots.sort_by_key(|e| e.path());
+    // Sort by filename — the timestamp + nanos prefix is monotonic enough
+    // for chronological ordering within a single process.
+    snapshots.sort_by_key(|e| e.file_name());
 
-    while snapshots.len() > MAX_VERSION_HISTORY {
-        if let Some(old) = snapshots.first() {
+    if snapshots.len() > MAX_VERSION_HISTORY {
+        let excess = snapshots.len() - MAX_VERSION_HISTORY;
+        for old in snapshots.drain(..excess) {
             let _ = std::fs::remove_file(old.path());
         }
-        snapshots.remove(0);
     }
 
     Ok(())
@@ -782,13 +853,22 @@ pub fn patch_skill(
 }
 
 /// Delete an agent-evolved skill.
+///
+/// Holds the skill lock across the entire deletion so concurrent
+/// patch/update/rollback callers either observe the skill before it is
+/// removed (and succeed) or after it is removed (and return NotFound) — but
+/// never mid-deletion. The lock file lives outside the skill directory
+/// (see [`acquire_skill_lock`]), so holding it does not block
+/// `remove_dir_all`.
 pub fn delete_skill(skills_dir: &Path, name: &str) -> Result<EvolutionResult, SkillError> {
     let skill_dir = skills_dir.join(name);
     if !skill_dir.exists() {
         return Err(SkillError::NotFound(name.to_string()));
     }
 
-    // Safety check: only delete local/agent-evolved skills
+    // Safety check: only delete local/agent-evolved skills. A missing or
+    // unparseable manifest falls through — we still allow deletion so
+    // orphaned scaffolding can be cleaned up.
     let manifest_path = skill_dir.join("skill.toml");
     if manifest_path.exists() {
         if let Ok(toml_str) = std::fs::read_to_string(&manifest_path) {
@@ -805,6 +885,14 @@ pub fn delete_skill(skills_dir: &Path, name: &str) -> Result<EvolutionResult, Sk
                 }
             }
         }
+    }
+
+    // Serialize against concurrent patch/update/rollback on this skill.
+    let _lock = acquire_skill_lock(&skill_dir)?;
+
+    // Re-check existence under the lock: another delete may have won the race.
+    if !skill_dir.exists() {
+        return Err(SkillError::NotFound(name.to_string()));
     }
 
     std::fs::remove_dir_all(&skill_dir)?;
@@ -895,8 +983,8 @@ pub fn write_supporting_file(
     let skill_dir_canonical =
         std::fs::canonicalize(&skill.path).unwrap_or_else(|_| skill.path.clone());
     let target_parent = target.parent().unwrap_or(&skill.path);
-    let target_canonical = std::fs::canonicalize(target_parent)
-        .unwrap_or_else(|_| target_parent.to_path_buf());
+    let target_canonical =
+        std::fs::canonicalize(target_parent).unwrap_or_else(|_| target_parent.to_path_buf());
     if !target_canonical.starts_with(&skill_dir_canonical) {
         return Err(SkillError::SecurityBlocked(format!(
             "Resolved path escapes skill directory: {}",
@@ -961,24 +1049,22 @@ pub fn remove_supporting_file(
     let target = skill.path.join(rel_path);
 
     if !target.exists() {
-        // List available files as a hint
+        // List available files (recursively) as a hint.
         let first_component = std::path::Path::new(rel_path)
             .components()
             .next()
             .and_then(|c| c.as_os_str().to_str())
             .unwrap_or("");
         let subdir = skill.path.join(first_component);
-        let available: Vec<String> = if subdir.is_dir() {
-            std::fs::read_dir(&subdir)
-                .ok()
+        let mut available = Vec::new();
+        if subdir.is_dir() {
+            walk_files_relative(&subdir, &subdir, &mut available);
+            available.sort();
+            available = available
                 .into_iter()
-                .flatten()
-                .filter_map(|e| e.ok())
-                .map(|e| format!("{}/{}", first_component, e.file_name().to_string_lossy()))
-                .collect()
-        } else {
-            vec![]
-        };
+                .map(|rel| format!("{first_component}/{rel}"))
+                .collect();
+        }
 
         let hint = if available.is_empty() {
             String::new()
@@ -992,15 +1078,24 @@ pub fn remove_supporting_file(
 
     std::fs::remove_file(&target)?;
 
-    // Clean up empty parent directory
-    if let Some(parent) = target.parent() {
-        if parent != skill.path {
-            if let Ok(mut entries) = std::fs::read_dir(parent) {
-                if entries.next().is_none() {
-                    let _ = std::fs::remove_dir(parent);
-                }
-            }
+    // Clean up now-empty ancestor directories up to (but not including) the
+    // skill root. Walks upward so a deeply-nested removal collapses back.
+    let skill_root = skill.path.as_path();
+    let mut cursor = target.parent().map(|p| p.to_path_buf());
+    while let Some(dir) = cursor {
+        if dir.as_path() == skill_root {
+            break;
         }
+        let is_empty = std::fs::read_dir(&dir)
+            .map(|mut it| it.next().is_none())
+            .unwrap_or(false);
+        if !is_empty {
+            break;
+        }
+        if std::fs::remove_dir(&dir).is_err() {
+            break;
+        }
+        cursor = dir.parent().map(|p| p.to_path_buf());
     }
 
     info!(skill = %name, path = rel_path, "Removed supporting file");
@@ -1013,29 +1108,69 @@ pub fn remove_supporting_file(
     })
 }
 
-/// List all supporting files in a skill directory (references/, templates/, etc.).
+/// List all supporting files in a skill directory (references/, templates/,
+/// etc.), walking subdirectories recursively so that nested files created
+/// by [`write_supporting_file`] remain visible.
+///
+/// Values are file paths **relative to the subdirectory** (e.g. an entry
+/// under `"references"` might be `"guide.md"` or `"nested/guide.md"`).
+/// This matches the shape the callers already expect for flat listings.
 pub fn list_supporting_files(
     skill: &InstalledSkill,
 ) -> std::collections::HashMap<String, Vec<String>> {
     let mut files: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
     for subdir in ALLOWED_SUBDIRS {
-        let dir = skill.path.join(subdir);
-        if dir.is_dir() {
-            let entries: Vec<String> = std::fs::read_dir(&dir)
-                .ok()
-                .into_iter()
-                .flatten()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_file())
-                .map(|e| e.file_name().to_string_lossy().to_string())
-                .collect();
-            if !entries.is_empty() {
-                files.insert(subdir.to_string(), entries);
-            }
+        let root = skill.path.join(subdir);
+        if !root.is_dir() {
+            continue;
+        }
+        let mut entries = Vec::new();
+        walk_files_relative(&root, &root, &mut entries);
+        if !entries.is_empty() {
+            // Stable ordering so consumers and tests don't rely on fs order.
+            entries.sort();
+            files.insert((*subdir).to_string(), entries);
         }
     }
     files
+}
+
+/// Maximum recursion depth when walking a skill's supporting-file tree.
+/// Bounds stack usage against a maliciously deep directory structure.
+const SUPPORTING_FILE_MAX_DEPTH: usize = 16;
+
+/// Depth-first walk that collects file paths relative to `base`. Symlinks
+/// are not followed.
+fn walk_files_relative(base: &Path, current: &Path, out: &mut Vec<String>) {
+    walk_files_relative_inner(base, current, 0, out);
+}
+
+fn walk_files_relative_inner(base: &Path, current: &Path, depth: usize, out: &mut Vec<String>) {
+    if depth > SUPPORTING_FILE_MAX_DEPTH {
+        return;
+    }
+    let iter = match std::fs::read_dir(current) {
+        Ok(it) => it,
+        Err(_) => return,
+    };
+    for entry in iter.flatten() {
+        let path = entry.path();
+        let file_type = match entry.file_type() {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            walk_files_relative_inner(base, &path, depth + 1, out);
+        } else if file_type.is_file() {
+            if let Ok(rel) = path.strip_prefix(base) {
+                out.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
 }
 
 /// Rollback a skill to its previous version.
@@ -1054,7 +1189,9 @@ pub fn rollback_skill(skill: &InstalledSkill) -> Result<EvolutionResult, SkillEr
         )));
     }
 
-    // Find the most recent snapshot
+    // Find the most recent snapshot. Filename carries the timestamp +
+    // nanoseconds + pid prefix, so lexical ordering by file_name is
+    // chronological within the skill directory.
     let mut snapshots: Vec<_> = std::fs::read_dir(&rollback_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| {
@@ -1063,7 +1200,7 @@ pub fn rollback_skill(skill: &InstalledSkill) -> Result<EvolutionResult, SkillEr
                 .is_some_and(|n| n.to_string_lossy().starts_with("prompt_context_"))
         })
         .collect();
-    snapshots.sort_by_key(|e| e.path());
+    snapshots.sort_by_key(|e| e.file_name());
 
     let latest = snapshots
         .last()
@@ -1155,18 +1292,82 @@ pub fn extract_skill_config_vars(skill: &InstalledSkill) -> Vec<SkillConfigVar> 
     vars
 }
 
+/// A config key claimed by two or more skills. Exposes the conflicting
+/// declarations so the caller can decide how to resolve them (e.g. prompt
+/// the user, pick a deterministic winner, or surface the conflict in the
+/// dashboard).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillConfigConflict {
+    /// Shared config key (e.g. `wiki.path`).
+    pub key: String,
+    /// Competing declarations ordered by discovery (first one wins for
+    /// backward-compatible callers).
+    pub declarations: Vec<SkillConfigVar>,
+}
+
+/// Result of a configuration-variable discovery pass. `vars` contains the
+/// deduplicated variables (first declaration wins, keeping existing call
+/// sites happy) while `conflicts` enumerates every key that was claimed by
+/// more than one skill.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConfigDiscovery {
+    /// Unique variables — first declaration wins when a key collides.
+    pub vars: Vec<SkillConfigVar>,
+    /// Keys claimed by multiple skills, with all of their declarations.
+    pub conflicts: Vec<SkillConfigConflict>,
+}
+
 /// Discover all config variables across all installed skills.
+///
+/// Kept as a thin wrapper over [`discover_config`] so existing callers
+/// that only want the flat list continue to work. New code should prefer
+/// [`discover_config`] to also see conflict information.
 pub fn discover_all_config_vars(skills: &[&InstalledSkill]) -> Vec<SkillConfigVar> {
-    let mut all_vars = Vec::new();
-    let mut seen_keys = std::collections::HashSet::new();
+    discover_config(skills).vars
+}
+
+/// Discover config variables **and** conflicts across all installed skills.
+///
+/// Conflicts are returned in a stable order (first collision first). The
+/// `vars` list preserves the "first declaration wins" behaviour of
+/// [`discover_all_config_vars`].
+pub fn discover_config(skills: &[&InstalledSkill]) -> ConfigDiscovery {
+    let mut first_decl: std::collections::HashMap<String, SkillConfigVar> =
+        std::collections::HashMap::new();
+    let mut grouped: std::collections::HashMap<String, Vec<SkillConfigVar>> =
+        std::collections::HashMap::new();
+    let mut key_order: Vec<String> = Vec::new();
+
     for skill in skills {
         for var in extract_skill_config_vars(skill) {
-            if seen_keys.insert(var.key.clone()) {
-                all_vars.push(var);
+            if !first_decl.contains_key(&var.key) {
+                first_decl.insert(var.key.clone(), var.clone());
+                key_order.push(var.key.clone());
             }
+            grouped.entry(var.key.clone()).or_default().push(var);
         }
     }
-    all_vars
+
+    let vars: Vec<SkillConfigVar> = key_order
+        .iter()
+        .filter_map(|k| first_decl.get(k).cloned())
+        .collect();
+
+    let conflicts: Vec<SkillConfigConflict> = key_order
+        .iter()
+        .filter_map(|k| {
+            let decls = grouped.get(k)?;
+            if decls.len() <= 1 {
+                return None;
+            }
+            Some(SkillConfigConflict {
+                key: k.clone(),
+                declarations: decls.clone(),
+            })
+        })
+        .collect();
+
+    ConfigDiscovery { vars, conflicts }
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -1507,8 +1708,12 @@ mod tests {
         let lock = acquire_skill_lock(&skill_dir);
         assert!(lock.is_ok(), "Should acquire lock successfully");
 
-        // Lock file should exist
-        assert!(skill_dir.join(".evolution.lock").exists());
+        // Lock file lives next to the skill dir, not inside it.
+        assert!(dir.path().join(LOCK_SUBDIR).join("lockable.lock").exists());
+        assert!(
+            !skill_dir.join(".evolution.lock").exists(),
+            "Lock file should not leak into the skill directory"
+        );
 
         // Lock is released when dropped
         drop(lock);
@@ -1563,7 +1768,10 @@ mod tests {
             .trim()
             .parse()
             .unwrap();
-        assert_eq!(final_val, 2, "Both threads should have incremented the counter");
+        assert_eq!(
+            final_val, 2,
+            "Both threads should have incremented the counter"
+        );
     }
 
     // ── Directory traversal defense tests ──────────────────────────
@@ -1625,7 +1833,9 @@ mod tests {
         };
 
         // Write a supporting file
-        let result = write_supporting_file(&skill, "references/guide.md", "# Guide\n\nHelpful guide.").unwrap();
+        let result =
+            write_supporting_file(&skill, "references/guide.md", "# Guide\n\nHelpful guide.")
+                .unwrap();
         assert!(result.success);
 
         // List supporting files
@@ -1665,12 +1875,21 @@ mod tests {
 
         // Record more than MAX_VERSION_HISTORY versions
         for i in 2..=15 {
-            record_version(&skill_dir, &format!("0.1.{i}"), &format!("Change {i}"), &format!("# V{i}")).unwrap();
+            record_version(
+                &skill_dir,
+                &format!("0.1.{i}"),
+                &format!("Change {i}"),
+                &format!("# V{i}"),
+            )
+            .unwrap();
         }
 
         let meta = load_evolution_meta(&skill_dir);
-        assert!(meta.versions.len() <= MAX_VERSION_HISTORY,
-            "Version history should be capped at {MAX_VERSION_HISTORY}, got {}", meta.versions.len());
+        assert!(
+            meta.versions.len() <= MAX_VERSION_HISTORY,
+            "Version history should be capped at {MAX_VERSION_HISTORY}, got {}",
+            meta.versions.len()
+        );
     }
 
     // ── Config variable discovery tests ────────────────────────────
@@ -1678,8 +1897,14 @@ mod tests {
     #[test]
     fn test_extract_skill_config_vars() {
         let mut config = HashMap::new();
-        config.insert("wiki_path".to_string(), serde_json::Value::String("~/wiki".to_string()));
-        config.insert("api_endpoint".to_string(), serde_json::Value::String("https://api.example.com".to_string()));
+        config.insert(
+            "wiki_path".to_string(),
+            serde_json::Value::String("~/wiki".to_string()),
+        );
+        config.insert(
+            "api_endpoint".to_string(),
+            serde_json::Value::String("https://api.example.com".to_string()),
+        );
 
         let skill = InstalledSkill {
             manifest: SkillManifest {
@@ -1706,5 +1931,315 @@ mod tests {
         assert_eq!(vars.len(), 2);
         assert!(vars.iter().any(|v| v.key == "wiki_path"));
         assert!(vars.iter().any(|v| v.key == "api_endpoint"));
+    }
+
+    fn make_skill_with_config(
+        name: &str,
+        config: HashMap<String, serde_json::Value>,
+    ) -> InstalledSkill {
+        InstalledSkill {
+            manifest: SkillManifest {
+                skill: SkillMeta {
+                    name: name.to_string(),
+                    version: "0.1.0".to_string(),
+                    description: "test".to_string(),
+                    author: "test".to_string(),
+                    license: String::new(),
+                    tags: vec![],
+                },
+                runtime: SkillRuntimeConfig::default(),
+                tools: SkillTools::default(),
+                requirements: Default::default(),
+                prompt_context: None,
+                source: Some(SkillSource::Local),
+                config,
+            },
+            path: std::path::PathBuf::from(format!("/tmp/{name}")),
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn test_discover_config_reports_conflicts() {
+        let mut cfg_a = HashMap::new();
+        cfg_a.insert(
+            "wiki_path".to_string(),
+            serde_json::Value::String("~/wiki-a".to_string()),
+        );
+        let skill_a = make_skill_with_config("skill-a", cfg_a);
+
+        let mut cfg_b = HashMap::new();
+        cfg_b.insert(
+            "wiki_path".to_string(),
+            serde_json::Value::String("~/wiki-b".to_string()),
+        );
+        cfg_b.insert(
+            "api_key".to_string(),
+            serde_json::Value::String("env:API_KEY".to_string()),
+        );
+        let skill_b = make_skill_with_config("skill-b", cfg_b);
+
+        let skills = vec![&skill_a, &skill_b];
+        let discovery = discover_config(&skills);
+
+        // Deduplicated unique vars (first-declaration-wins).
+        assert_eq!(discovery.vars.len(), 2);
+        let wiki = discovery
+            .vars
+            .iter()
+            .find(|v| v.key == "wiki_path")
+            .unwrap();
+        assert_eq!(wiki.skill_name, "skill-a");
+
+        // Conflict surfaced with both declarations.
+        assert_eq!(discovery.conflicts.len(), 1);
+        let conflict = &discovery.conflicts[0];
+        assert_eq!(conflict.key, "wiki_path");
+        assert_eq!(conflict.declarations.len(), 2);
+
+        // Backward-compat wrapper still returns the flat list.
+        let flat = discover_all_config_vars(&skills);
+        assert_eq!(flat.len(), 2);
+    }
+
+    #[test]
+    fn test_discover_config_no_conflicts() {
+        let mut cfg_a = HashMap::new();
+        cfg_a.insert(
+            "a_key".to_string(),
+            serde_json::Value::String("a".to_string()),
+        );
+        let mut cfg_b = HashMap::new();
+        cfg_b.insert(
+            "b_key".to_string(),
+            serde_json::Value::String("b".to_string()),
+        );
+        let skill_a = make_skill_with_config("sa", cfg_a);
+        let skill_b = make_skill_with_config("sb", cfg_b);
+        let discovery = discover_config(&[&skill_a, &skill_b]);
+        assert_eq!(discovery.vars.len(), 2);
+        assert!(discovery.conflicts.is_empty());
+    }
+
+    // ── Bug regressions ──────────────────────────────────────────────
+
+    #[test]
+    fn test_fuzzy_substring_not_mistaken_for_multi_match() {
+        // Regression: old_str is a short token that appears as a substring
+        // within longer words. Strategy 1 (Exact) must handle it; later
+        // strategies must not fall into a false "Multiple matches" error
+        // because substring counts no longer drive the decision.
+        //
+        // Here the token " a" (with a leading space) is never present as
+        // exact substring (no space precedes 'a'), but 'a' appears 3× as a
+        // substring in "banana kiwi". The bug would surface as a bogus
+        // LineTrimmed multi-match error; the fix produces a clean
+        // NoMatch-style error instead.
+        let content = "banana kiwi";
+        let err = fuzzy_find_and_replace(content, " a", "X", false)
+            .expect_err("no match should be reported");
+        let msg = format!("{err:?}");
+        assert!(
+            !msg.contains("Multiple matches"),
+            "should not report a spurious multi-match, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_fuzzy_line_match_count_is_line_based() {
+        // A two-line pattern with two non-overlapping occurrences.
+        let content = "foo\nbar\nxxx\nfoo\nbar";
+        let err = fuzzy_find_and_replace(content, "foo\nbar", "Y", false)
+            .expect_err("multi-match error expected");
+        let msg = format!("{err:?}");
+        assert!(msg.contains("Multiple matches"), "got: {msg}");
+
+        let result = fuzzy_find_and_replace(content, "foo\nbar", "Y", true).unwrap();
+        assert_eq!(result.match_count, 2);
+        assert_eq!(result.new_content, "Y\nxxx\nY");
+    }
+
+    #[test]
+    fn test_rollback_snapshot_no_timestamp_collision() {
+        // Rapid-fire snapshots within the same wall-clock second must not
+        // silently overwrite each other.
+        let dir = TempDir::new().unwrap();
+        let skill_dir = dir.path().join("rapid");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+
+        for i in 0..5 {
+            save_rollback_snapshot(&skill_dir, &format!("version-{i}")).unwrap();
+        }
+
+        let snapshots: Vec<_> = std::fs::read_dir(skill_dir.join(".rollback"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(
+            snapshots.len(),
+            5,
+            "all 5 snapshots must be retained as distinct files"
+        );
+    }
+
+    #[test]
+    fn test_lock_file_location_outside_skill_dir() {
+        // The lock file must live next to the skill dir so a delete can
+        // hold the lock during remove_dir_all.
+        let dir = TempDir::new().unwrap();
+        let skill_dir = dir.path().join("external-lock");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+
+        let _lock = acquire_skill_lock(&skill_dir).unwrap();
+        assert!(dir
+            .path()
+            .join(LOCK_SUBDIR)
+            .join("external-lock.lock")
+            .exists());
+        // And explicitly NOT inside the skill dir.
+        assert!(!skill_dir.join(".evolution.lock").exists());
+    }
+
+    #[test]
+    fn test_delete_skill_waits_for_existing_lock() {
+        // Delete must block while another operation holds the lock on the
+        // same skill, then proceed once the lock is released. Ordering is
+        // synchronised with a channel so the test is deterministic.
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        let dir = TempDir::new().unwrap();
+        create_skill(dir.path(), "block-delete", "x", "# hi", vec![]).unwrap();
+
+        let dir_path = dir.path().to_path_buf();
+        let (acquired_tx, acquired_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
+
+        let p1 = dir_path.clone();
+        let holder = thread::spawn(move || {
+            let skill_dir = p1.join("block-delete");
+            let lock = acquire_skill_lock(&skill_dir).unwrap();
+            acquired_tx.send(()).unwrap();
+            // Block until the main thread tells us to release.
+            release_rx.recv().unwrap();
+            let released_at = Instant::now();
+            drop(lock);
+            released_at
+        });
+
+        // Wait until the holder definitely owns the lock.
+        acquired_rx.recv().unwrap();
+
+        // Spawn the delete on a separate thread so we can observe that it
+        // is blocked while the holder still has the lock.
+        let p2 = dir_path.clone();
+        let delete_started = Instant::now();
+        let deleter = thread::spawn(move || {
+            delete_skill(&p2, "block-delete").unwrap();
+            Instant::now()
+        });
+
+        // Give delete enough time to reach the lock acquisition and block.
+        thread::sleep(Duration::from_millis(100));
+        assert!(
+            dir.path().join("block-delete").exists(),
+            "skill must still exist while holder owns the lock"
+        );
+
+        // Release: tell holder, record its release time, then wait for
+        // delete to finish.
+        release_tx.send(()).unwrap();
+        let released_at = holder.join().unwrap();
+        let delete_finished_at = deleter.join().unwrap();
+
+        assert!(
+            delete_finished_at >= released_at,
+            "delete ({delete_finished_at:?}) must finish only after lock release ({released_at:?})"
+        );
+        assert!(
+            delete_started < released_at,
+            "delete must have started waiting before the holder released"
+        );
+        assert!(!dir.path().join("block-delete").exists());
+    }
+
+    #[test]
+    fn test_list_supporting_files_recursive() {
+        let dir = TempDir::new().unwrap();
+        create_skill(dir.path(), "nested-files", "x", "# hi", vec![]).unwrap();
+        let skill_path = dir.path().join("nested-files");
+        let skill = InstalledSkill {
+            manifest: SkillManifest {
+                skill: SkillMeta {
+                    name: "nested-files".to_string(),
+                    version: "0.1.0".to_string(),
+                    description: "x".to_string(),
+                    author: "agent-evolved".to_string(),
+                    license: String::new(),
+                    tags: vec![],
+                },
+                runtime: SkillRuntimeConfig::default(),
+                tools: SkillTools::default(),
+                requirements: Default::default(),
+                prompt_context: Some("# hi".to_string()),
+                source: Some(SkillSource::Local),
+                config: HashMap::new(),
+            },
+            path: skill_path.clone(),
+            enabled: true,
+        };
+
+        write_supporting_file(&skill, "references/top.md", "# top").unwrap();
+        write_supporting_file(&skill, "references/nested/deep.md", "# deep").unwrap();
+        write_supporting_file(&skill, "templates/main.py", "print('hi')").unwrap();
+
+        let files = list_supporting_files(&skill);
+        let refs = files.get("references").expect("references entry");
+        assert!(refs.iter().any(|f| f == "top.md"));
+        assert!(
+            refs.iter().any(|f| f == "nested/deep.md"),
+            "nested file must be visible (got {refs:?})"
+        );
+        assert!(files
+            .get("templates")
+            .unwrap()
+            .iter()
+            .any(|f| f == "main.py"));
+    }
+
+    #[test]
+    fn test_remove_supporting_file_prunes_nested_empty_dirs() {
+        let dir = TempDir::new().unwrap();
+        create_skill(dir.path(), "prune-test", "x", "# hi", vec![]).unwrap();
+        let skill = InstalledSkill {
+            manifest: SkillManifest {
+                skill: SkillMeta {
+                    name: "prune-test".to_string(),
+                    version: "0.1.0".to_string(),
+                    description: "x".to_string(),
+                    author: "agent-evolved".to_string(),
+                    license: String::new(),
+                    tags: vec![],
+                },
+                runtime: SkillRuntimeConfig::default(),
+                tools: SkillTools::default(),
+                requirements: Default::default(),
+                prompt_context: Some("# hi".to_string()),
+                source: Some(SkillSource::Local),
+                config: HashMap::new(),
+            },
+            path: dir.path().join("prune-test"),
+            enabled: true,
+        };
+        write_supporting_file(&skill, "references/a/b/c.md", "content").unwrap();
+        remove_supporting_file(&skill, "references/a/b/c.md").unwrap();
+
+        // All the now-empty ancestor dirs should be gone, up to (and not
+        // including) the skill root.
+        assert!(!skill.path.join("references/a/b").exists());
+        assert!(!skill.path.join("references/a").exists());
+        assert!(!skill.path.join("references").exists());
+        assert!(skill.path.exists(), "skill root itself must remain");
     }
 }
