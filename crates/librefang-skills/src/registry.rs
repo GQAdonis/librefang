@@ -16,6 +16,42 @@ pub struct SkillRegistry {
     skills_dir: PathBuf,
     /// When true, no new skills can be loaded (Stable mode).
     frozen: bool,
+    /// Skill names that are globally disabled.
+    disabled_skills: Vec<String>,
+}
+
+// ── Platform filtering ──────────────────────────────────────────────
+
+/// Check if a skill is compatible with the current platform.
+///
+/// If the manifest declares no `tags` containing platform hints, the skill
+/// loads on all platforms. Recognized platform tags: "macos", "linux", "windows".
+fn skill_matches_platform(manifest: &crate::SkillManifest) -> bool {
+    let platform_tags: Vec<&str> = manifest
+        .skill
+        .tags
+        .iter()
+        .filter(|t| matches!(t.as_str(), "macos" | "linux" | "windows" | "macos-only" | "linux-only" | "windows-only"))
+        .map(|t| t.as_str())
+        .collect();
+
+    if platform_tags.is_empty() {
+        return true; // no platform restriction
+    }
+
+    let current = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        return true; // unknown platform, allow all
+    };
+
+    platform_tags.iter().any(|tag| {
+        tag.starts_with(current)
+    })
 }
 
 impl SkillRegistry {
@@ -25,7 +61,18 @@ impl SkillRegistry {
             skills: HashMap::new(),
             skills_dir,
             frozen: false,
+            disabled_skills: Vec::new(),
         }
+    }
+
+    /// Set the list of globally disabled skill names.
+    pub fn set_disabled_skills(&mut self, disabled: Vec<String>) {
+        self.disabled_skills = disabled;
+    }
+
+    /// Check if a skill name is in the disabled list.
+    pub fn is_disabled(&self, name: &str) -> bool {
+        self.disabled_skills.iter().any(|d| d == name)
     }
 
     /// Create a cheap owned snapshot of this registry.
@@ -161,6 +208,21 @@ impl SkillRegistry {
         let manifest_path = skill_dir.join("skill.toml");
         let toml_str = std::fs::read_to_string(&manifest_path)?;
         let mut manifest: SkillManifest = toml::from_str(&toml_str)?;
+
+        // Skip disabled skills
+        if self.is_disabled(&manifest.skill.name) {
+            info!(skill = %manifest.skill.name, "Skipping disabled skill");
+            return Ok(manifest.skill.name);
+        }
+
+        // Skip skills incompatible with the current platform
+        if !skill_matches_platform(&manifest) {
+            info!(
+                skill = %manifest.skill.name,
+                "Skipping skill — incompatible with current platform"
+            );
+            return Ok(manifest.skill.name);
+        }
 
         // Progressive loading: if prompt_context is not inlined in skill.toml,
         // try to load it from the companion prompt_context.md file.
@@ -380,6 +442,69 @@ impl SkillRegistry {
 
     /// Load workspace-scoped skills that override global/bundled skills.
     ///
+    /// Load skills from external directories (read-only).
+    ///
+    /// External skills don't override local skills with the same name.
+    /// Directories that don't exist are silently skipped.
+    pub fn load_external_dirs(&mut self, dirs: &[PathBuf]) -> Result<usize, SkillError> {
+        let mut count = 0;
+        for dir in dirs {
+            if !dir.exists() || !dir.is_dir() {
+                continue;
+            }
+            let entries = std::fs::read_dir(dir)?;
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let manifest_path = path.join("skill.toml");
+                if !manifest_path.exists() {
+                    // Try auto-convert SKILL.md
+                    if openclaw_compat::detect_skillmd(&path) {
+                        if let Ok(converted) = openclaw_compat::convert_skillmd(&path) {
+                            let _ = openclaw_compat::write_librefang_manifest(
+                                &path,
+                                &converted.manifest,
+                            );
+                            let _ = openclaw_compat::write_prompt_context(
+                                &path,
+                                &converted.prompt_context,
+                            );
+                        }
+                    }
+                    if !path.join("skill.toml").exists() {
+                        continue;
+                    }
+                }
+
+                // Read manifest to check name collision
+                if let Ok(toml_str) = std::fs::read_to_string(path.join("skill.toml")) {
+                    if let Ok(manifest) = toml::from_str::<SkillManifest>(&toml_str) {
+                        // Local skills take precedence — skip if name already loaded
+                        if self.skills.contains_key(&manifest.skill.name) {
+                            continue;
+                        }
+                    }
+                }
+
+                match self.load_skill(&path) {
+                    Ok(_) => count += 1,
+                    Err(e) => {
+                        warn!(
+                            "Failed to load external skill at {}: {e}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+        }
+        if count > 0 {
+            info!("Loaded {count} external skill(s) from {} dir(s)", dirs.len());
+        }
+        Ok(count)
+    }
+
     /// Scans subdirectories of `workspace_skills_dir` using the same loading
     /// logic as `load_all()`: auto-converts SKILL.md, runs prompt injection
     /// scan, blocks critical threats. Skills loaded here override global ones

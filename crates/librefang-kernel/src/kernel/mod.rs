@@ -3511,6 +3511,30 @@ system_prompt = "You are a helpful assistant."
                     self.reload_skills();
                 }
 
+                // Background skill review: when the agent used enough tool calls
+                // to suggest a non-trivial workflow, spawn a background LLM call
+                // to evaluate whether the approach should be saved as a skill.
+                // Runs AFTER the response is delivered so it never competes with
+                // the user's task for model attention.
+                if result.skill_evolution_suggested && !used_evolution_tool {
+                    let driver = self.default_driver.clone();
+                    let skills_dir = self.home_dir_boot.join("skills");
+                    let trace_summary = Self::summarize_traces_for_review(&result.decision_traces);
+                    let response_summary = result.response.chars().take(2000).collect::<String>();
+                    let kernel_weak = self.self_handle.get().cloned();
+                    tokio::spawn(async move {
+                        if let Err(e) = Self::background_skill_review(
+                            driver,
+                            &skills_dir,
+                            &trace_summary,
+                            &response_summary,
+                            kernel_weak,
+                        ).await {
+                            tracing::debug!(error = %e, "Background skill review failed (best-effort)");
+                        }
+                    });
+                }
+
                 Ok(result)
             }
             Err(e) => {
@@ -9835,6 +9859,160 @@ system_prompt = "You are a helpful assistant."
         // Bump skill generation so the tool list cache detects staleness
         self.skill_generation
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    // ── Background skill review ──────────────────────────────────────
+
+    /// Summarize decision traces into a compact text for the review LLM.
+    fn summarize_traces_for_review(
+        traces: &[librefang_types::tool::DecisionTrace],
+    ) -> String {
+        let mut summary = String::new();
+        for (i, trace) in traces.iter().enumerate().take(20) {
+            summary.push_str(&format!(
+                "{}. {} → {}\n",
+                i + 1,
+                trace.tool_name,
+                if trace.is_error { "ERROR" } else { "ok" },
+            ));
+            if let Some(rationale) = &trace.rationale {
+                let short = rationale.chars().take(100).collect::<String>();
+                summary.push_str(&format!("   reason: {short}\n"));
+            }
+        }
+        summary
+    }
+
+    /// Background LLM call to review a completed conversation and decide
+    /// whether to create or update a skill.
+    ///
+    /// This is the core self-evolution loop: after a complex task (5+ tool
+    /// calls), we ask the LLM whether the approach was non-trivial and
+    /// worth saving. If yes, we create/update a skill automatically.
+    ///
+    /// Runs in a spawned tokio task so it never blocks the main response.
+    async fn background_skill_review(
+        driver: std::sync::Arc<dyn LlmDriver>,
+        skills_dir: &std::path::Path,
+        trace_summary: &str,
+        response_summary: &str,
+        kernel_weak: Option<std::sync::Weak<LibreFangKernel>>,
+    ) -> Result<(), String> {
+        use librefang_runtime::llm_driver::CompletionRequest;
+        use librefang_types::message::Message;
+
+        let review_prompt = concat!(
+            "You are a skill evolution reviewer. Analyze the completed task below and decide ",
+            "whether the approach should be saved as a reusable skill.\n\n",
+            "A skill is worth saving when:\n",
+            "- The task required trial-and-error or changing course\n",
+            "- A non-obvious workflow was discovered\n",
+            "- The approach involved 5+ steps that could benefit future similar tasks\n",
+            "- The user's preferred method differs from the obvious approach\n\n",
+            "If worth saving, respond with a JSON object:\n",
+            "```json\n",
+            "{\"action\": \"create\", \"name\": \"skill-name\", \"description\": \"one-line desc\", ",
+            "\"prompt_context\": \"# Skill Title\\n\\nMarkdown instructions...\", ",
+            "\"tags\": [\"tag1\", \"tag2\"]}\n",
+            "```\n\n",
+            "If nothing is worth saving, respond with:\n",
+            "```json\n",
+            "{\"action\": \"skip\", \"reason\": \"brief explanation\"}\n",
+            "```\n\n",
+            "Respond with ONLY the JSON block, nothing else.",
+        );
+
+        let user_msg = format!(
+            "## Task Summary\n{response_summary}\n\n## Tool Calls\n{trace_summary}"
+        );
+
+        let request = CompletionRequest {
+            model: String::new(),
+            messages: vec![Message::user(user_msg)],
+            tools: vec![],
+            max_tokens: 2000,
+            temperature: 0.0,
+            system: Some(review_prompt.to_string()),
+            thinking: None,
+            prompt_caching: false,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+        };
+
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            driver.complete(request),
+        )
+        .await
+        .map_err(|_| "Background skill review timed out (30s)".to_string())?
+        .map_err(|e| format!("LLM call failed: {e}"))?;
+
+        let text = response.text();
+
+        // Extract JSON from response (may be wrapped in ```json ... ```)
+        let json_str = text
+            .find('{')
+            .and_then(|start| {
+                text.rfind('}').map(|end| &text[start..=end])
+            })
+            .unwrap_or(&text);
+
+        let parsed: serde_json::Value = serde_json::from_str(json_str)
+            .map_err(|e| format!("Failed to parse review response: {e}"))?;
+
+        let action = parsed["action"].as_str().unwrap_or("skip");
+        if action == "skip" {
+            tracing::debug!(
+                reason = parsed["reason"].as_str().unwrap_or(""),
+                "Background skill review: nothing to save"
+            );
+            return Ok(());
+        }
+
+        if action == "create" {
+            let name = parsed["name"]
+                .as_str()
+                .ok_or("Missing 'name' in review response")?;
+            let description = parsed["description"]
+                .as_str()
+                .ok_or("Missing 'description' in review response")?;
+            let prompt_context = parsed["prompt_context"]
+                .as_str()
+                .ok_or("Missing 'prompt_context' in review response")?;
+            let tags: Vec<String> = parsed["tags"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+
+            match librefang_skills::evolution::create_skill(
+                skills_dir,
+                name,
+                description,
+                prompt_context,
+                tags,
+            ) {
+                Ok(result) => {
+                    tracing::info!(
+                        skill = name,
+                        "💾 Background skill review: created skill '{}'",
+                        result.skill_name
+                    );
+                    // Hot-reload so the new skill is available immediately
+                    if let Some(kernel) = kernel_weak.and_then(|w| w.upgrade()) {
+                        kernel.reload_skills();
+                    }
+                }
+                Err(librefang_skills::SkillError::AlreadyInstalled(_)) => {
+                    tracing::debug!(skill = name, "Skill already exists — skipping creation");
+                }
+                Err(e) => {
+                    tracing::debug!(skill = name, error = %e, "Background skill creation failed");
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Check whether the context engine plugin (if any) is allowed for an agent.

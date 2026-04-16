@@ -10,6 +10,7 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
         .route("/skills/uninstall", axum::routing::post(uninstall_skill))
         .route("/skills/reload", axum::routing::post(reload_skills))
         .route("/skills/create", axum::routing::post(create_skill))
+        .route("/skills/{name}", axum::routing::get(get_skill_detail))
         // Marketplace / ClawHub
         .route(
             "/marketplace/search",
@@ -3429,6 +3430,73 @@ pub async fn create_skill(
                 .into_json_tuple()
         }
     }
+}
+
+/// Get detailed information about a specific skill, including linked files,
+/// tags, evolution history, and readiness status.
+pub async fn get_skill_detail(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let registry = state
+        .kernel
+        .skill_registry_ref()
+        .read()
+        .unwrap_or_else(|e| e.into_inner());
+
+    let skill = match registry.get(&name) {
+        Some(s) => s,
+        None => {
+            return ApiErrorResponse::not_found(format!("Skill '{name}' not found"))
+                .into_json_tuple();
+        }
+    };
+
+    let manifest = &skill.manifest;
+
+    // List linked files
+    let linked_files = librefang_skills::evolution::list_supporting_files(skill);
+
+    // Get evolution metadata
+    let evolution_meta = librefang_skills::evolution::get_evolution_info(skill);
+
+    // Build response
+    let tools: Vec<serde_json::Value> = manifest
+        .tools
+        .provided
+        .iter()
+        .map(|t| {
+            serde_json::json!({
+                "name": t.name,
+                "description": t.description,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "name": manifest.skill.name,
+            "version": manifest.skill.version,
+            "description": manifest.skill.description,
+            "author": manifest.skill.author,
+            "license": manifest.skill.license,
+            "tags": manifest.skill.tags,
+            "runtime": format!("{:?}", manifest.runtime.runtime_type),
+            "tools": tools,
+            "has_prompt_context": manifest.prompt_context.is_some(),
+            "prompt_context_length": manifest.prompt_context.as_ref().map(|c| c.len()).unwrap_or(0),
+            "source": manifest.source,
+            "enabled": skill.enabled,
+            "path": skill.path.to_string_lossy(),
+            "linked_files": linked_files,
+            "evolution": {
+                "versions": evolution_meta.versions,
+                "use_count": evolution_meta.use_count,
+                "evolution_count": evolution_meta.evolution_count,
+            },
+        })),
+    )
 }
 
 // ── Helper functions for secrets.env management ────────────────────────
