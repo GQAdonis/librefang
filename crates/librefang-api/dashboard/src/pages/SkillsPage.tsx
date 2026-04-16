@@ -2,19 +2,21 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDate } from "../lib/datetime";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listSkills, uninstallSkill, clawhubSearch, clawhubInstall, clawhubGetSkill, skillhubSearch, skillhubBrowse, skillhubInstall, skillhubGetSkill, fanghubListSkills, installSkill, listHands, type ClawHubBrowseItem, type FangHubSkill, type HandDefinitionItem } from "../api";
+import { listSkills, uninstallSkill, clawhubSearch, clawhubInstall, clawhubGetSkill, skillhubSearch, skillhubBrowse, skillhubInstall, skillhubGetSkill, fanghubListSkills, installSkill, listHands, getSkillDetail, createSkill, type ClawHubBrowseItem, type FangHubSkill, type HandDefinitionItem, type SkillDetail } from "../api";
 import { CardSkeleton } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { Input } from "../components/ui/Input";
+import { Modal } from "../components/ui/Modal";
 import { useUIStore } from "../lib/store";
 import {
   Wrench, Search, CheckCircle2, X,
   Download, Trash2, Star, Loader2, Sparkles, Package,
   Code, GitBranch, Globe, Cloud, Monitor, Bot, Database,
   Briefcase, Shield, Terminal, Calendar, Store, Zap, RefreshCw,
+  Plus, History, Eye, RotateCcw, FileText, Tag,
 } from "lucide-react";
 
 type ClawHubSkillWithStatus = ClawHubBrowseItem & { is_installed?: boolean };
@@ -112,9 +114,10 @@ function FangHubSkillCard({ skill, pendingId, onInstall, t }: {
 }
 
 // Skill Card - Installed
-function InstalledSkillCard({ skill, onUninstall, t }: {
-  skill: { name: string; version?: string; description?: string; author?: string; tools_count?: number };
+function InstalledSkillCard({ skill, onUninstall, onViewDetail, t }: {
+  skill: { name: string; version?: string; description?: string; author?: string; tools_count?: number; tags?: string[] };
   onUninstall: (name: string) => void;
+  onViewDetail: (name: string) => void;
   t: (key: string) => string;
 }) {
   return (
@@ -134,15 +137,214 @@ function InstalledSkillCard({ skill, onUninstall, t }: {
           <Badge variant="success">{t("skills.installed")}</Badge>
         </div>
         <p className="text-xs text-text-dim line-clamp-2 italic mb-4 flex-1">{skill.description || "-"}</p>
-        <div className="flex justify-between items-center text-[10px] font-bold text-text-dim uppercase mb-4">
+        <div className="flex justify-between items-center text-[10px] font-bold text-text-dim uppercase mb-3">
           <span>{t("skills.author")}: {skill.author || t("common.unknown")}</span>
           <span>{t("skills.tools")}: {skill.tools_count || 0}</span>
         </div>
-        <Button variant="ghost" className="w-full text-error hover:text-error" onClick={() => onUninstall(skill.name)} leftIcon={<Trash2 className="w-4 h-4" />}>
-          {t("skills.uninstall")}
-        </Button>
+        {skill.tags && skill.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3">
+            {skill.tags.slice(0, 3).map(tag => (
+              <span key={tag} className="px-1.5 py-0.5 text-[10px] rounded bg-surface-2 text-text-dim">{tag}</span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => onViewDetail(skill.name)} leftIcon={<Eye className="w-4 h-4" />}>
+            {t("common.detail")}
+          </Button>
+          <Button variant="ghost" className="flex-1 text-error hover:text-error" onClick={() => onUninstall(skill.name)} leftIcon={<Trash2 className="w-4 h-4" />}>
+            {t("skills.uninstall")}
+          </Button>
+        </div>
       </div>
     </Card>
+  );
+}
+
+// Create Skill Modal
+function CreateSkillModal({ isOpen, onClose, onCreated, t }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+  t: (key: string, opts?: any) => string;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [promptContext, setPromptContext] = useState("");
+  const [tags, setTags] = useState("");
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const handleCreate = async () => {
+    setError("");
+    if (!name.trim() || !description.trim()) {
+      setError(t("skills.evo_fill_required", { defaultValue: "Name and description are required" }));
+      return;
+    }
+    setCreating(true);
+    try {
+      await createSkill({
+        name: name.trim(),
+        description: description.trim(),
+        prompt_context: promptContext.trim(),
+        tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+      });
+      onCreated();
+      onClose();
+      setName(""); setDescription(""); setPromptContext(""); setTags("");
+    } catch (e: any) {
+      setError(e.message || "Failed to create skill");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={t("skills.evo_create_title", { defaultValue: "Create Skill" })} size="xl">
+      <div className="space-y-4 p-1">
+        <div>
+          <label className="block text-xs font-bold uppercase text-text-dim mb-1">{t("common.name")}</label>
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder="my-skill-name" />
+          <p className="text-[10px] text-text-dim mt-1">{t("skills.evo_name_hint", { defaultValue: "Lowercase, hyphens allowed (e.g., csv-analysis)" })}</p>
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase text-text-dim mb-1">{t("common.description")}</label>
+          <Input value={description} onChange={e => setDescription(e.target.value)} placeholder={t("skills.evo_desc_placeholder", { defaultValue: "What this skill teaches agents to do" })} />
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase text-text-dim mb-1">{t("skills.evo_prompt_context", { defaultValue: "Prompt Context (Markdown)" })}</label>
+          <textarea
+            value={promptContext}
+            onChange={e => setPromptContext(e.target.value)}
+            className="w-full h-48 px-3 py-2 text-sm rounded-lg bg-surface-2 border border-border text-text-main resize-y font-mono"
+            placeholder={t("skills.evo_prompt_placeholder", { defaultValue: "# Skill Instructions\n\nMarkdown instructions injected into the system prompt..." })}
+          />
+          <p className="text-[10px] text-text-dim mt-1">{promptContext.length.toLocaleString()} / 160,000</p>
+        </div>
+        <div>
+          <label className="block text-xs font-bold uppercase text-text-dim mb-1">{t("skills.evo_tags", { defaultValue: "Tags (comma-separated)" })}</label>
+          <Input value={tags} onChange={e => setTags(e.target.value)} placeholder="data, csv, analysis" />
+        </div>
+        {error && <p className="text-xs text-error">{error}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button onClick={handleCreate} disabled={creating} leftIcon={creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}>
+            {creating ? t("common.creating", { defaultValue: "Creating..." }) : t("common.create")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Skill Detail Modal with evolution history
+function SkillDetailModal({ skillName, isOpen, onClose, t }: {
+  skillName: string | null;
+  isOpen: boolean;
+  onClose: () => void;
+  t: (key: string, opts?: any) => string;
+}) {
+  const { data: detail, isLoading } = useQuery({
+    queryKey: ["skill-detail", skillName],
+    queryFn: () => getSkillDetail(skillName!),
+    enabled: isOpen && !!skillName,
+  });
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={detail?.name || skillName || ""} size="xl">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-text-dim" /></div>
+      ) : detail ? (
+        <div className="space-y-5 p-1">
+          {/* Header */}
+          <div>
+            <p className="text-sm text-text-dim italic">{detail.description}</p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Badge variant="default">v{detail.version}</Badge>
+              <Badge variant="default">{detail.runtime}</Badge>
+              {detail.tags.map(tag => (
+                <Badge key={tag} variant="default"><Tag className="w-3 h-3 mr-1" />{tag}</Badge>
+              ))}
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="p-3 rounded-lg bg-surface-2 text-center">
+              <p className="text-2xl font-black">{detail.tools.length}</p>
+              <p className="text-[10px] font-bold uppercase text-text-dim">{t("skills.tools")}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-surface-2 text-center">
+              <p className="text-2xl font-black">{detail.evolution.use_count}</p>
+              <p className="text-[10px] font-bold uppercase text-text-dim">{t("skills.evo_uses", { defaultValue: "Uses" })}</p>
+            </div>
+            <div className="p-3 rounded-lg bg-surface-2 text-center">
+              <p className="text-2xl font-black">{detail.evolution.evolution_count}</p>
+              <p className="text-[10px] font-bold uppercase text-text-dim">{t("skills.evo_evolutions", { defaultValue: "Evolutions" })}</p>
+            </div>
+          </div>
+
+          {/* Tools */}
+          {detail.tools.length > 0 && (
+            <div>
+              <h3 className="text-xs font-bold uppercase text-text-dim mb-2"><Wrench className="w-3 h-3 inline mr-1" />{t("skills.tools")}</h3>
+              <div className="space-y-1">
+                {detail.tools.map(tool => (
+                  <div key={tool.name} className="px-3 py-2 rounded bg-surface-2 text-xs">
+                    <span className="font-mono font-bold">{tool.name}</span>
+                    <span className="text-text-dim ml-2">{tool.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Linked Files */}
+          {Object.keys(detail.linked_files).length > 0 && (
+            <div>
+              <h3 className="text-xs font-bold uppercase text-text-dim mb-2"><FileText className="w-3 h-3 inline mr-1" />{t("skills.evo_files", { defaultValue: "Supporting Files" })}</h3>
+              {Object.entries(detail.linked_files).map(([dir, files]) => (
+                <div key={dir} className="mb-2">
+                  <p className="text-[10px] font-bold uppercase text-text-dim mb-1">{dir}/</p>
+                  <div className="flex flex-wrap gap-1">
+                    {files.map(f => (
+                      <span key={f} className="px-2 py-0.5 rounded bg-surface-2 text-xs font-mono">{f}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Version History */}
+          {detail.evolution.versions.length > 0 && (
+            <div>
+              <h3 className="text-xs font-bold uppercase text-text-dim mb-2"><History className="w-3 h-3 inline mr-1" />{t("skills.evo_history", { defaultValue: "Version History" })}</h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {[...detail.evolution.versions].reverse().map((v, i) => (
+                  <div key={i} className="flex items-start gap-3 px-3 py-2 rounded bg-surface-2 text-xs">
+                    <Badge variant={i === 0 ? "success" : "default"}>v{v.version}</Badge>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-text-main">{v.changelog}</p>
+                      <p className="text-[10px] text-text-dim mt-0.5">{new Date(v.timestamp).toLocaleString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Meta */}
+          <div className="text-[10px] text-text-dim space-y-0.5 pt-2 border-t border-border">
+            <p>{t("skills.author")}: {detail.author || "-"}</p>
+            <p>{t("skills.evo_prompt_size", { defaultValue: "Prompt context" })}: {detail.prompt_context_length.toLocaleString()} chars</p>
+            <p className="font-mono truncate">{detail.path}</p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-text-dim py-8 text-center">{t("skills.evo_not_found", { defaultValue: "Skill not found" })}</p>
+      )}
+    </Modal>
   );
 }
 
@@ -355,6 +557,10 @@ export function SkillsPage() {
   const [detailsSource, setDetailsSource] = useState<MarketplaceSource>("clawhub");
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [targetHand, setTargetHand] = useState<string>("");
+
+  // Skill evolution state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [detailSkillName, setDetailSkillName] = useState<string | null>(null);
 
   // Hands query for install target selector
   const handsQuery = useQuery({ queryKey: ["hands", "list"], queryFn: listHands });
@@ -579,6 +785,13 @@ export function SkillsPage() {
             {t("skills.installed_count", { count: installedSkills.length })}
           </span>
           <button
+            className="flex h-8 items-center gap-1.5 rounded-xl border border-brand/30 bg-brand/10 px-3 text-xs font-bold text-brand hover:bg-brand/20 transition-colors"
+            onClick={() => setShowCreateModal(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">{t("skills.evo_create", { defaultValue: "Create Skill" })}</span>
+          </button>
+          <button
             className="flex h-8 items-center gap-1.5 rounded-xl border border-border-subtle bg-surface px-3 text-xs font-bold text-text-dim hover:text-brand hover:border-brand/30 transition-colors"
             onClick={() => { void skillsQuery.refetch(); void searchQuery.refetch(); void activeSkillhubQuery.refetch(); }}
           >
@@ -723,7 +936,7 @@ export function SkillsPage() {
         ) : (
           <div className="grid gap-2 sm:gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
             {installedSkills.map(s => (
-              <InstalledSkillCard key={s.name} skill={s} onUninstall={handleUninstall} t={t} />
+              <InstalledSkillCard key={s.name} skill={s} onUninstall={handleUninstall} onViewDetail={setDetailSkillName} t={t} />
             ))}
           </div>
         )
@@ -820,6 +1033,25 @@ export function SkillsPage() {
           isPending={uninstallMutation.isPending}
         />
       )}
+
+      {/* Create Skill Modal */}
+      <CreateSkillModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ["skills"] });
+          addToast({ type: "success", message: t("skills.evo_created", { defaultValue: "Skill created successfully" }) });
+        }}
+        t={t}
+      />
+
+      {/* Skill Detail Modal */}
+      <SkillDetailModal
+        skillName={detailSkillName}
+        isOpen={!!detailSkillName}
+        onClose={() => setDetailSkillName(null)}
+        t={t}
+      />
     </div>
   );
 }

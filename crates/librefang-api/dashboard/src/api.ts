@@ -156,6 +156,51 @@ export interface SkillItem {
 export interface SkillsResponse {
   skills?: SkillItem[];
   total?: number;
+  categories?: string[];
+}
+
+// Skill evolution types
+export interface SkillVersionEntry {
+  version: string;
+  timestamp: string;
+  changelog: string;
+  content_hash: string;
+}
+
+export interface SkillEvolutionMeta {
+  versions: SkillVersionEntry[];
+  use_count: number;
+  evolution_count: number;
+}
+
+export interface SkillToolInfo {
+  name: string;
+  description: string;
+}
+
+export interface SkillDetail {
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  license: string;
+  tags: string[];
+  runtime: string;
+  tools: SkillToolInfo[];
+  has_prompt_context: boolean;
+  prompt_context_length: number;
+  source: any;
+  enabled: boolean;
+  path: string;
+  linked_files: Record<string, string[]>;
+  evolution: SkillEvolutionMeta;
+}
+
+export interface EvolutionResult {
+  success: boolean;
+  message: string;
+  skill_name: string;
+  version?: string;
 }
 
 export interface ProvidersResponse {
@@ -1081,6 +1126,24 @@ export async function installSkill(name: string, hand?: string): Promise<ApiActi
 
 export async function uninstallSkill(name: string): Promise<ApiActionResponse> {
   return post<ApiActionResponse>("/api/skills/uninstall", { name });
+}
+
+// Skill evolution APIs
+export async function getSkillDetail(name: string): Promise<SkillDetail> {
+  return get<SkillDetail>(`/api/skills/${encodeURIComponent(name)}`);
+}
+
+export async function createSkill(params: {
+  name: string;
+  description: string;
+  prompt_context: string;
+  tags?: string[];
+}): Promise<EvolutionResult> {
+  return post<EvolutionResult>("/api/skills/create", params);
+}
+
+export async function reloadSkills(): Promise<ApiActionResponse> {
+  return post<ApiActionResponse>("/api/skills/reload", {});
 }
 
 // ClawHub types
