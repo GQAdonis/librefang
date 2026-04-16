@@ -6,16 +6,16 @@
 
 ## 本页涵盖
 
-- [审批策略](#approval-policy)
-- [启用 TOTP](#enabling-totp)
-- [仪表盘流程](#dashboard-flow)
-- [API 参考](#api-reference)
-- [恢复码](#recovery-codes)
-- [加固清单](#hardening-checklist)
+- 审批策略
+- 启用 TOTP
+- 仪表盘流程
+- API 参考
+- 恢复码
+- 加固清单
 
 ---
 
-## 审批策略 {#approval-policy}
+## 审批策略
 
 **配置位置：** `~/.librefang/config.toml` 的 `[approval]` 段。
 **源码：** `librefang-types/src/approval.rs` 中的 `ApprovalPolicy`。
@@ -58,7 +58,7 @@ totp_tools = []                        # 留空表示审批列表内所有工具
 
 ---
 
-## 启用 TOTP {#enabling-totp}
+## 启用 TOTP
 
 整个 TOTP 流程由仪表盘驱动，但底层端点可供任何客户端使用。
 
@@ -76,7 +76,7 @@ totp_tools = []                        # 留空表示审批列表内所有工具
 
 ---
 
-## 仪表盘流程 {#dashboard-flow}
+## 仪表盘流程
 
 审批页（`/approvals`）包含三个标签：
 
@@ -94,7 +94,7 @@ totp_tools = []                        # 留空表示审批列表内所有工具
 
 ---
 
-## API 参考 {#api-reference}
+## API 参考
 
 所有端点位于 `/api/approvals` 之下。
 
@@ -121,7 +121,7 @@ curl -X POST "http://127.0.0.1:4545/api/approvals/${ID}/approve" \
 
 ---
 
-## 恢复码 {#recovery-codes}
+## 恢复码
 
 启用时会生成 10 个一次性恢复码，以 `totp_recovery_codes` 键存入保险库。每个恢复码：
 
@@ -134,7 +134,7 @@ curl -X POST "http://127.0.0.1:4545/api/approvals/${ID}/approve" \
 
 ---
 
-## 加固清单 {#hardening-checklist}
+## 加固清单
 
 1. 任何暴露到网络的部署都应将 `second_factor` 设为 `"both"`。
 2. `require_approval` 要精简但诚实——凡是写盘、执行 shell、调用变更型 API 的工具都要列进去。
