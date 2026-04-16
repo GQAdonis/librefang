@@ -450,6 +450,9 @@ pub struct LibreFangKernel {
     /// Generation counter for skill registry — bumped on every hot-reload.
     /// Used by the tool list cache to detect staleness.
     skill_generation: std::sync::atomic::AtomicU64,
+    /// Unix epoch (seconds) of the last background skill review. Used to
+    /// enforce a cooldown so we don't spam LLM calls on busy systems.
+    last_skill_review_epoch: std::sync::atomic::AtomicI64,
     /// Generation counter for MCP tool definitions — bumped whenever mcp_tools
     /// are modified (connect, disconnect, rebuild). Used by the tool list cache.
     mcp_generation: std::sync::atomic::AtomicU64,
@@ -2225,6 +2228,7 @@ impl LibreFangKernel {
             config_reload_lock: tokio::sync::RwLock::new(()),
             prompt_metadata_cache: PromptMetadataCache::new(),
             skill_generation: std::sync::atomic::AtomicU64::new(0),
+            last_skill_review_epoch: std::sync::atomic::AtomicI64::new(0),
             mcp_generation: std::sync::atomic::AtomicU64::new(0),
             driver_cache: librefang_runtime::drivers::DriverCache::new(),
             budget_config: std::sync::RwLock::new(initial_budget),
@@ -3500,9 +3504,10 @@ system_prompt = "You are a helpful assistant."
                 // Skill evolution: check if any skill_evolve_* tools were used
                 // and hot-reload the registry so new/updated skills take effect
                 // immediately for subsequent messages.
-                let used_evolution_tool = result.decision_traces.iter().any(|t| {
-                    t.tool_name.starts_with("skill_evolve_")
-                });
+                let used_evolution_tool = result
+                    .decision_traces
+                    .iter()
+                    .any(|t| t.tool_name.starts_with("skill_evolve_"));
                 if used_evolution_tool {
                     tracing::info!(
                         agent_id = %agent_id,
@@ -3516,7 +3521,15 @@ system_prompt = "You are a helpful assistant."
                 // to evaluate whether the approach should be saved as a skill.
                 // Runs AFTER the response is delivered so it never competes with
                 // the user's task for model attention.
-                if result.skill_evolution_suggested && !used_evolution_tool {
+                // Cooldown: at most one review every 5 minutes to avoid spamming.
+                let now_epoch = chrono::Utc::now().timestamp();
+                let last_review = self
+                    .last_skill_review_epoch
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                let cooldown_ok = now_epoch - last_review >= 300;
+                if result.skill_evolution_suggested && !used_evolution_tool && cooldown_ok {
+                    self.last_skill_review_epoch
+                        .store(now_epoch, std::sync::atomic::Ordering::Relaxed);
                     let driver = self.default_driver.clone();
                     let skills_dir = self.home_dir_boot.join("skills");
                     let trace_summary = Self::summarize_traces_for_review(&result.decision_traces);
@@ -3529,7 +3542,9 @@ system_prompt = "You are a helpful assistant."
                             &trace_summary,
                             &response_summary,
                             kernel_weak,
-                        ).await {
+                        )
+                        .await
+                        {
                             tracing::debug!(error = %e, "Background skill review failed (best-effort)");
                         }
                     });
@@ -4344,6 +4359,7 @@ system_prompt = "You are a helpful assistant."
             latency_ms: 0,
             // WASM agents don't mutate the session; N/A.
             new_messages_start: 0,
+            skill_evolution_suggested: false,
         })
     }
 
@@ -4414,6 +4430,7 @@ system_prompt = "You are a helpful assistant."
             latency_ms: 0,
             // Python agents don't mutate the session; N/A.
             new_messages_start: 0,
+            skill_evolution_suggested: false,
         })
     }
 
@@ -9864,9 +9881,7 @@ system_prompt = "You are a helpful assistant."
     // ── Background skill review ──────────────────────────────────────
 
     /// Summarize decision traces into a compact text for the review LLM.
-    fn summarize_traces_for_review(
-        traces: &[librefang_types::tool::DecisionTrace],
-    ) -> String {
+    fn summarize_traces_for_review(traces: &[librefang_types::tool::DecisionTrace]) -> String {
         let mut summary = String::new();
         for (i, trace) in traces.iter().enumerate().take(20) {
             summary.push_str(&format!(
@@ -9922,9 +9937,8 @@ system_prompt = "You are a helpful assistant."
             "Respond with ONLY the JSON block, nothing else.",
         );
 
-        let user_msg = format!(
-            "## Task Summary\n{response_summary}\n\n## Tool Calls\n{trace_summary}"
-        );
+        let user_msg =
+            format!("## Task Summary\n{response_summary}\n\n## Tool Calls\n{trace_summary}");
 
         let request = CompletionRequest {
             model: String::new(),
@@ -9940,22 +9954,18 @@ system_prompt = "You are a helpful assistant."
             extra_body: None,
         };
 
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            driver.complete(request),
-        )
-        .await
-        .map_err(|_| "Background skill review timed out (30s)".to_string())?
-        .map_err(|e| format!("LLM call failed: {e}"))?;
+        let response =
+            tokio::time::timeout(std::time::Duration::from_secs(30), driver.complete(request))
+                .await
+                .map_err(|_| "Background skill review timed out (30s)".to_string())?
+                .map_err(|e| format!("LLM call failed: {e}"))?;
 
         let text = response.text();
 
         // Extract JSON from response (may be wrapped in ```json ... ```)
         let json_str = text
             .find('{')
-            .and_then(|start| {
-                text.rfind('}').map(|end| &text[start..=end])
-            })
+            .and_then(|start| text.rfind('}').map(|end| &text[start..=end]))
             .unwrap_or(&text);
 
         let parsed: serde_json::Value = serde_json::from_str(json_str)
@@ -9982,7 +9992,11 @@ system_prompt = "You are a helpful assistant."
                 .ok_or("Missing 'prompt_context' in review response")?;
             let tags: Vec<String> = parsed["tags"]
                 .as_array()
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect()
+                })
                 .unwrap_or_default();
 
             match librefang_skills::evolution::create_skill(
@@ -10195,8 +10209,10 @@ system_prompt = "You are a helpful assistant."
         }
 
         // Group skills by category (derived from parent directory name or tags)
-        let mut categories: std::collections::BTreeMap<String, Vec<&librefang_skills::InstalledSkill>> =
-            std::collections::BTreeMap::new();
+        let mut categories: std::collections::BTreeMap<
+            String,
+            Vec<&librefang_skills::InstalledSkill>,
+        > = std::collections::BTreeMap::new();
         for skill in &skills {
             // Derive category: use first tag if available, else "general"
             let category = skill
@@ -10217,8 +10233,7 @@ system_prompt = "You are a helpful assistant."
                 // a malicious skill author could otherwise smuggle newlines or
                 // `[...]` markers through the name/description/tool name slots
                 // and forge fake trust-boundary headers in the system prompt.
-                let name =
-                    sanitize_for_prompt(&skill.manifest.skill.name, SKILL_NAME_DISPLAY_CAP);
+                let name = sanitize_for_prompt(&skill.manifest.skill.name, SKILL_NAME_DISPLAY_CAP);
                 let desc = sanitize_for_prompt(&skill.manifest.skill.description, 200);
                 let tools: Vec<String> = skill
                     .manifest

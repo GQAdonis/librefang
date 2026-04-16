@@ -147,9 +147,13 @@ impl SkillVerifier {
 
         // ── Critical: data exfiltration with env vars / secrets ─────
         let exfil_critical = [
-            "curl.*$", "wget.*$", "requests.post.*api_key",
-            "cat .env", "cat ~/.ssh", "cat ~/.aws",
-            "printenv", "os.environ",
+            "cat .env",
+            "cat ~/.ssh",
+            "cat ~/.aws",
+            "printenv |",
+            "printenv >",
+            "os.environ[",
+            "process.env.",
             "send conversation history",
             "forward the entire chat",
         ];
@@ -321,9 +325,7 @@ impl SkillVerifier {
         }
 
         // ── Warning: privilege escalation ───────────────────────────
-        let privesc_patterns = [
-            "sudo ", "setuid", "setgid", "chmod u+s", "chmod g+s",
-        ];
+        let privesc_patterns = ["sudo ", "setuid", "setgid", "chmod u+s", "chmod g+s"];
         for pattern in &privesc_patterns {
             if lower.contains(pattern) {
                 warnings.push(SkillWarning {
@@ -335,10 +337,19 @@ impl SkillVerifier {
 
         // ── Warning: hardcoded secrets ──────────────────────────────
         let secret_patterns = [
-            "sk-", "api_key", "apikey", "secret_key", "private_key",
-            "-----begin rsa", "-----begin openssh", "-----begin private",
-            "ghp_", "gho_", "github_pat_",
-            "xoxb-", "xoxp-",
+            "sk-",
+            "api_key",
+            "apikey",
+            "secret_key",
+            "private_key",
+            "-----begin rsa",
+            "-----begin openssh",
+            "-----begin private",
+            "ghp_",
+            "gho_",
+            "github_pat_",
+            "xoxb-",
+            "xoxp-",
             "akia",
         ];
         for pattern in &secret_patterns {

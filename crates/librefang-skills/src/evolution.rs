@@ -144,9 +144,8 @@ fn atomic_write(path: &Path, content: &str) -> Result<(), SkillError> {
         std::process::id()
     ));
 
-    std::fs::write(&temp_path, content).map_err(|e| {
+    std::fs::write(&temp_path, content).inspect_err(|_| {
         let _ = std::fs::remove_file(&temp_path);
-        e
     })?;
 
     std::fs::rename(&temp_path, path).map_err(|e| {
@@ -171,11 +170,7 @@ pub struct FuzzyReplaceResult {
 /// Normalize whitespace: collapse runs of spaces/tabs to single space, trim lines.
 fn normalize_whitespace(s: &str) -> String {
     s.lines()
-        .map(|line| {
-            line.split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -382,8 +377,7 @@ fn try_block_anchor_replace(
 
         // Check middle similarity
         let old_middle: Vec<&str> = old_lines[1..old_lines.len() - 1].to_vec();
-        let content_middle: Vec<&str> =
-            content_lines[start + 1..expected_end].to_vec();
+        let content_middle: Vec<&str> = content_lines[start + 1..expected_end].to_vec();
 
         if old_middle.len() == content_middle.len() {
             let matching = old_middle
@@ -452,8 +446,8 @@ fn load_evolution_meta(skill_dir: &Path) -> SkillEvolutionMeta {
 
 /// Save evolution metadata atomically.
 fn save_evolution_meta(skill_dir: &Path, meta: &SkillEvolutionMeta) -> Result<(), SkillError> {
-    let json =
-        serde_json::to_string_pretty(meta).map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
+    let json = serde_json::to_string_pretty(meta)
+        .map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
     atomic_write(&skill_dir.join(".evolution.json"), &json)
 }
 
@@ -600,7 +594,12 @@ pub fn create_skill(
     }
 
     // Record initial version
-    let _ = record_version(&skill_dir, "0.1.0", "Initial creation by agent", prompt_context);
+    let _ = record_version(
+        &skill_dir,
+        "0.1.0",
+        "Initial creation by agent",
+        prompt_context,
+    );
 
     info!(skill = name, "Created evolved skill");
 
@@ -634,8 +633,8 @@ pub fn update_skill(
     let mut manifest = skill.manifest.clone();
     manifest.skill.version = new_version.clone();
     manifest.prompt_context = None; // we use external file
-    let toml_str =
-        toml::to_string_pretty(&manifest).map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
+    let toml_str = toml::to_string_pretty(&manifest)
+        .map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
     atomic_write(&skill_dir.join("skill.toml"), &toml_str)?;
 
     // Write new prompt_context.md
@@ -665,32 +664,25 @@ pub fn patch_skill(
     let name = &skill.manifest.skill.name;
     let skill_dir = &skill.path;
 
-    // Read current prompt_context
-    let current_content = skill
-        .manifest
-        .prompt_context
-        .as_deref()
-        .or_else(|| {
-            // Try reading from file
-            None
-        })
-        .ok_or_else(|| {
-            SkillError::InvalidManifest(format!("Skill '{name}' has no prompt_context to patch"))
-        })?
-        .to_string();
-
-    // If prompt_context was None, try reading from file
-    let current_content = if current_content.is_empty() {
-        let prompt_path = skill_dir.join("prompt_context.md");
-        if prompt_path.exists() {
-            std::fs::read_to_string(&prompt_path)?
-        } else {
-            return Err(SkillError::InvalidManifest(format!(
-                "Skill '{name}' has no prompt_context to patch"
-            )));
+    // Read current prompt_context: try in-memory manifest first, then file
+    let current_content = match skill.manifest.prompt_context.as_deref() {
+        Some(ctx) if !ctx.is_empty() => ctx.to_string(),
+        _ => {
+            let prompt_path = skill_dir.join("prompt_context.md");
+            if prompt_path.exists() {
+                let content = std::fs::read_to_string(&prompt_path)?;
+                if content.is_empty() {
+                    return Err(SkillError::InvalidManifest(format!(
+                        "Skill '{name}' has no prompt_context to patch"
+                    )));
+                }
+                content
+            } else {
+                return Err(SkillError::InvalidManifest(format!(
+                    "Skill '{name}' has no prompt_context to patch"
+                )));
+            }
         }
-    } else {
-        current_content
     };
 
     // Save rollback snapshot
@@ -708,8 +700,8 @@ pub fn patch_skill(
     let mut manifest = skill.manifest.clone();
     manifest.skill.version = new_version.clone();
     manifest.prompt_context = None;
-    let toml_str =
-        toml::to_string_pretty(&manifest).map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
+    let toml_str = toml::to_string_pretty(&manifest)
+        .map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
     atomic_write(&skill_dir.join("skill.toml"), &toml_str)?;
 
     // Write patched content
@@ -843,11 +835,22 @@ pub fn write_supporting_file(
     let name = &skill.manifest.skill.name;
     let target = skill.path.join(rel_path);
 
-    // Verify resolved path stays within the skill directory
-    let skill_dir_canonical = std::fs::canonicalize(&skill.path)
-        .unwrap_or_else(|_| skill.path.clone());
-    if let Ok(target_canonical) = target.parent().map(std::fs::create_dir_all) {
-        let _ = target_canonical; // just ensuring parent dirs exist
+    // Ensure parent directories exist
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Verify resolved path stays within the skill directory (belt-and-suspenders
+    // on top of validate_supporting_path rejecting ".." and absolute paths)
+    let skill_dir_canonical =
+        std::fs::canonicalize(&skill.path).unwrap_or_else(|_| skill.path.clone());
+    let target_canonical = std::fs::canonicalize(target.parent().unwrap_or(&skill.path))
+        .unwrap_or_else(|_| target.parent().unwrap_or(&skill.path).to_path_buf());
+    if !target_canonical.starts_with(&skill_dir_canonical) {
+        return Err(SkillError::SecurityBlocked(format!(
+            "Resolved path escapes skill directory: {}",
+            target_canonical.display()
+        )));
     }
 
     atomic_write(&target, content)?;
@@ -947,8 +950,11 @@ pub fn remove_supporting_file(
 }
 
 /// List all supporting files in a skill directory (references/, templates/, etc.).
-pub fn list_supporting_files(skill: &InstalledSkill) -> std::collections::HashMap<String, Vec<String>> {
-    let mut files: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+pub fn list_supporting_files(
+    skill: &InstalledSkill,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut files: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     for subdir in ALLOWED_SUBDIRS {
         let dir = skill.path.join(subdir);
         if dir.is_dir() {
@@ -991,9 +997,9 @@ pub fn rollback_skill(skill: &InstalledSkill) -> Result<EvolutionResult, SkillEr
         .collect();
     snapshots.sort_by_key(|e| e.path());
 
-    let latest = snapshots.last().ok_or_else(|| {
-        SkillError::NotFound(format!("No rollback snapshots for skill '{name}'"))
-    })?;
+    let latest = snapshots
+        .last()
+        .ok_or_else(|| SkillError::NotFound(format!("No rollback snapshots for skill '{name}'")))?;
 
     let old_content = std::fs::read_to_string(latest.path())?;
     validate_prompt_content(&old_content)?;
@@ -1007,8 +1013,8 @@ pub fn rollback_skill(skill: &InstalledSkill) -> Result<EvolutionResult, SkillEr
     let mut manifest = skill.manifest.clone();
     manifest.skill.version = new_version.clone();
     manifest.prompt_context = None;
-    let toml_str =
-        toml::to_string_pretty(&manifest).map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
+    let toml_str = toml::to_string_pretty(&manifest)
+        .map_err(|e| SkillError::InvalidManifest(e.to_string()))?;
     atomic_write(&skill_dir.join("skill.toml"), &toml_str)?;
 
     record_version(
@@ -1082,9 +1088,7 @@ pub fn extract_skill_config_vars(skill: &InstalledSkill) -> Vec<SkillConfigVar> 
 }
 
 /// Discover all config variables across all installed skills.
-pub fn discover_all_config_vars(
-    skills: &[&InstalledSkill],
-) -> Vec<SkillConfigVar> {
+pub fn discover_all_config_vars(skills: &[&InstalledSkill]) -> Vec<SkillConfigVar> {
     let mut all_vars = Vec::new();
     let mut seen_keys = std::collections::HashSet::new();
     for skill in skills {
@@ -1170,8 +1174,7 @@ mod tests {
     #[test]
     fn test_fuzzy_line_trimmed() {
         let content = "  hello  \n  world  ";
-        let result =
-            fuzzy_find_and_replace(content, "hello\nworld", "hi\nearth", false).unwrap();
+        let result = fuzzy_find_and_replace(content, "hello\nworld", "hi\nearth", false).unwrap();
         assert_eq!(result.strategy, MatchStrategy::LineTrimmed);
     }
 
@@ -1225,7 +1228,14 @@ mod tests {
     #[test]
     fn test_update_skill() {
         let dir = TempDir::new().unwrap();
-        create_skill(dir.path(), "evolve-me", "Evolving", "# V1\n\nOriginal.", vec![]).unwrap();
+        create_skill(
+            dir.path(),
+            "evolve-me",
+            "Evolving",
+            "# V1\n\nOriginal.",
+            vec![],
+        )
+        .unwrap();
 
         // Load it as an InstalledSkill
         let skill = InstalledSkill {
@@ -1254,10 +1264,7 @@ mod tests {
         assert_eq!(result.version.as_deref(), Some("0.1.1"));
 
         // Verify rollback snapshot exists
-        assert!(dir
-            .path()
-            .join("evolve-me/.rollback")
-            .exists());
+        assert!(dir.path().join("evolve-me/.rollback").exists());
     }
 
     #[test]

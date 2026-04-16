@@ -470,20 +470,22 @@ fn build_skills_section(skill_summary: &str, prompt_context: &str) -> String {
             "Only proceed without loading a skill if genuinely none are relevant to the task.\n",
         );
     }
-    // Skill evolution guidance — teach agents to self-improve their skill library
-    out.push_str(concat!(
-        "\n### Skill Evolution\n",
-        "You can create and improve skills based on your experience:\n",
-        "- After completing a complex task (5+ tool calls) that involved trial-and-error ",
-        "or a non-trivial workflow, save the approach as a skill with `skill_evolve_create` ",
-        "so you can reuse it next time.\n",
-        "- When using a skill and finding it outdated, incomplete, or wrong, ",
-        "patch it immediately with `skill_evolve_patch` — don't wait to be asked. ",
-        "Skills that aren't maintained become liabilities.\n",
-        "- Use `skill_evolve_rollback` if a recent update made things worse.\n",
-        "- Use `skill_evolve_write_file` to add supporting files (references, templates, ",
-        "scripts, assets) that enrich a skill's context.\n",
-    ));
+    // Skill evolution guidance — only inject when skills are actually installed
+    if !skill_summary.is_empty() {
+        out.push_str(concat!(
+            "\n### Skill Evolution\n",
+            "You can create and improve skills based on your experience:\n",
+            "- After completing a complex task (5+ tool calls) that involved trial-and-error ",
+            "or a non-trivial workflow, save the approach as a skill with `skill_evolve_create` ",
+            "so you can reuse it next time.\n",
+            "- When using a skill and finding it outdated, incomplete, or wrong, ",
+            "patch it immediately with `skill_evolve_patch` — don't wait to be asked. ",
+            "Skills that aren't maintained become liabilities.\n",
+            "- Use `skill_evolve_rollback` if a recent update made things worse.\n",
+            "- Use `skill_evolve_write_file` to add supporting files (references, templates, ",
+            "scripts, assets) that enrich a skill's context.\n",
+        ));
+    }
     if !prompt_context.is_empty() {
         out.push('\n');
         // If the joined skill context overflows the total budget, the

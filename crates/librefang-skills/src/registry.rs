@@ -31,7 +31,12 @@ fn skill_matches_platform(manifest: &crate::SkillManifest) -> bool {
         .skill
         .tags
         .iter()
-        .filter(|t| matches!(t.as_str(), "macos" | "linux" | "windows" | "macos-only" | "linux-only" | "windows-only"))
+        .filter(|t| {
+            matches!(
+                t.as_str(),
+                "macos" | "linux" | "windows" | "macos-only" | "linux-only" | "windows-only"
+            )
+        })
         .map(|t| t.as_str())
         .collect();
 
@@ -49,9 +54,7 @@ fn skill_matches_platform(manifest: &crate::SkillManifest) -> bool {
         return true; // unknown platform, allow all
     };
 
-    platform_tags.iter().any(|tag| {
-        tag.starts_with(current)
-    })
+    platform_tags.iter().any(|tag| tag.starts_with(current))
 }
 
 impl SkillRegistry {
@@ -84,6 +87,7 @@ impl SkillRegistry {
             skills: self.skills.clone(),
             skills_dir: self.skills_dir.clone(),
             frozen: self.frozen,
+            disabled_skills: self.disabled_skills.clone(),
         }
     }
 
@@ -419,7 +423,8 @@ impl SkillRegistry {
             .ok_or_else(|| SkillError::NotFound(name.to_string()))?
             .clone();
 
-        let result = crate::evolution::patch_skill(&skill, old_str, new_str, changelog, replace_all)?;
+        let result =
+            crate::evolution::patch_skill(&skill, old_str, new_str, changelog, replace_all)?;
         self.reload_skill(name)?;
         Ok(result)
     }
@@ -491,16 +496,16 @@ impl SkillRegistry {
                 match self.load_skill(&path) {
                     Ok(_) => count += 1,
                     Err(e) => {
-                        warn!(
-                            "Failed to load external skill at {}: {e}",
-                            path.display()
-                        );
+                        warn!("Failed to load external skill at {}: {e}", path.display());
                     }
                 }
             }
         }
         if count > 0 {
-            info!("Loaded {count} external skill(s) from {} dir(s)", dirs.len());
+            info!(
+                "Loaded {count} external skill(s) from {} dir(s)",
+                dirs.len()
+            );
         }
         Ok(count)
     }

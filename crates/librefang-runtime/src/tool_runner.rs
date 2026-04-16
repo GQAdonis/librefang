@@ -4823,11 +4823,21 @@ async fn tool_skill_evolve_create(
         .ok_or("Missing 'prompt_context' parameter")?;
     let tags: Vec<String> = input["tags"]
         .as_array()
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     let skills_dir = registry.skills_dir();
-    match librefang_skills::evolution::create_skill(skills_dir, name, description, prompt_context, tags) {
+    match librefang_skills::evolution::create_skill(
+        skills_dir,
+        name,
+        description,
+        prompt_context,
+        tags,
+    ) {
         Ok(result) => serde_json::to_string(&result).map_err(|e| e.to_string()),
         Err(e) => Err(format!("Failed to create skill: {e}")),
     }
@@ -4877,7 +4887,13 @@ async fn tool_skill_evolve_patch(
         .get(name)
         .ok_or_else(|| format!("Skill '{name}' not found"))?;
 
-    match librefang_skills::evolution::patch_skill(skill, old_string, new_string, changelog, replace_all) {
+    match librefang_skills::evolution::patch_skill(
+        skill,
+        old_string,
+        new_string,
+        changelog,
+        replace_all,
+    ) {
         Ok(result) => serde_json::to_string(&result).map_err(|e| e.to_string()),
         Err(e) => Err(format!("Failed to patch skill: {e}")),
     }
@@ -4921,7 +4937,9 @@ async fn tool_skill_evolve_write_file(
     let registry = skill_registry.ok_or("Skill registry not available")?;
     let name = input["name"].as_str().ok_or("Missing 'name' parameter")?;
     let path = input["path"].as_str().ok_or("Missing 'path' parameter")?;
-    let content = input["content"].as_str().ok_or("Missing 'content' parameter")?;
+    let content = input["content"]
+        .as_str()
+        .ok_or("Missing 'content' parameter")?;
 
     let skill = registry
         .get(name)

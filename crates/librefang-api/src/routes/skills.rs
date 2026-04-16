@@ -210,15 +210,30 @@ pub async fn list_skills(
 
     let category_filter = params.get("category").map(|s| s.as_str());
 
+    // Collect all categories first (unaffected by the filter), then apply filter
+    let all_skills = registry.list();
     let mut categories = std::collections::BTreeSet::new();
-    let skills: Vec<serde_json::Value> = registry
-        .list()
+    for s in &all_skills {
+        let cat = s
+            .manifest
+            .skill
+            .tags
+            .first()
+            .map(|t| t.as_str())
+            .unwrap_or("general");
+        categories.insert(cat.to_string());
+    }
+
+    let skills: Vec<serde_json::Value> = all_skills
         .iter()
         .filter(|s| {
-            // Collect all categories while iterating
-            let cat = s.manifest.skill.tags.first().map(|t| t.as_str()).unwrap_or("general");
-            categories.insert(cat.to_string());
-            // Apply category filter if specified
+            let cat = s
+                .manifest
+                .skill
+                .tags
+                .first()
+                .map(|t| t.as_str())
+                .unwrap_or("general");
             match category_filter {
                 Some(filter) => cat == filter,
                 None => true,
@@ -3355,20 +3370,6 @@ fn remove_mcp_server_config(config_path: &std::path::Path, name: &str) -> Result
     Ok(())
 }
 
-fn is_safe_component_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.contains("..")
-        && !name.contains('/')
-        && !name.contains('\\')
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-        && std::path::Path::new(name)
-            .file_name()
-            .and_then(|n| n.to_str())
-            == Some(name)
-}
-
 fn validate_static_file_path(
     path: &std::path::Path,
     expected_file_name: &str,
@@ -3426,12 +3427,22 @@ pub async fn create_skill(
     let prompt_context = body["prompt_context"].as_str().unwrap_or("").to_string();
     let tags: Vec<String> = body["tags"]
         .as_array()
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     // Use the evolution module for safe, validated skill creation
     let skills_dir = state.kernel.home_dir().join("skills");
-    match librefang_skills::evolution::create_skill(&skills_dir, &name, &description, &prompt_context, tags) {
+    match librefang_skills::evolution::create_skill(
+        &skills_dir,
+        &name,
+        &description,
+        &prompt_context,
+        tags,
+    ) {
         Ok(result) => {
             // Hot-reload skills so the new skill is available immediately
             state.kernel.reload_skills();
@@ -3447,8 +3458,7 @@ pub async fn create_skill(
             )
         }
         Err(e) => {
-            ApiErrorResponse::bad_request(format!("Failed to create skill: {e}"))
-                .into_json_tuple()
+            ApiErrorResponse::bad_request(format!("Failed to create skill: {e}")).into_json_tuple()
         }
     }
 }

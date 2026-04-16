@@ -110,6 +110,7 @@ taskkill //PID <pid> //F
 | `/api/budget/agents/{id}` | GET | Single agent budget detail |
 | `/api/network/status` | GET | OFP network status |
 | `/api/peers` | GET | Connected OFP peers |
+| `/api/skills/{name}` | GET | Skill detail with evolution history |
 | `/api/a2a/agents` | GET | External A2A agents |
 | `/api/a2a/discover` | POST | Discover A2A agent at URL |
 | `/api/a2a/send` | POST | Send task to external A2A agent |
