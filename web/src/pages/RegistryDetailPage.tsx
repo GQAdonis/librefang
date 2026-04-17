@@ -50,11 +50,16 @@ function relTime(iso: string | null): string {
 // <id>/ ; file-backed categories just use <id>.toml at the top level.
 function pathFor(category: RegistryCategory, id: string): string {
   switch (category) {
-    case 'hands':  return `hands/${id}/HAND.toml`
-    case 'agents': return `agents/${id}/AGENT.toml`
-    case 'skills': return `skills/${id}/SKILL.toml`
-    case 'mcp':    return `mcp/${id}.toml`
-    default:       return `${category}/${id}.toml`
+    case 'hands':   return `hands/${id}/HAND.toml`
+    // `agent.toml` and `plugin.toml` are lowercase in the upstream
+    // registry (unlike HAND.toml / SKILL.md); using uppercase 404s.
+    case 'agents':  return `agents/${id}/agent.toml`
+    case 'plugins': return `plugins/${id}/plugin.toml`
+    // Skills ship SKILL.md with YAML frontmatter — there is no TOML
+    // manifest, so the "manifest" section renders the markdown source.
+    case 'skills':  return `skills/${id}/SKILL.md`
+    case 'mcp':     return `mcp/${id}.toml`
+    default:        return `${category}/${id}.toml`
   }
 }
 
