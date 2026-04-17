@@ -58,7 +58,8 @@ function pathFor(category: RegistryCategory, id: string): string {
     // Skills ship SKILL.md with YAML frontmatter — there is no TOML
     // manifest, so the "manifest" section renders the markdown source.
     case 'skills':  return `skills/${id}/SKILL.md`
-    case 'mcp':     return `mcp/${id}.toml`
+    // MCP servers live under integrations/ upstream.
+    case 'mcp':     return `integrations/${id}.toml`
     default:        return `${category}/${id}.toml`
   }
 }
