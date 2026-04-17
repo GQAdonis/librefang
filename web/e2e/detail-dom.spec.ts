@@ -2,8 +2,11 @@ import { expect, test } from '@playwright/test'
 
 test.describe('detail page DOM', () => {
   test('TOML manifest renders highlighted spans', async ({ page }) => {
-    await page.goto('/skills')
-    const firstCard = page.locator('a[href*="/skills/"]').first()
+    // Use /hands because skill manifests ship as SKILL.md (YAML frontmatter),
+    // not TOML — only TOML-backed categories exercise the .toml-highlight
+    // renderer (hands, agents, plugins, channels, providers, etc.).
+    await page.goto('/hands')
+    const firstCard = page.locator('a[href*="/hands/"]').first()
     await firstCard.waitFor({ state: 'visible', timeout: 15000 })
     const href = await firstCard.getAttribute('href')
     await page.goto(href!)
@@ -17,8 +20,8 @@ test.describe('detail page DOM', () => {
   })
 
   test('anchor copy-link hashes the URL', async ({ page }) => {
-    await page.goto('/skills')
-    const firstCard = page.locator('a[href*="/skills/"]').first()
+    await page.goto('/hands')
+    const firstCard = page.locator('a[href*="/hands/"]').first()
     await firstCard.waitFor({ state: 'visible', timeout: 15000 })
     await firstCard.click()
     // Manifest heading has an anchor link that sets the hash on click.
@@ -29,8 +32,8 @@ test.describe('detail page DOM', () => {
   })
 
   test('related items section renders when data is available', async ({ page }) => {
-    await page.goto('/skills')
-    const firstCard = page.locator('a[href*="/skills/"]').first()
+    await page.goto('/hands')
+    const firstCard = page.locator('a[href*="/hands/"]').first()
     await firstCard.waitFor({ state: 'visible', timeout: 15000 })
     await firstCard.click()
     // Related section has its own id and heading. Use .first() because each
