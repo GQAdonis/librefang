@@ -749,6 +749,10 @@ const evolutionToolIcons: LucideIcon[] = [FilePlus, FileEdit, FileEdit, RotateCc
 function Evolution({ t }: SectionProps) {
   if (!t.evolution) return null
   const ev = t.evolution
+  const lang = useAppStore((s) => s.lang)
+  const langPrefix = lang === 'en' ? '' : `/${lang}`
+  const skillsHref = `${langPrefix}/skills`
+  const skillsLabel = t.registry?.categories.skills.title || 'Skills'
   return (
     <section id="evolution" className="py-28 px-6 scroll-mt-20">
       <div className="max-w-6xl mx-auto">
@@ -796,15 +800,26 @@ function Evolution({ t }: SectionProps) {
         </FadeIn>
 
         <FadeIn delay={200}>
-          <a
-            href="https://docs.librefang.ai/agent/skills#skill-self-evolution"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => trackEvent('click', 'evolution_docs')}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition-colors"
-          >
-            {ev.cta} <ArrowRight className="w-3.5 h-3.5" />
-          </a>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <a
+              href={skillsHref}
+              onClick={() => trackEvent('click', 'evolution_browse_skills')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-300 rounded text-sm font-semibold transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {skillsLabel}
+              <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+            <a
+              href="https://docs.librefang.ai/agent/skills#skill-self-evolution"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => trackEvent('click', 'evolution_docs')}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 transition-colors"
+            >
+              {ev.cta} <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
         </FadeIn>
       </div>
     </section>
