@@ -2,7 +2,7 @@ import { useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, ArrowRight, Loader2, AlertCircle, ExternalLink, Sparkles, Copy, Check, Terminal, FileText, RotateCcw, Link as LinkIcon } from 'lucide-react'
 import { useState } from 'react'
-import { useRegistry, getLocalizedDesc, getCategoryItems } from '../useRegistry'
+import { useRegistry, getLocalizedDesc, getLocalizedName, getCategoryItems } from '../useRegistry'
 import type { RegistryCategory, Detail } from '../useRegistry'
 import { translations } from '../i18n'
 import { useAppStore } from '../store'
@@ -217,6 +217,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
   const catHref = lang === 'en' ? `/${category}` : `/${lang}/${category}`
   const categoryLabel = t.registry?.categories[category]?.title || category
   const desc = item ? getLocalizedDesc(item, lang) : ''
+  const displayName = item ? getLocalizedName(item, lang) : id
   const popular = isPopular(item)
 
   return (
@@ -231,7 +232,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
         <div className="lg:col-span-2 mb-6">
           <Breadcrumbs crumbs={[
             { label: categoryLabel, href: catHref },
-            { label: item?.name || id },
+            { label: displayName },
           ]} />
         </div>
         {/* Sticky TOC — hidden below lg, otherwise pinned in the left gutter. */}
@@ -263,7 +264,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight truncate">
-                  {item?.name || id}
+                  {displayName}
                 </h1>
                 {popular && <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />}
               </div>
@@ -442,7 +443,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
                           <RegistryIcon icon={rel.icon} className="w-4 h-4" fallbackClassName="text-lg leading-none" />
                         </span>
                       )}
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{rel.name}</h3>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{getLocalizedName(rel, lang)}</h3>
                       {relPopular && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
                     </div>
                     {relDesc && (

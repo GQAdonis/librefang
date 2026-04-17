@@ -11,7 +11,7 @@ const token = process.env.GITHUB_TOKEN
 if (token) HEADERS['Authorization'] = `Bearer ${token}`
 
 interface GHItem { name: string; type: string }
-interface I18nEntry { description: string }
+interface I18nEntry { name?: string; description?: string }
 interface Detail { id: string; name: string; description: string; category: string; icon: string; tags?: string[]; i18n?: Record<string, I18nEntry> }
 
 async function fetchDir(path: string): Promise<GHItem[]> {
@@ -30,17 +30,33 @@ function parseToml(text: string, fallbackId: string): Detail {
     const m = text.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`, 'm'))
     return m ? m[1]! : ''
   }
-  // Parse i18n sections
+  // Parse i18n sections — capture both name and description so the
+  // card title localizes (not just the blurb). Line-oriented on
+  // purpose: a regex that captures "everything between two headers"
+  // breaks when a value inside the block contains a `[` character
+  // (e.g. `tags = ["popular"]`).
   const i18n: Record<string, I18nEntry> = {}
-  const i18nRegex = /\[i18n\.([a-zA-Z-]+)\]\s*\n(?:([^[]*?)(?=\n\[|\n*$))/g
-  let match
-  while ((match = i18nRegex.exec(text)) !== null) {
-    const lang = match[1]!
-    const block = match[2] || ''
-    const descMatch = block.match(/description\s*=\s*"([^"]*)"/)
-    if (descMatch) {
-      i18n[lang] = { description: descMatch[1]! }
+  const lines = text.split(/\r?\n/)
+  // Match only top-level [i18n.<lang>] headers (no dots in the lang
+  // token), so we ignore nested [i18n.zh.agents.main] subsections.
+  const headerRe = /^\[i18n\.([a-zA-Z-]+)\]\s*$/
+  const anyHeaderRe = /^\[/
+  const kvRe = (k: string) => new RegExp(`^\\s*${k}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`)
+  const nameRe = kvRe('name')
+  const descRe = kvRe('description')
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i]!.match(headerRe)
+    if (!h) continue
+    const lang = h[1]!
+    const entry: I18nEntry = {}
+    for (let j = i + 1; j < lines.length; j++) {
+      if (anyHeaderRe.test(lines[j]!)) break
+      const n = lines[j]!.match(nameRe)
+      if (n && entry.name === undefined) entry.name = n[1]!
+      const d = lines[j]!.match(descRe)
+      if (d && entry.description === undefined) entry.description = d[1]!
     }
+    if (entry.name || entry.description) i18n[lang] = entry
   }
   // Parse tags = ["popular", ...]
   const tagsMatch = text.match(/^tags\s*=\s*\[([^\]]*)\]/m)

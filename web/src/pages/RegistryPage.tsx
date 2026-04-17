@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, Search, Loader2, AlertCircle, Sparkles, RotateCcw, Github, ExternalLink, ArrowUpDown, Star } from 'lucide-react'
-import { useRegistry, getLocalizedDesc, getCategoryItems } from '../useRegistry'
+import { useRegistry, getLocalizedDesc, getLocalizedName, getCategoryItems } from '../useRegistry'
 import type { RegistryCategory, Detail } from '../useRegistry'
 import { translations } from './../i18n'
 import type { Translation } from './../i18n'
@@ -250,7 +250,7 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
                     href={href}
                     className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 hover:underline"
                   >
-                    {item.name}
+                    {getLocalizedName(item, lang)}
                   </a>
                 )
               })}
@@ -408,7 +408,7 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
                         </span>
                       )}
                       <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
-                        {item.name}
+                        {getLocalizedName(item, lang)}
                       </h3>
                       {popular && <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                     </div>

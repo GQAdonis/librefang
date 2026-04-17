@@ -6,7 +6,8 @@ const LOCAL_JSON = '/registry.json'
 
 // ─── Zod schemas ───
 const I18nEntrySchema = z.object({
-  description: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional(),
 })
 
 const DetailSchema = z.object({
@@ -58,6 +59,15 @@ export function getLocalizedDesc(item: Detail, lang: string): string {
   // Try exact match first (zh-TW), then prefix (zh)
   const desc = item.i18n?.[lang]?.description ?? item.i18n?.[lang.split('-')[0]!]?.description
   return desc || item.description
+}
+
+/** Get localized name for a Detail item — falls back to English if the
+ * target locale has no translated name. Same lookup strategy as the
+ * description helper. */
+export function getLocalizedName(item: Detail, lang: string): string {
+  if (lang === 'en') return item.name
+  const name = item.i18n?.[lang]?.name ?? item.i18n?.[lang.split('-')[0]!]?.name
+  return name || item.name
 }
 
 async function fetchRegistryData(): Promise<RegistryData> {

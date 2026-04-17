@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEventHandler } from 'react'
 import { Search, X, Sparkles, Hash } from 'lucide-react'
-import { useRegistry, getLocalizedDesc } from '../useRegistry'
+import { useRegistry, getLocalizedDesc, getLocalizedName } from '../useRegistry'
 import RegistryIcon from './RegistryIcon'
 import type { RegistryCategory, Detail } from '../useRegistry'
 import { translations, type Translation } from '../i18n'
@@ -330,7 +330,7 @@ export default function SearchDialog({ open, onClose }: SearchDialogProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                      {hit.item.name}
+                      {getLocalizedName(hit.item, lang)}
                     </span>
                     {popular && <Sparkles className="w-3 h-3 text-amber-500 shrink-0" />}
                     <span className="ml-auto text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-wider shrink-0">
