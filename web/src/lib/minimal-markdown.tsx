@@ -53,7 +53,11 @@ function renderInline(line: string): ReactNode[] {
     else if (pick.kind === 'ital') next.italic = true
     else if (pick.kind === 'link') next.href = pick.href
     spans.push(next)
-    rest = rest.slice(pick.pre.length + pick.consume)
+    // `consume` is the full regex-match length which already covers
+    // the pre — don't add pre.length a second time or we chew through
+    // separators between adjacent spans (e.g. every other ", " in a
+    // `foo`, `bar`, `baz` sequence).
+    rest = rest.slice(pick.consume)
   }
   return spans.map((s, i) => {
     const key = `${i}-${escapeKey(s.text)}`
@@ -100,6 +104,51 @@ export function renderMarkdown(md: string): ReactNode[] {
       const Tag = level === 1 ? 'h3' : level === 2 ? 'h4' : 'h5'
       out.push(<Tag key={`h-${blockIdx++}`} className={cls}>{renderInline(text)}</Tag>)
       i++
+      continue
+    }
+    // GFM pipe table: a row starts with `|`, the next row is the
+    // separator `| --- | :---: | ---: |`. Minimal support — cells
+    // render inline markdown; header row gets `<th>`, rest `<td>`.
+    if (line.trim().startsWith('|') && i + 1 < lines.length && /^\s*\|?[\s-:|]+\|?\s*$/.test(lines[i + 1]!) && lines[i + 1]!.includes('-')) {
+      const splitRow = (l: string): string[] => {
+        let s = l.trim()
+        if (s.startsWith('|')) s = s.slice(1)
+        if (s.endsWith('|')) s = s.slice(0, -1)
+        return s.split('|').map(c => c.trim())
+      }
+      const header = splitRow(line)
+      i += 2 // skip header + separator
+      const rows: string[][] = []
+      while (i < lines.length && lines[i]!.trim().startsWith('|')) {
+        rows.push(splitRow(lines[i]!))
+        i++
+      }
+      out.push(
+        <div key={`tbl-${blockIdx++}`} className="my-4 overflow-x-auto">
+          <table className="min-w-full text-sm text-left border border-black/10 dark:border-white/5">
+            <thead className="bg-surface-100">
+              <tr>
+                {header.map((h, j) => (
+                  <th key={j} className="px-3 py-2 font-semibold text-slate-900 dark:text-white border-b border-black/10 dark:border-white/5">
+                    {renderInline(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, ri) => (
+                <tr key={ri} className="border-t border-black/10 dark:border-white/5">
+                  {r.map((c, ci) => (
+                    <td key={ci} className="px-3 py-2 text-gray-700 dark:text-gray-300">
+                      {renderInline(c)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
       continue
     }
     // Bullet list
