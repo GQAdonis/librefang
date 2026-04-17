@@ -190,8 +190,12 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/ErrorReport" }
+                type: object
+                required: [errors]
+                properties:
+                  errors:
+                    type: array
+                    items: { $ref: "#/components/schemas/ErrorReport" }
     post:
       tags: [errors]
       summary: Ingest a client-side error report
@@ -322,20 +326,37 @@ components:
       type: object
       required: [message]
       properties:
-        message: { type: string }
-        stack: { type: string }
-        url: { type: string, format: uri }
-        userAgent: { type: string }
-        timestamp: { type: string, format: date-time }
-        build: { type: string, description: Build SHA / version string. }
+        message: { type: string, maxLength: 2000 }
+        stack: { type: string, maxLength: 4000 }
+        pathname: { type: string, maxLength: 256, description: Page pathname where the error surfaced. }
+        lang: { type: string, maxLength: 16, description: App language code. }
+        ua: { type: string, maxLength: 256, description: Browser user agent. }
+        at: { type: string, format: date-time, description: Server-assigned ingestion timestamp (response only). }
     Release:
+      description: >
+        Passthrough of the upstream GitHub Releases API payload. Field names
+        and shape match GitHub's response verbatim — the worker does not
+        transform it, so consumers should treat this as the standard GitHub
+        release schema, not a LibreFang-specific envelope.
       type: object
       properties:
-        tag: { type: string }
-        name: { type: string }
-        publishedAt: { type: string, format: date-time }
-        url: { type: string, format: uri }
-        downloads: { type: integer }
+        tag_name: { type: string, description: Git tag the release was cut from. }
+        name: { type: string, description: Display title of the release. }
+        published_at: { type: string, format: date-time }
+        html_url: { type: string, format: uri, description: GitHub URL for the release. }
+        body: { type: string, description: Release notes in GitHub-flavored Markdown. }
+        prerelease: { type: boolean }
+        draft: { type: boolean }
+        assets:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              browser_download_url: { type: string, format: uri }
+              download_count: { type: integer, minimum: 0 }
+              size: { type: integer, minimum: 0 }
+              content_type: { type: string }
     Error:
       type: object
       required: [error]

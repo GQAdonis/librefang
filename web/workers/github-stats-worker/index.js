@@ -767,6 +767,29 @@ async function refreshRegistryCache(env) {
     return result
   }
 
+  // Skills ship as SKILL.md with YAML frontmatter, not TOML, so `fetchToml`
+  // returns empty fields for every skill. Mirrors `fetchSkillMd` in
+  // web/scripts/fetch-registry.ts so live and build-time shapes match.
+  async function fetchSkillMd(path, fallbackId) {
+    const res = await fetch(`${REGISTRY_RAW}/${path}`)
+    if (!res.ok) return null
+    const text = await res.text()
+    const fm = text.match(/^---\s*\n([\s\S]*?)\n---/)
+    if (!fm) return null
+    const block = fm[1]
+    const get = (key) => {
+      const m = block.match(new RegExp(`^${key}\\s*:\\s*"?([^"\\n]*?)"?\\s*$`, 'm'))
+      return m ? m[1].trim() : ''
+    }
+    return {
+      id: get('id') || fallbackId,
+      name: get('name') || fallbackId,
+      description: get('description'),
+      category: 'skills',
+      icon: '',
+    }
+  }
+
   try {
     const [handDirs, channelFiles, providerFiles, workflowFiles, agentDirs, pluginFiles, skillDirs, mcpFiles] = await Promise.all([
       fetchDir('hands'),
@@ -789,32 +812,46 @@ async function refreshRegistryCache(env) {
     const skills = filter(skillDirs)
     const mcp = filter(mcpFiles)
 
-    // Compare counts with cached data — skip full TOML fetch if unchanged
+    // Cache-invalidation signature: every listed item's name AND git sha.
+    // Comparing only counts missed content-only edits (description/tag/i18n
+    // updates, one item swapped for another with the same total). With
+    // sha-based hashing, any upstream registry change bumps the signature
+    // so the manifest fetch actually runs.
+    const sigOf = (items) =>
+      items.map(i => `${i.name}@${i.sha || ''}`).sort().join(',')
+    const signature = [
+      `hands=${sigOf(hands)}`,
+      `channels=${sigOf(channels)}`,
+      `providers=${sigOf(providers)}`,
+      `workflows=${sigOf(workflows)}`,
+      `agents=${sigOf(agents)}`,
+      `plugins=${sigOf(plugins)}`,
+      `skills=${sigOf(skills)}`,
+      `mcp=${sigOf(mcp)}`,
+    ].join('|')
+
     const cached = await env.KV.get('registry_data')
     if (cached) {
       try {
         const old = JSON.parse(cached)
-        if (old.handsCount === hands.length &&
-            old.channelsCount === channels.length &&
-            old.providersCount === providers.length &&
-            old.workflowsCount === workflows.length &&
-            old.agentsCount === agents.length &&
-            old.pluginsCount === plugins.length &&
-            old.skillsCount === skills.length &&
-            old.mcpCount === mcp.length) {
-          console.log('Registry unchanged, skipping TOML fetch')
+        if (old.signature === signature) {
+          console.log('Registry unchanged (signature match), skipping manifest fetch')
           await env.KV.put('registry_data_time', String(Date.now()))
           return
         }
       } catch (_) { /* parse error, refetch */ }
     }
 
-    // Counts changed — fetch full TOML details in batches of 10
-    async function fetchBatch(items, tomlPath) {
+    // Registry changed — fetch full manifest details in batches of 10.
+    // `fetcher` is configurable so skills (YAML frontmatter) route through
+    // fetchSkillMd while everything else stays on fetchToml.
+    async function fetchBatch(items, pathFn, fetcher = (p, _id) => fetchToml(p)) {
       const results = []
       for (let i = 0; i < items.length; i += 10) {
         const batch = items.slice(i, i + 10)
-        const batchResults = await Promise.all(batch.map(item => fetchToml(tomlPath(item))))
+        const batchResults = await Promise.all(
+          batch.map(item => fetcher(pathFn(item), item.name)),
+        )
         results.push(...batchResults)
       }
       return results.filter(Boolean)
@@ -828,7 +865,7 @@ async function refreshRegistryCache(env) {
       // plugins are directory-backed — match what fetch-registry.ts uses
       // so the per-item fetch actually resolves and populates descriptions.
       fetchBatch(agents, a => `agents/${a.name}/agent.toml`),
-      fetchBatch(skills, s => `skills/${s.name}/SKILL.md`),
+      fetchBatch(skills, s => `skills/${s.name}/SKILL.md`, fetchSkillMd),
       fetchBatch(channels, c => `channels/${c.name}`),
       fetchBatch(providers, p => `providers/${p.name}`),
       fetchBatch(workflows, w => `workflows/${w.name}`),
@@ -854,6 +891,9 @@ async function refreshRegistryCache(env) {
       skillsCount: skills.length,
       mcpCount: mcp.length,
       fetchedAt: new Date().toISOString(),
+      // Persisted so the next refresh can compare against it and skip
+      // the manifest fetch when nothing has changed upstream.
+      signature,
     }
 
     const json = JSON.stringify(result)
