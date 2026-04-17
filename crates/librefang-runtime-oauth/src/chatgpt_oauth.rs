@@ -461,7 +461,7 @@ pub async fn fetch_best_codex_model(access_token: &str) -> String {
         })
         .collect();
 
-    sorted.sort_by_key(|(_, priority)| std::cmp::Reverse(*priority));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     if let Some((best_slug, priority)) = sorted.first() {
         info!("Best Codex model: {best_slug} (priority {priority})");

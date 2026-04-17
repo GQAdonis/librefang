@@ -167,12 +167,16 @@ export interface SkillVersionEntry {
   timestamp: string;
   changelog: string;
   content_hash: string;
+  author?: string | null;
 }
 
 export interface SkillEvolutionMeta {
   versions: SkillVersionEntry[];
   use_count: number;
+  /** Total version entries written, incl. initial creation. */
   evolution_count: number;
+  /** Mutations after creation (update/patch/rollback). 0 on fresh skill. */
+  mutation_count: number;
 }
 
 export interface SkillToolInfo {
@@ -191,6 +195,7 @@ export interface SkillDetail {
   tools: SkillToolInfo[];
   has_prompt_context: boolean;
   prompt_context_length: number;
+  prompt_context?: string | null;
   source: any;
   enabled: boolean;
   path: string;
@@ -203,6 +208,16 @@ export interface EvolutionResult {
   message: string;
   skill_name: string;
   version?: string;
+  /** Set only on patch ops: which fuzzy strategy matched. */
+  match_strategy?: "Exact" | "WhitespaceStripped" | "LineTrimmed" | "WhitespaceNormalized" | "IndentFlexible" | "BlockAnchor";
+  /** Set only on patch ops: replaced occurrence count. */
+  match_count?: number;
+  /** Post-op version-history size (includes initial creation). */
+  evolution_count?: number;
+  /** Post-op mutation counter (post-create edits only — 0 on fresh create). */
+  mutation_count?: number;
+  /** Post-op usage counter. */
+  use_count?: number;
 }
 
 export interface ProvidersResponse {
@@ -1168,6 +1183,53 @@ export async function createSkill(params: {
 
 export async function reloadSkills(): Promise<ApiActionResponse> {
   return post<ApiActionResponse>("/api/skills/reload", {});
+}
+
+// Skill evolution mutation APIs (dashboard Update/Patch/Rollback/Files flow)
+export async function evolveUpdateSkill(name: string, params: {
+  prompt_context: string;
+  changelog: string;
+}): Promise<EvolutionResult> {
+  return post<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/update`, params);
+}
+
+export async function evolvePatchSkill(name: string, params: {
+  old_string: string;
+  new_string: string;
+  changelog: string;
+  replace_all?: boolean;
+}): Promise<EvolutionResult> {
+  return post<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/patch`, params);
+}
+
+export async function evolveRollbackSkill(name: string): Promise<EvolutionResult> {
+  return post<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/rollback`, {});
+}
+
+export async function evolveDeleteSkill(name: string): Promise<EvolutionResult> {
+  return post<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/delete`, {});
+}
+
+export async function evolveWriteFile(name: string, params: {
+  path: string;
+  content: string;
+}): Promise<EvolutionResult> {
+  return post<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/file`, params);
+}
+
+export async function evolveRemoveFile(name: string, path: string): Promise<EvolutionResult> {
+  return del<EvolutionResult>(`/api/skills/${encodeURIComponent(name)}/evolve/file?path=${encodeURIComponent(path)}`);
+}
+
+export interface SupportingFileContents {
+  name: string;
+  path: string;
+  content: string;
+  truncated: boolean;
+}
+
+export async function getSupportingFile(name: string, path: string): Promise<SupportingFileContents> {
+  return get<SupportingFileContents>(`/api/skills/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`);
 }
 
 // ClawHub types
