@@ -105,6 +105,8 @@ export const handKeys = {
     [...handKeys.all, "session", instanceId] as const,
   instanceStatus: (instanceId: string) =>
     [...handKeys.all, "instanceStatus", instanceId] as const,
+  manifest: (handId: string) =>
+    [...handKeys.all, "manifest", handId] as const,
 };
 
 export const workflowKeys = {
@@ -265,6 +267,7 @@ export const configKeys = {
   all: ["config"] as const,
   full: () => [...configKeys.all, "full"] as const,
   schema: () => [...configKeys.all, "schema"] as const,
+  rawToml: () => [...configKeys.all, "rawToml"] as const,
 };
 
 export const registryKeys = {
