@@ -74,24 +74,16 @@ pub fn sync_registry(home_dir: &Path, cache_ttl_secs: u64, registry_mirror: &str
             sync_flat_files(&src_dir, &home_dir.join(dir_name), dir_name);
         }
     }
-    // MCP catalog templates: upstream published them under
-    // `integrations/` historically; librefang-registry is migrating
-    // to `mcp/` to match the unified concept. Prefer the new path,
-    // fall back to the legacy one during the rollout window. Either
-    // one lands on disk at the read-only catalog `mcp/catalog/`.
+    // MCP catalog templates: upstream publishes them under `mcp/`;
+    // on disk they live as the read-only catalog at `mcp/catalog/`.
     {
-        let catalog_dest = home_dir.join("mcp").join("catalog");
-        let new_src = registry_cache.join("mcp");
-        let legacy_src = registry_cache.join("integrations");
-        let src_dir = if new_src.exists() {
-            Some(new_src)
-        } else if legacy_src.exists() {
-            Some(legacy_src)
-        } else {
-            None
-        };
-        if let Some(src) = src_dir {
-            sync_flat_files(&src, &catalog_dest, "mcp/catalog");
+        let src_dir = registry_cache.join("mcp");
+        if src_dir.exists() {
+            sync_flat_files(
+                &src_dir,
+                &home_dir.join("mcp").join("catalog"),
+                "mcp/catalog",
+            );
         }
     }
 

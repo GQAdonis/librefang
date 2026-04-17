@@ -125,20 +125,7 @@ async function fetchBatch(
 async function main() {
   console.log('Fetching registry data...')
 
-  // The upstream registry is migrating `integrations/` → `mcp/`. Prefer
-  // the new name and fall back to the legacy path while the rename rolls
-  // out. Track which path we read from so file fetches below use it.
-  let mcpFiles = await fetchDir('mcp')
-  let mcpDir = 'mcp'
-  if (mcpFiles.length === 0) {
-    const legacy = await fetchDir('integrations')
-    if (legacy.length > 0) {
-      console.log(`Using legacy 'integrations/' path (${legacy.length} files) — upstream rename to 'mcp/' not yet merged`)
-      mcpFiles = legacy
-      mcpDir = 'integrations'
-    }
-  }
-  const [handDirs, channelFiles, providerFiles, workflowFiles, agentDirs, pluginFiles, skillDirs] = await Promise.all([
+  const [handDirs, channelFiles, providerFiles, workflowFiles, agentDirs, pluginFiles, skillDirs, mcpFiles] = await Promise.all([
     fetchDir('hands'),
     fetchDir('channels'),
     fetchDir('providers'),
@@ -146,6 +133,7 @@ async function main() {
     fetchDir('agents'),
     fetchDir('plugins'),
     fetchDir('skills'),
+    fetchDir('mcp'),
   ])
 
   const filter = (items: GHItem[]) => items.filter(f => f.name !== 'README.md')
@@ -161,7 +149,7 @@ async function main() {
   console.log(
     `Found: ${hands.length} hands, ${channels.length} channels, ${providers.length} providers, ` +
     `${workflows.length} workflows, ${agents.length} agents, ` +
-    `${plugins.length} plugins, ${skills.length} skills, ${mcp.length} mcp (from ${mcpDir}/)`
+    `${plugins.length} plugins, ${skills.length} skills, ${mcp.length} mcp`
   )
 
   // Fetch manifest details for all categories in parallel.
@@ -173,7 +161,7 @@ async function main() {
     fetchBatch(providers, p => `providers/${p.name}`),
     fetchBatch(workflows, w => `workflows/${w.name}`),
     fetchBatch(plugins, p => `plugins/${p.name}/plugin.toml`),
-    fetchBatch(mcp, m => m.name.endsWith('.toml') ? `${mcpDir}/${m.name}` : `${mcpDir}/${m.name}/MCP.toml`),
+    fetchBatch(mcp, m => m.name.endsWith('.toml') ? `mcp/${m.name}` : `mcp/${m.name}/MCP.toml`),
   ])
 
   const data = {

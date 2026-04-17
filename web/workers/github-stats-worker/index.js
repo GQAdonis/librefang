@@ -199,7 +199,7 @@ function handleFetch(request, env, ctx) {
 // plus caching and CORS headers we control).
 async function handleRegistryRaw(env, cors, rawPath) {
   // Allowlist: only the categories we actually expose, plus README.
-  const allowedTop = /^(hands|channels|providers|integrations|workflows|agents|plugins|skills|mcp)\//
+  const allowedTop = /^(hands|channels|providers|workflows|agents|plugins|skills|mcp)\//
   // Reject path traversal or anything not matching the allowlist.
   if (!rawPath || !allowedTop.test(rawPath) || rawPath.includes('..') || rawPath.includes('\\')) {
     return new Response(JSON.stringify({ error: 'invalid path' }), {
@@ -510,7 +510,7 @@ async function handleRegistry(env, cors, ctx, forceRefresh = false) {
 // registry path. Lets detail pages show "Updated 3d ago" without each visitor
 // hitting api.github.com directly.
 async function handleRegistryCommit(env, cors, rawPath) {
-  const allowedTop = /^(hands|channels|providers|integrations|workflows|agents|plugins|skills|mcp)\//
+  const allowedTop = /^(hands|channels|providers|workflows|agents|plugins|skills|mcp)\//
   if (!rawPath || !allowedTop.test(rawPath) || rawPath.includes('..')) {
     return new Response(JSON.stringify({ error: 'invalid path' }), {
       status: 400, headers: { 'Content-Type': 'application/json', ...cors }
@@ -578,7 +578,7 @@ async function handleRegistryCommit(env, cors, rawPath) {
 // JSON blob per category. We keep one blob per category (max 9) instead of
 // one KV key per item because KV list ops are expensive, and 60–300 items per
 // category * 9 categories is small enough to keep in one JSON.
-const CATEGORIES = ['hands', 'channels', 'providers', 'integrations', 'workflows', 'agents', 'plugins', 'skills', 'mcp']
+const CATEGORIES = ['hands', 'channels', 'providers', 'workflows', 'agents', 'plugins', 'skills', 'mcp']
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
 async function handleRegistryClick(env, cors, request, ctx) {
@@ -768,18 +768,7 @@ async function refreshRegistryCache(env) {
   }
 
   try {
-    // Upstream is renaming `integrations/` → `mcp/`. Prefer the new
-    // name, fall back to the legacy path during rollout.
-    let mcpFiles = await fetchDir('mcp')
-    let mcpDir = 'mcp'
-    if (mcpFiles.length === 0) {
-      const legacy = await fetchDir('integrations')
-      if (legacy.length > 0) {
-        mcpFiles = legacy
-        mcpDir = 'integrations'
-      }
-    }
-    const [handDirs, channelFiles, providerFiles, workflowFiles, agentDirs, pluginFiles, skillDirs] = await Promise.all([
+    const [handDirs, channelFiles, providerFiles, workflowFiles, agentDirs, pluginFiles, skillDirs, mcpFiles] = await Promise.all([
       fetchDir('hands'),
       fetchDir('channels'),
       fetchDir('providers'),
@@ -787,6 +776,7 @@ async function refreshRegistryCache(env) {
       fetchDir('agents'),
       fetchDir('plugins'),
       fetchDir('skills'),
+      fetchDir('mcp'),
     ])
 
     const filter = (items) => items.filter(f => f.name !== 'README.md')
@@ -840,7 +830,7 @@ async function refreshRegistryCache(env) {
       fetchBatch(providers, p => `providers/${p.name}`),
       fetchBatch(workflows, w => `workflows/${w.name}`),
       fetchBatch(plugins, p => `plugins/${p.name}`),
-      fetchBatch(mcp, m => m.name.endsWith('.toml') ? `${mcpDir}/${m.name}` : `${mcpDir}/${m.name}/MCP.toml`),
+      fetchBatch(mcp, m => m.name.endsWith('.toml') ? `mcp/${m.name}` : `mcp/${m.name}/MCP.toml`),
     ])
 
     const result = {

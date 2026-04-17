@@ -76,7 +76,7 @@ paths:
       tags: [registry]
       summary: Proxy a single raw file from librefang-registry
       description: |
-        Allowlisted to `hands|channels|providers|integrations|workflows|agents|plugins|skills|mcp`
+        Allowlisted to `hands|channels|providers|workflows|agents|plugins|skills|mcp`
         top-level directories. Returns the file body as `text/plain`.
         Rejects path traversal.
       parameters:
@@ -159,7 +159,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [hands, channels, providers, integrations, workflows, agents, plugins, skills, mcp]
+            enum: [hands, channels, providers, workflows, agents, plugins, skills, mcp]
       responses:
         "200":
           description: OK
@@ -281,7 +281,7 @@ components:
       properties:
         category:
           type: string
-          enum: [hands, channels, providers, integrations, workflows, agents, plugins, skills, mcp]
+          enum: [hands, channels, providers, workflows, agents, plugins, skills, mcp]
         id: { type: string }
     Trending:
       type: object
