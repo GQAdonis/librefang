@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, ExternalLink, Sparkles, Github } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, ExternalLink, Sparkles, Github, RotateCcw } from 'lucide-react'
 import { useRegistry, getLocalizedDesc, getCategoryItems } from '../useRegistry'
 import type { RegistryCategory, Detail } from '../useRegistry'
 import { translations } from './../i18n'
@@ -50,10 +51,19 @@ function sortItems(items: Detail[]): Detail[] {
   })
 }
 
+const RAW_API = 'https://stats.librefang.ai/api/registry/raw'
+
+async function fetchRaw(path: string): Promise<string> {
+  const res = await fetch(`${RAW_API}?path=${encodeURIComponent(path)}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.text()
+}
+
 export default function RegistryPage({ category }: RegistryPageProps) {
   const lang = useAppStore(s => s.lang)
   const t = translations[lang] || translations['en']!
-  const { data, isLoading, error } = useRegistry()
+  const { data, isLoading, error, refetch, isFetching } = useRegistry()
+  const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
 
   const { items, count } = getCategoryItems(data, category)
@@ -153,11 +163,23 @@ export default function RegistryPage({ category }: RegistryPageProps) {
           </div>
         )}
 
-        {/* State: loading */}
+        {/* State: loading — skeleton cards so the grid layout doesn't jump */}
         {isLoading && (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-            <Loader2 className="w-6 h-6 animate-spin mb-3" />
-            <span className="text-sm">{t.registry?.loading || 'Loading registry...'}</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" aria-busy="true" aria-label={t.registry?.loading || 'Loading'}>
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="border border-black/10 dark:border-white/5 bg-surface-100 p-5 animate-pulse">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-5 w-5 rounded bg-black/10 dark:bg-white/10" />
+                  <div className="h-4 w-32 rounded bg-black/10 dark:bg-white/10" />
+                </div>
+                <div className="h-2 w-16 rounded bg-black/10 dark:bg-white/10 mb-2" />
+                <div className="space-y-1.5">
+                  <div className="h-2 w-full rounded bg-black/10 dark:bg-white/10" />
+                  <div className="h-2 w-11/12 rounded bg-black/10 dark:bg-white/10" />
+                  <div className="h-2 w-3/4 rounded bg-black/10 dark:bg-white/10" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -168,9 +190,19 @@ export default function RegistryPage({ category }: RegistryPageProps) {
             <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
               {t.registry?.errorTitle || 'Could not load registry'}
             </div>
-            <div className="text-xs text-gray-500 max-w-sm">
+            <div className="text-xs text-gray-500 max-w-sm mb-4">
               {t.registry?.errorDesc || 'GitHub rate limit hit or the proxy is down. Retry in a few seconds.'}
             </div>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 rounded transition-colors disabled:opacity-50"
+            >
+              {isFetching
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <RotateCcw className="w-3.5 h-3.5" />}
+              {t.registry?.retry || 'Retry'}
+            </button>
           </div>
         )}
 
@@ -211,10 +243,23 @@ export default function RegistryPage({ category }: RegistryPageProps) {
               const desc = getLocalizedDesc(item, lang)
               const popular = isPopular(item)
               const itemHref = `${langPrefix}/${category}/${item.id}`
+              const rawPath = meta.fileNameFor(item.id)
+              const prefetch = () => {
+                // Warm the detail page's raw-TOML cache the moment the user
+                // hovers a card. react-query dedupes if the query is already
+                // in-flight or fresh, so it's safe to call on every hover.
+                queryClient.prefetchQuery({
+                  queryKey: ['registry-raw', rawPath],
+                  queryFn: () => fetchRaw(rawPath),
+                  staleTime: 1000 * 60 * 60,
+                }).catch(() => { /* prefetch failure is silent */ })
+              }
               return (
                 <a
                   key={item.id}
                   href={itemHref}
+                  onMouseEnter={prefetch}
+                  onFocus={prefetch}
                   className={cn(
                     'group block border p-5 transition-all hover:-translate-y-0.5',
                     popular

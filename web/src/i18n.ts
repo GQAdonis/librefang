@@ -141,6 +141,7 @@ export interface Translation {
     useIt: string
     configOnly: string
     relatedIn: string
+    retry: string
     categories: {
       skills: { title: string; desc: string }
       mcp: { title: string; desc: string }
@@ -152,6 +153,15 @@ export interface Translation {
       channels: { title: string; desc: string }
       integrations: { title: string; desc: string }
     }
+  }
+  search?: {
+    title: string
+    placeholder: string
+    close: string
+    noResults: string
+    hint: string
+    kbd: string
+    open: string
   }
   footer: { docs: string; license: string; privacy: string; changelog: string }
 }
@@ -380,6 +390,7 @@ export const translations: Record<string, Translation> = {
       useIt: 'Use it',
       configOnly: '{category} entries are configured through ~/.librefang/config.toml rather than a CLI install command. Copy the manifest below and paste it into the matching section of your config.',
       relatedIn: 'More {category}',
+      retry: 'Retry',
       categories: {
         skills: { title: 'Skills', desc: 'Pluggable tool bundles — Python, WASM, Node, or prompt-only skills that extend what an agent can do.' },
         mcp:    { title: 'MCP Servers', desc: 'Model Context Protocol servers that plug external tools and data sources directly into any agent.' },
@@ -391,6 +402,15 @@ export const translations: Record<string, Translation> = {
         channels:  { title: 'Channels', desc: 'Messaging adapters. Telegram, Slack, Discord, WhatsApp, LINE and 40+ other platforms.' },
         integrations: { title: 'Integrations', desc: 'First-party integrations that expose agents to common SaaS tools and protocols.' },
       },
+    },
+    search: {
+      title: 'Search registry',
+      placeholder: 'Search skills, hands, agents, providers…',
+      close: 'Close',
+      noResults: 'No matches for "{query}"',
+      hint: 'Type to search across all registry entries.',
+      kbd: '↑↓ navigate · ↵ open · esc close',
+      open: 'Search',
     },
     footer: { docs: 'Docs', license: 'License', privacy: 'Privacy', changelog: 'Changelog' },
   },
@@ -582,6 +602,7 @@ export const translations: Record<string, Translation> = {
       useIt: '如何使用',
       configOnly: '{category}通过 ~/.librefang/config.toml 配置，不走 CLI 安装命令。复制下面的清单，粘贴到配置文件中对应段落即可。',
       relatedIn: '更多{category}',
+      retry: '重试',
       categories: {
         skills:   { title: '技能', desc: '可插拔的工具包 —— Python、WASM、Node 或 prompt-only 技能，扩展 Agent 的能力边界。' },
         mcp:      { title: 'MCP 服务器', desc: 'Model Context Protocol 服务器，把外部工具与数据直接挂接到任何 Agent。' },
@@ -593,6 +614,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: '通道', desc: '消息平台适配器：Telegram、Slack、Discord、WhatsApp、LINE 等 44 个。' },
         integrations: { title: '集成', desc: '把 Agent 暴露给主流 SaaS 工具与协议的一方集成。' },
       },
+    },
+    search: {
+      title: '搜索注册表',
+      placeholder: '搜索技能、能力单元、Agent、供应商…',
+      close: '关闭',
+      noResults: '没有匹配 "{query}" 的结果',
+      hint: '输入以搜索所有注册表条目。',
+      kbd: '↑↓ 导航 · ↵ 打开 · esc 关闭',
+      open: '搜索',
     },
     footer: { docs: '文档', license: '许可证', privacy: '隐私', changelog: '更新日志' },
   },
@@ -784,6 +814,7 @@ export const translations: Record<string, Translation> = {
       useIt: '如何使用',
       configOnly: '{category}透過 ~/.librefang/config.toml 設定，沒有 CLI 安裝指令。請複製下方清單，貼入設定檔中對應段落。',
       relatedIn: '更多{category}',
+      retry: '重試',
       categories: {
         skills:   { title: '技能', desc: '可插拔的工具組 —— Python、WASM、Node 或 prompt-only 技能，擴展 Agent 的能力邊界。' },
         mcp:      { title: 'MCP 伺服器', desc: 'Model Context Protocol 伺服器，把外部工具與資料直接接入任何 Agent。' },
@@ -795,6 +826,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: '頻道', desc: '訊息平台介面卡：Telegram、Slack、Discord、WhatsApp、LINE 等 44 個。' },
         integrations: { title: '整合', desc: '把 Agent 暴露給主流 SaaS 工具與協定的一方整合。' },
       },
+    },
+    search: {
+      title: '搜尋註冊表',
+      placeholder: '搜尋技能、能力單元、Agent、供應商…',
+      close: '關閉',
+      noResults: '沒有符合 "{query}" 的結果',
+      hint: '輸入以搜尋所有註冊表條目。',
+      kbd: '↑↓ 瀏覽 · ↵ 開啟 · esc 關閉',
+      open: '搜尋',
     },
     footer: { docs: '文件', license: '授權', privacy: '隱私', changelog: '更新日誌' },
   },
@@ -986,6 +1026,7 @@ export const translations: Record<string, Translation> = {
       useIt: '使い方',
       configOnly: '{category}は CLI の install コマンドではなく、~/.librefang/config.toml で設定します。下のマニフェストをコピーして設定ファイルの該当セクションに貼り付けてください。',
       relatedIn: '他の{category}',
+      retry: '再試行',
       categories: {
         skills:   { title: 'スキル', desc: 'プラグ可能なツールバンドル —— Python、WASM、Node、または prompt-only スキルで Agent の能力を拡張。' },
         mcp:      { title: 'MCP サーバー', desc: 'Model Context Protocol サーバーで、外部ツールとデータソースを任意の Agent に直接接続。' },
@@ -997,6 +1038,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: 'チャネル', desc: 'メッセージングアダプター：Telegram、Slack、Discord、WhatsApp、LINE など 44 プラットフォーム。' },
         integrations: { title: '統合', desc: 'Agent を主要な SaaS ツールとプロトコルに公開するファーストパーティ統合。' },
       },
+    },
+    search: {
+      title: 'レジストリを検索',
+      placeholder: 'スキル、Hands、Agent、プロバイダーを検索…',
+      close: '閉じる',
+      noResults: '"{query}" に一致する結果がありません',
+      hint: '入力してレジストリ全体を検索します。',
+      kbd: '↑↓ 移動 · ↵ 開く · esc 閉じる',
+      open: '検索',
     },
     footer: { docs: 'ドキュメント', license: 'ライセンス', privacy: 'プライバシー', changelog: '変更履歴' },
   },
@@ -1188,6 +1238,7 @@ export const translations: Record<string, Translation> = {
       useIt: '사용 방법',
       configOnly: '{category}은(는) CLI 설치 명령이 아니라 ~/.librefang/config.toml에서 설정합니다. 아래 매니페스트를 복사해 설정 파일의 해당 섹션에 붙여넣으세요.',
       relatedIn: '더 많은 {category}',
+      retry: '다시 시도',
       categories: {
         skills:   { title: '스킬', desc: '플러그 가능한 도구 번들 —— Python, WASM, Node 또는 prompt-only 스킬로 Agent의 능력 확장.' },
         mcp:      { title: 'MCP 서버', desc: 'Model Context Protocol 서버로 외부 도구와 데이터 소스를 모든 Agent에 직접 연결.' },
@@ -1199,6 +1250,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: '채널', desc: '메시징 어댑터: Telegram, Slack, Discord, WhatsApp, LINE 등 44개 플랫폼.' },
         integrations: { title: '통합', desc: 'Agent를 주요 SaaS 도구와 프로토콜에 노출하는 퍼스트파티 통합.' },
       },
+    },
+    search: {
+      title: '레지스트리 검색',
+      placeholder: '스킬, Hand, Agent, 프로바이더 검색…',
+      close: '닫기',
+      noResults: '"{query}"와 일치하는 결과 없음',
+      hint: '입력하여 모든 레지스트리 항목을 검색합니다.',
+      kbd: '↑↓ 이동 · ↵ 열기 · esc 닫기',
+      open: '검색',
     },
     footer: { docs: '문서', license: '라이선스', privacy: '개인정보', changelog: '변경 이력' },
   },
@@ -1390,6 +1450,7 @@ export const translations: Record<string, Translation> = {
       useIt: 'Verwenden',
       configOnly: '{category}-Einträge werden über ~/.librefang/config.toml konfiguriert, nicht per CLI-Install-Befehl. Manifest unten kopieren und in den passenden Abschnitt der Config einfügen.',
       relatedIn: 'Mehr {category}',
+      retry: 'Erneut versuchen',
       categories: {
         skills:   { title: 'Skills', desc: 'Austauschbare Tool-Bundles — Python-, WASM-, Node- oder Prompt-Only-Skills, die die Fähigkeiten eines Agenten erweitern.' },
         mcp:      { title: 'MCP-Server', desc: 'Model-Context-Protocol-Server, die externe Tools und Datenquellen direkt in jeden Agenten einbinden.' },
@@ -1401,6 +1462,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: 'Kanäle', desc: 'Messaging-Adapter: Telegram, Slack, Discord, WhatsApp, LINE und 40+ weitere Plattformen.' },
         integrations: { title: 'Integrationen', desc: 'First-Party-Integrationen, die Agenten gängigen SaaS-Tools und -Protokollen aussetzen.' },
       },
+    },
+    search: {
+      title: 'Registry durchsuchen',
+      placeholder: 'Skills, Hands, Agents, Provider suchen…',
+      close: 'Schließen',
+      noResults: 'Keine Treffer für "{query}"',
+      hint: 'Tippen, um alle Registry-Einträge zu durchsuchen.',
+      kbd: '↑↓ navigieren · ↵ öffnen · esc schließen',
+      open: 'Suche',
     },
     footer: { docs: 'Dokumentation', license: 'Lizenz', privacy: 'Datenschutz', changelog: 'Changelog' },
   },
@@ -1592,6 +1662,7 @@ export const translations: Record<string, Translation> = {
       useIt: 'Cómo usar',
       configOnly: 'Los elementos de {category} se configuran mediante ~/.librefang/config.toml en lugar de un comando CLI. Copia el manifiesto y pégalo en la sección correspondiente de tu config.',
       relatedIn: 'Más {category}',
+      retry: 'Reintentar',
       categories: {
         skills:   { title: 'Skills', desc: 'Paquetes de herramientas conectables — skills Python, WASM, Node o prompt-only que amplían las capacidades del agente.' },
         mcp:      { title: 'Servidores MCP', desc: 'Servidores Model Context Protocol que conectan herramientas y fuentes de datos externas directamente a cualquier agente.' },
@@ -1603,6 +1674,15 @@ export const translations: Record<string, Translation> = {
         channels: { title: 'Canales', desc: 'Adaptadores de mensajería: Telegram, Slack, Discord, WhatsApp, LINE y 40+ plataformas más.' },
         integrations: { title: 'Integraciones', desc: 'Integraciones first-party que exponen agentes a herramientas SaaS y protocolos populares.' },
       },
+    },
+    search: {
+      title: 'Buscar en el registry',
+      placeholder: 'Buscar skills, hands, agentes, providers…',
+      close: 'Cerrar',
+      noResults: 'Sin resultados para "{query}"',
+      hint: 'Escribe para buscar en todos los elementos del registry.',
+      kbd: '↑↓ navegar · ↵ abrir · esc cerrar',
+      open: 'Buscar',
     },
     footer: { docs: 'Documentación', license: 'Licencia', privacy: 'Privacidad', changelog: 'Cambios' },
   },

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, AlertCircle, ExternalLink, Sparkles, Github, Copy, Check, Terminal, FileText } from 'lucide-react'
+import { ArrowLeft, Loader2, AlertCircle, ExternalLink, Sparkles, Github, Copy, Check, Terminal, FileText, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
 import { useRegistry, getLocalizedDesc, getCategoryItems } from '../useRegistry'
 import type { RegistryCategory, Detail } from '../useRegistry'
@@ -226,9 +226,19 @@ export default function RegistryDetailPage({ category, id }: RegistryDetailPageP
             <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
               {t.registry?.manifestErrorTitle || 'Could not load manifest'}
             </div>
-            <div className="text-xs text-gray-500 max-w-md">
+            <div className="text-xs text-gray-500 max-w-md mb-4">
               {(rawQuery.error as Error).message}
             </div>
+            <button
+              onClick={() => rawQuery.refetch()}
+              disabled={rawQuery.isFetching}
+              className="inline-flex items-center gap-2 px-4 py-1.5 text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 rounded transition-colors disabled:opacity-50"
+            >
+              {rawQuery.isFetching
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <RotateCcw className="w-3 h-3" />}
+              {t.registry?.retry || 'Retry'}
+            </button>
           </div>
         )}
 

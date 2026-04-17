@@ -5,7 +5,8 @@ import {
   Copy, Check, Menu, X, Box, Layers, Radio, Eye,
   Scissors, Users, Globe, ArrowRight, Github, Monitor,
   Star, GitFork, CircleDot, GitPullRequest, MessageSquare,
-  Sun, Moon, Sparkles, History, RotateCcw, FileEdit, Trash2, FilePlus
+  Sun, Moon, Sparkles, History, RotateCcw, FileEdit, Trash2, FilePlus,
+  Search
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -18,6 +19,7 @@ import DeployPage from './pages/DeployPage'
 import ChangelogPage from './pages/ChangelogPage'
 import RegistryPage from './pages/RegistryPage'
 import RegistryDetailPage from './pages/RegistryDetailPage'
+import SearchDialog from './components/SearchDialog'
 import type { RegistryCategory } from './useRegistry'
 
 
@@ -96,9 +98,10 @@ interface NavProps {
   t: Translation
   lang: string
   onSwitchLang: (code: string) => void
+  onOpenSearch?: () => void
 }
 
-function Nav({ t, lang, onSwitchLang }: NavProps) {
+function Nav({ t, lang, onSwitchLang, onOpenSearch }: NavProps) {
   const [open, setOpen] = useState(false)
   const [langOpen, setLangOpen] = useState(false)
   const [featuresOpen, setFeaturesOpen] = useState(false)
@@ -312,6 +315,17 @@ function Nav({ t, lang, onSwitchLang }: NavProps) {
             )}
           </div>
 
+          {onOpenSearch && (
+            <button
+              onClick={onOpenSearch}
+              className="ml-1 flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 border border-black/10 dark:border-white/10 rounded hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
+              aria-label={t.search?.title || 'Search'}
+            >
+              <Search className="w-3.5 h-3.5" />
+              <kbd className="font-mono text-[10px] px-1 py-0.5 bg-surface-200 rounded">⌘K</kbd>
+            </button>
+          )}
+
           <button
             onClick={toggleTheme}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
@@ -331,6 +345,11 @@ function Nav({ t, lang, onSwitchLang }: NavProps) {
         </div>
 
         <div className="flex md:hidden items-center gap-1">
+          {onOpenSearch && (
+            <button onClick={onOpenSearch} aria-label={t.search?.title || 'Search'} className="p-2 text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
+              <Search className="w-4 h-4" />
+            </button>
+          )}
           <button onClick={toggleTheme} className="p-2 text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors" aria-label="Toggle theme">
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1594,6 +1613,19 @@ export default function App() {
   const [isDeployPage] = useState(() => window.location.pathname.startsWith('/deploy'))
   const [isChangelogPage] = useState(() => window.location.pathname.startsWith('/changelog'))
   const [registryRoute] = useState<RegistryMatch | null>(() => detectRegistryRoute(window.location.pathname))
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // Cmd/Ctrl+K opens global registry search, regardless of which page we're on.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault()
+        setSearchOpen(v => !v)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     document.documentElement.lang = lang
@@ -1678,18 +1710,26 @@ export default function App() {
   }, [lang, t, isDeployPage, isChangelogPage, registryRoute])
 
   if (isDeployPage) {
-    return <DeployPage />
+    return (<>
+      <DeployPage />
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>)
   }
 
   if (isChangelogPage) {
-    return <ChangelogPage />
+    return (<>
+      <ChangelogPage />
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>)
   }
 
   if (registryRoute) {
-    if (registryRoute.kind === 'detail') {
-      return <RegistryDetailPage category={registryRoute.category} id={registryRoute.id} />
-    }
-    return <RegistryPage category={registryRoute.category} />
+    return (<>
+      {registryRoute.kind === 'detail'
+        ? <RegistryDetailPage category={registryRoute.category} id={registryRoute.id} />
+        : <RegistryPage category={registryRoute.category} />}
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>)
   }
 
   return (
@@ -1697,7 +1737,8 @@ export default function App() {
       <a href="#architecture" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:px-4 focus:py-2 focus:bg-cyan-500 focus:text-surface focus:font-bold focus:rounded">
         Skip to content
       </a>
-      <Nav t={t} lang={lang} onSwitchLang={switchLang} />
+      <Nav t={t} lang={lang} onSwitchLang={switchLang} onOpenSearch={() => setSearchOpen(true)} />
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Hero t={t} registry={registry} />
       <div className="glow-line" />
       <Architecture t={t} />
