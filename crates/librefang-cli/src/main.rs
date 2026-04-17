@@ -492,37 +492,6 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
-enum McpCommands {
-    /// Install an MCP server integration by name.
-    #[command(
-        long_about = "Install and configure an MCP server integration.\n\nThe name refers to an entry in the LibreFang registry (see `librefang mcp list`).\nIf the integration needs credentials, supply them with --key or via an\ninteractive prompt.\n\nExamples:\n  librefang mcp add github                    # Interactive key prompt\n  librefang mcp add slack --key xoxb-...      # Provide key inline\n  librefang mcp add notion"
-    )]
-    Add {
-        /// Integration name (e.g., "github", "slack", "notion").
-        name: String,
-        /// API key or token to store in the vault.
-        #[arg(long)]
-        key: Option<String>,
-    },
-    /// Remove an installed MCP server integration.
-    #[command(
-        long_about = "Uninstall a previously added MCP server integration.\n\nExamples:\n  librefang mcp remove github\n  librefang mcp remove slack"
-    )]
-    Remove {
-        /// Integration name.
-        name: String,
-    },
-    /// List or search MCP server integrations available in the registry.
-    #[command(
-        long_about = "List every MCP server integration shipped with the current registry snapshot,\noptionally filtered by keyword.\n\nExamples:\n  librefang mcp list            # Show all integrations\n  librefang mcp list \"code\"     # Search"
-    )]
-    List {
-        /// Search query (optional — lists all if omitted).
-        query: Option<String>,
-    },
-}
-
-#[derive(Subcommand)]
 enum VaultCommands {
     /// Initialize the credential vault.
     #[command(
@@ -7677,8 +7646,8 @@ fn cmd_mcp_list() {
     }
     println!();
     println!(
-        "  {:<28} {:<14} {:<18} {}",
-        "name", "template_id", "transport", "details"
+        "  {:<28} {:<14} {:<18} details",
+        "name", "template_id", "transport"
     );
     for entry in servers {
         let Some(tbl) = entry.as_table() else {

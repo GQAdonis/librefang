@@ -7,8 +7,8 @@
 //!
 //! Unified layout:
 //!   - `~/.librefang/mcp/catalog/*.toml`  — catalog templates (read-only)
-//!   - `~/.librefang/config.toml`         — `[[mcp_servers]]` with
-//!                                          optional `template_id`
+//!   - `~/.librefang/config.toml`         — `[[mcp_servers]]` with an
+//!     optional `template_id` field
 //!
 //! Migration steps (run at most once per home dir):
 //! 1. If `integrations/` still exists and `mcp/catalog/` does not, rename.
