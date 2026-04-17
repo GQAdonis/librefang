@@ -17,6 +17,7 @@ import { cn } from './lib/utils'
 import DeployPage from './pages/DeployPage'
 import ChangelogPage from './pages/ChangelogPage'
 import RegistryPage from './pages/RegistryPage'
+import RegistryDetailPage from './pages/RegistryDetailPage'
 import type { RegistryCategory } from './useRegistry'
 
 
@@ -1507,16 +1508,31 @@ function BackToTop() {
 const REGISTRY_ROUTES: RegistryCategory[] = [
   'skills', 'mcp', 'plugins', 'hands', 'agents', 'providers', 'workflows', 'channels', 'integrations'
 ]
+const LOCALES = ['zh-TW', 'zh', 'ja', 'ko', 'de', 'es']
 
-function detectRegistryCategory(pathname: string): RegistryCategory | null {
-  // Strip locale prefix (e.g. /zh/skills -> /skills)
+type RegistryMatch =
+  | { kind: 'list'; category: RegistryCategory }
+  | { kind: 'detail'; category: RegistryCategory; id: string }
+
+function detectRegistryRoute(pathname: string): RegistryMatch | null {
   let path = pathname
   const parts = path.split('/').filter(Boolean)
-  if (parts.length >= 1 && ['zh', 'zh-TW', 'ja', 'ko', 'de', 'es'].includes(parts[0]!)) {
+  if (parts.length >= 1 && LOCALES.includes(parts[0]!)) {
     path = '/' + parts.slice(1).join('/')
   }
-  for (const cat of REGISTRY_ROUTES) {
-    if (path === `/${cat}` || path === `/${cat}/`) return cat
+  const segs = path.split('/').filter(Boolean)
+  if (segs.length === 0) return null
+  const cat = segs[0] as RegistryCategory
+  if (!REGISTRY_ROUTES.includes(cat)) return null
+  if (segs.length === 1) return { kind: 'list', category: cat }
+  // Allow /<cat>/<id> and /<cat>/<id>/ only. Item ids in the registry are
+  // slug-like (lowercase letters, digits, dashes, underscores) so guard
+  // against path-traversal or extra segments.
+  if (segs.length === 2 || (segs.length === 3 && segs[2] === '')) {
+    const id = segs[1]!
+    if (/^[a-z0-9][a-z0-9_-]*$/i.test(id)) {
+      return { kind: 'detail', category: cat, id }
+    }
   }
   return null
 }
@@ -1527,7 +1543,7 @@ export default function App() {
   const switchLang = useAppStore((s) => s.switchLang)
   const [isDeployPage] = useState(() => window.location.pathname.startsWith('/deploy'))
   const [isChangelogPage] = useState(() => window.location.pathname.startsWith('/changelog'))
-  const [registryCategory] = useState<RegistryCategory | null>(() => detectRegistryCategory(window.location.pathname))
+  const [registryRoute] = useState<RegistryMatch | null>(() => detectRegistryRoute(window.location.pathname))
 
   useEffect(() => {
     document.documentElement.lang = lang
@@ -1552,9 +1568,13 @@ export default function App() {
       document.title = 'Changelog | LibreFang'
       return
     }
-    if (registryCategory) {
-      const label = t.registry?.categories[registryCategory]?.title || registryCategory
-      document.title = `${label} — LibreFang Registry`
+    if (registryRoute) {
+      const label = t.registry?.categories[registryRoute.category]?.title || registryRoute.category
+      if (registryRoute.kind === 'detail') {
+        document.title = `${registryRoute.id} — ${label} — LibreFang`
+      } else {
+        document.title = `${label} — LibreFang Registry`
+      }
       return
     }
     if (t.meta) {
@@ -1566,7 +1586,7 @@ export default function App() {
       const ogDesc = document.querySelector('meta[property="og:description"]')
       if (ogDesc) ogDesc.setAttribute('content', t.meta.description)
     }
-  }, [lang, t, isDeployPage, isChangelogPage, registryCategory])
+  }, [lang, t, isDeployPage, isChangelogPage, registryRoute])
 
   if (isDeployPage) {
     return <DeployPage />
@@ -1576,8 +1596,11 @@ export default function App() {
     return <ChangelogPage />
   }
 
-  if (registryCategory) {
-    return <RegistryPage category={registryCategory} />
+  if (registryRoute) {
+    if (registryRoute.kind === 'detail') {
+      return <RegistryDetailPage category={registryRoute.category} id={registryRoute.id} />
+    }
+    return <RegistryPage category={registryRoute.category} />
   }
 
   return (

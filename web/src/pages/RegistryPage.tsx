@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Search, Loader2, AlertCircle, ExternalLink, Sparkles, Github } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Search, Loader2, AlertCircle, ExternalLink, Sparkles, Github } from 'lucide-react'
 import { useRegistry, getLocalizedDesc, getCategoryItems } from '../useRegistry'
 import type { RegistryCategory, Detail } from '../useRegistry'
 import { translations } from './../i18n'
@@ -81,6 +81,7 @@ export default function RegistryPage({ category }: RegistryPageProps) {
   }, [items])
 
   const baseHref = lang === 'en' ? '/' : `/${lang}/`
+  const langPrefix = lang === 'en' ? '' : `/${lang}`
 
   return (
     <main className="min-h-screen bg-surface">
@@ -209,13 +210,11 @@ export default function RegistryPage({ category }: RegistryPageProps) {
             {filtered.map(item => {
               const desc = getLocalizedDesc(item, lang)
               const popular = isPopular(item)
-              const sourcePath = meta.fileNameFor(item.id)
+              const itemHref = `${langPrefix}/${category}/${item.id}`
               return (
                 <a
                   key={item.id}
-                  href={`https://github.com/librefang/librefang-registry/blob/main/${sourcePath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={itemHref}
                   className={cn(
                     'group block border p-5 transition-all hover:-translate-y-0.5',
                     popular
@@ -235,7 +234,7 @@ export default function RegistryPage({ category }: RegistryPageProps) {
                       </h3>
                       {popular && <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                     </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-cyan-500 transition-colors shrink-0 mt-1" />
+                    <ArrowRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-cyan-500 transition-colors shrink-0 mt-1" />
                   </div>
                   {item.category && (
                     <div className="text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-2">

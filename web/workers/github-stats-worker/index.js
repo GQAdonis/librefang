@@ -158,11 +158,90 @@ function handleFetch(request, env, ctx) {
     return handleRegistry(env, cors, ctx, forceRefresh)
   }
 
+  if (path === '/api/registry/raw' && request.method === 'GET') {
+    return handleRegistryRaw(env, cors, url.searchParams.get('path') || '')
+  }
+
   if (path === '/api/releases' && request.method === 'GET') {
     return handleReleases(env, cors)
   }
 
   return new Response('Not Found', { status: 404 })
+}
+
+// ─── Registry raw-file proxy (GitHub raw) ───
+// Serves individual TOML / MD files out of librefang-registry so browsers
+// don't have to hit raw.githubusercontent.com directly (same 403 risk,
+// plus caching and CORS headers we control).
+async function handleRegistryRaw(env, cors, rawPath) {
+  // Allowlist: only the categories we actually expose, plus README.
+  const allowedTop = /^(hands|channels|providers|integrations|workflows|agents|plugins|skills|mcp)\//
+  // Reject path traversal or anything not matching the allowlist.
+  if (!rawPath || !allowedTop.test(rawPath) || rawPath.includes('..') || rawPath.includes('\\')) {
+    return new Response(JSON.stringify({ error: 'invalid path' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...cors }
+    })
+  }
+
+  const cacheKey = `registry_raw:${rawPath}`
+  const cacheTimeKey = `${cacheKey}:time`
+  const fresh = 1000 * 60 * 60     // 1h
+  const stale = 1000 * 60 * 60 * 24 // 24h upper bound
+
+  try {
+    const [cached, cacheTimeRaw] = await Promise.all([
+      env.KV.get(cacheKey),
+      env.KV.get(cacheTimeKey),
+    ])
+    const cacheTime = parseInt(cacheTimeRaw || '0', 10)
+    const age = cacheTime ? Date.now() - cacheTime : Infinity
+
+    if (cached && age < fresh) {
+      return new Response(cached, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', ...cors }
+      })
+    }
+
+    // Fetch fresh. If it fails and we have a stale cache, serve that instead
+    // of returning an error.
+    const upstream = await fetch(`https://raw.githubusercontent.com/librefang/librefang-registry/main/${rawPath}`)
+    if (!upstream.ok) {
+      if (cached && age < stale) {
+        return new Response(cached, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors }
+        })
+      }
+      return new Response(JSON.stringify({ error: `upstream ${upstream.status}` }), {
+        status: upstream.status,
+        headers: { 'Content-Type': 'application/json', ...cors }
+      })
+    }
+
+    const body = await upstream.text()
+    // 1 MiB cap — individual registry entries should be tiny.
+    if (body.length < 1024 * 1024) {
+      await Promise.all([
+        env.KV.put(cacheKey, body, { expirationTtl: 60 * 60 * 24 * 7 }),
+        env.KV.put(cacheTimeKey, String(Date.now()), { expirationTtl: 60 * 60 * 24 * 7 }),
+      ])
+    }
+
+    return new Response(body, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600', ...cors }
+    })
+  } catch (e) {
+    const cached = await env.KV.get(cacheKey)
+    if (cached) {
+      return new Response(cached, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=60', ...cors }
+      })
+    }
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...cors }
+    })
+  }
 }
 
 async function handleGitHubStats(env, cors, forceRefresh = false) {
