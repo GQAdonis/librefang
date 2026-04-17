@@ -137,7 +137,10 @@ pub fn migrate_if_needed(home_dir: &Path) -> Result<Option<String>, String> {
             Err(e) => {
                 // Fall back to copy-then-remove to handle cross-device or
                 // permissions issues.
-                warn!("Could not rename {}: {e}; falling back to copy", legacy_dir.display());
+                warn!(
+                    "Could not rename {}: {e}; falling back to copy",
+                    legacy_dir.display()
+                );
                 if let Err(e2) = copy_dir_recursive(&legacy_dir, &new_dir) {
                     return Err(format!(
                         "migration: failed to copy {}: {e2}",
@@ -275,18 +278,10 @@ fn upsert_mcp_server_from_template(
     // but a plain inline TOML keeps us independent of the exact derive
     // configuration on `McpServerConfigEntry`).
     let mut entry = toml::value::Table::new();
-    entry.insert(
-        "name".to_string(),
-        toml::Value::String(install.id.clone()),
-    );
+    entry.insert("name".to_string(), toml::Value::String(install.id.clone()));
     entry.insert(
         "template_id".to_string(),
-        toml::Value::String(
-            template
-                .id
-                .clone()
-                .unwrap_or_else(|| install.id.clone()),
-        ),
+        toml::Value::String(template.id.clone().unwrap_or_else(|| install.id.clone())),
     );
     entry.insert("timeout_secs".to_string(), toml::Value::Integer(30));
 
@@ -296,22 +291,18 @@ fn upsert_mcp_server_from_template(
         .map(|e| toml::Value::String(e.name.clone()))
         .collect();
     entry.insert("env".to_string(), toml::Value::Array(env_list));
-    entry.insert(
-        "headers".to_string(),
-        toml::Value::Array(Vec::new()),
-    );
+    entry.insert("headers".to_string(), toml::Value::Array(Vec::new()));
     entry.insert("taint_scanning".to_string(), toml::Value::Boolean(true));
 
     let transport = match &template.transport {
         LegacyTransport::Stdio { command, args } => {
             let mut t = toml::value::Table::new();
             t.insert("type".to_string(), toml::Value::String("stdio".to_string()));
-            t.insert(
-                "command".to_string(),
-                toml::Value::String(command.clone()),
-            );
-            let arr: Vec<toml::Value> =
-                args.iter().map(|a| toml::Value::String(a.clone())).collect();
+            t.insert("command".to_string(), toml::Value::String(command.clone()));
+            let arr: Vec<toml::Value> = args
+                .iter()
+                .map(|a| toml::Value::String(a.clone()))
+                .collect();
             t.insert("args".to_string(), toml::Value::Array(arr));
             toml::Value::Table(t)
         }
@@ -428,11 +419,19 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let old = tmp.path().join("integrations");
         std::fs::create_dir_all(&old).unwrap();
-        write(&old.join("github.toml"), "id = \"github\"\n[transport]\ntype = \"stdio\"\ncommand = \"echo\"\n");
+        write(
+            &old.join("github.toml"),
+            "id = \"github\"\n[transport]\ntype = \"stdio\"\ncommand = \"echo\"\n",
+        );
         let result = migrate_if_needed(tmp.path()).unwrap();
         assert!(result.is_some(), "expected migration to report work");
         assert!(!old.exists(), "legacy integrations dir should be gone");
-        assert!(tmp.path().join("mcp").join("catalog").join("github.toml").exists());
+        assert!(tmp
+            .path()
+            .join("mcp")
+            .join("catalog")
+            .join("github.toml")
+            .exists());
     }
 
     #[test]

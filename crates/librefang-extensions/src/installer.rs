@@ -10,9 +10,7 @@ use crate::credentials::CredentialResolver;
 use crate::{
     ExtensionError, ExtensionResult, McpCatalogEntry, McpCatalogTransport, McpStatus, OAuthTemplate,
 };
-use librefang_types::config::{
-    McpOAuthConfig, McpServerConfigEntry, McpTransportEntry,
-};
+use librefang_types::config::{McpOAuthConfig, McpServerConfigEntry, McpTransportEntry};
 use std::collections::HashMap;
 use tracing::{info, warn};
 use zeroize::Zeroizing;
@@ -267,13 +265,8 @@ mod tests {
         let mut catalog = McpCatalog::new(&home);
         catalog.load(&home);
         let mut resolver = CredentialResolver::new(None, None);
-        let err = install_integration(
-            &catalog,
-            &mut resolver,
-            "does-not-exist",
-            &HashMap::new(),
-        )
-        .unwrap_err();
+        let err = install_integration(&catalog, &mut resolver, "does-not-exist", &HashMap::new())
+            .unwrap_err();
         assert!(matches!(err, ExtensionError::NotFound(_)));
     }
 

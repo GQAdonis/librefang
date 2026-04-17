@@ -80,7 +80,11 @@ pub fn sync_registry(home_dir: &Path, cache_ttl_secs: u64, registry_mirror: &str
     {
         let src_dir = registry_cache.join("integrations");
         if src_dir.exists() {
-            sync_flat_files(&src_dir, &home_dir.join("mcp").join("catalog"), "mcp/catalog");
+            sync_flat_files(
+                &src_dir,
+                &home_dir.join("mcp").join("catalog"),
+                "mcp/catalog",
+            );
         }
     }
 

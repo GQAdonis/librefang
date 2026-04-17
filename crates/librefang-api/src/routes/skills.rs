@@ -3048,10 +3048,8 @@ pub async fn add_mcp_server(
         let entry = match catalog.get(&tid) {
             Some(e) => e.clone(),
             None => {
-                return ApiErrorResponse::not_found(format!(
-                    "MCP catalog entry '{tid}' not found"
-                ))
-                .into_json_tuple();
+                return ApiErrorResponse::not_found(format!("MCP catalog entry '{tid}' not found"))
+                    .into_json_tuple();
             }
         };
         drop(catalog);
@@ -3070,10 +3068,8 @@ pub async fn add_mcp_server(
         } else {
             None
         };
-        let mut resolver = librefang_extensions::credentials::CredentialResolver::new(
-            vault,
-            Some(&dotenv_path),
-        );
+        let mut resolver =
+            librefang_extensions::credentials::CredentialResolver::new(vault, Some(&dotenv_path));
 
         // Ephemeral catalog to feed the installer (it takes &McpCatalog).
         let mut cat = librefang_extensions::catalog::McpCatalog::new(&home);
@@ -4329,9 +4325,7 @@ pub(crate) fn remove_channel_config(
 // ---------------------------------------------------------------------------
 
 /// Serialize a single catalog transport for API output.
-fn serialize_catalog_transport(
-    t: &librefang_extensions::McpCatalogTransport,
-) -> serde_json::Value {
+fn serialize_catalog_transport(t: &librefang_extensions::McpCatalogTransport) -> serde_json::Value {
     match t {
         librefang_extensions::McpCatalogTransport::Stdio { command, args } => {
             serde_json::json!({ "type": "stdio", "command": command, "args": args })
@@ -4439,10 +4433,8 @@ pub async fn get_mcp_catalog_entry(
             StatusCode::OK,
             Json(render_catalog_entry(entry, &installed_ids)),
         ),
-        None => {
-            ApiErrorResponse::not_found(format!("MCP catalog entry '{}' not found", id))
-                .into_json_tuple()
-        }
+        None => ApiErrorResponse::not_found(format!("MCP catalog entry '{}' not found", id))
+            .into_json_tuple(),
     }
 }
 
@@ -4752,10 +4744,8 @@ pub async fn install_extension(
     } else {
         None
     };
-    let mut resolver = librefang_extensions::credentials::CredentialResolver::new(
-        vault,
-        Some(&dotenv_path),
-    );
+    let mut resolver =
+        librefang_extensions::credentials::CredentialResolver::new(vault, Some(&dotenv_path));
     let mut catalog = librefang_extensions::catalog::McpCatalog::new(&home);
     catalog.load(&home);
 

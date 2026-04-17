@@ -842,9 +842,7 @@ impl LibreFangKernel {
 
     /// MCP catalog (RwLock — hot-reload from `mcp/catalog/` on disk).
     #[inline]
-    pub fn mcp_catalog(
-        &self,
-    ) -> &std::sync::RwLock<librefang_extensions::catalog::McpCatalog> {
+    pub fn mcp_catalog(&self) -> &std::sync::RwLock<librefang_extensions::catalog::McpCatalog> {
         &self.mcp_catalog
     }
 
@@ -7644,10 +7642,7 @@ system_prompt = "You are a helpful assistant."
                 }
                 HotAction::ReloadExtensions => {
                     info!("Hot-reload: reloading MCP catalog");
-                    let mut cat = self
-                        .mcp_catalog
-                        .write()
-                        .unwrap_or_else(|e| e.into_inner());
+                    let mut cat = self.mcp_catalog.write().unwrap_or_else(|e| e.into_inner());
                     // Re-read template files from `mcp/catalog/` on disk.
                     let count = cat.load(&new_config.home_dir);
                     info!("Hot-reload: reloaded {count} MCP catalog entry/entries");
@@ -9341,8 +9336,7 @@ system_prompt = "You are a helpful assistant."
                         "MCP server connected"
                     );
                     // Update extension health if this is an extension-provided server
-                    self.mcp_health
-                        .report_ok(&server_config.name, tool_count);
+                    self.mcp_health.report_ok(&server_config.name, tool_count);
                     self.mcp_connections.lock().await.push(conn);
                 }
                 Err(e) => {
@@ -9368,8 +9362,7 @@ system_prompt = "You are a helpful assistant."
                             "Failed to connect to MCP server"
                         );
                     }
-                    self.mcp_health
-                        .report_error(&server_config.name, err_str);
+                    self.mcp_health.report_error(&server_config.name, err_str);
                 }
             }
         }
@@ -9488,8 +9481,7 @@ system_prompt = "You are a helpful assistant."
                     tools = tool_count,
                     "MCP server connected after OAuth"
                 );
-                self.mcp_health
-                    .report_ok(&server_config.name, tool_count);
+                self.mcp_health.report_ok(&server_config.name, tool_count);
                 self.mcp_connections.lock().await.push(conn);
 
                 // Update auth state to Authorized
@@ -9533,10 +9525,7 @@ system_prompt = "You are a helpful assistant."
         // 1. Reload the MCP catalog from disk (new templates may have landed
         //    after `registry_sync`).
         let catalog_count = {
-            let mut cat = self
-                .mcp_catalog
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
+            let mut cat = self.mcp_catalog.write().unwrap_or_else(|e| e.into_inner());
             cat.load(&cfg.home_dir)
         };
 
@@ -9611,8 +9600,7 @@ system_prompt = "You are a helpful assistant."
                         self.mcp_generation
                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
-                    self.mcp_health
-                        .report_ok(&server_config.name, tool_count);
+                    self.mcp_health.report_ok(&server_config.name, tool_count);
                     info!(
                         server = %server_config.name,
                         tools = tool_count,
@@ -9788,9 +9776,7 @@ system_prompt = "You are a helpful assistant."
             for entry in health_entries {
                 // Try reconnect for errored servers
                 if self.mcp_health.should_reconnect(&entry.id) {
-                    let backoff = self
-                        .mcp_health
-                        .backoff_duration(entry.reconnect_attempts);
+                    let backoff = self.mcp_health.backoff_duration(entry.reconnect_attempts);
                     debug!(
                         server = %entry.id,
                         attempt = entry.reconnect_attempts + 1,
