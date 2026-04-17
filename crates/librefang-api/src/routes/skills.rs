@@ -4955,6 +4955,7 @@ mod tests {
 
         let entry = McpServerConfigEntry {
             name: "nocodb".to_string(),
+            template_id: None,
             transport: Some(McpTransportEntry::Stdio {
                 command: "npx".to_string(),
                 args: vec![
@@ -5013,6 +5014,7 @@ mod tests {
 
         let v1 = McpServerConfigEntry {
             name: "nocodb".to_string(),
+            template_id: None,
             transport: Some(McpTransportEntry::Http {
                 url: "http://old:8080/mcp".to_string(),
             }),
@@ -5026,6 +5028,7 @@ mod tests {
 
         let v2 = McpServerConfigEntry {
             name: "nocodb".to_string(),
+            template_id: None,
             transport: Some(McpTransportEntry::Http {
                 url: "http://new:9090/mcp".to_string(),
             }),
