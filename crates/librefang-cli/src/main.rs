@@ -76,7 +76,7 @@ const AFTER_HELP: &str = "\
   librefang chat                 Quick chat with the default agent
   librefang agent new coder      Spawn a new agent from a template
   librefang models list          Browse available LLM models
-  librefang add github           Install the GitHub integration
+  librefang mcp add github       Install the GitHub MCP server
   librefang doctor               Run diagnostic health checks
   librefang channel setup        Interactive channel setup wizard
   librefang cron list            List scheduled jobs
@@ -285,37 +285,13 @@ enum Commands {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
-    /// Start MCP (Model Context Protocol) server over stdio.
+    /// Manage MCP (Model Context Protocol) servers and integrations.
     #[command(
-        long_about = "Start the MCP (Model Context Protocol) server over stdio.\n\nThis exposes LibreFang capabilities to MCP-compatible clients such as\nClaude Code, Cursor, and other AI editors.\n\nExamples:\n  librefang mcp   # Start MCP server (communicates over stdin/stdout)"
+        long_about = "Work with MCP servers — the integrations that plug external tools and data\ninto LibreFang agents.\n\nWith no subcommand, starts the MCP server over stdio (so MCP-aware clients\nlike Claude Code / Cursor can consume LibreFang's own capabilities).\n\nExamples:\n  librefang mcp                  # Start MCP server on stdin/stdout\n  librefang mcp add github       # Install the GitHub MCP server\n  librefang mcp add slack --key xoxb-...\n  librefang mcp list             # List available servers\n  librefang mcp remove github    # Uninstall"
     )]
-    Mcp,
-    /// Add an integration (one-click MCP server setup).
-    #[command(
-        long_about = "Add an integration by name with one-click setup.\n\nInstalls and configures an MCP server integration. Optionally provide\nan API key inline.\n\nExamples:\n  librefang add github                    # Interactive key prompt\n  librefang add slack --key xoxb-...      # Provide key inline\n  librefang add notion"
-    )]
-    Add {
-        /// Integration name (e.g., "github", "slack", "notion").
-        name: String,
-        /// API key or token to store in the vault.
-        #[arg(long)]
-        key: Option<String>,
-    },
-    /// Remove an installed integration.
-    #[command(
-        long_about = "Remove a previously installed integration.\n\nExamples:\n  librefang remove github\n  librefang remove slack"
-    )]
-    Remove {
-        /// Integration name.
-        name: String,
-    },
-    /// List or search integrations.
-    #[command(
-        long_about = "List all available integrations, or search by keyword.\n\nExamples:\n  librefang integrations            # List all integrations\n  librefang integrations \"code\"     # Search for code-related integrations"
-    )]
-    Integrations {
-        /// Search query (optional — lists all if omitted).
-        query: Option<String>,
+    Mcp {
+        #[command(subcommand)]
+        command: Option<McpCommands>,
     },
     /// Authenticate with a provider (chatgpt) [*].
     #[command(
@@ -329,9 +305,9 @@ enum Commands {
         long_about = "Manage the encrypted credential vault for storing API keys and tokens.\n\nExamples:\n  librefang vault init            # Initialize the vault\n  librefang vault set GROQ_API_KEY  # Store a credential (prompts for value)\n  librefang vault list            # List stored keys (values hidden)\n  librefang vault remove GROQ_API_KEY  # Remove a credential"
     )]
     Vault(VaultCommands),
-    /// Scaffold a new skill or integration template.
+    /// Scaffold a new skill or MCP server template.
     #[command(
-        long_about = "Scaffold a new skill or integration from a template.\n\nCreates boilerplate files for developing a custom skill or integration.\n\nExamples:\n  librefang new skill         # Scaffold a new skill\n  librefang new integration   # Scaffold a new integration"
+        long_about = "Scaffold a new skill or MCP server integration from a template.\n\nCreates boilerplate files for developing a custom skill or MCP server.\n\nExamples:\n  librefang new skill   # Scaffold a new skill\n  librefang new mcp     # Scaffold a new MCP server"
     )]
     New {
         /// What to scaffold.
@@ -516,6 +492,37 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum McpCommands {
+    /// Install an MCP server integration by name.
+    #[command(
+        long_about = "Install and configure an MCP server integration.\n\nThe name refers to an entry in the LibreFang registry (see `librefang mcp list`).\nIf the integration needs credentials, supply them with --key or via an\ninteractive prompt.\n\nExamples:\n  librefang mcp add github                    # Interactive key prompt\n  librefang mcp add slack --key xoxb-...      # Provide key inline\n  librefang mcp add notion"
+    )]
+    Add {
+        /// Integration name (e.g., "github", "slack", "notion").
+        name: String,
+        /// API key or token to store in the vault.
+        #[arg(long)]
+        key: Option<String>,
+    },
+    /// Remove an installed MCP server integration.
+    #[command(
+        long_about = "Uninstall a previously added MCP server integration.\n\nExamples:\n  librefang mcp remove github\n  librefang mcp remove slack"
+    )]
+    Remove {
+        /// Integration name.
+        name: String,
+    },
+    /// List or search MCP server integrations available in the registry.
+    #[command(
+        long_about = "List every MCP server integration shipped with the current registry snapshot,\noptionally filtered by keyword.\n\nExamples:\n  librefang mcp list            # Show all integrations\n  librefang mcp list \"code\"     # Search"
+    )]
+    List {
+        /// Search query (optional — lists all if omitted).
+        query: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
 enum VaultCommands {
     /// Initialize the credential vault.
     #[command(
@@ -561,7 +568,7 @@ enum AuthCommands {
 #[derive(Clone, clap::ValueEnum)]
 enum ScaffoldKind {
     Skill,
-    Integration,
+    Mcp,
 }
 
 #[derive(clap::Args)]
@@ -1816,10 +1823,12 @@ fn main() {
         Some(Commands::Doctor { json, repair }) => cmd_doctor(json, repair),
         Some(Commands::Dashboard) => cmd_dashboard(),
         Some(Commands::Completion { shell }) => cmd_completion(shell),
-        Some(Commands::Mcp) => mcp::run_mcp_server(cli.config),
-        Some(Commands::Add { name, key }) => cmd_integration_add(&name, key.as_deref()),
-        Some(Commands::Remove { name }) => cmd_integration_remove(&name),
-        Some(Commands::Integrations { query }) => cmd_integrations_list(query.as_deref()),
+        Some(Commands::Mcp { command }) => match command {
+            None => mcp::run_mcp_server(cli.config),
+            Some(McpCommands::Add { name, key }) => cmd_mcp_add(&name, key.as_deref()),
+            Some(McpCommands::Remove { name }) => cmd_mcp_remove(&name),
+            Some(McpCommands::List { query }) => cmd_mcp_list(query.as_deref()),
+        },
         Some(Commands::Auth(sub)) => match sub {
             AuthCommands::Chatgpt { device_auth } => cmd_auth_chatgpt(device_auth),
         },
@@ -4455,10 +4464,8 @@ fn cmd_doctor(json: bool, repair: bool) {
         let template_count = ext_registry.template_count();
         let installed_count = ext_registry.installed_count();
         if !json {
-            ui::check_ok(&format!(
-                "Available integration templates: {template_count}"
-            ));
-            ui::check_ok(&format!("Installed integrations: {installed_count}"));
+            ui::check_ok(&format!("Available MCP server templates: {template_count}"));
+            ui::check_ok(&format!("Installed MCP servers: {installed_count}"));
         }
         checks.push(serde_json::json!({"check": "extensions_available", "status": "ok", "count": template_count}));
         checks.push(serde_json::json!({"check": "extensions_installed", "status": "ok", "count": installed_count}));
@@ -4584,14 +4591,10 @@ fn cmd_doctor(json: bool, repair: bool) {
                         let total = arr.len();
                         if healthy == total {
                             if !json {
-                                ui::check_ok(&format!(
-                                    "Integration health: {healthy}/{total} healthy"
-                                ));
+                                ui::check_ok(&format!("MCP health: {healthy}/{total} healthy"));
                             }
                         } else if !json {
-                            ui::check_warn(&format!(
-                                "Integration health: {healthy}/{total} healthy"
-                            ));
+                            ui::check_warn(&format!("MCP health: {healthy}/{total} healthy"));
                         }
                         checks.push(serde_json::json!({"check": "integration_health", "status": if healthy == total { "ok" } else { "warn" }, "healthy": healthy, "total": total}));
                     }
@@ -7383,10 +7386,10 @@ pub(crate) fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) {
 }
 
 // ---------------------------------------------------------------------------
-// Integration commands (librefang add/remove/integrations)
+// Integration commands (librefang mcp add/remove/list)
 // ---------------------------------------------------------------------------
 
-fn cmd_integration_add(name: &str, key: Option<&str>) {
+fn cmd_mcp_add(name: &str, key: Option<&str>) {
     let home = librefang_home();
     let mut registry = librefang_extensions::registry::IntegrationRegistry::new(&home);
     registry.load_templates(&home);
@@ -7472,7 +7475,7 @@ fn cmd_integration_add(name: &str, key: Option<&str>) {
     }
 }
 
-fn cmd_integration_remove(name: &str) {
+fn cmd_mcp_remove(name: &str) {
     let home = librefang_home();
     let mut registry = librefang_extensions::registry::IntegrationRegistry::new(&home);
     registry.load_templates(&home);
@@ -7496,7 +7499,7 @@ fn cmd_integration_remove(name: &str) {
     }
 }
 
-fn cmd_integrations_list(query: Option<&str>) {
+fn cmd_mcp_list(query: Option<&str>) {
     let home = librefang_home();
     let mut registry = librefang_extensions::registry::IntegrationRegistry::new(&home);
     registry.load_templates(&home);
@@ -7568,7 +7571,7 @@ fn cmd_integrations_list(query: Option<&str>) {
             ))
             .count()
     );
-    println!("  Use `librefang add <name>` to install an integration.");
+    println!("  Use `librefang mcp add <name>` to install an MCP server.");
 }
 
 // ---------------------------------------------------------------------------
@@ -7910,8 +7913,8 @@ fn cmd_scaffold(kind: ScaffoldKind) {
         ScaffoldKind::Skill => {
             librefang_extensions::installer::scaffold_skill(&cwd.join("my-skill"))
         }
-        ScaffoldKind::Integration => {
-            librefang_extensions::installer::scaffold_integration(&cwd.join("my-integration"))
+        ScaffoldKind::Mcp => {
+            librefang_extensions::installer::scaffold_integration(&cwd.join("my-mcp"))
         }
     };
     match result {

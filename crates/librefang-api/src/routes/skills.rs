@@ -156,29 +156,25 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
             "/mcp/servers/{name}/auth/revoke",
             axum::routing::delete(super::mcp_auth::auth_revoke),
         )
-        // Integrations
-        .route("/integrations", axum::routing::get(list_integrations))
+        // MCP server catalog — registry-template-backed install flow.
+        // Distinct from /mcp/servers/* above (which CRUDs the raw
+        // config.toml entries — same domain, different storage layer).
+        .route("/mcp/installed", axum::routing::get(list_integrations))
         .route(
-            "/integrations/available",
+            "/mcp/catalog",
             axum::routing::get(list_available_integrations),
         )
-        .route("/integrations/add", axum::routing::post(add_integration))
+        .route("/mcp/install", axum::routing::post(add_integration))
         .route(
-            "/integrations/{id}",
+            "/mcp/installed/{id}",
             axum::routing::get(get_integration).delete(remove_integration),
         )
         .route(
-            "/integrations/{id}/reconnect",
+            "/mcp/installed/{id}/reconnect",
             axum::routing::post(reconnect_integration),
         )
-        .route(
-            "/integrations/health",
-            axum::routing::get(integrations_health),
-        )
-        .route(
-            "/integrations/reload",
-            axum::routing::post(reload_integrations),
-        )
+        .route("/mcp/health", axum::routing::get(integrations_health))
+        .route("/mcp/reload", axum::routing::post(reload_integrations))
         // Extensions
         .route("/extensions", axum::routing::get(list_extensions))
         .route(

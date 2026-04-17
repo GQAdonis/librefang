@@ -83,11 +83,10 @@ const COMMAND_TEMPLATE: Partial<Record<RegistryCategory, string>> = {
   hands:        'librefang hand activate {id}',
   agents:       'librefang agent new {id}',
   channels:     'librefang channel setup {id}',
-  // `librefang add <name>` is the one-click MCP-server installer the
-  // CLI exposes for every integrations/ entry — also reached as /mcp
-  // via the category alias.
-  integrations: 'librefang add {id}',
-  mcp:          'librefang add {id}',
+  // `librefang mcp add <name>` is the one-click MCP-server installer
+  // the CLI exposes for every integrations/ registry entry.
+  integrations: 'librefang mcp add {id}',
+  mcp:          'librefang mcp add {id}',
 }
 
 function isPopular(item: Detail | undefined) {
