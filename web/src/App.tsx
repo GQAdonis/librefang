@@ -1045,7 +1045,7 @@ function FAQ({ t }: SectionProps) {
   )
 }
 
-// ─── Community ───
+// ─── Community (merged stats + links) ───
 const communityHrefs: string[] = [
   'https://github.com/librefang/librefang/pulls',
   'https://github.com/librefang/librefang/issues',
@@ -1054,44 +1054,7 @@ const communityHrefs: string[] = [
 ]
 const communityIcons: LucideIcon[] = [GitPullRequest, CircleDot, MessageSquare, MessageSquare]
 
-function Community({ t }: SectionProps) {
-  return (
-    <section className="py-28 px-6 border-t border-black/10 dark:border-white/5">
-      <div className="max-w-6xl mx-auto">
-        <FadeIn>
-          <div className="text-xs font-mono text-cyan-600 dark:text-cyan-500 uppercase tracking-widest mb-3">{t.community.label}</div>
-          <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight mb-4">{t.community.title}</h2>
-          <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mb-16">{t.community.desc}</p>
-        </FadeIn>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {t.community.items.map((item, i) => {
-            const Icon = communityIcons[i]!
-            return (
-              <FadeIn key={i} delay={i * 80}>
-                <a
-                  href={communityHrefs[i]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group flex flex-col bg-surface-100 border border-black/10 dark:border-white/5 hover:border-cyan-500/20 p-6 transition-all hover:-translate-y-1 h-full"
-                >
-                  <Icon className="w-5 h-5 text-cyan-500/60 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors mb-4" />
-                  <h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.label}</h3>
-                  <p className="text-sm text-gray-500 line-clamp-1">{item.desc}</p>
-                  <div className="mt-4 text-cyan-600 dark:text-cyan-500 text-sm font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
-                    {t.community.open} <ArrowRight className="w-3.5 h-3.5" />
-                  </div>
-                </a>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── GitHub Stats ───
 function formatNumber(num: number | null | undefined): string {
   if (num === null || num === undefined) return '-'
   if (num >= 1000) return `${(num / 1000).toFixed(1)}k`
@@ -1141,7 +1104,7 @@ function GitHubStats({ t }: SectionProps) {
   const chartMax = Math.max(...chartData, 1)
 
   return (
-    <section className="py-28 px-6 border-t border-black/10 dark:border-white/5" id="github-stats">
+    <section className="py-28 px-6 border-t border-black/10 dark:border-white/5 scroll-mt-20" id="community">
       <div className="max-w-6xl mx-auto">
         <FadeIn>
           <div className="text-xs font-mono text-cyan-600 dark:text-cyan-500 uppercase tracking-widest mb-3">{gs.label}</div>
@@ -1201,15 +1164,35 @@ function GitHubStats({ t }: SectionProps) {
           </div>
         </FadeIn>
 
+        <FadeIn delay={300}>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+            {t.community.items.map((item, i) => {
+              const Icon = communityIcons[i]!
+              return (
+                <a
+                  key={i}
+                  href={communityHrefs[i]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex flex-col bg-surface-100 border border-black/10 dark:border-white/5 hover:border-cyan-500/20 p-6 transition-all hover:-translate-y-1 h-full"
+                >
+                  <Icon className="w-5 h-5 text-cyan-500/60 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors mb-4" />
+                  <h3 className="font-bold text-slate-900 dark:text-white mb-1">{item.label}</h3>
+                  <p className="text-sm text-gray-500 line-clamp-1">{item.desc}</p>
+                  <div className="mt-4 text-cyan-600 dark:text-cyan-500 text-sm font-semibold flex items-center gap-1 group-hover:gap-2 transition-all">
+                    {t.community.open} <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </a>
+              )
+            })}
+          </div>
+        </FadeIn>
+
         <FadeIn delay={400}>
-          <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <a href="https://github.com/librefang/librefang" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-black/10 dark:border-white/10 hover:border-cyan-500/30 hover:bg-cyan-500/10 text-slate-900 dark:text-white font-semibold rounded transition-all">
+          <div className="flex justify-center">
+            <a href="https://github.com/librefang/librefang" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-cyan-500/30 hover:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-semibold rounded transition-all">
               <Star className="w-4 h-4" />
               {gs.starUs}
-            </a>
-            <a href="https://github.com/librefang/librefang/discussions" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-black/10 dark:border-white/10 hover:border-black/20 dark:hover:border-white/20 text-gray-700 dark:text-gray-300 font-semibold rounded transition-all hover:bg-black/5 dark:hover:bg-white/5">
-              <MessageSquare className="w-4 h-4" />
-              {gs.discuss}
             </a>
           </div>
         </FadeIn>
@@ -1602,7 +1585,6 @@ export default function App() {
       <Docs t={t} />
       <FAQ t={t} />
       <GitHubStats t={t} />
-      <Community t={t} />
       <Footer t={t} />
       <BackToTop />
       <Suspense fallback={null}>

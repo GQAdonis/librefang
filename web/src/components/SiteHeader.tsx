@@ -110,7 +110,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
     { label: t.nav.downloads  || 'Downloads',                      href: anchor('downloads') },
     { label: t.nav.install,                                        href: anchor('install') },
     { label: t.faq?.label     || 'FAQ',                            href: anchor('faq') },
-    { label: t.githubStats?.label || 'Community',                  href: anchor('github-stats') },
+    { label: t.githubStats?.label || 'Community',                  href: anchor('community') },
   ]
   // Only external "flat" link that remains.
   const flatLinks: NavLink[] = [
@@ -118,7 +118,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
   ]
   const featureActiveIds = ['hands', 'agents', 'skills', 'mcp', 'plugins', 'providers', 'workflows', 'channels']
   const isFeatureActive = featureActiveIds.includes(activeSection)
-  const learnActiveIds = ['architecture', 'evolution', 'workflows', 'performance', 'downloads', 'install', 'faq', 'github-stats']
+  const learnActiveIds = ['architecture', 'evolution', 'workflows', 'performance', 'downloads', 'install', 'faq', 'community']
   const isLearnActive = learnActiveIds.includes(activeSection)
 
   const headerClass = cn(
