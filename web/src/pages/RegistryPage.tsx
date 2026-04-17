@@ -7,7 +7,7 @@ import { translations } from './../i18n'
 import type { Translation } from './../i18n'
 import { useAppStore } from '../store'
 import { cn } from '../lib/utils'
-import { fetchRegistryRaw } from '../lib/registry-raw'
+import { pathCandidatesFor, fetchFirstAvailable } from '../lib/registry-raw'
 import SiteHeader from '../components/SiteHeader'
 import Breadcrumbs from '../components/Breadcrumbs'
 import RegistryIcon from '../components/RegistryIcon'
@@ -22,18 +22,17 @@ interface RegistryPageProps {
 interface CategoryMeta {
   docsPath: string                        // docs.librefang.ai path
   registryPath: string                    // github.com/librefang/librefang-registry path
-  fileNameFor: (id: string) => string     // TOML / directory pointer inside the registry
 }
 
 const CATEGORY_META: Record<RegistryCategory, CategoryMeta> = {
-  skills:       { docsPath: '/agent/skills',            registryPath: '/tree/main/skills',    fileNameFor: id => `skills/${id}/SKILL.md` },
-  mcp:          { docsPath: '/integrations/mcp-a2a',    registryPath: '/tree/main/mcp',       fileNameFor: id => `mcp/${id}.toml` },
-  plugins:      { docsPath: '/agent/plugins',           registryPath: '/tree/main/plugins',   fileNameFor: id => `plugins/${id}/plugin.toml` },
-  hands:        { docsPath: '/agent/hands',             registryPath: '/tree/main/hands',     fileNameFor: id => `hands/${id}/HAND.toml` },
-  agents:       { docsPath: '/agent/templates',         registryPath: '/tree/main/agents',    fileNameFor: id => `agents/${id}/agent.toml` },
-  providers:    { docsPath: '/configuration/providers', registryPath: '/tree/main/providers', fileNameFor: id => `providers/${id}.toml` },
-  workflows:    { docsPath: '/agent/workflows',         registryPath: '/tree/main/workflows', fileNameFor: id => `workflows/${id}.toml` },
-  channels:     { docsPath: '/integrations/channels',   registryPath: '/tree/main/channels',  fileNameFor: id => `channels/${id}.toml` },
+  skills:       { docsPath: '/agent/skills',            registryPath: '/tree/main/skills' },
+  mcp:          { docsPath: '/integrations/mcp-a2a',    registryPath: '/tree/main/mcp' },
+  plugins:      { docsPath: '/agent/plugins',           registryPath: '/tree/main/plugins' },
+  hands:        { docsPath: '/agent/hands',             registryPath: '/tree/main/hands' },
+  agents:       { docsPath: '/agent/templates',         registryPath: '/tree/main/agents' },
+  providers:    { docsPath: '/configuration/providers', registryPath: '/tree/main/providers' },
+  workflows:    { docsPath: '/agent/workflows',         registryPath: '/tree/main/workflows' },
+  channels:     { docsPath: '/integrations/channels',   registryPath: '/tree/main/channels' },
 }
 
 function getCategoryLabels(t: Translation, category: RegistryCategory): { title: string; desc: string } {
@@ -362,14 +361,19 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
               const desc = getLocalizedDesc(item, lang)
               const popular = isPopular(item)
               const itemHref = `${langPrefix}/${category}/${item.id}`
-              const rawPath = meta.fileNameFor(item.id)
+              // Cache key uses the primary candidate so it matches the
+              // detail page's lookup exactly. The detail page stores
+              // { content, path } in this slot — we mirror that shape so
+              // the prefetch and the real query share one cache entry.
+              const candidates = pathCandidatesFor(category, item.id)
+              const primaryPath = candidates[0]!
               const prefetch = () => {
                 // Warm the detail page's raw-TOML cache the moment the user
                 // hovers a card. react-query dedupes if the query is already
                 // in-flight or fresh, so it's safe to call on every hover.
                 queryClient.prefetchQuery({
-                  queryKey: ['registry-raw', rawPath],
-                  queryFn: () => fetchRegistryRaw(rawPath),
+                  queryKey: ['registry-raw', primaryPath],
+                  queryFn: () => fetchFirstAvailable(candidates),
                   staleTime: 1000 * 60 * 60,
                 }).catch(() => { /* prefetch failure is silent */ })
               }

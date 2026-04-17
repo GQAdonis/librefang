@@ -12,7 +12,7 @@ import { renderMarkdown } from '../lib/minimal-markdown'
 import SiteHeader from '../components/SiteHeader'
 import Breadcrumbs from '../components/Breadcrumbs'
 import RegistryIcon from '../components/RegistryIcon'
-import { fetchRegistryRaw } from '../lib/registry-raw'
+import { fetchRegistryRaw, pathCandidatesFor, fetchFirstAvailable } from '../lib/registry-raw'
 
 interface RegistryDetailPageProps {
   category: RegistryCategory
@@ -45,26 +45,6 @@ function relTime(iso: string | null): string {
   return new Date(iso).toISOString().slice(0, 10)
 }
 
-// How to resolve a category + id to a file path inside librefang-registry.
-// Directory-backed categories (hands/agents/skills) use <UPPER>.toml inside
-// <id>/ ; file-backed categories just use <id>.toml at the top level.
-function pathFor(category: RegistryCategory, id: string): string {
-  switch (category) {
-    case 'hands':   return `hands/${id}/HAND.toml`
-    // `agent.toml` and `plugin.toml` are lowercase in the upstream
-    // registry (unlike HAND.toml / SKILL.md); using uppercase 404s.
-    case 'agents':  return `agents/${id}/agent.toml`
-    case 'plugins': return `plugins/${id}/plugin.toml`
-    // Skills ship SKILL.md with YAML frontmatter — there is no TOML
-    // manifest, so the "manifest" section renders the markdown source.
-    case 'skills':  return `skills/${id}/SKILL.md`
-    // Upstream dir is `mcp/` as of PR #64 in librefang-registry; the
-    // worker raw-file proxy allows both paths during the rollout so
-    // the fetch still resolves if the rename hasn't propagated yet.
-    case 'mcp':     return `mcp/${id}.toml`
-    default:        return `${category}/${id}.toml`
-  }
-}
 
 // README-ish path candidates by category. skills also ship a SKILL.md with the
 // prompt body (that's the canonical doc for them); everything else uses a
@@ -169,13 +149,20 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
   const prevItem = currentIdx > 0 ? sortedCategory[currentIdx - 1] : undefined
   const nextItem = currentIdx >= 0 && currentIdx < sortedCategory.length - 1 ? sortedCategory[currentIdx + 1] : undefined
 
-  const rawPath = pathFor(category, id)
+  const pathCandidates = pathCandidatesFor(category, id)
+  // Cache key is the primary path so the hover-prefetch on the list page
+  // (which only knows the preferred layout) warms the same slot.
+  const primaryPath = pathCandidates[0]!
   const rawQuery = useQuery({
-    queryKey: ['registry-raw', rawPath],
-    queryFn: () => fetchRegistryRaw(rawPath),
+    queryKey: ['registry-raw', primaryPath],
+    queryFn: () => fetchFirstAvailable(pathCandidates),
     staleTime: 1000 * 60 * 60,
     retry: 1,
   })
+  // Resolved path — the candidate that actually returned content, or the
+  // primary guess if the query hasn't succeeded yet. GitHub/commit URLs
+  // use this so they point at the file the user is actually viewing.
+  const rawPath = rawQuery.data?.path ?? primaryPath
   // Fire-and-forget click tracking so trending can surface on list pages.
   // navigator.sendBeacon is queued by the browser even on unload, and doesn't
   // block the page at all. Some browsers fall back to fetch keepalive.
@@ -214,6 +201,11 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
   })
 
   const commitQuery = useQuery<CommitInfo>({
+    // Wait until raw resolves so we only look up commits for the path
+    // that actually exists. Otherwise we'd race two requests for MCP
+    // entries — one against the file-backed path, one against the
+    // dir-backed path — and one would always 404.
+    enabled: !!rawQuery.data?.path,
     queryKey: ['registry-commit', rawPath],
     queryFn: async () => {
       const res = await fetch(`${COMMIT_API}?path=${encodeURIComponent(rawPath)}`)
@@ -378,7 +370,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
             <AnchorLink id="manifest" title={t.registry?.copyLink || 'Copy link'} />
           </h2>
           {rawQuery.data && (
-            <CopyButton text={rawQuery.data} label={t.registry?.copy || 'Copy'} />
+            <CopyButton text={rawQuery.data.content} label={t.registry?.copy || 'Copy'} />
           )}
         </div>
 
@@ -413,7 +405,7 @@ export default function RegistryDetailPage({ category, id, onOpenSearch }: Regis
 
         {rawQuery.data && (
           <pre className="overflow-x-auto text-xs md:text-sm font-mono leading-relaxed p-5 bg-surface-100 border border-black/10 dark:border-white/5 text-gray-700 dark:text-gray-300 whitespace-pre toml-highlight">
-            <code>{highlightToml(rawQuery.data)}</code>
+            <code>{highlightToml(rawQuery.data.content)}</code>
           </pre>
         )}
 

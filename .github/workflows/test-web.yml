@@ -27,14 +27,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Enable corepack (activates pnpm from packageManager field)
-        run: corepack enable
-
       - uses: actions/setup-node@v6
         with:
           node-version-file: "web/.nvmrc"
           cache: "pnpm"
           cache-dependency-path: web/pnpm-lock.yaml
+
+      # corepack must run AFTER setup-node so shims land in the Node install
+      # actually on PATH. Running it earlier adds shims to a Node installation
+      # that setup-node then replaces, leaving `pnpm: command not found`.
+      - name: Enable corepack (activates pnpm from packageManager field)
+        run: corepack enable
 
       - name: Install web deps
         run: cd web && pnpm install --frozen-lockfile
