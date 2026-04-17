@@ -3487,7 +3487,10 @@ fn upsert_mcp_server_config(
     validate_static_file_path(config_path, "config.toml")?;
     let mut table: toml::value::Table = if config_path.exists() {
         let content = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
-        toml::from_str(&content).unwrap_or_default()
+        // Propagate parse errors instead of silently defaulting to an empty
+        // table, which would overwrite every unrelated section when we write
+        // back. A malformed config.toml should surface to the caller.
+        toml::from_str(&content).map_err(|e| format!("config.toml is not valid TOML: {e}"))?
     } else {
         toml::value::Table::new()
     };
@@ -3523,7 +3526,10 @@ fn remove_mcp_server_config(config_path: &std::path::Path, name: &str) -> Result
     validate_static_file_path(config_path, "config.toml")?;
     let mut table: toml::value::Table = if config_path.exists() {
         let content = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
-        toml::from_str(&content).unwrap_or_default()
+        // Propagate parse errors instead of silently defaulting to an empty
+        // table, which would destroy every unrelated section when we write
+        // back after the retain().
+        toml::from_str(&content).map_err(|e| format!("config.toml is not valid TOML: {e}"))?
     } else {
         return Ok(());
     };
@@ -4864,6 +4870,15 @@ pub async fn install_extension(
         );
     }
 
+    // Sync the in-memory config with the freshly-written config.toml before
+    // reload_mcp_servers runs. `reload_mcp_servers` reads from
+    // `self.config.load_full()`, so skipping this step means the just-added
+    // [[mcp_servers]] entry is invisible and the endpoint reports "installed"
+    // without actually connecting anything.
+    if let Err(e) = state.kernel.reload_config().await {
+        tracing::warn!("Failed to reload config after extension install: {e}");
+    }
+
     state.kernel.mcp_health().register(&result.server.name);
     let connected = state.kernel.reload_mcp_servers().await.unwrap_or(0);
 
@@ -4917,6 +4932,14 @@ pub async fn uninstall_extension(
     if let Err(e) = remove_mcp_server_config(&config_path, &server_name) {
         return ApiErrorResponse::internal(format!("Failed to update config: {e}"))
             .into_json_tuple();
+    }
+
+    // Sync the in-memory config before reload_mcp_servers runs. Otherwise
+    // `self.config.load_full()` still returns the stale snapshot with the
+    // removed entry and `reload_mcp_servers` happily reconnects the server
+    // we just deleted.
+    if let Err(e) = state.kernel.reload_config().await {
+        tracing::warn!("Failed to reload config after extension uninstall: {e}");
     }
 
     state.kernel.mcp_health().unregister(&server_name);

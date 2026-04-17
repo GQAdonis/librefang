@@ -268,7 +268,10 @@ fn upsert_mcp_server_from_template(
 ) -> Result<(), String> {
     let mut table: toml::value::Table = if config_path.exists() {
         let content = std::fs::read_to_string(config_path).map_err(|e| e.to_string())?;
-        toml::from_str(&content).unwrap_or_default()
+        // Propagate parse errors instead of silently defaulting. Writing back
+        // a near-empty table would drop every unrelated section the user had
+        // and turn a recoverable malformed-file into destructive data loss.
+        toml::from_str(&content).map_err(|e| format!("config.toml is not valid TOML: {e}"))?
     } else {
         toml::value::Table::new()
     };

@@ -1854,41 +1854,46 @@ impl LibreFangKernel {
         // (`integrations.toml` + `integrations/`) into the unified
         // `config.toml` + `mcp/catalog/` layout. This is a no-op after the
         // first successful run.
-        match librefang_runtime::mcp_migrate::migrate_if_needed(&config.home_dir) {
+        //
+        // We reload `config.toml` ONLY when the migrator reports it actually
+        // wrote something (`Ok(Some(_))`). Reloading unconditionally would
+        // silently replace the caller's in-memory config with whatever is on
+        // disk, which is wrong when the caller started the kernel with a
+        // non-default config path or a programmatically-built config.
+        let migrated = match librefang_runtime::mcp_migrate::migrate_if_needed(&config.home_dir) {
             Ok(Some(summary)) => {
                 info!("MCP migration: {summary}");
+                true
             }
-            Ok(None) => {}
+            Ok(None) => false,
             Err(e) => {
                 warn!("MCP migration skipped due to error: {e}");
+                false
             }
-        }
+        };
 
         // Load the MCP catalog from `~/.librefang/mcp/catalog/`.
         let mut mcp_catalog = librefang_extensions::catalog::McpCatalog::new(&config.home_dir);
         let catalog_count = mcp_catalog.load(&config.home_dir);
         info!("MCP catalog: {catalog_count} template(s) available");
 
-        // The migrator may have added new `[[mcp_servers]]` entries to
-        // config.toml; reload so the rest of boot sees them. Only the
-        // migration path triggers this — the in-memory `config` arg is
-        // otherwise authoritative.
-        let reloaded_config = {
+        let config = if migrated {
             let cfg_path = config.home_dir.join("config.toml");
             if cfg_path.is_file() {
                 let reloaded = load_config(Some(&cfg_path));
-                // Defensive: if the reloaded view lost something essential,
-                // fall back to the original in-memory config.
+                // Defensive: only accept the reloaded view if it didn't drop
+                // any `[[mcp_servers]]` entries the caller already had.
                 if reloaded.mcp_servers.len() >= config.mcp_servers.len() {
-                    Some(reloaded)
+                    reloaded
                 } else {
-                    None
+                    config
                 }
             } else {
-                None
+                config
             }
+        } else {
+            config
         };
-        let config = reloaded_config.unwrap_or(config);
         let all_mcp_servers = config.mcp_servers.clone();
 
         // Initialize MCP health monitor.
@@ -7671,6 +7676,21 @@ system_prompt = "You are a helpful assistant."
                         .effective_mcp_servers
                         .write()
                         .unwrap_or_else(|e| e.into_inner());
+                    // Diff the health registry against the new server set so
+                    // removed servers stop being tracked and newly added ones
+                    // enter the map immediately — otherwise `report_ok` /
+                    // `report_error` are silent no-ops for those IDs and
+                    // `/api/mcp/health` under-reports until a full restart.
+                    let old_names: std::collections::HashSet<String> =
+                        effective.iter().map(|s| s.name.clone()).collect();
+                    let new_names: std::collections::HashSet<String> =
+                        new_mcp.iter().map(|s| s.name.clone()).collect();
+                    for name in old_names.difference(&new_names) {
+                        self.mcp_health.unregister(name);
+                    }
+                    for name in new_names.difference(&old_names) {
+                        self.mcp_health.register(name);
+                    }
                     let count = new_mcp.len();
                     *effective = new_mcp;
                     info!(

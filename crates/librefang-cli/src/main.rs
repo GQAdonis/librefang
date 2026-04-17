@@ -7431,6 +7431,46 @@ fn cmd_mcp_add(name: &str, key: Option<&str>) {
         }
     };
 
+    // Reject re-install of an already-configured server by name/template_id.
+    // The API path returns 409 here; the CLI was silently overwriting the
+    // existing [[mcp_servers]] entry (including edited transport/env/oauth)
+    // because upsert_mcp_server_local replaces by name. Users should remove
+    // first if they want to re-install.
+    let config_path = home.join("config.toml");
+    if config_path.is_file() {
+        let content = match std::fs::read_to_string(&config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                ui::error(&format!("Failed to read {}: {e}", config_path.display()));
+                std::process::exit(1);
+            }
+        };
+        let parsed: toml::value::Table = match toml::from_str(&content) {
+            Ok(t) => t,
+            Err(e) => {
+                ui::error(&format!("{} is not valid TOML: {e}", config_path.display()));
+                std::process::exit(1);
+            }
+        };
+        if let Some(toml::Value::Array(servers)) = parsed.get("mcp_servers") {
+            let conflict = servers.iter().any(|v| {
+                let t = match v.as_table() {
+                    Some(t) => t,
+                    None => return false,
+                };
+                let matches_field = |k: &str| t.get(k).and_then(|n| n.as_str()) == Some(name);
+                matches_field("name") || matches_field("template_id")
+            });
+            if conflict {
+                ui::error(&format!(
+                    "MCP server '{name}' is already configured. Run \
+                     `librefang mcp remove {name}` first if you want to re-install."
+                ));
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Set up credential resolver (vault + dotenv + interactive prompt fallback)
     let dotenv_path = home.join(".env");
     let vault_path = home.join("vault.enc");
