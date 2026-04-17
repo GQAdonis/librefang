@@ -105,15 +105,14 @@ The [`librefang-registry`](https://github.com/librefang/librefang-registry) repo
 
 | Path | Format | What it is |
 |------|--------|------------|
-| `skills/<id>/SKILL.toml` + Markdown | directory | A prompt-only or WASM skill bundle |
+| `skills/<id>/SKILL.md` | directory | A prompt-only or WASM skill bundle (markdown + YAML frontmatter) |
 | `hands/<id>/HAND.toml` | directory | An autonomous capability unit |
-| `agents/<id>/AGENT.toml` | directory | A pre-built agent template |
+| `agents/<id>/agent.toml` | directory | A pre-built agent template |
 | `channels/<id>.toml` | file | A messaging adapter manifest |
 | `providers/<id>.toml` | file | An LLM provider adapter manifest |
 | `workflows/<id>.toml` | file | A multi-step agent workflow |
-| `plugins/<id>.toml` | file | A runtime plugin manifest |
+| `plugins/<id>/plugin.toml` | directory | A runtime plugin manifest |
 | `mcp/<id>.toml` | file | An MCP server manifest |
-| `integrations/<id>.toml` | file | A first-party SaaS integration |
 
 ### Submitting a new entry
 

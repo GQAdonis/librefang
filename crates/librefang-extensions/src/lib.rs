@@ -25,7 +25,6 @@ pub mod vault;
 
 // Backwards-compatible module alias so downstream crates can still reach the
 // catalog via the old `registry` path during the rename. Prefer `catalog`.
-pub use catalog as registry;
 
 use serde::{Deserialize, Serialize};
 
