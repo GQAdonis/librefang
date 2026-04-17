@@ -173,10 +173,9 @@ fn acquire_skill_lock(skill_dir: &Path) -> Result<std::fs::File, SkillError> {
         .truncate(false)
         .open(&lock_path)?;
     lock_file.lock_exclusive().map_err(|e| {
-        SkillError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to acquire skill lock: {e}"),
-        ))
+        SkillError::Io(std::io::Error::other(format!(
+            "Failed to acquire skill lock: {e}"
+        )))
     })?;
     Ok(lock_file)
 }
