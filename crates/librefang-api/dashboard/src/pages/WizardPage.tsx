@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import {
-  listProviders,
-  setProviderKey,
-  testProvider,
-  setDefaultProvider,
-  postQuickInit,
-} from "../api";
 import type { ProviderItem } from "../api";
 import { isProviderAvailable } from "../lib/status";
+import { useProviders } from "../lib/queries/providers";
+import {
+  useSetProviderKey,
+  useTestProvider,
+  useSetDefaultProvider,
+} from "../lib/mutations/providers";
+import { useQuickInit } from "../lib/mutations/overview";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -24,18 +24,19 @@ export function WizardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const addToast = useUIStore((s) => s.addToast);
-  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<Step>(1);
   const [providerId, setProviderId] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [done, setDone] = useState(false);
 
-  const providersQuery = useQuery<ProviderItem[]>({
-    queryKey: ["providers"],
-    queryFn: listProviders,
-  });
+  const providersQuery = useProviders();
+  const setProviderKeyMutation = useSetProviderKey();
+  const testProviderMutation = useTestProvider();
+  const setDefaultProviderMutation = useSetDefaultProvider();
+  const quickInitMutation = useQuickInit();
 
   // Recommended providers for first-time setup — prioritize free/fast options.
   const providerOptions = useMemo(() => {
@@ -50,20 +51,27 @@ export function WizardPage() {
 
   const selectedProvider = providerOptions.find((p) => p.id === providerId);
   const requiresKey = selectedProvider?.key_required !== false;
+  // If the provider already has a working key and the user is typing a new one,
+  // they're about to overwrite a credential we know was good. A failed test
+  // post-write leaves the provider broken with no way to restore the old key,
+  // so gate the persist behind an explicit confirm checkbox.
+  const existingKeyWorking =
+    !!selectedProvider && isProviderAvailable(selectedProvider.auth_status);
+  const typingNewKey = requiresKey && apiKey.trim().length > 0;
+  const needsReplaceConfirm = existingKeyWorking && typingNewKey && !confirmReplace;
 
   const setKeyMutation = useMutation({
     mutationFn: async () => {
       if (!providerId) throw new Error("no_provider");
       if (requiresKey && apiKey.trim()) {
-        await setProviderKey(providerId, apiKey.trim());
+        await setProviderKeyMutation.mutateAsync({ id: providerId, key: apiKey.trim() });
       }
-      const test = await testProvider(providerId);
+      const test = await testProviderMutation.mutateAsync(providerId);
       if (test.status !== "ok" && test.status !== "success") {
         throw new Error(test.message || "test_failed");
       }
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["providers"] });
+    onSuccess: () => {
       addToast(t("wizard.provider_connected"), "success");
       setStep(3);
     },
@@ -76,9 +84,8 @@ export function WizardPage() {
     if (!providerId) return;
     setFinalizing(true);
     try {
-      await setDefaultProvider(providerId);
-      await postQuickInit();
-      await queryClient.invalidateQueries({ queryKey: ["dashboard", "snapshot"] });
+      await setDefaultProviderMutation.mutateAsync({ id: providerId });
+      await quickInitMutation.mutateAsync();
       setDone(true);
     } catch (err) {
       addToast(t("wizard.finalize_failed", { message: (err as Error).message }), "error");
@@ -200,7 +207,13 @@ export function WizardPage() {
                 placeholder="sk-..."
                 leftIcon={<Key className="h-4 w-4" />}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  // Any edit invalidates a prior confirmation — we don't want
+                  // a lingering approval from an earlier typed-then-erased key
+                  // to cover a different string the user later retypes.
+                  setConfirmReplace(false);
+                }}
                 autoFocus
               />
             ) : (
@@ -211,6 +224,23 @@ export function WizardPage() {
               <p className="text-[11px] text-text-dim/70 mt-2">
                 {t("wizard.env_hint", { env: selectedProvider.api_key_env })}
               </p>
+            )}
+
+            {existingKeyWorking && typingNewKey && (
+              <label className="mt-4 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/5 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={confirmReplace}
+                  onChange={(e) => setConfirmReplace(e.target.checked)}
+                />
+                <span className="text-xs text-text-dim leading-relaxed">
+                  {t("wizard.replace_key_warning", {
+                    defaultValue:
+                      "This provider is already connected with a working key. Submitting will overwrite it — a failed test cannot restore the previous key. Check to acknowledge.",
+                  })}
+                </span>
+              </label>
             )}
 
             {setKeyMutation.isError && (
@@ -265,7 +295,10 @@ export function WizardPage() {
               variant="primary"
               rightIcon={<ArrowRight className="h-4 w-4" />}
               isLoading={setKeyMutation.isPending}
-              disabled={requiresKey && !apiKey.trim() && !isProviderAvailable(selectedProvider?.auth_status)}
+              disabled={
+                (requiresKey && !apiKey.trim() && !isProviderAvailable(selectedProvider?.auth_status))
+                || needsReplaceConfirm
+              }
               onClick={() => setKeyMutation.mutate()}
             >
               {t("wizard.connect")}
