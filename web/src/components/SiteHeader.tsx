@@ -133,7 +133,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
     <nav className={headerClass}>
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
         <a href={homeHref} className="flex items-center gap-2.5">
-          <img src="/logo.png" alt="LibreFang" width="32" height="32" decoding="async" fetchPriority="high" className="w-8 h-8 rounded" />
+          <img src="/logo.png" alt="" width="32" height="32" decoding="async" fetchPriority="high" className="w-8 h-8 rounded" />
           <span className="font-bold text-slate-900 dark:text-white tracking-tight">LibreFang</span>
         </a>
 
@@ -238,7 +238,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
             <button
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors font-medium"
               onClick={() => setLangOpen(!langOpen)}
-              aria-label="Switch language"
+              aria-label={`Switch language (${currentLangName})`}
               aria-expanded={langOpen}
             >
               <Globe className="w-3.5 h-3.5" />
@@ -264,7 +264,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
             <button
               onClick={onOpenSearch}
               className="ml-1 flex items-center gap-1.5 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 border border-black/10 dark:border-white/10 rounded hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
-              aria-label={t.search?.title || 'Search'}
+              aria-label={`${t.search?.title || 'Search'} ⌘K`}
             >
               <Search className="w-3.5 h-3.5" />
               <kbd className="font-mono text-[10px] px-1 py-0.5 bg-surface-200 rounded">⌘K</kbd>

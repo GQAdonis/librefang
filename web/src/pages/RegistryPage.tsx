@@ -264,7 +264,7 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
               onClick={() => setQuery('')}
               className={cn(
                 'px-3 py-1 text-xs font-mono uppercase tracking-wider border transition-colors',
-                query.trim() === '' ? 'border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/5' : 'border-black/10 dark:border-white/10 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                query.trim() === '' ? 'border-cyan-500/40 text-cyan-600 dark:text-cyan-400 bg-cyan-500/5' : 'border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300'
               )}
             >
               {t.registry?.all || 'All'}
@@ -273,7 +273,7 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
               <button
                 key={cat}
                 onClick={() => setQuery(cat)}
-                className="px-3 py-1 text-xs font-mono uppercase tracking-wider border border-black/10 dark:border-white/10 text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
+                className="px-3 py-1 text-xs font-mono uppercase tracking-wider border border-black/10 dark:border-white/10 text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
                 title={cat}
               >
                 {t.registry?.subcategories?.[cat] || cat}
@@ -393,7 +393,7 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
                     aria-label={starred ? 'Unstar' : 'Star'}
                     aria-pressed={starred}
                     className={cn(
-                      'absolute top-3 right-3 p-1 transition-colors',
+                      'absolute top-2.5 right-2.5 p-1.5 transition-colors',
                       starred ? 'text-amber-500' : 'text-gray-300 dark:text-gray-600 hover:text-amber-500'
                     )}
                   >
@@ -406,15 +406,15 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
                           <RegistryIcon icon={item.icon} className="w-5 h-5" fallbackClassName="text-xl leading-none" />
                         </span>
                       )}
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white truncate">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white truncate">
                         {getLocalizedName(item, lang)}
-                      </h3>
+                      </h2>
                       {popular && <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-cyan-500 transition-colors shrink-0 mt-1" />
                   </div>
                   {item.category && (
-                    <div className="text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-2">
+                    <div className="text-[10px] font-mono text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                       {item.category}
                     </div>
                   )}
