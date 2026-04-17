@@ -4269,13 +4269,13 @@ fn integration_status_str(
     }
 }
 
-/// GET /api/integrations — List installed integrations with status.
+/// GET /api/mcp/installed — List installed MCP servers with status.
 #[utoipa::path(
     get,
-    path = "/api/integrations",
-    tag = "integrations",
+    path = "/api/mcp/installed",
+    tag = "mcp",
     responses(
-        (status = 200, description = "List installed integrations with status", body = serde_json::Value)
+        (status = 200, description = "List installed MCP servers with status", body = serde_json::Value)
     )
 )]
 pub async fn list_integrations(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -4310,17 +4310,17 @@ pub async fn list_integrations(State(state): State<Arc<AppState>>) -> impl IntoR
     }))
 }
 
-/// GET /api/integrations/:id — Get a single integration by ID.
+/// GET /api/mcp/installed/:id — Get a single installed MCP server by ID.
 #[utoipa::path(
     get,
-    path = "/api/integrations/{id}",
-    tag = "integrations",
+    path = "/api/mcp/installed/{id}",
+    tag = "mcp",
     params(
-        ("id" = String, Path, description = "Integration ID"),
+        ("id" = String, Path, description = "MCP server ID"),
     ),
     responses(
-        (status = 200, description = "Integration detail", body = serde_json::Value),
-        (status = 404, description = "Integration not found", body = serde_json::Value),
+        (status = 200, description = "MCP server detail", body = serde_json::Value),
+        (status = 404, description = "MCP server not found", body = serde_json::Value),
     )
 )]
 pub async fn get_integration(
@@ -4383,13 +4383,13 @@ pub async fn get_integration(
         .into_response()
 }
 
-/// GET /api/integrations/available — List all available templates.
+/// GET /api/mcp/catalog — List all available MCP server templates.
 #[utoipa::path(
     get,
-    path = "/api/integrations/available",
-    tag = "integrations",
+    path = "/api/mcp/catalog",
+    tag = "mcp",
     responses(
-        (status = 200, description = "List all available integration templates", body = serde_json::Value)
+        (status = 200, description = "List all available MCP server templates", body = serde_json::Value)
     )
 )]
 pub async fn list_available_integrations(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -4442,14 +4442,14 @@ pub async fn list_available_integrations(State(state): State<Arc<AppState>>) -> 
     }))
 }
 
-/// POST /api/integrations/add — Install an integration.
+/// POST /api/mcp/install — Install an MCP server from the catalog.
 #[utoipa::path(
     post,
-    path = "/api/integrations/add",
-    tag = "integrations",
+    path = "/api/mcp/install",
+    tag = "mcp",
     request_body = serde_json::Value,
     responses(
-        (status = 200, description = "Install an integration", body = serde_json::Value)
+        (status = 200, description = "Install an MCP server", body = serde_json::Value)
     )
 )]
 pub async fn add_integration(
@@ -4516,16 +4516,16 @@ pub async fn add_integration(
     )
 }
 
-/// DELETE /api/integrations/:id — Remove an integration.
+/// DELETE /api/mcp/installed/:id — Uninstall an MCP server.
 #[utoipa::path(
     delete,
-    path = "/api/integrations/{id}",
-    tag = "integrations",
+    path = "/api/mcp/installed/{id}",
+    tag = "mcp",
     params(
-        ("id" = String, Path, description = "Integration ID"),
+        ("id" = String, Path, description = "MCP server ID"),
     ),
     responses(
-        (status = 200, description = "Remove an integration", body = serde_json::Value)
+        (status = 200, description = "Uninstall an MCP server", body = serde_json::Value)
     )
 )]
 pub async fn remove_integration(
@@ -4562,16 +4562,16 @@ pub async fn remove_integration(
     )
 }
 
-/// POST /api/integrations/:id/reconnect — Reconnect an MCP server.
+/// POST /api/mcp/installed/:id/reconnect — Reconnect an MCP server.
 #[utoipa::path(
     post,
-    path = "/api/integrations/{id}/reconnect",
-    tag = "integrations",
+    path = "/api/mcp/installed/{id}/reconnect",
+    tag = "mcp",
     params(
-        ("id" = String, Path, description = "Integration ID"),
+        ("id" = String, Path, description = "MCP server ID"),
     ),
     responses(
-        (status = 200, description = "Reconnect an integration MCP server", body = serde_json::Value)
+        (status = 200, description = "Reconnect an MCP server", body = serde_json::Value)
     )
 )]
 pub async fn reconnect_integration(
@@ -4612,13 +4612,13 @@ pub async fn reconnect_integration(
     }
 }
 
-/// GET /api/integrations/health — Health status for all integrations.
+/// GET /api/mcp/health — Health status for all MCP servers.
 #[utoipa::path(
     get,
-    path = "/api/integrations/health",
-    tag = "integrations",
+    path = "/api/mcp/health",
+    tag = "mcp",
     responses(
-        (status = 200, description = "Health status for all integrations", body = serde_json::Value)
+        (status = 200, description = "Health status for all MCP servers", body = serde_json::Value)
     )
 )]
 pub async fn integrations_health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -4646,13 +4646,13 @@ pub async fn integrations_health(State(state): State<Arc<AppState>>) -> impl Int
     }))
 }
 
-/// POST /api/integrations/reload — Hot-reload integration configs and reconnect MCP.
+/// POST /api/mcp/reload — Hot-reload MCP catalog and reconnect servers.
 #[utoipa::path(
     post,
-    path = "/api/integrations/reload",
-    tag = "integrations",
+    path = "/api/mcp/reload",
+    tag = "mcp",
     responses(
-        (status = 200, description = "Hot-reload integration configs and reconnect MCP", body = serde_json::Value)
+        (status = 200, description = "Hot-reload MCP catalog and reconnect servers", body = serde_json::Value)
     )
 )]
 pub async fn reload_integrations(State(state): State<Arc<AppState>>) -> impl IntoResponse {
