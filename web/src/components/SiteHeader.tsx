@@ -130,6 +130,46 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
         </a>
 
         <div className="hidden md:flex items-center gap-1">
+          {/* Features dropdown — architecture, workflows, performance, install, downloads */}
+          <div className="relative" data-learn-menu>
+            <button
+              className={cn(
+                'flex items-center gap-1 px-3 py-1.5 text-sm transition-colors font-medium',
+                isLearnActive || learnOpen ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400'
+              )}
+              onClick={() => { setLearnOpen(!learnOpen); setFeaturesOpen(false) }}
+              aria-label={t.nav.learnMore || 'Features'}
+              aria-expanded={learnOpen}
+            >
+              {t.nav.learnMore || 'Features'}
+              <ChevronDown className={cn('w-3 h-3 transition-transform', learnOpen && 'rotate-180')} />
+            </button>
+            {learnOpen && (
+              <div className="absolute left-0 mt-2 w-56 bg-surface-200 border border-black/10 dark:border-white/10 rounded shadow-xl z-50 py-1">
+                {anchorLinks.map(link => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    onClick={(e) => {
+                      if (!isSubpage) {
+                        const hash = link.href.split('#')[1]
+                        if (hash) {
+                          e.preventDefault()
+                          const el = document.getElementById(hash)
+                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                        }
+                      }
+                      setLearnOpen(false)
+                    }}
+                    className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <span>{link.label}</span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Marketplace dropdown — 8 registry categories only */}
           <div className="relative" data-features-menu>
             <button
@@ -151,46 +191,6 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
                     key={link.label}
                     href={link.href}
                     onClick={() => { setFeaturesOpen(false); onTrackEvent?.('click', `nav_feature_${link.href}`) }}
-                    className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  >
-                    <span>{link.label}</span>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Learn More dropdown — architecture, workflows, performance, install, downloads */}
-          <div className="relative" data-learn-menu>
-            <button
-              className={cn(
-                'flex items-center gap-1 px-3 py-1.5 text-sm transition-colors font-medium',
-                isLearnActive || learnOpen ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400'
-              )}
-              onClick={() => { setLearnOpen(!learnOpen); setFeaturesOpen(false) }}
-              aria-label={t.nav.learnMore || 'Learn More'}
-              aria-expanded={learnOpen}
-            >
-              {t.nav.learnMore || 'Learn More'}
-              <ChevronDown className={cn('w-3 h-3 transition-transform', learnOpen && 'rotate-180')} />
-            </button>
-            {learnOpen && (
-              <div className="absolute left-0 mt-2 w-56 bg-surface-200 border border-black/10 dark:border-white/10 rounded shadow-xl z-50 py-1">
-                {anchorLinks.map(link => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    onClick={(e) => {
-                      if (!isSubpage) {
-                        const hash = link.href.split('#')[1]
-                        if (hash) {
-                          e.preventDefault()
-                          const el = document.getElementById(hash)
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                        }
-                      }
-                      setLearnOpen(false)
-                    }}
                     className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                   >
                     <span>{link.label}</span>
@@ -327,20 +327,7 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
         <div className="md:hidden bg-surface-100 border-t border-black/10 dark:border-white/5 px-6 py-4 space-y-1">
           <div className="pb-1">
             <div className="text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-widest py-1.5">
-              {t.nav.features || 'Marketplace'}
-            </div>
-            {featureLinks.map(link => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="block py-2 pl-3 text-sm text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors font-medium"
-              >
-                {link.label}
-              </a>
-            ))}
-            <div className="text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-widest py-1.5 mt-2">
-              {t.nav.learnMore || 'Learn More'}
+              {t.nav.learnMore || 'Features'}
             </div>
             {anchorLinks.map(link => (
               <a
@@ -357,6 +344,19 @@ export default function SiteHeader({ onOpenSearch, isSubpage = false, sourceUrl,
                   }
                   setOpen(false)
                 }}
+                className="block py-2 pl-3 text-sm text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors font-medium"
+              >
+                {link.label}
+              </a>
+            ))}
+            <div className="text-[10px] font-mono text-gray-400 dark:text-gray-600 uppercase tracking-widest py-1.5 mt-2">
+              {t.nav.features || 'Marketplace'}
+            </div>
+            {featureLinks.map(link => (
+              <a
+                key={link.label}
+                href={link.href}
+                onClick={() => setOpen(false)}
                 className="block py-2 pl-3 text-sm text-gray-600 dark:text-gray-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors font-medium"
               >
                 {link.label}
