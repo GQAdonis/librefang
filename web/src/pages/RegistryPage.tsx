@@ -274,8 +274,9 @@ export default function RegistryPage({ category, onOpenSearch }: RegistryPagePro
                 key={cat}
                 onClick={() => setQuery(cat)}
                 className="px-3 py-1 text-xs font-mono uppercase tracking-wider border border-black/10 dark:border-white/10 text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:border-cyan-500/30 transition-colors"
+                title={cat}
               >
-                {cat}
+                {t.registry?.subcategories?.[cat] || cat}
               </button>
             ))}
           </div>

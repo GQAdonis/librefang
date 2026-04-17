@@ -154,6 +154,10 @@ export interface Translation {
     readme: string
     viewHistory?: string
     templateDiff?: string
+    // Sub-category chips on the category pages (e.g. "communication",
+    // "devtools"). The registry stores them as raw English tokens;
+    // look them up here for display.
+    subcategories?: Record<string, string>
     categories: {
       skills: { title: string; desc: string }
       mcp: { title: string; desc: string }
@@ -430,6 +434,14 @@ export const translations: Record<string, Translation> = {
       readme: 'README',
       viewHistory: 'History',
       templateDiff: 'Template diff',
+      subcategories: {
+        ai: 'AI', business: 'Business', cloud: 'Cloud', communication: 'Communication',
+        content: 'Content', creation: 'Creation', data: 'Data', developer: 'Developer',
+        development: 'Development', devtools: 'DevTools', email: 'Email',
+        engineering: 'Engineering', enterprise: 'Enterprise', iot: 'IoT',
+        language: 'Language', messaging: 'Messaging', productivity: 'Productivity',
+        research: 'Research', skills: 'Skills', social: 'Social', thinking: 'Thinking',
+      },
       categories: {
         skills: { title: 'Skills', desc: 'Pluggable tool bundles — Python, WASM, Node, or prompt-only skills that extend what an agent can do.' },
         mcp:    { title: 'MCP Servers', desc: 'Model Context Protocol servers that plug external tools and data sources directly into any agent.' },
@@ -669,6 +681,14 @@ export const translations: Record<string, Translation> = {
       readme: '说明文档',
       viewHistory: '历史',
       templateDiff: '模板差异',
+      subcategories: {
+        ai: 'AI', business: '商业', cloud: '云', communication: '通信',
+        content: '内容', creation: '创作', data: '数据', developer: '开发者',
+        development: '开发', devtools: '开发者工具', email: '邮件',
+        engineering: '工程', enterprise: '企业', iot: '物联网',
+        language: '语言', messaging: '消息', productivity: '生产力',
+        research: '研究', skills: '技能', social: '社交', thinking: '思考',
+      },
       categories: {
         skills:   { title: '技能', desc: '可插拔的工具包 —— Python、WASM、Node 或 prompt-only 技能，扩展 Agent 的能力边界。' },
         mcp:      { title: 'MCP 服务器', desc: 'Model Context Protocol 服务器，把外部工具与数据直接挂接到任何 Agent。' },
@@ -908,6 +928,14 @@ export const translations: Record<string, Translation> = {
       readme: '說明文件',
       viewHistory: '歷史',
       templateDiff: '範本差異',
+      subcategories: {
+        ai: 'AI', business: '商業', cloud: '雲端', communication: '通訊',
+        content: '內容', creation: '創作', data: '資料', developer: '開發者',
+        development: '開發', devtools: '開發者工具', email: '郵件',
+        engineering: '工程', enterprise: '企業', iot: '物聯網',
+        language: '語言', messaging: '訊息', productivity: '生產力',
+        research: '研究', skills: '技能', social: '社交', thinking: '思考',
+      },
       categories: {
         skills:   { title: '技能', desc: '可插拔的工具組 —— Python、WASM、Node 或 prompt-only 技能，擴展 Agent 的能力邊界。' },
         mcp:      { title: 'MCP 伺服器', desc: 'Model Context Protocol 伺服器，把外部工具與資料直接接入任何 Agent。' },
@@ -1147,6 +1175,14 @@ export const translations: Record<string, Translation> = {
       readme: 'README',
       viewHistory: '履歴',
       templateDiff: 'テンプレート差分',
+      subcategories: {
+        ai: 'AI', business: 'ビジネス', cloud: 'クラウド', communication: 'コミュニケーション',
+        content: 'コンテンツ', creation: '制作', data: 'データ', developer: '開発者',
+        development: '開発', devtools: '開発ツール', email: 'メール',
+        engineering: 'エンジニアリング', enterprise: 'エンタープライズ', iot: 'IoT',
+        language: '言語', messaging: 'メッセージング', productivity: '生産性',
+        research: 'リサーチ', skills: 'スキル', social: 'ソーシャル', thinking: '思考',
+      },
       categories: {
         skills:   { title: 'スキル', desc: 'プラグ可能なツールバンドル —— Python、WASM、Node、または prompt-only スキルで Agent の能力を拡張。' },
         mcp:      { title: 'MCP サーバー', desc: 'Model Context Protocol サーバーで、外部ツールとデータソースを任意の Agent に直接接続。' },
@@ -1386,6 +1422,14 @@ export const translations: Record<string, Translation> = {
       readme: 'README',
       viewHistory: '기록',
       templateDiff: '템플릿 차이',
+      subcategories: {
+        ai: 'AI', business: '비즈니스', cloud: '클라우드', communication: '커뮤니케이션',
+        content: '콘텐츠', creation: '제작', data: '데이터', developer: '개발자',
+        development: '개발', devtools: '개발 도구', email: '이메일',
+        engineering: '엔지니어링', enterprise: '엔터프라이즈', iot: 'IoT',
+        language: '언어', messaging: '메시징', productivity: '생산성',
+        research: '리서치', skills: '스킬', social: '소셜', thinking: '사고',
+      },
       categories: {
         skills:   { title: '스킬', desc: '플러그 가능한 도구 번들 —— Python, WASM, Node 또는 prompt-only 스킬로 Agent의 능력 확장.' },
         mcp:      { title: 'MCP 서버', desc: 'Model Context Protocol 서버로 외부 도구와 데이터 소스를 모든 Agent에 직접 연결.' },
@@ -1625,6 +1669,14 @@ export const translations: Record<string, Translation> = {
       readme: 'README',
       viewHistory: 'Verlauf',
       templateDiff: 'Template-Diff',
+      subcategories: {
+        ai: 'KI', business: 'Business', cloud: 'Cloud', communication: 'Kommunikation',
+        content: 'Inhalt', creation: 'Gestaltung', data: 'Daten', developer: 'Entwickler',
+        development: 'Entwicklung', devtools: 'DevTools', email: 'E-Mail',
+        engineering: 'Engineering', enterprise: 'Enterprise', iot: 'IoT',
+        language: 'Sprache', messaging: 'Messaging', productivity: 'Produktivität',
+        research: 'Forschung', skills: 'Skills', social: 'Social', thinking: 'Denken',
+      },
       categories: {
         skills:   { title: 'Skills', desc: 'Austauschbare Tool-Bundles — Python-, WASM-, Node- oder Prompt-Only-Skills, die die Fähigkeiten eines Agenten erweitern.' },
         mcp:      { title: 'MCP-Server', desc: 'Model-Context-Protocol-Server, die externe Tools und Datenquellen direkt in jeden Agenten einbinden.' },
@@ -1864,6 +1916,14 @@ export const translations: Record<string, Translation> = {
       readme: 'README',
       viewHistory: 'Historial',
       templateDiff: 'Diferencias de plantilla',
+      subcategories: {
+        ai: 'IA', business: 'Negocio', cloud: 'Nube', communication: 'Comunicación',
+        content: 'Contenido', creation: 'Creación', data: 'Datos', developer: 'Desarrollador',
+        development: 'Desarrollo', devtools: 'DevTools', email: 'Correo',
+        engineering: 'Ingeniería', enterprise: 'Empresa', iot: 'IoT',
+        language: 'Lenguaje', messaging: 'Mensajería', productivity: 'Productividad',
+        research: 'Investigación', skills: 'Skills', social: 'Social', thinking: 'Pensamiento',
+      },
       categories: {
         skills:   { title: 'Skills', desc: 'Paquetes de herramientas conectables — skills Python, WASM, Node o prompt-only que amplían las capacidades del agente.' },
         mcp:      { title: 'Servidores MCP', desc: 'Servidores Model Context Protocol que conectan herramientas y fuentes de datos externas directamente a cualquier agente.' },
