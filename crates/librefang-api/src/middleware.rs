@@ -403,7 +403,6 @@ pub async fn auth(
             | "/api/skills"
             | "/api/sessions"
             | "/api/mcp/servers"
-            | "/api/mcp/installed"
             | "/api/mcp/catalog"
             | "/api/mcp/health"
             | "/api/workflows"
