@@ -8,12 +8,13 @@
 // 1/50th the size of the equivalent PNG, live in the repo as text, and stay
 // crisp on high-DPI displays. Run via `pnpm build` prebuild step.
 
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_DIR = join(__dirname, '..', 'public', 'og')
+const REGISTRY_JSON = join(__dirname, '..', 'public', 'registry.json')
 
 export interface CategoryDef {
   slug: string
@@ -83,12 +84,79 @@ export function render(def: CategoryDef): string {
 `
 }
 
+interface RegistryItem { id: string; name: string; description?: string; icon?: string }
+
+// Escape characters that would otherwise close the SVG attribute or
+// embed arbitrary markup. OG text from the registry is user-controlled.
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+function renderItem(def: CategoryDef, item: RegistryItem): string {
+  const name = esc((item.name || item.id).slice(0, 48))
+  const desc = esc((item.description || def.subtitle).slice(0, 120))
+  const icon = esc(item.icon || def.icon)
+  const id = esc(item.id)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <rect width="1200" height="630" fill="#070b14"/>
+
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#0f1729" stroke-width="0.5"/>
+    </pattern>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="${def.accent}" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="${def.accent}" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.6"/>
+  <circle cx="980" cy="160" r="320" fill="url(#glow)"/>
+
+  <text x="80" y="96" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="#475569">librefang.ai / ${def.slug} / ${id}</text>
+
+  <text x="80" y="220" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="${def.accent}" letter-spacing="2">${esc(def.title.toUpperCase())}</text>
+  <text x="80" y="310" font-family="Arial, Helvetica, sans-serif" font-size="88" font-weight="900" fill="#ffffff" letter-spacing="-2">${name}</text>
+
+  <foreignObject x="80" y="350" width="900" height="160">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:1.4;color:#94a3b8;overflow:hidden;max-height:140px;">${desc}</div>
+  </foreignObject>
+
+  <text x="1050" y="340" font-family="Arial, Helvetica, sans-serif" font-size="360" fill="${def.accent}" opacity="0.18" text-anchor="middle">${icon}</text>
+
+  <rect x="80" y="560" width="160" height="3" rx="1.5" fill="${def.accent}" opacity="0.8"/>
+  <text x="80" y="594" font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#94a3b8">LibreFang · the agent operating system</text>
+</svg>
+`
+}
+
 function main() {
   mkdirSync(OUT_DIR, { recursive: true })
   for (const def of CATEGORIES) {
     writeFileSync(join(OUT_DIR, `${def.slug}.svg`), render(def))
   }
-  console.log(`Wrote ${CATEGORIES.length} OG images to ${OUT_DIR}`)
+  let itemCount = 0
+  if (existsSync(REGISTRY_JSON)) {
+    const defBySlug = new Map(CATEGORIES.map(d => [d.slug, d]))
+    try {
+      const data = JSON.parse(readFileSync(REGISTRY_JSON, 'utf8')) as Record<string, RegistryItem[] | unknown>
+      for (const def of CATEGORIES) {
+        const arr = data[def.slug]
+        if (!Array.isArray(arr)) continue
+        const catDir = join(OUT_DIR, def.slug)
+        mkdirSync(catDir, { recursive: true })
+        for (const raw of arr as RegistryItem[]) {
+          if (!raw || typeof raw.id !== 'string') continue
+          const d = defBySlug.get(def.slug)!
+          writeFileSync(join(catDir, `${raw.id}.svg`), renderItem(d, raw))
+          itemCount++
+        }
+      }
+    } catch (err) {
+      console.warn('Could not read registry.json for per-item OGs:', err)
+    }
+  }
+  console.log(`Wrote ${CATEGORIES.length} category + ${itemCount} item OG images to ${OUT_DIR}`)
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main()

@@ -1475,7 +1475,12 @@ export default function App() {
       const ogDesc = document.querySelector('meta[property="og:description"]')
       if (ogDesc && descText) ogDesc.setAttribute('content', descText)
       const ogImage = document.querySelector('meta[property="og:image"]')
-      if (ogImage) ogImage.setAttribute('content', `https://librefang.ai/og/${registryRoute.category}.svg`)
+      if (ogImage) {
+        const src = registryRoute.kind === 'detail'
+          ? `https://librefang.ai/og/${registryRoute.category}/${registryRoute.id}.svg`
+          : `https://librefang.ai/og/${registryRoute.category}.svg`
+        ogImage.setAttribute('content', src)
+      }
       return
     }
     // Non-registry route — restore the default OG image.
