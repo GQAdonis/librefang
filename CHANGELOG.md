@@ -7,6 +7,15 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 
 ## [2026.4.18] - 2026-04-18
 
+### Highlights
+
+- **Visual agent authoring.** A new first-run wizard (#2704) and a point-and-click visual editor for agent creation (#2709, #2716) let new users get to a running agent without hand-writing TOML; existing agents gain a per-agent tool allowlist/blocklist editor (#2693) and read-only TOML viewer modals (#2722).
+- **Self-evolving skills.** Skills can now refine their own prompts and tool defaults from prior runs (#2694); large skill bodies load progressively through the new `skill_read_file` tool (#2623).
+- **MCP marketplace & bridge.** The `/mcp-servers` page gets a marketplace tab with one-click install and env-setup modal (#2666, #2664); servers connect immediately on add/update (#2668), stdio args expand env vars (#2669), and CLI drivers can finally call LibreFang tools back through the MCP HTTP bridge with full caller context — workspace, exec_policy, allowed_tools/skills — resolved from `X-LibreFang-Agent-Id` (#2719).
+- **Web-aware chat.** Web search augmentation turns on for non-tool-calling models (#2635), controllable per chat (#2639) and defaulting to `auto` (#2638). Thinking traces now render as markdown and follow the user's language (#2640, #2674, #2676, #2680, #2681).
+- **Terminal & channels.** Tmux-backed multi-window terminal tabs (#2651) land in the dashboard with fullscreen mode (#2732). Agent sessions persist across daemon restarts (#2643). Group-chat routing gets LLM reply-intent precheck (#2625), addressee detection (#2480), and decrypt-fail retransmit handling (#2692).
+- **Operator controls.** Per-provider proxy URL (#2634), per-model inference params (#2629), per-provider cost/token limits (#2482), and `require_auth_for_reads` (#2398) close the last dashboard enumeration surface when auth is configured. React bumped to 19.2.5 for CVE-2025-55182 (#2615).
+
 ### Added
 
 - Improve models page UX (#2547) (@houko)
