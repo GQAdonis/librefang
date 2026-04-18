@@ -27,6 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Corepack must be enabled BEFORE setup-node: setup-node's
+      # `cache: pnpm` feature runs `pnpm --version` to compute the cache
+      # key, and that fails if pnpm isn't on PATH yet. Modern setup-node
+      # (v6 + Node ≥22, which bundles corepack) preserves corepack shims
+      # across the Node swap, so running `enable` once up front is
+      # sufficient — no need for the second call after setup-node.
       - name: Enable corepack (activates pnpm from packageManager field)
         run: corepack enable
 
