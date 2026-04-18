@@ -48,14 +48,34 @@ impl McpCatalog {
         if let Ok(entries) = std::fs::read_dir(&self.catalog_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if !path.is_file() {
+
+                // Two layouts are valid upstream:
+                //   (A) `<id>.toml` — flat file, id from filename minus ext.
+                //   (B) `<id>/MCP.toml` — directory-backed (for multi-file
+                //       MCP packages), id from directory name.
+                // Mirrors `web/scripts/fetch-registry.ts` + the detail-page
+                // resolver so catalog loading, live API, and UI agree.
+                let (id, manifest_path) = if path.is_file() {
+                    match path.file_name().and_then(|n| n.to_str()) {
+                        Some(n) if n.ends_with(".toml") => {
+                            (n.trim_end_matches(".toml").to_string(), path.clone())
+                        }
+                        _ => continue,
+                    }
+                } else if path.is_dir() {
+                    let manifest = path.join("MCP.toml");
+                    if !manifest.is_file() {
+                        continue;
+                    }
+                    match path.file_name().and_then(|n| n.to_str()) {
+                        Some(n) => (n.to_string(), manifest),
+                        None => continue,
+                    }
+                } else {
                     continue;
-                }
-                let id = match path.file_name().and_then(|n| n.to_str()) {
-                    Some(n) if n.ends_with(".toml") => n.trim_end_matches(".toml").to_string(),
-                    _ => continue,
                 };
-                let content = match std::fs::read_to_string(&path) {
+
+                let content = match std::fs::read_to_string(&manifest_path) {
                     Ok(s) => s,
                     Err(_) => continue,
                 };

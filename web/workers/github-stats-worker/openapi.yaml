@@ -272,13 +272,17 @@ components:
             properties:
               description: { type: string }
     CommitInfo:
+      description: >
+        When no commit is found for a path (fresh entry with no git history
+        yet), the worker returns each field as null rather than omitting the
+        property. Strictly-generated clients must tolerate nulls here.
       type: object
       properties:
-        sha: { type: string }
-        author: { type: string }
-        date: { type: string, format: date-time }
-        message: { type: string }
-        url: { type: string, format: uri }
+        sha: { type: [string, "null"] }
+        author: { type: [string, "null"] }
+        date: { type: [string, "null"], format: date-time }
+        message: { type: [string, "null"] }
+        url: { type: [string, "null"], format: uri }
     ClickPayload:
       type: object
       required: [category, id]

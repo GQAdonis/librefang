@@ -3142,6 +3142,25 @@ pub async fn add_mcp_server(
         };
         drop(catalog);
 
+        // Duplicate-name check BEFORE running the installer. `install_integration`
+        // stores provided credentials in the vault as a side effect, so if we
+        // returned 409 from the check below (which used to run after install)
+        // the vault would already hold credentials for a server the caller never
+        // managed to register. Reject first, side-effect second.
+        let prospective_name = entry.id.clone();
+        if state
+            .kernel
+            .config_ref()
+            .mcp_servers
+            .iter()
+            .any(|s| s.name == prospective_name)
+        {
+            return ApiErrorResponse::conflict(format!(
+                "MCP server '{prospective_name}' already exists"
+            ))
+            .into_json_tuple();
+        }
+
         // Credential resolver: dotenv + vault (if unlocked)
         let home = state.kernel.home_dir().to_path_buf();
         let dotenv_path = home.join(".env");
@@ -4622,6 +4641,15 @@ pub async fn mcp_health_handler(State(state): State<Arc<AppState>>) -> impl Into
     )
 )]
 pub async fn reload_mcp_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Sync the in-memory config with config.toml before reconnecting.
+    // `reload_mcp_servers` reads from `self.config.load_full()`, so if the
+    // caller just edited config.toml out-of-band (the CLI's `librefang mcp
+    // add/remove` does this, then POSTs /api/mcp/reload) the reload would
+    // otherwise run against the stale snapshot and miss the change.
+    if let Err(e) = state.kernel.reload_config().await {
+        tracing::warn!("Failed to reload config before MCP reload: {e}");
+    }
+
     match state.kernel.reload_mcp_servers().await {
         Ok(connected) => (
             StatusCode::OK,

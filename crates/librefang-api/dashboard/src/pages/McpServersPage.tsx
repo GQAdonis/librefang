@@ -681,8 +681,17 @@ export function McpServersPage() {
 
   function confirmTemplateInstall() {
     if (!installingTemplate) return;
+    // Strip blank credential fields before submit. The server's installer
+    // persists whatever is sent, so a skipped optional field would land
+    // in the vault as an empty string and the downstream env lookup would
+    // then skip its dotenv fallback (since the vault "has" a value,
+    // albeit empty). Dropping the key lets the resolver chain work.
+    const cleanCreds: Record<string, string> = {};
+    for (const [k, v] of Object.entries(envInputs)) {
+      if (typeof v === "string" && v.trim().length > 0) cleanCreds[k] = v;
+    }
     addMutation.mutate(
-      { template_id: installingTemplate.id, credentials: envInputs },
+      { template_id: installingTemplate.id, credentials: cleanCreds },
       {
         onSuccess: () => {
           setShowAddModal(false);

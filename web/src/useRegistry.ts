@@ -32,14 +32,19 @@ const RegistryDataSchema = z.object({
   plugins: z.array(DetailSchema).optional().default([]),
   skills: z.array(DetailSchema).optional().default([]),
   mcp: z.array(DetailSchema).optional().default([]),
-  handsCount: z.number().optional().default(0),
-  channelsCount: z.number().optional().default(0),
-  providersCount: z.number().optional().default(0),
-  workflowsCount: z.number().optional().default(0),
-  agentsCount: z.number().optional().default(0),
-  pluginsCount: z.number().optional().default(0),
-  skillsCount: z.number().optional().default(0),
-  mcpCount: z.number().optional().default(0),
+  // Keep the count fields nullable (no `.default(0)`) so missing keys in
+  // a partial/stale API response stay `undefined`. The merge step below
+  // uses `apiData.*Count ?? localData.*Count` to prefer local counts
+  // when the API omits them — defaulting here to 0 would shadow that
+  // fallback and clobber valid local counts with zeros.
+  handsCount: z.number().optional(),
+  channelsCount: z.number().optional(),
+  providersCount: z.number().optional(),
+  workflowsCount: z.number().optional(),
+  agentsCount: z.number().optional(),
+  pluginsCount: z.number().optional(),
+  skillsCount: z.number().optional(),
+  mcpCount: z.number().optional(),
 })
 
 export type Detail = z.infer<typeof DetailSchema>

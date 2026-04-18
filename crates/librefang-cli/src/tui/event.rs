@@ -2572,12 +2572,20 @@ pub fn spawn_install_extension(backend: BackendRef, id: String, tx: mpsc::Sender
 }
 
 /// Remove an extension.
+///
+/// Routes through `/api/extensions/uninstall` rather than
+/// `DELETE /api/mcp/servers/{name}` because the UI list carries the
+/// catalog `entry.id` (template_id), and that can diverge from the
+/// configured server name (user renamed it, or the catalog entry id
+/// doesn't match the final server name). The extensions endpoint
+/// resolves either form; the MCP endpoint only accepts the exact name.
 pub fn spawn_remove_extension(backend: BackendRef, id: String, tx: mpsc::Sender<AppEvent>) {
     std::thread::spawn(move || match backend {
         BackendRef::Daemon(base_url) => {
             let client = daemon_client();
             match client
-                .delete(format!("{base_url}/api/mcp/servers/{id}"))
+                .post(format!("{base_url}/api/extensions/uninstall"))
+                .json(&serde_json::json!({ "name": id }))
                 .send()
             {
                 Ok(resp) if resp.status().is_success() => {
