@@ -725,11 +725,19 @@ mod tests {
             eprintln!("ffmpeg not on PATH — skipping");
             return;
         }
-        // With zero bytes ffmpeg produces no output on stdout and we reject it.
+        // With zero bytes we want a rejection, not silent success. Whether
+        // ffmpeg emits "empty output" (older builds: reads stdin, produces
+        // no Ogg frames, we reject at our layer) or fails earlier with
+        // "ffmpeg exited ..." / "Error opening input files" (newer builds
+        // that refuse to read an empty stream) depends on the installed
+        // ffmpeg version — both are correct rejections, so accept either.
         let err = transcode_oga_to_ogg_opus(&[]).await.unwrap_err();
         assert!(
-            err.contains("empty output"),
-            "expected empty-output rejection, got: {err}"
+            err.contains("empty output")
+                || err.contains("ffmpeg exited")
+                || err.to_lowercase().contains("error opening input")
+                || err.contains("End of file"),
+            "expected rejection (empty-output / ffmpeg-exited / input-error), got: {err}"
         );
     }
 

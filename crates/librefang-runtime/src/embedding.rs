@@ -665,6 +665,15 @@ pub fn embedding_from_bytes(bytes: &[u8]) -> Vec<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Serialize tests that mutate AWS_* env vars. Cargo runs tests in
+    /// parallel by default, and `std::env::set_var`/`remove_var` are
+    /// process-global — without a lock the three tests below race on
+    /// `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`/`AWS_REGION`,
+    /// occasionally flipping a variable mid-assertion and making
+    /// workspace-level test runs fail non-reproducibly.
+    static AWS_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_cosine_similarity_identical() {
@@ -888,6 +897,7 @@ mod tests {
 
     #[test]
     fn test_create_embedding_driver_bedrock_missing_keys() {
+        let _g = AWS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Without AWS env vars set, bedrock driver creation should fail.
         // Temporarily ensure the vars are unset for this test.
         let had_key = std::env::var("AWS_ACCESS_KEY_ID").ok();
@@ -911,6 +921,7 @@ mod tests {
 
     #[test]
     fn test_create_embedding_driver_bedrock_with_keys() {
+        let _g = AWS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Set fake AWS keys for this test.
         let had_key = std::env::var("AWS_ACCESS_KEY_ID").ok();
         let had_secret = std::env::var("AWS_SECRET_ACCESS_KEY").ok();
@@ -941,6 +952,7 @@ mod tests {
 
     #[test]
     fn test_bedrock_region_override_via_custom_base_url() {
+        let _g = AWS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // When custom_base_url is passed for bedrock, it's treated as a region override.
         let had_key = std::env::var("AWS_ACCESS_KEY_ID").ok();
         let had_secret = std::env::var("AWS_SECRET_ACCESS_KEY").ok();
