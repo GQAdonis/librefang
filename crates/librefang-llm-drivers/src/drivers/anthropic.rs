@@ -81,14 +81,28 @@ enum ApiContent {
 #[serde(tag = "type")]
 enum ApiContentBlock {
     #[serde(rename = "text")]
-    Text { text: String },
+    Text {
+        text: String,
+        /// `cache_control: {"type":"ephemeral"}` marker, stamped on the
+        /// last block of the last message when prompt caching is enabled.
+        /// Anthropic caches the prefix up to and including the marked
+        /// block — so the next turn's matching prefix hits the cache.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<serde_json::Value>,
+    },
     #[serde(rename = "image")]
-    Image { source: ApiImageSource },
+    Image {
+        source: ApiImageSource,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<serde_json::Value>,
+    },
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
         name: String,
         input: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<serde_json::Value>,
     },
     #[serde(rename = "tool_result")]
     ToolResult {
@@ -96,6 +110,8 @@ enum ApiContentBlock {
         content: String,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         is_error: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<serde_json::Value>,
     },
 }
 
@@ -209,12 +225,30 @@ fn build_anthropic_request(request: &CompletionRequest) -> ApiRequest {
     let system = system_text.map(|text| build_system_value(&text, request.prompt_caching));
 
     // Build API messages, filtering out system messages
-    let api_messages: Vec<ApiMessage> = request
+    let mut api_messages: Vec<ApiMessage> = request
         .messages
         .iter()
         .filter(|m| m.role != Role::System)
         .map(convert_message)
         .collect();
+
+    // When prompt caching is on, stamp `cache_control: ephemeral` on the
+    // last content block of the last message. Anthropic caches the prefix
+    // up through that block — so the next turn (which shares everything
+    // except a new trailing user message) hits cache for the whole
+    // conversation history so far, not just system + tools. This is what
+    // turns forkedAgent into a meaningful cost saver on multi-turn
+    // conversations.
+    //
+    // Text-content messages (the common plain-string form) are upgraded
+    // to a single-block `Blocks` payload so the marker has somewhere to
+    // live — Anthropic doesn't allow cache_control on the shorthand
+    // plain-string content form.
+    if request.prompt_caching {
+        if let Some(last_msg) = api_messages.last_mut() {
+            stamp_last_block_cache_control(last_msg);
+        }
+    }
 
     // Build tools. When prompt caching is enabled, stamp `cache_control`
     // on the last tool so Anthropic caches the system + tools prefix as a
@@ -714,6 +748,43 @@ fn append_response_format_instructions(system: &mut Option<String>, rf: &Respons
     }
 }
 
+/// Stamp `cache_control: ephemeral` on the last content block of this
+/// message. If the message is in the plain-string form (`ApiContent::Text`),
+/// upgrade it to a single-element `Blocks` payload first — Anthropic's
+/// API only accepts `cache_control` on structured content blocks, not on
+/// shorthand strings.
+fn stamp_last_block_cache_control(msg: &mut ApiMessage) {
+    let marker = serde_json::json!({"type": "ephemeral"});
+    // Upgrade plain string content to block form so the marker has a
+    // block to live on. This is a lossless transformation — Anthropic
+    // treats `{type: text, text: "…"}` identically to the raw string.
+    if let ApiContent::Text(text) = &msg.content {
+        let text = text.clone();
+        msg.content = ApiContent::Blocks(vec![ApiContentBlock::Text {
+            text,
+            cache_control: Some(marker),
+        }]);
+        return;
+    }
+    if let ApiContent::Blocks(blocks) = &mut msg.content {
+        // Walk backward to the last serializable block (some Thinking-like
+        // entries were already filtered out during convert_message, so the
+        // raw tail is fine to mark). Empty `Blocks` → nothing to do;
+        // downstream code already handles zero-block messages, marker
+        // would have nowhere to live.
+        if let Some(last) = blocks.last_mut() {
+            match last {
+                ApiContentBlock::Text { cache_control, .. }
+                | ApiContentBlock::Image { cache_control, .. }
+                | ApiContentBlock::ToolUse { cache_control, .. }
+                | ApiContentBlock::ToolResult { cache_control, .. } => {
+                    *cache_control = Some(marker);
+                }
+            }
+        }
+    }
+}
+
 fn build_system_value(text: &str, prompt_caching: bool) -> serde_json::Value {
     if prompt_caching {
         serde_json::json!([
@@ -742,15 +813,17 @@ fn convert_message(msg: &Message) -> ApiMessage {
             let api_blocks: Vec<ApiContentBlock> = blocks
                 .iter()
                 .filter_map(|block| match block {
-                    ContentBlock::Text { text, .. } => {
-                        Some(ApiContentBlock::Text { text: text.clone() })
-                    }
+                    ContentBlock::Text { text, .. } => Some(ApiContentBlock::Text {
+                        text: text.clone(),
+                        cache_control: None,
+                    }),
                     ContentBlock::Image { media_type, data } => Some(ApiContentBlock::Image {
                         source: ApiImageSource {
                             source_type: "base64".to_string(),
                             media_type: media_type.clone(),
                             data: data.clone(),
                         },
+                        cache_control: None,
                     }),
                     ContentBlock::ToolUse {
                         id, name, input, ..
@@ -758,6 +831,7 @@ fn convert_message(msg: &Message) -> ApiMessage {
                         id: id.clone(),
                         name: name.clone(),
                         input: ensure_object(input.clone()),
+                        cache_control: None,
                     }),
                     ContentBlock::ToolResult {
                         tool_use_id,
@@ -768,6 +842,7 @@ fn convert_message(msg: &Message) -> ApiMessage {
                         tool_use_id: tool_use_id.clone(),
                         content: content.clone(),
                         is_error: *is_error,
+                        cache_control: None,
                     }),
                     ContentBlock::Thinking { .. } => None,
                     ContentBlock::ImageFile { media_type, path } => match std::fs::read(path) {
@@ -780,6 +855,7 @@ fn convert_message(msg: &Message) -> ApiMessage {
                                     media_type: media_type.clone(),
                                     data,
                                 },
+                                cache_control: None,
                             })
                         }
                         Err(e) => {
@@ -968,6 +1044,7 @@ mod tests {
             id: "tool_1".to_string(),
             name: "get_time".to_string(),
             input: ensure_object(serde_json::Value::Null),
+            cache_control: None,
         };
         let json = serde_json::to_value(&block).unwrap();
         assert_eq!(json["input"], serde_json::json!({}));
@@ -1093,6 +1170,91 @@ mod tests {
         };
         let api_request = build_anthropic_request(&request);
         assert!(api_request.tools[0].cache_control.is_none());
+    }
+
+    /// Last message gets cache_control: ephemeral on its last content block
+    /// when prompt caching is on. This is what turns forkedAgent into a real
+    /// cost saver for multi-turn conversations — the full message prefix
+    /// caches, not just system + tools.
+    #[test]
+    fn test_messages_cache_control_on_last_block() {
+        let request = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![
+                Message::user("first user msg"),
+                Message::assistant("first assistant reply"),
+                Message::user("second user msg (last)"),
+            ],
+            tools: vec![],
+            max_tokens: 100,
+            temperature: 0.0,
+            system: Some("sys".to_string()),
+            thinking: None,
+            prompt_caching: true,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+            agent_id: None,
+        };
+        let api_request = build_anthropic_request(&request);
+        let last = api_request.messages.last().expect("has last message");
+        // Plain-string Text content was upgraded to Blocks form so the
+        // marker has somewhere to live. Anthropic rejects cache_control
+        // on shorthand strings, so this upgrade is load-bearing.
+        let blocks = match &last.content {
+            ApiContent::Blocks(b) => b,
+            ApiContent::Text(_) => {
+                panic!("cache_control on last msg requires Blocks form, got Text")
+            }
+        };
+        let last_block = blocks.last().expect("has last block");
+        let cc = match last_block {
+            ApiContentBlock::Text { cache_control, .. } => cache_control.as_ref(),
+            _ => panic!("expected Text block"),
+        };
+        assert_eq!(cc.expect("cache_control set")["type"], "ephemeral");
+
+        // Only the LAST message's last block is marked — earlier messages
+        // would split the cache into fragments and waste the 4-breakpoint
+        // budget Anthropic allows per request.
+        let first = &api_request.messages[0];
+        if let ApiContent::Blocks(blocks) = &first.content {
+            for block in blocks {
+                if let ApiContentBlock::Text { cache_control, .. } = block {
+                    assert!(cache_control.is_none(), "first message must NOT be marked");
+                }
+            }
+        }
+    }
+
+    /// With caching disabled, no message block gets cache_control — ensures
+    /// we don't leak markers to providers that can't handle them (or incur
+    /// cache-cost billing on providers that do).
+    #[test]
+    fn test_messages_cache_control_absent_when_caching_off() {
+        let request = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![Message::user("hi")],
+            tools: vec![],
+            max_tokens: 100,
+            temperature: 0.0,
+            system: Some("sys".to_string()),
+            thinking: None,
+            prompt_caching: false,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+            agent_id: None,
+        };
+        let api_request = build_anthropic_request(&request);
+        let last = api_request.messages.last().expect("has last message");
+        // With caching off, plain Text stays plain Text — we don't
+        // eagerly upgrade to Blocks form because that would change
+        // the wire format for no benefit.
+        match &last.content {
+            ApiContent::Text(_) => { /* expected */ }
+            ApiContent::Blocks(_) => panic!("expected Text form when caching off"),
+        }
     }
 
     /// With caching on but zero tools, the request still builds cleanly
