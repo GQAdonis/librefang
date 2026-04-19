@@ -304,6 +304,14 @@ pub struct LibreFangKernel {
     pub(crate) memory: Arc<MemorySubstrate>,
     /// Proactive memory store (mem0-style auto_retrieve/auto_memorize).
     pub(crate) proactive_memory: OnceLock<Arc<librefang_memory::ProactiveMemoryStore>>,
+    /// Concrete handle to the LLM-backed memory extractor used by
+    /// `proactive_memory`. Held alongside the trait-object version
+    /// inside the store so `set_self_handle` can call
+    /// `install_kernel_handle` on it — the fork-based extraction path
+    /// needs `Weak<dyn KernelHandle>` which requires the kernel to be
+    /// Arc-wrapped first. `None` for rule-based extractor (no LLM).
+    pub(crate) proactive_memory_extractor:
+        OnceLock<Arc<librefang_runtime::proactive_memory::LlmMemoryExtractor>>,
     /// Prompt versioning and A/B experiment store.
     pub(crate) prompt_store: OnceLock<librefang_memory::PromptStore>,
     /// Process supervisor.
@@ -2214,6 +2222,7 @@ impl LibreFangKernel {
             scheduler: AgentScheduler::new(),
             memory: memory.clone(),
             proactive_memory: OnceLock::new(),
+            proactive_memory_extractor: OnceLock::new(),
             prompt_store: OnceLock::new(),
             supervisor,
             workflows: WorkflowEngine::new_with_persistence(&workflow_home_dir),
@@ -2309,23 +2318,26 @@ impl LibreFangKernel {
                 &cfg.default_model.provider,
             );
             let llm = Some((Arc::clone(&kernel.default_driver) as _, extraction_model));
-            let store = if let Some(ref emb) = kernel.embedding_driver {
-                librefang_runtime::proactive_memory::init_proactive_memory_with_embedding(
+            // Use the _with_extractor variant so we get the concrete
+            // `LlmMemoryExtractor` back alongside the store. The extractor
+            // needs a `Weak<dyn KernelHandle>` installed before its fork-
+            // based extraction path can light up, and that weak ref can
+            // only be formed after `Arc::new(kernel)` — so we hold the
+            // concrete handle here and call `install_kernel_handle` from
+            // `set_self_handle` below.
+            let embedding = kernel.embedding_driver.as_ref().map(Arc::clone);
+            let result =
+                librefang_runtime::proactive_memory::init_proactive_memory_full_with_extractor(
                     Arc::clone(&kernel.memory),
                     pm_config,
                     llm,
-                    Arc::clone(emb),
-                )
-            } else {
-                librefang_runtime::proactive_memory::init_proactive_memory_full(
-                    Arc::clone(&kernel.memory),
-                    pm_config,
-                    llm,
-                    None,
-                )
-            };
-            if let Some(s) = store {
-                let _ = kernel.proactive_memory.set(s);
+                    embedding,
+                );
+            if let Some((store, extractor)) = result {
+                let _ = kernel.proactive_memory.set(store);
+                if let Some(ex) = extractor {
+                    let _ = kernel.proactive_memory_extractor.set(ex);
+                }
             }
         }
 
@@ -7570,6 +7582,18 @@ system_prompt = "You are a helpful assistant."
                     Arc::downgrade(self),
                 )),
             );
+            // Install the kernel-handle weak ref on the proactive-memory
+            // extractor so its `extract_memories_with_agent_id` path can
+            // route through `run_forked_agent_oneshot` for cache alignment
+            // with the parent agent turn. Rule-based extractor (no LLM)
+            // doesn't need this; it short-circuits before touching the
+            // kernel. Safe to no-op when the extractor wasn't configured
+            // (OnceLock::get returns None).
+            if let Some(extractor) = self.proactive_memory_extractor.get() {
+                let weak: std::sync::Weak<dyn librefang_runtime::kernel_handle::KernelHandle> =
+                    Arc::downgrade(self) as _;
+                extractor.install_kernel_handle(weak);
+            }
         }
     }
 
@@ -11796,6 +11820,43 @@ impl KernelHandle for LibreFangKernel {
         if let Ok(id) = agent_id.parse::<AgentId>() {
             self.registry.touch(id);
         }
+    }
+
+    async fn run_forked_agent_oneshot(
+        &self,
+        agent_id: &str,
+        prompt: &str,
+        allowed_tools: Option<Vec<String>>,
+    ) -> Result<String, String> {
+        let id = agent_id
+            .parse::<AgentId>()
+            .map_err(|e| format!("bad agent_id: {e}"))?;
+        // Need `Arc<Self>` to call `run_forked_agent_streaming` (the method
+        // is defined on `Arc<LibreFangKernel>`). Upgrade via `self_handle`;
+        // if the weak ref is stale the daemon is shutting down and the
+        // extractor should abort.
+        let kernel = self
+            .self_handle
+            .get()
+            .and_then(|w| w.upgrade())
+            .ok_or_else(|| "kernel Arc unavailable (shutting down?)".to_string())?;
+        let (mut rx, handle) = kernel
+            .run_forked_agent_streaming(id, prompt, allowed_tools)
+            .map_err(|e| format!("fork start failed: {e}"))?;
+        // Drain the stream — we don't need streaming semantics for a
+        // one-shot completion, just the final text. The spawned task
+        // keeps running until `ContentComplete` (or error/abort) anyway.
+        while (rx.recv().await).is_some() {
+            // Events consumed; the final text is on the join handle's
+            // `AgentLoopResult.response`. Discarding these events is
+            // fine because `ContentComplete` is already signalled to
+            // the join handle by the time we observe channel close.
+        }
+        let result = handle
+            .await
+            .map_err(|e| format!("fork join failed: {e}"))?
+            .map_err(|e| format!("fork loop failed: {e}"))?;
+        Ok(result.response)
     }
 
     fn kill_agent(&self, agent_id: &str) -> Result<(), String> {
