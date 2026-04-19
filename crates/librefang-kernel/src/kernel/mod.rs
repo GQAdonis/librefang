@@ -3355,6 +3355,7 @@ system_prompt = "You are a helpful assistant."
             None, // no proactive memory
             None, // no context engine
             None, // no pending messages
+            &librefang_runtime::agent_loop::LoopOptions::default(),
         )
         .await
         .map_err(KernelError::LibreFang)?;
@@ -3895,6 +3896,59 @@ system_prompt = "You are a helpful assistant."
         self.send_message_streaming_with_sender(agent_id, message, kernel_handle, None, None)
     }
 
+    /// Run a *derivative* (forked) turn for an agent using the canonical
+    /// session's messages as a cache-aligned prefix. Used by auto-dream and
+    /// any future post-turn consumer that wants to fire an LLM call on top
+    /// of the agent's context without persisting into its history.
+    ///
+    /// Semantics vs. `send_message_streaming`:
+    ///
+    /// - **Does not persist** messages added by the fork turn. The session
+    ///   is shared with canonical at read time but writes stay in memory.
+    /// - **Does not trigger AgentLoopEnd consumers that filter on
+    ///   `is_fork`** — notably auto-dream's own hook skips fork turns, so
+    ///   a dream won't trigger a nested dream (the file lock would also
+    ///   prevent it, but this is cheaper).
+    /// - **Enforces a runtime tool allowlist** via `allowed_tools`. The
+    ///   list is NOT applied to the request schema sent to the provider
+    ///   (that would break cache alignment) — it's enforced at tool
+    ///   execute time with a synthetic error returned to the model.
+    ///
+    /// Rejects WASM / Python agents with `Err` — the fork mode only
+    /// makes sense for LLM-backed agents.
+    pub fn run_forked_agent_streaming(
+        self: &Arc<Self>,
+        agent_id: AgentId,
+        fork_prompt: &str,
+        allowed_tools: Option<Vec<String>>,
+    ) -> KernelResult<(
+        tokio::sync::mpsc::Receiver<StreamEvent>,
+        tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
+    )> {
+        let entry = self.registry.get(agent_id).ok_or_else(|| {
+            KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
+        })?;
+        if entry.manifest.module.starts_with("wasm:")
+            || entry.manifest.module.starts_with("python:")
+        {
+            return Err(KernelError::LibreFang(LibreFangError::Internal(
+                "run_forked_agent_streaming is only supported for LLM agents".to_string(),
+            )));
+        }
+        let loop_opts = librefang_runtime::agent_loop::LoopOptions {
+            is_fork: true,
+            allowed_tools,
+        };
+        self.send_message_streaming_with_sender_and_opts(
+            agent_id,
+            fork_prompt,
+            None, // auto-wire self
+            None, // no sender context — fork uses the canonical session
+            None, // no thinking override
+            loop_opts,
+        )
+    }
+
     fn send_message_streaming_with_sender(
         self: &Arc<Self>,
         agent_id: AgentId,
@@ -3902,6 +3956,35 @@ system_prompt = "You are a helpful assistant."
         kernel_handle: Option<Arc<dyn KernelHandle>>,
         sender_context: Option<&SenderContext>,
         thinking_override: Option<bool>,
+    ) -> KernelResult<(
+        tokio::sync::mpsc::Receiver<StreamEvent>,
+        tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
+    )> {
+        self.send_message_streaming_with_sender_and_opts(
+            agent_id,
+            message,
+            kernel_handle,
+            sender_context,
+            thinking_override,
+            librefang_runtime::agent_loop::LoopOptions::default(),
+        )
+    }
+
+    /// Internal: same as [`Self::send_message_streaming_with_sender`] but
+    /// accepts a pre-built [`LoopOptions`]. `run_forked_agent_streaming`
+    /// passes `is_fork = true` + an `allowed_tools` filter so the spawned
+    /// agent_loop knows to skip session-saving and enforce the runtime
+    /// tool allowlist. All public streaming entry points above go through
+    /// this with the default `LoopOptions` (a normal main turn).
+    #[allow(clippy::too_many_arguments)]
+    fn send_message_streaming_with_sender_and_opts(
+        self: &Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        sender_context: Option<&SenderContext>,
+        thinking_override: Option<bool>,
+        loop_opts: librefang_runtime::agent_loop::LoopOptions,
     ) -> KernelResult<(
         tokio::sync::mpsc::Receiver<StreamEvent>,
         tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
@@ -4043,19 +4126,14 @@ system_prompt = "You are a helpful assistant."
         };
 
         let tools = self.available_tools(agent_id);
-        let mut tools = entry.mode.filter_tools((*tools).clone());
-        // Auto-dream tool constraint: when the sender channel indicates a
-        // dream invocation, clamp the tool list to memory-only. This is the
-        // runtime enforcement that backs the prompt's tool-constraint
-        // section — a prompt-injected dream that ignores the warning would
-        // still find shell and network tools absent from its tool schema.
-        if sender_context
-            .map(|s| s.channel.as_str() == crate::auto_dream::AUTO_DREAM_CHANNEL)
-            .unwrap_or(false)
-        {
-            let allowed = crate::auto_dream::DREAM_ALLOWED_TOOLS;
-            tools.retain(|t| allowed.iter().any(|a| *a == t.name));
-        }
+        let tools = entry.mode.filter_tools((*tools).clone());
+        // NOTE: fork-mode tool allowlist is NOT applied at request-build
+        // time — doing so would change the `tools` cache-key component
+        // and break Anthropic prompt-cache alignment between parent and
+        // fork. The allowlist is enforced at execute time via
+        // `LoopOptions::allowed_tools` in agent_loop instead. Before the
+        // forkedAgent migration this was filtered here by matching on
+        // `sender_context.channel == AUTO_DREAM_CHANNEL`.
         let driver = self.resolve_driver(&entry.manifest)?;
 
         // Look up model's actual context window from the catalog
@@ -4256,6 +4334,11 @@ system_prompt = "You are a helpful assistant."
         };
         let kernel_clone = Arc::clone(self);
 
+        // `loop_opts` is already a local — the spawned async move will
+        // capture it. Agent loop reads these at each turn-end / save /
+        // tool-exec checkpoint (see `LoopOptions::is_fork` and
+        // `LoopOptions::allowed_tools`).
+
         // All config-derived values have been snapshotted above; release the
         // reload barrier before spawning the async task.
         drop(_config_guard);
@@ -4368,6 +4451,7 @@ system_prompt = "You are a helpful assistant."
                 kernel_clone.proactive_memory.get().cloned(),
                 kernel_clone.context_engine_for_agent(&manifest),
                 Some(&injection_rx),
+                &loop_opts,
             )
             .await;
 
@@ -5628,6 +5712,7 @@ system_prompt = "You are a helpful assistant."
             proactive_memory,
             self.context_engine_for_agent(&manifest),
             Some(&injection_rx),
+            &librefang_runtime::agent_loop::LoopOptions::default(),
         )
         .await;
 

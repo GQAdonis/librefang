@@ -112,6 +112,14 @@ struct ApiTool {
     name: String,
     description: String,
     input_schema: serde_json::Value,
+    /// Optional `cache_control: {"type":"ephemeral"}` marker. When present
+    /// on a tool block, Anthropic caches the system prompt AND the tool
+    /// schema prefix up through that block. We stamp this on the *last*
+    /// tool only when prompt caching is on, so the common (system + all
+    /// tools) prefix is cached as one unit — the next call with the same
+    /// tools list hits cache for the whole block.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_control: Option<serde_json::Value>,
 }
 
 /// Anthropic Messages API response body.
@@ -208,14 +216,27 @@ fn build_anthropic_request(request: &CompletionRequest) -> ApiRequest {
         .map(convert_message)
         .collect();
 
-    // Build tools
+    // Build tools. When prompt caching is enabled, stamp `cache_control`
+    // on the last tool so Anthropic caches the system + tools prefix as a
+    // single unit. Without this, only the system block cached — tools
+    // (often several KB of schema) were rewritten on every call.
+    let tool_count = request.tools.len();
     let api_tools: Vec<ApiTool> = request
         .tools
         .iter()
-        .map(|t| ApiTool {
-            name: t.name.clone(),
-            description: t.description.clone(),
-            input_schema: t.input_schema.clone(),
+        .enumerate()
+        .map(|(idx, t)| {
+            let is_last = idx + 1 == tool_count;
+            ApiTool {
+                name: t.name.clone(),
+                description: t.description.clone(),
+                input_schema: t.input_schema.clone(),
+                cache_control: if request.prompt_caching && is_last {
+                    Some(serde_json::json!({"type": "ephemeral"}))
+                } else {
+                    None
+                },
+            }
         })
         .collect();
 
@@ -835,6 +856,7 @@ fn convert_response(api: ApiResponse) -> CompletionResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use librefang_types::tool::ToolDefinition;
 
     #[test]
     fn test_convert_message_text() {
@@ -1000,5 +1022,100 @@ mod tests {
             }
             _ => panic!("Expected ToolUse content block"),
         }
+    }
+
+    /// With prompt_caching enabled, the LAST tool in the request must carry
+    /// `cache_control: ephemeral`; preceding tools must not. This means the
+    /// (system + tools) prefix is cached as one unit — the common expensive
+    /// part that derivative calls can reuse.
+    #[test]
+    fn test_tools_cache_control_on_last_only() {
+        let tool_a = ToolDefinition {
+            name: "alpha".to_string(),
+            description: "first".to_string(),
+            input_schema: serde_json::json!({"type":"object"}),
+        };
+        let tool_b = ToolDefinition {
+            name: "beta".to_string(),
+            description: "second".to_string(),
+            input_schema: serde_json::json!({"type":"object"}),
+        };
+        let request = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![Message::user("hi")],
+            tools: vec![tool_a, tool_b],
+            max_tokens: 100,
+            temperature: 0.0,
+            system: Some("sys".to_string()),
+            thinking: None,
+            prompt_caching: true,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+            agent_id: None,
+        };
+        let api_request = build_anthropic_request(&request);
+        assert_eq!(api_request.tools.len(), 2);
+        assert!(
+            api_request.tools[0].cache_control.is_none(),
+            "first tool must NOT have cache_control",
+        );
+        let last_cc = api_request.tools[1]
+            .cache_control
+            .as_ref()
+            .expect("last tool must have cache_control");
+        assert_eq!(last_cc["type"], "ephemeral");
+    }
+
+    /// With prompt_caching disabled, no tool gets cache_control. Ensures
+    /// we don't accidentally leak cache markers to providers that can't
+    /// handle them or incur unintended cost-accounting.
+    #[test]
+    fn test_tools_cache_control_absent_when_caching_off() {
+        let tool = ToolDefinition {
+            name: "only".to_string(),
+            description: "solo".to_string(),
+            input_schema: serde_json::json!({"type":"object"}),
+        };
+        let request = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![Message::user("hi")],
+            tools: vec![tool],
+            max_tokens: 100,
+            temperature: 0.0,
+            system: Some("sys".to_string()),
+            thinking: None,
+            prompt_caching: false,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+            agent_id: None,
+        };
+        let api_request = build_anthropic_request(&request);
+        assert!(api_request.tools[0].cache_control.is_none());
+    }
+
+    /// With caching on but zero tools, the request still builds cleanly
+    /// — the `is_last` check must not underflow or special-case an empty
+    /// list. Skipping this test once hid a bug where `tool_count - 1`
+    /// produced an out-of-range index on empty input.
+    #[test]
+    fn test_tools_cache_control_empty_tools_list() {
+        let request = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            messages: vec![Message::user("hi")],
+            tools: vec![],
+            max_tokens: 100,
+            temperature: 0.0,
+            system: Some("sys".to_string()),
+            thinking: None,
+            prompt_caching: true,
+            response_format: None,
+            timeout_secs: None,
+            extra_body: None,
+            agent_id: None,
+        };
+        let api_request = build_anthropic_request(&request);
+        assert!(api_request.tools.is_empty());
     }
 }
