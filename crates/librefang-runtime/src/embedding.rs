@@ -760,10 +760,20 @@ pub fn create_embedding_driver(
             "embed-english-v3.0".to_string()
         };
 
+        // Cohere is a cloud provider — require the catalog (or caller) to
+        // supply the base URL. No hardcoded fallback: that's exactly the
+        // trap that split v1 vs v2 and caused this PR in the first place.
         let base_url = custom_base_url
             .filter(|u| !u.is_empty())
             .map(|u| u.trim_end_matches('/').to_string())
-            .unwrap_or_else(|| "https://api.cohere.com/v2".to_string());
+            .ok_or_else(|| {
+                EmbeddingError::InvalidInput(
+                    "Cohere embedding driver requires a base URL. Expected it from the model \
+                     catalog (`providers/cohere.toml`) or `config.toml` `provider_urls.cohere`, \
+                     but got none."
+                        .to_string(),
+                )
+            })?;
 
         warn!(
             provider = "cohere",
@@ -813,21 +823,23 @@ pub fn create_embedding_driver(
                 trimmed.to_string()
             }
         })
+        .map(Ok)
         .unwrap_or_else(|| match provider {
-            "openai" => "https://api.openai.com/v1".to_string(),
-            "openrouter" => "https://openrouter.ai/api/v1".to_string(),
-            "groq" => "https://api.groq.com/openai/v1".to_string(),
-            "together" => "https://api.together.xyz/v1".to_string(),
-            "fireworks" => "https://api.fireworks.ai/inference/v1".to_string(),
-            "mistral" => "https://api.mistral.ai/v1".to_string(),
-            "ollama" => "http://localhost:11434/v1".to_string(),
-            "vllm" => "http://localhost:8000/v1".to_string(),
-            "lmstudio" => "http://localhost:1234/v1".to_string(),
-            other => {
-                warn!("Unknown embedding provider '{other}', using OpenAI-compatible format");
-                format!("https://{other}/v1")
-            }
-        });
+            // Local providers keep hardcoded defaults: their localhost URLs
+            // aren't registry-tracked and the ports are stable by convention.
+            "ollama" => Ok("http://localhost:11434/v1".to_string()),
+            "vllm" => Ok("http://localhost:8000/v1".to_string()),
+            "lmstudio" => Ok("http://localhost:1234/v1".to_string()),
+            // Cloud providers MUST come from the model catalog or an explicit
+            // override. A hardcoded fallback is exactly the bug class this
+            // plumbing is trying to eliminate (stale baked-in URL silently
+            // overriding a registry entry pinned to a newer version).
+            cloud => Err(EmbeddingError::InvalidInput(format!(
+                "Embedding provider '{cloud}' requires a base URL. Expected it from the \
+                 model catalog (`providers/{cloud}.toml`) or `config.toml` \
+                 `provider_urls.{cloud}`, but got none."
+            ))),
+        })?;
 
     // SECURITY: Warn when embedding requests will be sent to an external API
     let is_local = base_url.contains("localhost")
@@ -1331,8 +1343,14 @@ mod tests {
         let had = std::env::var("COHERE_API_KEY").ok();
         std::env::set_var("COHERE_API_KEY", "test-cohere-key");
 
-        let driver = create_embedding_driver("cohere", "embed-english-v3.0", "", None, None)
-            .expect("cohere driver should build with key present");
+        let driver = create_embedding_driver(
+            "cohere",
+            "embed-english-v3.0",
+            "",
+            Some("https://api.cohere.com/v2"),
+            None,
+        )
+        .expect("cohere driver should build with key present");
         assert_eq!(driver.dimensions(), 1024);
 
         match had {
@@ -1349,11 +1367,39 @@ mod tests {
         let had = std::env::var("COHERE_API_KEY").ok();
         std::env::set_var("COHERE_API_KEY", "test-cohere-key");
 
-        let driver =
-            create_embedding_driver("cohere", "text-embedding-3-small", "", None, None).unwrap();
+        let driver = create_embedding_driver(
+            "cohere",
+            "text-embedding-3-small",
+            "",
+            Some("https://api.cohere.com/v2"),
+            None,
+        )
+        .unwrap();
         // After remap, dims should match embed-english-v3.0 (1024), NOT the
         // 1536 that text-embedding-3-small would have inferred.
         assert_eq!(driver.dimensions(), 1024);
+
+        match had {
+            Some(v) => std::env::set_var("COHERE_API_KEY", v),
+            None => std::env::remove_var("COHERE_API_KEY"),
+        }
+    }
+
+    #[test]
+    fn test_create_embedding_driver_cloud_provider_requires_base_url() {
+        // Cloud providers no longer have hardcoded URL fallbacks — the catalog
+        // (or an explicit override) must supply the base_url. Pin the
+        // behavior so a regression can't silently re-introduce the
+        // version-drift bug.
+        let had = std::env::var("COHERE_API_KEY").ok();
+        std::env::set_var("COHERE_API_KEY", "test-cohere-key");
+
+        let err =
+            create_embedding_driver("cohere", "embed-english-v3.0", "", None, None).unwrap_err();
+        assert!(
+            matches!(err, EmbeddingError::InvalidInput(_)),
+            "expected InvalidInput when no base_url is available, got {err:?}"
+        );
 
         match had {
             Some(v) => std::env::set_var("COHERE_API_KEY", v),
