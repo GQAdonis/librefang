@@ -12163,7 +12163,23 @@ impl KernelHandle for LibreFangKernel {
         Ok(result)
     }
 
-    async fn task_complete(&self, task_id: &str, result: &str) -> Result<(), String> {
+    async fn task_complete(
+        &self,
+        agent_id: &str,
+        task_id: &str,
+        result: &str,
+    ) -> Result<(), String> {
+        let resolved = match librefang_types::agent::AgentId::from_str(agent_id) {
+            Ok(_) => agent_id.to_string(),
+            Err(_) => match self.registry.find_by_name(agent_id) {
+                Some(entry) => entry.id.to_string(),
+                None => {
+                    return Err(format!(
+                        "Task complete failed: agent {agent_id:?} not found by UUID or name"
+                    ));
+                }
+            },
+        };
         self.memory
             .task_complete(task_id, result)
             .await
@@ -12175,6 +12191,7 @@ impl KernelHandle for LibreFangKernel {
             librefang_types::event::EventPayload::System(
                 librefang_types::event::SystemEvent::TaskCompleted {
                     task_id: task_id.to_string(),
+                    completed_by: resolved,
                     result: result.to_string(),
                 },
             ),
