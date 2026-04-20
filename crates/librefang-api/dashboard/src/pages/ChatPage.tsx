@@ -17,7 +17,7 @@ import { approvalKeys } from "../lib/queries/keys";
 import { groupedPicker } from "../lib/chatPicker";
 import { normalizeToolOutput } from "../lib/chat";
 import { useTtsManager } from "../lib/tts";
-import { MessageCircle, Send, Bot, User, RefreshCw, AlertCircle, Wifi, Sparkles, X, ArrowRight, ArrowLeft, Zap, ShieldAlert, CheckCircle, XCircle, Clock, Plus, Trash2, ChevronDown, Loader2, Copy, Volume2, Pause, Download, Brain, Eye, EyeOff, Mic, MicOff, Globe } from "lucide-react";
+import { MessageCircle, Send, Square, Bot, User, RefreshCw, AlertCircle, Wifi, Sparkles, X, ArrowRight, ArrowLeft, Zap, ShieldAlert, CheckCircle, XCircle, Clock, Plus, Trash2, ChevronDown, Loader2, Copy, Volume2, Pause, Download, Brain, Eye, EyeOff, Mic, MicOff, Globe } from "lucide-react";
 import { Badge } from "../components/ui/Badge";
 import { MarkdownContent } from "../components/ui/MarkdownContent";
 import { useUIStore } from "../lib/store";
@@ -31,6 +31,7 @@ import {
   useDeleteAgentSession,
   usePatchAgentConfig,
   useResolveApproval,
+  useStopAgent,
   useSwitchAgentSession,
 } from "../lib/mutations/agents";
 import "katex/dist/katex.min.css";
@@ -166,6 +167,7 @@ const sessionCache = new Map<string, ChatMessage[]>();
 // sessionVersion: bump to force reload after session switch
 function useChatMessages(agentId: string | null, agents: any[] = [], sessionVersion = 0, onModelSwitch?: () => void, onClearError?: (message: string) => void) {
   const { t } = useTranslation();
+  const stopAgentMutation = useStopAgent();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Per-agent loading state. A single shared `isLoading` would freeze the
   // ChatInput on every agent while one of them is streaming (#2322). Keyed
@@ -186,6 +188,16 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
   // is already in flight (user can now type + send while the previous turn's
   // `response` event is still pending — see `ChatInput` inputDisabled split).
   const latestTurnRef = useRef<Record<string, string>>({});
+  // Per-agent in-flight turn lifecycle state, hoisted out of sendMessage's
+  // closure so stopMessage can reach `cleanup`, `fallbackTimer`, and
+  // `responded`. Without this, stopMessage POSTs /stop but the WS fallback
+  // watchdog stays armed and 180s later re-sends the stopped message over
+  // HTTP (#2787 review).
+  const activeTurnsRef = useRef<Record<string, {
+    cleanup?: () => void;
+    fallbackTimer?: ReturnType<typeof setTimeout> | null;
+    responded: boolean;
+  }>>({});
   const finishTurnIfCurrent = useCallback((agent: string, botId: string) => {
     if (latestTurnRef.current[agent] === botId) {
       setAgentLoading(agent, false);
@@ -476,13 +488,27 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
     // Try WebSocket streaming first
     if (wsConnected && ws.current && ws.current.readyState === WebSocket.OPEN) {
       try {
-        let responded = false;
-        let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+        // Hoist per-turn lifecycle state onto the ref so stopMessage can tear
+        // down the WS listener + watchdog. Any prior entry for this agent
+        // should already have been cleaned up by its own terminal path, but
+        // be defensive and clear it.
+        const prevTurn = activeTurnsRef.current[sendAgentId];
+        if (prevTurn) {
+          prevTurn.responded = true;
+          if (prevTurn.fallbackTimer) clearTimeout(prevTurn.fallbackTimer);
+          prevTurn.cleanup?.();
+        }
+        const turn: {
+          cleanup?: () => void;
+          fallbackTimer?: ReturnType<typeof setTimeout> | null;
+          responded: boolean;
+        } = { responded: false, fallbackTimer: null };
+        activeTurnsRef.current[sendAgentId] = turn;
 
         const resetFallbackTimer = () => {
-          if (fallbackTimer) clearTimeout(fallbackTimer);
-          fallbackTimer = setTimeout(() => {
-            if (!responded) {
+          if (turn.fallbackTimer) clearTimeout(turn.fallbackTimer);
+          turn.fallbackTimer = setTimeout(() => {
+            if (!turn.responded) {
               cleanup();
               sendViaHttp();
             }
@@ -490,11 +516,15 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
         };
 
         const cleanup = () => {
-          responded = true;
-          if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+          turn.responded = true;
+          if (turn.fallbackTimer) { clearTimeout(turn.fallbackTimer); turn.fallbackTimer = null; }
           onDropRef.current = null;
           ws.current?.removeEventListener("message", handleMessage);
+          if (activeTurnsRef.current[sendAgentId] === turn) {
+            delete activeTurnsRef.current[sendAgentId];
+          }
         };
+        turn.cleanup = cleanup;
 
         // Set up message handler for this response
         const handleMessage = (event: MessageEvent) => {
@@ -590,9 +620,9 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
               // and send a final response. Shorten the inactivity window to
               // 30s so the WS doesn't stay half-open forever if the failure
               // is terminal.
-              if (fallbackTimer) clearTimeout(fallbackTimer);
-              fallbackTimer = setTimeout(() => {
-                if (!responded) { cleanup(); sendViaHttp(); }
+              if (turn.fallbackTimer) clearTimeout(turn.fallbackTimer);
+              turn.fallbackTimer = setTimeout(() => {
+                if (!turn.responded) { cleanup(); sendViaHttp(); }
               }, 30_000);
             } else if (data.type === "response") {
               updateAgentMessages(sendAgentId, prev => prev.map(m =>
@@ -621,8 +651,11 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
 
         // Register fallback: if WS drops mid-stream, retry via HTTP
         onDropRef.current = () => {
-          if (!responded) {
+          if (!turn.responded) {
             ws.current?.removeEventListener("message", handleMessage);
+            if (activeTurnsRef.current[sendAgentId] === turn) {
+              delete activeTurnsRef.current[sendAgentId];
+            }
             sendViaHttp();
           }
         };
@@ -648,7 +681,43 @@ function useChatMessages(agentId: string | null, agents: any[] = [], sessionVers
     await sendViaHttp();
   }, [agentId, agents, wsConnected, ws, deepThinking, showThinkingProcess, finishTurnIfCurrent, clearHistory]);
 
-  return { messages, isLoading, sendMessage, clearHistory, wsConnected };
+  // Abort an in-flight agent run. Hits the backend stop endpoint (which aborts
+  // the tokio task on the kernel side) and optimistically finalizes any
+  // streaming messages for this agent so the input re-enables immediately —
+  // we don't wait for the WS to emit a terminal event.
+  const stopMessage = useCallback(async () => {
+    if (!agentId) return;
+    const targetId = agentId;
+    updateAgentMessages(targetId, prev => prev.map(m =>
+      m.isStreaming ? { ...m, isStreaming: false } : m,
+    ));
+    const pendingBotId = latestTurnRef.current[targetId];
+    if (pendingBotId) finishTurnIfCurrent(targetId, pendingBotId);
+    // Tear down the in-flight WS turn: mark responded, clear the 180s/30s
+    // watchdog, and detach the message listener. Without this the watchdog
+    // would fire after the backend aborts (WS goes silent) and re-send the
+    // stopped message over HTTP (#2787 review).
+    const turn = activeTurnsRef.current[targetId];
+    if (turn) {
+      turn.responded = true;
+      if (turn.fallbackTimer) {
+        clearTimeout(turn.fallbackTimer);
+        turn.fallbackTimer = null;
+      }
+      turn.cleanup?.();
+      // cleanup() deletes the entry itself, but guard against custom
+      // cleanup implementations.
+      delete activeTurnsRef.current[targetId];
+    }
+    try {
+      await stopAgentMutation.mutateAsync(targetId);
+    } catch {
+      // Backend stop failure is non-fatal for the UI — the run may have
+      // completed between user click and request. UI is already unblocked.
+    }
+  }, [agentId, updateAgentMessages, finishTurnIfCurrent, stopAgentMutation]);
+
+  return { messages, isLoading, sendMessage, stopMessage, clearHistory, wsConnected };
 }
 
 // Message bubble component — memoized to skip re-render during streaming of other messages
@@ -861,7 +930,7 @@ const MessageBubble = memo(function MessageBubble({ message, usageFooter, onCopy
 });
 
 // Input box - with shortcut hints
-function ChatInput({ onSend, disabled, inputDisabled, placeholder, authMissing, authStatus, providerName, supportsThinking, sttAvailable }: { onSend: (msg: string) => void; disabled: boolean; inputDisabled?: boolean; placeholder: string; authMissing?: boolean; authStatus?: string; providerName?: string; supportsThinking?: boolean; sttAvailable?: boolean }) {
+function ChatInput({ onSend, onStop, isStreaming, disabled, inputDisabled, placeholder, authMissing, authStatus, providerName, supportsThinking, sttAvailable }: { onSend: (msg: string) => void; onStop?: () => void; isStreaming?: boolean; disabled: boolean; inputDisabled?: boolean; placeholder: string; authMissing?: boolean; authStatus?: string; providerName?: string; supportsThinking?: boolean; sttAvailable?: boolean }) {
   const { t } = useTranslation();
   const [message, setMessage] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -1076,16 +1145,30 @@ function ChatInput({ onSend, disabled, inputDisabled, placeholder, authMissing, 
             {voiceInput.isRecording ? <MicOff className="h-4 w-4" /> : voiceInput.isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
           </button>
         )}
-        <button
-          type="submit"
-          disabled={!message.trim() || effectiveDisabled}
-          className="group relative px-3.5 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-linear-to-r from-brand to-brand/90 text-white font-bold text-sm shadow-lg shadow-brand/20 hover:shadow-brand/40 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-        >
-          <Send className="h-4 w-4" />
-          <span className="absolute -top-8 right-0 bg-surface border border-border-subtle rounded-lg px-2 py-1 text-[10px] text-text-dim opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap hidden sm:block">
-            {t("chat.send_hint")}
-          </span>
-        </button>
+        {isStreaming && onStop ? (
+          <button
+            type="button"
+            onClick={onStop}
+            title={t("chat.stop_hint")}
+            className="group relative px-3.5 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-linear-to-r from-error to-error/90 text-white font-bold text-sm shadow-lg shadow-error/20 hover:shadow-error/40 hover:-translate-y-0.5 transition-all duration-300"
+          >
+            <Square className="h-4 w-4 fill-current" />
+            <span className="absolute -top-8 right-0 bg-surface border border-border-subtle rounded-lg px-2 py-1 text-[10px] text-text-dim opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap hidden sm:block">
+              {t("chat.stop_hint")}
+            </span>
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!message.trim() || effectiveDisabled}
+            className="group relative px-3.5 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-linear-to-r from-brand to-brand/90 text-white font-bold text-sm shadow-lg shadow-brand/20 hover:shadow-brand/40 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+          >
+            <Send className="h-4 w-4" />
+            <span className="absolute -top-8 right-0 bg-surface border border-border-subtle rounded-lg px-2 py-1 text-[10px] text-text-dim opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap hidden sm:block">
+              {t("chat.send_hint")}
+            </span>
+          </button>
+        )}
       </div>
     </form>
   );
@@ -1747,7 +1830,7 @@ export function ChatPage() {
   );
   // Session state — bump version to force message reload after switch
   const [sessionVersion, setSessionVersion] = useState(0);
-  const { messages, isLoading, sendMessage, clearHistory, wsConnected } = useChatMessages(
+  const { messages, isLoading, sendMessage, stopMessage, clearHistory, wsConnected } = useChatMessages(
     selectedAgentId || null,
     agents,
     sessionVersion,
@@ -2103,6 +2186,8 @@ export function ChatPage() {
           <div className={`p-2 sm:p-4 border-t border-border-subtle bg-surface transition-opacity ${!selectedAgentId ? "opacity-30 pointer-events-none" : ""}`}>
             <ChatInput
               onSend={sendMessage}
+              onStop={stopMessage}
+              isStreaming={isStreaming}
               disabled={isLoading}
               inputDisabled={isStreaming}
               placeholder={isStreaming ? t("chat.generating") : selectedAgentId ? t("chat.input_placeholder_with_agent", { name: selectedAgent?.name }) : t("chat.transmit_command")}

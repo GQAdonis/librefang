@@ -111,6 +111,7 @@ export {
   // agents
   spawnAgent,
   cloneAgent,
+  stopAgent,
   suspendAgent,
   resumeAgent,
   deleteAgent,
