@@ -2,7 +2,13 @@
 //!
 //! Provides an `EmbeddingDriver` trait and implementations:
 //! - `OpenAIEmbeddingDriver` — works with any provider offering a `/v1/embeddings`
-//!   endpoint (OpenAI, Groq, Together, Fireworks, Ollama, etc.).
+//!   endpoint (OpenAI, OpenRouter, Together, Fireworks, Mistral, Ollama, vLLM,
+//!   LM Studio, etc.). **Groq is intentionally excluded**: it does not expose an
+//!   embeddings endpoint (`/v1/models` lists only chat + Whisper), so autowiring
+//!   Groq here would produce silent 404s.
+//! - `CohereEmbeddingDriver` — Cohere's native `/v2/embed` endpoint, which
+//!   differs from OpenAI's shape (`texts` + required `input_type`, embeddings
+//!   returned in `{ "embeddings": { "float": [[...]] } }`).
 //! - `BedrockEmbeddingDriver` — Amazon Bedrock embedding models via SigV4-signed
 //!   REST calls (no heavy `aws-sdk-*` dependency).
 
@@ -35,7 +41,7 @@ pub enum EmbeddingError {
 /// Configuration for creating an embedding driver.
 #[derive(Debug, Clone)]
 pub struct EmbeddingConfig {
-    /// Provider name (openai, groq, together, ollama, etc.).
+    /// Provider name (openai, together, mistral, cohere, ollama, etc.).
     pub provider: String,
     /// Model name (e.g., "text-embedding-3-small", "all-MiniLM-L6-v2").
     pub model: String,
@@ -85,7 +91,9 @@ pub trait EmbeddingDriver: Send + Sync {
 /// OpenAI-compatible embedding driver.
 ///
 /// Works with any provider that implements the `/v1/embeddings` endpoint:
-/// OpenAI, Groq, Together, Fireworks, Ollama, vLLM, LM Studio, etc.
+/// OpenAI, OpenRouter, Together, Fireworks, Mistral, Ollama, vLLM, LM Studio,
+/// etc.  Cohere uses `CohereEmbeddingDriver` (different endpoint + shape) and
+/// Groq is intentionally excluded because its API has no embeddings route.
 pub struct OpenAIEmbeddingDriver {
     api_key: Zeroizing<String>,
     base_url: String,
@@ -637,20 +645,24 @@ impl EmbeddingDriver for BedrockEmbeddingDriver {
 /// embedding provider.
 ///
 /// Checks in priority order:
-/// 1. `OPENAI_API_KEY`    → `"openai"`
-/// 2. `GROQ_API_KEY`      → `"groq"`
-/// 3. `MISTRAL_API_KEY`   → `"mistral"`
-/// 4. `TOGETHER_API_KEY`  → `"together"`
-/// 5. `FIREWORKS_API_KEY` → `"fireworks"`
-/// 6. `COHERE_API_KEY`    → `"cohere"`
+/// 1. `OPENAI_API_KEY`     → `"openai"`
+/// 2. `OPENROUTER_API_KEY` → `"openrouter"`
+/// 3. `MISTRAL_API_KEY`    → `"mistral"`
+/// 4. `TOGETHER_API_KEY`   → `"together"`
+/// 5. `FIREWORKS_API_KEY`  → `"fireworks"`
+/// 6. `COHERE_API_KEY`     → `"cohere"`
 /// 7. `OLLAMA_HOST` set, or Ollama running on localhost → `"ollama"`
 /// 8. `None` if nothing is available
+///
+/// `GROQ_API_KEY` is deliberately **not** in this list. Groq has no
+/// `/v1/embeddings` endpoint (verify with `GET api.groq.com/openai/v1/models`
+/// — only chat + Whisper models are returned), so picking it for embeddings
+/// would produce silent 404s at the first real call.
 pub fn detect_embedding_provider() -> Option<&'static str> {
     // Cloud providers — check API key env vars in priority order.
     let cloud_providers: &[(&str, &str)] = &[
         ("OPENAI_API_KEY", "openai"),
         ("OPENROUTER_API_KEY", "openrouter"),
-        ("GROQ_API_KEY", "groq"),
         ("MISTRAL_API_KEY", "mistral"),
         ("TOGETHER_API_KEY", "together"),
         ("FIREWORKS_API_KEY", "fireworks"),
@@ -691,9 +703,10 @@ pub fn create_embedding_driver(
     if provider == "auto" {
         let detected = detect_embedding_provider().ok_or_else(|| {
             EmbeddingError::MissingApiKey(
-                "No embedding provider available. Set one of: OPENAI_API_KEY, GROQ_API_KEY, \
-                 MISTRAL_API_KEY, TOGETHER_API_KEY, FIREWORKS_API_KEY, COHERE_API_KEY, \
-                 or configure Ollama."
+                "No embedding provider available. Set one of: OPENAI_API_KEY, \
+                 OPENROUTER_API_KEY, MISTRAL_API_KEY, TOGETHER_API_KEY, FIREWORKS_API_KEY, \
+                 COHERE_API_KEY, or configure Ollama. (GROQ_API_KEY is not accepted here — \
+                 Groq does not expose an embeddings endpoint.)"
                     .to_string(),
             )
         })?;
