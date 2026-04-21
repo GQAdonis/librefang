@@ -387,7 +387,11 @@ pub trait ContextEngine: Send + Sync {
     ///
     /// Mirrors `ContextEngine.update_model(model, context_length, …)` from
     /// the Python reference implementation.
-    fn update_model(&mut self, _model: &str, _context_length: usize) {}
+    ///
+    /// Takes `&self` (not `&mut self`) so the method is callable through a
+    /// `&dyn ContextEngine` trait object.  Implementations that need to mutate
+    /// state should use interior mutability (e.g. `Mutex`).
+    fn update_model(&self, _model: &str, _context_length: usize) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -4453,8 +4457,9 @@ impl ContextEngine for SummaryContextEngine {
     /// Update the engine's view of the active model and recalculate thresholds.
     ///
     /// Called by the agent loop when the operator switches models or when a
-    /// provider fallback activates.
-    fn update_model(&mut self, model: &str, context_length: usize) {
+    /// provider fallback activates.  Uses interior mutability so this can be
+    /// called through a `&dyn ContextEngine` trait object.
+    fn update_model(&self, model: &str, context_length: usize) {
         *self.model.lock().unwrap_or_else(|p| p.into_inner()) = model.to_owned();
         *self
             .context_length
@@ -4836,7 +4841,7 @@ ingest = "hooks/ingest.py"
     #[test]
     fn test_summary_context_engine_update_model() {
         let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
-        let mut engine = SummaryContextEngine::new(inner, 0.80);
+        let engine = SummaryContextEngine::new(inner, 0.80);
 
         // Before update: context_length comes from ContextEngineConfig::default (200_000)
         assert!(!engine.should_compress(100_000, 200_000)); // 50 % < 80 %
