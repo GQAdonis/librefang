@@ -170,7 +170,10 @@ jobs:
             PFLAGS=""
             for c in $CRATES; do PFLAGS="$PFLAGS -p $c"; done
             echo "Selective build for:  $CRATES"
-            cargo build $PFLAGS --lib
+            # Build default targets of each changed crate. Avoid `--lib`
+            # because binary-only crates (e.g. librefang-cli) have no lib
+            # target, and cargo errors out hard in that case.
+            cargo build $PFLAGS
             echo "Selective clippy for: $CRATES"
             cargo clippy $PFLAGS --all-targets --all-features -- -D warnings
           fi
