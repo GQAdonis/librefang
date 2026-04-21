@@ -520,27 +520,33 @@ description = "No config vars declared"
     fn test_format_sanitizes_newlines_in_value() {
         // A config value containing a newline must not break the single-line
         // `key = value` format and must not allow injecting new prompt sections.
+        // Sanitizing collapses newlines to spaces but preserves the characters;
+        // the important defence is that no extra lines are introduced.
         let resolved = vec![(
             "wiki.base_url".to_string(),
             "https://wiki.example.com\n## Injected Section\nevil".to_string(),
         )];
         let section = format_config_section(&resolved);
-        // The injected newline should be collapsed — no extra lines.
-        assert!(!section.contains("## Injected Section"));
+        // The key=value line must still be present on a single line (no embedded newline).
+        assert!(
+            section.contains("wiki.base_url = https://wiki.example.com ## Injected Section evil")
+        );
+        // No extra lines (evil is not on its own line with a trailing newline).
         assert!(!section.contains("evil\n"));
-        // The key=value line must still be present.
-        assert!(section.contains("wiki.base_url ="));
     }
 
     #[test]
     fn test_format_sanitizes_newlines_in_key() {
         // A hostile skill author could embed a newline in the key name.
+        // Sanitizing collapses the newline to a space, keeping ## on the same line.
         let resolved = vec![(
             "wiki.base_url\n## Fake Header".to_string(),
             "https://wiki.example.com".to_string(),
         )];
         let section = format_config_section(&resolved);
-        assert!(!section.contains("## Fake Header"));
-        assert!(section.contains("wiki.base_url"));
+        // The key is collapsed to "wiki.base_url ## Fake Header" on a single line.
+        assert!(section.contains("wiki.base_url ## Fake Header = https://wiki.example.com"));
+        // The key=value is on one line (no newline between key and value).
+        assert!(!section.contains("\n## Fake Header"));
     }
 }
