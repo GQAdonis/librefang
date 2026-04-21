@@ -2256,18 +2256,56 @@ async fn tool_shell_exec(
         return Err("[interrupted before execution]".to_string());
     }
 
-    let result =
-        tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), cmd.output()).await;
+    // Capture piped output so we can collect it after the process exits.
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
 
-    // Check again after the subprocess completes — if the session was interrupted
-    // while this command was running, report it as interrupted rather than returning
-    // potentially stale output.
-    if interrupt.as_ref().is_some_and(|i| i.is_cancelled()) {
-        return Err("[interrupted]".to_string());
-    }
+    // Spawn the child process so we hold a handle that can be killed if the
+    // session interrupt fires while the command is running.  Using `output()`
+    // instead would block until the process *completes*, meaning cancel() would
+    // never be observed mid-execution — the whole point of this feature.
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return Err(format!("Failed to execute command: {e}")),
+    };
 
-    match result {
-        Ok(Ok(output)) => {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+
+    // Poll for completion, interrupt, or timeout.  We use a short sleep so we
+    // don't burn CPU in a tight loop; 50 ms is imperceptible to users but still
+    // gives responsive cancellation.
+    let output = loop {
+        // Has the process already finished?
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                // Process exited; collect its output.
+                match child.wait_with_output().await {
+                    Ok(o) => break Ok(o),
+                    Err(e) => break Err(format!("Failed to collect output: {e}")),
+                }
+            }
+            Ok(None) => {} // still running
+            Err(e) => break Err(format!("Failed to wait on child: {e}")),
+        }
+
+        // Did the session get cancelled while the command was running?
+        if interrupt.as_ref().is_some_and(|i| i.is_cancelled()) {
+            // Best-effort kill; ignore errors (process may have already exited).
+            let _ = child.kill().await;
+            return Err("[interrupted]".to_string());
+        }
+
+        // Timed out?
+        if tokio::time::Instant::now() >= deadline {
+            let _ = child.kill().await;
+            return Err(format!("Command timed out after {timeout_secs}s"));
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    };
+
+    match output {
+        Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             let exit_code = output.status.code().unwrap_or(-1);
@@ -2297,8 +2335,7 @@ async fn tool_shell_exec(
                 "Exit code: {exit_code}\n\nSTDOUT:\n{stdout_str}\nSTDERR:\n{stderr_str}"
             ))
         }
-        Ok(Err(e)) => Err(format!("Failed to execute command: {e}")),
-        Err(_) => Err(format!("Command timed out after {timeout_secs}s")),
+        Err(e) => Err(e),
     }
 }
 
