@@ -6056,8 +6056,12 @@ system_prompt = "You are a helpful assistant."
         let is_internal_cron = sender_context.is_some_and(|ctx| ctx.is_internal_cron);
         let message_for_llm = if is_internal_cron && message.contains("[SILENT]") {
             let stripped = message.replace("[SILENT]", "").trim().to_string();
+            // If the entire prompt was just the marker (possibly with whitespace),
+            // use a minimal stand-in so the LLM still receives a non-empty turn.
+            // Falling back to the original `message` would expose "[SILENT]" to the
+            // model, violating the invariant that the LLM never sees the marker.
             if stripped.is_empty() {
-                message.trim().to_string()
+                "(maintenance run)".to_string()
             } else {
                 stripped
             }
@@ -6178,7 +6182,8 @@ system_prompt = "You are a helpful assistant."
         // assistant turn from it first so the next cron fire does not see the
         // suppressed response in its context window.
         // Canonical append: skipped entirely for silent cron turns.
-        let is_internal_cron = sender_context.is_some_and(|ctx| ctx.is_internal_cron);
+        // `is_internal_cron` was already derived above for the message-stripping
+        // step — reuse it here rather than re-querying the same sender_context.
         let skip_canonical_append = if is_internal_cron && message.contains("[SILENT]") {
             // Remove the last assistant message from the in-memory session so
             // it is not included in the re-saved version.
