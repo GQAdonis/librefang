@@ -11889,11 +11889,11 @@ system_prompt = "You are a helpful assistant."
 
     /// Build the resolved skill config variable section for the system prompt.
     ///
-    /// Reads `~/.librefang/config.toml` as a raw `toml::Value` tree so that
-    /// `resolve_config_vars` can traverse arbitrary dotted paths under
-    /// `skills.config.*`. Returns an empty string when no skills declare
-    /// config vars, when the config file is absent, or when no vars could be
-    /// resolved.
+    /// Uses the merged config tree from [`crate::config::load_config_raw`],
+    /// which handles `include` directives and deep-merge, so that
+    /// `skills.config.*` values stored in included TOML files are visible.
+    /// Falls back to an empty table when no skills declare config vars,
+    /// when the config file is absent, or when no vars could be resolved.
     fn collect_config_section(&self, skill_allowlist: &[String]) -> String {
         use librefang_skills::config_injection::{
             collect_config_vars, format_config_section, resolve_config_vars,
@@ -11905,15 +11905,13 @@ system_prompt = "You are a helpful assistant."
             return String::new();
         }
 
-        // Read config.toml if it exists.  Fall back to an empty table so
-        // that skills whose vars all have `default` values still get their
-        // config section rendered even on a fresh install where
-        // config.toml has not been created yet.
-        let config_path = self.home_dir_boot.join("config.toml");
-        let config_toml: toml::Value = std::fs::read_to_string(&config_path)
-            .ok()
-            .and_then(|s| toml::from_str(&s).ok())
-            .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
+        // Use the merged config tree (with `include` resolution and migrations)
+        // so that skills.config.* values stored in included TOML files are
+        // visible.  Fall back to an empty table so that skills whose vars all
+        // have `default` values still get their config section rendered on a
+        // fresh install.
+        let config_toml =
+            crate::config::load_config_raw(Some(&self.home_dir_boot.join("config.toml")));
 
         let resolved = resolve_config_vars(&vars, &config_toml);
         format_config_section(&resolved)

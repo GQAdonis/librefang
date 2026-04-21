@@ -186,7 +186,7 @@ pub fn load_config(path: Option<&Path>) -> KernelConfig {
 ///
 /// Included files are loaded first and the root config overrides them.
 /// Security: rejects absolute paths, `..` components, and circular references.
-fn resolve_config_includes(
+pub(crate) fn resolve_config_includes(
     root_value: &mut toml::Value,
     config_dir: &Path,
     visited: &mut HashSet<PathBuf>,
@@ -313,6 +313,71 @@ pub fn deep_merge_toml(base: &mut toml::Value, overlay: &toml::Value) {
             *base = overlay.clone();
         }
     }
+}
+
+/// Load the raw merged TOML value from a config file, handling `include`
+/// directives and deep-merge, but **without** schema deserialization.
+///
+/// This exposes the same merged config tree that [`load_config`] uses
+/// internally, so callers (e.g. skill config var resolution) can resolve
+/// values from included TOML files.  Returns an empty table on any error
+/// so callers that already have fallback defaults can proceed safely.
+pub fn load_config_raw(path: Option<&Path>) -> toml::Value {
+    let config_path = path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(default_config_path);
+
+    if !config_path.exists() {
+        return toml::Value::Table(toml::map::Map::new());
+    }
+
+    let contents = match std::fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return toml::Value::Table(toml::map::Map::new()),
+    };
+
+    let mut root_value: toml::Value = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(_) => return toml::Value::Table(toml::map::Map::new()),
+    };
+
+    let config_dir = config_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .to_path_buf();
+
+    let mut visited = HashSet::new();
+    if let Ok(canonical) = std::fs::canonicalize(&config_path) {
+        visited.insert(canonical);
+    } else {
+        visited.insert(config_path.clone());
+    }
+
+    // Best-effort include resolution — on failure we still proceed with the
+    // root config alone (matching `load_config` behaviour).
+    let _ = resolve_config_includes(&mut root_value, &config_dir, &mut visited, 0);
+
+    // Remove the `include` field so callers see a clean tree.
+    if let toml::Value::Table(ref mut tbl) = root_value {
+        tbl.remove("include");
+    }
+
+    // Run versioned migrations so the returned tree reflects current schema.
+    let file_version = root_value
+        .as_table()
+        .and_then(|t| t.get("config_version"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v as u32)
+        .unwrap_or_else(default_config_version);
+
+    if file_version < CONFIG_VERSION {
+        let mut migrated = root_value.clone();
+        if run_migrations(&mut migrated, file_version).is_ok() {
+            root_value = migrated;
+        }
+    }
+
+    root_value
 }
 
 /// Get the default config file path.
