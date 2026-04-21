@@ -2577,6 +2577,7 @@ pub async fn run_agent_loop(
     let mut hallucination_retried = false;
     let mut action_nudge_retried = false;
     let mut consecutive_all_failed: u32 = 0;
+    let mut last_prompt_tokens: usize = 0;
 
     for iteration in 0..max_iterations {
         debug!(iteration, "Agent loop iteration");
@@ -2587,16 +2588,17 @@ pub async fn run_agent_loop(
         // compaction pass *before* the assemble step so that the assembled
         // context is already trimmed.
         //
-        // `total_usage.input_tokens` tracks the last turn's prompt-token
-        // count and serves as the "current tokens" estimate. On the first
-        // iteration it is 0 and `should_compress` will return false, which
-        // is the correct behaviour (nothing to compress yet).
+        // `last_prompt_tokens` carries the prompt-token count from the
+        // previous LLM call — never the running sum.  This correctly gates
+        // `should_compress` on each turn's own input cost rather than the
+        // cumulative total.  `total_usage` (which is accumulated) is never
+        // read here, so it remains a clean snapshot for the kernel budget
+        // tracker and is never mutated by the compaction path.
         if let Some(engine) = context_engine {
-            let current_tokens = total_usage.input_tokens as usize;
-            if engine.should_compress(current_tokens, ctx_window) {
+            if engine.should_compress(last_prompt_tokens, ctx_window) {
                 debug!(
                     iteration,
-                    current_tokens, ctx_window, "Context engine requested compaction"
+                    last_prompt_tokens, ctx_window, "Context engine requested compaction"
                 );
                 match engine
                     .compact(
@@ -2614,11 +2616,10 @@ pub async fn run_agent_loop(
                             "Context engine compaction complete"
                         );
                         messages = result.kept_messages;
-                        // Reset the stale token count so should_compress does not
-                        // re-fire on the next iteration before the LLM has run.
-                        // The real count will be refreshed by accumulate_token_usage
-                        // after the upcoming LLM call.
-                        total_usage.input_tokens = 0;
+                        // `last_prompt_tokens` is intentionally NOT reset here.
+                        // A second compaction should only fire after the next
+                        // LLM call raises it above threshold again.  Resetting
+                        // to 0 would cause premature re-trigger.
                     }
                     Err(e) => {
                         warn!("Context engine compaction failed (continuing): {e}");
@@ -2712,6 +2713,10 @@ pub async fn run_agent_loop(
         let provider_name = manifest.model.provider.as_str();
         let mut response = call_with_retry(&*driver, request, Some(provider_name), None).await?;
 
+        // Snapshot prompt tokens for the next iteration's should_compress check.
+        // This is the per-turn input cost, NOT a running sum — we deliberately
+        // do NOT accumulate into last_prompt_tokens.
+        last_prompt_tokens = response.usage.input_tokens as usize;
         accumulate_token_usage(&mut total_usage, &response.usage);
 
         // Strip image base64 from earlier messages (LLM already processed them)
@@ -3616,19 +3621,20 @@ pub async fn run_agent_loop_streaming(
     let mut hallucination_retried = false;
     let mut action_nudge_retried = false;
     let mut consecutive_all_failed: u32 = 0;
+    let mut last_prompt_tokens: usize = 0;
 
     for iteration in 0..max_iterations {
         debug!(iteration, "Streaming agent loop iteration");
 
         // Pluggable context engine: threshold-gated compaction (same as the
-        // non-streaming loop). See the non-streaming path for the full
-        // rationale.
+        // non-streaming loop). `last_prompt_tokens` carries only the previous
+        // turn's prompt cost — never the cumulative total.  `total_usage`
+        // (accumulated) is never read or written here.
         if let Some(engine) = context_engine {
-            let current_tokens = total_usage.input_tokens as usize;
-            if engine.should_compress(current_tokens, ctx_window) {
+            if engine.should_compress(last_prompt_tokens, ctx_window) {
                 debug!(
                     iteration,
-                    current_tokens,
+                    last_prompt_tokens,
                     ctx_window,
                     "Context engine requested compaction (streaming path)"
                 );
@@ -3648,11 +3654,8 @@ pub async fn run_agent_loop_streaming(
                             "Context engine compaction complete (streaming)"
                         );
                         messages = result.kept_messages;
-                        // Reset the stale token count so should_compress does not
-                        // re-fire on the next iteration before the LLM has run.
-                        // The real count will be refreshed by accumulate_token_usage
-                        // after the upcoming LLM call.
-                        total_usage.input_tokens = 0;
+                        // `last_prompt_tokens` is NOT reset — see non-streaming
+                        // comment for rationale.
                     }
                     Err(e) => {
                         warn!("Context engine compaction failed (continuing, streaming): {e}");
@@ -3810,6 +3813,8 @@ pub async fn run_agent_loop_streaming(
             }
         };
 
+        // Snapshot prompt tokens for the next iteration's should_compress check.
+        last_prompt_tokens = response.usage.input_tokens as usize;
         accumulate_token_usage(&mut total_usage, &response.usage);
 
         // Strip image base64 from earlier messages (LLM already processed them)

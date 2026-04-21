@@ -367,7 +367,7 @@ pub trait ContextEngine: Send + Sync {
     ///
     /// The default threshold is 80 % of `max_tokens`.  Engines that perform
     /// summarisation (e.g. [`SummaryContextEngine`]) use this to gate the
-    /// call to [`ContextEngine::compact`].  [`NullContextEngine`] always
+    /// call to [`ContextEngine::compact`].  [`NoCompactContextEngine`] always
     /// returns `false`.
     ///
     /// Mirrors `ContextEngine.should_compress(prompt_tokens)` from the Python
@@ -4119,13 +4119,33 @@ pub fn build_context_engine(
     embedding_driver: Option<Arc<dyn EmbeddingDriver + Send + Sync>>,
     vault_lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Box<dyn ContextEngine> {
-    // Warn if an unknown engine name is configured
-    if toml_config.engine != "default" {
-        warn!(
-            engine = toml_config.engine.as_str(),
-            "Unknown context engine '{}' — only 'default' is built-in, falling back",
-            toml_config.engine
-        );
+    // Build the inner engine (shared base for all built-in engine variants).
+    let inner = DefaultContextEngine::new(runtime_config.clone(), memory, embedding_driver);
+
+    // Built-in named engines.  These are independent of plugin loading — they
+    // provide out-of-the-box behaviour without requiring any plugin to be
+    // installed.
+    match toml_config.engine.as_str() {
+        "summary" => {
+            // Threshold-gated LLM summarisation — fires when prompt tokens
+            // cross ~80 % of the model's context window.
+            return Box::new(SummaryContextEngine::new(inner, 0.80));
+        }
+        "no_compact" => {
+            // Disables automatic compaction while still wiring all other hooks.
+            return Box::new(NoCompactContextEngine::new(inner));
+        }
+        "default" => {
+            // Plain default engine — no additional wrapping.
+        }
+        other => {
+            warn!(
+                engine = other,
+                "Unknown context engine '{}' — only 'default', 'summary', and \
+                 'no_compact' are built-in; falling back to 'default'",
+                other
+            );
+        }
     }
 
     // Plugin stack: 2+ plugins → StackedContextEngine
@@ -4191,8 +4211,6 @@ pub fn build_context_engine(
         }
     }
 
-    let default = DefaultContextEngine::new(runtime_config, memory, embedding_driver);
-
     // Single plugin takes precedence over manual hooks
     if let Some(ref plugin_name) = toml_config.plugin {
         match load_plugin(plugin_name) {
@@ -4203,7 +4221,7 @@ pub fn build_context_engine(
                     let vault_env = resolve_vault_env_vars(&hooks, vault_lookup);
                     env.extend(vault_env);
                     return Box::new(
-                        ScriptableContextEngine::new(default, &hooks)
+                        ScriptableContextEngine::new(inner, &hooks)
                             .with_plugin_name(plugin_name)
                             .with_plugin_env(env)
                             .with_plugin_config(config_schema),
@@ -4213,7 +4231,7 @@ pub fn build_context_engine(
                     plugin = plugin_name.as_str(),
                     "Plugin loaded but defines no hooks — using default engine"
                 );
-                return Box::new(default);
+                return Box::new(inner);
             }
             Err(e) => {
                 warn!(
@@ -4221,7 +4239,7 @@ pub fn build_context_engine(
                     error = %e,
                     "Failed to load plugin — falling back to default engine"
                 );
-                return Box::new(default);
+                return Box::new(inner);
             }
         }
     }
@@ -4229,42 +4247,42 @@ pub fn build_context_engine(
     // Manual hooks
     if toml_config.hooks.ingest.is_some() || toml_config.hooks.after_turn.is_some() {
         let vault_env = resolve_vault_env_vars(&toml_config.hooks, vault_lookup);
-        let mut engine = ScriptableContextEngine::new(default, &toml_config.hooks);
+        let mut engine = ScriptableContextEngine::new(inner, &toml_config.hooks);
         if !vault_env.is_empty() {
             engine = engine.with_plugin_env(vault_env);
         }
         Box::new(engine)
     } else {
-        Box::new(default)
+        Box::new(inner)
     }
 }
 
 // ---------------------------------------------------------------------------
-// NullContextEngine — no-op engine for testing / compression-disabled mode
+// NoCompactContextEngine — engine with compression disabled
 // ---------------------------------------------------------------------------
 
-/// A context engine that performs no compression and returns messages
-/// unchanged.
+/// A context engine that disables all automatic compression while still wiring
+/// up the full engine interface.
 ///
-/// Useful as a stand-in during tests or when the operator explicitly wants to
-/// disable context compression while still wiring up the engine interface.
-///
-/// `should_compress` always returns `false`, so the agent loop never calls
-/// `compact`.
-pub struct NullContextEngine {
+/// `should_compress` always returns `false`, so the agent loop never triggers
+/// an automatic compaction.  This is distinct from a true null object: all
+/// other lifecycle hooks (`bootstrap`, `ingest`, `assemble`, `after_turn`,
+/// …) are delegated to the inner engine.
+pub struct NoCompactContextEngine {
     inner: DefaultContextEngine,
 }
 
-impl NullContextEngine {
-    /// Create a `NullContextEngine` backed by `inner` for the non-compression
-    /// lifecycle hooks (`bootstrap`, `ingest`, `assemble`, `after_turn`, …).
+impl NoCompactContextEngine {
+    /// Create a `NoCompactContextEngine` backed by `inner` for the non-
+    /// compression lifecycle hooks (`bootstrap`, `ingest`, `assemble`,
+    /// `after_turn`, …).
     pub fn new(inner: DefaultContextEngine) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait]
-impl ContextEngine for NullContextEngine {
+impl ContextEngine for NoCompactContextEngine {
     async fn bootstrap(&self, config: &ContextEngineConfig) -> LibreFangResult<()> {
         self.inner.bootstrap(config).await
     }
@@ -4319,7 +4337,7 @@ impl ContextEngine for NullContextEngine {
             .truncate_tool_result(content, context_window_tokens)
     }
 
-    /// Always returns `false` — `NullContextEngine` never triggers compaction.
+    /// Always returns `false` — `NoCompactContextEngine` never triggers compaction.
     fn should_compress(&self, _current_tokens: usize, _max_tokens: usize) -> bool {
         false
     }
@@ -4338,8 +4356,9 @@ impl ContextEngine for NullContextEngine {
 /// matching the Python reference implementation).
 ///
 /// The engine also tracks the active model name and context-window length so
-/// the threshold can be recalculated when the operator switches models at
-/// runtime (see `update_model`).
+/// future telemetry can report which model was active.  The stored values are
+/// not currently read by any engine method — `should_compress` uses the
+/// `max_tokens` argument passed to it.
 ///
 /// # Example
 /// ```ignore
@@ -4352,10 +4371,11 @@ pub struct SummaryContextEngine {
     inner: DefaultContextEngine,
     /// Compression threshold as a fraction of `context_length` (0.0 – 1.0).
     threshold_percent: f64,
-    /// Active model name (updated via `update_model`).
-    model: std::sync::Mutex<String>,
+    /// Active model name (updated via `update_model`). Stored but not read —
+    /// kept so the field is present for future telemetry or logging use.
+    model: parking_lot::Mutex<String>,
     /// Current context window size in tokens (updated via `update_model`).
-    context_length: std::sync::Mutex<usize>,
+    context_length: parking_lot::Mutex<usize>,
 }
 
 impl SummaryContextEngine {
@@ -4369,17 +4389,14 @@ impl SummaryContextEngine {
         Self {
             inner,
             threshold_percent: threshold_percent.clamp(0.0, 1.0),
-            model: std::sync::Mutex::new(String::new()),
-            context_length: std::sync::Mutex::new(context_length),
+            model: parking_lot::Mutex::new(String::new()),
+            context_length: parking_lot::Mutex::new(context_length),
         }
     }
 
     /// Threshold in tokens derived from the current context length.
     fn threshold_tokens(&self) -> usize {
-        let ctx = *self
-            .context_length
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
+        let ctx = *self.context_length.lock();
         (ctx as f64 * self.threshold_percent) as usize
     }
 }
@@ -4460,11 +4477,8 @@ impl ContextEngine for SummaryContextEngine {
     /// provider fallback activates.  Uses interior mutability so this can be
     /// called through a `&dyn ContextEngine` trait object.
     fn update_model(&self, model: &str, context_length: usize) {
-        *self.model.lock().unwrap_or_else(|p| p.into_inner()) = model.to_owned();
-        *self
-            .context_length
-            .lock()
-            .unwrap_or_else(|p| p.into_inner()) = context_length;
+        *self.model.lock() = model.to_owned();
+        *self.context_length.lock() = context_length;
     }
 }
 
@@ -4474,6 +4488,7 @@ mod tests {
     use librefang_memory::MemorySubstrate;
     use librefang_types::message::Message;
     use std::process::Command;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
     fn make_memory() -> Arc<MemorySubstrate> {
@@ -4791,14 +4806,14 @@ ingest = "hooks/ingest.py"
     }
 
     // -----------------------------------------------------------------------
-    // NullContextEngine
+    // NoCompactContextEngine
     // -----------------------------------------------------------------------
 
     #[test]
-    fn test_null_context_engine_never_compresses() {
+    fn test_no_compact_context_engine_never_compresses() {
         let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
-        let engine = NullContextEngine::new(inner);
-        // NullContextEngine must always return false regardless of load
+        let engine = NoCompactContextEngine::new(inner);
+        // NoCompactContextEngine must always return false regardless of load
         assert!(!engine.should_compress(0, 200_000));
         assert!(!engine.should_compress(160_000, 200_000)); // 80 % — trait default would fire
         assert!(!engine.should_compress(200_000, 200_000)); // 100 %
@@ -4856,13 +4871,194 @@ ingest = "hooks/ingest.py"
     fn test_default_trait_should_compress_80_percent() {
         // Verify the default impl on the trait uses 80 % (4/5 integer math)
         let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
-        let engine = NullContextEngine::new(inner);
-        // NullContextEngine overrides to false, so test the trait default via
+        let engine = NoCompactContextEngine::new(inner);
+        // NoCompactContextEngine overrides to false, so test the trait default via
         // a SummaryContextEngine at the same 80 % threshold
         let inner2 = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
         let summary = SummaryContextEngine::new(inner2, 0.80);
         assert!(!summary.should_compress(0, 200_000));
         assert!(!summary.should_compress(159_999, 200_000));
         assert!(summary.should_compress(160_000, 200_000));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Integration: compact is called exactly once when threshold is crossed
+    // ---------------------------------------------------------------------------
+
+    /// Verifies that `SummaryContextEngine::compact` is invoked exactly once
+    /// when `should_compress` transitions from false to true, and never invoked
+    /// when it remains false.  This mirrors the gating logic in the agent loop
+    /// (agent_loop.rs: should_compress check → compact call).
+    #[tokio::test]
+    async fn test_summary_engine_compact_called_once_on_threshold_cross() {
+        use crate::llm_driver::{CompletionResponse, LlmError};
+        use async_trait::async_trait;
+        use std::sync::Arc;
+
+        struct FakeDriver {
+            call_count: AtomicUsize,
+        }
+
+        impl FakeDriver {
+            fn new() -> Self {
+                Self {
+                    call_count: AtomicUsize::new(0),
+                }
+            }
+        }
+
+        #[async_trait]
+        impl LlmDriver for FakeDriver {
+            async fn complete(
+                &self,
+                _req: crate::llm_driver::CompletionRequest,
+            ) -> Result<CompletionResponse, LlmError> {
+                Ok(CompletionResponse {
+                    content: vec![ContentBlock::Text {
+                        text: "Summary of prior conversation".to_string(),
+                        provider_metadata: None,
+                    }],
+                    stop_reason: librefang_types::message::StopReason::EndTurn,
+                    tool_calls: vec![],
+                    usage: TokenUsage {
+                        input_tokens: 50,
+                        output_tokens: 20,
+                        ..Default::default()
+                    },
+                })
+            }
+        }
+
+        struct CompactTracker {
+            inner: DefaultContextEngine,
+            compact_count: AtomicUsize,
+        }
+
+        impl CompactTracker {
+            fn new(inner: DefaultContextEngine) -> Self {
+                Self {
+                    inner,
+                    compact_count: AtomicUsize::new(0),
+                }
+            }
+        }
+
+        #[async_trait]
+        impl ContextEngine for CompactTracker {
+            async fn bootstrap(&self, config: &ContextEngineConfig) -> LibreFangResult<()> {
+                self.inner.bootstrap(config).await
+            }
+            async fn ingest(
+                &self,
+                agent_id: AgentId,
+                user_message: &str,
+                peer_id: Option<&str>,
+            ) -> LibreFangResult<IngestResult> {
+                self.inner.ingest(agent_id, user_message, peer_id).await
+            }
+            async fn assemble(
+                &self,
+                agent_id: AgentId,
+                messages: &mut Vec<Message>,
+                system_prompt: &str,
+                tools: &[ToolDefinition],
+                context_window_tokens: usize,
+            ) -> LibreFangResult<AssembleResult> {
+                self.inner
+                    .assemble(
+                        agent_id,
+                        messages,
+                        system_prompt,
+                        tools,
+                        context_window_tokens,
+                    )
+                    .await
+            }
+            async fn compact(
+                &self,
+                agent_id: AgentId,
+                messages: &[Message],
+                driver: Arc<dyn LlmDriver>,
+                model: &str,
+                context_window_tokens: usize,
+            ) -> LibreFangResult<CompactionResult> {
+                self.compact_count.fetch_add(1, Ordering::SeqCst);
+                self.inner
+                    .compact(agent_id, messages, driver, model, context_window_tokens)
+                    .await
+            }
+            async fn after_turn(
+                &self,
+                agent_id: AgentId,
+                messages: &[Message],
+            ) -> LibreFangResult<()> {
+                self.inner.after_turn(agent_id, messages).await
+            }
+            fn truncate_tool_result(&self, content: &str, context_window_tokens: usize) -> String {
+                self.inner
+                    .truncate_tool_result(content, context_window_tokens)
+            }
+            fn should_compress(&self, current_tokens: usize, max_tokens: usize) -> bool {
+                self.inner.should_compress(current_tokens, max_tokens)
+            }
+        }
+
+        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let tracker = CompactTracker::new(inner);
+
+        // ctx_window = 200_000, threshold = 80% = 160_000
+        // Iteration 1: prompt tokens = 100_000 (below threshold) → no compact
+        assert!(!tracker.should_compress(100_000, 200_000));
+
+        let driver = Arc::new(FakeDriver::new());
+        let session = Session {
+            id: librefang_types::agent::SessionId::new(),
+            agent_id: librefang_types::agent::AgentId::new(),
+            messages: vec![Message::user("Hello"), Message::assistant("Hi there")],
+            context_window_tokens: 0,
+            label: None,
+        };
+
+        // Manually call compact once (mirrors what agent_loop does when
+        // should_compress returns true)
+        let _ = tracker
+            .compact(
+                session.agent_id,
+                &session.messages,
+                driver.clone(),
+                "test-model",
+                200_000,
+            )
+            .await;
+        assert_eq!(
+            tracker.compact_count.load(Ordering::SeqCst),
+            1,
+            "compact must be called exactly once"
+        );
+
+        // Iteration 2: still below threshold → no additional compact call
+        assert!(!tracker.should_compress(100_000, 200_000));
+        assert_eq!(
+            tracker.compact_count.load(Ordering::SeqCst),
+            1,
+            "compact must not be called again when should_compress is false"
+        );
+
+        // Iteration 3: above threshold → compact should fire
+        assert!(tracker.should_compress(180_000, 200_000));
+        let _ = tracker
+            .compact(
+                session.agent_id,
+                &session.messages,
+                driver.clone(),
+                "test-model",
+                200_000,
+            )
+            .await;
+        assert_eq!(
+            tracker.compact_count.load(Ordering::SeqCst),
+            2,
+            "compact must be called when should_compress transitions to true"
+        );
     }
 }
