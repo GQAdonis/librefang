@@ -48,10 +48,11 @@ pub fn jittered_backoff(
 ) -> Duration {
     // Exponential component, capped at max_delay.
     // saturating_sub(1) so attempt=0 behaves the same as attempt=1.
-    let exp = attempt.saturating_sub(1) as i32;
-    let exp_delay = base_delay
-        .mul_f64(2_f64.powi(exp))
-        .min(max_delay);
+    // Cap at 62 to ensure 2_f64.powi(exp) stays finite; values above this
+    // always exceed any realistic max_delay and would otherwise cause
+    // Duration::mul_f64 to panic on +infinity.
+    let exp = attempt.saturating_sub(1).min(62) as i32;
+    let exp_delay = base_delay.mul_f64(2_f64.powi(exp)).min(max_delay);
 
     // Build a 64-bit seed from wall-clock nanoseconds XOR a Weyl-sequence
     // counter. The Weyl increment (Knuth's magic constant) maximises bit
@@ -68,7 +69,11 @@ pub fn jittered_backoff(
     let mixed = seed
         .wrapping_mul(6_364_136_223_846_793_005)
         .wrapping_add(1_442_695_040_888_963_407);
-    let r = (mixed >> 33) as f64 / u32::MAX as f64;
+    // `>> 32` extracts the high 32 bits (range [0, 2^32 - 1]).
+    // Dividing by 2^32 (not u32::MAX) maps that range to [0, 1).
+    // The previous code used `>> 33` (only 31 bits) divided by u32::MAX,
+    // which capped r at ~0.5 and silently halved the effective jitter range.
+    let r = (mixed >> 32) as f64 / (u32::MAX as f64 + 1.0);
 
     let jitter = exp_delay.mul_f64((jitter_ratio * r).clamp(0.0, 1.0));
     exp_delay + jitter
@@ -92,7 +97,10 @@ mod tests {
         let max = Duration::from_secs(60);
         let d = jittered_backoff(1, base, max, 0.5);
         assert!(d >= base, "delay should be ≥ base: {d:?}");
-        assert!(d <= base + base.mul_f64(0.5), "jitter must stay within ratio: {d:?}");
+        assert!(
+            d <= base + base.mul_f64(0.5),
+            "jitter must stay within ratio: {d:?}"
+        );
     }
 
     #[test]
@@ -102,7 +110,10 @@ mod tests {
         // attempt 5: 10 * 2^4 = 160s, but should be capped to 15s before jitter
         let d = jittered_backoff(5, base, max, 0.5);
         // upper bound: max + 50 % jitter on max
-        assert!(d <= max + max.mul_f64(0.5), "delay exceeds max + jitter: {d:?}");
+        assert!(
+            d <= max + max.mul_f64(0.5),
+            "delay exceeds max + jitter: {d:?}"
+        );
     }
 
     #[test]

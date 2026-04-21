@@ -344,7 +344,11 @@ impl LlmDriver for AnthropicDriver {
                         std::time::Duration::from_secs(60),
                         0.5,
                     );
-                    warn!(status, delay_ms = delay.as_millis(), "Rate limited, retrying");
+                    warn!(
+                        status,
+                        delay_ms = delay.as_millis(),
+                        "Rate limited, retrying"
+                    );
                     tokio::time::sleep(delay).await;
                     continue;
                 }
@@ -419,7 +423,11 @@ impl LlmDriver for AnthropicDriver {
                         std::time::Duration::from_secs(60),
                         0.5,
                     );
-                    warn!(status, delay_ms = delay.as_millis(), "Rate limited (stream), retrying");
+                    warn!(
+                        status,
+                        delay_ms = delay.as_millis(),
+                        "Rate limited (stream), retrying"
+                    );
                     tokio::time::sleep(delay).await;
                     continue;
                 }

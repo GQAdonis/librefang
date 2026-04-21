@@ -651,7 +651,11 @@ impl LlmDriver for OpenAIDriver {
                         std::time::Duration::from_secs(60),
                         0.5,
                     );
-                    warn!(status, delay_ms = delay.as_millis(), "Rate limited, retrying");
+                    warn!(
+                        status,
+                        delay_ms = delay.as_millis(),
+                        "Rate limited, retrying"
+                    );
                     tokio::time::sleep(delay).await;
                     continue;
                 }
@@ -679,7 +683,12 @@ impl LlmDriver for OpenAIDriver {
                             std::time::Duration::from_secs(60),
                             0.5,
                         );
-                        warn!(status, attempt, delay_ms = delay.as_millis(), "tool_use_failed, retrying");
+                        warn!(
+                            status,
+                            attempt,
+                            delay_ms = delay.as_millis(),
+                            "tool_use_failed, retrying"
+                        );
                         tokio::time::sleep(delay).await;
                         continue;
                     }
@@ -1001,7 +1010,11 @@ impl LlmDriver for OpenAIDriver {
                         std::time::Duration::from_secs(60),
                         0.5,
                     );
-                    warn!(status, delay_ms = delay.as_millis(), "Rate limited (stream), retrying");
+                    warn!(
+                        status,
+                        delay_ms = delay.as_millis(),
+                        "Rate limited (stream), retrying"
+                    );
                     tokio::time::sleep(delay).await;
                     continue;
                 }
