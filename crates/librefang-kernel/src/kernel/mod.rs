@@ -8117,17 +8117,19 @@ system_prompt = "You are a helpful assistant."
         // Only store the new config when hot-reload is active (Hot / Hybrid).
         // In Off / Restart modes the user expects no runtime changes — they
         // must restart to pick up the new config.
+        // Always invalidate the skill metadata cache on any reload attempt,
+        // regardless of whether hot actions are applied.  `skills.config.*`
+        // values are free-form TOML keys invisible to the structured config
+        // diff, so a reload that changes only skill config vars would not
+        // trigger `ReloadSkills` and could leave stale resolved values in the
+        // next system prompt even when other hot actions fire (e.g.
+        // `UpdateApprovalPolicy`) and land in the IF branch below.
+        self.prompt_metadata_cache.skills.clear();
+
         if should_apply_hot(old_cfg.reload.mode, &plan) {
             let _write_guard = self.config_reload_lock.write().await;
             self.apply_hot_actions_inner(&plan, &new_config);
             self.config.store(std::sync::Arc::new(new_config));
-        } else {
-            // Even when no hot actions are applied, always invalidate the skill
-            // metadata cache. `skills.config.*` values are free-form TOML keys
-            // that are invisible to the structured config diff, so a reload that
-            // changes only skill config vars would not trigger `ReloadSkills`
-            // and would leave stale resolved values in the next system prompt.
-            self.prompt_metadata_cache.skills.clear();
         }
 
         Ok(plan)

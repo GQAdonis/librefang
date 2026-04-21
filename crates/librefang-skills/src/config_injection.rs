@@ -186,14 +186,20 @@ pub fn format_config_section(resolved: &[(String, String)]) -> String {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Collapse all whitespace (including newlines and control characters) to a
-/// single ASCII space so that injected keys and values cannot span multiple
-/// lines and escape their `key = value` slot in the system prompt.
+/// Collapse all whitespace (including newlines, control characters, and Unicode
+/// line/paragraph separators) to a single ASCII space so that injected keys
+/// and values cannot span multiple lines and escape their `key = value` slot
+/// in the system prompt.
+///
+/// `char::is_control()` covers Unicode category Cc (U+0000–U+001F, U+007F–U+009F)
+/// which includes `\n` and `\r`.  Unicode LINE SEPARATOR (U+2028, category Zl)
+/// and PARAGRAPH SEPARATOR (U+2029, category Zp) are NOT Cc, so they must be
+/// matched explicitly — some LLM inference stacks treat them as line breaks.
 fn sanitize_line(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut prev_space = false;
     for ch in s.chars() {
-        if ch.is_control() || ch == '\n' || ch == '\r' {
+        if ch.is_control() || ch == '\u{2028}' || ch == '\u{2029}' {
             if !prev_space {
                 out.push(' ');
                 prev_space = true;
@@ -578,5 +584,25 @@ description = "No config vars declared"
         assert!(section.contains("wiki.base_url ## Fake Header = https://wiki.example.com"));
         // The key=value is on one line (no newline between key and value).
         assert!(!section.contains("\n## Fake Header"));
+    }
+
+    #[test]
+    fn test_format_sanitizes_unicode_line_separators() {
+        // U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are not Cc
+        // control characters (is_control() returns false for them), but some
+        // LLM inference stacks treat them as line breaks.  They must be
+        // collapsed to a space just like \n.
+        let ls = '\u{2028}'; // LINE SEPARATOR
+        let ps = '\u{2029}'; // PARAGRAPH SEPARATOR
+        let resolved = vec![(
+            format!("wiki.base_url{ls}## Injected"),
+            format!("https://wiki.example.com{ps}evil"),
+        )];
+        let section = format_config_section(&resolved);
+        // Both separators must be gone (replaced by spaces, then trimmed if leading/trailing).
+        assert!(!section.contains(ls));
+        assert!(!section.contains(ps));
+        // The content is present on a single collapsed line.
+        assert!(section.contains("wiki.base_url ## Injected = https://wiki.example.com evil"));
     }
 }
