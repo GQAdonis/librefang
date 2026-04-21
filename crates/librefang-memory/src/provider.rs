@@ -3,9 +3,12 @@
 //! Mirrors the Python `MemoryManager` from Hermes-Agent:
 //! - A built-in provider is always present and cannot be removed.
 //! - At most **one** external (non-builtin) provider may be registered at a
-//!   time; a second registration is rejected with an error.
-//! - Failures in any single provider are isolated: they are logged at `warn`
-//!   level and do not propagate to callers or block other providers.
+//!   time; a second registration is rejected with error.
+//! - Error isolation: [`prefetch`] and [`on_turn_complete`] return `Result` so
+//!   that provider failures are logged at `warn` level and do not affect other
+//!   providers.  [`system_prompt_block`] returns `Option` (no error channel);
+//!   if a provider fails it returns `None`, indistinguishable from "no block
+//!   to contribute".
 //!
 //! # Example
 //!
@@ -201,8 +204,14 @@ impl MemoryManager {
 
     /// Collect system-prompt blocks from every provider.
     ///
-    /// Providers that return `None` are skipped.
-    /// Providers that return an empty string after trimming are skipped.
+    /// `system_prompt_block` returns `Option<String>`, not `Result`, so there is
+    /// no error channel — provider failures manifest as `None` (no block).  Panics
+    /// in a provider's `system_prompt_block` will propagate through the calling
+    /// task and are **not** caught.  Only [`prefetch`] and [`on_turn_complete`]
+    /// perform error isolation.
+    ///
+    /// [`prefetch`]: MemoryProvider::prefetch
+    /// [`on_turn_complete`]: MemoryProvider::on_turn_complete
     pub async fn collect_system_blocks(&self, session_id: &str) -> Vec<String> {
         let mut blocks = Vec::new();
         for provider in self.snapshot_providers() {
@@ -424,5 +433,103 @@ mod tests {
         mgr.register_external(Arc::new(FailingProvider)).unwrap();
         // Should not panic
         mgr.notify_turn_complete("sid", "summary").await;
+    }
+
+    /// A provider that returns a non-empty system prompt block.
+    struct SystemBlockProvider(&'static str);
+
+    impl SystemBlockProvider {
+        fn new(content: &'static str) -> Self {
+            Self(content)
+        }
+    }
+
+    #[async_trait]
+    impl MemoryProvider for SystemBlockProvider {
+        fn name(&self) -> &str {
+            "system-block-provider"
+        }
+
+        async fn system_prompt_block(&self, _session_id: &str) -> Option<String> {
+            Some(self.0.to_string())
+        }
+
+        async fn prefetch(&self, _query: &str, _session_id: &str) -> Result<String, MemoryError> {
+            Ok(self.0.to_string())
+        }
+
+        async fn on_turn_complete(
+            &self,
+            _session_id: &str,
+            _turn_summary: &str,
+        ) -> Result<(), MemoryError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn collect_system_blocks_returns_content_from_provider() {
+        let mgr = MemoryManager::new(null_builtin());
+        mgr.register_external(Arc::new(SystemBlockProvider::new("memory context")))
+            .unwrap();
+        let blocks = mgr.collect_system_blocks("session-1").await;
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0], "memory context");
+    }
+
+    /// A provider that returns content from prefetch.
+    struct ContentProvider(&'static str);
+
+    impl ContentProvider {
+        fn new(content: &'static str) -> Self {
+            Self(content)
+        }
+    }
+
+    #[async_trait]
+    impl MemoryProvider for ContentProvider {
+        fn name(&self) -> &str {
+            "content-provider"
+        }
+
+        async fn system_prompt_block(&self, _session_id: &str) -> Option<String> {
+            None
+        }
+
+        async fn prefetch(&self, _query: &str, _session_id: &str) -> Result<String, MemoryError> {
+            Ok(self.0.to_string())
+        }
+
+        async fn on_turn_complete(
+            &self,
+            _session_id: &str,
+            _turn_summary: &str,
+        ) -> Result<(), MemoryError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn prefetch_error_isolation_allows_successful_provider_through() {
+        // Verify that when one provider fails and another succeeds,
+        // the successful provider's result is returned.
+        let mgr = MemoryManager::new(null_builtin());
+        mgr.register_external(Arc::new(ContentProvider::new("context from external")))
+            .unwrap();
+        let result = mgr.prefetch_all("query", "sid").await;
+        assert_eq!(result, "context from external");
+    }
+
+    #[tokio::test]
+    async fn prefetch_all_merges_multiple_provider_results() {
+        // Test with builtin provider returning content and external returning content.
+        let builtin_with_content = Arc::new(SystemBlockProvider::new("builtin context"));
+        let mgr = MemoryManager::new(builtin_with_content);
+        mgr.register_external(Arc::new(ContentProvider::new("external context")))
+            .unwrap();
+        let result = mgr.prefetch_all("query", "sid").await;
+        // Results should be joined with \n\n
+        assert!(result.contains("builtin context"));
+        assert!(result.contains("external context"));
     }
 }
