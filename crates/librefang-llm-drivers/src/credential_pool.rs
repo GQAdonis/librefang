@@ -155,7 +155,10 @@ impl CredentialPool {
     /// Returns a **cloned** copy of the chosen API key, or `None` when all
     /// credentials are currently exhausted.
     pub fn acquire(&self) -> Option<String> {
-        let creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         match self.strategy {
             PoolStrategy::FillFirst => Self::acquire_fill_first(&creds),
             PoolStrategy::RoundRobin => {
@@ -170,9 +173,7 @@ impl CredentialPool {
                     if available.len() > 1 {
                         let pos_in_available = available
                             .iter()
-                            .position(|&i| {
-                                result.as_deref() == Some(creds[i].api_key.as_str())
-                            })
+                            .position(|&i| result.as_deref() == Some(creds[i].api_key.as_str()))
                             .unwrap_or(0);
                         // Store the index of the *next* available slot (wrapping).
                         let next_pos = (pos_in_available + 1) % available.len();
@@ -191,7 +192,10 @@ impl CredentialPool {
     /// exhausted (402).  The credential is placed in cooldown for
     /// `exhausted_ttl`.
     pub fn mark_exhausted(&self, api_key: &str) {
-        let mut creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let mut creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         let until = Instant::now() + self.exhausted_ttl;
         if let Some(c) = creds.iter_mut().find(|c| c.api_key == api_key) {
             c.exhausted_until = Some(until);
@@ -202,27 +206,33 @@ impl CredentialPool {
     /// credential's `request_count` and clears any leftover exhaustion marker
     /// (e.g. if a provider recovered before the TTL expired).
     pub fn mark_success(&self, api_key: &str) {
-        let mut creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let mut creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         if let Some(c) = creds.iter_mut().find(|c| c.api_key == api_key) {
             c.request_count = c.request_count.saturating_add(1);
-            // Clear any stale exhaustion — the key is working again.
-            if let Some(until) = c.exhausted_until {
-                if Instant::now() >= until {
-                    c.exhausted_until = None;
-                }
-            }
+            // Always clear the exhaustion marker on success — the key is working
+            // again regardless of whether the cooldown TTL has elapsed.
+            c.exhausted_until = None;
         }
     }
 
     /// Number of currently available (non-exhausted) credentials.
     pub fn available_count(&self) -> usize {
-        let creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         creds.iter().filter(|c| c.is_available()).count()
     }
 
     /// Total number of credentials in the pool (available + exhausted).
     pub fn total_count(&self) -> usize {
-        let creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         creds.len()
     }
 
@@ -230,7 +240,10 @@ impl CredentialPool {
     /// The returned list is sorted by priority descending, matching the
     /// internal ordering.
     pub fn snapshot(&self) -> Vec<PooledCredential> {
-        let creds = self.credentials.lock().expect("credential pool lock poisoned");
+        let creds = self
+            .credentials
+            .lock()
+            .expect("credential pool lock poisoned");
         creds.clone()
     }
 
@@ -269,8 +282,7 @@ impl CredentialPool {
     /// Random: pick a random available entry using a simple LCG so we avoid
     /// pulling in `rand` crate.
     fn acquire_random(creds: &[PooledCredential]) -> Option<String> {
-        let available: Vec<&PooledCredential> =
-            creds.iter().filter(|c| c.is_available()).collect();
+        let available: Vec<&PooledCredential> = creds.iter().filter(|c| c.is_available()).collect();
         if available.is_empty() {
             return None;
         }
@@ -314,10 +326,7 @@ mod tests {
     use std::collections::HashSet;
 
     fn make_pool(keys: &[(&str, u32)], strategy: PoolStrategy) -> CredentialPool {
-        let keys = keys
-            .iter()
-            .map(|(k, p)| (k.to_string(), *p))
-            .collect();
+        let keys = keys.iter().map(|(k, p)| (k.to_string(), *p)).collect();
         CredentialPool::new(keys, strategy)
     }
 
@@ -335,10 +344,7 @@ mod tests {
 
     #[test]
     fn fill_first_falls_back_when_exhausted() {
-        let pool = make_pool(
-            &[("key-a", 10), ("key-b", 5)],
-            PoolStrategy::FillFirst,
-        );
+        let pool = make_pool(&[("key-a", 10), ("key-b", 5)], PoolStrategy::FillFirst);
         pool.mark_exhausted("key-a");
         assert_eq!(pool.acquire().as_deref(), Some("key-b"));
     }
@@ -369,10 +375,7 @@ mod tests {
 
     #[test]
     fn round_robin_skips_exhausted() {
-        let pool = make_pool(
-            &[("key-a", 1), ("key-b", 1)],
-            PoolStrategy::RoundRobin,
-        );
+        let pool = make_pool(&[("key-a", 1), ("key-b", 1)], PoolStrategy::RoundRobin);
         pool.mark_exhausted("key-a");
         for _ in 0..4 {
             assert_eq!(pool.acquire().as_deref(), Some("key-b"));
@@ -383,10 +386,7 @@ mod tests {
 
     #[test]
     fn least_used_picks_freshest_key() {
-        let pool = make_pool(
-            &[("key-a", 1), ("key-b", 1)],
-            PoolStrategy::LeastUsed,
-        );
+        let pool = make_pool(&[("key-a", 1), ("key-b", 1)], PoolStrategy::LeastUsed);
         pool.mark_success("key-a");
         pool.mark_success("key-a");
         // key-b has 0 requests, key-a has 2 — pool should choose key-b.
@@ -417,6 +417,25 @@ mod tests {
         pool.mark_success("key-a");
         let snap = pool.snapshot();
         assert_eq!(snap[0].request_count, 2);
+    }
+
+    #[test]
+    fn mark_success_clears_active_exhaustion() {
+        // A credential marked exhausted with a long TTL should become available
+        // immediately after mark_success (early-recovery path).
+        let pool = CredentialPool::with_exhausted_ttl(
+            vec![("key-a".to_string(), 1)],
+            PoolStrategy::FillFirst,
+            Duration::from_secs(3600),
+        );
+        pool.mark_exhausted("key-a");
+        assert!(pool.acquire().is_none(), "should be exhausted");
+        pool.mark_success("key-a");
+        assert_eq!(
+            pool.acquire().as_deref(),
+            Some("key-a"),
+            "should be available after mark_success clears exhaustion"
+        );
     }
 
     #[test]
@@ -477,10 +496,7 @@ mod tests {
 
     #[test]
     fn new_arc_pool_works() {
-        let pool = new_arc_pool(
-            vec![("key-a".to_string(), 1)],
-            PoolStrategy::RoundRobin,
-        );
+        let pool = new_arc_pool(vec![("key-a".to_string(), 1)], PoolStrategy::RoundRobin);
         assert_eq!(pool.acquire().as_deref(), Some("key-a"));
     }
 }
