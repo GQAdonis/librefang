@@ -6028,13 +6028,19 @@ system_prompt = "You are a helpful assistant."
         // marker is a system-level signal for the kernel; the LLM should never
         // see it in the conversation. Stripping must happen before link-context
         // expansion so the expanded string is also clean.
-        let message_for_llm = message.replace("[SILENT]", "").trim().to_string();
-        let message_for_llm = if message_for_llm.is_empty() {
-            // Edge case: the entire message was just the marker. Fall back to
-            // the original (trimmed) so the LLM receives something non-empty.
-            message.trim().to_string()
+        // Only active for internal cron calls (is_internal_cron flag) — external
+        // callers cannot trigger this path, so legitimate user messages containing
+        // "[SILENT]" (e.g. "add a `[SILENT]` comment") are preserved.
+        let is_internal_cron = sender_context.is_some_and(|ctx| ctx.is_internal_cron);
+        let message_for_llm = if is_internal_cron && message.contains("[SILENT]") {
+            let stripped = message.replace("[SILENT]", "").trim().to_string();
+            if stripped.is_empty() {
+                message.trim().to_string()
+            } else {
+                stripped
+            }
         } else {
-            message_for_llm
+            message.trim().to_string()
         };
 
         // Build link context from user message (auto-extract URLs for the agent)
@@ -6140,16 +6146,17 @@ system_prompt = "You are a helpful assistant."
         // `message` parameter (before any link-context additions) so the
         // marker placement is unambiguous to the job author.
         //
-        // Gated to cron callers only (sender_context.channel == "cron") so
+        // Gated to internal cron callers only (is_internal_cron flag) so
         // that a regular user sending "[SILENT]" in chat does not accidentally
-        // suppress their own session history.
+        // suppress their own session history. The channel field cannot be
+        // trusted because external callers can set it via the API.
         //
         // Session write: we still save the session — we just remove the
         // assistant turn from it first so the next cron fire does not see the
         // suppressed response in its context window.
         // Canonical append: skipped entirely for silent cron turns.
-        let is_cron_call = sender_context.map_or(false, |ctx| ctx.channel == "cron");
-        let skip_canonical_append = if is_cron_call && message.contains("[SILENT]") {
+        let is_internal_cron = sender_context.is_some_and(|ctx| ctx.is_internal_cron);
+        let skip_canonical_append = if is_internal_cron && message.contains("[SILENT]") {
             // Remove the last assistant message from the in-memory session so
             // it is not included in the re-saved version.
             let removed = session
@@ -9360,6 +9367,7 @@ system_prompt = "You are a helpful assistant."
                                         was_mentioned: false,
                                         thread_id: None,
                                         account_id: None,
+                                        is_internal_cron: true,
                                         ..Default::default()
                                     };
                                     (Some(cron_sender), None)

@@ -1720,6 +1720,7 @@ fn build_sender_context(
         // Channel bridges land in per-channel sessions (the default); only
         // the dashboard WS opts into canonical storage.
         use_canonical_session: false,
+        is_internal_cron: false,
     }
 }
 

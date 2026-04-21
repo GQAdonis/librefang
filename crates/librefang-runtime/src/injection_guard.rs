@@ -1,4 +1,4 @@
-//! Prompt injection guard for incoming user messages.
+//! Prompt injection detection for incoming user messages.
 //!
 //! Scans user-supplied text for known prompt injection patterns before the
 //! message reaches the LLM. When a threat is detected the caller receives an
@@ -6,16 +6,23 @@
 //! — it is still delivered, but the agent loop prepends a safety notice so the
 //! LLM is explicitly aware the message may be adversarial.
 //!
+//! ## Detection capabilities
+//!
 //! Detection covers two categories:
 //!
-//! 1. **Text patterns** — case-insensitive substring / regex-style checks for
-//!    well-known injection phrases (`ignore previous instructions`, `you are now`,
-//!    `system:`, etc.).
+//! 1. **Text patterns** — case-insensitive substring checks for well-known
+//!    injection phrases (`ignore previous instructions`, `you are now`,
+//!    `system:` (as a standalone token), etc.).
 //! 2. **Invisible unicode** — zero-width and directional override characters that
 //!    are invisible to human reviewers but can alter LLM behaviour.
 //!
-//! No external `regex` crate is required: all checks use `str::contains` with
-//! `.to_ascii_lowercase()` for case folding.
+//! ## Security note
+//!
+//! This is a **best-effort telemetry system**, not a security control. Substring
+//! matching with ASCII case-folding is bypassable via whitespace variants, typos,
+//! non-ASCII homoglyphs (Cyrillic/mixed case), URL encoding, and many other
+//! transformations. Do not rely on this guard to block adversarial input; treat
+//! detections as informational signals only.
 
 /// A set of invisible / zero-width unicode code points that are meaningless in
 /// normal human text but are frequently used to smuggle hidden instructions.
@@ -62,7 +69,6 @@ const INJECTION_PATTERNS: &[(&str, &str)] = &[
     ),
     ("do not tell the user", "deception_hide"),
     ("system prompt override", "sys_prompt_override"),
-    ("translate into", "translate_execute"),
 ];
 
 /// Describes a detected injection threat.
@@ -96,6 +102,42 @@ pub fn scan_message(text: &str) -> Option<InjectionWarning> {
     // --- text pattern check ---
     for &(pattern, id) in INJECTION_PATTERNS {
         if lower.contains(pattern) {
+            // Suppress false positive: "translate into" (e.g. natural language
+            // "Can you translate this into French?") contains "into" but is not
+            // an injection. Match only when NOT preceded by a word character.
+            // Skip for patterns that don't contain "into" to avoid unnecessary work.
+            let passes_false_positive_filter =
+                if pattern.contains("into ") || pattern.ends_with(" into") {
+                    // Find the "into" position within the pattern
+                    let intro_pos = pattern
+                        .find("into ")
+                        .map(|p| p + 5)
+                        .or_else(|| pattern.rfind(" into").map(|p| p + 5));
+                    if let Some(intro_pos) = intro_pos {
+                        // Check the position in the lower string
+                        if let Some(pos) = lower.find(pattern) {
+                            let abs_pos = pos + intro_pos;
+                            // Ensure it's not preceded by an alphabetic word character
+                            if abs_pos > 0 {
+                                let prev_char = lower.chars().nth(abs_pos - 1);
+                                if let Some(c) = prev_char {
+                                    if c.is_alphabetic() {
+                                        // Preceded by a word character — likely "translate into X"
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    true
+                } else {
+                    true
+                };
+
+            if !passes_false_positive_filter {
+                continue;
+            }
+
             // Deduplicate: the same id may match via multiple surface forms.
             let id_str = id.to_string();
             if !threat_ids.contains(&id_str) {
@@ -184,7 +226,7 @@ mod tests {
 
     #[test]
     fn detects_rtl_override() {
-        let msg = format!("Hello\u{202E}World");
+        let msg = "Hello\u{202E}World".to_string();
         let w = scan_message(&msg);
         assert!(w.is_some());
     }

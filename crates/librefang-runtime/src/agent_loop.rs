@@ -2500,7 +2500,7 @@ pub async fn run_agent_loop(
     // (see push_filtered_user_message) so display names that look like emails/phones do not
     // get redacted into the stored content.
     let sender_prefix = build_group_sender_prefix(manifest, sender_user_id.as_deref());
-    let effective_user_message = match &sender_prefix {
+    let _effective_user_message = match &sender_prefix {
         Some(p) => format!("{p}{user_message}"),
         None => user_message.to_string(),
     };
@@ -2509,8 +2509,8 @@ pub async fn run_agent_loop(
     // it reaches the LLM. Threats are logged and a warning prefix is prepended
     // to the message — the message itself is never silently dropped so users
     // are not confused by missing replies.
-    let injection_prefix_storage;
-    let (guarded_user_message, guarded_user_content_blocks) =
+    let guarded_user_message: String;
+    let guarded_user_content_blocks =
         if let Some(warning) = crate::injection_guard::scan_message(user_message) {
             warn!(
                 event = "injection_guard",
@@ -2520,9 +2520,9 @@ pub async fn run_agent_loop(
                 "Prompt injection indicators detected in user message"
             );
             let prefix = crate::injection_guard::warning_prefix(&warning);
-            injection_prefix_storage = format!("{prefix}{user_message}");
+            guarded_user_message = format!("{prefix}{user_message}");
             // For multimodal messages prepend the warning as an extra text block.
-            let prefixed_blocks = user_content_blocks.map(|blocks| {
+            user_content_blocks.map(|blocks| {
                 let mut out = blocks;
                 out.insert(
                     0,
@@ -2532,11 +2532,10 @@ pub async fn run_agent_loop(
                     },
                 );
                 out
-            });
-            (injection_prefix_storage.as_str(), prefixed_blocks)
+            })
         } else {
-            injection_prefix_storage = user_message.to_string();
-            (user_message, user_content_blocks)
+            guarded_user_message = user_message.to_string();
+            user_content_blocks
         };
 
     // Add the user message to session history.
@@ -2544,7 +2543,7 @@ pub async fn run_agent_loop(
     // use multimodal message format so the LLM receives the image for vision.
     push_filtered_user_message(
         session,
-        guarded_user_message,
+        &guarded_user_message,
         guarded_user_content_blocks,
         &pii_filter,
         &privacy_config,
@@ -2554,12 +2553,7 @@ pub async fn run_agent_loop(
     let PreparedMessages {
         mut messages,
         new_messages_start: prepared_new_messages_start,
-    } = prepare_llm_messages(
-        manifest,
-        session,
-        &effective_user_message,
-        memory_context_msg,
-    );
+    } = prepare_llm_messages(manifest, session, &guarded_user_message, memory_context_msg);
 
     // Web search augmentation: generate search queries via LLM, search the web,
     // and inject results into context for models without tool/function calling.
@@ -3527,7 +3521,7 @@ pub async fn run_agent_loop_streaming(
     // (see push_filtered_user_message) so display names that look like emails/phones do not
     // get redacted into the stored content.
     let sender_prefix = build_group_sender_prefix(manifest, sender_user_id.as_deref());
-    let effective_user_message = match &sender_prefix {
+    let _effective_user_message = match &sender_prefix {
         Some(p) => format!("{p}{user_message}"),
         None => user_message.to_string(),
     };
@@ -3536,8 +3530,8 @@ pub async fn run_agent_loop_streaming(
     // it reaches the LLM. Threats are logged and a warning prefix is prepended
     // to the message — the message itself is never silently dropped so users
     // are not confused by missing replies.
-    let injection_prefix_storage;
-    let (guarded_user_message, guarded_user_content_blocks) =
+    let guarded_user_message: String;
+    let guarded_user_content_blocks =
         if let Some(warning) = crate::injection_guard::scan_message(user_message) {
             warn!(
                 event = "injection_guard",
@@ -3547,9 +3541,9 @@ pub async fn run_agent_loop_streaming(
                 "Prompt injection indicators detected in user message"
             );
             let prefix = crate::injection_guard::warning_prefix(&warning);
-            injection_prefix_storage = format!("{prefix}{user_message}");
+            guarded_user_message = format!("{prefix}{user_message}");
             // For multimodal messages prepend the warning as an extra text block.
-            let prefixed_blocks = user_content_blocks.map(|blocks| {
+            user_content_blocks.map(|blocks| {
                 let mut out = blocks;
                 out.insert(
                     0,
@@ -3559,11 +3553,10 @@ pub async fn run_agent_loop_streaming(
                     },
                 );
                 out
-            });
-            (injection_prefix_storage.as_str(), prefixed_blocks)
+            })
         } else {
-            injection_prefix_storage = user_message.to_string();
-            (user_message, user_content_blocks)
+            guarded_user_message = user_message.to_string();
+            user_content_blocks
         };
 
     // Add the user message to session history.
@@ -3571,7 +3564,7 @@ pub async fn run_agent_loop_streaming(
     // use multimodal message format so the LLM receives the image for vision.
     push_filtered_user_message(
         session,
-        guarded_user_message,
+        &guarded_user_message,
         guarded_user_content_blocks,
         &pii_filter,
         &privacy_config,
@@ -3581,12 +3574,7 @@ pub async fn run_agent_loop_streaming(
     let PreparedMessages {
         mut messages,
         new_messages_start: prepared_new_messages_start,
-    } = prepare_llm_messages(
-        manifest,
-        session,
-        &effective_user_message,
-        memory_context_msg,
-    );
+    } = prepare_llm_messages(manifest, session, &guarded_user_message, memory_context_msg);
 
     // Web search augmentation: generate search queries via LLM, search the web,
     // and inject results into context for models without tool/function calling.

@@ -327,6 +327,13 @@ pub struct SenderContext {
     /// `switch_agent_session` actually affect what the user sees.
     #[serde(default)]
     pub use_canonical_session: bool,
+    /// Marks invocations that originate from the internal cron dispatcher.
+    /// Unlike `channel == "cron"` (which can be set by external callers),
+    /// this flag is set exclusively by the kernel's own cron job runner and
+    /// cannot be spoofed through the public API. Used to gate sensitive
+    /// features like `[SILENT]` marker processing.
+    #[serde(default)]
+    pub is_internal_cron: bool,
 }
 
 /// Reference to a participant in a group chat.
