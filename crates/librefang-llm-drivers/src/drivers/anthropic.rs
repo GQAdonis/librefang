@@ -343,12 +343,9 @@ impl LlmDriver for AnthropicDriver {
                         .get("retry-after")
                         .and_then(|v| v.to_str().ok())
                         .and_then(|s| s.parse::<u64>().ok())
-                        .map(std::time::Duration::from_secs);
-                    let delay = standard_retry_delay(attempt + 1);
-                    let delay = match retry_after {
-                        Some(ra) if ra > delay => ra.min(std::time::Duration::from_secs(300)),
-                        _ => delay,
-                    };
+                        .map(std::time::Duration::from_secs)
+                        .unwrap_or(std::time::Duration::ZERO);
+                    let delay = standard_retry_delay(attempt + 1, retry_after);
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),
@@ -427,12 +424,9 @@ impl LlmDriver for AnthropicDriver {
                         .get("retry-after")
                         .and_then(|v| v.to_str().ok())
                         .and_then(|s| s.parse::<u64>().ok())
-                        .map(std::time::Duration::from_secs);
-                    let delay = standard_retry_delay(attempt + 1);
-                    let delay = match retry_after {
-                        Some(ra) if ra > delay => ra.min(std::time::Duration::from_secs(300)),
-                        _ => delay,
-                    };
+                        .map(std::time::Duration::from_secs)
+                        .unwrap_or(std::time::Duration::ZERO);
+                    let delay = standard_retry_delay(attempt + 1, retry_after);
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),
