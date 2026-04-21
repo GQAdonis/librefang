@@ -65,7 +65,20 @@ pub static DANGEROUS_PATTERNS: &[DangerousPattern] = &[
         "recursive world/other-writable (long flag)",
         r"\bchmod\s+--recursive\b.*(777|666|o\+[rwx]*w|a\+[rwx]*w)"
     ),
-    dp!("recursive chown to root", r"\bchown\s+(-[^\s]*)?r\s+root"),
+    // Match chown with a flag that contains 'r' (case-insensitive, already lowercased)
+    // anywhere in the flag cluster, followed eventually by 'root' as the owner argument.
+    // Old pattern `\bchown\s+(-[^\s]*)?r\s+root` had two bugs:
+    //   1. FALSE POSITIVE: matched `chown r root file` (user named 'r', file named 'root')
+    //      because (-[^\s]*)? is optional and the literal 'r' in the pattern matched the
+    //      username positional argument.
+    //   2. FALSE NEGATIVE: missed `chown -Rh root /path` and `chown -Rn root /path`
+    //      because when R is not the last character in the flag cluster the regex
+    //      could not satisfy both (-[^\s]*)? and the following literal 'r'.
+    // New pattern requires a dash-prefixed flag cluster containing 'r' (the recursive flag).
+    dp!(
+        "recursive chown to root",
+        r"\bchown\b.*-[^\s]*r[^\s]*\s+\S*root"
+    ),
     dp!(
         "recursive chown to root (long flag)",
         r"\bchown\s+--recursive\b.*root"
@@ -154,9 +167,13 @@ pub static DANGEROUS_PATTERNS: &[DangerousPattern] = &[
         "git force push (rewrites remote history)",
         r"\bgit\s+push\b.*--force\b"
     ),
+    // Require -f to be a standalone flag (preceded by whitespace or at argument start)
+    // so that branch/remote names that happen to end in "-f" (e.g. "hotfix-f") are not
+    // flagged as force-push attempts.  The old `.*-f\b` pattern matched any occurrence of
+    // "-f" at a word boundary, including embedded in argument values.
     dp!(
         "git force push short flag (rewrites remote history)",
-        r"\bgit\s+push\b.*-f\b"
+        r"\bgit\s+push\b.*\s-f(\s|$)"
     ),
     dp!(
         "git clean with force (deletes untracked files)",
@@ -358,6 +375,15 @@ mod tests {
     fn git_force_push() {
         assert!(dangerous("git push --force"));
         assert!(dangerous("git push origin main -f"));
+        assert!(dangerous("git push -f"));
+    }
+
+    #[test]
+    fn git_force_push_false_positive_branch_name() {
+        // Branch/remote names that contain "-f" as a suffix must not trigger the
+        // short-flag pattern; only a standalone -f argument should.
+        assert!(safe("git push origin hotfix-f"));
+        assert!(safe("git push origin feature/off-by-one-f"));
     }
 
     #[test]
@@ -421,6 +447,23 @@ mod tests {
     #[test]
     fn kill_all() {
         assert!(dangerous("kill -9 -1"));
+    }
+
+    #[test]
+    fn chown_recursive_to_root_variants() {
+        // Core cases
+        assert!(dangerous("chown -R root /tmp"));
+        assert!(dangerous("chown -R root:users /tmp"));
+        // Combined flags: R mixed with other flags in any order
+        assert!(dangerous("chown -Rh root /tmp")); // was false-negative
+        assert!(dangerous("chown -hR root /tmp"));
+        assert!(dangerous("chown -Rn root /tmp")); // was false-negative
+        assert!(dangerous("chown -nR root /tmp"));
+        // The long-flag variant is caught by the separate pattern
+        assert!(dangerous("chown --recursive root /var"));
+        // Must NOT flag a plain username of 'r' being given ownership of a file
+        assert!(safe("chown r somefile")); // was false-positive: username 'r'
+        assert!(safe("chown -R developer /home/developer")); // recursive, non-root target
     }
 
     #[test]
