@@ -4133,35 +4133,85 @@ pub fn build_context_engine(
         "summary" => {
             // Threshold-gated LLM summarisation — fires when prompt tokens
             // cross ~80 % of the model's context window.
+            //
+            // If hooks are also configured, wire them alongside the summary
+            // engine via a StackedContextEngine so they remain active.
             if toml_config.plugin.is_some() {
                 tracing::warn!(
                     "context engine config: `engine = \"summary\"` takes precedence, \
                      `plugin` config is ignored"
                 );
             }
-            if toml_config.hooks.ingest.is_some() || toml_config.hooks.after_turn.is_some() {
-                tracing::warn!(
-                    "context engine config: `engine = \"summary\"` takes precedence, \
-                     hook config is ignored"
+            let summary_engine: Box<dyn ContextEngine> =
+                Box::new(SummaryContextEngine::new(inner, 0.80));
+            let hooks = &toml_config.hooks;
+            let has_hooks = hooks.ingest.is_some()
+                || hooks.after_turn.is_some()
+                || hooks.bootstrap.is_some()
+                || hooks.assemble.is_some()
+                || hooks.compact.is_some()
+                || hooks.prepare_subagent.is_some()
+                || hooks.merge_subagent.is_some();
+            if has_hooks {
+                // Build a fresh DefaultContextEngine for the hook layer so the
+                // SummaryContextEngine continues to own the original `inner`.
+                let hook_inner = DefaultContextEngine::new(
+                    runtime_config.clone(),
+                    memory.clone(),
+                    embedding_driver.clone(),
                 );
+                let vault_env = resolve_vault_env_vars(hooks, vault_lookup);
+                let mut hook_engine = ScriptableContextEngine::new(hook_inner, hooks);
+                if !vault_env.is_empty() {
+                    hook_engine = hook_engine.with_plugin_env(vault_env);
+                }
+                return Box::new(StackedContextEngine::new(vec![
+                    summary_engine,
+                    Box::new(hook_engine),
+                ]));
             }
-            return Box::new(SummaryContextEngine::new(inner, 0.80));
+            return summary_engine;
         }
         "no_compact" => {
             // Disables automatic compaction while still wiring all other hooks.
+            //
+            // If hooks are also configured, wire them alongside the no_compact
+            // engine via a StackedContextEngine so they remain active.
             if toml_config.plugin.is_some() {
                 tracing::warn!(
                     "context engine config: `engine = \"no_compact\"` takes precedence, \
                      `plugin` config is ignored"
                 );
             }
-            if toml_config.hooks.ingest.is_some() || toml_config.hooks.after_turn.is_some() {
-                tracing::warn!(
-                    "context engine config: `engine = \"no_compact\"` takes precedence, \
-                     hook config is ignored"
+            let no_compact_engine: Box<dyn ContextEngine> =
+                Box::new(NoCompactContextEngine::new(inner));
+            let hooks = &toml_config.hooks;
+            let has_hooks = hooks.ingest.is_some()
+                || hooks.after_turn.is_some()
+                || hooks.bootstrap.is_some()
+                || hooks.assemble.is_some()
+                || hooks.compact.is_some()
+                || hooks.prepare_subagent.is_some()
+                || hooks.merge_subagent.is_some();
+            if has_hooks {
+                // Build a fresh DefaultContextEngine for the hook layer so the
+                // NoCompactContextEngine continues to own the original `inner`.
+                let hook_inner = DefaultContextEngine::new(
+                    runtime_config.clone(),
+                    memory.clone(),
+                    embedding_driver.clone(),
                 );
+                let vault_env = resolve_vault_env_vars(hooks, vault_lookup);
+                let mut hook_engine = ScriptableContextEngine::new(hook_inner, hooks);
+                if !vault_env.is_empty() {
+                    hook_engine = hook_engine.with_plugin_env(vault_env);
+                }
+                return Box::new(StackedContextEngine::new(vec![
+                    no_compact_engine,
+                    Box::new(hook_engine),
+                ]));
             }
-            return Box::new(NoCompactContextEngine::new(inner));
+            return no_compact_engine;
         }
         "default" => {
             // Plain default engine — no additional wrapping.

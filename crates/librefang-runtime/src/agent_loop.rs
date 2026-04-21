@@ -2577,7 +2577,14 @@ pub async fn run_agent_loop(
     let mut hallucination_retried = false;
     let mut action_nudge_retried = false;
     let mut consecutive_all_failed: u32 = 0;
-    let mut last_prompt_tokens: usize = 0;
+    // Seed with a pre-loop estimate so that should_compress fires on the very
+    // first iteration even for single-turn conversations.  Without this, the
+    // check is always `0 < threshold`, which is always false.
+    let mut last_prompt_tokens: usize = crate::compactor::estimate_token_count(
+        &messages,
+        Some(&system_prompt),
+        Some(available_tools),
+    );
 
     for iteration in 0..max_iterations {
         debug!(iteration, "Agent loop iteration");
@@ -2600,12 +2607,18 @@ pub async fn run_agent_loop(
                     iteration,
                     last_prompt_tokens, ctx_window, "Context engine requested compaction"
                 );
+                // Normalize the model ID before passing to the engine — raw
+                // manifest values may carry a provider prefix (e.g.
+                // "openrouter/google/gemini-2.5-flash") that drivers don't
+                // understand when used as a summarisation model.
+                let compact_model =
+                    strip_provider_prefix(&manifest.model.model, &manifest.model.provider);
                 match engine
                     .compact(
                         session.agent_id,
                         &messages,
                         driver.clone(),
-                        &manifest.model.model,
+                        &compact_model,
                         ctx_window,
                     )
                     .await
@@ -2716,7 +2729,19 @@ pub async fn run_agent_loop(
         // Snapshot prompt tokens for the next iteration's should_compress check.
         // This is the per-turn input cost, NOT a running sum — we deliberately
         // do NOT accumulate into last_prompt_tokens.
-        last_prompt_tokens = response.usage.input_tokens as usize;
+        //
+        // Some drivers (gemini_cli, codex_cli) return input_tokens = 0.  Fall
+        // back to a local estimate so should_compress is not permanently
+        // suppressed for those providers.
+        last_prompt_tokens = if response.usage.input_tokens > 0 {
+            response.usage.input_tokens as usize
+        } else {
+            crate::compactor::estimate_token_count(
+                &messages,
+                Some(&system_prompt),
+                Some(available_tools),
+            )
+        };
         accumulate_token_usage(&mut total_usage, &response.usage);
 
         // Strip image base64 from earlier messages (LLM already processed them)
@@ -3621,7 +3646,14 @@ pub async fn run_agent_loop_streaming(
     let mut hallucination_retried = false;
     let mut action_nudge_retried = false;
     let mut consecutive_all_failed: u32 = 0;
-    let mut last_prompt_tokens: usize = 0;
+    // Seed with a pre-loop estimate so that should_compress fires on the very
+    // first iteration even for single-turn conversations.  Without this, the
+    // check is always `0 < threshold`, which is always false.
+    let mut last_prompt_tokens: usize = crate::compactor::estimate_token_count(
+        &messages,
+        Some(&system_prompt),
+        Some(available_tools),
+    );
 
     for iteration in 0..max_iterations {
         debug!(iteration, "Streaming agent loop iteration");
@@ -3638,12 +3670,18 @@ pub async fn run_agent_loop_streaming(
                     ctx_window,
                     "Context engine requested compaction (streaming path)"
                 );
+                // Normalize the model ID before passing to the engine — raw
+                // manifest values may carry a provider prefix (e.g.
+                // "openrouter/google/gemini-2.5-flash") that drivers don't
+                // understand when used as a summarisation model.
+                let compact_model =
+                    strip_provider_prefix(&manifest.model.model, &manifest.model.provider);
                 match engine
                     .compact(
                         session.agent_id,
                         &messages,
                         driver.clone(),
-                        &manifest.model.model,
+                        &compact_model,
                         ctx_window,
                     )
                     .await
@@ -3814,7 +3852,18 @@ pub async fn run_agent_loop_streaming(
         };
 
         // Snapshot prompt tokens for the next iteration's should_compress check.
-        last_prompt_tokens = response.usage.input_tokens as usize;
+        // Some drivers (gemini_cli, codex_cli) return input_tokens = 0.  Fall
+        // back to a local estimate so should_compress is not permanently
+        // suppressed for those providers.
+        last_prompt_tokens = if response.usage.input_tokens > 0 {
+            response.usage.input_tokens as usize
+        } else {
+            crate::compactor::estimate_token_count(
+                &messages,
+                Some(&system_prompt),
+                Some(available_tools),
+            )
+        };
         accumulate_token_usage(&mut total_usage, &response.usage);
 
         // Strip image base64 from earlier messages (LLM already processed them)
