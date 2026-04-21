@@ -3164,6 +3164,7 @@ system_prompt = "You are a helpful assistant."
             onboarding_completed: false,
             onboarding_completed_at: None,
             is_hand,
+            ..Default::default()
         };
         self.registry
             .register(entry.clone())
