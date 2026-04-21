@@ -74,6 +74,40 @@ impl PooledCredential {
     }
 }
 
+// ── CredentialSnapshot ───────────────────────────────────────────────────────
+
+/// Redacted view of a [`PooledCredential`] safe for diagnostics and dashboards.
+///
+/// The raw API key is never exposed; only a hint showing the last four
+/// characters (prefixed by `****`) is included.
+#[derive(Debug, Clone)]
+pub struct CredentialSnapshot {
+    /// Redacted key hint, e.g. `"****abcd"`.
+    pub key_hint: String,
+    /// Higher value = higher priority.
+    pub priority: u32,
+    /// Number of successful requests dispatched with this credential.
+    pub request_count: u64,
+    /// Whether this credential is currently exhausted (in cooldown).
+    pub is_exhausted: bool,
+}
+
+impl CredentialSnapshot {
+    fn from_credential(c: &PooledCredential) -> Self {
+        let hint = if c.api_key.len() >= 4 {
+            format!("****{}", &c.api_key[c.api_key.len() - 4..])
+        } else {
+            "****".to_string()
+        };
+        Self {
+            key_hint: hint,
+            priority: c.priority,
+            request_count: c.request_count,
+            is_exhausted: !c.is_available(),
+        }
+    }
+}
+
 // ── CredentialPool ────────────────────────────────────────────────────────────
 
 /// Thread-safe pool of API keys for a single provider.
@@ -105,11 +139,6 @@ pub struct CredentialPool {
     /// How long an exhausted credential stays in cooldown.
     exhausted_ttl: Duration,
 }
-
-// SAFETY: CredentialPool uses Mutex for all mutable state and AtomicUsize for
-// the round-robin index — both are Send+Sync by design.
-unsafe impl Send for CredentialPool {}
-unsafe impl Sync for CredentialPool {}
 
 impl CredentialPool {
     /// Create a new pool from a list of `(api_key, priority)` pairs.
@@ -231,15 +260,21 @@ impl CredentialPool {
         creds.len()
     }
 
-    /// Returns a snapshot of all credentials (for diagnostics / dashboards).
-    /// The returned list is sorted by priority descending, matching the
-    /// internal ordering.
-    pub fn snapshot(&self) -> Vec<PooledCredential> {
+    /// Returns a redacted snapshot of all credentials (for diagnostics / dashboards).
+    ///
+    /// API keys are never included in the snapshot; each entry contains only a
+    /// `key_hint` (last 4 chars prefixed by `****`), priority, request count,
+    /// and exhaustion status.  The list is sorted by priority descending,
+    /// matching the internal ordering.
+    pub fn snapshot(&self) -> Vec<CredentialSnapshot> {
         let creds = self
             .credentials
             .lock()
             .expect("credential pool lock poisoned");
-        creds.clone()
+        creds
+            .iter()
+            .map(CredentialSnapshot::from_credential)
+            .collect()
     }
 
     // ── Strategy helpers (operate on a locked slice) ─────────────────────────
