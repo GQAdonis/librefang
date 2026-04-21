@@ -13,16 +13,24 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
+# ── lld linker (macOS) — similar speedup to mold ─────────────────────────────
+# Requires: brew install llvm
+#           Add to shell: export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+# CI installs llvm and adds it to PATH automatically.
+[target.aarch64-apple-darwin]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[target.x86_64-apple-darwin]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
 # ── Optional per-developer speedups (add to YOUR ~/.cargo/config.toml) ───────
-# These require extra tooling not available everywhere, so they are NOT
-# committed here — they break any machine that doesn't have them installed.
+# Cranelift backend — incremental codegen: 2-4× faster (dev/test only)
+#   Install: rustup component add rustc-codegen-cranelift-preview
 #
-# lld linker (macOS) — similar speedup to mold
-#   Install: brew install llvm
-#
-#   [target.aarch64-apple-darwin]
-#   linker = "clang"
-#   rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#   [profile.dev]
+#   codegen-backend = "cranelift"
 #
 # Cranelift backend — incremental codegen: 2-4× faster (dev/test only)
 #   Install: rustup component add rustc-codegen-cranelift-preview
@@ -32,3 +40,4 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 #
 #   [profile.test]
 #   codegen-backend = "cranelift"
+

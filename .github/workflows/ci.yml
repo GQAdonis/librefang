@@ -361,6 +361,10 @@ jobs:
           key: test-macos-${{ hashFiles('**/Cargo.lock') }}
       - name: Install nextest
         uses: taiki-e/install-action@nextest
+      - name: Install lld
+        run: |
+          brew install llvm
+          echo "/opt/homebrew/opt/llvm/bin" >> $GITHUB_PATH
       - name: Ensure dashboard build dir exists
         run: mkdir -p crates/librefang-api/static/react
       - name: Run tests
