@@ -617,10 +617,12 @@ mod tests {
 
     #[test]
     fn test_has_warning_true_when_one_hot() {
-        let mut snap = RateLimitSnapshot::default();
-        snap.tokens_per_minute = RateLimitBucket {
-            limit: 100,
-            remaining: 5, // 95% used
+        let snap = RateLimitSnapshot {
+            tokens_per_minute: RateLimitBucket {
+                limit: 100,
+                remaining: 5, // 95% used
+                ..Default::default()
+            },
             ..Default::default()
         };
         assert!(snap.has_warning());
@@ -685,12 +687,14 @@ mod tests {
 
     #[test]
     fn test_display_with_data() {
-        let mut snap = RateLimitSnapshot::default();
-        snap.requests_per_minute = RateLimitBucket {
-            limit: 1000,
-            remaining: 600,
-            reset_after_secs: 42.0,
-            captured_at: Instant::now(),
+        let snap = RateLimitSnapshot {
+            requests_per_minute: RateLimitBucket {
+                limit: 1000,
+                remaining: 600,
+                reset_after_secs: 42.0,
+                captured_at: Instant::now(),
+            },
+            ..Default::default()
         };
         let s = snap.display();
         assert!(s.contains("Rate Limits:"));
@@ -701,12 +705,14 @@ mod tests {
 
     #[test]
     fn test_display_shows_warning_section() {
-        let mut snap = RateLimitSnapshot::default();
-        snap.tokens_per_minute = RateLimitBucket {
-            limit: 100,
-            remaining: 5, // 95% used
-            reset_after_secs: 20.0,
-            captured_at: Instant::now(),
+        let snap = RateLimitSnapshot {
+            tokens_per_minute: RateLimitBucket {
+                limit: 100,
+                remaining: 5, // 95% used
+                reset_after_secs: 20.0,
+                captured_at: Instant::now(),
+            },
+            ..Default::default()
         };
         let s = snap.display();
         assert!(s.contains('⚠'));
@@ -786,10 +792,12 @@ mod tests {
 
     #[test]
     fn test_has_warning_includes_output_tokens() {
-        let mut snap = RateLimitSnapshot::default();
-        snap.output_tokens_per_minute = RateLimitBucket {
-            limit: 100,
-            remaining: 10, // 90% used — should trigger warning
+        let snap = RateLimitSnapshot {
+            output_tokens_per_minute: RateLimitBucket {
+                limit: 100,
+                remaining: 10, // 90% used — should trigger warning
+                ..Default::default()
+            },
             ..Default::default()
         };
         assert!(snap.has_warning());
