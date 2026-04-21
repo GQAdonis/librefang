@@ -461,7 +461,7 @@ impl AgentRegistry {
     /// Update the session auto-reset state flags on an agent entry.
     ///
     /// Called after a policy-driven session reset or a manual reset:
-    /// - `suspended` is cleared (the forced-wipe has been applied).
+    /// - `force_session_wipe` is cleared (the forced-wipe has been applied).
     /// - `resume_pending` is cleared.
     /// - `reset_reason` records why the reset happened.
     ///
@@ -475,31 +475,35 @@ impl AgentRegistry {
             .agents
             .get_mut(&id)
             .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.suspended = false;
+        entry.force_session_wipe = false;
         entry.resume_pending = false;
         entry.reset_reason = Some(reason);
         Ok(())
     }
 
-    /// Mark an agent's session as `suspended` so the next invocation performs
-    /// a hard reset.  Used by operator action or stuck-loop recovery.
-    pub fn suspend_session(&self, id: AgentId) -> LibreFangResult<()> {
+    /// Schedule a forced session wipe so the next invocation performs a hard
+    /// reset (new session_id, cleared history).  Used by operator action or
+    /// stuck-loop recovery.
+    ///
+    /// Named `schedule_session_wipe` to avoid confusion with
+    /// `suspend_agent()` / `AgentState::Suspended`.
+    pub fn schedule_session_wipe(&self, id: AgentId) -> LibreFangResult<()> {
         let mut entry = self
             .agents
             .get_mut(&id)
             .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.suspended = true;
+        entry.force_session_wipe = true;
         Ok(())
     }
 
     /// Mark an agent's session as `resume_pending` after an interrupted
-    /// restart.  Ignored when `suspended` is already set (hard-wipe wins).
+    /// restart.  Ignored when `force_session_wipe` is already set (hard-wipe wins).
     pub fn mark_resume_pending(&self, id: AgentId) -> LibreFangResult<()> {
         let mut entry = self
             .agents
             .get_mut(&id)
             .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        if !entry.suspended {
+        if !entry.force_session_wipe {
             entry.resume_pending = true;
         }
         Ok(())

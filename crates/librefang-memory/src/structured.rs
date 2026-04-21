@@ -654,6 +654,7 @@ mod tests {
             onboarding_completed: false,
             onboarding_completed_at: None,
             is_hand: false,
+            ..Default::default()
         };
 
         store.save_agent(&entry).unwrap();
