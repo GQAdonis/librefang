@@ -79,9 +79,24 @@ pub fn split_to_utf16_chunks(s: &str, limit: usize) -> Vec<&str> {
         // Guard against zero-progress (degenerate limit=0 or limit=1 on a
         // 2-unit char that can't fit at all).
         if chunk.is_empty() {
-            // Force progress: emit the safe prefix and continue.
-            chunks.push(safe_prefix);
-            remaining = &remaining[safe_prefix.len()..];
+            if safe_prefix.is_empty() {
+                // safe_prefix is empty when even a single char exceeds the
+                // limit (e.g. a surrogate-pair emoji with limit=1, or
+                // limit=0).  We must still advance past at least one char
+                // to avoid an infinite loop.  Emit that one char as an
+                // oversized-but-unavoidable chunk and continue.
+                let next_char_len = remaining
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(remaining.len());
+                chunks.push(&remaining[..next_char_len]);
+                remaining = &remaining[next_char_len..];
+            } else {
+                // Force progress: emit the safe prefix and continue.
+                chunks.push(safe_prefix);
+                remaining = &remaining[safe_prefix.len()..];
+            }
             continue;
         }
         chunks.push(chunk);
@@ -330,5 +345,22 @@ mod tests {
         let s = "🎉🎉";
         let chunks = split_to_utf16_chunks(s, 4);
         assert_eq!(chunks, vec!["🎉🎉"]);
+    }
+
+    #[test]
+    fn split_limit_zero_does_not_loop() {
+        // limit=0: no char fits, but each char must still be emitted to
+        // avoid an infinite loop.  Every character becomes its own chunk.
+        let chunks = split_to_utf16_chunks("ab", 0);
+        assert_eq!(chunks, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn split_surrogate_pair_exceeds_limit_does_not_loop() {
+        // limit=1: a surrogate-pair emoji (2 units) cannot fit within the
+        // limit; must still advance past it rather than looping forever.
+        let chunks = split_to_utf16_chunks("🎉🎉", 1);
+        // Each emoji is an unavoidable oversized chunk.
+        assert_eq!(chunks, vec!["🎉", "🎉"]);
     }
 }
