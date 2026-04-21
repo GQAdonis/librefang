@@ -4120,7 +4120,11 @@ pub fn build_context_engine(
     vault_lookup: &dyn Fn(&str) -> Option<String>,
 ) -> Box<dyn ContextEngine> {
     // Build the inner engine (shared base for all built-in engine variants).
-    let inner = DefaultContextEngine::new(runtime_config.clone(), memory, embedding_driver);
+    let inner = DefaultContextEngine::new(
+        runtime_config.clone(),
+        memory.clone(),
+        embedding_driver.clone(),
+    );
 
     // Built-in named engines.  These are independent of plugin loading — they
     // provide out-of-the-box behaviour without requiring any plugin to be
@@ -4393,12 +4397,6 @@ impl SummaryContextEngine {
             context_length: parking_lot::Mutex::new(context_length),
         }
     }
-
-    /// Threshold in tokens derived from the current context length.
-    fn threshold_tokens(&self) -> usize {
-        let ctx = *self.context_length.lock();
-        (ctx as f64 * self.threshold_percent) as usize
-    }
 }
 
 #[async_trait]
@@ -4485,6 +4483,7 @@ impl ContextEngine for SummaryContextEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use librefang_memory::session::Session as MemSession;
     use librefang_memory::MemorySubstrate;
     use librefang_types::message::Message;
     use std::process::Command;
@@ -4871,7 +4870,7 @@ ingest = "hooks/ingest.py"
     fn test_default_trait_should_compress_80_percent() {
         // Verify the default impl on the trait uses 80 % (4/5 integer math)
         let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
-        let engine = NoCompactContextEngine::new(inner);
+        let _engine = NoCompactContextEngine::new(inner);
         // NoCompactContextEngine overrides to false, so test the trait default via
         // a SummaryContextEngine at the same 80 % threshold
         let inner2 = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
@@ -4893,16 +4892,17 @@ ingest = "hooks/ingest.py"
     async fn test_summary_engine_compact_called_once_on_threshold_cross() {
         use crate::llm_driver::{CompletionResponse, LlmError};
         use async_trait::async_trait;
+        use librefang_types::message::{ContentBlock, TokenUsage};
         use std::sync::Arc;
 
         struct FakeDriver {
-            call_count: AtomicUsize,
+            _call_count: AtomicUsize,
         }
 
         impl FakeDriver {
             fn new() -> Self {
                 Self {
-                    call_count: AtomicUsize::new(0),
+                    _call_count: AtomicUsize::new(0),
                 }
             }
         }
@@ -5011,7 +5011,7 @@ ingest = "hooks/ingest.py"
         assert!(!tracker.should_compress(100_000, 200_000));
 
         let driver = Arc::new(FakeDriver::new());
-        let session = Session {
+        let session = MemSession {
             id: librefang_types::agent::SessionId::new(),
             agent_id: librefang_types::agent::AgentId::new(),
             messages: vec![Message::user("Hello"), Message::assistant("Hi there")],
