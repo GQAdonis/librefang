@@ -907,7 +907,8 @@ pub struct AgentEntry {
     // Session auto-reset state (mirrors hermes-agent SessionEntry flags)
     // -----------------------------------------------------------------------
     /// When `true`, the next call to `execute_llm_agent` will force a hard
-    /// reset (new session_id, cleared history) before processing the message.
+    /// reset (cleared message history) before processing the message.
+    /// The session_id is kept; only the stored messages are wiped.
     /// Set by operator action or stuck-loop recovery.  Takes priority over
     /// `resume_pending`.
     ///

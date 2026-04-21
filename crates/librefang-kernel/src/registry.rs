@@ -482,8 +482,8 @@ impl AgentRegistry {
     }
 
     /// Schedule a forced session wipe so the next invocation performs a hard
-    /// reset (new session_id, cleared history).  Used by operator action or
-    /// stuck-loop recovery.
+    /// reset (cleared message history; session_id is preserved).
+    /// Used by operator action or stuck-loop recovery.
     ///
     /// Named `schedule_session_wipe` to avoid confusion with
     /// `suspend_agent()` / `AgentState::Suspended`.

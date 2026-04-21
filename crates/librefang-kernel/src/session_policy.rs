@@ -369,11 +369,16 @@ mod tests {
             daily_at_hour: 4,
             ..Default::default()
         };
-        // last_active = today 05:00 local, now = today 12:00 local
-        // → still in same day after today's 04:00 boundary → no trigger
-        let last = SystemTime::now() - Duration::from_secs(7 * 3600);
+        // last_active = right now (or 1 s ago) → always after any daily boundary
+        // regardless of what time the test runs. Using 7 h ago was flaky: if the
+        // test runs between 04:00 and 11:00 local time the 7-hour-old timestamp
+        // falls before today's 04:00 boundary and the reset fires unexpectedly.
+        let last = SystemTime::now() - Duration::from_secs(1);
         let result = policy.should_reset(last, false);
-        assert_eq!(result, None, "same-day after boundary should not trigger");
+        assert_eq!(
+            result, None,
+            "last_active=~now must never trigger daily reset"
+        );
     }
 
     #[test]
