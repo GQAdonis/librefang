@@ -115,7 +115,9 @@ fn user_role_allows_request(role: UserRole, method: &axum::http::Method, path: &
         let agent_clone = path.starts_with("/api/agents/") && path.ends_with("/clone");
         let approval_action = path == "/api/approvals/batch"
             || path.ends_with("/approve")
+            || path.ends_with("/approve_all")
             || path.ends_with("/reject")
+            || path.ends_with("/reject_all")
             || path.ends_with("/modify");
         return agent_message || agent_clone || approval_action;
     }

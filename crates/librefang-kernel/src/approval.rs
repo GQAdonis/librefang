@@ -578,11 +578,17 @@ impl ApprovalManager {
             .map(|entry| *entry.key())
             .collect();
 
-        let count = ids.len();
+        let mut count = 0usize;
         for id in ids {
-            // Ignore individual errors (request may have expired between
-            // the collect and the resolve call).
-            let _ = self.resolve(id, decision.clone(), decided_by.clone(), false, None);
+            // Count only requests that were successfully resolved; ignore
+            // individual errors (request may have expired or required TOTP
+            // between the collect and the resolve call).
+            if self
+                .resolve(id, decision.clone(), decided_by.clone(), false, None)
+                .is_ok()
+            {
+                count += 1;
+            }
         }
         count
     }

@@ -1890,11 +1890,13 @@ pub async fn list_approvals_for_session(
         .iter()
         .map(|a| approval_to_json(a, &registry_agents))
         .collect();
+    let count = items.len();
+    let has_pending = !items.is_empty();
     Json(serde_json::json!({
         "session_id": session_id,
         "pending": items,
-        "count": items.len(),
-        "has_pending": !items.is_empty(),
+        "count": count,
+        "has_pending": has_pending,
     }))
 }
 
@@ -1918,29 +1920,39 @@ pub async fn approve_all_for_session(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
 ) -> impl IntoResponse {
-    // Reject if any pending request for this session requires TOTP, to avoid
-    // bypassing the second-factor gate through the batch path.
-    let policy = state.kernel.approvals().policy();
-    let any_needs_totp = state
-        .kernel
-        .approvals()
-        .list_pending_for_session(&session_id)
-        .iter()
-        .any(|req| policy.tool_requires_totp(&req.tool_name));
-    if any_needs_totp {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({
-                "error": "Session contains approvals that require TOTP. Approve those individually."
-            })),
-        );
-    }
-
+    // Attempt to resolve all pending requests for the session.  Requests that
+    // require TOTP are silently skipped by resolve() (it returns Err), so
+    // `resolved` only counts requests that were actually approved.  We then
+    // check whether any TOTP-blocked requests remain to surface an actionable
+    // error.  Doing the TOTP check *after* (rather than before) resolution
+    // avoids a TOCTOU window where a new TOTP-required request arrives between
+    // a pre-check and the actual resolve call.
     let resolved = state.kernel.approvals().resolve_all_for_session(
         &session_id,
         librefang_types::approval::ApprovalDecision::Approved,
         Some("api".to_string()),
     );
+
+    // If any requests remain pending for this session, they were blocked by
+    // the TOTP gate inside resolve().  Report that to the caller so they can
+    // approve those individually.
+    let totp_blocked = state
+        .kernel
+        .approvals()
+        .list_pending_for_session(&session_id)
+        .len();
+
+    if totp_blocked > 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Session contains approvals that require TOTP. Approve those individually.",
+                "resolved": resolved,
+                "totp_blocked": totp_blocked,
+            })),
+        );
+    }
+
     (
         StatusCode::OK,
         Json(serde_json::json!({
