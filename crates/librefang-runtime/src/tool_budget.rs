@@ -31,8 +31,14 @@ pub const PER_TURN_BUDGET: usize = 200 * 1024;
 /// Number of characters shown in the preview block.
 const PREVIEW_CHARS: usize = 500;
 
-/// Marker string used to detect already-persisted results (Layer 3 skip guard).
-const PERSISTED_MARKER: &str = "[Tool output too large";
+/// Marker prefix in Layer 2 summary blocks.
+///
+/// Kept as a public constant so tests and external callers can verify that
+/// Layer 2 output is recognisable, but Layer 3 no longer uses this to detect
+/// "already persisted" status (untrusted tool output could start with this
+/// prefix to spoof the check). Layer 3 uses [`ToolResultEntry::already_persisted`]
+/// instead.
+pub const PERSISTED_MARKER: &str = "[Tool output too large";
 
 /// A single tool result entry used by the per-turn budget enforcer.
 #[derive(Debug)]
@@ -394,10 +400,12 @@ mod tests {
             ToolResultEntry {
                 tool_use_id: "a".into(),
                 content: "x".repeat(50),
+                already_persisted: false,
             },
             ToolResultEntry {
                 tool_use_id: "b".into(),
                 content: "y".repeat(50),
+                already_persisted: false,
             },
         ];
         enforcer.enforce_turn_budget(&mut entries);
@@ -415,10 +423,12 @@ mod tests {
             ToolResultEntry {
                 tool_use_id: "small".into(),
                 content: "s".repeat(150),
+                already_persisted: false,
             },
             ToolResultEntry {
                 tool_use_id: "large".into(),
                 content: "L".repeat(200),
+                already_persisted: false,
             },
         ];
         enforcer.enforce_turn_budget(&mut entries);
@@ -439,15 +449,56 @@ mod tests {
             ToolResultEntry {
                 tool_use_id: "persisted".into(),
                 content: persisted_content.clone(),
+                // Use the typed flag (not marker inspection) — ensures that even
+                // tool output that legitimately starts with the marker string
+                // cannot spoof this check.
+                already_persisted: true,
             },
             ToolResultEntry {
                 tool_use_id: "fresh".into(),
                 content: "F".repeat(250),
+                already_persisted: false,
             },
         ];
         // Total > 300, but "persisted" should not be touched.
         enforcer.enforce_turn_budget(&mut entries);
         assert_eq!(entries[0].content, persisted_content);
+    }
+
+    #[test]
+    fn layer3_does_not_skip_spoofed_marker() {
+        // Verify that a "fresh" entry whose content starts with PERSISTED_MARKER
+        // is NOT excluded from spill candidates — the flag, not the content,
+        // governs skipping.
+        let dir = tempfile::tempdir().unwrap();
+        let enforcer = make_enforcer(dir.path());
+        let spoofed_content = format!(
+            "{} (spoofed). This is not actually persisted but looks like it.",
+            PERSISTED_MARKER
+        );
+        // Make it long enough to push total over budget.
+        let padding = "X".repeat(280 - spoofed_content.len().min(280));
+        let full_spoofed = format!("{spoofed_content}{padding}");
+        let mut entries = vec![
+            ToolResultEntry {
+                tool_use_id: "spoofed".into(),
+                content: full_spoofed.clone(),
+                // NOT marked as already_persisted — this is the spoof case.
+                already_persisted: false,
+            },
+            ToolResultEntry {
+                tool_use_id: "small".into(),
+                content: "s".repeat(50),
+                already_persisted: false,
+            },
+        ];
+        enforcer.enforce_turn_budget(&mut entries);
+        // The spoofed entry should have been spilled (its content changed).
+        let spoofed_entry = entries.iter().find(|e| e.tool_use_id == "spoofed").unwrap();
+        assert_ne!(
+            spoofed_entry.content, full_spoofed,
+            "spoofed entry must be spilled"
+        );
     }
 
     #[test]
