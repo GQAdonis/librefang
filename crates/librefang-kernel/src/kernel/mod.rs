@@ -109,6 +109,7 @@ impl CachedWorkspaceMetadata {
 struct CachedSkillMetadata {
     skill_summary: String,
     skill_prompt_context: String,
+    skill_config_section: String,
     created_at: std::time::Instant,
 }
 
@@ -3555,6 +3556,7 @@ system_prompt = "You are a helpful assistant."
                 recalled_memories: vec![],
                 skill_summary: String::new(),
                 skill_prompt_context: String::new(),
+                skill_config_section: String::new(),
                 mcp_summary: if mcp_tool_count > 0 {
                     self.build_mcp_summary(&manifest.mcp_servers)
                 } else {
@@ -4553,6 +4555,10 @@ system_prompt = "You are a helpful assistant."
                 skill_prompt_context: skill_meta
                     .as_ref()
                     .map(|s| s.skill_prompt_context.clone())
+                    .unwrap_or_default(),
+                skill_config_section: skill_meta
+                    .as_ref()
+                    .map(|s| s.skill_config_section.clone())
                     .unwrap_or_default(),
                 mcp_summary: if mcp_tool_count > 0 {
                     self.build_mcp_summary(&manifest.mcp_servers)
@@ -5804,6 +5810,10 @@ system_prompt = "You are a helpful assistant."
                 skill_prompt_context: skill_meta
                     .as_ref()
                     .map(|s| s.skill_prompt_context.clone())
+                    .unwrap_or_default(),
+                skill_config_section: skill_meta
+                    .as_ref()
+                    .map(|s| s.skill_config_section.clone())
                     .unwrap_or_default(),
                 mcp_summary: if mcp_tool_count > 0 {
                     self.build_mcp_summary(&manifest.mcp_servers)
@@ -11588,6 +11598,7 @@ system_prompt = "You are a helpful assistant."
         let metadata = CachedSkillMetadata {
             skill_summary: self.build_skill_summary(skill_allowlist),
             skill_prompt_context: self.collect_prompt_context(skill_allowlist),
+            skill_config_section: self.collect_config_section(skill_allowlist),
             created_at: std::time::Instant::now(),
         };
 
@@ -11874,6 +11885,37 @@ system_prompt = "You are a helpful assistant."
             ));
         }
         context_parts.join("\n\n")
+    }
+
+    /// Build the resolved skill config variable section for the system prompt.
+    ///
+    /// Reads `~/.librefang/config.toml` as a raw `toml::Value` tree so that
+    /// `resolve_config_vars` can traverse arbitrary dotted paths under
+    /// `skills.config.*`. Returns an empty string when no skills declare
+    /// config vars, when the config file is absent, or when no vars could be
+    /// resolved.
+    fn collect_config_section(&self, skill_allowlist: &[String]) -> String {
+        use librefang_skills::config_injection::{
+            collect_config_vars, format_config_section, resolve_config_vars,
+        };
+
+        let skills = self.sorted_enabled_skills(skill_allowlist);
+        let vars = collect_config_vars(&skills);
+        if vars.is_empty() {
+            return String::new();
+        }
+
+        let config_path = self.home_dir_boot.join("config.toml");
+        let config_toml: toml::Value = match std::fs::read_to_string(&config_path)
+            .ok()
+            .and_then(|s| toml::from_str(&s).ok())
+        {
+            Some(v) => v,
+            None => return String::new(),
+        };
+
+        let resolved = resolve_config_vars(&vars, &config_toml);
+        format_config_section(&resolved)
     }
 }
 
