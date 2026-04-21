@@ -6404,6 +6404,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -6462,6 +6463,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -6514,6 +6516,7 @@ mod tests {
             None,
             None,
             None,
+            None, // checkpoint_manager
             None,
             None,
             None,
@@ -6568,6 +6571,7 @@ mod tests {
             None,
             None,
             None,
+            None, // checkpoint_manager
             None,
             None,
             None,
@@ -6623,6 +6627,7 @@ mod tests {
             None,
             None,
             None,
+            None, // checkpoint_manager
             None,
             None,
             None,
@@ -6684,6 +6689,7 @@ mod tests {
             None,
             None,
             None,
+            None, // checkpoint_manager
             None,
             None,
             None,
@@ -6739,6 +6745,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -6872,6 +6879,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -6924,6 +6932,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -6984,6 +6993,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -7766,6 +7776,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -7838,6 +7849,7 @@ mod tests {
             None,
             None,
             None,
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -7906,6 +7918,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -8204,6 +8217,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -8261,6 +8275,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -8319,6 +8334,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
@@ -8378,6 +8394,7 @@ mod tests {
             None, // hooks
             None, // context_window_tokens
             None, // process_manager
+            None, // checkpoint_manager
             None, // user_content_blocks
             None, // proactive_memory
             None, // context_engine
