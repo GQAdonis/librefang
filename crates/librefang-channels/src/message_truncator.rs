@@ -47,19 +47,7 @@ pub fn utf16_len(s: &str) -> usize {
 /// `&nbsp;`, `&amp;#` (escaped entity prefix), `&#`, `&#x`.
 ///
 /// Returns `chunk` unchanged if no entity is broken across the boundary.
-///
-/// # Examples
-/// ```
-/// use librefang_channels::message_truncator::adjust_html_entity_boundary;
-///
-/// // Entity `&lt;` split after `&l` — should cut before `&l` so `&lt;` stays complete
-/// assert_eq!(adjust_html_entity_boundary("foo &l"), "foo ");
-/// // No broken entity — no change
-/// assert_eq!(adjust_html_entity_boundary("hello &lt;"), "hello &lt;");
-/// // `&#` prefix cut — remove the broken `&#`
-/// assert_eq!(adjust_html_entity_boundary("text &#x"), "text ");
-/// ```
-fn adjust_html_entity_boundary(chunk: &str) -> &str {
+pub(crate) fn adjust_html_entity_boundary(chunk: &str) -> &str {
     // Check if chunk ends with what looks like a truncated entity.
     // We look for '&' followed by partial entity content (but not a
     // complete valid entity that ends with ';').
@@ -68,23 +56,44 @@ fn adjust_html_entity_boundary(chunk: &str) -> &str {
         None => return chunk,
     };
 
-    // If the tail is already a valid complete entity (ends with ';'), it is
-    // safe — no adjustment needed.
-    if tail.ends_with(';') {
+    // If the tail contains a ';' anywhere, the entity starting with '&' is
+    // already complete (the ';' closes it), and any text after it is just
+    // trailing content — no adjustment needed.
+    //
+    // Example: "text&nbsp;here" → tail = "&nbsp;here" → contains ';' → safe.
+    // Example: "text&nbsp;"     → tail = "&nbsp;"     → ends with ';' → safe.
+    // Example: "text&nbs"       → tail = "&nbs"        → no ';' → broken entity.
+    if tail.contains(';') {
         return chunk;
     }
 
-    // The '&' is not followed by ';' — entity may be broken.
-    // Named entities: &amp; &lt; &gt; &quot; &nbsp;
-    // Numeric entities: &#digits;  &#xhexdigits;
-    // Pattern: '&' followed by name chars (a-zA-Z) or '#' (decimal/hex).
-    // We accept up to 10 chars after '&' to handle `&#xxxxxxxx` (8 hex + 'x').
+    // The '&' has no following ';' anywhere in the tail — entity may be broken.
+    // Only rewind if the tail looks like a *known* Telegram HTML entity prefix:
+    //   &amp  &lt  &gt  &quot  &nbsp  &#  &#x
+    // Unknown sequences like `&bar` or `&foo` are left as-is (literal `&`).
     let after_ampersand = &tail[1..];
-    let is_entity_like = !after_ampersand.is_empty()
-        && after_ampersand
-            .chars()
-            .take(10)
-            .all(|c| c.is_ascii_alphanumeric() || c == '#' || c == 'x' || c == ';');
+    let is_entity_like = matches!(
+        after_ampersand,
+        "a" | "am"
+            | "amp"
+            | "l"
+            | "lt"
+            | "g"
+            | "gt"
+            | "q"
+            | "qu"
+            | "quo"
+            | "quot"
+            | "n"
+            | "nb"
+            | "nbs"
+            | "nbsp"
+            | "#"
+            | "#x"
+    ) || (after_ampersand.starts_with('#')
+        && after_ampersand[1..].chars().all(|c| c.is_ascii_digit()))
+        || (after_ampersand.starts_with("#x")
+            && after_ampersand[2..].chars().all(|c| c.is_ascii_hexdigit()));
 
     if !is_entity_like {
         // No active entity — the '&' is a literal ampersand or start of
