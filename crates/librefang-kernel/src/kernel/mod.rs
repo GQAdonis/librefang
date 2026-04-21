@@ -6024,13 +6024,26 @@ system_prompt = "You are a helpful assistant."
             }
         }
 
+        // Strip the [SILENT] marker before the message reaches the LLM. The
+        // marker is a system-level signal for the kernel; the LLM should never
+        // see it in the conversation. Stripping must happen before link-context
+        // expansion so the expanded string is also clean.
+        let message_for_llm = message.replace("[SILENT]", "").trim().to_string();
+        let message_for_llm = if message_for_llm.is_empty() {
+            // Edge case: the entire message was just the marker. Fall back to
+            // the original (trimmed) so the LLM receives something non-empty.
+            message.trim().to_string()
+        } else {
+            message_for_llm
+        };
+
         // Build link context from user message (auto-extract URLs for the agent)
         let message_with_links = if let Some(link_ctx) =
-            librefang_runtime::link_understanding::build_link_context(message, &cfg.links)
+            librefang_runtime::link_understanding::build_link_context(&message_for_llm, &cfg.links)
         {
-            format!("{message}{link_ctx}")
+            format!("{message_for_llm}{link_ctx}")
         } else {
-            message.to_string()
+            message_for_llm
         };
 
         // Inject sender context into manifest metadata so the tool runner can
@@ -6127,11 +6140,16 @@ system_prompt = "You are a helpful assistant."
         // `message` parameter (before any link-context additions) so the
         // marker placement is unambiguous to the job author.
         //
+        // Gated to cron callers only (sender_context.channel == "cron") so
+        // that a regular user sending "[SILENT]" in chat does not accidentally
+        // suppress their own session history.
+        //
         // Session write: we still save the session — we just remove the
         // assistant turn from it first so the next cron fire does not see the
         // suppressed response in its context window.
         // Canonical append: skipped entirely for silent cron turns.
-        let skip_canonical_append = if message.contains("[SILENT]") {
+        let is_cron_call = sender_context.map_or(false, |ctx| ctx.channel == "cron");
+        let skip_canonical_append = if is_cron_call && message.contains("[SILENT]") {
             // Remove the last assistant message from the in-memory session so
             // it is not included in the re-saved version.
             let removed = session
