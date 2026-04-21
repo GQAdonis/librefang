@@ -108,8 +108,9 @@ pub struct HookManifest {
 #[derive(Debug, Clone)]
 struct LoadedHook {
     manifest: HookManifest,
-    /// Directory containing `HOOK.yaml` (for relative path resolution if needed).
-    #[allow(dead_code)]
+    /// Directory containing `HOOK.yaml`. Used as the working directory when
+    /// spawning the hook process so that relative commands (e.g. `./run.sh`)
+    /// resolve correctly.
     dir: PathBuf,
 }
 
@@ -245,35 +246,47 @@ impl ExternalHookSystem {
 
             let command = loaded.manifest.command.clone();
             let hook_name = loaded.manifest.name.clone();
+            let hook_dir = loaded.dir.clone();
             let ev = event_str.clone();
             let payload = data_str.clone();
 
-            // Spawn if a Tokio runtime is active; otherwise run inline to avoid
-            // panicking when this is called from sync kernel APIs (session
-            // reset/reboot/clear).
+            // Spawn if a Tokio runtime is active; otherwise spin up a background
+            // thread so the caller is never blocked (fire-and-forget in both paths).
             if let Ok(handle) = tokio::runtime::Handle::try_current() {
                 handle.spawn(async move {
-                    Self::run_hook(&hook_name, &ev, &command, &payload).await;
+                    Self::run_hook(&hook_name, &ev, &command, &hook_dir, &payload).await;
                 });
             } else {
-                // No runtime — execute synchronously on the current thread.
-                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    rt.block_on(Self::run_hook(&hook_name, &ev, &command, &payload));
-                } else {
-                    warn!(
-                        hook = %hook_name,
-                        event = %ev,
-                        "Failed to create runtime for external hook"
-                    );
-                }
+                // No runtime active (e.g. called from a sync kernel API).
+                // Spawn a background thread so we never block the caller and
+                // never panic due to a missing runtime.
+                std::thread::spawn(move || {
+                    if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    {
+                        rt.block_on(Self::run_hook(
+                            &hook_name, &ev, &command, &hook_dir, &payload,
+                        ));
+                    } else {
+                        warn!(
+                            hook = %hook_name,
+                            event = %ev,
+                            "Failed to create runtime for external hook"
+                        );
+                    }
+                });
             }
         }
     }
 
-    async fn run_hook(hook_name: &str, ev: &str, command: &str, payload: &str) {
+    async fn run_hook(
+        hook_name: &str,
+        ev: &str,
+        command: &str,
+        dir: &std::path::Path,
+        payload: &str,
+    ) {
         debug!(
             hook = %hook_name,
             event = %ev,
@@ -283,6 +296,7 @@ impl ExternalHookSystem {
         let result = tokio::time::timeout(
             Duration::from_secs(30),
             tokio::process::Command::new(command)
+                .current_dir(dir)
                 .env("HOOK_EVENT", ev)
                 .env("HOOK_EVENT_DATA", payload)
                 .kill_on_drop(true)

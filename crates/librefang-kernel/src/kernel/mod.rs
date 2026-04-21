@@ -2410,6 +2410,7 @@ impl LibreFangKernel {
             Some(path) => config.data_dir.join(path),
             None => config.data_dir.join("audit.anchor"),
         };
+        let hooks_dir = config.home_dir.join("hooks");
         let kernel = Self {
             home_dir_boot: config.home_dir.clone(),
             data_dir_boot: config.data_dir.clone(),
@@ -2464,9 +2465,7 @@ impl LibreFangKernel {
             broadcast: initial_broadcast,
             auto_reply_engine,
             hooks: librefang_runtime::hooks::HookRegistry::new(),
-            external_hooks: crate::hooks::ExternalHookSystem::load(
-                crate::config::librefang_home().join("hooks"),
-            ),
+            external_hooks: crate::hooks::ExternalHookSystem::load(hooks_dir),
             process_manager: Arc::new(librefang_runtime::process_manager::ProcessManager::new(5)),
             peer_registry: OnceLock::new(),
             peer_node: OnceLock::new(),
@@ -6354,9 +6353,18 @@ system_prompt = "You are a helpful assistant."
 
         // Auto-save session summaries for ALL sessions (default + per-channel)
         // before clearing, so no channel's conversation history is silently lost.
+        // Also emit session:end for each active session before deletion.
         if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
             for sid in session_ids {
                 if let Ok(Some(old_session)) = self.memory.get_session(sid) {
+                    // Fire session:end before removing the old session.
+                    self.external_hooks.fire(
+                        crate::hooks::ExternalHookEvent::SessionEnd,
+                        serde_json::json!({
+                            "agent_id": agent_id.to_string(),
+                            "session_id": old_session.id.0.to_string(),
+                        }),
+                    );
                     if old_session.messages.len() >= 2 {
                         self.save_session_summary(agent_id, &entry, &old_session);
                     }
@@ -6404,6 +6412,19 @@ system_prompt = "You are a helpful assistant."
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
         })?;
 
+        // Emit session:end for each active session before deletion.
+        if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
+            for sid in session_ids {
+                self.external_hooks.fire(
+                    crate::hooks::ExternalHookEvent::SessionEnd,
+                    serde_json::json!({
+                        "agent_id": agent_id.to_string(),
+                        "session_id": sid.0.to_string(),
+                    }),
+                );
+            }
+        }
+
         // Delete ALL sessions for this agent (default + per-channel)
         let _ = self.memory.delete_agent_sessions(agent_id);
 
@@ -6430,6 +6451,16 @@ system_prompt = "You are a helpful assistant."
             }),
         );
 
+        // Fire session:start for the newly created session to match the
+        // behaviour of other new-session flows.
+        self.external_hooks.fire(
+            crate::hooks::ExternalHookEvent::SessionStart,
+            serde_json::json!({
+                "agent_id": agent_id.to_string(),
+                "session_id": new_session.id.0.to_string(),
+            }),
+        );
+
         info!(agent_id = %agent_id, "Session rebooted (no summary saved)");
         Ok(())
     }
@@ -6441,6 +6472,19 @@ system_prompt = "You are a helpful assistant."
         let _entry = self.registry.get(agent_id).ok_or_else(|| {
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
         })?;
+
+        // Emit session:end for each active session before deletion.
+        if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
+            for sid in session_ids {
+                self.external_hooks.fire(
+                    crate::hooks::ExternalHookEvent::SessionEnd,
+                    serde_json::json!({
+                        "agent_id": agent_id.to_string(),
+                        "session_id": sid.0.to_string(),
+                    }),
+                );
+            }
+        }
 
         // Delete all regular sessions
         let _ = self.memory.delete_agent_sessions(agent_id);
