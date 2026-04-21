@@ -319,6 +319,11 @@ pub struct ToolExecContext<'a> {
     pub process_manager: Option<&'a crate::process_manager::ProcessManager>,
     pub sender_id: Option<&'a str>,
     pub channel: Option<&'a str>,
+    /// Per-session interrupt handle.  Tools MAY poll `interrupt.is_cancelled()`
+    /// at natural checkpoints to exit early when the user stops the session.
+    /// `None` means no interrupt support was wired up for this call site (legacy
+    /// paths) — tools must treat `None` the same as "not cancelled".
+    pub interrupt: Option<crate::interrupt::SessionInterrupt>,
 }
 
 /// Execute a tool without running the approval / capability / taint gate.
@@ -353,6 +358,7 @@ pub async fn execute_tool_raw(
         process_manager,
         sender_id,
         channel: _,
+        interrupt,
     } = ctx;
 
     let result = match tool_name {
@@ -508,6 +514,7 @@ pub async fn execute_tool_raw(
                 effective_allowed_env_vars.unwrap_or(&[]),
                 *workspace_root,
                 *exec_policy,
+                interrupt.clone(),
             )
             .await
         }
@@ -871,6 +878,7 @@ pub async fn execute_tool(
     process_manager: Option<&crate::process_manager::ProcessManager>,
     sender_id: Option<&str>,
     channel: Option<&str>,
+    interrupt: Option<crate::interrupt::SessionInterrupt>,
 ) -> ToolResult {
     // Normalize the tool name through compat mappings so LLM-hallucinated aliases
     // (e.g. "fs-write" → "file_write") resolve to the canonical LibreFang name.
@@ -1014,6 +1022,7 @@ pub async fn execute_tool(
         process_manager,
         sender_id,
         channel,
+        interrupt,
     };
     execute_tool_raw(tool_use_id, tool_name, input, &ctx).await
 }
@@ -2155,6 +2164,7 @@ async fn tool_shell_exec(
     allowed_env: &[String],
     workspace_root: Option<&Path>,
     exec_policy: Option<&librefang_types::config::ExecPolicy>,
+    interrupt: Option<crate::interrupt::SessionInterrupt>,
 ) -> Result<String, String> {
     let command = input["command"]
         .as_str()
@@ -2240,8 +2250,21 @@ async fn tool_shell_exec(
     // Prevent child from inheriting stdin (avoids blocking on Windows)
     cmd.stdin(std::process::Stdio::null());
 
+    // Check for interrupt before we even launch the subprocess — the user may
+    // have hit /stop while approval was pending or while a prior tool was running.
+    if interrupt.as_ref().is_some_and(|i| i.is_cancelled()) {
+        return Err("[interrupted before execution]".to_string());
+    }
+
     let result =
         tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), cmd.output()).await;
+
+    // Check again after the subprocess completes — if the session was interrupted
+    // while this command was running, report it as interrupted rather than returning
+    // potentially stale output.
+    if interrupt.as_ref().is_some_and(|i| i.is_cancelled()) {
+        return Err("[interrupted]".to_string());
+    }
 
     match result {
         Ok(Ok(output)) => {
