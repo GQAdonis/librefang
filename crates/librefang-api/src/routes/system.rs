@@ -2027,10 +2027,8 @@ pub async fn approve_all_for_session(
             )
             .await
         {
-            Ok((resp, _)) => {
-                if resp.decision.is_approved() {
-                    resolved += 1;
-                }
+            Ok(_) => {
+                resolved += 1;
             }
             // Non-existent / already-resolved items are skipped silently.
             Err(_) => {}
@@ -2093,10 +2091,8 @@ pub async fn reject_all_for_session(
             )
             .await
         {
-            Ok((resp, _)) => {
-                if resp.decision.is_approved() {
-                    resolved += 1;
-                }
+            Ok(_) => {
+                resolved += 1;
             }
             Err(_) => {}
         }
