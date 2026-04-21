@@ -11905,14 +11905,15 @@ system_prompt = "You are a helpful assistant."
             return String::new();
         }
 
+        // Read config.toml if it exists.  Fall back to an empty table so
+        // that skills whose vars all have `default` values still get their
+        // config section rendered even on a fresh install where
+        // config.toml has not been created yet.
         let config_path = self.home_dir_boot.join("config.toml");
-        let config_toml: toml::Value = match std::fs::read_to_string(&config_path)
+        let config_toml: toml::Value = std::fs::read_to_string(&config_path)
             .ok()
             .and_then(|s| toml::from_str(&s).ok())
-        {
-            Some(v) => v,
-            None => return String::new(),
-        };
+            .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
 
         let resolved = resolve_config_vars(&vars, &config_toml);
         format_config_section(&resolved)
