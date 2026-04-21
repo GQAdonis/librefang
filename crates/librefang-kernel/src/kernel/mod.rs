@@ -6128,6 +6128,10 @@ system_prompt = "You are a helpful assistant."
         // interrupt.cancel()) aborts in-flight tools without affecting other
         // concurrent sessions.
         let session_interrupt = librefang_runtime::interrupt::SessionInterrupt::new();
+        // Register in session_interrupts so stop_agent_run can call cancel()
+        // even when the caller uses the non-streaming send_message() path.
+        self.session_interrupts
+            .insert(agent_id, session_interrupt.clone());
         let loop_opts = librefang_runtime::agent_loop::LoopOptions {
             is_fork: false,
             allowed_tools: None,
@@ -6184,6 +6188,11 @@ system_prompt = "You are a helpful assistant."
 
         // Tear down injection channel after loop finishes
         self.teardown_injection_channel(agent_id);
+
+        // Clean up the interrupt handle regardless of outcome — the map must
+        // not retain stale entries that would suppress cancellation on the
+        // next run for the same agent.
+        self.session_interrupts.remove(&agent_id);
 
         let result = result.map_err(KernelError::LibreFang)?;
 
@@ -7243,7 +7252,11 @@ system_prompt = "You are a helpful assistant."
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
         })?;
         let _ = self.registry.set_state(agent_id, AgentState::Suspended);
-        // Also stop any active run
+        // Also stop any active run — signal the interrupt first so in-flight
+        // tools observe cancellation before the task is dropped.
+        if let Some((_, interrupt)) = self.session_interrupts.remove(&agent_id) {
+            interrupt.cancel();
+        }
         if let Some((_, handle)) = self.running_tasks.remove(&agent_id) {
             handle.abort();
         }
