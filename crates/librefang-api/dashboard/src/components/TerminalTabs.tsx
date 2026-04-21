@@ -81,7 +81,9 @@ export function TerminalTabs({
   }, [windows]);
 
   // Keep tab order in sync with server windows list.
+  // Skip when windows is empty (query still loading) to avoid wiping persisted order.
   useEffect(() => {
+    if (windows.length === 0) return;
     setTabOrder(prev => {
       const existing = new Set(windows.map(w => w.id));
       const filtered = prev.filter(id => existing.has(id));
