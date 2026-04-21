@@ -332,7 +332,10 @@ pub struct SenderContext {
     /// this flag is set exclusively by the kernel's own cron job runner and
     /// cannot be spoofed through the public API. Used to gate sensitive
     /// features like `[SILENT]` marker processing.
-    #[serde(default)]
+    ///
+    /// Intentionally excluded from serialization so external callers cannot
+    /// inject `"is_internal_cron": true` through a JSON payload.
+    #[serde(skip)]
     pub is_internal_cron: bool,
 }
 

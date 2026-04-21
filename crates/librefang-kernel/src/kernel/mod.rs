@@ -9357,7 +9357,21 @@ system_prompt = "You are a helpful assistant."
                                 let wants_new_session = job.session_mode
                                     == Some(librefang_types::agent::SessionMode::New);
                                 let (sender_ctx_owned, mode_override) = if wants_new_session {
-                                    (None, Some(librefang_types::agent::SessionMode::New))
+                                    let cron_sender = SenderContext {
+                                        channel: "cron".to_string(),
+                                        user_id: job.peer_id.clone().unwrap_or_default(),
+                                        display_name: "cron".to_string(),
+                                        is_group: false,
+                                        was_mentioned: false,
+                                        thread_id: None,
+                                        account_id: None,
+                                        is_internal_cron: true,
+                                        ..Default::default()
+                                    };
+                                    (
+                                        Some(cron_sender),
+                                        Some(librefang_types::agent::SessionMode::New),
+                                    )
                                 } else {
                                     let cron_sender = SenderContext {
                                         channel: "cron".to_string(),
