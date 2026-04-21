@@ -146,7 +146,7 @@ pub fn split_to_utf16_chunks(s: &str, limit: usize) -> Vec<&str> {
             None => safe_prefix.len(),
         };
         let raw_chunk_len = split_at;
-        let (chunk, rest) = remaining.split_at(raw_chunk_len);
+        let (chunk, _rest) = remaining.split_at(raw_chunk_len);
 
         // ── HTML-entity boundary guard ─────────────────────────────────────
         // When streaming, the caller sends chunks with parse_mode=HTML.
@@ -155,10 +155,12 @@ pub fn split_to_utf16_chunks(s: &str, limit: usize) -> Vec<&str> {
         // Detect and avoid this by shrinking the chunk to the last complete
         // entity boundary before the split point.
         let chunk = adjust_html_entity_boundary(chunk);
-        // Recompute rest after the adjustment — the part we discarded
-        // (broken entity prefix + rest) must be prepended to `rest`.
-        let discard_len = raw_chunk_len - chunk.len();
-        let rest = &remaining[discard_len..];
+        // Recompute rest from the end of the (possibly shortened) chunk so
+        // that `remaining` always advances forward.  Using `discard_len`
+        // was wrong: when no entity is trimmed (discard_len == 0),
+        // `&remaining[0..]` equals `remaining` itself and the loop never
+        // makes progress, causing an infinite loop.
+        let rest = &remaining[chunk.len()..];
         // ─────────────────────────────────────────────────────────────────
 
         // Guard against zero-progress (degenerate limit=0 or limit=1 on a
@@ -235,7 +237,7 @@ pub fn truncate_to_utf16_limit(s: &str, limit: usize) -> &str {
             .iter()
             .map(|(_, c)| if (*c as u32) > 0xFFFF { 2 } else { 1 })
             .sum();
-        if count < limit {
+        if count <= limit {
             lo = mid;
         } else {
             hi = mid - 1;

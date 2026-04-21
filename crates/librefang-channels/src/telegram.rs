@@ -4,9 +4,7 @@
 //! No external Telegram crate — just `reqwest` for full control over error handling.
 
 use crate::formatter;
-use crate::message_truncator::{
-    split_to_utf16_chunks, truncate_to_utf16_limit, TELEGRAM_MESSAGE_LIMIT,
-};
+use crate::message_truncator::{split_to_utf16_chunks, TELEGRAM_MESSAGE_LIMIT};
 use crate::types::{
     truncate_utf8, ChannelAdapter, ChannelContent, ChannelMessage, ChannelType, ChannelUser,
     InteractiveButton, InteractiveMessage, LifecycleReaction,
