@@ -41,7 +41,12 @@ pub enum PoolStrategy {
 // ── PooledCredential ─────────────────────────────────────────────────────────
 
 /// A single credential entry inside a [`CredentialPool`].
-#[derive(Debug, Clone)]
+///
+/// # Security note
+/// `Debug` output for this type redacts the raw `api_key` to prevent
+/// accidental key exposure in logs.  Use [`CredentialSnapshot`] for
+/// diagnostics-safe output.
+#[derive(Clone)]
 pub struct PooledCredential {
     /// The API key string.
     pub api_key: String,
@@ -53,6 +58,22 @@ pub struct PooledCredential {
     /// When `Some(t)`, this credential is exhausted and must not be used until
     /// `Instant::now() >= t`.
     exhausted_until: Option<Instant>,
+}
+
+impl std::fmt::Debug for PooledCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let hint = if self.api_key.len() >= 4 {
+            format!("****{}", &self.api_key[self.api_key.len() - 4..])
+        } else {
+            "****".to_string()
+        };
+        f.debug_struct("PooledCredential")
+            .field("api_key", &hint)
+            .field("priority", &self.priority)
+            .field("request_count", &self.request_count)
+            .field("exhausted_until", &self.exhausted_until)
+            .finish()
+    }
 }
 
 impl PooledCredential {
@@ -190,11 +211,15 @@ impl CredentialPool {
                 let result = Self::acquire_round_robin(&creds, start);
                 if result.is_some() {
                     // Advance the index past the entry we just selected so
-                    // subsequent calls pick the next one.
+                    // subsequent calls pick the next one.  We always update the
+                    // index, even when only one credential is currently available:
+                    // if it later becomes unavailable and another recovers, the
+                    // stored index would otherwise point past the recovered entry
+                    // and the pool would start from an arbitrary position.
                     let available: Vec<usize> = (0..creds.len())
                         .filter(|&i| creds[i].is_available())
                         .collect();
-                    if available.len() > 1 {
+                    if !available.is_empty() {
                         let pos_in_available = available
                             .iter()
                             .position(|&i| result.as_deref() == Some(creds[i].api_key.as_str()))
