@@ -121,6 +121,19 @@ pub fn resolve_config_vars(
     resolved
 }
 
+/// Maximum number of Unicode characters allowed per injected config value.
+///
+/// Values larger than this are truncated before injection. This prevents a
+/// large `skills.config.*` value (e.g. a pasted certificate or a large JSON
+/// blob) from bloating every system prompt and causing token-limit failures.
+const MAX_CONFIG_VALUE_CHARS: usize = 512;
+
+/// Maximum total characters for the entire skill config section (header
+/// included). Applied after per-value truncation so that an operator with
+/// many skills and config vars cannot inadvertently push the section past
+/// model prompt limits.
+const MAX_CONFIG_SECTION_CHARS: usize = 4096;
+
 /// Format resolved config variable pairs as a system-prompt section string.
 ///
 /// Returns an empty string when `resolved` is empty so callers can cheaply
@@ -130,6 +143,11 @@ pub fn resolve_config_vars(
 /// control characters are collapsed to a single space so that a hostile skill
 /// author or a config value containing embedded newlines cannot escape the
 /// `## Skill Config Variables` block and inject arbitrary prompt content.
+///
+/// Each value is additionally capped at [`MAX_CONFIG_VALUE_CHARS`] Unicode
+/// characters, and the total section is capped at [`MAX_CONFIG_SECTION_CHARS`]
+/// characters, to prevent oversized config values from bloating every system
+/// prompt and causing token-limit failures.
 ///
 /// Format:
 /// ```text
@@ -143,10 +161,22 @@ pub fn format_config_section(resolved: &[(String, String)]) -> String {
     }
     let mut out = String::from("## Skill Config Variables\n");
     for (key, value) in resolved {
-        out.push_str(&sanitize_line(key));
-        out.push_str(" = ");
-        out.push_str(&sanitize_line(value));
-        out.push('\n');
+        let safe_key = sanitize_line(key);
+        let safe_value = sanitize_line(value);
+        // Cap individual values so a large cert/blob doesn't blow out the prompt.
+        let capped_value: String = if safe_value.chars().count() > MAX_CONFIG_VALUE_CHARS {
+            let truncated: String = safe_value.chars().take(MAX_CONFIG_VALUE_CHARS).collect();
+            format!("{truncated}…")
+        } else {
+            safe_value
+        };
+        let line = format!("{safe_key} = {capped_value}\n");
+        // Stop adding lines once the section would exceed the section-level cap.
+        if out.len() + line.len() > MAX_CONFIG_SECTION_CHARS {
+            out.push_str("… (additional config vars omitted)\n");
+            break;
+        }
+        out.push_str(&line);
     }
     // Trim the trailing newline so the caller controls spacing.
     out.trim_end_matches('\n').to_string()

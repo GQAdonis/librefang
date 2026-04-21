@@ -41,6 +41,12 @@ pub struct ToolResultEntry {
     pub tool_use_id: String,
     /// Content of the result. May be replaced in-place by the enforcer.
     pub content: String,
+    /// Set to `true` by the enforcer when this entry has already been written
+    /// to a spill file (Layer 2 or Layer 3). Layer 3 uses this flag instead of
+    /// inspecting the content string so that tool output that happens to begin
+    /// with the marker prefix cannot spoof "already persisted" status and bypass
+    /// the aggregate budget guard.
+    pub already_persisted: bool,
 }
 
 /// Enforces per-result and per-turn-aggregate size budgets on tool outputs.
@@ -89,9 +95,15 @@ impl ToolBudgetEnforcer {
     /// **Fallback**: if the file write fails for any reason, the content is
     /// truncated to `per_result_threshold` bytes and a notice is appended.
     /// This function never panics.
-    pub fn maybe_persist_result(&self, content: &str, tool_use_id: &str) -> String {
+    ///
+    /// Returns `(new_content, persisted)` where `persisted` is `true` when the
+    /// full content was successfully written to a spill file. The caller should
+    /// propagate this flag to [`ToolResultEntry::already_persisted`] so that
+    /// Layer 3 can skip this entry without inspecting the content string (which
+    /// is untrusted and could be spoofed to match [`PERSISTED_MARKER`]).
+    pub fn maybe_persist_result(&self, content: &str, tool_use_id: &str) -> (String, bool) {
         if content.len() <= self.per_result_threshold {
-            return content.to_string();
+            return (content.to_string(), false);
         }
 
         let original_len = content.len();
@@ -106,7 +118,10 @@ impl ToolBudgetEnforcer {
                     path = %file_path.display(),
                     "tool_budget: persisted oversized result (Layer 2)"
                 );
-                build_persisted_summary(content, original_len, &file_path)
+                (
+                    build_persisted_summary(content, original_len, &file_path),
+                    true,
+                )
             }
             Err(e) => {
                 warn!(
@@ -115,7 +130,7 @@ impl ToolBudgetEnforcer {
                     error = %e,
                     "tool_budget: failed to persist result, falling back to inline truncation"
                 );
-                inline_truncate(content, self.per_result_threshold)
+                (inline_truncate(content, self.per_result_threshold), false)
             }
         }
     }
@@ -147,10 +162,16 @@ impl ToolBudgetEnforcer {
 
         // Build a candidate list: (index, size) for non-persisted results,
         // sorted largest-first.
+        //
+        // Use the typed `already_persisted` flag set by the caller, which is
+        // based on the return value of `maybe_persist_result` (Layer 2). This
+        // is more reliable than re-inspecting content for `PERSISTED_MARKER`
+        // because tool output is untrusted and could begin with that prefix to
+        // spoof "already persisted" status and bypass the aggregate budget guard.
         let mut candidates: Vec<(usize, usize)> = results
             .iter()
             .enumerate()
-            .filter(|(_, r)| !r.content.starts_with(PERSISTED_MARKER))
+            .filter(|(_, r)| !r.already_persisted)
             .map(|(i, r)| (i, r.content.len()))
             .collect();
         candidates.sort_by_key(|b| std::cmp::Reverse(b.1));
@@ -166,7 +187,7 @@ impl ToolBudgetEnforcer {
             let safe_id = sanitize_id(&entry.tool_use_id);
             let file_path = self.temp_dir.join(format!("{safe_id}-budget.txt"));
 
-            let replacement = match self.write_spill_file(&file_path, &entry.content) {
+            let (replacement, persisted) = match self.write_spill_file(&file_path, &entry.content) {
                 Ok(()) => {
                     debug!(
                         tool_use_id = %entry.tool_use_id,
@@ -174,7 +195,10 @@ impl ToolBudgetEnforcer {
                         path = %file_path.display(),
                         "tool_budget: spilled result for turn budget (Layer 3)"
                     );
-                    build_persisted_summary(&entry.content, size, &file_path)
+                    (
+                        build_persisted_summary(&entry.content, size, &file_path),
+                        true,
+                    )
                 }
                 Err(e) => {
                     warn!(
@@ -183,12 +207,57 @@ impl ToolBudgetEnforcer {
                         error = %e,
                         "tool_budget: turn-budget spill failed, truncating inline"
                     );
-                    inline_truncate(&entry.content, self.per_result_threshold)
+                    // Only truncate if it actually reduces size. Layer-3
+                    // candidates may already be at or below `per_result_threshold`
+                    // (when they were handled by Layer 2 inline truncation earlier),
+                    // so appending the notice could make them larger rather than
+                    // smaller. In that case keep the content unchanged — the
+                    // budget guard has already exhausted its options.
+                    let truncated = inline_truncate(&entry.content, self.per_result_threshold);
+                    if truncated.len() < entry.content.len() {
+                        (truncated, false)
+                    } else {
+                        (entry.content.clone(), false)
+                    }
                 }
             };
 
             running_total = running_total - size + replacement.len();
             entry.content = replacement;
+            entry.already_persisted = persisted;
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Cleanup
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// Delete spill files that are older than `max_age`.
+    ///
+    /// Call at the end of each turn (or at agent shutdown) to bound disk
+    /// consumption. Files that cannot be read or removed are silently skipped
+    /// so a transient I/O error never aborts the caller.
+    pub fn cleanup_old_spill_files(&self, max_age: std::time::Duration) {
+        let read_dir = match fs::read_dir(&self.temp_dir) {
+            Ok(d) => d,
+            Err(_) => return, // directory may not exist yet
+        };
+        let cutoff = std::time::SystemTime::now()
+            .checked_sub(max_age)
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        for entry in read_dir.flatten() {
+            let path = entry.path();
+            // Only touch files we wrote (*.txt suffix).
+            if path.extension().and_then(|e| e.to_str()) != Some("txt") {
+                continue;
+            }
+            let mtime = match entry.metadata().and_then(|m| m.modified()) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if mtime <= cutoff {
+                let _ = fs::remove_file(&path);
+            }
         }
     }
 

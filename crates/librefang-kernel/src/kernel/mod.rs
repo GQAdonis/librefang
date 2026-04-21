@@ -291,6 +291,12 @@ pub struct LibreFangKernel {
     home_dir_boot: PathBuf,
     /// Boot-time data directory (immutable — cannot hot-reload).
     data_dir_boot: PathBuf,
+    /// Actual config file path used at boot (immutable — honours `--config <path>`).
+    ///
+    /// May differ from `home_dir_boot/config.toml` when the user starts with a
+    /// custom `--config` flag. Always use this for config-file reads to avoid
+    /// reading the wrong file.
+    config_file_boot: PathBuf,
     /// Kernel configuration (atomically swappable for hot-reload).
     pub(crate) config: ArcSwap<KernelConfig>,
     /// Agent registry.
@@ -1433,11 +1439,20 @@ impl LibreFangKernel {
 impl LibreFangKernel {
     /// Boot the kernel with configuration from the given path.
     pub fn boot(config_path: Option<&Path>) -> KernelResult<Self> {
-        let config = load_config(config_path);
-        Self::boot_with_config(config)
+        // Resolve the canonical path before consuming it in load_config so we
+        // can store it in the kernel for later use (e.g. collect_config_section).
+        let resolved_config_path = config_path
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(crate::config::default_config_path);
+        let config = load_config(Some(&resolved_config_path));
+        Self::boot_with_config_file(config, Some(resolved_config_path))
     }
 
     /// Boot the kernel with an explicit configuration.
+    ///
+    /// The config file path defaults to `config.home_dir/config.toml`. Use
+    /// [`Self::boot`] when launching from `--config <path>` to preserve the
+    /// actual boot path for later config reads.
     ///
     /// Callers must have loaded `.env` / `secrets.env` / vault into the
     /// process env before calling this — use
@@ -1445,7 +1460,18 @@ impl LibreFangKernel {
     /// `main()`. Mutating env from here would be UB: this function is
     /// reached from inside a tokio runtime, and `std::env::set_var` is
     /// unsound once other threads exist (Rust 1.80+).
-    pub fn boot_with_config(mut config: KernelConfig) -> KernelResult<Self> {
+    pub fn boot_with_config(config: KernelConfig) -> KernelResult<Self> {
+        Self::boot_with_config_file(config, None)
+    }
+
+    /// Internal boot implementation that accepts an explicit config file path.
+    ///
+    /// When `config_file` is `None`, the path is inferred as
+    /// `config.home_dir/config.toml` (the default used by `boot_with_config`).
+    fn boot_with_config_file(
+        mut config: KernelConfig,
+        config_file: Option<PathBuf>,
+    ) -> KernelResult<Self> {
         use librefang_types::config::KernelMode;
 
         // Env var overrides — useful for Docker where config.toml is baked in.
@@ -2396,9 +2422,11 @@ impl LibreFangKernel {
             Some(path) => config.data_dir.join(path),
             None => config.data_dir.join("audit.anchor"),
         };
+        let config_file_boot = config_file.unwrap_or_else(|| config.home_dir.join("config.toml"));
         let kernel = Self {
             home_dir_boot: config.home_dir.clone(),
             data_dir_boot: config.data_dir.clone(),
+            config_file_boot,
             config: ArcSwap::new(std::sync::Arc::new(config)),
             registry: AgentRegistry::new(),
             capabilities: CapabilityManager::new(),
@@ -8070,6 +8098,13 @@ system_prompt = "You are a helpful assistant."
             let _write_guard = self.config_reload_lock.write().await;
             self.apply_hot_actions_inner(&plan, &new_config);
             self.config.store(std::sync::Arc::new(new_config));
+        } else {
+            // Even when no hot actions are applied, always invalidate the skill
+            // metadata cache. `skills.config.*` values are free-form TOML keys
+            // that are invisible to the structured config diff, so a reload that
+            // changes only skill config vars would not trigger `ReloadSkills`
+            // and would leave stale resolved values in the next system prompt.
+            self.prompt_metadata_cache.skills.clear();
         }
 
         Ok(plan)
@@ -11910,8 +11945,11 @@ system_prompt = "You are a helpful assistant."
         // visible.  Fall back to an empty table so that skills whose vars all
         // have `default` values still get their config section rendered on a
         // fresh install.
-        let config_toml =
-            crate::config::load_config_raw(Some(&self.home_dir_boot.join("config.toml")));
+        //
+        // Use `config_file_boot` rather than constructing a path from
+        // `home_dir_boot` so that custom `--config <path>` boots read from
+        // the correct file.
+        let config_toml = crate::config::load_config_raw(Some(&self.config_file_boot));
 
         let resolved = resolve_config_vars(&vars, &config_toml);
         format_config_section(&resolved)

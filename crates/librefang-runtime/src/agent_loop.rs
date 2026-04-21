@@ -409,6 +409,12 @@ struct StagedToolUseTurn {
     /// Once `commit` runs this flips to true so a second commit call
     /// (or a drop-after-commit) is a no-op.
     committed: bool,
+    /// `tool_use_id` values for which Layer 2 (`maybe_persist_result`)
+    /// successfully wrote a spill file. Forwarded to `ToolResultEntry`
+    /// when Layer 3 processes the staged blocks so that the budget guard
+    /// can skip persisted entries without inspecting the content string
+    /// (which is untrusted and could begin with `PERSISTED_MARKER`).
+    layer2_persisted_ids: std::collections::HashSet<String>,
 }
 
 impl StagedToolUseTurn {
@@ -487,7 +493,12 @@ impl StagedToolUseTurn {
         // Step 3: delegate the user{tool_result} push to the existing
         // `finalize_tool_use_results` helper so guidance-block append
         // behaviour stays centralized.
-        finalize_tool_use_results(session, messages, &mut self.tool_result_blocks)
+        finalize_tool_use_results(
+            session,
+            messages,
+            &mut self.tool_result_blocks,
+            &self.layer2_persisted_ids,
+        )
     }
 }
 
@@ -528,6 +539,7 @@ fn stage_tool_use_turn(
         allowed_tool_names: available_tools.iter().map(|t| t.name.clone()).collect(),
         caller_id_str: session.agent_id.to_string(),
         committed: false,
+        layer2_persisted_ids: std::collections::HashSet::new(),
     }
 }
 
@@ -886,6 +898,7 @@ fn finalize_tool_use_results(
     session: &mut Session,
     messages: &mut Vec<Message>,
     tool_result_blocks: &mut Vec<ContentBlock>,
+    layer2_persisted_ids: &std::collections::HashSet<String>,
 ) -> ToolResultOutcomeSummary {
     if tool_result_blocks.is_empty() {
         return ToolResultOutcomeSummary::default();
@@ -908,6 +921,13 @@ fn finalize_tool_use_results(
                 } = b
                 {
                     Some(ToolResultEntry {
+                        // Mark entries that Layer 2 already wrote to disk using
+                        // the typed `layer2_persisted_ids` set rather than
+                        // inspecting content for `PERSISTED_MARKER`. Tool output
+                        // is untrusted and could begin with the marker string to
+                        // spoof "already persisted" status and bypass the aggregate
+                        // budget guard.
+                        already_persisted: layer2_persisted_ids.contains(tool_use_id.as_str()),
                         tool_use_id: tool_use_id.clone(),
                         content: content.clone(),
                     })
@@ -918,6 +938,10 @@ fn finalize_tool_use_results(
             .collect();
 
         enforcer.enforce_turn_budget(&mut entries);
+
+        // Remove spill files older than 1 hour to prevent unbounded disk growth.
+        // Best-effort: failures are silently ignored.
+        enforcer.cleanup_old_spill_files(std::time::Duration::from_secs(3600));
 
         // Write back potentially-modified content using the same index order
         // (only ToolResult blocks participate; Text guidance blocks are skipped).
@@ -2936,10 +2960,16 @@ pub async fn run_agent_loop(
                     let executed = execute_single_tool_call(&mut tool_exec_ctx, tool_call).await?;
 
                     // Layer 2: per-result budget — persist oversized outputs to disk.
-                    let budgeted_content = ToolBudgetEnforcer::default().maybe_persist_result(
-                        &executed.final_content,
-                        &executed.result.tool_use_id,
-                    );
+                    let (budgeted_content, l2_persisted) = ToolBudgetEnforcer::default()
+                        .maybe_persist_result(
+                            &executed.final_content,
+                            &executed.result.tool_use_id,
+                        );
+                    if l2_persisted {
+                        staged
+                            .layer2_persisted_ids
+                            .insert(executed.result.tool_use_id.clone());
+                    }
                     staged.append_result(ContentBlock::ToolResult {
                         tool_use_id: executed.result.tool_use_id.clone(),
                         tool_name: tool_call.name.clone(),
@@ -3991,10 +4021,16 @@ pub async fn run_agent_loop_streaming(
                     let executed = execute_single_tool_call(&mut tool_exec_ctx, tool_call).await?;
 
                     // Layer 2: per-result budget — persist oversized outputs to disk.
-                    let budgeted_content = ToolBudgetEnforcer::default().maybe_persist_result(
-                        &executed.final_content,
-                        &executed.result.tool_use_id,
-                    );
+                    let (budgeted_content, l2_persisted) = ToolBudgetEnforcer::default()
+                        .maybe_persist_result(
+                            &executed.final_content,
+                            &executed.result.tool_use_id,
+                        );
+                    if l2_persisted {
+                        staged
+                            .layer2_persisted_ids
+                            .insert(executed.result.tool_use_id.clone());
+                    }
 
                     // Notify client of tool execution result (detect dead consumer)
                     let preview: String = budgeted_content.chars().take(300).collect();
@@ -5269,8 +5305,12 @@ mod tests {
         let mut messages = Vec::new();
         let mut tool_result_blocks = Vec::new();
 
-        let outcomes =
-            finalize_tool_use_results(&mut session, &mut messages, &mut tool_result_blocks);
+        let outcomes = finalize_tool_use_results(
+            &mut session,
+            &mut messages,
+            &mut tool_result_blocks,
+            &std::collections::HashSet::new(),
+        );
 
         assert_eq!(outcomes, ToolResultOutcomeSummary::default());
         assert!(session.messages.is_empty());
@@ -5305,6 +5345,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: session.agent_id.to_string(),
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         };
         let (tx, rx) = mpsc::channel(1);
         tx.try_send(AgentLoopSignal::Message {
@@ -5393,6 +5434,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: session.agent_id.to_string(),
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         };
         let (tx, rx) = mpsc::channel(1);
         tx.try_send(AgentLoopSignal::Message {
@@ -5529,6 +5571,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: session.agent_id.to_string(),
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         };
         let (tx, rx) = mpsc::channel(1);
         tx.try_send(AgentLoopSignal::ApprovalResolved {
@@ -5981,6 +6024,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: session.agent_id.to_string(),
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         };
         let (tx, rx) = mpsc::channel(1);
         tx.send(AgentLoopSignal::Message {
@@ -8442,6 +8486,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: agent_id_str,
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         }
     }
 
@@ -8699,6 +8744,7 @@ mod tests {
             allowed_tool_names: Vec::new(),
             caller_id_str: session.agent_id.to_string(),
             committed: false,
+            layer2_persisted_ids: std::collections::HashSet::new(),
         };
 
         // Simulate the batch executing end-to-end (no early break).
