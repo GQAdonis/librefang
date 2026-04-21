@@ -2014,12 +2014,10 @@ pub async fn approve_all_for_session(
     // Resolve each pending request through the kernel so deferred executions
     // are properly spawned (resolve_tool_approval calls handle_approval_resolution
     // for each deferred payload).
+    // Reuse the `pending` list collected above — avoids a TOCTOU race where the
+    // set could change between the pre-check and the resolve loop.
     let mut resolved = 0usize;
-    for pending_req in state
-        .kernel
-        .approvals()
-        .list_pending_for_session(&session_id)
-    {
+    for pending_req in pending {
         match state
             .kernel
             .resolve_tool_approval(
