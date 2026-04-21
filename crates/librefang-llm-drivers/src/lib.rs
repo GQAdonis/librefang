@@ -6,4 +6,7 @@
 pub use librefang_llm_driver as llm_driver;
 pub use librefang_llm_driver::llm_errors;
 pub mod drivers;
+pub mod rate_limit_tracker;
 pub mod think_filter;
+
+pub use rate_limit_tracker::{RateLimitBucket, RateLimitSnapshot};
