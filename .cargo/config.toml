@@ -1,35 +1,34 @@
 [alias]
 xtask = "run --package xtask --"
 
-# ── Optional: faster local dev builds ───────────────────────────────────────
-# The settings below speed up incremental rebuilds but require extra tooling.
-# Add them to YOUR LOCAL ~/.cargo/config.toml — do NOT commit them here,
-# because they break any machine that doesn't have the tools installed.
+# ── mold linker (Linux x86-64 + aarch64) — link step: ~3s → <0.5s ──────────
+# Requires: sudo apt install mold  (Ubuntu/Debian)
+#           sudo pacman -S mold    (Arch)
+# CI installs mold automatically; local devs on other distros must install it.
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.aarch64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# ── Optional per-developer speedups (add to YOUR ~/.cargo/config.toml) ───────
+# These require extra tooling not available everywhere, so they are NOT
+# committed here — they break any machine that doesn't have them installed.
 #
-# 1. mold linker (Linux) — link step: ~3s → <0.5s
-#    Install: sudo apt install mold   (Ubuntu)
-#             sudo pacman -S mold     (Arch)
+# lld linker (macOS) — similar speedup to mold
+#   Install: brew install llvm
 #
-#    [target.x86_64-unknown-linux-gnu]
-#    linker = "clang"
-#    rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+#   [target.aarch64-apple-darwin]
+#   linker = "clang"
+#   rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 #
-#    [target.aarch64-unknown-linux-gnu]
-#    linker = "clang"
-#    rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+# Cranelift backend — incremental codegen: 2-4× faster (dev/test only)
+#   Install: rustup component add rustc-codegen-cranelift-preview
 #
-# 2. lld linker (macOS) — similar speedup
-#    Install: brew install llvm
+#   [profile.dev]
+#   codegen-backend = "cranelift"
 #
-#    [target.aarch64-apple-darwin]
-#    linker = "clang"
-#    rustflags = ["-C", "link-arg=-fuse-ld=lld"]
-#
-# 3. Cranelift backend — incremental codegen: 2-4× faster (dev/test only)
-#    Install: rustup component add rustc-codegen-cranelift-preview
-#
-#    [profile.dev]
-#    codegen-backend = "cranelift"
-#
-#    [profile.test]
-#    codegen-backend = "cranelift"
+#   [profile.test]
+#   codegen-backend = "cranelift"

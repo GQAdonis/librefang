@@ -151,7 +151,8 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            mold
       - name: Check formatting
         run: cargo xtask fmt
       - name: Ensure dashboard build dir exists
@@ -272,7 +273,8 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            mold
       - name: Build tests
         run: |
           if [ "${{ needs.changes.outputs.full_run }}" = "true" ]; then
