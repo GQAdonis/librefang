@@ -398,6 +398,9 @@ pub struct LibreFangKernel {
     pub(crate) hooks: librefang_runtime::hooks::HookRegistry,
     /// Persistent process manager for interactive sessions (REPLs, servers).
     pub(crate) process_manager: Arc<librefang_runtime::process_manager::ProcessManager>,
+    /// Background process registry — tracks fire-and-forget processes spawned by
+    /// `shell_exec` with a rolling 200 KB output buffer per process.
+    pub(crate) process_registry: Arc<librefang_runtime::process_registry::ProcessRegistry>,
     /// OFP peer registry — tracks connected peers (set once during OFP startup).
     pub(crate) peer_registry: OnceLock<librefang_wire::PeerRegistry>,
     /// OFP peer node — the local networking node (set once during OFP startup).
@@ -1224,6 +1227,12 @@ impl LibreFangKernel {
     #[inline]
     pub fn processes(&self) -> &Arc<librefang_runtime::process_manager::ProcessManager> {
         &self.process_manager
+    }
+
+    /// Background process registry for fire-and-forget shell_exec processes.
+    #[inline]
+    pub fn process_registry(&self) -> &Arc<librefang_runtime::process_registry::ProcessRegistry> {
+        &self.process_registry
     }
 
     /// OFP peer registry (set once at startup).
@@ -2450,6 +2459,7 @@ impl LibreFangKernel {
             auto_reply_engine,
             hooks: librefang_runtime::hooks::HookRegistry::new(),
             process_manager: Arc::new(librefang_runtime::process_manager::ProcessManager::new(5)),
+            process_registry: Arc::new(librefang_runtime::process_registry::ProcessRegistry::new()),
             peer_registry: OnceLock::new(),
             peer_node: OnceLock::new(),
             booted_at: std::time::Instant::now(),
@@ -4795,6 +4805,7 @@ system_prompt = "You are a helpful assistant."
                 Some(&kernel_clone.hooks),
                 ctx_window,
                 Some(&kernel_clone.process_manager),
+                Some(&kernel_clone.process_registry),
                 None, // content_blocks (streaming path uses text only for now)
                 kernel_clone.proactive_memory.get().cloned(),
                 kernel_clone.context_engine_for_agent(&manifest),
@@ -6105,6 +6116,7 @@ system_prompt = "You are a helpful assistant."
             Some(&self.hooks),
             ctx_window,
             Some(&self.process_manager),
+            Some(&self.process_registry),
             content_blocks,
             proactive_memory,
             self.context_engine_for_agent(&manifest),

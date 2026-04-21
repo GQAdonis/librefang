@@ -99,8 +99,8 @@ impl ProcessEntry {
     fn append_output(&mut self, chunk: &str) {
         self.output_buf.push_str(chunk);
         if self.output_buf.len() > MAX_OUTPUT_BYTES {
-            // Keep the newest MAX_OUTPUT_BYTES/2 bytes.
-            let keep_from = self.output_buf.len() - MAX_OUTPUT_BYTES / 2;
+            // Keep the newest MAX_OUTPUT_BYTES bytes.
+            let keep_from = self.output_buf.len() - MAX_OUTPUT_BYTES;
             // Align to a UTF-8 character boundary.
             let keep_from = self.output_buf.ceil_char_boundary(keep_from);
             let retained = self.output_buf.split_off(keep_from);
