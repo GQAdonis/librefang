@@ -2255,7 +2255,7 @@ async fn tool_shell_exec(
     cmd.stderr(std::process::Stdio::piped());
 
     // Spawn the child so we can obtain the OS PID before waiting.
-    let mut child = match cmd.spawn() {
+    let child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => return Err(format!("Failed to execute command: {e}")),
     };
@@ -2266,10 +2266,13 @@ async fn tool_shell_exec(
         reg.register(pid, command.to_string(), session_id.clone());
     }
 
-    let result = tokio::time::timeout(
-        std::time::Duration::from_secs(timeout_secs),
-        child.wait_with_output(),
-    )
+    // Wrap `child` in an `Option` so we can recover it on the timeout path.
+    // `wait_with_output` takes `self` by value, so we wrap in `Option` to
+    // allow extraction after the timeout fires without borrowing issues.
+    let mut child_opt = Some(child);
+    let result = tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), async {
+        child_opt.take().unwrap().wait_with_output().await
+    })
     .await;
 
     match result {
@@ -2314,19 +2317,13 @@ async fn tool_shell_exec(
         }
         Ok(Err(e)) => Err(format!("Failed to execute command: {e}")),
         Err(_) => {
-            // Timed out — kill the child process to prevent it becoming an
-            // orphan.  `Child::drop` does NOT kill the process (Tokio docs),
-            // so without an explicit kill the OS process keeps running, its
-            // piped stdout/stderr go unread, and once the child finally exits
-            // it lingers as a zombie until init reaps it.
-            //
-            // Ignore kill/wait errors: the process may have already exited on
-            // its own in the narrow window between the timeout and here.
-            let _ = child.start_kill();
-            // Wait so the kernel can release the process table entry
-            // (avoids a zombie).  This is a best-effort fire-and-forget wait;
-            // failure just means a short-lived zombie, which is acceptable.
-            let _ = child.wait().await;
+            // Timed out — recover `child` from the Option and kill it to
+            // prevent it becoming an orphan/zombie.  `Child::drop` does NOT
+            // kill the process (Tokio docs), so explicit kill is required.
+            if let Some(mut c) = child_opt.take() {
+                let _ = c.start_kill();
+                let _ = c.wait().await;
+            }
 
             // Mark the registry entry finished with a sentinel exit code so
             // callers never see a perpetually-Running entry.
