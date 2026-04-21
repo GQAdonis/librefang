@@ -569,6 +569,8 @@ struct ToolExecutionContext<'a> {
     streaming: bool,
     agent_id_str: &'a str,
     opts: &'a LoopOptions,
+    dangerous_command_checker:
+        Option<&'a Arc<tokio::sync::RwLock<crate::dangerous_command::DangerousCommandChecker>>>,
 }
 
 async fn execute_single_tool_call(
@@ -2893,6 +2895,7 @@ pub async fn run_agent_loop(
                         streaming: false,
                         agent_id_str: agent_id_str.as_str(),
                         opts,
+                        dangerous_command_checker: None,
                     };
                     let executed = execute_single_tool_call(&mut tool_exec_ctx, tool_call).await?;
 
@@ -3943,6 +3946,7 @@ pub async fn run_agent_loop_streaming(
                         streaming: true,
                         agent_id_str: agent_id_str.as_str(),
                         opts,
+                        dangerous_command_checker: None,
                     };
                     let executed = execute_single_tool_call(&mut tool_exec_ctx, tool_call).await?;
 

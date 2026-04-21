@@ -319,6 +319,10 @@ pub struct ToolExecContext<'a> {
     pub process_manager: Option<&'a crate::process_manager::ProcessManager>,
     pub sender_id: Option<&'a str>,
     pub channel: Option<&'a str>,
+    /// Shared dangerous-command checker for session-scoped allowlist.
+    /// Created once per tool-execution session and reused across all
+    /// `shell_exec` calls so that `allow_for_session` persists.
+    pub dangerous_command_checker: Option<&'a Arc<tokio::sync::RwLock<DangerousCommandChecker>>>,
 }
 
 /// Execute a tool without running the approval / capability / taint gate.
@@ -505,27 +509,74 @@ pub async fn execute_tool_raw(
             // descriptive error. The agent can route approval via the existing
             // `submit_tool_approval` path by catching the error message and
             // re-submitting after the user has explicitly allowed the pattern.
-            {
-                use crate::dangerous_command::{ApprovalMode, DangerousCommandChecker, CheckResult};
-                let checker = DangerousCommandChecker::new(ApprovalMode::Manual);
-                if let CheckResult::Dangerous { description } = checker.check(command) {
-                    warn!(
-                        command = crate::str_utils::safe_truncate_str(command, 120),
-                        description,
-                        "Dangerous command detected — blocking execution"
-                    );
-                    return ToolResult {
-                        tool_use_id: tool_use_id.to_string(),
-                        content: format!(
-                            "shell_exec blocked: dangerous command detected ({description}). \
-                             The command matches a known-dangerous pattern and has been blocked \
-                             for safety. If you need to run this command, request explicit user \
-                             approval first."
-                        ),
-                        is_error: true,
-                        ..Default::default()
-                    };
+            //
+            // If a shared checker is available (passed through ToolExecContext),
+            // reuse it so that session allowlist entries from prior `allow_for_session`
+            // calls are honored. Otherwise create a one-shot checker with no allowlist.
+            let command_is_dangerous = {
+                use crate::dangerous_command::{
+                    ApprovalMode, CheckResult, DangerousCommandChecker,
+                };
+                match ctx.dangerous_command_checker {
+                    Some(checker_arc) => {
+                        let checker = checker_arc.read().unwrap();
+                        matches!(checker.check(command), CheckResult::Dangerous { .. })
+                    }
+                    None => {
+                        let checker = DangerousCommandChecker::new(ApprovalMode::Manual);
+                        matches!(checker.check(command), CheckResult::Dangerous { .. })
+                    }
                 }
+            };
+            if command_is_dangerous {
+                let description = {
+                    use crate::dangerous_command::{
+                        ApprovalMode, CheckResult, DangerousCommandChecker,
+                    };
+                    match ctx.dangerous_command_checker {
+                        Some(checker_arc) => {
+                            let checker = checker_arc.read().unwrap();
+                            if let CheckResult::Dangerous { description } = checker.check(command) {
+                                description
+                            } else {
+                                return ToolResult {
+                                    tool_use_id: tool_use_id.to_string(),
+                                    content: "shell_exec blocked: unexpected state".into(),
+                                    is_error: true,
+                                    ..Default::default()
+                                };
+                            }
+                        }
+                        None => {
+                            let checker = DangerousCommandChecker::new(ApprovalMode::Manual);
+                            if let CheckResult::Dangerous { description } = checker.check(command) {
+                                description
+                            } else {
+                                return ToolResult {
+                                    tool_use_id: tool_use_id.to_string(),
+                                    content: "shell_exec blocked: unexpected state".into(),
+                                    is_error: true,
+                                    ..Default::default()
+                                };
+                            }
+                        }
+                    }
+                };
+                warn!(
+                    command = crate::str_utils::safe_truncate_str(command, 120),
+                    description, "Dangerous command detected — blocking execution"
+                );
+                return ToolResult {
+                    tool_use_id: tool_use_id.to_string(),
+                    content: format!(
+                        "shell_exec blocked: dangerous command detected ({description}). \
+                         The command matches a known-dangerous pattern and has been blocked \
+                         for safety. If you need to run this command, request explicit user \
+                         approval first."
+                    ),
+                    is_error: true,
+                    ..Default::default()
+                };
             }
 
             let effective_allowed_env_vars = allowed_env_vars.or_else(|| {
@@ -1048,6 +1099,7 @@ pub async fn execute_tool(
         process_manager,
         sender_id,
         channel,
+        dangerous_command_checker: None,
     };
     execute_tool_raw(tool_use_id, tool_name, input, &ctx).await
 }
