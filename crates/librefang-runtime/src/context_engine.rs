@@ -4133,10 +4133,34 @@ pub fn build_context_engine(
         "summary" => {
             // Threshold-gated LLM summarisation — fires when prompt tokens
             // cross ~80 % of the model's context window.
+            if toml_config.plugin.is_some() {
+                tracing::warn!(
+                    "context engine config: `engine = \"summary\"` takes precedence, \
+                     `plugin` config is ignored"
+                );
+            }
+            if toml_config.hooks.ingest.is_some() || toml_config.hooks.after_turn.is_some() {
+                tracing::warn!(
+                    "context engine config: `engine = \"summary\"` takes precedence, \
+                     hook config is ignored"
+                );
+            }
             return Box::new(SummaryContextEngine::new(inner, 0.80));
         }
         "no_compact" => {
             // Disables automatic compaction while still wiring all other hooks.
+            if toml_config.plugin.is_some() {
+                tracing::warn!(
+                    "context engine config: `engine = \"no_compact\"` takes precedence, \
+                     `plugin` config is ignored"
+                );
+            }
+            if toml_config.hooks.ingest.is_some() || toml_config.hooks.after_turn.is_some() {
+                tracing::warn!(
+                    "context engine config: `engine = \"no_compact\"` takes precedence, \
+                     hook config is ignored"
+                );
+            }
             return Box::new(NoCompactContextEngine::new(inner));
         }
         "default" => {
@@ -4321,15 +4345,16 @@ impl ContextEngine for NoCompactContextEngine {
 
     async fn compact(
         &self,
-        agent_id: AgentId,
+        _agent_id: AgentId,
         messages: &[Message],
-        driver: Arc<dyn LlmDriver>,
-        model: &str,
-        context_window_tokens: usize,
+        _driver: Arc<dyn LlmDriver>,
+        _model: &str,
+        _context_window_tokens: usize,
     ) -> LibreFangResult<CompactionResult> {
-        self.inner
-            .compact(agent_id, messages, driver, model, context_window_tokens)
-            .await
+        // NoCompactContextEngine must never compress — return all messages as-is.
+        Ok(CompactionResult {
+            kept_messages: messages.to_vec(),
+        })
     }
 
     async fn after_turn(&self, agent_id: AgentId, messages: &[Message]) -> LibreFangResult<()> {
