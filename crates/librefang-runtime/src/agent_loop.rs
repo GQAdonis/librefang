@@ -2581,6 +2581,47 @@ pub async fn run_agent_loop(
     for iteration in 0..max_iterations {
         debug!(iteration, "Agent loop iteration");
 
+        // Pluggable context engine: threshold-gated compaction (Hermes-Agent
+        // ContextEngine compatibility). When the engine signals that the
+        // current token count has crossed its compression threshold, run a
+        // compaction pass *before* the assemble step so that the assembled
+        // context is already trimmed.
+        //
+        // `total_usage.input_tokens` tracks the last turn's prompt-token
+        // count and serves as the "current tokens" estimate. On the first
+        // iteration it is 0 and `should_compress` will return false, which
+        // is the correct behaviour (nothing to compress yet).
+        if let Some(engine) = context_engine {
+            let current_tokens = total_usage.input_tokens as usize;
+            if engine.should_compress(current_tokens, ctx_window) {
+                debug!(
+                    iteration,
+                    current_tokens, ctx_window, "Context engine requested compaction"
+                );
+                match engine
+                    .compact(
+                        session.agent_id,
+                        &messages,
+                        driver.clone(),
+                        &manifest.model.model,
+                        ctx_window,
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        debug!(
+                            kept = result.kept_messages.len(),
+                            "Context engine compaction complete"
+                        );
+                        messages = result.kept_messages;
+                    }
+                    Err(e) => {
+                        warn!("Context engine compaction failed (continuing): {e}");
+                    }
+                }
+            }
+        }
+
         // Context assembly — use context engine if available, else inline logic
         if let Some(engine) = context_engine {
             let result = engine
@@ -3573,6 +3614,42 @@ pub async fn run_agent_loop_streaming(
 
     for iteration in 0..max_iterations {
         debug!(iteration, "Streaming agent loop iteration");
+
+        // Pluggable context engine: threshold-gated compaction (same as the
+        // non-streaming loop). See the non-streaming path for the full
+        // rationale.
+        if let Some(engine) = context_engine {
+            let current_tokens = total_usage.input_tokens as usize;
+            if engine.should_compress(current_tokens, ctx_window) {
+                debug!(
+                    iteration,
+                    current_tokens,
+                    ctx_window,
+                    "Context engine requested compaction (streaming path)"
+                );
+                match engine
+                    .compact(
+                        session.agent_id,
+                        &messages,
+                        driver.clone(),
+                        &manifest.model.model,
+                        ctx_window,
+                    )
+                    .await
+                {
+                    Ok(result) => {
+                        debug!(
+                            kept = result.kept_messages.len(),
+                            "Context engine compaction complete (streaming)"
+                        );
+                        messages = result.kept_messages;
+                    }
+                    Err(e) => {
+                        warn!("Context engine compaction failed (continuing, streaming): {e}");
+                    }
+                }
+            }
+        }
 
         // Context assembly — use context engine if available, else inline logic
         let recovery = if let Some(engine) = context_engine {
