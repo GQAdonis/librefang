@@ -366,31 +366,36 @@ fn parse_reset_value(s: &str) -> Option<f64> {
         return Some(v);
     }
 
-    // Go-style duration — e.g. "6m0s", "7.66s", "1h30m", "3600s"
+    // Go-style duration — e.g. "6m0s", "7.66s", "1h30m", "3600s", "0s"
     // Numbers immediately followed by a unit (h/m/s), concatenated with no spaces.
     let mut secs = 0.0f64;
     let mut current = String::new();
+    let mut matched_unit = false;
     for ch in s.chars() {
         match ch {
             '0'..='9' | '.' => current.push(ch),
             'h' | 'H' => {
                 secs += current.parse::<f64>().unwrap_or(0.0) * 3600.0;
                 current.clear();
+                matched_unit = true;
             }
             'm' | 'M' if !current.is_empty() => {
                 // 'm' for minutes; distinguish Go-style "6m" from ISO 8601 "PT1M".
                 secs += current.parse::<f64>().unwrap_or(0.0) * 60.0;
                 current.clear();
+                matched_unit = true;
             }
             's' | 'S' => {
                 secs += current.parse::<f64>().unwrap_or(0.0);
                 current.clear();
+                matched_unit = true;
             }
             _ => {}
         }
     }
-    // If we consumed at least one unit and have no leftover digits, it's a valid Go duration.
-    if secs > 0.0 && current.is_empty() {
+    // If we matched at least one unit designator and have no leftover unmatched digits,
+    // it is a valid Go duration (including zero-valued durations like "0s").
+    if matched_unit && current.is_empty() {
         return Some(secs);
     }
 
@@ -756,6 +761,16 @@ mod tests {
     fn test_parse_reset_value_go_duration_no_unit_is_none() {
         // "42foo" is not a valid Go duration
         assert!(parse_reset_value("42foo").is_none());
+    }
+
+    #[test]
+    fn test_parse_reset_value_go_duration_zero() {
+        // "0s" is a valid Go duration meaning the window has already reset.
+        // This must return Some(0.0), not None, so callers don't fall through
+        // to the unwrap_or(0.0) default silently.
+        assert_eq!(parse_reset_value("0s").unwrap(), 0.0);
+        assert_eq!(parse_reset_value("0m0s").unwrap(), 0.0);
+        assert_eq!(parse_reset_value("0h").unwrap(), 0.0);
     }
 
     #[test]
