@@ -1899,12 +1899,15 @@ pub async fn list_approvals_for_session(
         .collect();
     let count = items.len();
     let has_pending = !items.is_empty();
-    Json(serde_json::json!({
-        "session_id": session_id,
-        "pending": items,
-        "count": count,
-        "has_pending": has_pending,
-    }))
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "session_id": session_id,
+            "pending": items,
+            "count": count,
+            "has_pending": has_pending,
+        })),
+    )
 }
 
 /// POST /api/approvals/session/{session_id}/approve_all — Approve all pending
@@ -1913,7 +1916,7 @@ pub async fn list_approvals_for_session(
 /// Mirrors Hermes-Agent's `resolve_gateway_approval(session_key, "once",
 /// resolve_all=True)`.  TOTP pre-check is enforced — if any pending request
 /// requires TOTP, the entire batch is rejected before any mutation.
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct ApproveAllForSessionRequest {
     /// Optional count of approvals the caller expects to be pending.
     /// If provided, the server verifies the actual pending count matches
@@ -1936,6 +1939,7 @@ pub struct ApproveAllForSessionRequest {
     path = "/api/approvals/session/{session_id}/approve_all",
     tag = "approvals",
     params(("session_id" = String, Path, description = "Session ID")),
+    request_body = ApproveAllForSessionRequest,
     responses(
         (status = 200, description = "All pending session approvals approved", body = serde_json::Value),
         (status = 400, description = "TOTP required for one or more items", body = serde_json::Value),
