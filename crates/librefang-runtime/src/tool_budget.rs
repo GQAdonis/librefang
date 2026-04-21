@@ -154,7 +154,7 @@ impl ToolBudgetEnforcer {
     /// Already-persisted results (those whose content starts with the
     /// [`PERSISTED_MARKER`]) are counted toward the total but are never
     /// re-persisted.
-    pub fn enforce_turn_budget(&self, results: &mut Vec<ToolResultEntry>) {
+    pub fn enforce_turn_budget(&self, results: &mut [ToolResultEntry]) {
         let total: usize = results.iter().map(|r| r.content.len()).sum();
         if total <= self.per_turn_budget {
             return;
@@ -359,8 +359,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let enforcer = make_enforcer(dir.path());
         let content = "x".repeat(50);
-        let result = enforcer.maybe_persist_result(&content, "id-1");
+        let (result, persisted) = enforcer.maybe_persist_result(&content, "id-1");
         assert_eq!(result, content);
+        assert!(!persisted);
         // No file should be written.
         assert!(dir.path().read_dir().unwrap().next().is_none());
     }
@@ -370,7 +371,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let enforcer = make_enforcer(dir.path());
         let content = "y".repeat(200);
-        let result = enforcer.maybe_persist_result(&content, "id-2");
+        let (result, persisted) = enforcer.maybe_persist_result(&content, "id-2");
+        assert!(persisted);
         assert!(result.starts_with(PERSISTED_MARKER));
         assert!(result.contains("id-2.txt"));
         // File should exist and contain the original content.
@@ -379,15 +381,20 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn layer2_fallback_on_bad_path() {
-        // Use an unwriteable path to force the fallback.
+        // Use an unwriteable path to force the fallback. `/proc` is read-only
+        // on Linux; macOS has no `/proc` so `create_dir_all` fails at root.
+        // Skipped on Windows because `/proc/...` resolves to `C:\proc\...`,
+        // which is writeable under a standard user account.
         let enforcer = ToolBudgetEnforcer {
             per_result_threshold: 10,
             per_turn_budget: 1000,
             temp_dir: PathBuf::from("/proc/no-such-dir-librefang-test"),
         };
         let content = "z".repeat(100);
-        let result = enforcer.maybe_persist_result(&content, "bad-id");
+        let (result, persisted) = enforcer.maybe_persist_result(&content, "bad-id");
+        assert!(!persisted);
         assert!(result.ends_with("[Truncated: could not save full output]"));
         assert!(result.len() <= 10 + 50); // truncated portion + notice
     }
