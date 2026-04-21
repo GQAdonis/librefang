@@ -3,7 +3,7 @@
 //! Full implementation of the Anthropic Messages API with tool use support,
 //! system prompt extraction, and retry on 429/529 errors.
 
-use crate::backoff::jittered_backoff;
+use crate::backoff::standard_retry_delay;
 use crate::llm_driver::{CompletionRequest, CompletionResponse, LlmDriver, LlmError, StreamEvent};
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -338,12 +338,17 @@ impl LlmDriver for AnthropicDriver {
 
             if status == 429 || status == 529 {
                 if attempt < max_retries {
-                    let delay = jittered_backoff(
-                        attempt + 1,
-                        std::time::Duration::from_secs(2),
-                        std::time::Duration::from_secs(60),
-                        0.5,
-                    );
+                    let retry_after = resp
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(std::time::Duration::from_secs);
+                    let delay = standard_retry_delay(attempt + 1);
+                    let delay = match retry_after {
+                        Some(ra) if ra > delay => ra,
+                        _ => delay,
+                    };
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),
@@ -417,12 +422,17 @@ impl LlmDriver for AnthropicDriver {
 
             if status == 429 || status == 529 {
                 if attempt < max_retries {
-                    let delay = jittered_backoff(
-                        attempt + 1,
-                        std::time::Duration::from_secs(2),
-                        std::time::Duration::from_secs(60),
-                        0.5,
-                    );
+                    let retry_after = resp
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(std::time::Duration::from_secs);
+                    let delay = standard_retry_delay(attempt + 1);
+                    let delay = match retry_after {
+                        Some(ra) if ra > delay => ra,
+                        _ => delay,
+                    };
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),

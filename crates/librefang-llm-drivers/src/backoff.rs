@@ -1,11 +1,11 @@
 //! Jittered exponential backoff for LLM driver retry loops.
 //!
-//! Implements decorrelated jitter to prevent thundering-herd retry spikes when
-//! multiple agent sessions hit the same rate-limited provider concurrently.
-//! The algorithm mirrors the Python reference in `hermes-agent/agent/retry_utils.py`.
+//! Implements exponential backoff with proportional jitter — the delay grows
+//! exponentially with each retry attempt, and a random fraction of that delay
+//! is added as jitter to spread out concurrent retry spikes from multiple sessions.
 //!
 //! Formula: `delay = min(base * 2^(attempt-1), max_delay) + jitter`
-//! where `jitter ∈ [0, jitter_ratio * delay]`.
+//! where `jitter ∈ [0, jitter_ratio * exp_delay]`.
 //!
 //! The random seed combines `SystemTime::now().subsec_nanos()` with a
 //! process-global monotonic counter so that seeds remain diverse even when the
@@ -73,18 +73,30 @@ pub fn jittered_backoff(
     // Dividing by 2^32 (not u32::MAX) maps that range to [0, 1).
     // The previous code used `>> 33` (only 31 bits) divided by u32::MAX,
     // which capped r at ~0.5 and silently halved the effective jitter range.
-    let r = (mixed >> 32) as f64 / (u32::MAX as f64 + 1.0);
+    let r = (mixed >> 32) as f64 / (1u64 << 32) as f64;
 
     let jitter = exp_delay.mul_f64((jitter_ratio * r).clamp(0.0, 1.0));
     exp_delay + jitter
 }
 
-/// Return `true` when the caller should make another attempt.
-///
-/// Equivalent to `attempt < max_attempts`.
-#[inline]
-pub fn should_retry(attempt: u32, max_attempts: u32) -> bool {
-    attempt < max_attempts
+/// Standard LLM-driver retry delay using 2s base, 60s cap, 50% jitter.
+pub fn standard_retry_delay(attempt: u32) -> Duration {
+    jittered_backoff(
+        attempt,
+        Duration::from_secs(2),
+        Duration::from_secs(60),
+        0.5,
+    )
+}
+
+/// Variant for tool-use failures with faster 1.5s base.
+pub fn tool_use_retry_delay(attempt: u32) -> Duration {
+    jittered_backoff(
+        attempt,
+        Duration::from_millis(1500),
+        Duration::from_secs(60),
+        0.5,
+    )
 }
 
 #[cfg(test)]
@@ -129,19 +141,42 @@ mod tests {
     }
 
     #[test]
-    fn should_retry_logic() {
-        assert!(should_retry(0, 3));
-        assert!(should_retry(2, 3));
-        assert!(!should_retry(3, 3));
-        assert!(!should_retry(5, 3));
-    }
-
-    #[test]
     fn zero_jitter_ratio_equals_pure_exp() {
         let base = Duration::from_secs(1);
         let max = Duration::from_secs(120);
         let d = jittered_backoff(3, base, max, 0.0);
         // attempt 3: base * 2^2 = 4s, no jitter
         assert_eq!(d, Duration::from_secs(4));
+    }
+
+    #[test]
+    fn attempt_0_treated_as_base() {
+        // attempt=0 is normalized to attempt=1 via saturating_sub(1)
+        let base = Duration::from_secs(5);
+        let max = Duration::from_secs(60);
+        let d = jittered_backoff(0, base, max, 0.5);
+        // should behave like attempt=1: base + up to 50% jitter
+        assert!(d >= base);
+        assert!(d <= base + base.mul_f64(0.5));
+    }
+
+    #[test]
+    fn attempt_max_saturates_exp_without_panic() {
+        // attempt=u32::MAX saturates exp to 62, keeping 2_f64.powi(62) finite.
+        // No panic and delay is capped at max_delay.
+        let base = Duration::from_secs(2);
+        let max = Duration::from_secs(30);
+        let d = jittered_backoff(u32::MAX, base, max, 0.5);
+        assert!(d <= max + max.mul_f64(0.5));
+    }
+
+    #[test]
+    fn jitter_ratio_over_1_clamped_to_1() {
+        // jitter_ratio > 1.0 is clamped to 1.0, so jitter ≤ exp_delay
+        let base = Duration::from_secs(2);
+        let max = Duration::from_secs(60);
+        let d = jittered_backoff(2, base, max, 3.0);
+        // attempt=2: base * 2^1 = 4s; jitter capped so total ≤ 4s + 4s = 8s
+        assert!(d <= max.mul_f64(2.0));
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! Works with OpenAI, Ollama, vLLM, and any other OpenAI-compatible endpoint.
 
-use crate::backoff::jittered_backoff;
+use crate::backoff::{standard_retry_delay, tool_use_retry_delay};
 use crate::llm_driver::{CompletionRequest, CompletionResponse, LlmDriver, LlmError, StreamEvent};
 use crate::think_filter::{FilterAction, StreamingThinkFilter};
 use async_trait::async_trait;
@@ -645,12 +645,17 @@ impl LlmDriver for OpenAIDriver {
             let status = resp.status().as_u16();
             if status == 429 {
                 if attempt < max_retries {
-                    let delay = jittered_backoff(
-                        attempt + 1,
-                        std::time::Duration::from_secs(2),
-                        std::time::Duration::from_secs(60),
-                        0.5,
-                    );
+                    let retry_after = resp
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(std::time::Duration::from_secs);
+                    let delay = standard_retry_delay(attempt + 1);
+                    let delay = match retry_after {
+                        Some(ra) if ra > delay => ra,
+                        _ => delay,
+                    };
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),
@@ -677,12 +682,7 @@ impl LlmDriver for OpenAIDriver {
                     }
                     // If parsing fails, retry on next attempt
                     if attempt < max_retries {
-                        let delay = jittered_backoff(
-                            attempt + 1,
-                            std::time::Duration::from_millis(1500),
-                            std::time::Duration::from_secs(60),
-                            0.5,
-                        );
+                        let delay = tool_use_retry_delay(attempt + 1);
                         warn!(
                             status,
                             attempt,
@@ -1004,12 +1004,17 @@ impl LlmDriver for OpenAIDriver {
             let status = resp.status().as_u16();
             if status == 429 {
                 if attempt < max_retries {
-                    let delay = jittered_backoff(
-                        attempt + 1,
-                        std::time::Duration::from_secs(2),
-                        std::time::Duration::from_secs(60),
-                        0.5,
-                    );
+                    let retry_after = resp
+                        .headers()
+                        .get("retry-after")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(std::time::Duration::from_secs);
+                    let delay = standard_retry_delay(attempt + 1);
+                    let delay = match retry_after {
+                        Some(ra) if ra > delay => ra,
+                        _ => delay,
+                    };
                     warn!(
                         status,
                         delay_ms = delay.as_millis(),
@@ -1034,12 +1039,7 @@ impl LlmDriver for OpenAIDriver {
                         return Ok(response);
                     }
                     if attempt < max_retries {
-                        let delay = jittered_backoff(
-                            attempt + 1,
-                            std::time::Duration::from_millis(1500),
-                            std::time::Duration::from_secs(60),
-                            0.5,
-                        );
+                        let delay = tool_use_retry_delay(attempt + 1);
                         warn!(
                             status,
                             attempt,
