@@ -315,6 +315,10 @@ fn parse_reset_value(s: &str) -> Option<f64> {
 
     // ISO 8601 duration — minimal subset: PT[Nh][Nm][Ns] (no date part)
     if let Some(rest) = s.strip_prefix("PT").or_else(|| s.strip_prefix("pt")) {
+        // Empty duration "PT" is malformed.
+        if rest.is_empty() {
+            return None;
+        }
         let mut secs = 0.0f64;
         let mut current = String::new();
         for ch in rest.chars() {
@@ -334,6 +338,12 @@ fn parse_reset_value(s: &str) -> Option<f64> {
                 }
                 _ => {}
             }
+        }
+        // If digits remain without a unit designator the duration is malformed
+        // (e.g. "PT42" or "PT1M30"). Return None rather than silently dropping
+        // the trailing digits and returning a wrong value.
+        if !current.is_empty() {
+            return None;
         }
         return Some(secs);
     }
@@ -548,6 +558,20 @@ mod tests {
     #[test]
     fn test_parse_reset_value_iso_duration_mixed() {
         assert!((parse_reset_value("PT1H2M3S").unwrap() - 3723.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_parse_reset_value_empty_pt_is_none() {
+        // "PT" with no digits/units is malformed — must not return Some(0.0).
+        assert!(parse_reset_value("PT").is_none());
+    }
+
+    #[test]
+    fn test_parse_reset_value_trailing_digits_no_unit_is_none() {
+        // "PT42" has no unit designator — silently returning Some(0.0) would be wrong.
+        assert!(parse_reset_value("PT42").is_none());
+        // "PT1M30" — the trailing "30" has no unit; the whole value is malformed.
+        assert!(parse_reset_value("PT1M30").is_none());
     }
 
     #[test]
