@@ -1010,6 +1010,7 @@ pub fn create_skill(
         prompt_context: None, // stored in prompt_context.md
         source: Some(SkillSource::Local),
         config: HashMap::new(),
+        config_vars: vec![],
     };
 
     // Serialize manifest to TOML
