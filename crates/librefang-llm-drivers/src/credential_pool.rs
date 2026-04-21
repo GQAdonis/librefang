@@ -25,22 +25,17 @@ pub const DEFAULT_EXHAUSTED_TTL: Duration = Duration::from_secs(60 * 60); // 1 h
 // ── Strategy ─────────────────────────────────────────────────────────────────
 
 /// Credential selection strategy for [`CredentialPool`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum PoolStrategy {
     /// Always try the highest-priority available credential first.
     FillFirst,
     /// Cycle through available credentials in priority order.
+    #[default]
     RoundRobin,
     /// Choose a random available credential.
     Random,
     /// Choose the credential with the fewest successful requests so far.
     LeastUsed,
-}
-
-impl Default for PoolStrategy {
-    fn default() -> Self {
-        PoolStrategy::RoundRobin
-    }
 }
 
 // ── PooledCredential ─────────────────────────────────────────────────────────
@@ -98,7 +93,7 @@ impl PooledCredential {
 ///
 /// if let Some(key) = pool.acquire() {
 ///     // use key …
-///     pool.mark_success(key);
+///     pool.mark_success(&key);
 /// }
 /// ```
 pub struct CredentialPool {
