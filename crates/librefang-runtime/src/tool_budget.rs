@@ -132,7 +132,7 @@ impl ToolBudgetEnforcer {
     /// Already-persisted results (those whose content starts with the
     /// [`PERSISTED_MARKER`]) are counted toward the total but are never
     /// re-persisted.
-    pub fn enforce_turn_budget(&self, results: &mut Vec<ToolResultEntry>) {
+    pub fn enforce_turn_budget(&self, results: &mut [ToolResultEntry]) {
         let total: usize = results.iter().map(|r| r.content.len()).sum();
         if total <= self.per_turn_budget {
             return;
@@ -287,11 +287,15 @@ mod tests {
 
     #[test]
     fn layer2_fallback_on_bad_path() {
-        // Use an unwriteable path to force the fallback.
+        // Use a path whose parent is a regular file (not a directory) so that
+        // create_dir_all always fails, cross-platform.
+        let dir = tempfile::tempdir().unwrap();
+        let file_path = dir.path().join("i_am_a_regular_file");
+        fs::write(&file_path, b"").unwrap();
         let enforcer = ToolBudgetEnforcer {
             per_result_threshold: 10,
             per_turn_budget: 1000,
-            temp_dir: PathBuf::from("/proc/no-such-dir-librefang-test"),
+            temp_dir: file_path.join("subdir"), // can't create inside a file
         };
         let content = "z".repeat(100);
         let result = enforcer.maybe_persist_result(&content, "bad-id");

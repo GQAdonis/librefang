@@ -404,8 +404,9 @@ impl CheckpointManager {
 
     /// Validate a commit hash to prevent git argument injection.
     ///
-    /// Accepts 4–64 lowercase or uppercase hex characters.  Values starting
-    /// with `-` would be misinterpreted as git flags.
+    /// Accepts 4–40 lowercase or uppercase hex characters (SHA-1 abbreviated
+    /// through full-length).  Values starting with `-` would be misinterpreted
+    /// as git flags.
     fn validate_commit_hash(hash: &str) -> Result<(), CheckpointError> {
         if hash.is_empty() {
             return Err(CheckpointError::InvalidHash("empty hash".to_string()));
@@ -416,9 +417,9 @@ impl CheckpointManager {
             )));
         }
         let len = hash.len();
-        if !(4..=64).contains(&len) {
+        if !(4..=40).contains(&len) {
             return Err(CheckpointError::InvalidHash(format!(
-                "hash length {len} not in 4–64 range"
+                "hash length {len} not in 4–40 range"
             )));
         }
         if !hash.chars().all(|c| c.is_ascii_hexdigit()) {

@@ -352,18 +352,22 @@ pub fn validate_window_id(id: &str) -> bool {
 ///
 /// The `|` character is forbidden because it is used as the field separator
 /// in our `list-windows -F` format string; allowing it would corrupt parsing.
-/// Control characters (including newlines and null bytes) are rejected because
-/// they cannot appear in tmux window names meaningfully.
-///
-/// Since window names are passed via `Command::arg` (not a shell), there is no
-/// shell-injection risk — we only need to guard against chars that break our
-/// own tmux output parsing.
+/// Control characters and shell-special characters are rejected.  The list
+/// covers characters that could be misused if the name ever reaches a shell
+/// context (logging, display, scripting) or that break our own tmux output
+/// parsing (e.g. `|` is the field delimiter).
 pub fn validate_window_name(name: &str) -> bool {
+    const FORBIDDEN: &[char] = &[
+        ';', '&', '|', '`', '$', '(', ')', '{', '}', '<', '>', '/', '\\', '"', '\'', '#', '!', '@',
+        '=', '+', '~',
+    ];
     let len = name.chars().count();
     if len == 0 || len > 64 {
         return false;
     }
-    !name.chars().any(|c| c.is_control() || c == '|')
+    !name
+        .chars()
+        .any(|c| c.is_control() || FORBIDDEN.contains(&c))
 }
 
 // ── internal parser ───────────────────────────────────────────────────────────
