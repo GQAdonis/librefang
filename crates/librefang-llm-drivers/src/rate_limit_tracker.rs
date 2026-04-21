@@ -760,12 +760,13 @@ mod tests {
 
     #[test]
     fn test_parse_reset_value_rfc3339_future() {
-        // A fixed future timestamp: 2026-12-31 23:59:59 UTC
-        let val = parse_reset_value("2026-12-31T23:59:59Z").unwrap();
-        // Should be a positive number of seconds in the future from now.
-        assert!(val > 0.0, "future timestamps must return positive seconds");
-        // Should be less than 2 years' worth of seconds
-        assert!(val < 63_072_000.0, "sanity check: 2 years in seconds");
+        // Use a dynamically generated future timestamp (1 hour from now) so this
+        // test never becomes a time bomb.
+        let future = (chrono::Utc::now() + chrono::Duration::hours(1))
+            .format("%Y-%m-%dT%H:%M:%SZ")
+            .to_string();
+        let val = parse_reset_value(&future).unwrap();
+        assert!(val > 0.0 && val <= 3700.0, "expected 0–3700s, got {val}");
     }
 
     #[test]
