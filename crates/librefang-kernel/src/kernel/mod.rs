@@ -3197,6 +3197,15 @@ system_prompt = "You are a helpful assistant."
         // agent-scoped injections and tag-gated global injections are visible.
         self.inject_reset_prompt(&mut session, agent_id);
 
+        // Fire external session:start hook for the newly created session.
+        self.external_hooks.fire(
+            crate::hooks::ExternalHookEvent::SessionStart,
+            serde_json::json!({
+                "agent_id": agent_id.to_string(),
+                "session_id": session.id.0.to_string(),
+            }),
+        );
+
         // Update parent's children list
         if let Some(parent_id) = parent {
             self.registry.add_child(parent_id, agent_id);
@@ -6399,6 +6408,15 @@ system_prompt = "You are a helpful assistant."
             }),
         );
 
+        // Fire session:start for the newly created session.
+        self.external_hooks.fire(
+            crate::hooks::ExternalHookEvent::SessionStart,
+            serde_json::json!({
+                "agent_id": agent_id.to_string(),
+                "session_id": new_session.id.0.to_string(),
+            }),
+        );
+
         info!(agent_id = %agent_id, "Session reset (summary saved to memory)");
         Ok(())
     }
@@ -6516,6 +6534,15 @@ system_prompt = "You are a helpful assistant."
             }),
         );
 
+        // Fire session:start for the newly created session.
+        self.external_hooks.fire(
+            crate::hooks::ExternalHookEvent::SessionStart,
+            serde_json::json!({
+                "agent_id": agent_id.to_string(),
+                "session_id": new_session.id.0.to_string(),
+            }),
+        );
+
         info!(agent_id = %agent_id, "All agent history cleared");
         Ok(())
     }
@@ -6568,6 +6595,15 @@ system_prompt = "You are a helpful assistant."
         self.registry
             .update_session_id(agent_id, session.id)
             .map_err(KernelError::LibreFang)?;
+
+        // Fire external session:start hook for the newly created session.
+        self.external_hooks.fire(
+            crate::hooks::ExternalHookEvent::SessionStart,
+            serde_json::json!({
+                "agent_id": agent_id.to_string(),
+                "session_id": session.id.0.to_string(),
+            }),
+        );
 
         info!(agent_id = %agent_id, label = ?label, "Created new session");
 
@@ -6804,15 +6840,6 @@ system_prompt = "You are a helpful assistant."
         if !session.messages.is_empty() {
             let _ = self.memory.save_session(session);
         }
-
-        // Fire external session:start hook (fire-and-forget).
-        self.external_hooks.fire(
-            crate::hooks::ExternalHookEvent::SessionStart,
-            serde_json::json!({
-                "agent_id": agent_id.to_string(),
-                "session_id": session.id.0.to_string(),
-            }),
-        );
 
         // Run on_session_start_script if configured (fire-and-forget).
         if let Some(ref script) = cfg.session.on_session_start_script {
