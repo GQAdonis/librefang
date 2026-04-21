@@ -95,7 +95,8 @@ impl ToolBudgetEnforcer {
         }
 
         let original_len = content.len();
-        let file_path = self.temp_dir.join(format!("{tool_use_id}.txt"));
+        let safe_id = sanitize_id(tool_use_id);
+        let file_path = self.temp_dir.join(format!("{safe_id}.txt"));
 
         match self.write_spill_file(&file_path, content) {
             Ok(()) => {
@@ -162,9 +163,8 @@ impl ToolBudgetEnforcer {
             }
 
             let entry = &mut results[idx];
-            let file_path = self
-                .temp_dir
-                .join(format!("{}-budget.txt", entry.tool_use_id));
+            let safe_id = sanitize_id(&entry.tool_use_id);
+            let file_path = self.temp_dir.join(format!("{safe_id}-budget.txt"));
 
             let replacement = match self.write_spill_file(&file_path, &entry.content) {
                 Ok(()) => {
@@ -207,6 +207,24 @@ impl ToolBudgetEnforcer {
 // ──────────────────────────────────────────────────────────────────────────────
 // Free helpers (pure, no I/O)
 // ──────────────────────────────────────────────────────────────────────────────
+
+/// Sanitize a `tool_use_id` so it is safe to use as a filename component.
+///
+/// Keeps alphanumeric characters, hyphens, and underscores; replaces everything
+/// else with `_`. Limits the output to 128 characters to prevent excessively
+/// long path components.
+fn sanitize_id(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(128)
+        .collect()
+}
 
 /// Build the compact summary block shown in-context when a result is persisted.
 fn build_persisted_summary(content: &str, original_bytes: usize, path: &Path) -> String {
