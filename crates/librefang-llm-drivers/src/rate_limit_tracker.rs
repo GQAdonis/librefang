@@ -104,6 +104,8 @@ pub struct RateLimitSnapshot {
     pub tokens_per_hour: RateLimitBucket,
     /// Input-tokens-per-minute window (Anthropic-specific).
     pub input_tokens_per_minute: RateLimitBucket,
+    /// Output-tokens-per-minute window (Anthropic-specific).
+    pub output_tokens_per_minute: RateLimitBucket,
 }
 
 impl RateLimitSnapshot {
@@ -127,10 +129,38 @@ impl RateLimitSnapshot {
             })
             .collect();
 
-        // Quick guard: at least one rate-limit header must be present.
+        // Quick guard: at least one known rate-limit header must be present.
+        const KNOWN_KEYS: &[&str] = &[
+            // OpenAI / Groq / OpenRouter format
+            "x-ratelimit-limit-requests",
+            "x-ratelimit-remaining-requests",
+            "x-ratelimit-reset-requests",
+            "x-ratelimit-limit-tokens",
+            "x-ratelimit-remaining-tokens",
+            "x-ratelimit-reset-tokens",
+            "x-ratelimit-limit-requests-1h",
+            "x-ratelimit-remaining-requests-1h",
+            "x-ratelimit-reset-requests-1h",
+            "x-ratelimit-limit-tokens-1h",
+            "x-ratelimit-remaining-tokens-1h",
+            "x-ratelimit-reset-tokens-1h",
+            // Anthropic format
+            "anthropic-ratelimit-requests-limit",
+            "anthropic-ratelimit-requests-remaining",
+            "anthropic-ratelimit-requests-reset",
+            "anthropic-ratelimit-tokens-limit",
+            "anthropic-ratelimit-tokens-remaining",
+            "anthropic-ratelimit-tokens-reset",
+            "anthropic-ratelimit-input-tokens-limit",
+            "anthropic-ratelimit-input-tokens-remaining",
+            "anthropic-ratelimit-input-tokens-reset",
+            "anthropic-ratelimit-output-tokens-limit",
+            "anthropic-ratelimit-output-tokens-remaining",
+            "anthropic-ratelimit-output-tokens-reset",
+        ];
         let has_any = lowered
             .keys()
-            .any(|k| k.starts_with("x-ratelimit-") || k.starts_with("anthropic-ratelimit-"));
+            .any(|k| KNOWN_KEYS.iter().any(|&known| known == k));
         if !has_any {
             return None;
         }
@@ -142,8 +172,16 @@ impl RateLimitSnapshot {
         let get_u64 = |key: &str| -> u64 {
             lowered
                 .get(key)
-                .and_then(|v| v.trim().parse::<f64>().ok())
-                .map(|f| f as u64)
+                .and_then(|v| {
+                    let trimmed = v.trim();
+                    // Try u64 first (exact integer from most providers), then fall
+                    // back to f64→u64 for values that arrive as floats (lossy above
+                    // 2^53, but rate-limit numbers are never that large).
+                    trimmed
+                        .parse::<u64>()
+                        .ok()
+                        .or_else(|| trimmed.parse::<f64>().ok().map(|f| f as u64))
+                })
                 .unwrap_or(0)
         };
 
@@ -232,12 +270,20 @@ impl RateLimitSnapshot {
             get_f64("anthropic-ratelimit-input-tokens-reset"),
         );
 
+        // Output tokens (Anthropic-only concept)
+        let output_tpm = make_bucket(
+            get_u64("anthropic-ratelimit-output-tokens-limit"),
+            get_u64("anthropic-ratelimit-output-tokens-remaining"),
+            get_f64("anthropic-ratelimit-output-tokens-reset"),
+        );
+
         Some(RateLimitSnapshot {
             requests_per_minute: anthropic_rpm,
             requests_per_hour: rph,
             tokens_per_minute: anthropic_tpm,
             tokens_per_hour: tph,
             input_tokens_per_minute: input_tpm,
+            output_tokens_per_minute: output_tpm,
         })
     }
 
@@ -248,6 +294,7 @@ impl RateLimitSnapshot {
             || self.tokens_per_minute.is_warning()
             || self.tokens_per_hour.is_warning()
             || self.input_tokens_per_minute.is_warning()
+            || self.output_tokens_per_minute.is_warning()
     }
 
     /// Format the snapshot as a multi-line human-readable string with ASCII
@@ -257,20 +304,22 @@ impl RateLimitSnapshot {
     /// ```text
     /// Rate Limits:
     ///
-    ///   Requests/min   [████████░░░░░░░░░░░░]  40.0%  400/1000 used  (600 left, resets in 42s)
+    ///   Requests/min   [████████░░░░░░░░░░░░]  40.0%  400/1.0K used  (600 left, resets in 42s)
     ///   Requests/hr    (no data)
     ///
     ///   Tokens/min     [██████████████░░░░░░]  70.0%  70.0K/100.0K used  (30.0K left, resets in 42s)
     ///   Tokens/hr      (no data)
     ///   Input tok/min  (no data)
+    ///   Output tok/min (no data)
     /// ```
     pub fn display(&self) -> String {
         let buckets: &[(&str, &RateLimitBucket)] = &[
-            ("Requests/min ", &self.requests_per_minute),
-            ("Requests/hr  ", &self.requests_per_hour),
-            ("Tokens/min   ", &self.tokens_per_minute),
-            ("Tokens/hr    ", &self.tokens_per_hour),
+            ("Requests/min", &self.requests_per_minute),
+            ("Requests/hr ", &self.requests_per_hour),
+            ("Tokens/min  ", &self.tokens_per_minute),
+            ("Tokens/hr   ", &self.tokens_per_hour),
             ("Input tok/min", &self.input_tokens_per_minute),
+            ("Output tok/min", &self.output_tokens_per_minute),
         ];
 
         let mut lines = vec!["Rate Limits:".to_string(), String::new()];
@@ -305,12 +354,44 @@ impl RateLimitSnapshot {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 /// Parse a reset value that may be expressed as:
-/// - A plain number of seconds (`"42.5"`)
-/// - An ISO 8601 duration (`"PT42.5S"`, `"PT1M30S"`, `"PT1H"`)
+/// - A plain number of seconds (`"42.5"`);
+/// - A Go-style duration (`"6m0s"`, `"7.66s"`, `"1h30m"`);
+/// - An ISO 8601 duration (`"PT42.5S"`, `"PT1M30S"`, `"PT1H"`);
+/// - An RFC 3339 timestamp (`"2026-04-21T12:34:56Z"`).
 fn parse_reset_value(s: &str) -> Option<f64> {
+    let s = s.trim();
+
     // Plain numeric seconds
     if let Ok(v) = s.parse::<f64>() {
         return Some(v);
+    }
+
+    // Go-style duration — e.g. "6m0s", "7.66s", "1h30m", "3600s"
+    // Numbers immediately followed by a unit (h/m/s), concatenated with no spaces.
+    let mut secs = 0.0f64;
+    let mut current = String::new();
+    for ch in s.chars() {
+        match ch {
+            '0'..='9' | '.' => current.push(ch),
+            'h' | 'H' => {
+                secs += current.parse::<f64>().unwrap_or(0.0) * 3600.0;
+                current.clear();
+            }
+            'm' | 'M' if !current.is_empty() => {
+                // 'm' for minutes; distinguish Go-style "6m" from ISO 8601 "PT1M".
+                secs += current.parse::<f64>().unwrap_or(0.0) * 60.0;
+                current.clear();
+            }
+            's' | 'S' => {
+                secs += current.parse::<f64>().unwrap_or(0.0);
+                current.clear();
+            }
+            _ => {}
+        }
+    }
+    // If we consumed at least one unit and have no leftover digits, it's a valid Go duration.
+    if secs > 0.0 && current.is_empty() {
+        return Some(secs);
     }
 
     // ISO 8601 duration — minimal subset: PT[Nh][Nm][Ns] (no date part)
@@ -339,13 +420,21 @@ fn parse_reset_value(s: &str) -> Option<f64> {
                 _ => {}
             }
         }
-        // If digits remain without a unit designator the duration is malformed
-        // (e.g. "PT42" or "PT1M30"). Return None rather than silently dropping
-        // the trailing digits and returning a wrong value.
+        // If digits remain without a unit designator the duration is malformed.
         if !current.is_empty() {
             return None;
         }
         return Some(secs);
+    }
+
+    // RFC 3339 timestamp — "2026-04-21T12:34:56Z", "2026-04-21T12:34:56+00:00"
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        let now = chrono::Utc::now();
+        let diff = dt.signed_duration_since(now);
+        // If the timestamp is in the past the window has already reset — return 0.
+        // If it's in the future, return the number of seconds until reset.
+        let secs = diff.num_seconds() as f64;
+        return Some(secs.max(0.0));
     }
 
     None
@@ -396,7 +485,7 @@ fn ascii_bar(ratio: f64, width: usize) -> String {
 /// Format a single bucket as one display line.
 fn fmt_bucket_line(label: &str, bucket: &RateLimitBucket) -> String {
     if !bucket.has_data() {
-        return format!("  {label}  (no data)");
+        return format!("  {:<14}  (no data)", label);
     }
 
     let ratio = bucket.usage_ratio();
@@ -405,7 +494,9 @@ fn fmt_bucket_line(label: &str, bucket: &RateLimitBucket) -> String {
     let reset = fmt_seconds(bucket.remaining_secs());
 
     format!(
-        "  {label}  {bar} {:5.1}%  {}/{} used  ({} left, resets in {})",
+        "  {:<14}  {} {:5.1}%  {}/{} used  ({} left, resets in {})",
+        label,
+        bar,
         ratio * 100.0,
         fmt_count(used),
         fmt_count(bucket.limit),
@@ -635,5 +726,72 @@ mod tests {
         let snap = RateLimitSnapshot::from_headers(&headers).expect("should parse");
         assert_eq!(snap.requests_per_hour.limit, 10_000);
         assert_eq!(snap.tokens_per_hour.limit, 5_000_000);
+    }
+
+    #[test]
+    fn test_parse_reset_value_go_duration_seconds() {
+        // "7.66s" — seconds with decimal
+        assert!((parse_reset_value("7.66s").unwrap() - 7.66).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_parse_reset_value_go_duration_minutes() {
+        // "6m0s" — minutes and seconds
+        assert!((parse_reset_value("6m0s").unwrap() - 360.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_parse_reset_value_go_duration_hours() {
+        // "1h30m" — hours and minutes
+        assert!((parse_reset_value("1h30m").unwrap() - 5400.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_parse_reset_value_go_duration_no_unit_is_none() {
+        // "42foo" is not a valid Go duration
+        assert!(parse_reset_value("42foo").is_none());
+    }
+
+    #[test]
+    fn test_parse_reset_value_rfc3339_future() {
+        // A fixed future timestamp: 2026-12-31 23:59:59 UTC
+        let val = parse_reset_value("2026-12-31T23:59:59Z").unwrap();
+        // Should be a positive number of seconds in the future from now.
+        assert!(val > 0.0, "future timestamps must return positive seconds");
+        // Should be less than 2 years' worth of seconds
+        assert!(val < 63_072_000.0, "sanity check: 2 years in seconds");
+    }
+
+    #[test]
+    fn test_parse_reset_value_rfc3339_past() {
+        // A past timestamp means the window has already reset — return 0.
+        let val = parse_reset_value("2020-01-01T00:00:00Z").unwrap();
+        assert_eq!(
+            val, 0.0,
+            "past timestamps must return 0 (window already reset)"
+        );
+    }
+
+    #[test]
+    fn test_output_tokens_bucket_parsed() {
+        let headers = headers_from_pairs(&[
+            ("anthropic-ratelimit-output-tokens-limit", "80000"),
+            ("anthropic-ratelimit-output-tokens-remaining", "60000"),
+            ("anthropic-ratelimit-output-tokens-reset", "60"),
+        ]);
+        let snap = RateLimitSnapshot::from_headers(&headers).expect("should parse");
+        assert_eq!(snap.output_tokens_per_minute.limit, 80_000);
+        assert_eq!(snap.output_tokens_per_minute.remaining, 60_000);
+    }
+
+    #[test]
+    fn test_has_warning_includes_output_tokens() {
+        let mut snap = RateLimitSnapshot::default();
+        snap.output_tokens_per_minute = RateLimitBucket {
+            limit: 100,
+            remaining: 10, // 90% used — should trigger warning
+            ..Default::default()
+        };
+        assert!(snap.has_warning());
     }
 }
