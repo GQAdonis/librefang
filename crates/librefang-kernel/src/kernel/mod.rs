@@ -6120,20 +6120,68 @@ system_prompt = "You are a helpful assistant."
 
         let latency_ms = start_time.elapsed().as_millis() as u64;
 
+        // Cron [SILENT] marker: if the cron prompt contains "[SILENT]", the
+        // agent intends this job to be maintenance-only. Strip the assistant
+        // response from session history so it does not pollute the conversation
+        // context for future turns. The prompt is checked on the original
+        // `message` parameter (before any link-context additions) so the
+        // marker placement is unambiguous to the job author.
+        //
+        // Session write: we still save the session — we just remove the
+        // assistant turn from it first so the next cron fire does not see the
+        // suppressed response in its context window.
+        // Canonical append: skipped entirely for silent cron turns.
+        let skip_canonical_append = if message.contains("[SILENT]") {
+            // Remove the last assistant message from the in-memory session so
+            // it is not included in the re-saved version.
+            let removed = session
+                .messages
+                .iter()
+                .rposition(|msg| msg.role == librefang_types::message::Role::Assistant)
+                .map(|idx| {
+                    session.messages.remove(idx);
+                    true
+                })
+                .unwrap_or(false);
+
+            if removed {
+                // Persist the stripped session. agent_loop already called
+                // save_session internally; this second save overwrites that
+                // with the version that has the assistant turn removed.
+                if let Err(e) = self.memory.save_session(&session) {
+                    warn!("cron [SILENT]: failed to persist stripped session: {e}");
+                }
+            }
+            tracing::info!(
+                event = "cron_silent_job_completed",
+                agent = %entry.name,
+                agent_id = %agent_id,
+                stripped = removed,
+                "[SILENT] cron job completed — assistant response suppressed from session history"
+            );
+            true
+        } else {
+            false
+        };
+
         // Append new messages to canonical session for cross-channel memory.
         // Use run_agent_loop's own start index (post-trim) instead of one
         // captured here — the loop may trim session history and make a
         // locally-captured index stale (see #2067). Clamp defensively.
-        let start = result.new_messages_start.min(session.messages.len());
-        if start < session.messages.len() {
-            let new_messages = session.messages[start..].to_vec();
-            if let Err(e) = self.memory.append_canonical(
-                agent_id,
-                &new_messages,
-                None,
-                Some(effective_session_id),
-            ) {
-                warn!("Failed to update canonical session: {e}");
+        // Skipped for [SILENT] cron turns — we stripped the assistant message
+        // from the session above and do not want it in canonical context.
+        if !skip_canonical_append {
+            let start = result.new_messages_start.min(session.messages.len());
+            if start < session.messages.len() {
+                let new_messages = session.messages[start..].to_vec();
+                if let Err(e) = self.memory.append_canonical(
+                    agent_id,
+                    &new_messages,
+                    None,
+                    Some(effective_session_id),
+                ) {
+                    warn!("Failed to update canonical session: {e}");
+                }
             }
         }
 
