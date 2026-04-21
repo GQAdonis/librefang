@@ -6219,6 +6219,7 @@ mod tests {
             None,
             None,
             None,
+            None,
             None, // sender_id
             None, // channel
         )
@@ -6260,6 +6261,7 @@ mod tests {
             None, // media_engine
             None, // media_drivers
             Some(&policy),
+            None,
             None,
             None,
             None,
@@ -6315,6 +6317,7 @@ mod tests {
             None, // media_engine
             None, // media_drivers
             Some(&policy),
+            None,
             None,
             None,
             None,
