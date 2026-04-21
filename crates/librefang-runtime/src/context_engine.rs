@@ -4067,6 +4067,25 @@ impl ContextEngine for StackedContextEngine {
         }
         merged
     }
+
+    /// Delegate to the first engine whose `should_compress` returns `true`.
+    ///
+    /// If any layer wants compression the whole stack should compact.  This
+    /// correctly propagates `NoCompactContextEngine`'s hard `false` when it is
+    /// the primary layer: the stacked engine will only trigger if *some* layer
+    /// says yes, which a `NoCompactContextEngine` never will.
+    fn should_compress(&self, current_tokens: usize, max_tokens: usize) -> bool {
+        self.engines
+            .iter()
+            .any(|e| e.should_compress(current_tokens, max_tokens))
+    }
+
+    /// Propagate `update_model` to every layer in the stack.
+    fn update_model(&self, model: &str, context_length: usize) {
+        for engine in &self.engines {
+            engine.update_model(model, context_length);
+        }
+    }
 }
 
 /// Resolve `allowed_secrets` from a hooks config into `LIBREFANG_SECRET_<NAME>`
@@ -4403,7 +4422,11 @@ impl ContextEngine for NoCompactContextEngine {
     ) -> LibreFangResult<CompactionResult> {
         // NoCompactContextEngine must never compress — return all messages as-is.
         Ok(CompactionResult {
+            summary: String::new(),
             kept_messages: messages.to_vec(),
+            compacted_count: 0,
+            chunks_used: 0,
+            used_fallback: false,
         })
     }
 
