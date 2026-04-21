@@ -3,7 +3,6 @@
 //! Provides filesystem, web, shell, and inter-agent tools. Agent tools
 //! (agent_send, agent_spawn, etc.) require a KernelHandle to be passed in.
 
-use crate::dangerous_command::DangerousCommandChecker;
 use crate::kernel_handle::KernelHandle;
 use crate::mcp;
 use crate::web_search::{parse_ddg_results, WebToolsContext};
@@ -320,10 +319,10 @@ pub struct ToolExecContext<'a> {
     pub process_manager: Option<&'a crate::process_manager::ProcessManager>,
     pub sender_id: Option<&'a str>,
     pub channel: Option<&'a str>,
-    /// Shared dangerous-command checker for session-scoped allowlist.
-    /// Created once per tool-execution session and reused across all
-    /// `shell_exec` calls so that `allow_for_session` persists.
-    pub dangerous_command_checker: Option<&'a Arc<tokio::sync::RwLock<DangerousCommandChecker>>>,
+    /// Session-scoped dangerous command checker. When `Some`, the session allowlist
+    /// is preserved across tool calls so previously-approved patterns are not re-blocked.
+    pub dangerous_command_checker:
+        Option<&'a Arc<tokio::sync::RwLock<crate::dangerous_command::DangerousCommandChecker>>>,
 }
 
 /// Execute a tool without running the approval / capability / taint gate.
@@ -358,7 +357,7 @@ pub async fn execute_tool_raw(
         process_manager,
         sender_id,
         channel: _,
-        dangerous_command_checker: _,
+        dangerous_command_checker,
     } = ctx;
 
     let result = match tool_name {
@@ -511,39 +510,32 @@ pub async fn execute_tool_raw(
             // descriptive error. The agent can route approval via the existing
             // `submit_tool_approval` path by catching the error message and
             // re-submitting after the user has explicitly allowed the pattern.
-            //
-            // If a shared checker is available (passed through ToolExecContext),
-            // reuse it so that session allowlist entries from prior `allow_for_session`
-            // calls are honored. Otherwise create a one-shot checker with no allowlist.
-            let check_result = {
-                use crate::dangerous_command::ApprovalMode;
-                match ctx.dangerous_command_checker {
-                    Some(checker_arc) => {
-                        let checker = checker_arc.read().await;
-                        checker.check(command)
-                    }
-                    None => {
-                        let checker = DangerousCommandChecker::new(ApprovalMode::Manual);
-                        checker.check(command)
-                    }
-                }
-            };
-            if let crate::dangerous_command::CheckResult::Dangerous { description } = check_result {
-                warn!(
-                    command = crate::str_utils::safe_truncate_str(command, 120),
-                    description, "Dangerous command detected — blocking execution"
-                );
-                return ToolResult {
-                    tool_use_id: tool_use_id.to_string(),
-                    content: format!(
-                        "shell_exec blocked: dangerous command detected ({description}). \
-                         The command matches a known-dangerous pattern and has been blocked \
-                         for safety. If you need to run this command, request explicit user \
-                         approval first."
-                    ),
-                    is_error: true,
-                    ..Default::default()
+            {
+                use crate::dangerous_command::{
+                    ApprovalMode, CheckResult, DangerousCommandChecker,
                 };
+                let check_result = if let Some(checker_arc) = dangerous_command_checker {
+                    checker_arc.read().await.check(command)
+                } else {
+                    DangerousCommandChecker::new(ApprovalMode::Manual).check(command)
+                };
+                if let CheckResult::Dangerous { description } = check_result {
+                    warn!(
+                        command = crate::str_utils::safe_truncate_str(command, 120),
+                        description, "Dangerous command detected — blocking execution"
+                    );
+                    return ToolResult {
+                        tool_use_id: tool_use_id.to_string(),
+                        content: format!(
+                            "shell_exec blocked: dangerous command detected ({description}). \
+                             The command matches a known-dangerous pattern and has been blocked \
+                             for safety. If you need to run this command, request explicit user \
+                             approval first."
+                        ),
+                        is_error: true,
+                        ..Default::default()
+                    };
+                }
             }
 
             let effective_allowed_env_vars = allowed_env_vars.or_else(|| {
@@ -923,6 +915,9 @@ pub async fn execute_tool(
     process_manager: Option<&crate::process_manager::ProcessManager>,
     sender_id: Option<&str>,
     channel: Option<&str>,
+    dangerous_command_checker: Option<
+        &Arc<tokio::sync::RwLock<crate::dangerous_command::DangerousCommandChecker>>,
+    >,
 ) -> ToolResult {
     // Normalize the tool name through compat mappings so LLM-hallucinated aliases
     // (e.g. "fs-write" → "file_write") resolve to the canonical LibreFang name.
@@ -1066,7 +1061,7 @@ pub async fn execute_tool(
         process_manager,
         sender_id,
         channel,
-        dangerous_command_checker: None,
+        dangerous_command_checker,
     };
     execute_tool_raw(tool_use_id, tool_name, input, &ctx).await
 }
@@ -5821,6 +5816,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -5855,6 +5851,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -5886,6 +5883,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -5917,6 +5915,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -5947,6 +5946,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         // web_search now attempts a real fetch; may succeed or fail depending on network
@@ -5977,6 +5977,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6007,6 +6008,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6038,6 +6040,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6070,6 +6073,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         // Should fail for path resolution, NOT for permission denied
@@ -6128,6 +6132,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -6164,6 +6169,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6207,6 +6213,7 @@ mod tests {
             None,
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
 
@@ -6251,6 +6258,7 @@ mod tests {
             None,
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
 
@@ -6306,6 +6314,7 @@ mod tests {
             None,
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
 
@@ -6497,6 +6506,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6550,6 +6560,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -6762,6 +6773,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -6800,6 +6812,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -6838,6 +6851,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -6885,6 +6899,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -6936,6 +6951,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -7030,6 +7046,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -7067,6 +7084,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         // Should fail for "MCP not available", not "Permission denied"
@@ -7113,6 +7131,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         // Should NOT be a permission-denied error
@@ -7149,6 +7168,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(result.is_error);
@@ -7185,6 +7205,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -7220,6 +7241,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         assert!(
@@ -7255,6 +7277,7 @@ mod tests {
             None, // process_manager
             None, // sender_id
             None, // channel
+            None, // dangerous_command_checker
         )
         .await;
         // Should fail for "MCP not available", not "Permission denied"

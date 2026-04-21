@@ -733,6 +733,7 @@ async fn execute_single_tool_call(
             ctx.process_manager,
             ctx.sender_user_id,
             ctx.sender_channel,
+            ctx.dangerous_command_checker,
         ),
     )
     .await
