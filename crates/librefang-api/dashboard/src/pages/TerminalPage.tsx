@@ -272,7 +272,7 @@ export function TerminalPage() {
         }
       }, delay);
     };
-  }, [t, terminalEnabled, queryClient]);
+  }, [t, terminalEnabled, queryClient, addToast]);
 
   connectRef.current = connect;
 
@@ -547,6 +547,15 @@ export function TerminalPage() {
           </button>
         </div>
       )}
+      <TerminalTabs
+        ws={wsRef.current}
+        tmuxAvailable={tmuxAvailable}
+        maxWindows={maxWindows}
+        displayedActiveWindowId={displayedActiveWindowId}
+        onSwitchWindow={handleSwitchWindow}
+        terminalRef={terminalRef}
+        fitAddonRef={fitAddonRef}
+      />
       {searchVisible && (
         <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-[#1c2128] border-b border-gray-700/50">
           <input
@@ -589,15 +598,6 @@ export function TerminalPage() {
           ><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
-      <TerminalTabs
-        ws={wsRef.current}
-        tmuxAvailable={tmuxAvailable}
-        maxWindows={maxWindows}
-        displayedActiveWindowId={displayedActiveWindowId}
-        onSwitchWindow={handleSwitchWindow}
-        terminalRef={terminalRef}
-        fitAddonRef={fitAddonRef}
-      />
       <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden" />
     </div>
   );
