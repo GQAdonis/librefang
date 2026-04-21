@@ -746,6 +746,17 @@ mod tests {
             &post,
             "/api/agents/123/message"
         ));
+        // Session-scoped approval endpoints are also denied for Viewer.
+        assert!(!user_role_allows_request(
+            UserRole::Viewer,
+            &post,
+            "/api/approvals/session/sess-1/approve_all"
+        ));
+        assert!(!user_role_allows_request(
+            UserRole::Viewer,
+            &post,
+            "/api/approvals/session/sess-1/reject_all"
+        ));
     }
 
     #[tokio::test]

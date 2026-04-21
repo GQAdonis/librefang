@@ -1881,6 +1881,13 @@ pub async fn list_approvals_for_session(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
 ) -> impl IntoResponse {
+    // Validate session_id is not empty/whitespace.
+    if session_id.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "session_id must not be empty or whitespace"})),
+        );
+    }
     let registry_agents = state.kernel.agent_registry().list();
     let pending = state
         .kernel
@@ -1904,53 +1911,111 @@ pub async fn list_approvals_for_session(
 /// approvals for the given session atomically.
 ///
 /// Mirrors Hermes-Agent's `resolve_gateway_approval(session_key, "once",
-/// resolve_all=True)`.  TOTP is not enforced on this endpoint — it is intended
-/// for operator-level batch actions where individual TOTP verification would be
-/// impractical.
+/// resolve_all=True)`.  TOTP pre-check is enforced — if any pending request
+/// requires TOTP, the entire batch is rejected before any mutation.
+#[derive(serde::Deserialize)]
+pub struct ApproveAllForSessionRequest {
+    /// Optional list of approval IDs the caller expects to be pending.
+    /// If provided and non-empty, the server verifies the actual pending set
+    /// matches before approving.  Returns 409 Conflict if a new high-risk
+    /// approval landed between the operator viewing the list and clicking
+    /// approve_all.
+    #[serde(default)]
+    pub expected_ids: Option<Vec<uuid::Uuid>>,
+}
+
+/// POST /api/approvals/session/{session_id}/approve_all — Approve all pending
+/// approvals for the given session atomically.
 #[utoipa::path(
     post,
     path = "/api/approvals/session/{session_id}/approve_all",
     tag = "approvals",
     params(("session_id" = String, Path, description = "Session ID")),
     responses(
-        (status = 200, description = "All pending session approvals approved", body = serde_json::Value)
+        (status = 200, description = "All pending session approvals approved", body = serde_json::Value),
+        (status = 400, description = "TOTP required for one or more items", body = serde_json::Value),
+        (status = 409, description = "Pending set changed since request was issued", body = serde_json::Value),
     )
 )]
 pub async fn approve_all_for_session(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
+    Json(req): Json<ApproveAllForSessionRequest>,
 ) -> impl IntoResponse {
-    // Attempt to resolve all pending requests for the session.  Requests that
-    // require TOTP are silently skipped by resolve() (it returns Err), so
-    // `resolved` only counts requests that were actually approved.  We then
-    // check whether any TOTP-blocked requests remain to surface an actionable
-    // error.  Doing the TOTP check *after* (rather than before) resolution
-    // avoids a TOCTOU window where a new TOTP-required request arrives between
-    // a pre-check and the actual resolve call.
-    let resolved = state.kernel.approvals().resolve_all_for_session(
-        &session_id,
-        librefang_types::approval::ApprovalDecision::Approved,
-        Some("api".to_string()),
-    );
+    // Validate session_id is not empty/whitespace.
+    if session_id.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "session_id must not be empty or whitespace"})),
+        );
+    }
 
-    // If any requests remain pending for this session, they were blocked by
-    // the TOTP gate inside resolve().  Report that to the caller so they can
-    // approve those individually.
-    let totp_blocked = state
+    // Collect pending IDs and pre-check for TOTP blockers.
+    let pending = state
         .kernel
         .approvals()
-        .list_pending_for_session(&session_id)
-        .len();
+        .list_pending_for_session(&session_id);
 
-    if totp_blocked > 0 {
+    // Confirmation check: verify pending set matches expected_ids if provided.
+    if let Some(ref expected) = req.expected_ids {
+        if !expected.is_empty() {
+            let pending_ids: std::collections::HashSet<_> = pending.iter().map(|r| r.id).collect();
+            let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
+            if pending_ids != expected_set {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({
+                        "error": "Pending approval set has changed since this request was issued. Refresh and try again.",
+                        "pending_ids": pending_ids,
+                        "expected_ids": expected_set,
+                    })),
+                );
+            }
+        }
+    }
+
+    // TOTP pre-check: reject entire batch if any item requires TOTP.
+    let policy = state.kernel.approvals().policy();
+    if pending
+        .iter()
+        .any(|req| policy.tool_requires_totp(&req.tool_name))
+    {
         return (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({
                 "error": "Session contains approvals that require TOTP. Approve those individually.",
-                "resolved": resolved,
-                "totp_blocked": totp_blocked,
             })),
         );
+    }
+
+    // Resolve each pending request through the kernel so deferred executions
+    // are properly spawned (resolve_tool_approval calls handle_approval_resolution
+    // for each deferred payload).
+    let mut resolved = 0usize;
+    for pending_req in state
+        .kernel
+        .approvals()
+        .list_pending_for_session(&session_id)
+    {
+        match state
+            .kernel
+            .resolve_tool_approval(
+                pending_req.id,
+                librefang_types::approval::ApprovalDecision::Approved,
+                Some("api".to_string()),
+                false,
+                None,
+            )
+            .await
+        {
+            Ok((resp, _)) => {
+                if resp.decision.is_approved() {
+                    resolved += 1;
+                }
+            }
+            // Non-existent / already-resolved items are skipped silently.
+            Err(_) => {}
+        }
     }
 
     (
@@ -1981,11 +2046,42 @@ pub async fn reject_all_for_session(
     State(state): State<Arc<AppState>>,
     Path(session_id): Path<String>,
 ) -> impl IntoResponse {
-    let resolved = state.kernel.approvals().resolve_all_for_session(
-        &session_id,
-        librefang_types::approval::ApprovalDecision::Denied,
-        Some("api".to_string()),
-    );
+    // Validate session_id is not empty/whitespace.
+    if session_id.trim().is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "session_id must not be empty or whitespace"})),
+        );
+    }
+
+    // Route through resolve_tool_approval for each request so deferred
+    // executions are properly handled (even though rejection means the deferred
+    // will never run, this keeps the code path consistent).
+    let mut resolved = 0usize;
+    for pending_req in state
+        .kernel
+        .approvals()
+        .list_pending_for_session(&session_id)
+    {
+        match state
+            .kernel
+            .resolve_tool_approval(
+                pending_req.id,
+                librefang_types::approval::ApprovalDecision::Denied,
+                Some("api".to_string()),
+                false,
+                None,
+            )
+            .await
+        {
+            Ok((resp, _)) => {
+                if resp.decision.is_denied() {
+                    resolved += 1;
+                }
+            }
+            Err(_) => {}
+        }
+    }
     (
         StatusCode::OK,
         Json(serde_json::json!({

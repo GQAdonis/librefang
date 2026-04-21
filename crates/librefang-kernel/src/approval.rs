@@ -2410,8 +2410,134 @@ mod tests {
         let _ = id; // consumed by resolve_all
                     // Verify appears in recent
         let recent = mgr.list_recent(10);
-        assert!(recent
-            .iter()
-            .any(|r| r.request.id == id || recent.len() > 0));
+        assert!(
+            recent.iter().any(|r| r.request.id == id),
+            "resolved approval should appear in recent list"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional session resolution tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_cross_agent_same_session_resolved() {
+        // Requests from different agents in the same session are all resolved.
+        let mgr = Arc::new(default_manager());
+
+        let req_a1 = make_session_request("agent-1", "sess-shared");
+        let req_a2 = make_session_request("agent-2", "sess-shared");
+        let id_a1 = req_a1.id;
+        let id_a2 = req_a2.id;
+
+        for req in [req_a1, req_a2] {
+            let m = Arc::clone(&mgr);
+            tokio::spawn(async move { m.request_approval(req).await });
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        let resolved = mgr.resolve_all_for_session(
+            "sess-shared",
+            ApprovalDecision::Approved,
+            Some("batch".to_string()),
+        );
+        assert_eq!(resolved, 2);
+
+        // Both agents should be unblocked.
+        let recent = mgr.list_recent(10);
+        assert_eq!(recent.len(), 2);
+        assert!(recent.iter().any(|r| r.request.id == id_a1));
+        assert!(recent.iter().any(|r| r.request.id == id_a2));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_all_for_session_totp_blocks_approval() {
+        // When TOTP is required, resolve_all_for_session skips the item
+        // (returns 0 for that item) and the item remains pending.
+        let policy = ApprovalPolicy {
+            second_factor: SecondFactor::Totp,
+            ..Default::default()
+        };
+        let mgr = Arc::new(ApprovalManager::new(policy));
+
+        let req = make_session_request("agent-1", "sess-totp");
+        let id = req.id;
+        let mgr2 = Arc::clone(&mgr);
+        tokio::spawn(async move { mgr2.request_approval(req).await });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
+        // Without totp_verified, resolve returns Err → item is skipped.
+        let resolved = mgr.resolve_all_for_session(
+            "sess-totp",
+            ApprovalDecision::Approved,
+            Some("batch".to_string()),
+        );
+        assert_eq!(resolved, 0); // Skipped, not approved.
+
+        // Request should still be pending (not consumed).
+        assert!(mgr.get_pending(id).is_some());
+
+        // With totp_verified=true, it should succeed.
+        let (resp, _) = mgr
+            .resolve(
+                id,
+                ApprovalDecision::Approved,
+                Some("admin".to_string()),
+                true,
+                Some("admin"),
+            )
+            .unwrap();
+        assert!(resp.decision.is_approved());
+
+        let recent = mgr.list_recent(10);
+        assert!(recent.iter().any(|r| r.request.id == id));
+    }
+
+    #[tokio::test]
+    async fn test_submit_request_dedup_same_tool_use_id() {
+        // Duplicate tool_use_id in same session is rejected.
+        let mgr = Arc::new(default_manager());
+        let deferred = DeferredToolExecution {
+            agent_id: "agent-1".to_string(),
+            tool_use_id: "dedup-id".to_string(),
+            tool_name: "shell_exec".to_string(),
+            input: serde_json::json!({"cmd": "ls"}),
+            allowed_tools: None,
+            allowed_env_vars: None,
+            exec_policy: None,
+            sender_id: None,
+            channel: None,
+            workspace_root: None,
+        };
+
+        let req1 = make_session_request("agent-1", "sess-dedup");
+        let id1 = mgr.submit_request(req1, deferred.clone()).unwrap();
+
+        // Same tool_use_id: rejected.
+        let req2 = make_session_request("agent-1", "sess-dedup");
+        let result = mgr.submit_request(req2, deferred.clone());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Duplicate"));
+
+        // Different tool_use_id: allowed even if same session.
+        let deferred2 = DeferredToolExecution {
+            agent_id: "agent-1".to_string(),
+            tool_use_id: "dedup-id-2".to_string(),
+            tool_name: "shell_exec".to_string(),
+            input: serde_json::json!({"cmd": "ls"}),
+            allowed_tools: None,
+            allowed_env_vars: None,
+            exec_policy: None,
+            sender_id: None,
+            channel: None,
+            workspace_root: None,
+        };
+        let req3 = make_session_request("agent-1", "sess-dedup");
+        let id3 = mgr.submit_request(req3, deferred2).unwrap();
+        assert_ne!(id1, id3);
+
+        // Cleanup.
+        let _ = mgr.resolve(id1, ApprovalDecision::Denied, None, false, None);
+        let _ = mgr.resolve(id3, ApprovalDecision::Denied, None, false, None);
     }
 }
