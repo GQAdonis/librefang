@@ -5509,15 +5509,16 @@ mod tests {
         assert!(is_no_reply("[no reply needed]"));
         assert!(is_no_reply("Some context. [no reply needed]"));
 
-        // Unbracketed variant the model sometimes emits
+        // Unbracketed variant — exact match only (ends_with dropped to avoid prose false-positives)
         assert!(is_no_reply("no reply needed"));
-        assert!(is_no_reply("context here\nno reply needed"));
 
         // Negatives — real responses must never be silenced
         assert!(!is_no_reply(""));
         assert!(!is_no_reply("Just replying normally."));
         assert!(!is_no_reply("NO_REPLY is my favorite token")); // prefix, not suffix
         assert!(!is_no_reply("no reply needed? let me check")); // doesn't end with marker
+        assert!(!is_no_reply("I filed the bug; no reply needed")); // prose ending — not a sentinel
+        assert!(!is_no_reply("context here\nno reply needed")); // multi-line prose ending
     }
 
     #[test]
