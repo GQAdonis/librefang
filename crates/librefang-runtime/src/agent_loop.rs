@@ -749,6 +749,7 @@ async fn execute_single_tool_call(
             ctx.sender_user_id,
             ctx.sender_channel,
             ctx.checkpoint_manager,
+            Some(ctx.session.id.to_string()).as_deref(),
         ),
     )
     .await
