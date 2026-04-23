@@ -127,7 +127,7 @@ enum Commands {
     },
     /// Start the LibreFang kernel daemon (API server + kernel).
     #[command(
-        long_about = "Start the LibreFang kernel daemon, which runs the API server and agent runtime.\n\nBy default the daemon detaches into the background. Use --foreground to keep it\nattached to the current terminal, or --tail to detach but stream logs.\n\nExamples:\n  librefang start                # Start daemon in the background\n  librefang start --tail         # Start and follow log output\n  librefang start --foreground   # Run in the foreground (Ctrl+C to stop)"
+        long_about = "Start the LibreFang kernel daemon, which runs the API server and agent runtime.\n\nBy default the daemon detaches into the background. Use --foreground to keep it\nattached to the current terminal, or --tail to detach but stream logs.\n\nThe bind address is resolved in priority order:\n  --bind flag > LIBREFANG_LISTEN env var > api_listen in config.toml > compiled default (0.0.0.0:4545)\n\nExamples:\n  librefang start                              # Start daemon in the background\n  librefang start --tail                       # Start and follow log output\n  librefang start --foreground                 # Run in the foreground (Ctrl+C to stop)\n  librefang start --bind 127.0.0.1:4545        # Loopback only\n  librefang start --bind 0.0.0.0:9000          # All interfaces, custom port"
     )]
     Start {
         /// Follow the daemon log after launching it in the background.
@@ -139,6 +139,10 @@ enum Commands {
         /// Internal flag used by the detached daemon child process.
         #[arg(long, hide = true)]
         spawned: bool,
+        /// Override the bind address for this run (e.g. "0.0.0.0:4545" or "127.0.0.1:9000").
+        /// Overrides LIBREFANG_LISTEN env var and api_listen in config.toml.
+        #[arg(long, value_name = "HOST:PORT")]
+        bind: Option<String>,
     },
     /// Restart the running daemon (or start it if not running).
     #[command(
@@ -1964,7 +1968,8 @@ fn main() {
             tail,
             foreground,
             spawned,
-        }) => cmd_start(cli.config, tail, spawned, foreground),
+            bind,
+        }) => cmd_start(cli.config, tail, spawned, foreground, bind),
         Some(Commands::Restart { tail, foreground }) => cmd_restart(cli.config, tail, foreground),
         Some(Commands::Spawn(args)) => cmd_spawn_alias(
             cli.config,
@@ -2140,7 +2145,7 @@ fn main() {
         },
         Some(Commands::Gateway(sub)) => match sub {
             GatewayCommands::Start { tail, foreground } => {
-                cmd_start(cli.config, tail, false, foreground)
+                cmd_start(cli.config, tail, false, foreground, None)
             }
             GatewayCommands::Restart { tail, foreground } => {
                 cmd_restart(cli.config, tail, foreground)
@@ -3079,7 +3084,7 @@ fn daemon_log_path_for_config(config: Option<&std::path::Path>) -> PathBuf {
     }
 }
 
-fn detached_daemon_args(config: Option<&std::path::Path>) -> Vec<OsString> {
+fn detached_daemon_args(config: Option<&std::path::Path>, bind: Option<&str>) -> Vec<OsString> {
     let mut args = Vec::new();
     if let Some(path) = config {
         args.push(OsString::from("--config"));
@@ -3087,12 +3092,17 @@ fn detached_daemon_args(config: Option<&std::path::Path>) -> Vec<OsString> {
     }
     args.push(OsString::from("start"));
     args.push(OsString::from("--spawned"));
+    if let Some(addr) = bind {
+        args.push(OsString::from("--bind"));
+        args.push(OsString::from(addr));
+    }
     args
 }
 
 fn spawn_detached_daemon(
     config: Option<&std::path::Path>,
     log_path: &std::path::Path,
+    bind: Option<&str>,
 ) -> Result<std::process::Child, String> {
     let exe = std::env::current_exe().map_err(|e| format!("resolve current executable: {e}"))?;
     if let Some(log_dir) = log_path.parent() {
@@ -3112,7 +3122,7 @@ fn spawn_detached_daemon(
 
     let mut command = std::process::Command::new(exe);
     command
-        .args(detached_daemon_args(config))
+        .args(detached_daemon_args(config, bind))
         .stdin(Stdio::null())
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr))
@@ -3170,7 +3180,13 @@ fn ensure_initialized(config: &Option<PathBuf>) {
     }
 }
 
-fn cmd_start(config: Option<PathBuf>, tail: bool, spawned: bool, foreground: bool) {
+fn cmd_start(
+    config: Option<PathBuf>,
+    tail: bool,
+    spawned: bool,
+    foreground: bool,
+    bind: Option<String>,
+) {
     ensure_initialized(&config);
 
     let daemon = daemon_config_context(config.as_deref());
@@ -3184,10 +3200,11 @@ fn cmd_start(config: Option<PathBuf>, tail: bool, spawned: bool, foreground: boo
 
     if !spawned && !foreground {
         let log_path = daemon_log_path_for_config(config.as_deref());
-        let mut child = spawn_detached_daemon(config.as_deref(), &log_path).unwrap_or_else(|e| {
-            ui::error_with_fix(&i18n::t("daemon-launch-fail"), &e);
-            std::process::exit(1);
-        });
+        let mut child = spawn_detached_daemon(config.as_deref(), &log_path, bind.as_deref())
+            .unwrap_or_else(|e| {
+                ui::error_with_fix(&i18n::t("daemon-launch-fail"), &e);
+                std::process::exit(1);
+            });
 
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -3272,7 +3289,8 @@ fn cmd_start(config: Option<PathBuf>, tail: bool, spawned: bool, foreground: boo
         };
 
         let cfg = kernel.config_ref();
-        let listen_addr = cfg.api_listen.clone();
+        // CLI --bind wins over LIBREFANG_LISTEN (applied by kernel boot) and config.toml.
+        let listen_addr = bind.clone().unwrap_or_else(|| cfg.api_listen.clone());
         let daemon_info_path = kernel.home_dir().join("daemon.json");
         let provider = cfg.default_model.provider.clone();
         let model = cfg.default_model.model.clone();
@@ -3386,7 +3404,7 @@ fn cmd_restart(config: Option<PathBuf>, tail: bool, foreground: bool) {
         ui::hint(&i18n::t("daemon-no-running-starting"));
     }
 
-    cmd_start(config, tail, false, foreground);
+    cmd_start(config, tail, false, foreground, None);
 }
 
 fn force_kill_pid(pid: u32) {
@@ -4893,7 +4911,7 @@ fn cmd_doctor(json: bool, repair: bool) {
         }
 
         // --- Check 4: Port availability ---
-        // Read api_listen from config (default: 127.0.0.1:4545)
+        // Read api_listen from config (default: 0.0.0.0:4545)
         let api_listen = {
             let cfg_path = librefang_dir.join("config.toml");
             if cfg_path.exists() {

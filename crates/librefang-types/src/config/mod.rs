@@ -20,8 +20,14 @@ pub use version::*;
 /// should reference this constant so a rename is a single-line change.
 pub const DEFAULT_API_PORT: u16 = 4545;
 
-/// Default API listen address (loopback + default port).
-pub const DEFAULT_API_LISTEN: &str = "127.0.0.1:4545";
+/// Default API listen address (all interfaces + default port).
+///
+/// Binds to all network interfaces by default so the daemon is reachable
+/// from other machines on the same network. To restrict to loopback only,
+/// set `api_listen = "127.0.0.1:4545"` in `~/.librefang/config.toml`,
+/// or set `LIBREFANG_LISTEN=127.0.0.1:4545`, or pass `--bind 127.0.0.1:4545`
+/// to `librefang start`.
+pub const DEFAULT_API_LISTEN: &str = "0.0.0.0:4545";
 
 #[cfg(test)]
 mod tests {
@@ -32,6 +38,7 @@ mod tests {
         let config = KernelConfig::default();
         assert_eq!(config.log_level, "info");
         assert_eq!(config.api_listen, DEFAULT_API_LISTEN);
+        assert_eq!(DEFAULT_API_LISTEN, "0.0.0.0:4545");
         assert!(!config.network_enabled);
     }
 

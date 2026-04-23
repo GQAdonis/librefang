@@ -4,7 +4,12 @@
 # ══════════════════════════════════════════════════════════════
 
 # ── Server ────────────────────────────────────────────────────
-api_listen = "127.0.0.1:4545"  # Local-only; use "0.0.0.0:4545" to expose on LAN/remote
+# Bind address for the HTTP API server.
+# Override precedence (highest to lowest):
+#   --bind CLI flag  >  LIBREFANG_LISTEN env var  >  this file  >  compiled default
+# "0.0.0.0:4545" binds all interfaces (reachable from other machines).
+# Use "127.0.0.1:4545" to restrict access to this machine only.
+api_listen = "0.0.0.0:4545"
 log_level = "info"             # trace | debug | info | warn | error
 mode = "default"               # stable | default | dev
 update_channel = "stable"      # stable | beta | rc

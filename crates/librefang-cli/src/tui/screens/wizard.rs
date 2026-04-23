@@ -438,7 +438,7 @@ model = "{model}"
 decay_rate = 0.05
 
 [network]
-listen_addr = "127.0.0.1:4545"
+listen_addr = "0.0.0.0:4545"
 "#,
             provider = p.name,
         );
