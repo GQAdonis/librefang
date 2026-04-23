@@ -265,11 +265,14 @@ pub fn run(server_url: Option<String>, force_local: bool) {
         ])
         .setup(move |app| {
             if show_connection_screen {
-                // Show the connection screen via about:blank + eval
-                let window = WebviewWindowBuilder::new(
+                // Serve the connection screen through the app asset protocol so
+                // the Tauri IPC bridge (`window.__TAURI__`) is properly injected.
+                // Using `about:blank` + `document.write()` destroys the bridge
+                // because `document.open()` tears down the window context.
+                let _window = WebviewWindowBuilder::new(
                     app,
                     "main",
-                    WebviewUrl::External("about:blank".parse().expect("Invalid about:blank URL")),
+                    WebviewUrl::App("connection.html".into()),
                 )
                 .title("LibreFang — Connect")
                 .inner_size(1280.0, 800.0)
@@ -277,13 +280,6 @@ pub fn run(server_url: Option<String>, force_local: bool) {
                 .center()
                 .visible(true)
                 .build()?;
-
-                // Inject the connection screen HTML into the blank page
-                let html = connection::connection_html();
-                let escaped = serde_json::to_string(&html).unwrap_or_default();
-                window.eval(format!(
-                    "document.open(); document.write({escaped}); document.close();"
-                ))?;
             } else {
                 // Direct mode — navigate to the resolved URL
                 let _window = WebviewWindowBuilder::new(

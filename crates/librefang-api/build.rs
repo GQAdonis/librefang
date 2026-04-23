@@ -2,18 +2,49 @@ use std::process::Command;
 
 fn main() {
     // Ensure the dashboard embed directory exists so `include_dir!` never
-    // fails on fresh clones/worktrees. The directory is gitignored because
-    // it contains build artifacts produced by `npm run build` in the
-    // dashboard subcrate (or downloaded from release assets at runtime).
-    // When empty, `include_dir!` embeds nothing and the runtime directory
-    // `~/.librefang/dashboard/` serves the actual assets.
-    let dashboard_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("static")
-        .join("react");
+    // fails on fresh clones/worktrees.
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let dashboard_dir = manifest_dir.join("static").join("react");
     if !dashboard_dir.exists() {
         std::fs::create_dir_all(&dashboard_dir)
             .expect("failed to create static/react placeholder directory");
     }
+
+    // --- Dashboard frontend build ---
+    //
+    // Rerun ONLY when dashboard source changes, not on every Rust-side change.
+    // Granular directives prevent unnecessary pnpm invocations so that touching
+    // a .rs file does not trigger a ~60s frontend rebuild.
+    println!("cargo:rerun-if-changed=dashboard/src");
+    println!("cargo:rerun-if-changed=dashboard/package.json");
+    println!("cargo:rerun-if-changed=dashboard/pnpm-lock.yaml");
+    println!("cargo:rerun-if-changed=dashboard/vite.config.ts");
+    println!("cargo:rerun-if-changed=dashboard/tsconfig.json");
+    println!("cargo:rerun-if-changed=dashboard/index.html");
+
+    // Escape hatch: set SKIP_DASHBOARD_BUILD=1 in CI jobs that pre-build
+    // the dashboard in a separate step, or for `cargo check` workflows.
+    if std::env::var("SKIP_DASHBOARD_BUILD").as_deref() != Ok("1") {
+        let dashboard_src = manifest_dir.join("dashboard");
+
+        let status = Command::new("pnpm")
+            .args([
+                "--dir",
+                dashboard_src.to_str().unwrap(),
+                "install",
+                "--frozen-lockfile",
+            ])
+            .status()
+            .expect("pnpm not found — install Node.js and pnpm");
+        assert!(status.success(), "pnpm install failed");
+
+        let status = Command::new("pnpm")
+            .args(["--dir", dashboard_src.to_str().unwrap(), "run", "build"])
+            .status()
+            .expect("pnpm run build failed");
+        assert!(status.success(), "pnpm run build failed");
+    }
+    // --------------------------------
 
     // Capture git commit hash at build time.
     let git_sha = Command::new("git")

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LibreFang — Connect</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: #0f1117;
+    color: #e4e4e7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .container {
+    width: 420px;
+    max-width: 90vw;
+    background: #1a1b23;
+    border: 1px solid #2a2b35;
+    border-radius: 16px;
+    padding: 40px 36px 36px;
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .logo h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #f4f4f5;
+    letter-spacing: -0.5px;
+  }
+  .logo p {
+    font-size: 14px;
+    color: #71717a;
+    margin-top: 6px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #a1a1aa;
+    margin-bottom: 6px;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 14px;
+    font-size: 14px;
+    background: #0f1117;
+    border: 1px solid #2a2b35;
+    border-radius: 8px;
+    color: #f4f4f5;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus {
+    border-color: #6366f1;
+  }
+  input[type="text"]::placeholder {
+    color: #52525b;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .btn {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-test {
+    background: #27272a;
+    color: #d4d4d8;
+  }
+  .btn-test:hover:not(:disabled) {
+    background: #3f3f46;
+  }
+  .btn-connect {
+    background: #6366f1;
+    color: #fff;
+  }
+  .btn-connect:hover:not(:disabled) {
+    background: #4f46e5;
+  }
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0;
+    color: #52525b;
+    font-size: 13px;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #27272a;
+  }
+  .btn-local {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    background: #27272a;
+    color: #d4d4d8;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-local:hover:not(:disabled) {
+    background: #3f3f46;
+  }
+  .remember-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .remember-row input[type="checkbox"] {
+    accent-color: #6366f1;
+  }
+  .remember-row label {
+    margin: 0;
+    font-size: 13px;
+    color: #a1a1aa;
+    cursor: pointer;
+  }
+  .status {
+    margin-top: 16px;
+    min-height: 20px;
+    font-size: 13px;
+    text-align: center;
+    transition: color 0.2s;
+  }
+  .status.error { color: #ef4444; }
+  .status.success { color: #22c55e; }
+  .status.info { color: #6366f1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">
+    <h1>LibreFang</h1>
+    <p>Agent Operating System</p>
+  </div>
+
+  <label for="url-input">Server URL</label>
+  <input type="text" id="url-input" placeholder="http://192.168.1.100:4545" spellcheck="false">
+
+  <div class="btn-row">
+    <button class="btn btn-test" id="btn-test" onclick="testConn()">Test Connection</button>
+    <button class="btn btn-connect" id="btn-connect" onclick="connectRemote()">Connect</button>
+  </div>
+
+  <div class="divider">or</div>
+
+  <button class="btn-local" id="btn-local" onclick="startLocal()">Start Local Server</button>
+
+  <div class="remember-row">
+    <input type="checkbox" id="remember" checked>
+    <label for="remember">Remember this choice</label>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+  // Wait for the Tauri IPC bridge to be ready before wiring up handlers.
+  // On Linux/WebKitGTK the bridge is injected as an init-script that runs
+  // synchronously before DOMContentLoaded, but we still guard with the
+  // Tauri-provided ready helper when available.
+  function withTauri(cb) {
+    if (window.__TAURI__?.core) {
+      cb(window.__TAURI__.core);
+    } else if (window.__TAURI_INVOKE__) {
+      // Older / alternate injection path
+      cb({ invoke: window.__TAURI_INVOKE__ });
+    } else {
+      // Bridge not yet ready — retry once after a short delay
+      setTimeout(() => {
+        if (window.__TAURI__?.core) {
+          cb(window.__TAURI__.core);
+        } else {
+          document.getElementById('status').textContent =
+            'Tauri IPC bridge unavailable. Please restart the application.';
+          document.getElementById('status').className = 'status error';
+        }
+      }, 200);
+    }
+  }
+
+  function setStatus(msg, cls) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status ' + (cls || '');
+  }
+
+  function setAllDisabled(disabled) {
+    document.getElementById('btn-test').disabled = disabled;
+    document.getElementById('btn-connect').disabled = disabled;
+    document.getElementById('btn-local').disabled = disabled;
+    document.getElementById('url-input').disabled = disabled;
+  }
+
+  function testConn() {
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) { setStatus('Please enter a server URL.', 'error'); return; }
+    setStatus('Testing connection...', 'info');
+    setAllDisabled(true);
+    withTauri(({ invoke }) => {
+      invoke('test_connection', { url })
+        .then(() => setStatus('Connected! Server is healthy.', 'success'))
+        .catch(e => setStatus(String(e), 'error'))
+        .finally(() => setAllDisabled(false));
+    });
+  }
+
+  function connectRemote() {
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) { setStatus('Please enter a server URL.', 'error'); return; }
+    const remember = document.getElementById('remember').checked;
+    setStatus('Connecting...', 'info');
+    setAllDisabled(true);
+    withTauri(({ invoke }) => {
+      invoke('connect_remote', { url, remember })
+        .catch(e => {
+          setStatus(String(e), 'error');
+          setAllDisabled(false);
+        });
+    });
+  }
+
+  function startLocal() {
+    const remember = document.getElementById('remember').checked;
+    setStatus('Starting local server...', 'info');
+    setAllDisabled(true);
+    withTauri(({ invoke }) => {
+      invoke('start_local', { remember })
+        .catch(e => {
+          setStatus(String(e), 'error');
+          setAllDisabled(false);
+        });
+    });
+  }
+</script>
+</body>
+</html>
