@@ -114,7 +114,9 @@ export function OverviewPage() {
             {t("overview.system_overview")}
           </div>
           <div className="flex items-center gap-3 sm:block">
-            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight md:text-4xl sm:mt-2">{t("overview.welcome")}</h1>
+            <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight md:text-4xl sm:mt-2">
+              {t("overview.welcome", { defaultValue: "Welcome to BossFang" })}
+            </h1>
             <div className="flex items-center gap-2 rounded-full border border-border-subtle bg-surface px-3 py-1 sm:hidden shrink-0">
               <div className={`h-2 w-2 rounded-full ${snapshot?.health?.status === "ok" ? "bg-success" : "bg-warning animate-pulse"}`} />
               <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">

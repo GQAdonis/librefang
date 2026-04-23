@@ -731,9 +731,11 @@ export function App() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-2 lg:hidden">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 ring-1 ring-primary/40 shrink-0">
-                <div className="h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
-              </div>
+              <img
+                src="/boss-libre.png"
+                alt="BossFang"
+                className="h-7 w-7 rounded-lg object-contain shrink-0"
+              />
               <strong className="text-sm font-bold tracking-tight">BossFang</strong>
             </div>
           </div>

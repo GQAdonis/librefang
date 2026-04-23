@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("loads dashboard shell", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("LibreFang")).toBeVisible();
+  await expect(page.getByText("BossFang")).toBeVisible();
   await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Agents" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sessions" })).toBeVisible();
