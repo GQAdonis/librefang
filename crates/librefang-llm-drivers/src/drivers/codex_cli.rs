@@ -133,6 +133,12 @@ impl CodexCliDriver {
             "o4-mini" => Some("o4-mini".to_string()),
             "o3" => Some("o3".to_string()),
             "gpt-4.1" => Some("gpt-4.1".to_string()),
+            // GPT-5.5 family (Codex CLI native models, April 2026)
+            "gpt-5.5" => Some("gpt-5.5".to_string()),
+            "gpt-5.5-pro" => Some("gpt-5.5-pro".to_string()),
+            // "codex-latest" is a rolling alias that always points to the
+            // newest Codex CLI model; currently resolves to gpt-5.5.
+            "codex-latest" => Some("gpt-5.5".to_string()),
             _ => Some(stripped.to_string()),
         }
     }
@@ -315,6 +321,19 @@ mod tests {
         assert_eq!(
             CodexCliDriver::model_flag("codex-cli/gpt-4.1"),
             Some("gpt-4.1".to_string())
+        );
+        assert_eq!(
+            CodexCliDriver::model_flag("codex-cli/gpt-5.5"),
+            Some("gpt-5.5".to_string())
+        );
+        assert_eq!(
+            CodexCliDriver::model_flag("codex-cli/gpt-5.5-pro"),
+            Some("gpt-5.5-pro".to_string())
+        );
+        // codex-latest rolling alias resolves to gpt-5.5
+        assert_eq!(
+            CodexCliDriver::model_flag("codex-cli/codex-latest"),
+            Some("gpt-5.5".to_string())
         );
         assert_eq!(
             CodexCliDriver::model_flag("custom-model"),

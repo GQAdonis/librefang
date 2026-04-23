@@ -1981,6 +1981,24 @@ supports_streaming = false
     }
 
     #[test]
+    fn test_codex_cli_gpt55_models() {
+        // Verifies that GPT-5.5 and GPT-5.5 Pro are listed under the codex-cli provider
+        let catalog = test_catalog();
+        let models = catalog.models_by_provider("codex-cli");
+        assert!(
+            models.iter().any(|m| m.id == "codex-cli/gpt-5.5"),
+            "codex-cli/gpt-5.5 must be present in the catalog"
+        );
+        assert!(
+            models.iter().any(|m| m.id == "codex-cli/gpt-5.5-pro"),
+            "codex-cli/gpt-5.5-pro must be present in the catalog"
+        );
+        // codex-latest alias must resolve to gpt-5.5
+        let latest = catalog.find_model("codex-latest").unwrap();
+        assert_eq!(latest.id, "codex-cli/gpt-5.5");
+    }
+
+    #[test]
     fn test_claude_code_provider() {
         let catalog = test_catalog();
         let cc = catalog.get_provider("claude-code").unwrap();
