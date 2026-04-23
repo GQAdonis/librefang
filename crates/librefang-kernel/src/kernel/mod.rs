@@ -10263,9 +10263,25 @@ system_prompt = "You are a helpful assistant."
                             librefang_types::scheduler::CronAction::AgentTurn {
                                 message,
                                 timeout_secs,
+                                pre_check_script,
                                 ..
                             } => {
                                 tracing::debug!(job = %job_name, agent = %agent_id, "Cron: firing agent turn");
+
+                                // Wake-gate: run pre_check_script and check for
+                                // {"wakeAgent": false} in the last non-empty output line.
+                                // Only fires when the script exits successfully.
+                                if let Some(script_path) = pre_check_script {
+                                    if !cron_script_wake_gate(&job_name, script_path).await {
+                                        tracing::info!(
+                                            job = %job_name,
+                                            "cron: script gate wakeAgent=false, skipping agent"
+                                        );
+                                        kernel.cron_scheduler.record_success(job_id);
+                                        continue;
+                                    }
+                                }
+
                                 let timeout_s = timeout_secs.unwrap_or(120);
                                 let timeout = std::time::Duration::from_secs(timeout_s);
                                 let delivery = job.delivery.clone();
@@ -13048,6 +13064,78 @@ fn sanitize_reviewer_block(s: &str, max_chars: usize) -> String {
     // UTF-8-safe truncation: keep chars, not bytes.
     let truncated: String = out.chars().take(max_chars.saturating_sub(14)).collect();
     format!("{truncated} …[truncated]")
+}
+
+/// Run a cron job's pre-check script and parse the wake gate from its output.
+///
+/// Returns `true` if the agent should be woken (normal path), `false` to skip.
+///
+/// Rules (mirrors Hermes `_parse_wake_gate`):
+/// - Script must exit 0; on any error we default to waking the agent.
+/// - Find the last non-empty stdout line and try to parse it as JSON.
+/// - If the parsed object has `"wakeAgent": false` (strict bool), return false.
+/// - Everything else (non-JSON, missing key, null, 0, "") → return true.
+async fn cron_script_wake_gate(job_name: &str, script_path: &str) -> bool {
+    use tokio::process::Command;
+
+    // Hard cap: pre-check scripts must complete within 30 s.
+    // A hung script would otherwise block the cron dispatcher indefinitely.
+    let run = async { Command::new(script_path).output().await };
+
+    let output = match tokio::time::timeout(std::time::Duration::from_secs(30), run).await {
+        Err(_elapsed) => {
+            tracing::warn!(
+                job = %job_name,
+                script = %script_path,
+                "cron: pre-check script timed out after 30s, waking agent"
+            );
+            return true;
+        }
+        Ok(Err(e)) => {
+            tracing::warn!(
+                job = %job_name,
+                script = %script_path,
+                error = %e,
+                "cron: pre-check script failed to launch, waking agent"
+            );
+            return true;
+        }
+        Ok(Ok(o)) => o,
+    };
+
+    if !output.status.success() {
+        tracing::warn!(
+            job = %job_name,
+            script = %script_path,
+            code = ?output.status.code(),
+            "cron: pre-check script exited non-zero, waking agent"
+        );
+        return true;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    parse_wake_gate(&stdout)
+}
+
+/// Parse the wake gate from script stdout.
+///
+/// Finds the last non-empty line, tries JSON-decode, checks `wakeAgent`.
+/// Returns `true` (wake) unless `wakeAgent` is strictly `false`.
+fn parse_wake_gate(script_output: &str) -> bool {
+    let last_line = script_output.lines().rfind(|l| !l.trim().is_empty());
+
+    let last_line = match last_line {
+        Some(l) => l.trim(),
+        None => return true,
+    };
+
+    let value: serde_json::Value = match serde_json::from_str(last_line) {
+        Ok(v) => v,
+        Err(_) => return true,
+    };
+
+    // Only `{"wakeAgent": false}` (strict bool false) skips the agent.
+    value.get("wakeAgent") != Some(&serde_json::Value::Bool(false))
 }
 
 /// Deliver a cron job's agent response to the configured delivery target.
