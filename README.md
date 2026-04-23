@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/assets/logo.png" width="160" alt="LibreFang Logo" />
+  <img src="docs/branding/boss-libre.png" width="160" alt="BossFang Logo" />
 </p>
 
-<h1 align="center">LibreFang</h1>
+<h1 align="center">BossFang</h1>
 <h3 align="center">Libre Agent Operating System — Free as in Freedom</h3>
 
 <p align="center">
