@@ -128,8 +128,8 @@ librefang-kernel      Orchestration, workflows, metering, RBAC, scheduler, budge
 librefang-runtime     Agent loop, 3 LLM drivers, 53 tools, WASM sandbox, MCP, A2A
 librefang-api         140+ REST/WS/SSE endpoints, OpenAI-compatible API, dashboard
 librefang-channels    40 messaging adapters with rate limiting, DM/group policies
-librefang-memory      11 storage backend traits + SurrealDB/SQLite impls, vector embeddings
-librefang-storage     SurrealDB 3.0 connection pool, 10 DDL migrations, sqlite→surreal migrator
+librefang-memory      12 storage backend traits + SurrealDB/SQLite impls, vector embeddings
+librefang-storage     SurrealDB 3.0 connection pool, 11 DDL migrations, sqlite→surreal migrator
 librefang-types       Core types, taint tracking, Ed25519 signing, model catalog
 librefang-skills      60 bundled skills, SKILL.md parser, FangHub marketplace
 librefang-hands       14 autonomous Hands, HAND.toml parser, lifecycle management
@@ -170,7 +170,7 @@ Every storage subsystem is now abstracted behind its own trait object in the ker
 
 ### SurrealDB DDL Migrations
 
-Ten idempotent DDL migrations are applied at kernel boot (`OPERATIONAL_MIGRATIONS`, `v1`–`v10`):
+Eleven idempotent DDL migrations are applied at kernel boot (`OPERATIONAL_MIGRATIONS`, `v1`–`v11`):
 
 | Migration | Tables Covered |
 |---|---|
@@ -184,6 +184,7 @@ Ten idempotent DDL migrations are applied at kernel boot (`OPERATIONAL_MIGRATION
 | `008_usage_events.surql` | `usage_events` |
 | `009_paired_devices.surql` | `paired_devices` |
 | `010_prompt_management.surql` | `prompt_versions`, `prompt_experiments`, `experiment_variants`, `experiment_metrics` |
+| `011_knowledge_graph.surql` | `kg_entities`, `kg_relations` |
 
 All migrations use `DEFINE TABLE IF NOT EXISTS` / `DEFINE FIELD IF NOT EXISTS` / `DEFINE INDEX IF NOT EXISTS` — safe to apply on every boot, and re-entrant.
 
@@ -221,6 +222,58 @@ curl -X POST http://localhost:4545/api/storage/migrate \
 ```
 
 Tables migrated: `audit_entries`, `hook_traces`, `circuit_breaker_states`, `totp_lockout`, `agents`, `sessions`, `canonical_sessions`, `kv_store`, `task_queue`, `usage_events`, `paired_devices`, `prompt_versions`, `prompt_experiments`.
+
+### Backend Hardening (Security & Correctness)
+
+Three additional hardening improvements were made on top of the full SurrealDB migration:
+
+#### SQL Injection Safety — Fully Parameterized Queries
+
+All SurrealQL queries in `surreal_usage.rs` and `surreal_prompt.rs` previously used `format!()` to embed values (agent IDs, provider names, UUIDs, status strings, experiment IDs) directly into query strings. Every one of these has been replaced with parameterized `.bind()` calls:
+
+```rust
+// Before — injection risk
+let q = format!("SELECT * FROM usage_events WHERE agent_id = '{agent_id}'");
+self.db.query(&q).await?
+
+// After — safe, parameterized
+self.db
+    .query("SELECT * FROM usage_events WHERE agent_id = $agent_id")
+    .bind(("agent_id", agent_id))
+    .await?
+```
+
+This matches the pattern already used in `surreal_session.rs` and `surreal_task.rs` and is now consistent across all 12 SurrealDB backend implementations.
+
+#### Knowledge Graph — Native SurrealDB Backend
+
+The `KnowledgeBackend` trait and `SurrealKnowledgeBackend` implementation are now fully wired into the kernel. Previously, `knowledge_add_entity` and `knowledge_query` tool handlers called `self.memory` (SQLite `KnowledgeStore`), even on the SurrealDB path.
+
+- **`KnowledgeBackend` trait** (`backend.rs`) — `add_entity`, `add_relation`, `query_graph`, `delete_by_agent`
+- **`SurrealKnowledgeBackend`** — Direct parameterized SurrealQL against `kg_entities`/`kg_relations` tables (the `kg_` prefix avoids conflicts with `surreal-memory`'s internal schema)
+- **DDL migration v11** — `011_knowledge_graph.surql` defines both tables with all indexes
+- **Kernel wiring** — `LibreFangKernel.knowledge_backend: Arc<dyn KnowledgeBackend>` field; all knowledge tool handlers route through it on both the SurrealDB and SQLite paths
+
+#### Proactive Memory Consolidation — `with_extended()` Now Active
+
+`SurrealProactiveMemoryBackend` has a `with_extended(SurrealStorage)` builder that enables TTL-based memory eviction via `surreal-memory`'s `expire_stale_memories()`. Previously, this builder was never called in kernel boot, making `consolidate()` a perpetual no-op.
+
+The fix introduces `SurrealProactiveMemoryBackend::open_with_storage(&session, &storage_cfg)` — a factory function that builds the `SurrealStorage` and `NoopEmbedding` service internally (encapsulated within `librefang-memory` so `surreal-memory` is not a direct dependency of `librefang-kernel`). The kernel boot now calls this factory:
+
+```rust
+// Before — consolidate() was a no-op, no TTL eviction
+let proactive_backend = Arc::new(SurrealProactiveMemoryBackend::open(&session));
+
+// After — expire_stale_memories() runs on the consolidation schedule
+let proactive_backend = Arc::new(
+    SurrealProactiveMemoryBackend::open_with_storage(&session, &storage_cfg).await?
+);
+```
+
+This activates:
+- `consolidate()` → `surreal-memory`'s `expire_stale_memories()` — TTL-based memory eviction
+- Per-scope (user/session/agent) memory decay through the `SurrealStorage` extended handle
+- Foundation for future semantic/vector search integration
 
 ### Why SurrealDB
 
