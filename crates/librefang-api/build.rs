@@ -27,6 +27,9 @@ fn main() {
     if std::env::var("SKIP_DASHBOARD_BUILD").as_deref() != Ok("1") {
         let dashboard_src = manifest_dir.join("dashboard");
 
+        // Set CI=true so pnpm never prompts for TTY confirmation when it needs
+        // to purge the node_modules directory (e.g. after a lockfile change).
+        // The build script always runs in a non-interactive subprocess.
         let status = Command::new("pnpm")
             .args([
                 "--dir",
@@ -34,6 +37,7 @@ fn main() {
                 "install",
                 "--frozen-lockfile",
             ])
+            .env("CI", "true")
             .status()
             .expect("pnpm not found — install Node.js and pnpm");
         assert!(status.success(), "pnpm install failed");
