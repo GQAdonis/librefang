@@ -1,0 +1,1 @@
+2026/04/24-06:39:21.017553 906532 [WARN] [db/db_impl/db_impl_open.cc:2704] DB::Open() failed: IO error: lock hold by current process, acquire time 1777030761 acquiring thread 906545: .librefang/librefang.surreal/LOCK: No locks available

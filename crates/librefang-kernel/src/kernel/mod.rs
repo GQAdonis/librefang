@@ -37,7 +37,6 @@ use librefang_types::capability::{glob_matches, Capability};
 use librefang_types::config::{AuthProfile, AutoRouteStrategy, KernelConfig};
 use librefang_types::error::LibreFangError;
 use librefang_types::event::*;
-use librefang_types::memory::Memory;
 use librefang_types::tool::{AgentLoopSignal, ToolApprovalSubmission, ToolDefinition};
 
 use arc_swap::ArcSwap;
@@ -385,6 +384,14 @@ pub struct LibreFangKernel {
     /// `SurrealKnowledgeBackend` when `surreal-backend` is enabled;
     /// `MemorySubstrate` (rusqlite) otherwise.
     pub(crate) knowledge_backend: Arc<dyn librefang_memory::KnowledgeBackend>,
+    /// Semantic / vector memory backend.
+    ///
+    /// `SurrealSemanticBackend` (HNSW + BM25 hybrid via `surreal-memory`) when
+    /// `surreal-backend` is enabled and `vector_backend` is `"surreal"` or
+    /// `"auto"` (default). Falls back to the SQLite-backed `MemorySubstrate`
+    /// path for upstream compatibility when only `sqlite-backend` is active or
+    /// `vector_backend = "sqlite"` is set explicitly.
+    pub(crate) semantic_backend: Arc<dyn librefang_memory::SemanticBackend>,
     /// Process supervisor.
     pub(crate) supervisor: Supervisor,
     /// Workflow engine.
@@ -1794,7 +1801,10 @@ impl LibreFangKernel {
         )
         .map_err(|e| KernelError::BootFailed(format!("Memory init failed: {e}")))?;
 
-        // Optionally attach an external vector store backend.
+        // Optionally attach an external vector store backend to the SQLite
+        // substrate. For the `"surreal"` and `"auto"` paths the real routing
+        // happens via `self.semantic_backend` (a `SurrealSemanticBackend`);
+        // no store is attached to the substrate for those cases.
         if let Some(ref backend) = config.memory.vector_backend {
             match backend.as_str() {
                 "http" => {
@@ -1807,13 +1817,38 @@ impl LibreFangKernel {
                     substrate.set_vector_store(store);
                     tracing::info!("Vector store backend: http ({})", url);
                 }
-                "sqlite" | "" => { /* default — no external backend */ }
+                "surreal" => {
+                    // Validate that the feature is compiled in; the actual
+                    // SurrealSemanticBackend is built inside the surreal init
+                    // block below and stored as `self.semantic_backend`.
+                    #[cfg(not(feature = "surreal-backend"))]
+                    return Err(KernelError::BootFailed(
+                        "vector_backend = \"surreal\" requires the `surreal-backend` feature"
+                            .into(),
+                    ));
+                    #[cfg(feature = "surreal-backend")]
+                    tracing::info!("Vector store backend: surreal (HNSW + BM25 hybrid)");
+                }
+                "auto" | "sqlite" | "" => {
+                    // "auto" → use SurrealDB when `surreal-backend` is enabled,
+                    // otherwise keep SQLite. "sqlite" / "" → explicit SQLite.
+                    #[cfg(feature = "surreal-backend")]
+                    if backend.as_str() != "sqlite" {
+                        tracing::info!("Vector store backend: surreal (auto-selected)");
+                    }
+                }
                 other => {
                     return Err(KernelError::BootFailed(format!(
-                        "Unknown vector_backend: {other:?}"
+                        "Unknown vector_backend: {other:?}. Valid values: \
+                         \"surreal\", \"auto\", \"sqlite\", \"http\""
                     )));
                 }
             }
+        } else {
+            // No explicit vector_backend configured. Default: SurrealDB when
+            // the feature is compiled in, SQLite otherwise.
+            #[cfg(feature = "surreal-backend")]
+            tracing::info!("Vector store backend: surreal (default)");
         }
 
         let memory = Arc::new(substrate);
@@ -1875,6 +1910,7 @@ impl LibreFangKernel {
             surreal_device_store,
             surreal_prompt_store,
             surreal_knowledge_backend,
+            surreal_semantic_backend,
         ) = {
             info!(
                 backend = ?config.storage.backend,
@@ -1945,6 +1981,17 @@ impl LibreFangKernel {
                 let knowledge_backend: Arc<dyn librefang_memory::KnowledgeBackend> =
                     Arc::new(librefang_memory::SurrealKnowledgeBackend::open(&session));
 
+                // Build the SurrealSemanticBackend via the factory in librefang-memory
+                // so surreal-memory is not a direct dependency of librefang-kernel.
+                let semantic_backend: Arc<dyn librefang_memory::SemanticBackend> = Arc::new(
+                    librefang_memory::SurrealSemanticBackend::open_with_storage(
+                        &session,
+                        &storage_cfg,
+                    )
+                    .await
+                    .map_err(|e| format!("semantic backend: {e}"))?,
+                );
+
                 Ok::<_, String>((
                     pool,
                     session,
@@ -1958,6 +2005,7 @@ impl LibreFangKernel {
                     device_store,
                     prompt_backend,
                     knowledge_backend,
+                    semantic_backend,
                 ))
             };
 
@@ -1990,11 +2038,12 @@ impl LibreFangKernel {
                 device,
                 prompt,
                 knowledge,
+                semantic,
             ) = result.map_err(KernelError::BootFailed)?;
             info!("SurrealDB operational migrations applied; all storage backends ready");
             (
                 pool, session, store, trace, sess, kv, task, proactive, usage, device, prompt,
-                knowledge,
+                knowledge, semantic,
             )
         };
         #[cfg(not(feature = "surreal-backend"))]
@@ -2018,6 +2067,9 @@ impl LibreFangKernel {
         #[cfg(not(feature = "surreal-backend"))]
         let surreal_knowledge_backend: Arc<dyn librefang_memory::KnowledgeBackend> =
             Arc::clone(&memory) as Arc<dyn librefang_memory::KnowledgeBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_semantic_backend: Arc<dyn librefang_memory::SemanticBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::SemanticBackend>;
 
         // Check if Ollama is reachable on localhost:11434 (TCP probe, 500ms timeout).
         fn is_ollama_reachable() -> bool {
@@ -2894,6 +2946,7 @@ impl LibreFangKernel {
                 &config.context_engine,
                 context_engine_config.clone(),
                 memory.clone(),
+                Arc::clone(&surreal_semantic_backend),
                 emb_arc,
                 &|secret_name| {
                     let mut vault =
@@ -2969,6 +3022,7 @@ impl LibreFangKernel {
             prompt_store: prompt_store_backend,
             device_store: surreal_device_store,
             knowledge_backend: surreal_knowledge_backend,
+            semantic_backend: surreal_semantic_backend,
             supervisor,
             workflows: WorkflowEngine::new_with_persistence(&workflow_home_dir),
             template_registry: WorkflowTemplateRegistry::new(),
@@ -3095,6 +3149,14 @@ impl LibreFangKernel {
                     prompt_caching,
                 );
             if let Some((store, extractor)) = result {
+                // When surreal-backend is enabled, override the SQLite semantic
+                // search path in ProactiveMemoryStore with the SurrealDB backend
+                // so that search() / search_all() / list_all() hit SurrealDB.
+                #[cfg(feature = "surreal-backend")]
+                let store = {
+                    let inner = Arc::try_unwrap(store).unwrap_or_else(|arc| (*arc).clone());
+                    Arc::new(inner.with_semantic_backend(Arc::clone(&kernel.semantic_backend)))
+                };
                 let _ = kernel.proactive_memory.set(store);
                 if let Some(ex) = extractor {
                     let _ = kernel.proactive_memory_extractor.set(ex);

@@ -37,10 +37,10 @@
 //! - Embedding-based semantic memory recall with LIKE fallback
 
 use async_trait::async_trait;
-use librefang_memory::MemorySubstrate;
+use librefang_memory::{MemorySubstrate, SemanticBackend};
 use librefang_types::agent::AgentId;
 use librefang_types::error::{LibreFangError, LibreFangResult};
-use librefang_types::memory::{Memory, MemoryFilter, MemoryFragment};
+use librefang_types::memory::{MemoryFilter, MemoryFragment};
 use librefang_types::message::Message;
 use librefang_types::tool::ToolDefinition;
 use std::sync::Arc;
@@ -407,7 +407,14 @@ pub trait ContextEngine: Send + Sync {
 /// - Embedding-based semantic memory recall with LIKE fallback
 pub struct DefaultContextEngine {
     config: ContextEngineConfig,
+    /// Legacy SQLite substrate — kept for the `memory_substrate()` accessor
+    /// used by `ScriptableContextEngine` to inject memories from after_turn hooks.
     memory: Arc<MemorySubstrate>,
+    /// Backend-agnostic semantic store — used for `ingest()` recall.
+    /// `SurrealSemanticBackend` when `surreal-backend` is enabled; falls back
+    /// to `Arc<MemorySubstrate>` (which also implements `SemanticBackend`)
+    /// when only the SQLite path is active.
+    semantic: Arc<dyn SemanticBackend>,
     embedding_driver: Option<Arc<dyn EmbeddingDriver + Send + Sync>>,
     compaction_config: CompactionConfig,
 }
@@ -417,6 +424,7 @@ impl DefaultContextEngine {
     pub fn new(
         config: ContextEngineConfig,
         memory: Arc<MemorySubstrate>,
+        semantic: Arc<dyn SemanticBackend>,
         embedding_driver: Option<Arc<dyn EmbeddingDriver + Send + Sync>>,
     ) -> Self {
         let mut compaction_config = match config.compaction {
@@ -427,6 +435,7 @@ impl DefaultContextEngine {
         Self {
             config,
             memory,
+            semantic,
             embedding_driver,
             compaction_config,
         }
@@ -442,7 +451,7 @@ impl DefaultContextEngine {
         &self.compaction_config
     }
 
-    /// Get a reference to the memory substrate.
+    /// Get a reference to the memory substrate (for hook-based memory writes).
     pub fn memory_substrate(&self) -> &Arc<MemorySubstrate> {
         &self.memory
     }
@@ -479,13 +488,22 @@ impl ContextEngine for DefaultContextEngine {
         });
         let limit = self.config.max_recall_results;
 
-        // Prefer vector similarity search when embedding driver is available
+        // Prefer vector similarity search when embedding driver is available.
+        // Both paths delegate to `self.semantic` (a `dyn SemanticBackend`):
+        // - When `surreal-backend` is active this is `SurrealSemanticBackend`
+        //   (BM25 + HNSW hybrid).
+        // - When only `sqlite-backend` is active this is `MemorySubstrate`
+        //   (SQLite LIKE matching + in-process cosine similarity).
         let memories = if let Some(ref emb) = self.embedding_driver {
             match emb.embed_one(user_message).await {
                 Ok(query_vec) => {
-                    debug!("ContextEngine: vector recall (dims={})", query_vec.len());
-                    self.memory
-                        .recall_with_embedding_async(user_message, limit, filter, Some(&query_vec))
+                    debug!(
+                        "ContextEngine: vector recall via {} (dims={})",
+                        self.semantic.backend_name(),
+                        query_vec.len(),
+                    );
+                    self.semantic
+                        .recall(user_message, limit, filter, Some(query_vec))
                         .await
                         .unwrap_or_else(|e| {
                             warn!("ContextEngine: vector recall query failed: {e}");
@@ -494,8 +512,8 @@ impl ContextEngine for DefaultContextEngine {
                 }
                 Err(e) => {
                     warn!("ContextEngine: embedding recall failed, falling back to text: {e}");
-                    self.memory
-                        .recall(user_message, limit, filter)
+                    self.semantic
+                        .recall(user_message, limit, filter, None)
                         .await
                         .unwrap_or_else(|e| {
                             warn!("ContextEngine: text recall failed: {e}");
@@ -504,8 +522,8 @@ impl ContextEngine for DefaultContextEngine {
                 }
             }
         } else {
-            self.memory
-                .recall(user_message, limit, filter)
+            self.semantic
+                .recall(user_message, limit, filter, None)
                 .await
                 .unwrap_or_else(|e| {
                     warn!("ContextEngine: memory recall failed: {e}");
@@ -1703,7 +1721,6 @@ impl ScriptableContextEngine {
                     let substrate = std::sync::Arc::clone(substrate);
                     let agent_id_owned = agent_id.to_string();
                     tokio::spawn(async move {
-                        use librefang_types::memory::Memory as _;
                         let parsed_id = uuid::Uuid::parse_str(&agent_id_owned)
                             .map(librefang_types::agent::AgentId)
                             .unwrap_or_else(|_| librefang_types::agent::AgentId::new());
@@ -1712,8 +1729,9 @@ impl ScriptableContextEngine {
                         } else {
                             tags.join(",")
                         };
-                        if let Err(e) = substrate
-                            .remember(
+                        if let Err(e) = <librefang_memory::MemorySubstrate as
+                                librefang_types::memory::Memory>::remember(
+                                &*substrate,
                                 parsed_id,
                                 &content,
                                 librefang_types::memory::MemorySource::System,
@@ -4142,6 +4160,7 @@ pub fn build_context_engine(
     toml_config: &librefang_types::config::ContextEngineTomlConfig,
     runtime_config: ContextEngineConfig,
     memory: Arc<MemorySubstrate>,
+    semantic: Arc<dyn SemanticBackend>,
     embedding_driver: Option<Arc<dyn EmbeddingDriver + Send + Sync>>,
     vault_lookup: &dyn Fn(&str) -> Option<String>,
     trace_backend: Option<std::sync::Arc<dyn crate::storage_backends::TraceBackend>>,
@@ -4150,6 +4169,7 @@ pub fn build_context_engine(
     let inner = DefaultContextEngine::new(
         runtime_config.clone(),
         memory.clone(),
+        semantic.clone(),
         embedding_driver.clone(),
     );
 
@@ -4185,6 +4205,7 @@ pub fn build_context_engine(
                 let hook_inner = DefaultContextEngine::new(
                     runtime_config.clone(),
                     memory.clone(),
+                    semantic.clone(),
                     embedding_driver.clone(),
                 );
                 let vault_env = resolve_vault_env_vars(hooks, vault_lookup);
@@ -4226,6 +4247,7 @@ pub fn build_context_engine(
                 let hook_inner = DefaultContextEngine::new(
                     runtime_config.clone(),
                     memory.clone(),
+                    semantic.clone(),
                     embedding_driver.clone(),
                 );
                 let vault_env = resolve_vault_env_vars(hooks, vault_lookup);
@@ -4264,8 +4286,14 @@ pub fn build_context_engine(
             let mut engines: Vec<Box<dyn ContextEngine>> = Vec::with_capacity(stack.len());
             for plugin_name in stack {
                 let eng_memory = memory.clone();
+                let eng_semantic = semantic.clone();
                 let eng_emb = embedding_driver.clone();
-                let inner = DefaultContextEngine::new(runtime_config.clone(), eng_memory, eng_emb);
+                let inner = DefaultContextEngine::new(
+                    runtime_config.clone(),
+                    eng_memory,
+                    eng_semantic,
+                    eng_emb,
+                );
                 match load_plugin(plugin_name) {
                     Ok((manifest, hooks)) => {
                         if hooks.ingest.is_some()
@@ -4591,7 +4619,7 @@ impl ContextEngine for SummaryContextEngine {
 mod tests {
     use super::*;
     use librefang_memory::session::Session as MemSession;
-    use librefang_memory::MemorySubstrate;
+    use librefang_memory::{MemorySubstrate, SemanticBackend};
     use librefang_types::message::Message;
     use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -4601,10 +4629,17 @@ mod tests {
         Arc::new(MemorySubstrate::open_in_memory(0.01).unwrap())
     }
 
+    /// Helper to coerce an `Arc<MemorySubstrate>` into `Arc<dyn SemanticBackend>`.
+    fn semantic_from(m: &Arc<MemorySubstrate>) -> Arc<dyn SemanticBackend> {
+        Arc::clone(m) as Arc<dyn SemanticBackend>
+    }
+
     #[tokio::test]
     async fn test_bootstrap_default() {
         let config = ContextEngineConfig::default();
-        let engine = DefaultContextEngine::new(config.clone(), make_memory(), None);
+        let mem = make_memory();
+        let engine =
+            DefaultContextEngine::new(config.clone(), mem.clone(), semantic_from(&mem), None);
         assert!(engine.bootstrap(&config).await.is_ok());
     }
 
@@ -4614,7 +4649,8 @@ mod tests {
             stable_prefix_mode: true,
             ..Default::default()
         };
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
         let result = engine.ingest(AgentId::new(), "hello", None).await.unwrap();
         assert!(result.recalled_memories.is_empty());
     }
@@ -4647,7 +4683,8 @@ mod tests {
             .unwrap();
 
         let config = ContextEngineConfig::default();
-        let engine = DefaultContextEngine::new(config, memory, None);
+        let semantic = semantic_from(&memory);
+        let engine = DefaultContextEngine::new(config, memory, semantic, None);
         let result = engine.ingest(agent_id, "Rust", None).await.unwrap();
         assert_eq!(result.recalled_memories.len(), 1);
         assert!(result.recalled_memories[0].content.contains("Rust"));
@@ -4656,7 +4693,8 @@ mod tests {
     #[tokio::test]
     async fn test_assemble_no_overflow() {
         let config = ContextEngineConfig::default();
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
         let mut messages = vec![Message::user("hi"), Message::assistant("hello")];
         let result = engine
             .assemble(AgentId::new(), &mut messages, "system", &[], 200_000)
@@ -4671,7 +4709,8 @@ mod tests {
             context_window_tokens: 100, // tiny window
             ..Default::default()
         };
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
 
         // Create messages that exceed the tiny context window
         let mut messages: Vec<Message> = (0..20)
@@ -4697,7 +4736,8 @@ mod tests {
             context_window_tokens: 500,
             ..Default::default()
         };
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
         let big_content = "x".repeat(10_000);
         let truncated = engine.truncate_tool_result(&big_content, 500);
         assert!(truncated.len() < big_content.len());
@@ -4707,7 +4747,8 @@ mod tests {
     #[tokio::test]
     async fn test_after_turn_noop() {
         let config = ContextEngineConfig::default();
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
         assert!(engine
             .after_turn(AgentId::new(), &[Message::user("hi")])
             .await
@@ -4717,7 +4758,8 @@ mod tests {
     #[tokio::test]
     async fn test_subagent_hooks_noop() {
         let config = ContextEngineConfig::default();
-        let engine = DefaultContextEngine::new(config, make_memory(), None);
+        let mem = make_memory();
+        let engine = DefaultContextEngine::new(config, mem.clone(), semantic_from(&mem), None);
         let parent = AgentId::new();
         let child = AgentId::new();
         assert!(engine.prepare_subagent_context(parent, child).await.is_ok());
@@ -4917,7 +4959,13 @@ ingest = "hooks/ingest.py"
 
     #[test]
     fn test_no_compact_context_engine_never_compresses() {
-        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem = make_memory();
+        let inner = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem.clone(),
+            semantic_from(&mem),
+            None,
+        );
         let engine = NoCompactContextEngine::new(inner);
         // NoCompactContextEngine must always return false regardless of load
         assert!(!engine.should_compress(0, 200_000));
@@ -4931,12 +4979,14 @@ ingest = "hooks/ingest.py"
 
     #[test]
     fn test_summary_context_engine_threshold_default_80_percent() {
+        let mem = make_memory();
         let inner = DefaultContextEngine::new(
             ContextEngineConfig {
                 context_window_tokens: 200_000,
                 ..Default::default()
             },
-            make_memory(),
+            mem.clone(),
+            semantic_from(&mem),
             None,
         );
         // Default threshold_percent = 0.80
@@ -4952,7 +5002,13 @@ ingest = "hooks/ingest.py"
 
     #[test]
     fn test_summary_context_engine_zero_max_tokens_safe() {
-        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem = make_memory();
+        let inner = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem.clone(),
+            semantic_from(&mem),
+            None,
+        );
         let engine = SummaryContextEngine::new(inner, 0.80);
         // max_tokens = 0 must never panic and must return false
         assert!(!engine.should_compress(0, 0));
@@ -4961,7 +5017,13 @@ ingest = "hooks/ingest.py"
 
     #[test]
     fn test_summary_context_engine_update_model() {
-        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem = make_memory();
+        let inner = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem.clone(),
+            semantic_from(&mem),
+            None,
+        );
         let engine = SummaryContextEngine::new(inner, 0.80);
 
         // Before update: context_length comes from ContextEngineConfig::default (200_000)
@@ -4976,11 +5038,23 @@ ingest = "hooks/ingest.py"
     #[test]
     fn test_default_trait_should_compress_80_percent() {
         // Verify the default impl on the trait uses 80 % (4/5 integer math)
-        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem = make_memory();
+        let inner = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem.clone(),
+            semantic_from(&mem),
+            None,
+        );
         let _engine = NoCompactContextEngine::new(inner);
         // NoCompactContextEngine overrides to false, so test the trait default via
         // a SummaryContextEngine at the same 80 % threshold
-        let inner2 = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem2 = make_memory();
+        let inner2 = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem2.clone(),
+            semantic_from(&mem2),
+            None,
+        );
         let summary = SummaryContextEngine::new(inner2, 0.80);
         assert!(!summary.should_compress(0, 200_000));
         assert!(!summary.should_compress(159_999, 200_000));
@@ -5110,7 +5184,13 @@ ingest = "hooks/ingest.py"
             }
         }
 
-        let inner = DefaultContextEngine::new(ContextEngineConfig::default(), make_memory(), None);
+        let mem = make_memory();
+        let inner = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            mem.clone(),
+            semantic_from(&mem),
+            None,
+        );
         let tracker = CompactTracker::new(inner);
 
         // ctx_window = 200_000, threshold = 80% = 160_000

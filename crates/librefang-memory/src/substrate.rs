@@ -119,6 +119,15 @@ impl MemorySubstrate {
         self.semantic.set_vector_store(store);
     }
 
+    /// Clone the inner [`SemanticStore`] for use in blocking tasks.
+    ///
+    /// This is the bridge used by the [`crate::backend::SemanticBackend`]
+    /// implementation to satisfy the `spawn_blocking` pattern without holding a
+    /// reference into `self`.
+    pub fn semantic_store_clone(&self) -> crate::semantic::SemanticStore {
+        self.semantic.clone()
+    }
+
     /// Get the shared database connection (for constructing stores from outside).
     pub fn usage_conn(&self) -> Arc<Mutex<Connection>> {
         Arc::clone(&self.conn)

@@ -19,6 +19,8 @@ pub mod surreal_proactive;
 #[cfg(feature = "surreal-backend")]
 pub mod surreal_prompt;
 #[cfg(feature = "surreal-backend")]
+pub mod surreal_semantic;
+#[cfg(feature = "surreal-backend")]
 pub mod surreal_session;
 #[cfg(feature = "surreal-backend")]
 pub mod surreal_task;
@@ -37,6 +39,8 @@ pub use surreal_kv::SurrealKvBackend;
 pub use surreal_proactive::SurrealProactiveMemoryBackend;
 #[cfg(feature = "surreal-backend")]
 pub use surreal_prompt::SurrealPromptStore;
+#[cfg(feature = "surreal-backend")]
+pub use surreal_semantic::SurrealSemanticBackend;
 #[cfg(feature = "surreal-backend")]
 pub use surreal_session::SurrealSessionBackend;
 #[cfg(feature = "surreal-backend")]

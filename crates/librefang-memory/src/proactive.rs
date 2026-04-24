@@ -21,6 +21,7 @@
 //! +-------------------+
 //! ```
 
+use crate::backend::SemanticBackend;
 use crate::knowledge::KnowledgeStore;
 use crate::semantic::SemanticStore;
 use crate::structured::StructuredStore;
@@ -117,6 +118,15 @@ pub struct ProactiveMemoryStore {
     last_decay_run: Arc<Mutex<Option<chrono::DateTime<Utc>>>>,
     /// Timestamp of the last session TTL cleanup run (at most once per hour).
     last_cleanup_run: Arc<Mutex<Option<chrono::DateTime<Utc>>>>,
+    /// Optional SurrealDB-native semantic backend.
+    ///
+    /// When set (under `surreal-backend`), `search()`, `search_all()`, and
+    /// `list_all()` route through this trait object instead of the embedded
+    /// SQLite `SemanticStore`.  Internal operations that require SQLite-specific
+    /// methods (eviction, version history, decay) still use `self.semantic`
+    /// until a follow-up migration completes those paths.
+    #[allow(dead_code)]
+    semantic_backend: Option<Arc<dyn SemanticBackend>>,
 }
 
 impl Clone for ProactiveMemoryStore {
@@ -132,6 +142,7 @@ impl Clone for ProactiveMemoryStore {
             consolidation_counters: Arc::clone(&self.consolidation_counters),
             last_decay_run: Arc::clone(&self.last_decay_run),
             last_cleanup_run: Arc::clone(&self.last_cleanup_run),
+            semantic_backend: self.semantic_backend.clone(),
         }
     }
 }
@@ -152,6 +163,7 @@ impl ProactiveMemoryStore {
             consolidation_counters: Arc::new(Mutex::new(HashMap::new())),
             last_decay_run: Arc::new(Mutex::new(None)),
             last_cleanup_run: Arc::new(Mutex::new(None)),
+            semantic_backend: None,
         }
     }
 
@@ -174,6 +186,7 @@ impl ProactiveMemoryStore {
             consolidation_counters: Arc::new(Mutex::new(HashMap::new())),
             last_decay_run: Arc::new(Mutex::new(None)),
             last_cleanup_run: Arc::new(Mutex::new(None)),
+            semantic_backend: None,
         }
     }
 
@@ -189,6 +202,41 @@ impl ProactiveMemoryStore {
     /// Create with default configuration.
     pub fn with_default_config(substrate: Arc<MemorySubstrate>) -> Self {
         Self::new(substrate, ProactiveMemoryConfig::default())
+    }
+
+    /// Override the semantic backend used by `search()`, `search_all()`, and
+    /// `list_all()` with a SurrealDB-native implementation.
+    ///
+    /// When set, the primary search paths are routed through the supplied
+    /// `SemanticBackend` trait object (e.g. `SurrealSemanticBackend`) instead
+    /// of the embedded SQLite `SemanticStore`.  All other internal operations
+    /// (eviction, version history, decay bookkeeping) continue to use the
+    /// SQLite substrate until a follow-up migration extends the trait.
+    #[cfg(feature = "surreal-backend")]
+    pub fn with_semantic_backend(mut self, backend: Arc<dyn SemanticBackend>) -> Self {
+        self.semantic_backend = Some(backend);
+        self
+    }
+
+    /// Construct a `ProactiveMemoryStore` that routes its primary search
+    /// operations through the supplied `SemanticBackend` and `KnowledgeBackend`
+    /// trait objects when `surreal-backend` is compiled in.
+    ///
+    /// The `substrate` is still required for internal maintenance operations
+    /// (decay bookkeeping, session cleanup, KV cache) that have not yet been
+    /// fully migrated to the backend-trait layer — this is a known follow-up.
+    ///
+    /// # Arguments
+    /// * `substrate` — SQLite `MemorySubstrate` used for internal maintenance.
+    /// * `semantic` — SurrealDB-native semantic backend for searches.
+    /// * `config` — proactive memory configuration.
+    #[cfg(feature = "surreal-backend")]
+    pub fn with_backends(
+        substrate: Arc<MemorySubstrate>,
+        semantic: Arc<dyn SemanticBackend>,
+        config: ProactiveMemoryConfig,
+    ) -> Self {
+        Self::new(substrate, config).with_semantic_backend(semantic)
     }
 
     /// Get a snapshot of the current config.
@@ -1188,7 +1236,11 @@ impl ProactiveMemoryStore {
     pub async fn list_all(&self, category: Option<&str>) -> LibreFangResult<Vec<MemoryItem>> {
         // Use semantic recall with no agent filter to get all memories
         // Limit to 10000 to avoid unbounded queries; increase if needed
-        let results = self.semantic.recall("", 10_000, None)?;
+        let results = if let Some(ref backend) = self.semantic_backend {
+            backend.recall("", 10_000, None, None).await?
+        } else {
+            self.semantic.recall("", 10_000, None)?
+        };
 
         let items: Vec<MemoryItem> = results
             .into_iter()
@@ -1209,8 +1261,15 @@ impl ProactiveMemoryStore {
     ///
     /// Used by the dashboard to search all memories without agent scoping.
     pub async fn search_all(&self, query: &str, limit: usize) -> LibreFangResult<Vec<MemoryItem>> {
-        // Use vector search if embedding driver available, with no agent filter
-        let results = if let Some(ref emb) = self.embedding {
+        // Route through SurrealDB semantic backend when available (no agent filter).
+        let results = if let Some(ref backend) = self.semantic_backend {
+            let qe = if let Some(ref emb) = self.embedding {
+                emb.embed_one(query).await.ok()
+            } else {
+                None
+            };
+            backend.recall(query, limit, None, qe).await?
+        } else if let Some(ref emb) = self.embedding {
             if let Ok(qe) = emb.embed_one(query).await {
                 self.semantic
                     .recall_with_embedding(query, limit, None, Some(&qe))?
@@ -1615,8 +1674,16 @@ impl ProactiveMemory for ProactiveMemoryStore {
         // Filter by agent to avoid cross-agent leakage
         let filter = Some(MemoryFilter::agent(agent_id));
 
-        // Use vector search if embedding driver available
-        let results = if let Some(ref emb) = self.embedding {
+        // Route through SurrealDB semantic backend when available.
+        let results = if let Some(ref backend) = self.semantic_backend {
+            let qe = if let Some(ref emb) = self.embedding {
+                emb.embed_one(query).await.ok()
+            } else {
+                None
+            };
+            backend.recall(query, limit, filter, qe).await?
+        } else if let Some(ref emb) = self.embedding {
+            // SQLite path — use vector search if embedding driver available
             if let Ok(qe) = emb.embed_one(query).await {
                 self.semantic
                     .recall_with_embedding(query, limit, filter, Some(&qe))?

@@ -275,6 +275,96 @@ This activates:
 - Per-scope (user/session/agent) memory decay through the `SurrealStorage` extended handle
 - Foundation for future semantic/vector search integration
 
+### Semantic / Vector Search — SurrealDB HNSW + BM25
+
+This release adds full, verifiable semantic/vector search parity for the SurrealDB backend through three new components.
+
+#### `SemanticBackend` trait
+
+`crates/librefang-memory/src/backend.rs` introduces `SemanticBackend` — a backend-agnostic trait mirroring the public surface of the existing `SemanticStore`:
+
+| Method | Purpose |
+|--------|---------|
+| `remember(agent_id, content, source, scope, metadata, embedding)` | Store a memory with an optional pre-computed vector |
+| `recall(query, limit, filter, query_embedding)` | Text or ANN vector search |
+| `forget(id)` | Soft-delete by ID |
+| `count(filter)` | Parameterized COUNT query |
+| `update_access(id)` | Touch `accessed_at` + `access_count` |
+| `backend_name()` | `"surreal"` or `"sqlite"` |
+
+`MemorySubstrate` (SQLite) and `SurrealSemanticBackend` (SurrealDB) both implement the trait, enabling the kernel to route through either backend via `Arc<dyn SemanticBackend>`.
+
+#### `SurrealSemanticBackend`
+
+`crates/librefang-memory/src/backends/surreal_semantic.rs` implements both `SemanticBackend` and `VectorStore` for SurrealDB:
+
+- **Search path**: delegates to `surreal_memory::SurrealStorage::search_memories()` / `hybrid_search_memories()` — BM25 full-text + HNSW v5 vector similarity in one call (provided free by the `surreal-memory` migration v5 schema).
+- **KNN path**: when a precomputed query vector is available, issues a direct SurrealQL KNN query, fully parameterized via `.bind()`:
+
+```sql
+SELECT *, vector::similarity::cosine(embedding, $vec) AS _score
+FROM memory
+WHERE embedding <|$limit,COSINE|> $vec
+  AND ($agent_id IS NONE OR agent_id = $agent_id)
+  AND ($peer_id  IS NONE OR user_id  = $peer_id)
+  AND ($scope    IS NONE OR $scope   IN categories)
+ORDER BY _score DESC
+LIMIT $limit;
+```
+
+No caller-supplied strings are ever interpolated into query text — the same hardening pattern as `SurrealKnowledgeBackend`.
+
+- **Reuses `surreal-memory`'s `memory` table** — no duplicate `lf_memories` table, no extra DDL, HNSW index comes from the existing v5 migration.
+
+#### `MemoryFragment` ↔ `surreal_memory::Memory` mapping
+
+A lossless round-trip mapping is implemented so that LibreFang's internal `MemoryFragment` type can be stored and retrieved from the shared `memory` table:
+
+| `MemoryFragment` field | `surreal_memory::Memory` field |
+|------------------------|-------------------------------|
+| `content` | `content` |
+| `embedding` | `embedding` |
+| `agent_id` | `agent_id` (string) |
+| `scope` | `categories[0]` |
+| `confidence` | `importance` |
+| LibreFang-only fields (`peer_id`, `modality`, `image_url`, `image_embedding`, `source`, `accessed_at`, `access_count`) | Nested in `metadata.librefang` |
+| User-supplied `metadata` | Nested in `metadata.user` |
+
+#### Kernel wiring
+
+The kernel now holds `pub(crate) semantic_backend: Arc<dyn SemanticBackend>` and selects the backend based on the `vector_backend` config field:
+
+| `vector_backend` value | Result |
+|------------------------|--------|
+| `"auto"` (default / unset) | `SurrealSemanticBackend` when `surreal-backend` feature is compiled in; `MemorySubstrate` otherwise |
+| `"surreal"` | Force `SurrealSemanticBackend` (error if feature is absent) |
+| `"sqlite"` | Force SQLite `MemorySubstrate` |
+| `"http"` | `HttpVectorStore` (existing path) |
+
+`DefaultContextEngine` (the runtime context manager) holds `semantic: Arc<dyn SemanticBackend>` and routes all `ingest()` recall operations through it. `ProactiveMemoryStore` similarly overrides its primary `search()`, `search_all()`, and `list_all()` methods through the backend when running under `surreal-backend`.
+
+The `SurrealStorage` handle is shared between `SurrealProactiveMemoryBackend` and `SurrealSemanticBackend`, so both hit the same connection pool and HNSW index — no duplicate indexing, no split-brain.
+
+#### How to verify
+
+```bash
+# Run unit tests (no live SurrealDB required)
+cargo test --features surreal-backend \
+  -p librefang-memory \
+  -- surreal_semantic::tests
+
+# Run integration tests with a live SurrealDB
+cargo test --features surreal-backend \
+  -p librefang-memory \
+  -- --ignored knn_hnsw_relevance
+
+# Run kernel boot tests with a live SurrealDB
+cargo test --features surreal-backend \
+  -p librefang-kernel \
+  --test vector_backend_boot_test \
+  -- --ignored
+```
+
 ### Why SurrealDB
 
 | Property | SQLite (legacy) | SurrealDB 3.0 (default) |

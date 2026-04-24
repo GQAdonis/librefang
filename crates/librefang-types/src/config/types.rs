@@ -4298,7 +4298,14 @@ pub struct MemoryConfig {
     /// Chunking configuration for long documents.
     #[serde(default)]
     pub chunking: ChunkConfig,
-    /// Vector store backend: `"sqlite"` (default) or `"http"`.
+    /// Vector store backend selection.
+    ///
+    /// | Value | Behaviour |
+    /// |-------|-----------|
+    /// | `"auto"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in; SQLite otherwise. |
+    /// | `"surreal"` | Force SurrealDB HNSW+BM25 hybrid search via `SurrealSemanticBackend`. Requires `surreal-backend` feature. |
+    /// | `"sqlite"` | Force SQLite cosine-similarity in-process store (`SqliteVectorStore`). |
+    /// | `"http"` | Remote HTTP vector store (`HttpVectorStore`); see `vector_store_url`. |
     #[serde(default)]
     pub vector_backend: Option<String>,
     /// Base URL for the HTTP vector store (used when `vector_backend = "http"`).

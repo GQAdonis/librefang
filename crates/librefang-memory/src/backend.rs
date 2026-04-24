@@ -14,14 +14,18 @@ use librefang_types::agent::{
     AgentEntry, AgentId, AgentId as PromptAgentId, ExperimentStatus, ExperimentVariantMetrics,
     PromptExperiment, PromptVersion, SessionId,
 };
-use librefang_types::error::LibreFangResult;
+use librefang_types::error::{LibreFangError, LibreFangResult};
 use librefang_types::message::Message;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 // Re-import Session from the session module so trait impls can use it.
 use crate::session::Session;
 use crate::usage::{ModelUsage, UsageRecord, UsageSummary};
-use librefang_types::memory::{ConsolidationReport, Entity, GraphMatch, GraphPattern, Relation};
+use librefang_types::memory::{
+    ConsolidationReport, Entity, GraphMatch, GraphPattern, MemoryFilter, MemoryFragment, MemoryId,
+    MemorySource, Relation,
+};
 
 // ── MemoryBackend ────────────────────────────────────────────────────────────
 
@@ -741,5 +745,123 @@ impl PromptBackend for crate::prompt::PromptStore {
         experiment_id: Uuid,
     ) -> LibreFangResult<Vec<ExperimentVariantMetrics>> {
         crate::prompt::PromptStore::get_experiment_metrics(self, experiment_id)
+    }
+}
+
+// ── SemanticBackend ───────────────────────────────────────────────────────────
+
+/// Backend-agnostic interface for semantic (vector / text) memory storage.
+///
+/// Abstracting over this surface lets the kernel and runtime select the correct
+/// persistence layer at boot time — SurrealDB (HNSW + BM25 hybrid) when
+/// `surreal-backend` is compiled in, or the SQLite [`crate::MemorySubstrate`]
+/// path for upstream compatibility.
+///
+/// ## Implementations
+///
+/// | Type | Feature flag | Engine |
+/// |------|-------------|--------|
+/// | [`crate::MemorySubstrate`] | always | SQLite LIKE + in-process cosine |
+/// | `SurrealSemanticBackend` | `surreal-backend` | SurrealDB HNSW v5 + BM25 hybrid |
+#[async_trait]
+pub trait SemanticBackend: Send + Sync {
+    /// Store a memory fragment.
+    ///
+    /// An optional pre-computed `embedding` may be provided. When absent the
+    /// implementation stores the content and defers embedding to a later pass.
+    async fn remember(
+        &self,
+        agent_id: AgentId,
+        content: &str,
+        source: MemorySource,
+        scope: &str,
+        metadata: HashMap<String, serde_json::Value>,
+        embedding: Option<Vec<f32>>,
+    ) -> LibreFangResult<MemoryId>;
+
+    /// Semantic search.
+    ///
+    /// When `query_embedding` is `Some`, implementations should prefer
+    /// approximate-nearest-neighbour (ANN) vector search. When `None`, fall
+    /// back to full-text / BM25 search.
+    async fn recall(
+        &self,
+        query: &str,
+        limit: usize,
+        filter: Option<MemoryFilter>,
+        query_embedding: Option<Vec<f32>>,
+    ) -> LibreFangResult<Vec<MemoryFragment>>;
+
+    /// Soft-delete a memory by ID. Returns `true` if a row was removed.
+    async fn forget(&self, id: MemoryId) -> LibreFangResult<bool>;
+
+    /// Count memories matching `filter`.
+    async fn count(&self, filter: MemoryFilter) -> LibreFangResult<u64>;
+
+    /// Touch the access timestamp and increment the access counter.
+    async fn update_access(&self, id: MemoryId) -> LibreFangResult<()>;
+
+    /// Return the name of this backend (e.g. `"surreal"`, `"sqlite"`).
+    fn backend_name(&self) -> &str;
+}
+
+// ── SemanticBackend impl for MemorySubstrate (SQLite compatibility path) ──────
+
+#[async_trait]
+impl SemanticBackend for MemorySubstrate {
+    async fn remember(
+        &self,
+        agent_id: AgentId,
+        content: &str,
+        source: MemorySource,
+        scope: &str,
+        metadata: HashMap<String, serde_json::Value>,
+        embedding: Option<Vec<f32>>,
+    ) -> LibreFangResult<MemoryId> {
+        self.remember_with_embedding_async(
+            agent_id,
+            content,
+            source,
+            scope,
+            metadata,
+            embedding.as_deref(),
+        )
+        .await
+    }
+
+    async fn recall(
+        &self,
+        query: &str,
+        limit: usize,
+        filter: Option<MemoryFilter>,
+        query_embedding: Option<Vec<f32>>,
+    ) -> LibreFangResult<Vec<MemoryFragment>> {
+        self.recall_with_embedding_async(query, limit, filter, query_embedding.as_deref())
+            .await
+    }
+
+    async fn forget(&self, id: MemoryId) -> LibreFangResult<bool> {
+        let store = self.semantic_store_clone();
+        tokio::task::spawn_blocking(move || store.forget(id).map(|_| true))
+            .await
+            .map_err(|e| LibreFangError::Internal(e.to_string()))?
+    }
+
+    async fn count(&self, filter: MemoryFilter) -> LibreFangResult<u64> {
+        let store = self.semantic_store_clone();
+        tokio::task::spawn_blocking(move || store.count_by_filter(filter))
+            .await
+            .map_err(|e| LibreFangError::Internal(e.to_string()))?
+    }
+
+    async fn update_access(&self, id: MemoryId) -> LibreFangResult<()> {
+        let store = self.semantic_store_clone();
+        tokio::task::spawn_blocking(move || store.update_access(id))
+            .await
+            .map_err(|e| LibreFangError::Internal(e.to_string()))?
+    }
+
+    fn backend_name(&self) -> &str {
+        "sqlite"
     }
 }

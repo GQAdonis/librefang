@@ -609,6 +609,68 @@ impl SemanticStore {
         Ok(())
     }
 
+    /// Count non-deleted memories matching a `MemoryFilter`.
+    ///
+    /// Used by the `SemanticBackend` trait implementation to count memories
+    /// with backend-agnostic filter semantics.  The original `count(agent_id,
+    /// scope)` method remains for internal proactive-store use.
+    pub fn count_by_filter(&self, filter: MemoryFilter) -> LibreFangResult<u64> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| LibreFangError::Internal(e.to_string()))?;
+        let mut sql = "SELECT count(*) FROM memories WHERE deleted = 0".to_string();
+        let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+        let mut idx = 1usize;
+        if let Some(agent_id) = &filter.agent_id {
+            sql.push_str(&format!(" AND agent_id = ?{idx}"));
+            params.push(Box::new(agent_id.0.to_string()));
+            idx += 1;
+        }
+        if let Some(scope) = &filter.scope {
+            sql.push_str(&format!(" AND scope = ?{idx}"));
+            params.push(Box::new(scope.clone()));
+            idx += 1;
+        }
+        if let Some(min_conf) = filter.min_confidence {
+            sql.push_str(&format!(" AND confidence >= ?{idx}"));
+            params.push(Box::new(min_conf as f64));
+            idx += 1;
+        }
+        if let Some(after) = &filter.after {
+            sql.push_str(&format!(" AND created_at >= ?{idx}"));
+            params.push(Box::new(after.to_rfc3339()));
+            idx += 1;
+        }
+        if let Some(before) = &filter.before {
+            sql.push_str(&format!(" AND created_at <= ?{idx}"));
+            params.push(Box::new(before.to_rfc3339()));
+            // idx is only incremented to satisfy the compiler's unused-variable
+            // lint; it is not needed after this last binding.
+            let _ = idx;
+        }
+        let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+        let count: i64 = conn
+            .query_row(&sql, param_refs.as_slice(), |row| row.get(0))
+            .map_err(|e| LibreFangError::Memory(e.to_string()))?;
+        Ok(count as u64)
+    }
+
+    /// Update `accessed_at` to now and increment `access_count` for a memory.
+    pub fn update_access(&self, id: MemoryId) -> LibreFangResult<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| LibreFangError::Internal(e.to_string()))?;
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE memories SET accessed_at = ?1, access_count = access_count + 1 WHERE id = ?2 AND deleted = 0",
+            rusqlite::params![now, id.0.to_string()],
+        )
+        .map_err(|e| LibreFangError::Memory(e.to_string()))?;
+        Ok(())
+    }
+
     /// Update the content (and optionally metadata) of an existing memory in-place.
     ///
     /// Preserves the original ID, agent_id, scope, source, and access stats.

@@ -1,15 +1,36 @@
-//! Memory substrate for the LibreFang Agent Operating System.
+//! Memory subsystem for the LibreFang Agent Operating System.
 //!
-//! Provides a unified memory API over three storage backends:
-//! - **Structured store** (SQLite): Key-value pairs, sessions, agent state
-//! - **Semantic store**: Text-based search (Phase 1: LIKE matching, Phase 2: Qdrant vectors)
-//! - **Knowledge graph** (SQLite): Entities and relations
+//! ## Storage backends
 //!
-//! Agents interact with a single `Memory` trait that abstracts over all three stores.
+//! Two backend families are available, selected at compile time via Cargo features:
+//!
+//! ### SurrealDB (default — `surreal-backend` feature)
+//!
+//! All production-grade backends use SurrealDB 3.0 with HNSW vector indexes,
+//! BM25 full-text search, and parameterised SurrealQL queries.  The concrete
+//! types are:
+//!
+//! | Backend | Type |
+//! |---|---|
+//! | Semantic / vector search | [`SurrealSemanticBackend`] (HNSW v5 + BM25 hybrid) |
+//! | Agent registry | `SurrealMemoryBackend` |
+//! | Sessions | `SurrealSessionBackend` |
+//! | Key-value store | `SurrealKvBackend` |
+//! | Task queue | `SurrealTaskBackend` |
+//! | Proactive memory | `SurrealProactiveMemoryBackend` |
+//! | Prompt management | `SurrealPromptStore` |
+//! | Device pairing | `SurrealDeviceStore` |
+//! | Usage metering | `SurrealUsageStore` |
+//! | Knowledge graph | `SurrealKnowledgeBackend` |
+//!
+//! ### SQLite (upstream compatibility — `sqlite-backend` feature)
+//!
+//! [`MemorySubstrate`] provides the legacy monolithic SQLite implementation.
+//! All backend traits are implemented for it so existing code continues to
+//! compile unchanged when only the `sqlite-backend` feature is active.
 //!
 //! ## Proactive Memory (mem0-style API)
 //!
-//! This module also provides proactive memory capabilities:
 //! - `ProactiveMemory`: Unified API (search, add, get, list)
 //! - `ProactiveMemoryHooks`: Auto-memorize and auto-retrieve hooks
 //! - `ProactiveMemoryStore`: Implementation on top of MemorySubstrate
@@ -33,7 +54,7 @@ pub mod backends;
 mod substrate;
 pub use backend::{
     DeviceBackend, KnowledgeBackend, KvBackend, MemoryBackend, ProactiveMemoryBackend,
-    PromptBackend, SessionBackend, TaskBackend, UsageBackend,
+    PromptBackend, SemanticBackend, SessionBackend, TaskBackend, UsageBackend,
 };
 #[cfg(feature = "surreal-backend")]
 pub use backends::SurrealDeviceStore;
@@ -47,6 +68,8 @@ pub use backends::SurrealMemoryBackend;
 pub use backends::SurrealProactiveMemoryBackend;
 #[cfg(feature = "surreal-backend")]
 pub use backends::SurrealPromptStore;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealSemanticBackend;
 #[cfg(feature = "surreal-backend")]
 pub use backends::SurrealSessionBackend;
 #[cfg(feature = "surreal-backend")]
