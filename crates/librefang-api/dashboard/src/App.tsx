@@ -610,7 +610,7 @@ export function App() {
         }`}>
           <div className={`flex items-center gap-3 ${isSidebarCollapsed ? "lg:hidden" : ""}`}>
             <img
-              src="/boss-libre.png"
+              src={`${import.meta.env.BASE_URL}boss-libre.png`}
               alt="BossFang"
               className="h-8 w-8 rounded-lg object-contain shrink-0"
             />
@@ -732,7 +732,7 @@ export function App() {
             </button>
             <div className="flex items-center gap-2 lg:hidden">
               <img
-                src="/boss-libre.png"
+                src={`${import.meta.env.BASE_URL}boss-libre.png`}
                 alt="BossFang"
                 className="h-7 w-7 rounded-lg object-contain shrink-0"
               />

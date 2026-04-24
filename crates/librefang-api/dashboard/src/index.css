@@ -168,6 +168,50 @@ code, pre, kbd, samp {
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ══════════════════════════════════════════════════
+   Global cursor rules
+   Applied via @layer base so Tailwind utility classes
+   (cursor-default, cursor-not-allowed, etc.) can still
+   override on a per-element basis.
+   ══════════════════════════════════════════════════ */
+@layer base {
+  /* Everything a user can click/activate gets a pointer */
+  a[href],
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"],
+  [role="combobox"],
+  [role="listbox"],
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  input[type="file"],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
+  /* Disabled elements get a not-allowed cursor regardless of role */
+  [disabled],
+  [aria-disabled="true"],
+  button[disabled],
+  input[disabled],
+  select[disabled],
+  textarea[disabled] {
+    cursor: not-allowed;
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    Apple-style Animation System
    Spring physics · Blur transitions · GPU accelerated
