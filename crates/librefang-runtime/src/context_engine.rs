@@ -883,8 +883,11 @@ pub struct ScriptableContextEngine {
     otel_endpoint: Option<String>,
     /// Canonical plugin name — used as the `plugin` column when writing to trace_store.
     plugin_name: String,
-    /// Persistent SQLite trace store (None if it could not be opened at construction time).
-    trace_store: Option<std::sync::Arc<crate::trace_store::TraceStore>>,
+    /// Persistent hook trace store (None if it could not be opened at construction time).
+    ///
+    /// Backed by `SurrealTraceBackend` when `surreal-backend` is enabled; falls
+    /// back to `TraceStore` (rusqlite) otherwise.
+    trace_store: Option<std::sync::Arc<dyn crate::storage_backends::TraceBackend>>,
     /// Tracks all spawned after_turn background tasks for graceful shutdown.
     after_turn_tasks: std::sync::Arc<tokio::sync::Mutex<tokio::task::JoinSet<()>>>,
     /// Memory substrate for after_turn hook memory injection.
@@ -1055,16 +1058,25 @@ impl ScriptableContextEngine {
             );
         }
 
-        // Open the persistent trace store. Failure is non-fatal — traces will
-        // still land in the in-memory ring buffer even if SQLite is unavailable.
-        self.trace_store = crate::plugin_manager::open_trace_store()
-            .map(std::sync::Arc::new)
-            .map_err(|e| {
-                warn!(plugin = name, error = %e, "Could not open hook trace store; SQLite persistence disabled");
-            })
-            .ok();
+        // Open the persistent trace store only when no backend was pre-injected
+        // via `with_trace_backend` (e.g. a SurrealDB backend from the kernel pool).
+        // The SQLite fallback is only available when the `sqlite-backend` feature
+        // is compiled in. Failure is non-fatal — traces still land in the
+        // in-memory ring buffer even if the store is unavailable.
+        #[cfg(feature = "sqlite-backend")]
+        if self.trace_store.is_none() {
+            self.trace_store = crate::plugin_manager::open_trace_store()
+                .map(|s| {
+                    std::sync::Arc::new(s)
+                        as std::sync::Arc<dyn crate::storage_backends::TraceBackend>
+                })
+                .map_err(|e| {
+                    warn!(plugin = name, error = %e, "Could not open hook trace store; persistence disabled");
+                })
+                .ok();
+        }
 
-        // Restore circuit breaker state from SQLite so tripped circuits survive daemon restarts.
+        // Restore circuit breaker state so tripped circuits survive daemon restarts.
         if let Some(ref store) = self.trace_store {
             if let Ok(saved) = store.load_circuit_states() {
                 if let Ok(mut guard) = self.circuit_breakers.lock() {
@@ -1095,6 +1107,20 @@ impl ScriptableContextEngine {
             }
         }
 
+        self
+    }
+
+    /// Inject a pre-constructed [`crate::storage_backends::TraceBackend`].
+    ///
+    /// When called before [`Self::with_plugin_name`] the engine uses this
+    /// backend instead of opening the default SQLite trace store.  The
+    /// `surreal-backend` kernel boot path uses this to wire
+    /// `SurrealTraceBackend` into every plugin engine.
+    pub fn with_trace_backend(
+        mut self,
+        backend: std::sync::Arc<dyn crate::storage_backends::TraceBackend>,
+    ) -> Self {
+        self.trace_store = Some(backend);
         self
     }
 
@@ -1282,10 +1308,10 @@ impl ScriptableContextEngine {
     fn push_trace(
         traces: &std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<HookTrace>>>,
         trace: HookTrace,
-        trace_store: Option<&std::sync::Arc<crate::trace_store::TraceStore>>,
+        trace_store: Option<&std::sync::Arc<dyn crate::storage_backends::TraceBackend>>,
         plugin_name: &str,
     ) {
-        // Persist to SQLite first (borrows trace by ref).
+        // Persist to the trace store first (borrows trace by ref).
         if let Some(store) = trace_store {
             store.insert(plugin_name, &trace);
         }
@@ -1822,7 +1848,7 @@ impl ScriptableContextEngine {
         traces: &std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<HookTrace>>>,
         hook_schemas: &std::collections::HashMap<String, librefang_types::config::HookSchema>,
         shared_state_path: Option<&std::path::Path>,
-        trace_store: Option<&std::sync::Arc<crate::trace_store::TraceStore>>,
+        trace_store: Option<&std::sync::Arc<dyn crate::storage_backends::TraceBackend>>,
         plugin_name: &str,
         correlation_id: &str,
         output_schema_strict: bool,
@@ -4118,6 +4144,7 @@ pub fn build_context_engine(
     memory: Arc<MemorySubstrate>,
     embedding_driver: Option<Arc<dyn EmbeddingDriver + Send + Sync>>,
     vault_lookup: &dyn Fn(&str) -> Option<String>,
+    trace_backend: Option<std::sync::Arc<dyn crate::storage_backends::TraceBackend>>,
 ) -> Box<dyn ContextEngine> {
     // Build the inner engine (shared base for all built-in engine variants).
     let inner = DefaultContextEngine::new(
@@ -4253,16 +4280,15 @@ pub fn build_context_engine(
                             let mut env: Vec<(String, String)> = manifest.env.into_iter().collect();
                             let vault_env = resolve_vault_env_vars(&hooks, vault_lookup);
                             env.extend(vault_env);
-                            engines.push(Box::new(
-                                ScriptableContextEngine::new(inner, &hooks)
-                                    .with_plugin_name(plugin_name)
-                                    .with_plugin_env(env)
-                                    .with_plugin_config(config_schema)
-                                    // Wire the shared bus: this engine will emit events to it
-                                    // AND subscribe its on_event hook to receive events from
-                                    // all other plugins in the stack.
-                                    .with_event_bus(shared_bus.clone()),
-                            ));
+                            let mut engine_builder = ScriptableContextEngine::new(inner, &hooks)
+                                .with_plugin_name(plugin_name)
+                                .with_plugin_env(env)
+                                .with_plugin_config(config_schema)
+                                .with_event_bus(shared_bus.clone());
+                            if let Some(ref tb) = trace_backend {
+                                engine_builder = engine_builder.with_trace_backend(tb.clone());
+                            }
+                            engines.push(Box::new(engine_builder));
                         } else {
                             warn!(
                                 plugin = plugin_name.as_str(),
@@ -4298,12 +4324,14 @@ pub fn build_context_engine(
                     let mut env: Vec<(String, String)> = manifest.env.into_iter().collect();
                     let vault_env = resolve_vault_env_vars(&hooks, vault_lookup);
                     env.extend(vault_env);
-                    return Box::new(
-                        ScriptableContextEngine::new(inner, &hooks)
-                            .with_plugin_name(plugin_name)
-                            .with_plugin_env(env)
-                            .with_plugin_config(config_schema),
-                    );
+                    let mut engine_builder = ScriptableContextEngine::new(inner, &hooks)
+                        .with_plugin_name(plugin_name)
+                        .with_plugin_env(env)
+                        .with_plugin_config(config_schema);
+                    if let Some(ref tb) = trace_backend {
+                        engine_builder = engine_builder.with_trace_backend(tb.clone());
+                    }
+                    return Box::new(engine_builder);
                 }
                 warn!(
                     plugin = plugin_name.as_str(),

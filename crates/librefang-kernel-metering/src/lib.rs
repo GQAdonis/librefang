@@ -1,6 +1,7 @@
 //! Metering engine — tracks LLM cost and enforces spending quotas.
 
-use librefang_memory::usage::{ModelUsage, UsageRecord, UsageStore, UsageSummary};
+use librefang_memory::usage::{ModelUsage, UsageRecord, UsageSummary};
+use librefang_memory::UsageBackend;
 use librefang_types::agent::{AgentId, ResourceQuota};
 use librefang_types::error::{LibreFangError, LibreFangResult};
 use librefang_types::model_catalog::ModelCatalogEntry;
@@ -11,13 +12,19 @@ const DEFAULT_OUTPUT_COST_PER_M: f64 = 3.0;
 
 /// The metering engine tracks usage cost and enforces quota limits.
 pub struct MeteringEngine {
-    /// Persistent usage store (SQLite-backed).
-    store: Arc<UsageStore>,
+    /// Persistent usage store (SQLite or SurrealDB).
+    store: Arc<dyn UsageBackend>,
 }
 
 impl MeteringEngine {
-    /// Create a new metering engine with the given usage store.
-    pub fn new(store: Arc<UsageStore>) -> Self {
+    /// Create a new metering engine with the given usage backend.
+    pub fn new(store: Arc<dyn UsageBackend>) -> Self {
+        Self { store }
+    }
+
+    /// Create a metering engine backed by the SQLite `UsageStore`.
+    #[cfg(feature = "sqlite-backend")]
+    pub fn new_sqlite(store: Arc<librefang_memory::usage::UsageStore>) -> Self {
         Self { store }
     }
 

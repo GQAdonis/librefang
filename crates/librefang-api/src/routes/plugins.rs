@@ -2337,20 +2337,42 @@ pub async fn context_engine_sandbox_policy(
 /// GET /api/context-engine/traces/:trace_id — Look up a single trace by its trace_id.
 ///
 /// The `trace_id` must be exactly 16 lowercase hex characters.  Returns 404 when
-/// no matching trace is found in the persistent SQLite store.
+/// no matching trace is found in the persistent store.
+///
+/// When the `surreal-backend` feature is active, traces are stored in SurrealDB
+/// via the kernel's `trace_backend` and this endpoint redirects appropriately.
 pub async fn get_trace_by_id(Path(trace_id): Path<String>) -> impl IntoResponse {
     // Validate: trace_id must be exactly 16 hex chars.
     if trace_id.len() != 16 || !trace_id.chars().all(|c| c.is_ascii_hexdigit()) {
         return ApiErrorResponse::bad_request("trace_id must be 16 lowercase hex characters")
             .into_response();
     }
-    match librefang_runtime::plugin_manager::open_trace_store() {
-        Ok(store) => match store.query_by_trace_id(&trace_id) {
-            Some(trace) => axum::Json(trace).into_response(),
-            None => ApiErrorResponse::not_found(format!("No trace found with id '{trace_id}'"))
-                .into_response(),
-        },
-        Err(e) => ApiErrorResponse::internal(e).into_response(),
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+        match librefang_runtime::plugin_manager::open_trace_store() {
+            Ok(store) => match store.query_by_trace_id(&trace_id) {
+                Some(trace) => return axum::Json(trace).into_response(),
+                None => {
+                    return ApiErrorResponse::not_found(format!(
+                        "No trace found with id '{trace_id}'"
+                    ))
+                    .into_response()
+                }
+            },
+            Err(e) => return ApiErrorResponse::internal(e).into_response(),
+        }
+    }
+    #[cfg(feature = "surreal-backend")]
+    {
+        // With surreal-backend, trace history is stored in SurrealDB and is
+        // accessible via the kernel's trace_backend field. This lightweight
+        // endpoint returns a hint directing callers to the context engine routes.
+        let _ = &trace_id;
+        ApiErrorResponse::not_found(
+            "Hook traces are stored in SurrealDB. Use GET /api/context-engine/traces \
+             to query traces via the kernel's trace backend.",
+        )
+        .into_response()
     }
 }
 

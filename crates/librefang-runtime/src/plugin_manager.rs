@@ -4003,6 +4003,11 @@ pub async fn install_plugin_with_deps(
 ///
 /// The database is stored at `~/.librefang/hook_traces.db` and retains the
 /// last 10,000 hook execution records across daemon restarts.
+///
+/// When the `surreal-backend` feature is active, hook traces are stored in
+/// SurrealDB via [`SurrealTraceBackend`] and this function is not compiled.
+/// Use the kernel's `trace_backend` accessor instead.
+#[cfg(not(feature = "surreal-backend"))]
 pub fn open_trace_store() -> Result<crate::trace_store::TraceStore, String> {
     let path = plugins_dir()
         .parent()

@@ -39,6 +39,14 @@ pub(super) const TABLES: &[&str] = &[
     "circuit_breaker_states",
     "totp_lockout",
     "agents",
+    "sessions",
+    "canonical_sessions",
+    "kv_store",
+    "task_queue",
+    "usage_events",
+    "paired_devices",
+    "prompt_versions",
+    "prompt_experiments",
 ];
 
 pub(super) fn run(
@@ -71,6 +79,14 @@ pub(super) fn run(
             "circuit_breaker_states" => copy_circuit_states(&conn, &db, opts.dry_run),
             "totp_lockout" => copy_totp_lockout(&conn, &db, opts.dry_run),
             "agents" => copy_agents(&conn, &db, opts.dry_run),
+            "sessions" => copy_sessions(&conn, &db, opts.dry_run),
+            "canonical_sessions" => copy_canonical_sessions(&conn, &db, opts.dry_run),
+            "kv_store" => copy_kv_store(&conn, &db, opts.dry_run),
+            "task_queue" => copy_task_queue(&conn, &db, opts.dry_run),
+            "usage_events" => copy_usage_events(&conn, &db, opts.dry_run),
+            "paired_devices" => copy_paired_devices(&conn, &db, opts.dry_run),
+            "prompt_versions" => copy_prompt_versions(&conn, &db, opts.dry_run),
+            "prompt_experiments" => copy_prompt_experiments(&conn, &db, opts.dry_run),
             other => {
                 warn!(table = other, "no migrator registered; skipping");
                 Ok(0)
@@ -445,10 +461,563 @@ struct SqliteAgentRow {
     updated_at: String,
 }
 
+// ── sessions ──────────────────────────────────────────────────────────
+
+fn copy_sessions(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "sessions")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, agent_id, messages, context_window_tokens, created_at, updated_at, label \
+             FROM sessions ORDER BY created_at ASC",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let messages_bytes: Vec<u8> = row.get(2)?;
+            let messages_json = serde_json::from_slice::<serde_json::Value>(&messages_bytes)
+                .unwrap_or(serde_json::Value::Array(vec![]));
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                messages_json,
+                row.get::<_, i64>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<String>>(6)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (id, agent_id, messages, context_window_tokens, created_at, updated_at, label) =
+            row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "messages": messages,
+                "context_window_tokens": context_window_tokens,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "label": label,
+            });
+            let rec_id = sanitise_id(&id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("sessions", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── canonical_sessions ────────────────────────────────────────────────
+
+fn copy_canonical_sessions(
+    conn: &Connection,
+    db: &Surreal<Any>,
+    dry_run: bool,
+) -> StorageResult<u64> {
+    if !table_exists(conn, "canonical_sessions")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT agent_id, messages, compaction_cursor, compacted_summary, updated_at \
+             FROM canonical_sessions",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let messages_bytes: Vec<u8> = row.get(1)?;
+            let messages_json = serde_json::from_slice::<serde_json::Value>(&messages_bytes)
+                .unwrap_or(serde_json::Value::Array(vec![]));
+            Ok((
+                row.get::<_, String>(0)?,
+                messages_json,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (agent_id, messages, compaction_cursor, compacted_summary, updated_at) =
+            row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "messages": messages,
+                "compaction_cursor": compaction_cursor,
+                "compacted_summary": compacted_summary,
+                "updated_at": updated_at,
+            });
+            let rec_id = sanitise_id(&agent_id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("canonical_sessions", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── kv_store ──────────────────────────────────────────────────────────
+
+fn copy_kv_store(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "kv_store")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare("SELECT agent_id, key, value, version, updated_at FROM kv_store")
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let value_bytes: Vec<u8> = row.get(2)?;
+            let value_json = serde_json::from_slice::<serde_json::Value>(&value_bytes)
+                .unwrap_or(serde_json::Value::Null);
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                value_json,
+                row.get::<_, i64>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (agent_id, key, value, version, updated_at) = row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "key": key,
+                "value": value,
+                "version": version,
+                "updated_at": updated_at,
+            });
+            // Use compound key as record ID
+            let rec_id = format!("{}_{}", sanitise_id(&agent_id), sanitise_id(&key));
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("kv_store", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── task_queue ────────────────────────────────────────────────────────
+
+fn copy_task_queue(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "task_queue")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, agent_id, task_type, payload, status, priority, \
+                    scheduled_at, created_at, completed_at \
+             FROM task_queue ORDER BY created_at ASC",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let payload_bytes: Vec<u8> = row.get(3)?;
+            let payload_json = serde_json::from_slice::<serde_json::Value>(&payload_bytes)
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                payload_json,
+                row.get::<_, String>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, Option<String>>(8)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (
+            id,
+            agent_id,
+            task_type,
+            payload,
+            status,
+            priority,
+            scheduled_at,
+            created_at,
+            completed_at,
+        ) = row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "task_type": task_type,
+                "payload": payload,
+                "status": status,
+                "priority": priority,
+                "scheduled_at": scheduled_at,
+                "created_at": created_at,
+                "completed_at": completed_at,
+            });
+            let rec_id = sanitise_id(&id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("task_queue", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── usage_events ──────────────────────────────────────────────────────
+
+fn copy_usage_events(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "usage_events")? {
+        return Ok(0);
+    }
+    // latency_ms and provider may not exist in older DBs — use optional cols
+    let has_latency = column_exists_storage(conn, "usage_events", "latency_ms");
+    let has_provider = column_exists_storage(conn, "usage_events", "provider");
+    let select = format!(
+        "SELECT id, agent_id, timestamp, model, input_tokens, output_tokens, cost_usd, tool_calls{}{} \
+         FROM usage_events ORDER BY timestamp ASC",
+        if has_provider { ", provider" } else { "" },
+        if has_latency { ", latency_ms" } else { "" },
+    );
+
+    let mut stmt = conn.prepare(&select).map_err(map_sql)?;
+    let provider_idx: Option<usize> = if has_provider { Some(8) } else { None };
+    let latency_idx: Option<usize> = if has_latency {
+        Some(if has_provider { 9 } else { 8 })
+    } else {
+        None
+    };
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, f64>(6)?,
+                row.get::<_, i64>(7)?,
+                provider_idx
+                    .and_then(|i| row.get::<_, Option<String>>(i).ok())
+                    .flatten(),
+                latency_idx
+                    .and_then(|i| row.get::<_, Option<i64>>(i).ok())
+                    .flatten(),
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (
+            id,
+            agent_id,
+            timestamp,
+            model,
+            input_tokens,
+            output_tokens,
+            cost_usd,
+            tool_calls,
+            provider,
+            latency_ms,
+        ) = row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "timestamp": timestamp,
+                "provider": provider.unwrap_or_default(),
+                "model": model,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": cost_usd,
+                "tool_calls": tool_calls,
+                "latency_ms": latency_ms.unwrap_or(0),
+            });
+            let rec_id = sanitise_id(&id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("usage_events", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── paired_devices ────────────────────────────────────────────────────
+
+fn copy_paired_devices(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "paired_devices")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT device_id, display_name, platform, paired_at, last_seen, push_token \
+             FROM paired_devices",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (device_id, display_name, platform, paired_at, last_seen, push_token) =
+            row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "device_id": device_id,
+                "display_name": display_name,
+                "platform": platform,
+                "paired_at": paired_at,
+                "last_seen": last_seen,
+                "push_token": push_token,
+            });
+            let rec_id = sanitise_id(&device_id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("paired_devices", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── prompt_versions ───────────────────────────────────────────────────
+
+fn copy_prompt_versions(conn: &Connection, db: &Surreal<Any>, dry_run: bool) -> StorageResult<u64> {
+    if !table_exists(conn, "prompt_versions")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, agent_id, version, content_hash, system_prompt, tools, variables, \
+                    created_at, created_by, is_active, description \
+             FROM prompt_versions ORDER BY version ASC",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let tools_str: String = row.get(5)?;
+            let variables_str: String = row.get(6)?;
+            let tools_json = serde_json::from_str::<serde_json::Value>(&tools_str)
+                .unwrap_or(serde_json::Value::Array(vec![]));
+            let variables_json = serde_json::from_str::<serde_json::Value>(&variables_str)
+                .unwrap_or(serde_json::Value::Array(vec![]));
+            let is_active: i64 = row.get(9)?;
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                tools_json,
+                variables_json,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?,
+                is_active != 0,
+                row.get::<_, Option<String>>(10)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (
+            id,
+            agent_id,
+            version,
+            content_hash,
+            system_prompt,
+            tools,
+            variables,
+            created_at,
+            created_by,
+            is_active,
+            description,
+        ) = row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "agent_id": agent_id,
+                "version": version,
+                "content_hash": content_hash,
+                "system_prompt": system_prompt,
+                "tools": tools,
+                "variables": variables,
+                "created_at": created_at,
+                "created_by": created_by,
+                "is_active": is_active,
+                "description": description,
+            });
+            let rec_id = sanitise_id(&id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("prompt_versions", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+// ── prompt_experiments ────────────────────────────────────────────────
+
+fn copy_prompt_experiments(
+    conn: &Connection,
+    db: &Surreal<Any>,
+    dry_run: bool,
+) -> StorageResult<u64> {
+    if !table_exists(conn, "prompt_experiments")? {
+        return Ok(0);
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, agent_id, status, traffic_split, success_criteria, \
+                    started_at, ended_at, created_at \
+             FROM prompt_experiments ORDER BY created_at ASC",
+        )
+        .map_err(map_sql)?;
+    let rows = stmt
+        .query_map([], |row| {
+            let traffic_str: String = row.get(4)?;
+            let criteria_str: String = row.get(5)?;
+            let traffic_json = serde_json::from_str::<serde_json::Value>(&traffic_str)
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            let criteria_json = serde_json::from_str::<serde_json::Value>(&criteria_str)
+                .unwrap_or(serde_json::Value::Object(Default::default()));
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                traffic_json,
+                criteria_json,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, String>(8)?,
+            ))
+        })
+        .map_err(map_sql)?;
+
+    let mut count = 0u64;
+    for row in rows {
+        let (
+            id,
+            name,
+            agent_id,
+            status,
+            traffic_split,
+            success_criteria,
+            started_at,
+            ended_at,
+            created_at,
+        ) = row.map_err(map_sql)?;
+        if !dry_run {
+            let body = serde_json::json!({
+                "name": name,
+                "agent_id": agent_id,
+                "status": status,
+                "traffic_split": traffic_split,
+                "success_criteria": success_criteria,
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "created_at": created_at,
+            });
+            let rec_id = sanitise_id(&id);
+            block_on(async {
+                let _: Option<serde_json::Value> = db
+                    .upsert(("prompt_experiments", rec_id.as_str()))
+                    .content(body)
+                    .await
+                    .map_err(|e| StorageError::Backend(e.to_string()))?;
+                Ok::<(), StorageError>(())
+            })?;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
 // ── shared helpers ────────────────────────────────────────────────────
 
 fn map_sql(e: rusqlite::Error) -> StorageError {
     StorageError::Backend(format!("sqlite: {e}"))
+}
+
+/// Returns `true` if `table` exists in the SQLite database.
+fn table_exists(conn: &Connection, table: &str) -> StorageResult<bool> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            rusqlite::params![table],
+            |r| r.get(0),
+        )
+        .map_err(map_sql)?;
+    Ok(count > 0)
+}
+
+/// Returns `true` if `column` exists in `table` (storage-error variant).
+fn column_exists_storage(conn: &Connection, table: &str, column: &str) -> bool {
+    conn.prepare(&format!("SELECT {column} FROM {table} LIMIT 0"))
+        .is_ok()
 }
 
 fn sanitise_id(input: &str) -> String {

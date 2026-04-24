@@ -332,6 +332,34 @@ pub struct LibreFangKernel {
     #[cfg(feature = "surreal-backend")]
     #[allow(dead_code)]
     _surreal_runtime: Option<tokio::runtime::Runtime>,
+    /// Hook trace + circuit-breaker backend.
+    ///
+    /// `SurrealTraceBackend` when `surreal-backend` is enabled; `None` causes
+    /// each `ContextEngine` to fall back to the default SQLite `TraceStore`.
+    /// Kept alive here; the value is cloned into context engines during boot.
+    #[cfg(feature = "surreal-backend")]
+    #[allow(dead_code)]
+    pub(crate) trace_backend: Arc<dyn librefang_runtime::storage_backends::TraceBackend>,
+    /// Proactive memory backend (decay, consolidation, vacuum).
+    ///
+    /// `SurrealProactiveMemoryBackend` when `surreal-backend` is enabled;
+    /// `MemorySubstrate` (rusqlite) otherwise.
+    pub(crate) proactive_backend: Arc<dyn librefang_memory::ProactiveMemoryBackend>,
+    /// Session and canonical-session persistence backend.
+    ///
+    /// `SurrealSessionBackend` when `surreal-backend` is enabled;
+    /// `MemorySubstrate` (rusqlite) when `sqlite-backend` is used.
+    pub(crate) session_store: Arc<dyn librefang_memory::SessionBackend>,
+    /// Per-agent key-value store backend.
+    ///
+    /// `SurrealKvBackend` when `surreal-backend` is enabled;
+    /// `MemorySubstrate` (rusqlite) otherwise.
+    pub(crate) kv_store: Arc<dyn librefang_memory::KvBackend>,
+    /// Task queue backend.
+    ///
+    /// `SurrealTaskBackend` when `surreal-backend` is enabled;
+    /// `MemorySubstrate` (rusqlite) otherwise.
+    pub(crate) task_backend: Arc<dyn librefang_memory::TaskBackend>,
     /// Proactive memory store (mem0-style auto_retrieve/auto_memorize).
     pub(crate) proactive_memory: OnceLock<Arc<librefang_memory::ProactiveMemoryStore>>,
     /// Concrete handle to the LLM-backed memory extractor used by
@@ -343,7 +371,15 @@ pub struct LibreFangKernel {
     pub(crate) proactive_memory_extractor:
         OnceLock<Arc<librefang_runtime::proactive_memory::LlmMemoryExtractor>>,
     /// Prompt versioning and A/B experiment store.
-    pub(crate) prompt_store: OnceLock<librefang_memory::PromptStore>,
+    ///
+    /// `SurrealPromptStore` when `surreal-backend` is enabled;
+    /// `librefang_memory::PromptStore` (rusqlite) otherwise.
+    pub(crate) prompt_store: Arc<dyn librefang_memory::PromptBackend>,
+    /// Paired-device persistence backend.
+    ///
+    /// `SurrealDeviceStore` when `surreal-backend` is enabled;
+    /// `MemorySubstrate` (rusqlite) otherwise.
+    pub(crate) device_store: Arc<dyn librefang_memory::DeviceBackend>,
     /// Process supervisor.
     pub(crate) supervisor: Supervisor,
     /// Workflow engine.
@@ -917,6 +953,12 @@ impl LibreFangKernel {
         &self.memory
     }
 
+    /// Paired-device persistence backend.
+    #[inline]
+    pub fn device_store(&self) -> &Arc<dyn librefang_memory::DeviceBackend> {
+        &self.device_store
+    }
+
     /// Proactive memory store (mem0-style auto-memorize/retrieve).
     #[inline]
     pub fn proactive_memory_store(&self) -> Option<&Arc<librefang_memory::ProactiveMemoryStore>> {
@@ -1118,7 +1160,11 @@ impl LibreFangKernel {
                     continue;
                 }
 
-                match kernel.memory.task_reset_stuck(ttl_secs, max_retries).await {
+                match kernel
+                    .task_backend
+                    .task_reset_stuck(ttl_secs, max_retries)
+                    .await
+                {
                     Ok(reset) if !reset.is_empty() => {
                         warn!(
                             count = reset.len(),
@@ -1811,7 +1857,19 @@ impl LibreFangKernel {
         let mut surreal_owned_rt: Option<tokio::runtime::Runtime> = None;
 
         #[cfg(feature = "surreal-backend")]
-        let (surreal_pool, surreal_session, agent_store) = {
+        let (
+            surreal_pool,
+            surreal_session,
+            agent_store,
+            surreal_trace_backend,
+            surreal_session_store,
+            surreal_kv_store,
+            surreal_task_backend,
+            surreal_proactive_backend,
+            surreal_usage_store,
+            surreal_device_store,
+            surreal_prompt_store,
+        ) = {
             info!(
                 backend = ?config.storage.backend,
                 namespace = %config.storage.effective_namespace(),
@@ -1846,7 +1904,40 @@ impl LibreFangKernel {
                 let agent_store: Arc<dyn librefang_memory::MemoryBackend> =
                     Arc::new(backend) as Arc<dyn librefang_memory::MemoryBackend>;
 
-                Ok::<_, String>((pool, session, agent_store))
+                let trace_backend: Arc<dyn librefang_runtime::storage_backends::TraceBackend> =
+                    Arc::new(librefang_runtime::backends::SurrealTraceBackend::open(
+                        &session,
+                    ));
+
+                let session_store: Arc<dyn librefang_memory::SessionBackend> =
+                    Arc::new(librefang_memory::SurrealSessionBackend::open(&session));
+                let kv_store: Arc<dyn librefang_memory::KvBackend> =
+                    Arc::new(librefang_memory::SurrealKvBackend::open(&session));
+                let task_backend: Arc<dyn librefang_memory::TaskBackend> =
+                    Arc::new(librefang_memory::SurrealTaskBackend::open(&session));
+                let proactive_backend: Arc<dyn librefang_memory::ProactiveMemoryBackend> = Arc::new(
+                    librefang_memory::SurrealProactiveMemoryBackend::open(&session),
+                );
+                let usage_store: Arc<dyn librefang_memory::UsageBackend> =
+                    Arc::new(librefang_memory::SurrealUsageStore::open(&session));
+                let device_store: Arc<dyn librefang_memory::DeviceBackend> =
+                    Arc::new(librefang_memory::SurrealDeviceStore::open(&session));
+                let prompt_backend: Arc<dyn librefang_memory::PromptBackend> =
+                    Arc::new(librefang_memory::SurrealPromptStore::open(&session));
+
+                Ok::<_, String>((
+                    pool,
+                    session,
+                    agent_store,
+                    trace_backend,
+                    session_store,
+                    kv_store,
+                    task_backend,
+                    proactive_backend,
+                    usage_store,
+                    device_store,
+                    prompt_backend,
+                ))
             };
 
             let result = match tokio::runtime::Handle::try_current() {
@@ -1865,13 +1956,31 @@ impl LibreFangKernel {
                 }
             };
 
-            let (pool, session, store) = result.map_err(KernelError::BootFailed)?;
-            info!("SurrealDB operational migrations applied; agent registry backend ready");
-            (pool, session, store)
+            let (pool, session, store, trace, sess, kv, task, proactive, usage, device, prompt) =
+                result.map_err(KernelError::BootFailed)?;
+            info!("SurrealDB operational migrations applied; all storage backends ready");
+            (
+                pool, session, store, trace, sess, kv, task, proactive, usage, device, prompt,
+            )
         };
         #[cfg(not(feature = "surreal-backend"))]
         let agent_store: Arc<dyn librefang_memory::MemoryBackend> =
             Arc::clone(&memory) as Arc<dyn librefang_memory::MemoryBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_proactive_backend: Arc<dyn librefang_memory::ProactiveMemoryBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::ProactiveMemoryBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_session_store: Arc<dyn librefang_memory::SessionBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::SessionBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_kv_store: Arc<dyn librefang_memory::KvBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::KvBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_task_backend: Arc<dyn librefang_memory::TaskBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::TaskBackend>;
+        #[cfg(not(feature = "surreal-backend"))]
+        let surreal_device_store: Arc<dyn librefang_memory::DeviceBackend> =
+            Arc::clone(&memory) as Arc<dyn librefang_memory::DeviceBackend>;
 
         // Check if Ollama is reachable on localhost:11434 (TCP probe, 500ms timeout).
         fn is_ollama_reachable() -> bool {
@@ -2203,15 +2312,25 @@ impl LibreFangKernel {
             Arc::new(StubDriver) as Arc<dyn LlmDriver>
         };
 
-        // Initialize metering engine (shares the same SQLite connection as the memory substrate)
+        // Initialize metering engine backed by either SurrealDB or SQLite.
+        #[cfg(feature = "surreal-backend")]
+        let metering = Arc::new(MeteringEngine::new(Arc::clone(&surreal_usage_store)));
+        #[cfg(not(feature = "surreal-backend"))]
         let metering = Arc::new(MeteringEngine::new(Arc::new(
             librefang_memory::usage::UsageStore::new(memory.usage_conn()),
-        )));
+        )
+            as Arc<dyn librefang_memory::UsageBackend>));
 
-        // Initialize prompt versioning and A/B experiment store with its own connection
-        // to avoid conflicts with UsageStore concurrent writes
-        let prompt_store = librefang_memory::PromptStore::new_with_path(&db_path)
-            .map_err(|e| KernelError::BootFailed(format!("Prompt store init failed: {e}")))?;
+        // Initialize prompt versioning and A/B experiment store.
+        #[cfg(feature = "surreal-backend")]
+        let prompt_store_backend: Arc<dyn librefang_memory::PromptBackend> =
+            Arc::clone(&surreal_prompt_store);
+        #[cfg(not(feature = "surreal-backend"))]
+        let prompt_store_backend: Arc<dyn librefang_memory::PromptBackend> = {
+            let sqlite_prompt = librefang_memory::PromptStore::new_with_path(&db_path)
+                .map_err(|e| KernelError::BootFailed(format!("Prompt store init failed: {e}")))?;
+            Arc::new(sqlite_prompt) as Arc<dyn librefang_memory::PromptBackend>
+        };
 
         let supervisor = Supervisor::new();
         let background = BackgroundExecutor::with_concurrency(
@@ -2577,7 +2696,7 @@ impl LibreFangKernel {
 
         // Load paired devices from database and set up persistence callback
         if config.pairing.enabled {
-            match memory.load_paired_devices() {
+            match surreal_device_store.load_paired_devices() {
                 Ok(rows) => {
                     let devices: Vec<crate::pairing::PairedDevice> = rows
                         .into_iter()
@@ -2607,10 +2726,10 @@ impl LibreFangKernel {
                 }
             }
 
-            let persist_memory = Arc::clone(&memory);
+            let persist_device_store = Arc::clone(&surreal_device_store);
             pairing.set_persist(Box::new(move |device, op| match op {
                 crate::pairing::PersistOp::Save => {
-                    if let Err(e) = persist_memory.save_paired_device(
+                    if let Err(e) = persist_device_store.save_paired_device(
                         &device.device_id,
                         &device.display_name,
                         &device.platform,
@@ -2622,7 +2741,7 @@ impl LibreFangKernel {
                     }
                 }
                 crate::pairing::PersistOp::Remove => {
-                    if let Err(e) = persist_memory.remove_paired_device(&device.device_id) {
+                    if let Err(e) = persist_device_store.remove_paired_device(&device.device_id) {
                         tracing::warn!("Failed to remove paired device from DB: {e}");
                     }
                 }
@@ -2726,6 +2845,14 @@ impl LibreFangKernel {
                 Arc<dyn librefang_runtime::embedding::EmbeddingDriver + Send + Sync>,
             > = embedding_driver.as_ref().map(Arc::clone);
             let vault_path = config.home_dir.join("vault.enc");
+            #[cfg(feature = "surreal-backend")]
+            let trace_backend_for_engine: Option<
+                Arc<dyn librefang_runtime::storage_backends::TraceBackend>,
+            > = Some(Arc::clone(&surreal_trace_backend));
+            #[cfg(not(feature = "surreal-backend"))]
+            let trace_backend_for_engine: Option<
+                Arc<dyn librefang_runtime::storage_backends::TraceBackend>,
+            > = None;
             let engine = librefang_runtime::context_engine::build_context_engine(
                 &config.context_engine,
                 context_engine_config.clone(),
@@ -2739,6 +2866,7 @@ impl LibreFangKernel {
                     }
                     vault.get(secret_name).map(|v| v.as_str().to_string())
                 },
+                trace_backend_for_engine,
             );
             Some(engine)
         };
@@ -2793,9 +2921,16 @@ impl LibreFangKernel {
             surreal_pool,
             #[cfg(feature = "surreal-backend")]
             _surreal_runtime: surreal_owned_rt,
+            #[cfg(feature = "surreal-backend")]
+            trace_backend: surreal_trace_backend,
+            proactive_backend: surreal_proactive_backend,
+            session_store: surreal_session_store,
+            kv_store: surreal_kv_store,
+            task_backend: surreal_task_backend,
             proactive_memory: OnceLock::new(),
             proactive_memory_extractor: OnceLock::new(),
-            prompt_store: OnceLock::new(),
+            prompt_store: prompt_store_backend,
+            device_store: surreal_device_store,
             supervisor,
             workflows: WorkflowEngine::new_with_persistence(&workflow_home_dir),
             template_registry: WorkflowTemplateRegistry::new(),
@@ -2929,8 +3064,7 @@ impl LibreFangKernel {
             }
         }
 
-        // Initialize prompt store
-        let _ = kernel.prompt_store.set(prompt_store);
+        // prompt_store is now initialized directly in the kernel struct literal above.
 
         // Restore persisted agents from the active backend (SurrealDB or SQLite)
         match kernel.agent_store.load_all_agents() {
@@ -3213,7 +3347,7 @@ impl LibreFangKernel {
                 if webui_session_id == canonical_session_id {
                     continue;
                 }
-                let webui_msgs = match kernel.memory.get_session(webui_session_id) {
+                let webui_msgs = match kernel.session_store.get_session(webui_session_id) {
                     Ok(Some(s)) => s.messages.len(),
                     _ => continue,
                 };
@@ -6490,7 +6624,7 @@ system_prompt = "You are a helpful assistant."
                     // guard (which is skipped when there are no injections)
                     // would leave the storage copy untouched and the reset
                     // would be invisible to subsequent calls.
-                    if let Err(e) = self.memory.save_session(&session) {
+                    if let Err(e) = self.session_store.save_session(&session) {
                         tracing::warn!(
                             agent_id = %agent_id,
                             error = %e,
@@ -7080,7 +7214,7 @@ system_prompt = "You are a helpful assistant."
                 // Persist the stripped session. agent_loop already called
                 // save_session internally; this second save overwrites that
                 // with the version that has the assistant turn removed.
-                if let Err(e) = self.memory.save_session(&session) {
+                if let Err(e) = self.session_store.save_session(&session) {
                     warn!("cron [SILENT]: failed to persist stripped session: {e}");
                 }
             }
@@ -7106,7 +7240,7 @@ system_prompt = "You are a helpful assistant."
             let start = result.new_messages_start.min(session.messages.len());
             if start < session.messages.len() {
                 let new_messages = session.messages[start..].to_vec();
-                if let Err(e) = self.memory.append_canonical(
+                if let Err(e) = self.session_store.append_canonical(
                     agent_id,
                     &new_messages,
                     None,
@@ -7266,9 +7400,9 @@ system_prompt = "You are a helpful assistant."
         // Auto-save session summaries for ALL sessions (default + per-channel)
         // before clearing, so no channel's conversation history is silently lost.
         // Also emit session:end for each active session before deletion.
-        if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
+        if let Ok(session_ids) = self.session_store.get_agent_session_ids(agent_id) {
             for sid in session_ids {
-                if let Ok(Some(old_session)) = self.memory.get_session(sid) {
+                if let Ok(Some(old_session)) = self.session_store.get_session(sid) {
                     // Fire session:end before removing the old session.
                     self.external_hooks.fire(
                         crate::hooks::ExternalHookEvent::SessionEnd,
@@ -7285,7 +7419,7 @@ system_prompt = "You are a helpful assistant."
         }
 
         // Delete ALL sessions for this agent (default + per-channel)
-        let _ = self.memory.delete_agent_sessions(agent_id);
+        let _ = self.session_store.delete_agent_sessions(agent_id);
 
         // Create a fresh session and inject reset prompt if configured
         let mut new_session = self
@@ -7334,7 +7468,7 @@ system_prompt = "You are a helpful assistant."
         })?;
 
         // Emit session:end for each active session before deletion.
-        if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
+        if let Ok(session_ids) = self.session_store.get_agent_session_ids(agent_id) {
             for sid in session_ids {
                 self.external_hooks.fire(
                     crate::hooks::ExternalHookEvent::SessionEnd,
@@ -7347,7 +7481,7 @@ system_prompt = "You are a helpful assistant."
         }
 
         // Delete ALL sessions for this agent (default + per-channel)
-        let _ = self.memory.delete_agent_sessions(agent_id);
+        let _ = self.session_store.delete_agent_sessions(agent_id);
 
         // Create a fresh session
         let new_session = self
@@ -7395,7 +7529,7 @@ system_prompt = "You are a helpful assistant."
         })?;
 
         // Emit session:end for each active session before deletion.
-        if let Ok(session_ids) = self.memory.get_agent_session_ids(agent_id) {
+        if let Ok(session_ids) = self.session_store.get_agent_session_ids(agent_id) {
             for sid in session_ids {
                 self.external_hooks.fire(
                     crate::hooks::ExternalHookEvent::SessionEnd,
@@ -7408,10 +7542,10 @@ system_prompt = "You are a helpful assistant."
         }
 
         // Delete all regular sessions
-        let _ = self.memory.delete_agent_sessions(agent_id);
+        let _ = self.session_store.delete_agent_sessions(agent_id);
 
         // Delete canonical (cross-channel) session
-        let _ = self.memory.delete_canonical_session(agent_id);
+        let _ = self.session_store.delete_canonical_session(agent_id);
 
         // Create a fresh session and inject reset prompt if configured
         let mut new_session = self
@@ -7741,7 +7875,7 @@ system_prompt = "You are a helpful assistant."
 
         // Persist if anything was injected.
         if !session.messages.is_empty() {
-            let _ = self.memory.save_session(session);
+            let _ = self.session_store.save_session(session);
         }
 
         // Run on_session_start_script if configured (fire-and-forget).
@@ -7967,7 +8101,7 @@ system_prompt = "You are a helpful assistant."
         }
 
         // Clear canonical session to prevent memory poisoning from old model's responses
-        let _ = self.memory.delete_canonical_session(agent_id);
+        let _ = self.session_store.delete_canonical_session(agent_id);
         debug!(agent_id = %agent_id, "Cleared canonical session after model switch");
 
         Ok(())
@@ -10234,7 +10368,10 @@ system_prompt = "You are a helpful assistant."
                         Err(e) => warn!("Startup session prune (excess) failed: {e}"),
                     }
                 }
-                if let Err(e) = self.memory.vacuum_if_shrank(pruned_total as usize) {
+                if let Err(e) = self
+                    .proactive_backend
+                    .vacuum_if_shrank(pruned_total as usize)
+                {
                     warn!("Startup VACUUM after session prune failed: {e}");
                 }
                 if pruned_total > 0 {
@@ -10291,7 +10428,7 @@ system_prompt = "You are a helpful assistant."
                         if kernel.supervisor.is_shutting_down() {
                             break;
                         }
-                        match kernel.memory.consolidate().await {
+                        match kernel.proactive_backend.consolidate().await {
                             Ok(report) => {
                                 if report.memories_decayed > 0 || report.memories_merged > 0 {
                                     info!(
@@ -10328,7 +10465,7 @@ system_prompt = "You are a helpful assistant."
                         if kernel.supervisor.is_shutting_down() {
                             break;
                         }
-                        match kernel.memory.run_decay(&decay_config) {
+                        match kernel.proactive_backend.run_decay(&decay_config) {
                             Ok(n) => {
                                 if n > 0 {
                                     info!(deleted = n, "Memory decay sweep completed");
@@ -10507,7 +10644,7 @@ system_prompt = "You are a helpful assistant."
                                     if max_tokens.is_some() || max_messages.is_some() {
                                         let cron_sid = SessionId::for_channel(agent_id, "cron");
                                         if let Ok(Some(mut session)) =
-                                            kernel.memory.get_session(cron_sid)
+                                            kernel.session_store.get_session(cron_sid)
                                         {
                                             // Prune by message count first.
                                             if let Some(max_msgs) = max_messages {
@@ -10533,7 +10670,7 @@ system_prompt = "You are a helpful assistant."
                                                     session.messages.remove(0);
                                                 }
                                             }
-                                            let _ = kernel.memory.save_session(&session);
+                                            let _ = kernel.session_store.save_session(&session);
                                         }
                                     }
                                 }
@@ -12877,7 +13014,7 @@ system_prompt = "You are a helpful assistant."
     fn active_goals_for_prompt(&self, agent_id: Option<AgentId>) -> Vec<(String, String, u8)> {
         let shared_id = shared_memory_agent_id();
         let goals: Vec<serde_json::Value> =
-            match self.memory.structured_get(shared_id, "__librefang_goals") {
+            match self.kv_store.structured_get(shared_id, "__librefang_goals") {
                 Ok(Some(serde_json::Value::Array(arr))) => arr,
                 _ => return Vec::new(),
             };
@@ -14913,11 +15050,7 @@ impl KernelHandle for LibreFangKernel {
         let id: AgentId = agent_id
             .parse()
             .map_err(|e| format!("Invalid agent ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .get_running_experiment(id)
             .map_err(|e| format!("Failed to get experiment: {e}"))
     }
@@ -14936,11 +15069,7 @@ impl KernelHandle for LibreFangKernel {
         let var_id: uuid::Uuid = variant_id
             .parse()
             .map_err(|e| format!("Invalid variant ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .record_request(exp_id, var_id, latency_ms, cost_usd, success)
             .map_err(|e| format!("Failed to record request: {e}"))
     }
@@ -14952,11 +15081,7 @@ impl KernelHandle for LibreFangKernel {
         let id: uuid::Uuid = version_id
             .parse()
             .map_err(|e| format!("Invalid version ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .get_version(id)
             .map_err(|e| format!("Failed to get version: {e}"))
     }
@@ -14965,11 +15090,7 @@ impl KernelHandle for LibreFangKernel {
         &self,
         agent_id: librefang_types::agent::AgentId,
     ) -> Result<Vec<librefang_types::agent::PromptVersion>, String> {
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .list_versions(agent_id)
             .map_err(|e| format!("Failed to list versions: {e}"))
     }
@@ -14979,17 +15100,13 @@ impl KernelHandle for LibreFangKernel {
         version: librefang_types::agent::PromptVersion,
     ) -> Result<(), String> {
         let cfg = self.config.load();
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
         let agent_id = version.agent_id;
-        store
+        self.prompt_store
             .create_version(version)
             .map_err(|e| format!("Failed to create version: {e}"))?;
         // Prune old versions if over the configured limit
         let max = cfg.prompt_intelligence.max_versions_per_agent;
-        let _ = store.prune_old_versions(agent_id, max);
+        let _ = self.prompt_store.prune_old_versions(agent_id, max);
         Ok(())
     }
 
@@ -14997,11 +15114,7 @@ impl KernelHandle for LibreFangKernel {
         let id: uuid::Uuid = version_id
             .parse()
             .map_err(|e| format!("Invalid version ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .delete_version(id)
             .map_err(|e| format!("Failed to delete version: {e}"))
     }
@@ -15013,11 +15126,7 @@ impl KernelHandle for LibreFangKernel {
         let agent: librefang_types::agent::AgentId = agent_id
             .parse()
             .map_err(|e| format!("Invalid agent ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .set_active_version(id, agent)
             .map_err(|e| format!("Failed to set active version: {e}"))
     }
@@ -15026,11 +15135,7 @@ impl KernelHandle for LibreFangKernel {
         &self,
         agent_id: librefang_types::agent::AgentId,
     ) -> Result<Vec<librefang_types::agent::PromptExperiment>, String> {
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .list_experiments(agent_id)
             .map_err(|e| format!("Failed to list experiments: {e}"))
     }
@@ -15039,11 +15144,7 @@ impl KernelHandle for LibreFangKernel {
         &self,
         experiment: librefang_types::agent::PromptExperiment,
     ) -> Result<(), String> {
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .create_experiment(experiment)
             .map_err(|e| format!("Failed to create experiment: {e}"))
     }
@@ -15055,11 +15156,7 @@ impl KernelHandle for LibreFangKernel {
         let id: uuid::Uuid = experiment_id
             .parse()
             .map_err(|e| format!("Invalid experiment ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .get_experiment(id)
             .map_err(|e| format!("Failed to get experiment: {e}"))
     }
@@ -15072,17 +15169,14 @@ impl KernelHandle for LibreFangKernel {
         let id: uuid::Uuid = experiment_id
             .parse()
             .map_err(|e| format!("Invalid experiment ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .update_experiment_status(id, status)
             .map_err(|e| format!("Failed to update experiment status: {e}"))?;
 
         // When completing an experiment, auto-activate the winning variant's prompt version
         if status == librefang_types::agent::ExperimentStatus::Completed {
-            let metrics = store
+            let metrics = self
+                .prompt_store
                 .get_experiment_metrics(id)
                 .map_err(|e| format!("Failed to get experiment metrics: {e}"))?;
             if let Some(winner) = metrics.iter().max_by(|a, b| {
@@ -15090,12 +15184,15 @@ impl KernelHandle for LibreFangKernel {
                     .partial_cmp(&b.success_rate)
                     .unwrap_or(std::cmp::Ordering::Equal)
             }) {
-                if let Some(exp) = store
+                if let Some(exp) = self
+                    .prompt_store
                     .get_experiment(id)
                     .map_err(|e| format!("Failed to get experiment: {e}"))?
                 {
                     if let Some(variant) = exp.variants.iter().find(|v| v.id == winner.variant_id) {
-                        let _ = store.set_active_version(variant.prompt_version_id, exp.agent_id);
+                        let _ = self
+                            .prompt_store
+                            .set_active_version(variant.prompt_version_id, exp.agent_id);
                         tracing::info!(
                             experiment_id = %id,
                             winner_variant = %winner.variant_name,
@@ -15117,11 +15214,7 @@ impl KernelHandle for LibreFangKernel {
         let id: uuid::Uuid = experiment_id
             .parse()
             .map_err(|e| format!("Invalid experiment ID: {e}"))?;
-        let store = self
-            .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        store
+        self.prompt_store
             .get_experiment_metrics(id)
             .map_err(|e| format!("Failed to get experiment metrics: {e}"))
     }
@@ -15135,16 +15228,15 @@ impl KernelHandle for LibreFangKernel {
         if !cfg.prompt_intelligence.enabled {
             return Ok(());
         }
-        let store = self
+        match self
             .prompt_store
-            .get()
-            .ok_or("Prompt store not initialized")?;
-        match store.create_version_if_changed(agent_id, system_prompt, "auto") {
+            .create_version_if_changed(agent_id, system_prompt, "auto")
+        {
             Ok(true) => {
                 tracing::debug!(agent_id = %agent_id, "Auto-tracked new prompt version");
                 // Prune old versions
                 let max = cfg.prompt_intelligence.max_versions_per_agent;
-                let _ = store.prune_old_versions(agent_id, max);
+                let _ = self.prompt_store.prune_old_versions(agent_id, max);
                 Ok(())
             }
             Ok(false) => Ok(()),
@@ -15231,7 +15323,7 @@ impl KernelHandle for LibreFangKernel {
     ) -> Result<Vec<serde_json::Value>, String> {
         let shared_id = shared_memory_agent_id();
         let goals: Vec<serde_json::Value> =
-            match self.memory.structured_get(shared_id, "__librefang_goals") {
+            match self.kv_store.structured_get(shared_id, "__librefang_goals") {
                 Ok(Some(serde_json::Value::Array(arr))) => arr,
                 Ok(_) => return Ok(Vec::new()),
                 Err(e) => return Err(format!("Failed to load goals: {e}")),
@@ -15261,7 +15353,7 @@ impl KernelHandle for LibreFangKernel {
     ) -> Result<serde_json::Value, String> {
         let shared_id = shared_memory_agent_id();
         let mut goals: Vec<serde_json::Value> =
-            match self.memory.structured_get(shared_id, "__librefang_goals") {
+            match self.kv_store.structured_get(shared_id, "__librefang_goals") {
                 Ok(Some(serde_json::Value::Array(arr))) => arr,
                 Ok(_) => return Err(format!("Goal '{}' not found", goal_id)),
                 Err(e) => return Err(format!("Failed to load goals: {e}")),
@@ -15549,7 +15641,7 @@ impl LibreFangKernel {
             }
         };
 
-        let mut session = match self.memory.get_session(session_id) {
+        let mut session = match self.session_store.get_session(session_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
                 warn!(
@@ -15652,7 +15744,7 @@ impl LibreFangKernel {
             return;
         }
 
-        let persisted_session = match self.memory.get_session(session_id) {
+        let persisted_session = match self.session_store.get_session(session_id) {
             Ok(Some(s)) => s,
             Ok(None) => {
                 warn!(
@@ -15673,7 +15765,7 @@ impl LibreFangKernel {
 
         session = persisted_session;
         if reconcile_tool_result(&mut session, tool_use_id, result) {
-            if let Err(e) = self.memory.save_session(&session) {
+            if let Err(e) = self.session_store.save_session(&session) {
                 warn!(
                     agent_id = %agent_id,
                     error = %e,

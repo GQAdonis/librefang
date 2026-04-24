@@ -21,8 +21,7 @@ mod runner;
 #[cfg(feature = "surreal-backend")]
 pub use runner::{apply_pending, Migration, MigrationError, APPLIED_TABLE};
 
-/// Migration set covering the operational stores (audit_entries,
-/// hook_traces, circuit_breaker_states, totp_lockout).
+/// Migration set covering all operational SurrealDB stores.
 ///
 /// New migrations append to this list with strictly increasing `version`.
 /// Never re-order or rewrite past entries — the runner refuses to apply a
@@ -48,5 +47,35 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         version: 4,
         name: "totp_lockout_v1",
         sql: include_str!("sql/004_totp_lockout.surql"),
+    },
+    Migration {
+        version: 5,
+        name: "sessions_v1",
+        sql: include_str!("sql/005_sessions.surql"),
+    },
+    Migration {
+        version: 6,
+        name: "kv_store_v1",
+        sql: include_str!("sql/006_kv_store.surql"),
+    },
+    Migration {
+        version: 7,
+        name: "task_queue_v1",
+        sql: include_str!("sql/007_task_queue.surql"),
+    },
+    Migration {
+        version: 8,
+        name: "usage_events_v1",
+        sql: include_str!("sql/008_usage_events.surql"),
+    },
+    Migration {
+        version: 9,
+        name: "paired_devices_v1",
+        sql: include_str!("sql/009_paired_devices.surql"),
+    },
+    Migration {
+        version: 10,
+        name: "prompt_management_v1",
+        sql: include_str!("sql/010_prompt_management.surql"),
     },
 ];

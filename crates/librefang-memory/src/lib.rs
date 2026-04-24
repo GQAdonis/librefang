@@ -31,9 +31,26 @@ pub mod usage;
 mod backend;
 pub mod backends;
 mod substrate;
-pub use backend::MemoryBackend;
+pub use backend::{
+    DeviceBackend, KvBackend, MemoryBackend, ProactiveMemoryBackend, PromptBackend, SessionBackend,
+    TaskBackend, UsageBackend,
+};
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealDeviceStore;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealKvBackend;
 #[cfg(feature = "surreal-backend")]
 pub use backends::SurrealMemoryBackend;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealProactiveMemoryBackend;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealPromptStore;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealSessionBackend;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealTaskBackend;
+#[cfg(feature = "surreal-backend")]
+pub use backends::SurrealUsageStore;
 pub use substrate::MemorySubstrate;
 
 // Re-export types for convenience

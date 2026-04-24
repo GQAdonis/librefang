@@ -799,15 +799,47 @@ pub async fn get_config(State(state): State<Arc<AppState>>) -> impl IntoResponse
     });
 
     // ── Memory ──
-    set!("memory", {
-        "sqlite_path": config.memory.sqlite_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-        "embedding_model": config.memory.embedding_model,
-        "consolidation_threshold": config.memory.consolidation_threshold,
-        "decay_rate": config.memory.decay_rate,
-        "embedding_provider": config.memory.embedding_provider,
-        "embedding_api_key_env": config.memory.embedding_api_key_env,
-        "consolidation_interval_hours": config.memory.consolidation_interval_hours,
-    });
+    {
+        let mut mem_obj = serde_json::Map::new();
+        // sqlite_path and fts_only only apply to the SQLite storage backend
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            mem_obj.insert(
+                "sqlite_path".into(),
+                serde_json::json!(config
+                    .memory
+                    .sqlite_path
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().to_string())),
+            );
+            mem_obj.insert("fts_only".into(), serde_json::json!(config.memory.fts_only));
+        }
+        mem_obj.insert(
+            "embedding_model".into(),
+            serde_json::json!(config.memory.embedding_model),
+        );
+        mem_obj.insert(
+            "consolidation_threshold".into(),
+            serde_json::json!(config.memory.consolidation_threshold),
+        );
+        mem_obj.insert(
+            "decay_rate".into(),
+            serde_json::json!(config.memory.decay_rate),
+        );
+        mem_obj.insert(
+            "embedding_provider".into(),
+            serde_json::json!(config.memory.embedding_provider),
+        );
+        mem_obj.insert(
+            "embedding_api_key_env".into(),
+            serde_json::json!(config.memory.embedding_api_key_env),
+        );
+        mem_obj.insert(
+            "consolidation_interval_hours".into(),
+            serde_json::json!(config.memory.consolidation_interval_hours),
+        );
+        out.insert("memory".into(), serde_json::Value::Object(mem_obj));
+    }
 
     // ── Proactive Memory ──
     set!("proactive_memory", {
