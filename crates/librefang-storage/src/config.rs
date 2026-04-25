@@ -15,6 +15,14 @@ pub const DEFAULT_NAMESPACE_NAME: &str = "librefang";
 /// Default SurrealDB database name (within the librefang namespace).
 pub const DEFAULT_DATABASE_NAME: &str = "main";
 
+/// SurrealDB database name for the AI memory store.
+///
+/// Kept separate from [`DEFAULT_DATABASE_NAME`] so the memory subsystem
+/// (`SurrealStorage` from `surreal-memory`) can own its own RocksDB file in
+/// embedded mode and its own logical database in remote mode, eliminating all
+/// cross-subsystem lock contention.
+pub const DEFAULT_MEMORY_DATABASE_NAME: &str = "memory";
+
 /// Where the storage backend lives.
 ///
 /// `Embedded` uses the bundled RocksDB engine and is the default chosen by
@@ -144,6 +152,46 @@ impl StorageConfig {
         match &self.backend {
             StorageBackendKind::Remote(remote) => remote.database.as_str(),
             StorageBackendKind::Embedded { .. } => self.database.as_str(),
+        }
+    }
+
+    /// Derive a [`StorageConfig`] for the AI memory store (`SurrealStorage`).
+    ///
+    /// **Embedded mode**: places a sibling `librefang-memory.surreal` directory
+    /// next to the operational `librefang.surreal` directory. Each directory
+    /// gets its own exclusive RocksDB lock, eliminating all embedded lock
+    /// contention between `SurrealConnectionPool` and `SurrealStorage`.
+    ///
+    /// **Remote mode**: same server and namespace as the operational store but
+    /// routed to the [`DEFAULT_MEMORY_DATABASE_NAME`] (`"memory"`) database,
+    /// keeping tenant isolation while separating operational and memory concerns.
+    ///
+    /// The returned config is always auto-derived — no user-visible changes to
+    /// `config.toml` or the wizard are required.
+    #[must_use]
+    pub fn memory_storage_config(&self) -> Self {
+        match &self.backend {
+            StorageBackendKind::Embedded { path } => {
+                // Sibling path: .../librefang.surreal → .../librefang-memory.surreal
+                let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+                Self {
+                    backend: StorageBackendKind::Embedded {
+                        path: parent.join("librefang-memory.surreal"),
+                    },
+                    namespace: self.namespace.clone(),
+                    database: DEFAULT_MEMORY_DATABASE_NAME.to_string(),
+                    legacy_sqlite_path: None,
+                }
+            }
+            StorageBackendKind::Remote(remote) => Self {
+                backend: StorageBackendKind::Remote(RemoteSurrealConfig {
+                    database: DEFAULT_MEMORY_DATABASE_NAME.to_string(),
+                    ..remote.clone()
+                }),
+                namespace: self.namespace.clone(),
+                database: DEFAULT_MEMORY_DATABASE_NAME.to_string(),
+                legacy_sqlite_path: None,
+            },
         }
     }
 }

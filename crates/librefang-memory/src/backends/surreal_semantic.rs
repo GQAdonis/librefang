@@ -126,15 +126,20 @@ impl SurrealSemanticBackend {
             }
         }
 
-        let sm_config = match &storage_cfg.backend {
+        // Use the memory-specific storage config so SurrealStorage opens its
+        // own dedicated file (embedded: librefang-memory.surreal) rather than
+        // competing for the lock on the operational file (librefang.surreal)
+        // already held by SurrealConnectionPool.
+        let mem_cfg = storage_cfg.memory_storage_config();
+        let sm_config = match &mem_cfg.backend {
             librefang_storage::config::StorageBackendKind::Embedded { path } => SurrealConfig {
                 mode: SurrealMode::Embedded,
                 endpoint: None,
                 embedded_path: Some(path.to_string_lossy().to_string()),
                 username: None,
                 password: None,
-                namespace: storage_cfg.effective_namespace().to_string(),
-                database: storage_cfg.effective_database().to_string(),
+                namespace: mem_cfg.effective_namespace().to_string(),
+                database: mem_cfg.effective_database().to_string(),
                 retry: surreal_memory::RetryConfig::default(),
             },
             librefang_storage::config::StorageBackendKind::Remote(remote) => {
