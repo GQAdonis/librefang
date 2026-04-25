@@ -125,6 +125,26 @@
           postFixup = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
             patchelf --add-rpath "${pkgs.libayatana-appindicator}/lib" "$out/bin/librefang-desktop"
           '';
+          postInstall = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+            mkdir -p "$out/share/applications"
+            mkdir -p "$out/share/icons/hicolor/128x128/apps"
+
+            cat > "$out/share/applications/librefang-desktop.desktop" << 'EOF'
+[Desktop Entry]
+Name=LibreFang
+Comment=Open-source Agent Operating System
+Exec=librefang-desktop
+Icon=librefang-desktop
+Terminal=false
+Type=Application
+Categories=Productivity;AI;
+Keywords=AI;Agent;LLM;Automation;
+StartupWMClass=librefang-desktop
+EOF
+
+            cp ${./crates/librefang-desktop/icons/icon.png} "$out/share/icons/hicolor/128x128/apps/librefang-desktop.png"
+            update-desktop-database "$out/share/applications" 2>/dev/null || true
+          '';
           meta = with pkgs.lib; {
             description = "LibreFang — Open-source Agent Operating System (desktop UI)";
             homepage = "https://github.com/librefang/librefang";
