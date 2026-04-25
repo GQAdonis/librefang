@@ -2456,6 +2456,7 @@ async fn dispatch_message(
                 router,
                 &message.sender,
                 &message.channel,
+                overrides.as_ref(),
             )
             .await;
             send_response(adapter, &message.sender, result, thread_id, output_format).await;
@@ -2790,38 +2791,7 @@ async fn dispatch_message(
             vec![]
         };
 
-        if matches!(
-            cmd,
-            "start"
-                | "help"
-                | "agents"
-                | "agent"
-                | "status"
-                | "models"
-                | "providers"
-                | "new"
-                | "reboot"
-                | "compact"
-                | "model"
-                | "stop"
-                | "usage"
-                | "think"
-                | "skills"
-                | "hands"
-                | "btw"
-                | "workflows"
-                | "workflow"
-                | "triggers"
-                | "trigger"
-                | "schedules"
-                | "schedule"
-                | "approvals"
-                | "approve"
-                | "reject"
-                | "budget"
-                | "peers"
-                | "a2a"
-        ) {
+        if crate::commands::is_channel_command(cmd) {
             if is_command_allowed(cmd, overrides.as_ref()) {
                 // Special-case /agents: send an inline keyboard with one button per agent.
                 if cmd == "agents" {
@@ -2904,6 +2874,7 @@ async fn dispatch_message(
                     router,
                     &message.sender,
                     &message.channel,
+                    overrides.as_ref(),
                 )
                 .await;
                 send_response(adapter, &message.sender, result, thread_id, output_format).await;
@@ -4111,6 +4082,11 @@ async fn dispatch_with_blocks(
 }
 
 /// Handle a bot command (returns the response text).
+///
+/// `overrides` reflects the merged agent + channel policy for the calling
+/// context. It currently affects `/help` rendering (so disabled/blocked
+/// commands don't appear in the help text); other branches treat it as
+/// advisory.
 async fn handle_command(
     name: &str,
     args: &[String],
@@ -4118,6 +4094,7 @@ async fn handle_command(
     router: &Arc<AgentRouter>,
     sender: &ChannelUser,
     channel_type: &crate::types::ChannelType,
+    overrides: Option<&ChannelOverrides>,
 ) -> String {
     match name {
         "start" => {
@@ -4135,50 +4112,7 @@ async fn handle_command(
             msg.push_str("\nCommands:\n/agents - list agents\n/agent <name> - select an agent\n/help - show this help");
             msg
         }
-        "help" => "LibreFang Bot Commands:\n\
-             \n\
-             Session:\n\
-             /agents - list running agents\n\
-             /agent <name> - select which agent to talk to\n\
-             /new - reset session (clear messages)\n\
-             /reboot - hard reset session (full context clear, no summary)\n\
-             /compact - trigger LLM session compaction\n\
-             /model [name] - show or switch agent model\n\
-             /stop - cancel current agent run\n\
-             /usage - show session token usage and cost\n\
-             /think [on|off] - toggle extended thinking\n\
-             \n\
-             Info:\n\
-             /models - list available AI models\n\
-             /providers - show configured providers\n\
-             /skills - list installed skills\n\
-             /hands - list available and active hands\n\
-             /status - show system status\n\
-             \n\
-             Automation:\n\
-             /workflows - list workflows\n\
-             /workflow run <name> [input] - run a workflow\n\
-             /triggers - list event triggers\n\
-             /trigger add <agent> <pattern> <prompt> - create trigger\n\
-             /trigger del <id> - remove trigger\n\
-             /schedules - list cron jobs\n\
-             /schedule add <agent> <cron-5-fields> <message> - create job\n\
-             /schedule del <id> - remove job\n\
-             /schedule run <id> - run job now\n\
-             /approvals - list pending approvals\n\
-             /approve <id> - approve a request\n\
-             /reject <id> - reject a request\n\
-             \n\
-             Monitoring:\n\
-             /budget - show spending limits and current costs\n\
-             /peers - show OFP peer network status\n\
-             /a2a - list discovered external A2A agents\n\
-             \n\
-             /btw <question> - ask a side question (ephemeral, not saved to session)\n\
-             \n\
-             /start - show welcome message\n\
-             /help - show this help"
-            .to_string(),
+        "help" => crate::commands::channel_help_text(overrides),
         "status" => handle.uptime_info().await,
         "agents" => {
             let agents = handle.list_agents().await.unwrap_or_default();
@@ -4633,12 +4567,28 @@ mod tests {
             librefang_user: None,
         };
 
-        let result =
-            handle_command("agents", &[], &handle, &router, &sender, &ChannelType::CLI).await;
+        let result = handle_command(
+            "agents",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+        )
+        .await;
         assert!(result.contains("coder"));
 
-        let result =
-            handle_command("help", &[], &handle, &router, &sender, &ChannelType::CLI).await;
+        let result = handle_command(
+            "help",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+        )
+        .await;
         assert!(result.contains("/agents"));
     }
 
@@ -4663,6 +4613,7 @@ mod tests {
             &router,
             &sender,
             &ChannelType::CLI,
+            None,
         )
         .await;
         assert!(result.contains("Now talking to agent: coder"));
@@ -5193,7 +5144,16 @@ mod tests {
             librefang_user: None,
         };
 
-        let result = handle_command("btw", &[], &handle, &router, &sender, &ChannelType::CLI).await;
+        let result = handle_command(
+            "btw",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+        )
+        .await;
         assert!(result.contains("Usage:"));
     }
 
@@ -5218,6 +5178,7 @@ mod tests {
             &router,
             &sender,
             &ChannelType::CLI,
+            None,
         )
         .await;
         assert!(result.contains("No agent selected"));
@@ -5235,8 +5196,16 @@ mod tests {
             librefang_user: None,
         };
 
-        let result =
-            handle_command("help", &[], &handle, &router, &sender, &ChannelType::CLI).await;
+        let result = handle_command(
+            "help",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+        )
+        .await;
         assert!(result.contains("/btw"));
     }
 
