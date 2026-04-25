@@ -458,6 +458,7 @@ pub struct BudgetStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use librefang_memory::usage::UsageStore;
     use librefang_memory::MemorySubstrate;
 
     fn setup() -> MeteringEngine {

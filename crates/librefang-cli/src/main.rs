@@ -12999,7 +12999,7 @@ mod tests {
 
     #[test]
     fn test_detached_daemon_args_include_config_and_spawned_flag() {
-        let args = detached_daemon_args(Some(Path::new("/tmp/librefang.toml")));
+        let args = detached_daemon_args(Some(Path::new("/tmp/librefang.toml")), None);
         assert_eq!(
             args,
             vec![
