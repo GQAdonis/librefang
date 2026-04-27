@@ -23,6 +23,7 @@ use librefang_types::error::LibreFangResult;
 ///
 /// All methods preserve the exact signatures and error semantics of the
 /// equivalently named inherent methods on [`MemorySubstrate`].
+#[allow(dead_code)]
 pub trait SessionStore {
     /// Load a session by id. Returns `Ok(None)` when the session does not exist.
     fn get_session(&self, session_id: SessionId) -> LibreFangResult<Option<Session>>;

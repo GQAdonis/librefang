@@ -859,6 +859,7 @@ pub async fn update_user_budget(
     // existing caps via `UserBudgetConfig`'s `#[serde(default)]`. A typo
     // (`"max_hourly_usd": "1.0"` as a string) returns 400 instead of being
     // coerced to 0.0.
+    #[allow(clippy::result_large_err)]
     let extract_f64 = |key: &str| -> Result<f64, ApiErrorResponse> {
         match body.get(key) {
             Some(v) => v.as_f64().ok_or_else(|| {
