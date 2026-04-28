@@ -92,3 +92,17 @@ pub trait TotpLockoutBackend: Send + Sync {
     /// ignored.
     fn clear(&self, sender_id: &str) -> TotpLockoutResult<()>;
 }
+
+/// Backend for TOTP replay-prevention storage (upstream #3952).
+///
+/// Stores SHA-256 hashes of recently-used TOTP codes so that a code cannot
+/// be reused within the same 30-second window (or an adjacent window).
+/// Entries older than 120 seconds are pruned on every successful verification.
+pub trait TotpUsedCodesBackend: Send + Sync + 'static {
+    /// Returns `true` if `code_hash` appears in the table with `used_at >= window_start_secs`.
+    fn is_code_used(&self, code_hash: &str, window_start_secs: i64) -> bool;
+    /// Upsert: insert or update the hash with the given timestamp.
+    fn mark_code_used(&self, code_hash: &str, used_at_secs: i64);
+    /// Delete all entries with `used_at < cutoff_secs`.
+    fn prune_old_codes(&self, cutoff_secs: i64);
+}

@@ -8,6 +8,7 @@ use librefang_types::approval::{
 };
 use librefang_types::capability::glob_matches;
 use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
@@ -41,6 +42,10 @@ pub struct ApprovalManager {
     /// When present, `persist_totp_lockout_save` / `persist_totp_lockout_clear`
     /// delegate to this backend instead of `audit_db`.
     totp_store: Option<Box<dyn crate::storage_backends::TotpLockoutBackend>>,
+    /// SurrealDB-backed TOTP replay-prevention storage (surreal-backend).
+    /// When present, `is_totp_code_used` / `record_totp_code_used` delegate
+    /// to this backend instead of `audit_db`.
+    used_codes_store: Option<Box<dyn crate::storage_backends::TotpUsedCodesBackend>>,
     /// TOTP grace period cache: sender_id → last successful verification time.
     totp_grace: StdMutex<HashMap<String, Instant>>,
     /// TOTP failure tracking: sender_id → (failure_count, lockout_start).
@@ -86,6 +91,7 @@ impl ApprovalManager {
             policy: std::sync::RwLock::new(policy),
             audit_db: None,
             totp_store: None,
+            used_codes_store: None,
             totp_grace: StdMutex::new(HashMap::new()),
             totp_failures: StdMutex::new(HashMap::new()),
         }
@@ -100,6 +106,7 @@ impl ApprovalManager {
             policy: std::sync::RwLock::new(policy),
             audit_db: Some(conn),
             totp_store: None,
+            used_codes_store: None,
             totp_grace: StdMutex::new(HashMap::new()),
             totp_failures: StdMutex::new(failures),
         }
@@ -114,6 +121,7 @@ impl ApprovalManager {
     pub fn new_with_surreal(
         policy: ApprovalPolicy,
         totp_backend: Box<dyn crate::storage_backends::TotpLockoutBackend>,
+        used_codes_backend: Box<dyn crate::storage_backends::TotpUsedCodesBackend>,
     ) -> Self {
         let failures = Self::load_totp_from_backend(totp_backend.as_ref());
         Self {
@@ -122,6 +130,7 @@ impl ApprovalManager {
             policy: std::sync::RwLock::new(policy),
             audit_db: None,
             totp_store: Some(totp_backend),
+            used_codes_store: Some(used_codes_backend),
             totp_grace: StdMutex::new(HashMap::new()),
             totp_failures: StdMutex::new(failures),
         }
@@ -1065,6 +1074,83 @@ impl ApprovalManager {
         let _ = conn.execute(
             "DELETE FROM totp_lockout WHERE sender_id = ?1",
             rusqlite::params![sender_id],
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // TOTP replay prevention (issue #3359)
+    // -----------------------------------------------------------------------
+
+    /// Hash a TOTP code for replay-prevention storage.
+    ///
+    /// Stores `sha256(code)` in hex so the raw digit string is never persisted.
+    fn totp_code_hash(code: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(code.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+
+    /// Check whether a TOTP code has already been used within the replay window.
+    ///
+    /// The window is 60 seconds (two 30-second TOTP steps) to cover both the
+    /// current step and the immediately preceding one.
+    pub fn is_totp_code_used(&self, code: &str) -> bool {
+        let hash = Self::totp_code_hash(code);
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let window_start = now_unix - 60;
+
+        // SurrealDB path
+        if let Some(store) = &self.used_codes_store {
+            return store.is_code_used(&hash, window_start);
+        }
+
+        // SQLite path
+        let Some(db) = &self.audit_db else {
+            return false;
+        };
+        let Ok(conn) = db.lock() else { return false };
+        conn.query_row(
+            "SELECT COUNT(*) FROM totp_used_codes WHERE code_hash = ?1 AND used_at >= ?2",
+            rusqlite::params![hash, window_start],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+            > 0
+    }
+
+    /// Record a successfully-verified TOTP code to prevent replay.
+    ///
+    /// Also prunes entries older than 120 seconds from the table to keep it small.
+    pub fn record_totp_code_used(&self, code: &str) {
+        let hash = Self::totp_code_hash(code);
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let prune_before = now_unix - 120;
+
+        // SurrealDB path
+        if let Some(store) = &self.used_codes_store {
+            store.mark_code_used(&hash, now_unix);
+            store.prune_old_codes(prune_before);
+            return;
+        }
+
+        // SQLite path
+        let Some(db) = &self.audit_db else { return };
+        let Ok(conn) = db.lock() else { return };
+        let _ = conn.execute(
+            "INSERT INTO totp_used_codes (code_hash, used_at)
+             VALUES (?1, ?2)
+             ON CONFLICT(code_hash) DO UPDATE SET used_at = excluded.used_at",
+            rusqlite::params![hash, now_unix],
+        );
+        let _ = conn.execute(
+            "DELETE FROM totp_used_codes WHERE used_at < ?1",
+            rusqlite::params![prune_before],
         );
     }
 
@@ -2399,6 +2485,50 @@ mod tests {
         assert!(policy2.tool_requires_totp("shell_exec"));
         assert!(policy2.tool_requires_totp("file_write"));
         assert!(policy2.tool_requires_totp("anything"));
+    }
+
+    // -----------------------------------------------------------------------
+    // TOTP replay prevention (#3359)
+    // -----------------------------------------------------------------------
+
+    fn make_manager_with_db() -> ApprovalManager {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        librefang_memory::migration::run_migrations(&conn).unwrap();
+        let conn = Arc::new(StdMutex::new(conn));
+        ApprovalManager::new_with_db(ApprovalPolicy::default(), conn)
+    }
+
+    #[test]
+    fn test_totp_replay_prevention_code_not_used_initially() {
+        let mgr = make_manager_with_db();
+        // A fresh code should not be marked as used.
+        assert!(!mgr.is_totp_code_used("123456"));
+    }
+
+    #[test]
+    fn test_totp_replay_prevention_code_rejected_after_use() {
+        let mgr = make_manager_with_db();
+        mgr.record_totp_code_used("123456");
+        // The same code must now be detected as already used.
+        assert!(mgr.is_totp_code_used("123456"));
+    }
+
+    #[test]
+    fn test_totp_replay_prevention_different_code_not_blocked() {
+        let mgr = make_manager_with_db();
+        mgr.record_totp_code_used("123456");
+        // A different code must not be blocked.
+        assert!(!mgr.is_totp_code_used("654321"));
+    }
+
+    #[test]
+    fn test_totp_code_hash_does_not_store_plaintext() {
+        // The hash of "123456" must not equal "123456".
+        let hash = ApprovalManager::totp_code_hash("123456");
+        assert_ne!(hash, "123456");
+        // It must be a 64-character hex string (SHA-256 output).
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     // -----------------------------------------------------------------------

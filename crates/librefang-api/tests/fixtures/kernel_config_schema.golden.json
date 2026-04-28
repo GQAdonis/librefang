@@ -1394,6 +1394,13 @@
         }
       ]
     },
+    "workflow_stale_timeout_minutes": {
+      "description": "How long (in minutes) a workflow run may remain in the `Running` or `Pending` state before it is considered stale after a daemon restart.\n\nOn boot the engine scans all persisted runs and marks any that are older than this threshold as `Failed` with the error `\"Interrupted by daemon restart\"`.  Set to `0` to disable recovery. Default: `60` minutes.",
+      "default": 60,
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
     "workspaces_dir": {
       "description": "Root directory for agent workspaces. Default: `~/.librefang/workspaces`",
       "default": null,
@@ -6340,6 +6347,11 @@
             "null"
           ]
         },
+        "app_secret_env": {
+          "description": "Env var name holding the Facebook App Secret. Used for HMAC-SHA1 verification of incoming webhook POST requests via `X-Hub-Signature`. If absent or empty, verification is skipped with a warning (backwards compatibility).",
+          "default": "",
+          "type": "string"
+        },
         "default_agent": {
           "description": "Default agent name to route messages to.",
           "default": null,
@@ -8713,6 +8725,11 @@
                 "null"
               ]
             },
+            "app_secret_env": {
+              "description": "Env var name holding the Facebook App Secret. Used for HMAC-SHA1 verification of incoming webhook POST requests via `X-Hub-Signature`. If absent or empty, verification is skipped with a warning (backwards compatibility).",
+              "default": "",
+              "type": "string"
+            },
             "default_agent": {
               "description": "Default agent name to route messages to.",
               "default": null,
@@ -9870,6 +9887,11 @@
                   "$ref": "#/definitions/ChannelOverrides"
                 }
               ]
+            },
+            "security_token_env": {
+              "description": "Env var name holding the outgoing webhook security token (base64-encoded). Used for HMAC-SHA256 verification of inbound webhook requests. If the env var is absent or empty, verification is skipped with a warning.",
+              "default": "",
+              "type": "string"
             },
             "webhook_port": {
               "description": "Port for the incoming webhook.",
@@ -13149,6 +13171,11 @@
               "$ref": "#/definitions/ChannelOverrides"
             }
           ]
+        },
+        "security_token_env": {
+          "description": "Env var name holding the outgoing webhook security token (base64-encoded). Used for HMAC-SHA256 verification of inbound webhook requests. If the env var is absent or empty, verification is skipped with a warning.",
+          "default": "",
+          "type": "string"
         },
         "webhook_port": {
           "description": "Port for the incoming webhook.",

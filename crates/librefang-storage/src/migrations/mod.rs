@@ -98,4 +98,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "paired_devices_api_key_hash_v1",
         sql: include_str!("sql/014_paired_devices_api_key_hash.surql"),
     },
+    Migration {
+        version: 15,
+        name: "totp_used_codes_v1",
+        sql: include_str!("sql/015_totp_used_codes.surql"),
+    },
 ];
