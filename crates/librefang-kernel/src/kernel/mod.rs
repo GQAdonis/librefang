@@ -3231,9 +3231,13 @@ impl LibreFangKernel {
             let totp_backend = Box::new(crate::backends::SurrealTotpLockoutBackend::open(
                 &surreal_session,
             ));
+            let used_codes_backend = Box::new(crate::backends::SurrealTotpUsedCodesBackend::open(
+                &surreal_session,
+            ));
             crate::approval::ApprovalManager::new_with_surreal(
                 config.approval.clone(),
                 totp_backend,
+                used_codes_backend,
             )
         };
         #[cfg(not(feature = "surreal-backend"))]

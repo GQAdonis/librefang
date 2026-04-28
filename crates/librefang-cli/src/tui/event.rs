@@ -2032,7 +2032,7 @@ pub fn spawn_fetch_tools(backend: BackendRef, tx: mpsc::Sender<AppEvent>) {
 pub fn spawn_save_provider_key(
     backend: BackendRef,
     name: String,
-    api_key: String,
+    _api_key: String,
     tx: mpsc::Sender<AppEvent>,
 ) {
     std::thread::spawn(move || match backend {

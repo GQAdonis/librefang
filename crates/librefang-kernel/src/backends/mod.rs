@@ -8,6 +8,10 @@
 
 #[cfg(feature = "surreal-backend")]
 pub mod surreal_approval;
+#[cfg(feature = "surreal-backend")]
+pub mod surreal_totp_used_codes;
 
 #[cfg(feature = "surreal-backend")]
 pub use surreal_approval::SurrealTotpLockoutBackend;
+#[cfg(feature = "surreal-backend")]
+pub use surreal_totp_used_codes::SurrealTotpUsedCodesBackend;

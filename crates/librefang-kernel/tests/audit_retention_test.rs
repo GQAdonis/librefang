@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! Audit retention M7: kernel boot wires the periodic trim task and the
 //! self-audit `RetentionTrim` row lands when a trim cycle actually drops
 //! entries.

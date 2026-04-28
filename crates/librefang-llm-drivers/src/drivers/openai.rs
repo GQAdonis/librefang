@@ -1685,16 +1685,15 @@ impl LlmDriver for OpenAIDriver {
                                     // Arguments delta
                                     if let Some(args) = func["arguments"].as_str() {
                                         tool_accum[idx].2.push_str(args);
-                                        if !args.is_empty() {
-                                            if tx
+                                        if !args.is_empty()
+                                            && tx
                                                 .send(StreamEvent::ToolInputDelta {
                                                     text: args.to_string(),
                                                 })
                                                 .await
                                                 .is_err()
-                                            {
-                                                receiver_dropped = true;
-                                            }
+                                        {
+                                            receiver_dropped = true;
                                         }
                                     }
                                 }

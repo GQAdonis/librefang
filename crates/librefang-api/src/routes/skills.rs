@@ -4929,12 +4929,6 @@ pub(crate) fn write_secret_env(
             "secret key must not contain newline characters",
         ));
     }
-    if value.contains('\n') || value.contains('\r') {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "secret value must not contain newline characters",
-        ));
-    }
     let mut lines: Vec<String> = if path.exists() {
         std::fs::read_to_string(path)?
             .lines()

@@ -612,12 +612,12 @@ mod tests {
     use super::*;
 
     fn test_state(capabilities: Vec<Capability>) -> GuestState {
-        GuestState {
+        GuestState::for_testing(
             capabilities,
-            kernel: None,
-            agent_id: "test-agent".to_string(),
-            tokio_handle: tokio::runtime::Handle::current(),
-        }
+            None,
+            "test-agent".to_string(),
+            tokio::runtime::Handle::current(),
+        )
     }
 
     #[tokio::test]
@@ -885,12 +885,9 @@ mod tests {
         );
     }
 
-    /// Regression for #3814: capability check must use the canonical path,
-    /// not the raw path supplied by the guest. A traversal path like
-    /// `../../etc/passwd` must be rejected by path resolution *before* any
-    /// capability comparison can be made — it must never reach the file read.
+    /// Regression for #3814: double-`..` traversal path.
     #[tokio::test]
-    async fn test_fs_read_traversal_rejected_before_capability_check() {
+    async fn test_fs_read_deep_traversal_rejected_before_capability_check() {
         // Even with a wildcard FileRead grant, traversal paths are rejected.
         let state = test_state(vec![Capability::FileRead("*".to_string())]);
         let result = host_fs_read(&state, &json!({"path": "../../etc/passwd"}));

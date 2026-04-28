@@ -108,6 +108,27 @@ pub struct GuestState {
     limiter: MemoryLimiter,
 }
 
+impl GuestState {
+    /// Construct a `GuestState` for unit tests with a generous memory limit.
+    #[cfg(test)]
+    pub fn for_testing(
+        capabilities: Vec<librefang_types::capability::Capability>,
+        kernel: Option<std::sync::Arc<dyn librefang_kernel_handle::KernelHandle>>,
+        agent_id: String,
+        tokio_handle: tokio::runtime::Handle,
+    ) -> Self {
+        Self {
+            capabilities,
+            kernel,
+            agent_id,
+            tokio_handle,
+            limiter: MemoryLimiter {
+                max_bytes: 256 * 1024 * 1024, // 256 MB
+            },
+        }
+    }
+}
+
 /// Result of executing a WASM module.
 #[derive(Debug)]
 pub struct ExecutionResult {
@@ -668,19 +689,17 @@ mod tests {
             max_bytes: 1024 * 1024,
         };
         // Within limit → allowed
-        assert_eq!(
+        assert!(
             limiter
                 .memory_growing(0, 64 * 1024, None)
                 .expect("should not error"),
-            true,
             "growth within cap must be permitted"
         );
         // Exceeds limit → denied
-        assert_eq!(
-            limiter
+        assert!(
+            !limiter
                 .memory_growing(0, 2 * 1024 * 1024, None)
                 .expect("should not error"),
-            false,
             "growth beyond cap must be denied"
         );
     }
