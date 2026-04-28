@@ -12516,6 +12516,9 @@ system_prompt = "You are a helpful assistant."
                                     }
                                 };
                                 let kernel_job = kernel.clone();
+                                // Shadow so outer `job_name` survives the move
+                                // for the post-arm per-job persist warn.
+                                let job_name = job_name.clone();
                                 tokio::spawn(async move {
                                     // Hold the permit for the full duration of this job.
                                     let _permit = permit;
@@ -12579,6 +12582,12 @@ system_prompt = "You are a helpful assistant."
                                         Ok(Ok(result)) => {
                                             tracing::info!(job = %job_name, "Cron job completed successfully");
                                             kernel_job.cron_scheduler.record_success(job_id);
+                                            // Persist last_run before delivery
+                                            // so a slow/failed channel push
+                                            // can't strand last_run on disk.
+                                            if let Err(e) = kernel_job.cron_scheduler.persist() {
+                                                tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                            }
                                             // Deliver response to configured channel (skip NO_REPLY/silent)
                                             if !result.silent {
                                                 cron_deliver_response(
@@ -12606,6 +12615,9 @@ system_prompt = "You are a helpful assistant."
                                             kernel_job
                                                 .cron_scheduler
                                                 .record_failure(job_id, &err_msg);
+                                            if let Err(e) = kernel_job.cron_scheduler.persist() {
+                                                tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                            }
                                         }
                                         Err(_) => {
                                             tracing::warn!(job = %job_name, timeout_s, "Cron job timed out");
@@ -12613,6 +12625,9 @@ system_prompt = "You are a helpful assistant."
                                                 job_id,
                                                 &format!("timed out after {timeout_s}s"),
                                             );
+                                            if let Err(e) = kernel_job.cron_scheduler.persist() {
+                                                tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                            }
                                         }
                                     }
                                 }); // end tokio::spawn for AgentTurn
@@ -12691,9 +12706,15 @@ system_prompt = "You are a helpful assistant."
                                 }
                             }
                         }
+                        // Persist immediately after each job execution so that
+                        // last_run / next_run are durable on disk even if the
+                        // daemon crashes before the periodic flush fires.
+                        if let Err(e) = kernel.cron_scheduler.persist() {
+                            tracing::warn!(job = %job_name, "Cron per-job persist failed: {e}");
+                        }
                     }
 
-                    // Persist every ~5 minutes (20 ticks * 15s)
+                    // Periodic persist as a safety net (every ~5 minutes / 20 ticks * 15s)
                     persist_counter += 1;
                     if persist_counter >= 20 {
                         persist_counter = 0;
