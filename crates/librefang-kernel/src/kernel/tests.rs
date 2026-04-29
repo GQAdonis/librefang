@@ -5399,3 +5399,81 @@ fn cron_create_handles_missing_peer_id() {
     let peer_id = job_json["peer_id"].as_str().map(|s| s.to_string());
     assert_eq!(peer_id, None);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn injection_senders_two_sessions_one_agent_do_not_collide() {
+    let kernel = boot_kernel_for_display_tests();
+    let agent_id = register_test_agent(&kernel, "twin");
+
+    let session_a = SessionId::new();
+    let session_b = SessionId::new();
+
+    let _rx_a = kernel.setup_injection_channel(agent_id, session_a);
+    let _rx_b = kernel.setup_injection_channel(agent_id, session_b);
+
+    // Both senders must be live concurrently (second insert used to overwrite the first).
+    assert!(
+        kernel
+            .injection_senders
+            .contains_key(&(agent_id, session_a)),
+        "session A sender lost under (agent, session) keying"
+    );
+    assert!(
+        kernel
+            .injection_senders
+            .contains_key(&(agent_id, session_b)),
+        "session B sender lost under (agent, session) keying"
+    );
+
+    // Targeted inject must reach exactly one session — the other's mpsc
+    // receiver still holds at-zero queue depth.
+    kernel
+        .inject_message_for_session(agent_id, Some(session_a), "hello A")
+        .await
+        .expect("inject A");
+
+    let queued_a = _rx_a.lock().await.try_recv();
+    let queued_b = _rx_b.lock().await.try_recv();
+    assert!(queued_a.is_ok(), "session A must have received");
+    assert!(
+        matches!(queued_b, Err(tokio::sync::mpsc::error::TryRecvError::Empty)),
+        "session B must NOT have received a session-A inject"
+    );
+
+    // Untargeted inject (None session_id) broadcasts to both sessions.
+    kernel
+        .inject_message_for_session(agent_id, None, "broadcast")
+        .await
+        .expect("inject broadcast");
+
+    assert!(_rx_a.lock().await.try_recv().is_ok());
+    assert!(_rx_b.lock().await.try_recv().is_ok());
+
+    kernel.teardown_injection_channel(agent_id, session_a);
+    kernel.teardown_injection_channel(agent_id, session_b);
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn injection_teardown_only_removes_target_session() {
+    let kernel = boot_kernel_for_display_tests();
+    let agent_id = register_test_agent(&kernel, "twin2");
+
+    let session_a = SessionId::new();
+    let session_b = SessionId::new();
+
+    let _rx_a = kernel.setup_injection_channel(agent_id, session_a);
+    let _rx_b = kernel.setup_injection_channel(agent_id, session_b);
+
+    // Tearing down session A must NOT clear session B's sender.
+    kernel.teardown_injection_channel(agent_id, session_a);
+    assert!(!kernel
+        .injection_senders
+        .contains_key(&(agent_id, session_a)));
+    assert!(kernel
+        .injection_senders
+        .contains_key(&(agent_id, session_b)));
+
+    kernel.teardown_injection_channel(agent_id, session_b);
+    kernel.shutdown();
+}

@@ -5570,7 +5570,22 @@ pub async fn inject_message(
             .into_response();
     }
 
-    match state.kernel.inject_message(agent_id, &req.message).await {
+    // None falls back to a broadcast across every live session for the agent.
+    let session_id = match req.session_id.as_deref() {
+        Some(s) if !s.is_empty() => match s.parse::<uuid::Uuid>() {
+            Ok(u) => Some(librefang_types::agent::SessionId(u)),
+            Err(_) => {
+                return ApiErrorResponse::bad_request("invalid session_id").into_response();
+            }
+        },
+        _ => None,
+    };
+
+    match state
+        .kernel
+        .inject_message_for_session(agent_id, session_id, &req.message)
+        .await
+    {
         Ok(injected) => (
             StatusCode::OK,
             Json(serde_json::json!({"injected": injected})),

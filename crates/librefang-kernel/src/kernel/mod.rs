@@ -568,14 +568,14 @@ pub struct LibreFangKernel {
     /// fresh `instance_id` doesn't accumulate stale mutexes across
     /// activate/deactivate cycles.
     hand_runtime_override_locks: dashmap::DashMap<uuid::Uuid, Arc<std::sync::Mutex<()>>>,
-    /// Per-agent mid-turn message injection senders (#956).
-    /// When an agent loop is running, it holds the receiver; callers use the sender
-    /// to inject messages between tool calls.
+    /// Per-(agent, session) mid-turn injection senders; keyed by session so concurrent
+    /// sessions on the same agent each get their own channel.
     pub(crate) injection_senders:
-        dashmap::DashMap<AgentId, tokio::sync::mpsc::Sender<AgentLoopSignal>>,
-    /// Per-agent injection receivers, created alongside senders and consumed by the agent loop.
+        dashmap::DashMap<(AgentId, SessionId), tokio::sync::mpsc::Sender<AgentLoopSignal>>,
+    /// Per-(agent, session) injection receivers, created alongside senders
+    /// and consumed by the agent loop.
     injection_receivers: dashmap::DashMap<
-        AgentId,
+        (AgentId, SessionId),
         Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<AgentLoopSignal>>>,
     >,
     /// Sticky assistant routing per conversation (assistant + sender/thread).
@@ -1765,11 +1765,11 @@ impl LibreFangKernel {
         &self.whatsapp_gateway_pid
     }
 
-    /// Per-agent message injection senders.
+    /// Per-(agent, session) message injection senders.
     #[inline]
     pub fn injection_senders_ref(
         &self,
-    ) -> &dashmap::DashMap<AgentId, tokio::sync::mpsc::Sender<AgentLoopSignal>> {
+    ) -> &dashmap::DashMap<(AgentId, SessionId), tokio::sync::mpsc::Sender<AgentLoopSignal>> {
         &self.injection_senders
     }
 
@@ -1866,18 +1866,18 @@ impl LibreFangKernel {
             }
         }
 
-        // 4. injection_senders / injection_receivers — remove for dead agents
+        // 4. injection_senders / injection_receivers — remove for dead agents.
         {
-            let stale: Vec<AgentId> = self
+            let stale: Vec<(AgentId, SessionId)> = self
                 .injection_senders
                 .iter()
-                .filter(|e| !live_agents.contains(e.key()))
+                .filter(|e| !live_agents.contains(&e.key().0))
                 .map(|e| *e.key())
                 .collect();
             total_removed += stale.len();
-            for id in &stale {
-                self.injection_senders.remove(id);
-                self.injection_receivers.remove(id);
+            for key in &stale {
+                self.injection_senders.remove(key);
+                self.injection_receivers.remove(key);
             }
         }
 
@@ -5825,29 +5825,14 @@ system_prompt = "You are a helpful assistant."
             );
         }
 
-        // Check if auto-compaction is needed: message-count OR token-count trigger
-        let needs_compact = {
-            use librefang_runtime::compactor::{
-                estimate_token_count, needs_compaction as check_compact,
-                needs_compaction_by_tokens, CompactionConfig,
-            };
-            let config = CompactionConfig::from_toml(&cfg.compaction);
-            let by_messages = check_compact(&session, &config);
-            let estimated = estimate_token_count(
-                &session.messages,
-                Some(&entry.manifest.model.system_prompt),
-                None,
-            );
-            let by_tokens = needs_compaction_by_tokens(estimated, &config);
-            if by_tokens && !by_messages {
-                info!(
-                    agent_id = %agent_id,
-                    estimated_tokens = estimated,
-                    messages = session.messages.len(),
-                    "Token-based compaction triggered (messages below threshold but tokens above)"
-                );
-            }
-            by_messages || by_tokens
+        // Snapshot the compaction config so the spawned task can recompute the
+        // `needs_compact` flag *after* reloading the session under the lock.
+        // Computing it here on the pre-lock snapshot would make it stale: a
+        // concurrent turn that committed history while we were waiting for
+        // the lock could push us across (or back below) the threshold.
+        let compaction_config_snapshot = {
+            use librefang_runtime::compactor::CompactionConfig;
+            CompactionConfig::from_toml(&cfg.compaction)
         };
 
         let tools = self.available_tools(agent_id);
@@ -6114,11 +6099,8 @@ system_prompt = "You are a helpful assistant."
         // reload barrier before spawning the async task.
         drop(_config_guard);
 
-        // Issue #3737: acquire the same session/agent lock as the non-streaming
-        // path so concurrent streaming + non-streaming turns on the same session
-        // are serialized (last-write-wins data loss on session history otherwise).
-        // We clone the Arc here (sync fn) and move it into the task; the lock
-        // itself is awaited inside the spawn where we can .await.
+        // Acquire the same session/agent lock as the non-streaming path so concurrent
+        // turns are serialized. Clone the Arc here (sync fn); lock inside the spawn.
         let session_lock = if session_id_override.is_some() {
             self.session_msg_locks
                 .entry(effective_session_id)
@@ -6140,12 +6122,62 @@ system_prompt = "You are a helpful assistant."
             },
         );
 
+        // Reload session after acquiring the lock so we never act on a stale
+        // snapshot captured before a concurrent turn's writes landed.
         let handle = tokio::spawn(async move {
             // Acquire the session/agent serialization lock for the duration of
             // this streaming turn.  This matches the non-streaming path and
             // prevents concurrent streaming + non-streaming writes from
-            // producing last-write-wins data loss on session history (#3737).
+            // producing last-write-wins data loss on session history.
             let _session_guard = session_lock.lock().await;
+
+            // Reload session under the lock; keep the placeholder on miss.
+            match memory.get_session(effective_session_id) {
+                Ok(Some(reloaded)) => {
+                    session = reloaded;
+                }
+                Ok(None) => {
+                    // Brand-new session — keep the empty placeholder.
+                }
+                Err(e) => {
+                    warn!(
+                        agent_id = %agent_id,
+                        session_id = %effective_session_id,
+                        error = %e,
+                        "Failed to reload session under lock; proceeding with pre-lock snapshot (streaming)"
+                    );
+                }
+            }
+
+            // Recompute `needs_compact` against the freshly-reloaded session.
+            // Computing it on the pre-lock snapshot was racy: a concurrent
+            // turn that wrote history while we were queued on `session_lock`
+            // could have pushed us across (or back below) the threshold,
+            // causing this turn to either skip a compact that is now due or
+            // re-compact a session another turn just compacted.
+            let needs_compact = {
+                use librefang_runtime::compactor::{
+                    estimate_token_count, needs_compaction as check_compact,
+                    needs_compaction_by_tokens,
+                };
+                let by_messages = check_compact(&session, &compaction_config_snapshot);
+                let estimated = estimate_token_count(
+                    &session.messages,
+                    Some(&manifest.model.system_prompt),
+                    None,
+                );
+                let by_tokens = needs_compaction_by_tokens(estimated, &compaction_config_snapshot);
+                if by_tokens && !by_messages {
+                    info!(
+                        agent_id = %agent_id,
+                        estimated_tokens = estimated,
+                        messages = session.messages.len(),
+                        "Token-based compaction triggered (messages below threshold but tokens above)"
+                    );
+                }
+                by_messages || by_tokens
+            };
+
             // Auto-compact if the session is large before running the loop.
             // Pass the in-turn session id so the compactor operates on
             // the SAME session the outer loop just measured. Using the
@@ -6216,17 +6248,13 @@ system_prompt = "You are a helpful assistant."
                     let _ = phase_tx.try_send(event);
                 });
 
-            // Set up mid-turn injection channel (#956). Fork turns skip —
-            // inserting into `injection_senders[agent_id]` would overwrite
-            // the parent turn's channel, and external code trying to
-            // inject into the parent during the fork window would land on
-            // the fork's (about-to-be-dropped) sender instead. Forks are
-            // by design short synchronous derivative calls that don't
-            // need mid-turn injection themselves.
+            // Set up mid-turn injection channel. Fork turns skip — inserting
+            // would overwrite the parent turn's channel (forks share the parent's
+            // session id for prompt-cache alignment).
             let injection_rx = if loop_opts.is_fork {
                 None
             } else {
-                Some(kernel_clone.setup_injection_channel(agent_id))
+                Some(kernel_clone.setup_injection_channel(agent_id, effective_session_id))
             };
 
             let start_time = std::time::Instant::now();
@@ -6283,9 +6311,10 @@ system_prompt = "You are a helpful assistant."
 
             // Tear down injection channel after loop finishes (skipped for
             // forks since they never set one up — tearing down would
-            // remove the parent turn's entry).
+            // remove the parent turn's entry under the shared
+            // (agent, session) key).
             if !loop_opts.is_fork {
-                kernel_clone.teardown_injection_channel(agent_id);
+                kernel_clone.teardown_injection_channel(agent_id, effective_session_id);
             }
 
             let latency_ms = start_time.elapsed().as_millis() as u64;
@@ -7819,8 +7848,8 @@ system_prompt = "You are a helpful assistant."
 
         let proactive_memory = self.proactive_memory.get().cloned();
 
-        // Set up mid-turn injection channel (#956)
-        let injection_rx = self.setup_injection_channel(agent_id);
+        // Set up mid-turn injection channel.
+        let injection_rx = self.setup_injection_channel(agent_id, effective_session_id);
 
         // Session-scoped interrupt for tool-level cancellation.  Cloned into
         // each ToolExecutionContext so that cancelling the session (via
@@ -7911,8 +7940,8 @@ system_prompt = "You are a helpful assistant."
         )
         .await;
 
-        // Tear down injection channel after loop finishes
-        self.teardown_injection_channel(agent_id);
+        // Tear down injection channel after loop finishes.
+        self.teardown_injection_channel(agent_id, effective_session_id);
 
         // Clean up the interrupt handle regardless of outcome — the map must
         // not retain stale entries that would suppress cancellation on the
@@ -8138,53 +8167,101 @@ system_prompt = "You are a helpful assistant."
     /// Returns `Ok(true)` if the message was sent, `Ok(false)` if no active
     /// loop is running for this agent, or `Err` if the agent doesn't exist.
     pub async fn inject_message(&self, agent_id: AgentId, message: &str) -> KernelResult<bool> {
+        self.inject_message_for_session(agent_id, None, message)
+            .await
+    }
+
+    /// Session-aware variant of [`Self::inject_message`]; `None` fans out to all live sessions.
+    ///
+    /// Returns `Ok(true)` if at least one channel accepted, `Ok(false)` if no loop was running.
+    pub async fn inject_message_for_session(
+        &self,
+        agent_id: AgentId,
+        session_id: Option<SessionId>,
+        message: &str,
+    ) -> KernelResult<bool> {
         // Verify the agent exists
         if self.registry.get(agent_id).is_none() {
             return Err(KernelError::LibreFang(LibreFangError::AgentNotFound(
                 agent_id.to_string(),
             )));
         }
-        if let Some(tx) = self.injection_senders.get(&agent_id) {
+
+        // Collect targets first so we don't hold any DashMap shard lock
+        // across the `try_send` calls (which themselves can briefly block on
+        // the per-channel internal lock).
+        let targets: Vec<(
+            (AgentId, SessionId),
+            tokio::sync::mpsc::Sender<AgentLoopSignal>,
+        )> = if let Some(sid) = session_id {
+            self.injection_senders
+                .get(&(agent_id, sid))
+                .map(|entry| (*entry.key(), entry.value().clone()))
+                .into_iter()
+                .collect()
+        } else {
+            self.injection_senders
+                .iter()
+                .filter(|e| e.key().0 == agent_id)
+                .map(|e| (*e.key(), e.value().clone()))
+                .collect()
+        };
+
+        if targets.is_empty() {
+            return Ok(false);
+        }
+
+        let mut delivered = false;
+        let mut closed_keys: Vec<(AgentId, SessionId)> = Vec::new();
+        for (key, tx) in targets {
             match tx.try_send(AgentLoopSignal::Message {
                 content: message.to_string(),
             }) {
                 Ok(()) => {
-                    info!(agent_id = %agent_id, "Mid-turn message injected");
-                    Ok(true)
+                    info!(
+                        agent_id = %agent_id,
+                        session_id = %key.1,
+                        "Mid-turn message injected"
+                    );
+                    delivered = true;
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    warn!(agent_id = %agent_id, "Injection channel full — message dropped");
-                    Ok(false)
+                    warn!(
+                        agent_id = %agent_id,
+                        session_id = %key.1,
+                        "Injection channel full — message dropped"
+                    );
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    // Receiver dropped — loop is no longer running
-                    self.injection_senders.remove(&agent_id);
-                    Ok(false)
+                    // Receiver dropped — loop is no longer running.
+                    closed_keys.push(key);
                 }
             }
-        } else {
-            // No active loop for this agent
-            Ok(false)
         }
+        for key in closed_keys {
+            self.injection_senders.remove(&key);
+        }
+        Ok(delivered)
     }
 
-    /// Set up the injection channel for an agent before running its loop.
-    /// Returns the receiver wrapped in a Mutex for the agent loop to consume.
+    /// Creates the injection channel for `(agent_id, session_id)` and returns the receiver.
     fn setup_injection_channel(
         &self,
         agent_id: AgentId,
+        session_id: SessionId,
     ) -> Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<AgentLoopSignal>>> {
         let (tx, rx) = tokio::sync::mpsc::channel::<AgentLoopSignal>(8);
-        self.injection_senders.insert(agent_id, tx);
+        self.injection_senders.insert((agent_id, session_id), tx);
         let rx = Arc::new(tokio::sync::Mutex::new(rx));
-        self.injection_receivers.insert(agent_id, Arc::clone(&rx));
+        self.injection_receivers
+            .insert((agent_id, session_id), Arc::clone(&rx));
         rx
     }
 
-    /// Tear down the injection channel after the agent loop finishes.
-    fn teardown_injection_channel(&self, agent_id: AgentId) {
-        self.injection_senders.remove(&agent_id);
-        self.injection_receivers.remove(&agent_id);
+    /// Tears down the `(agent_id, session_id)` injection channel after the loop finishes.
+    fn teardown_injection_channel(&self, agent_id: AgentId, session_id: SessionId) {
+        self.injection_senders.remove(&(agent_id, session_id));
+        self.injection_receivers.remove(&(agent_id, session_id));
     }
 
     /// Resolve a module path relative to the kernel's home directory.
@@ -18423,8 +18500,7 @@ impl LibreFangKernel {
         }
     }
 
-    /// Notify the running agent loop about an approval resolution via an explicit
-    /// mid-turn signal.
+    /// Notify the running agent loop about an approval resolution via an explicit mid-turn signal.
     fn notify_agent_of_resolution(
         &self,
         agent_id: &AgentId,
@@ -18432,7 +18508,27 @@ impl LibreFangKernel {
         decision: &librefang_types::approval::ApprovalDecision,
         result: &librefang_types::tool::ToolResult,
     ) -> bool {
-        if let Some(tx) = self.injection_senders.get(agent_id) {
+        let senders: Vec<(
+            (AgentId, SessionId),
+            tokio::sync::mpsc::Sender<AgentLoopSignal>,
+        )> = self
+            .injection_senders
+            .iter()
+            .filter(|e| e.key().0 == *agent_id)
+            .map(|e| (*e.key(), e.value().clone()))
+            .collect();
+
+        if senders.is_empty() {
+            debug!(
+                agent_id = %agent_id,
+                "Approval resolution: no active agent loop to notify"
+            );
+            return false;
+        }
+
+        let mut delivered = false;
+        let mut closed_keys: Vec<(AgentId, SessionId)> = Vec::new();
+        for (key, tx) in senders {
             match tx.try_send(AgentLoopSignal::ApprovalResolved {
                 tool_use_id: deferred.tool_use_id.clone(),
                 tool_name: deferred.tool_name.clone(),
@@ -18442,31 +18538,34 @@ impl LibreFangKernel {
                 result_status: result.status,
             }) {
                 Ok(()) => {
-                    debug!(agent_id = %agent_id, "Approval resolution injected into agent loop");
-                    true
+                    debug!(
+                        agent_id = %agent_id,
+                        session_id = %key.1,
+                        "Approval resolution injected into agent loop"
+                    );
+                    delivered = true;
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
                     warn!(
                         agent_id = %agent_id,
+                        session_id = %key.1,
                         "Approval resolution injection channel full — falling back to session patch"
                     );
-                    false
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                     debug!(
                         agent_id = %agent_id,
+                        session_id = %key.1,
                         "Approval resolution: agent loop is not running (injection channel closed)"
                     );
-                    false
+                    closed_keys.push(key);
                 }
             }
-        } else {
-            debug!(
-                agent_id = %agent_id,
-                "Approval resolution: no active agent loop to notify"
-            );
-            false
         }
+        for key in closed_keys {
+            self.injection_senders.remove(&key);
+        }
+        delivered
     }
 }
 
