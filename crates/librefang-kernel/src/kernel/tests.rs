@@ -3722,6 +3722,7 @@ fn test_running_tasks_two_concurrent_sessions_for_same_agent() {
         RunningTask {
             abort: h_a.abort_handle(),
             started_at: chrono::Utc::now(),
+            task_id: uuid::Uuid::new_v4(),
         },
     );
     kernel.running_tasks.insert(
@@ -3729,6 +3730,7 @@ fn test_running_tasks_two_concurrent_sessions_for_same_agent() {
         RunningTask {
             abort: h_b.abort_handle(),
             started_at: chrono::Utc::now(),
+            task_id: uuid::Uuid::new_v4(),
         },
     );
 
@@ -3797,6 +3799,7 @@ fn test_stop_agent_run_fans_out_across_sessions() {
         RunningTask {
             abort: mk_handle(),
             started_at: chrono::Utc::now(),
+            task_id: uuid::Uuid::new_v4(),
         },
     );
     kernel.running_tasks.insert(
@@ -3804,6 +3807,7 @@ fn test_stop_agent_run_fans_out_across_sessions() {
         RunningTask {
             abort: mk_handle(),
             started_at: chrono::Utc::now(),
+            task_id: uuid::Uuid::new_v4(),
         },
     );
     // Different agent — must NOT be touched by stop_agent_run.
@@ -3812,6 +3816,7 @@ fn test_stop_agent_run_fans_out_across_sessions() {
         RunningTask {
             abort: mk_handle(),
             started_at: chrono::Utc::now(),
+            task_id: uuid::Uuid::new_v4(),
         },
     );
 
@@ -3893,6 +3898,7 @@ fn test_fork_does_not_overwrite_parent_registration() {
         RunningTask {
             abort: parent_abort,
             started_at: parent_started_at,
+            task_id: uuid::Uuid::new_v4(),
         },
     );
     let parent_interrupt = librefang_runtime::interrupt::SessionInterrupt::new();
@@ -5231,6 +5237,28 @@ fn agent_concurrency_falls_back_to_config_default_when_unset() {
 
 // -- #3755: three-layer concurrency caps joint integration --------------------
 
+/// Regression for #3446: trigger fires must run under a bounded
+/// timeout so a stuck LLM call cannot pin Lane::Trigger permits
+/// kernel-wide.  We assert the config field is wired and clamping
+/// rewrites a `0` (infinite-hold) value back to a safe default.
+#[test]
+fn trigger_fire_timeout_secs_is_wired_and_validated() {
+    use librefang_types::config::QueueConcurrencyConfig;
+    let default_cfg = QueueConcurrencyConfig::default();
+    assert!(
+        default_cfg.trigger_fire_timeout_secs > 0,
+        "default trigger_fire_timeout_secs must not be infinite (#3446)"
+    );
+
+    let mut cfg = KernelConfig::default();
+    cfg.queue.concurrency.trigger_fire_timeout_secs = 0;
+    cfg.clamp_bounds();
+    assert!(
+        cfg.queue.concurrency.trigger_fire_timeout_secs > 0,
+        "clamp_bounds must rewrite 0 to a positive default to avoid lane starvation"
+    );
+}
+
 /// Verify that the global `Lane::Trigger` semaphore correctly limits total
 /// concurrent trigger fires across the whole kernel.  We use a capacity-2
 /// queue and prove that the third caller cannot acquire a permit immediately.
@@ -5717,4 +5745,136 @@ fn sanitize_session_title_caps_at_60_chars() {
 fn sanitize_session_title_handles_empty() {
     assert_eq!(sanitize_session_title(""), "");
     assert_eq!(sanitize_session_title("   \n  "), "");
+}
+
+// ---------------------------------------------------------------------------
+// #3459 — cron_session_max_messages / max_tokens clamping
+// ---------------------------------------------------------------------------
+
+#[test]
+fn resolve_cron_max_messages_none_passthrough() {
+    assert_eq!(resolve_cron_max_messages(None), None);
+}
+
+#[test]
+fn resolve_cron_max_messages_zero_disabled() {
+    // 0 must be treated as "disable", not "trim to 0 messages"
+    assert_eq!(resolve_cron_max_messages(Some(0)), None);
+}
+
+#[test]
+fn resolve_cron_max_messages_below_min_clamped() {
+    // 1, 2, 3 are all below MIN_CRON_HISTORY_MESSAGES=4 and must be clamped
+    for small in 1usize..4 {
+        assert_eq!(
+            resolve_cron_max_messages(Some(small)),
+            Some(MIN_CRON_HISTORY_MESSAGES),
+            "expected clamp for input {small}"
+        );
+    }
+}
+
+#[test]
+fn resolve_cron_max_messages_at_min_passthrough() {
+    assert_eq!(
+        resolve_cron_max_messages(Some(MIN_CRON_HISTORY_MESSAGES)),
+        Some(MIN_CRON_HISTORY_MESSAGES)
+    );
+}
+
+#[test]
+fn resolve_cron_max_messages_large_passthrough() {
+    assert_eq!(resolve_cron_max_messages(Some(100)), Some(100));
+}
+
+#[test]
+fn resolve_cron_max_tokens_none_passthrough() {
+    assert_eq!(resolve_cron_max_tokens(None), None);
+}
+
+#[test]
+fn resolve_cron_max_tokens_zero_disabled() {
+    // 0 must disable the cap, not force every fire to start empty
+    assert_eq!(resolve_cron_max_tokens(Some(0)), None);
+}
+
+#[test]
+fn resolve_cron_max_tokens_nonzero_passthrough() {
+    assert_eq!(resolve_cron_max_tokens(Some(8192)), Some(8192));
+    assert_eq!(resolve_cron_max_tokens(Some(1)), Some(1));
+}
+
+/// Regression for #3533: `spawn_agent` must reject manifests whose
+/// `module` string escapes the LibreFang home dir. The pure-function
+/// `validate_module_string` is unit-tested in librefang-runtime, but
+/// this end-to-end test locks the wiring at the kernel boundary so a
+/// future refactor (e.g. moving the call out of `spawn_agent_inner`)
+/// fails loudly instead of silently re-opening the path-escape hole.
+#[test]
+fn test_spawn_agent_rejects_absolute_module_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-spawn-reject-abs");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let result = kernel.spawn_agent(AgentManifest {
+        name: "evil-abs".to_string(),
+        description: "tries to exec /etc/passwd.py".to_string(),
+        author: "test".to_string(),
+        module: "python:/etc/passwd.py".to_string(),
+        ..Default::default()
+    });
+
+    assert!(
+        result.is_err(),
+        "spawn must reject absolute module path; got {result:?}"
+    );
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("Invalid module path"),
+        "error should mention invalid module path, got: {err}"
+    );
+
+    kernel.shutdown();
+}
+
+/// Companion to the absolute-path rejection test: parent-traversal
+/// (`..`) must also be refused at the kernel spawn boundary. Same
+/// wiring-regression intent as `test_spawn_agent_rejects_absolute_module_path`.
+#[test]
+fn test_spawn_agent_rejects_parent_traversal_module_path() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-spawn-reject-traversal");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let result = kernel.spawn_agent(AgentManifest {
+        name: "evil-traversal".to_string(),
+        description: "tries ../../etc/shadow.py".to_string(),
+        author: "test".to_string(),
+        module: "python:../../etc/shadow.py".to_string(),
+        ..Default::default()
+    });
+
+    assert!(
+        result.is_err(),
+        "spawn must reject '..' traversal; got {result:?}"
+    );
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("Invalid module path"),
+        "error should mention invalid module path, got: {err}"
+    );
+
+    kernel.shutdown();
 }

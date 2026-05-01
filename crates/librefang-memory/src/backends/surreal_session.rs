@@ -82,6 +82,8 @@ impl SurrealSessionBackend {
             messages,
             context_window_tokens,
             label,
+            messages_generation: 0,
+            last_repaired_generation: None,
         })
     }
 }

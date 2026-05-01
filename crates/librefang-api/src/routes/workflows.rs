@@ -373,11 +373,47 @@ pub async fn list_workflows(State(state): State<Arc<AppState>>) -> impl IntoResp
     let workflows = engine.list_workflows().await;
     let all_runs = engine.list_runs(None).await;
 
-    // Count runs per workflow
-    let mut run_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    for r in &all_runs {
-        *run_counts.entry(r.workflow_id.to_string()).or_default() += 1;
+    // Per-workflow run aggregates: total count, completed/failed counts (used
+    // for success_rate over terminal runs only — including running/paused
+    // would deflate the rate while a long run is in flight), and the most
+    // recent run summary for the row badge. Computed in one pass over
+    // `all_runs` to avoid N+1 scans across O(workflows × runs).
+    struct RunAgg<'a> {
+        total: usize,
+        completed: usize,
+        failed: usize,
+        latest: Option<&'a librefang_kernel::workflow::WorkflowRun>,
     }
+    let mut agg: std::collections::HashMap<String, RunAgg> = std::collections::HashMap::new();
+    for r in &all_runs {
+        let entry = agg.entry(r.workflow_id.to_string()).or_insert(RunAgg {
+            total: 0,
+            completed: 0,
+            failed: 0,
+            latest: None,
+        });
+        entry.total += 1;
+        match &r.state {
+            librefang_kernel::workflow::WorkflowRunState::Completed => entry.completed += 1,
+            librefang_kernel::workflow::WorkflowRunState::Failed => entry.failed += 1,
+            _ => {}
+        }
+        match entry.latest {
+            None => entry.latest = Some(r),
+            Some(prev) if r.started_at > prev.started_at => entry.latest = Some(r),
+            _ => {}
+        }
+    }
+
+    let state_kind = |s: &librefang_kernel::workflow::WorkflowRunState| -> &'static str {
+        match s {
+            librefang_kernel::workflow::WorkflowRunState::Pending => "pending",
+            librefang_kernel::workflow::WorkflowRunState::Running => "running",
+            librefang_kernel::workflow::WorkflowRunState::Paused { .. } => "paused",
+            librefang_kernel::workflow::WorkflowRunState::Completed => "completed",
+            librefang_kernel::workflow::WorkflowRunState::Failed => "failed",
+        }
+    };
 
     // Load cron jobs to find workflow-bound schedules
     let all_cron_jobs = state.kernel.cron().list_all_jobs();
@@ -401,14 +437,32 @@ pub async fn list_workflows(State(state): State<Arc<AppState>>) -> impl IntoResp
                     "last_run": j.last_run.map(|t| t.to_rfc3339()),
                 })
             });
+            let wf_agg = agg.get(&wid);
+            let run_count = wf_agg.map(|a| a.total).unwrap_or(0);
+            let last_run_json = wf_agg.and_then(|a| a.latest).map(|r| {
+                serde_json::json!({
+                    "state": state_kind(&r.state),
+                    "started_at": r.started_at.to_rfc3339(),
+                    "completed_at": r.completed_at.map(|t| t.to_rfc3339()),
+                })
+            });
+            // success_rate is null until at least one run reached a terminal
+            // state — surfacing 0% on a workflow with only in-flight runs
+            // would be misleading.
+            let success_rate = wf_agg.and_then(|a| {
+                let terminal = a.completed + a.failed;
+                (terminal > 0).then(|| a.completed as f32 / terminal as f32)
+            });
             serde_json::json!({
                 "id": wid,
                 "name": w.name,
                 "description": w.description,
                 "steps": w.steps.len(),
-                "run_count": run_counts.get(&wid).copied().unwrap_or(0),
+                "run_count": run_count,
                 "created_at": w.created_at.to_rfc3339(),
                 "schedule": schedule_json,
+                "last_run": last_run_json,
+                "success_rate": success_rate,
             })
         })
         .collect();
@@ -1055,16 +1109,59 @@ fn trigger_to_json(t: &Trigger) -> serde_json::Value {
 #[utoipa::path(get, path = "/api/triggers", tag = "workflows", params(("agent_id" = Option<String>, Query, description = "Filter by agent ID")), responses((status = 200, description = "List triggers", body = serde_json::Value)))]
 pub async fn list_triggers(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
+) -> axum::response::Response {
     let agent_filter = params
         .get("agent_id")
         .and_then(|id| id.parse::<AgentId>().ok());
 
+    // Owner-scoping: non-admins can't see triggers for agents they don't
+    // author. Two enforcement points:
+    //   1. With ?agent_id=... — verify the caller owns that agent.
+    //   2. Without — post-filter the trigger list by author.
+    let restrict_to: Option<String> = match api_user.as_ref() {
+        Some(u) if u.0.role < librefang_kernel::auth::UserRole::Admin => Some(u.0.name.clone()),
+        _ => None,
+    };
+    if let (Some(user_name), Some(aid)) = (restrict_to.as_ref(), agent_filter) {
+        let owns = state
+            .kernel
+            .agent_registry()
+            .get(aid)
+            .as_ref()
+            .map(|e| e.manifest.author.eq_ignore_ascii_case(user_name))
+            .unwrap_or(false);
+        if !owns {
+            return (
+                StatusCode::OK,
+                Json(serde_json::json!({"triggers": [], "total": 0})),
+            )
+                .into_response();
+        }
+    }
+
     let triggers = state.kernel.list_triggers(agent_filter);
-    let list: Vec<serde_json::Value> = triggers.iter().map(trigger_to_json).collect();
+    let list: Vec<serde_json::Value> = if let Some(ref user_name) = restrict_to {
+        // No explicit agent_id — fall back to per-trigger owner check.
+        let owned_ids: std::collections::HashSet<librefang_types::agent::AgentId> = state
+            .kernel
+            .agent_registry()
+            .list()
+            .iter()
+            .filter(|e| e.manifest.author.eq_ignore_ascii_case(user_name))
+            .map(|e| e.id)
+            .collect();
+        triggers
+            .iter()
+            .filter(|tr| owned_ids.contains(&tr.agent_id))
+            .map(trigger_to_json)
+            .collect()
+    } else {
+        triggers.iter().map(trigger_to_json).collect()
+    };
     let total = list.len();
-    Json(serde_json::json!({"triggers": list, "total": total}))
+    Json(serde_json::json!({"triggers": list, "total": total})).into_response()
 }
 
 #[utoipa::path(get, path = "/api/triggers/{id}", tag = "workflows", params(("id" = String, Path, description = "Trigger ID")), responses((status = 200, description = "Trigger detail", body = serde_json::Value), (status = 404, description = "Not found")))]

@@ -13,7 +13,13 @@ mod connection;
 mod server;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod shortcuts;
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+// Tray is desktop-only (not iOS/Android), and on Linux it additionally
+// requires the `linux-tray` Cargo feature — see #3667 and `tray.rs` for
+// the GTK3 unmaintained-crate advisories that motivate the gate.
+#[cfg(all(
+    not(any(target_os = "ios", target_os = "android")),
+    any(not(target_os = "linux"), feature = "linux-tray")
+))]
 mod tray;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod updater;
@@ -126,7 +132,7 @@ pub struct ServerHandleHolder(pub std::sync::Mutex<Option<server::ServerHandle>>
 /// logs rather than a silent `warn!` on a per-listener counter (issue #3630).
 pub async fn forward_kernel_events(
     app_handle: tauri::AppHandle,
-    event_rx: &mut tokio::sync::broadcast::Receiver<librefang_types::event::Event>,
+    event_rx: &mut tokio::sync::broadcast::Receiver<std::sync::Arc<librefang_types::event::Event>>,
     kernel: &Arc<LibreFangKernel>,
 ) {
     while let Some(event) =
@@ -483,8 +489,9 @@ pub fn run(server_url: Option<String>, force_local: bool) {
                 }
             }
 
-            // Set up system tray (desktop only)
-            #[cfg(desktop)]
+            // Set up system tray (desktop only). On Linux, gated behind the
+            // `linux-tray` Cargo feature — see #3667 / `tray.rs`.
+            #[cfg(all(desktop, any(not(target_os = "linux"), feature = "linux-tray")))]
             tray::setup_tray(app)?;
 
             // For local direct-boot mode, start event forwarding for notifications

@@ -5,15 +5,39 @@
 //! authorization.
 
 use super::AppState;
+use crate::middleware::AuthenticatedApiUser;
 use crate::types::ApiErrorResponse;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
+use axum::{Extension, Json};
 use librefang_kernel::mcp_oauth_provider::KernelOAuthProvider;
 use librefang_runtime::mcp_oauth::{self, McpAuthState, OAuthTokens};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
+use url::Url;
+
+/// SHA-256 prefix of the caller's user_id (UUID).  Embedded into the vault
+/// key + flow_id so a callback initiated by user A cannot be redeemed
+/// against user B's in-flight flow even if they targeted the same server.
+///
+/// Truncated to 64 bits — we only need collision avoidance among concurrent
+/// in-flight flows on a single daemon, not preimage resistance, so 16 hex
+/// chars of SHA-256 is sufficient.
+fn caller_fingerprint(user: &Option<Extension<AuthenticatedApiUser>>) -> String {
+    let raw = match user {
+        Some(Extension(u)) => u.user_id.to_string(),
+        // No identity attached — fall back to a constant so single-user
+        // deployments (no RBAC configured) still produce deterministic
+        // vault keys.  The flow_id random nonce still keeps concurrent
+        // anonymous flows isolated.
+        None => "anon".to_string(),
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(raw.as_bytes());
+    hex::encode(hasher.finalize())[..16].to_string()
+}
 
 fn callback_text(body: String) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body).into_response()
@@ -240,6 +264,7 @@ fn percent_encode_param(s: &str) -> String {
 pub async fn auth_start(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    user: Option<Extension<AuthenticatedApiUser>>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
     // Find the server config
@@ -334,10 +359,16 @@ pub async fn auth_start(
     // in the OAuth `state` parameter as `{flow_id}.{random_state}` so the
     // callback can look up the correct vault entry.
     //
+    // The flow_id carries a caller fingerprint prefix so a callback initiated
+    // by user A is keyed under a vault entry user B's flow can never reach,
+    // even if both target the same server URL — closing the multi-user
+    // clobber path the issue called out.
+    //
     // This supersedes the earlier per-server `{server_name}:{random}` binding
     // (#3911) — per-flow IDs subsume the per-server protection while also
     // allowing multiple concurrent flows against the same server.
-    let flow_id = mcp_oauth::generate_flow_id();
+    let caller_fp = caller_fingerprint(&user);
+    let flow_id = format!("{caller_fp}-{}", mcp_oauth::generate_flow_id());
     let (pkce_verifier, pkce_challenge) = mcp_oauth::generate_pkce();
     let pkce_random = mcp_oauth::generate_state();
     // Combined state sent to the OAuth server: "{flow_id}.{random_state}"
@@ -363,6 +394,21 @@ pub async fn auth_start(
     }
     if let Err(e) = store("token_endpoint", &metadata.token_endpoint) {
         tracing::warn!(error = %e, "Failed to store token_endpoint in vault");
+    }
+    // #3713: persist the original authorization-server host so the callback
+    // can re-verify that the stored `token_endpoint` still resolves to the
+    // same host the user authorized against. Without this pin, a malicious
+    // (or mid-flow tampered) discovery response could redirect the
+    // authorization-code exchange to an attacker-controlled endpoint and
+    // exfiltrate the auth code. We pin against `server_url`'s host because
+    // that is the URL the operator placed in `config.toml` — the only value
+    // in the flow that the attacker cannot influence.
+    if let Some(issuer_host) = url_host_lower(&server_url) {
+        if let Err(e) = store("issuer_host", &issuer_host) {
+            tracing::warn!(error = %e, "Failed to store issuer_host in vault");
+        }
+    } else {
+        tracing::warn!(server_url = %server_url, "server_url has no host — cannot pin issuer for callback");
     }
     if let Err(e) = store("redirect_uri", &redirect_uri) {
         tracing::warn!(error = %e, "Failed to store redirect_uri in vault");
@@ -562,6 +608,57 @@ pub async fn auth_callback(
             return auth_failed("Token endpoint missing from vault.");
         }
     };
+    // SSRF guard (#3623): re-validate the stored token_endpoint before the
+    // outbound code exchange.  The parser checks at discovery time, but the
+    // value sat in the vault between then and now and may predate a tightening
+    // of the SSRF policy — the kernel's `try_refresh` already does this; this
+    // is the matching guard for the auth-code path.
+    if let Err(reason) = mcp_oauth::is_ssrf_blocked_url(&token_endpoint) {
+        return auth_failed(format!(
+            "SSRF: token_endpoint rejected for code exchange: {reason}"
+        ));
+    }
+
+    // #3713: pin the token-exchange target to the authorization server's
+    // original host. The discovery metadata's `token_endpoint` is attacker-
+    // influenced data; it must not be trusted to point anywhere outside the
+    // host the user originally authorized against. If the stored issuer host
+    // is missing (e.g. an in-flight flow predating this guard) or does not
+    // match `token_endpoint.host()`, refuse the exchange — never POST the
+    // code to an unverified host.
+    let issuer_host = match load("issuer_host") {
+        Some(h) if !h.is_empty() => h,
+        _ => {
+            tracing::error!(
+                server = %name,
+                token_endpoint = %token_endpoint,
+                "issuer_host missing from vault — refusing token exchange (#3713)"
+            );
+            return auth_failed(
+                "Authorization server host pin missing from vault — refusing to exchange the auth code. Please retry the sign-in from the dashboard.",
+            );
+        }
+    };
+    if !token_endpoint_host_matches(&token_endpoint, &issuer_host) {
+        let token_host = url_host_lower(&token_endpoint).unwrap_or_default();
+        tracing::error!(
+            server = %name,
+            token_endpoint = %token_endpoint,
+            issuer_host = %issuer_host,
+            token_host = %token_host,
+            "token_endpoint host does not match authorization server host — refusing token exchange (possible metadata-tamper attack, #3713)"
+        );
+        let mut auth_states = state.kernel.mcp_auth_states_ref().lock().await;
+        auth_states.insert(
+            name.clone(),
+            McpAuthState::Error {
+                message: "token_endpoint host mismatch — refused to exchange auth code".to_string(),
+            },
+        );
+        return auth_failed(
+            "Token endpoint host does not match the authorization server host. Refusing to exchange the auth code.",
+        );
+    }
 
     let client_id = load("client_id");
     let redirect_uri = match load("redirect_uri") {
@@ -588,6 +685,14 @@ pub async fn auth_callback(
         form_params.push(("client_id", cid.clone()));
     }
 
+    // #3730: user-visible errors must NOT leak the token endpoint URL or the
+    // raw response body — both can include internal hostnames, query
+    // parameters, or provider error payloads that contain sensitive context.
+    // Detailed diagnostics go to tracing (operator-only); the user/dashboard
+    // sees a generic message.
+    const GENERIC_TOKEN_EXCHANGE_FAILED: &str =
+        "Token exchange failed. Check the daemon logs for details.";
+
     let token_resp = match http_client
         .post(&token_endpoint)
         .form(&form_params)
@@ -596,63 +701,84 @@ pub async fn auth_callback(
     {
         Ok(resp) => resp,
         Err(e) => {
-            let msg = format!("Token exchange request failed: {e}");
+            tracing::error!(
+                server = %name,
+                token_endpoint = %token_endpoint,
+                error = %e,
+                "OAuth token exchange request failed"
+            );
             let mut auth_states = state.kernel.mcp_auth_states_ref().lock().await;
             auth_states.insert(
                 name.clone(),
                 McpAuthState::Error {
-                    message: msg.clone(),
+                    message: GENERIC_TOKEN_EXCHANGE_FAILED.to_string(),
                 },
             );
-            return auth_failed(msg);
+            return auth_failed(GENERIC_TOKEN_EXCHANGE_FAILED);
         }
     };
 
     if !token_resp.status().is_success() {
         let status = token_resp.status();
         let body_raw = token_resp.text().await.unwrap_or_default();
-        // Truncate to guard against a malicious server sending a huge payload.
+        // Truncate operator-visible body for tracing; user gets generic msg.
         let body_preview: String = body_raw.chars().take(500).collect();
-        let msg = format!("Token exchange failed (HTTP {status}): {body_preview}");
+        tracing::error!(
+            server = %name,
+            token_endpoint = %token_endpoint,
+            status = %status,
+            body_preview = %body_preview,
+            "OAuth token exchange returned non-success status"
+        );
         let mut auth_states = state.kernel.mcp_auth_states_ref().lock().await;
         auth_states.insert(
             name.clone(),
             McpAuthState::Error {
-                message: msg.clone(),
+                message: GENERIC_TOKEN_EXCHANGE_FAILED.to_string(),
             },
         );
-        return auth_failed(msg);
+        return auth_failed(GENERIC_TOKEN_EXCHANGE_FAILED);
     }
 
     let body = match token_resp.text().await {
         Ok(b) => b,
         Err(e) => {
-            let msg = format!("Failed to read token response body: {e}");
+            tracing::error!(
+                server = %name,
+                token_endpoint = %token_endpoint,
+                error = %e,
+                "Failed to read OAuth token response body"
+            );
             let mut auth_states = state.kernel.mcp_auth_states_ref().lock().await;
             auth_states.insert(
                 name.clone(),
                 McpAuthState::Error {
-                    message: msg.clone(),
+                    message: GENERIC_TOKEN_EXCHANGE_FAILED.to_string(),
                 },
             );
-            return auth_failed(msg);
+            return auth_failed(GENERIC_TOKEN_EXCHANGE_FAILED);
         }
     };
 
     let tokens: OAuthTokens = match serde_json::from_str(&body) {
         Ok(t) => t,
         Err(e) => {
-            // Truncate body preview to guard against a malicious server sending a huge payload.
             let body_preview: String = body.chars().take(500).collect();
-            let msg = format!("Failed to parse token response: {e}. Body: {body_preview}");
+            tracing::error!(
+                server = %name,
+                token_endpoint = %token_endpoint,
+                error = %e,
+                body_preview = %body_preview,
+                "Failed to parse OAuth token response"
+            );
             let mut auth_states = state.kernel.mcp_auth_states_ref().lock().await;
             auth_states.insert(
                 name.clone(),
                 McpAuthState::Error {
-                    message: msg.clone(),
+                    message: GENERIC_TOKEN_EXCHANGE_FAILED.to_string(),
                 },
             );
-            return auth_failed(msg);
+            return auth_failed(GENERIC_TOKEN_EXCHANGE_FAILED);
         }
     };
 
@@ -748,11 +874,69 @@ pub async fn auth_revoke(
     )
 }
 
+/// Lowercased host component of a URL string, or None if the URL is
+/// unparseable or has no host. Used to pin the OAuth flow's token endpoint
+/// to the original authorization server's host (#3713).
+fn url_host_lower(raw: &str) -> Option<String> {
+    Url::parse(raw)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()))
+}
+
+/// True iff `token_endpoint` parses to a URL whose host equals
+/// `expected_host` (case-insensitive). A token endpoint with no host, an
+/// unparseable URL, or a different host all return false — the caller MUST
+/// refuse the code exchange in that case (#3713).
+fn token_endpoint_host_matches(token_endpoint: &str, expected_host: &str) -> bool {
+    match url_host_lower(token_endpoint) {
+        Some(h) => h == expected_host.to_ascii_lowercase(),
+        None => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::body::to_bytes;
     use axum::http::{HeaderName, HeaderValue};
+    use librefang_kernel::auth::UserRole;
+    use librefang_types::agent::UserId;
+
+    #[test]
+    fn caller_fingerprint_is_stable_per_user() {
+        let user = AuthenticatedApiUser {
+            name: "alice".into(),
+            role: UserRole::Owner,
+            user_id: UserId::from_name("alice"),
+        };
+        let fp1 = caller_fingerprint(&Some(Extension(user.clone())));
+        let fp2 = caller_fingerprint(&Some(Extension(user)));
+        assert_eq!(fp1, fp2, "same user must produce identical fingerprint");
+    }
+
+    #[test]
+    fn caller_fingerprint_differs_across_users() {
+        let alice = AuthenticatedApiUser {
+            name: "alice".into(),
+            role: UserRole::Owner,
+            user_id: UserId::from_name("alice"),
+        };
+        let bob = AuthenticatedApiUser {
+            name: "bob".into(),
+            role: UserRole::Owner,
+            user_id: UserId::from_name("bob"),
+        };
+        let fp_a = caller_fingerprint(&Some(Extension(alice)));
+        let fp_b = caller_fingerprint(&Some(Extension(bob)));
+        assert_ne!(fp_a, fp_b, "distinct users must produce distinct prefixes");
+    }
+
+    #[test]
+    fn caller_fingerprint_anonymous_is_stable() {
+        let fp1 = caller_fingerprint(&None);
+        let fp2 = caller_fingerprint(&None);
+        assert_eq!(fp1, fp2);
+    }
 
     fn hdrs(pairs: &[(&str, &str)]) -> HeaderMap {
         let mut h = HeaderMap::new();
@@ -938,5 +1122,62 @@ mod tests {
         let h = hdrs(&[("origin", "null")]);
         let url = derive_callback_url(&h, "srv", &[], LISTEN);
         assert!(url.starts_with("http://127.0.0.1:4545/"), "got {url}");
+    }
+
+    #[test]
+    fn token_endpoint_matching_issuer_host_is_accepted() {
+        assert!(token_endpoint_host_matches(
+            "https://auth.example.com/oauth/token",
+            "auth.example.com"
+        ));
+    }
+
+    #[test]
+    fn token_endpoint_with_different_host_is_rejected() {
+        // The vulnerability scenario: discovery advertises a token endpoint
+        // pointed at an attacker host. The callback must refuse.
+        assert!(!token_endpoint_host_matches(
+            "https://attacker.example/oauth/token",
+            "auth.example.com"
+        ));
+    }
+
+    #[test]
+    fn token_endpoint_subdomain_is_rejected() {
+        // Defense-in-depth: a sibling/child of the issuer host is still a
+        // different origin and must not be trusted.
+        assert!(!token_endpoint_host_matches(
+            "https://evil.auth.example.com.attacker.example/oauth/token",
+            "auth.example.com"
+        ));
+        assert!(!token_endpoint_host_matches(
+            "https://api.auth.example.com/oauth/token",
+            "auth.example.com"
+        ));
+    }
+
+    #[test]
+    fn token_endpoint_host_match_is_case_insensitive() {
+        assert!(token_endpoint_host_matches(
+            "https://AUTH.Example.COM/oauth/token",
+            "auth.example.com"
+        ));
+    }
+
+    #[test]
+    fn unparseable_token_endpoint_is_rejected() {
+        assert!(!token_endpoint_host_matches(
+            "not a url",
+            "auth.example.com"
+        ));
+    }
+
+    #[test]
+    fn url_host_lower_extracts_lowercased_host() {
+        assert_eq!(
+            url_host_lower("https://Auth.Example.COM/path"),
+            Some("auth.example.com".to_string())
+        );
+        assert_eq!(url_host_lower("not a url"), None);
     }
 }

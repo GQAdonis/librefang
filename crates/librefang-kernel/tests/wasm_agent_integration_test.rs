@@ -5,9 +5,8 @@
 //!
 //! These tests use real WASM execution — no mocks.
 
-use librefang_kernel::LibreFangKernel;
+use librefang_testing::MockKernelBuilder;
 use librefang_types::agent::AgentManifest;
-use librefang_types::config::{DefaultModelConfig, KernelConfig};
 use std::sync::Arc;
 
 /// Minimal echo module: returns input JSON wrapped as `{"response": "..."}`.
@@ -106,23 +105,6 @@ const HOST_CALL_PROXY_WAT: &str = r#"
     )
 "#;
 
-fn test_config(tmp: &tempfile::TempDir) -> KernelConfig {
-    KernelConfig {
-        home_dir: tmp.path().to_path_buf(),
-        data_dir: tmp.path().join("data"),
-        default_model: DefaultModelConfig {
-            provider: "ollama".to_string(),
-            model: "test".to_string(),
-            api_key_env: "OLLAMA_API_KEY".to_string(),
-            base_url: None,
-            message_timeout_secs: 300,
-            extra_params: std::collections::HashMap::new(),
-            cli_profile_dirs: Vec::new(),
-        },
-        ..KernelConfig::default()
-    }
-}
-
 fn wasm_manifest(name: &str, module: &str) -> AgentManifest {
     let toml_str = format!(
         r#"
@@ -153,11 +135,8 @@ memory_write = ["self.*"]
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_hello_response() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
 
     let manifest = wasm_manifest("wasm-hello", "hello.wat");
     let agent_id = kernel.spawn_agent(manifest).unwrap();
@@ -177,11 +156,8 @@ async fn test_wasm_agent_hello_response() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_echo() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("echo.wat"), ECHO_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("echo.wat"), ECHO_WAT).unwrap();
 
     let manifest = wasm_manifest("wasm-echo", "echo.wat");
     let agent_id = kernel.spawn_agent(manifest).unwrap();
@@ -205,11 +181,8 @@ async fn test_wasm_agent_echo() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_fuel_exhaustion() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("loop.wat"), INFINITE_LOOP_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("loop.wat"), INFINITE_LOOP_WAT).unwrap();
 
     let manifest = wasm_manifest("wasm-loop", "loop.wat");
     let agent_id = kernel.spawn_agent(manifest).unwrap();
@@ -232,11 +205,8 @@ async fn test_wasm_agent_fuel_exhaustion() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_missing_module() {
-    let tmp = tempfile::tempdir().unwrap();
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
     // Don't write any .wat file
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
 
     let manifest = wasm_manifest("wasm-missing", "nonexistent.wasm");
     let agent_id = kernel.spawn_agent(manifest).unwrap();
@@ -256,11 +226,8 @@ async fn test_wasm_agent_missing_module() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_host_call_time() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("proxy.wat"), HOST_CALL_PROXY_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("proxy.wat"), HOST_CALL_PROXY_WAT).unwrap();
 
     // Proxy module forwards input to host_call — send a time_now request
     let toml_str = r#"
@@ -301,11 +268,8 @@ memory_write = ["self.*"]
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_wasm_agent_streaming_fallback() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
     let kernel = Arc::new(kernel);
 
     let manifest = wasm_manifest("wasm-stream", "hello.wat");
@@ -338,12 +302,9 @@ async fn test_wasm_agent_streaming_fallback() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_wasm_agents() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
-    std::fs::write(tmp.path().join("echo.wat"), ECHO_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
+    std::fs::write(_tmp.path().join("echo.wat"), ECHO_WAT).unwrap();
 
     let hello_id = kernel
         .spawn_agent(wasm_manifest("hello-agent", "hello.wat"))
@@ -370,11 +331,8 @@ async fn test_multiple_wasm_agents() {
 #[ignore = "wasm integration: boots full kernel with embedded SurrealDB + Ollama; run manually"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_mixed_wasm_and_llm_agents() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
-
-    let config = test_config(&tmp);
-    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+    let (kernel, _tmp) = MockKernelBuilder::new().build();
+    std::fs::write(_tmp.path().join("hello.wat"), HELLO_WAT).unwrap();
 
     // Spawn a WASM agent
     let wasm_id = kernel

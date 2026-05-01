@@ -241,6 +241,103 @@ pub(crate) fn paired_device_user_keys(kernel: &LibreFangKernel) -> Vec<middlewar
         .collect()
 }
 
+/// Returns `true` when at least one form of authentication is configured for
+/// the daemon: an explicit `api_key`, any `[[users]]` entry with an
+/// `api_key_hash`, any paired device, or dashboard credentials. Used at boot
+/// (#3572) to decide whether a non-loopback bind is safe.
+fn any_auth_configured(kernel: &LibreFangKernel) -> bool {
+    let api_key_set = !kernel.config_ref().api_key.trim().is_empty();
+    let users_have_keys = kernel.config_ref().users.iter().any(|u| {
+        u.api_key_hash
+            .as_deref()
+            .map(|h| !h.trim().is_empty())
+            .unwrap_or(false)
+    });
+    let paired_devices = !kernel.pairing_ref().device_api_keys().is_empty();
+    let dashboard = has_dashboard_credentials(kernel);
+    api_key_set || users_have_keys || paired_devices || dashboard
+}
+
+/// Reads the `LIBREFANG_ALLOW_NO_AUTH` env var the same way the auth
+/// middleware does (`1` / `true` / `yes` / `on`, case-insensitive on the
+/// boolean keyword). Kept here so the boot-time refusal in #3572 stays in
+/// sync with the runtime allow flag in `middleware.rs`.
+fn allow_no_auth_env() -> bool {
+    std::env::var("LIBREFANG_ALLOW_NO_AUTH")
+        .map(|v| matches!(v.trim(), "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+/// Outcome of evaluating a bind address against the configured authentication
+/// posture. See `evaluate_bind_auth_safety` for the decision logic and
+/// `check_bind_auth_safety` for the production wiring that pulls the inputs
+/// from a real `LibreFangKernel`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BindAuthCheck {
+    /// Loopback bind OR auth configured — safe to start silently.
+    Ok,
+    /// Non-loopback bind without auth, but `LIBREFANG_ALLOW_NO_AUTH` is set —
+    /// the daemon should start but `run_daemon` should log a loud warning.
+    OkWithExplicitOptIn,
+    /// Non-loopback bind, no auth, no opt-in — refuse to start with `reason`.
+    Refuse { reason: String },
+}
+
+/// Pure decision function for #3572. Takes the three inputs that determine
+/// the bind-safety posture and returns a verdict; isolated from
+/// `LibreFangKernel` and the environment so it is unit-testable.
+pub(crate) fn evaluate_bind_auth_safety(
+    bind: &SocketAddr,
+    any_auth_configured: bool,
+    allow_no_auth: bool,
+) -> BindAuthCheck {
+    if bind.ip().is_loopback() || any_auth_configured {
+        return BindAuthCheck::Ok;
+    }
+    if allow_no_auth {
+        return BindAuthCheck::OkWithExplicitOptIn;
+    }
+    BindAuthCheck::Refuse {
+        reason: format!(
+            "Refusing to start: api_listen = {bind} is a non-loopback bind but no \
+             authentication is configured. Set `api_key` in config.toml, configure \
+             dashboard credentials (`dashboard_user`/`dashboard_pass`), or define a \
+             `[[users]]` entry with `api_key_hash`. To bind on a loopback address, \
+             set api_listen = \"127.0.0.1:4545\". To run intentionally open (NOT \
+             RECOMMENDED — exposes shell-exec, vault, and LLM keys), set \
+             LIBREFANG_ALLOW_NO_AUTH=1 in the environment."
+        ),
+    }
+}
+
+/// #3572: Refuses to start when the resolved bind is non-loopback AND no
+/// authentication is configured AND `LIBREFANG_ALLOW_NO_AUTH` is unset.
+///
+/// Returns `Ok(())` when the configuration is safe (loopback bind, OR auth
+/// configured, OR operator opted in). Returns `Err(msg)` with an actionable
+/// message otherwise — `run_daemon` propagates that as a startup error so the
+/// CLI prints it and exits non-zero rather than running open and dropping
+/// every request at the middleware layer.
+pub(crate) fn check_bind_auth_safety(
+    kernel: &LibreFangKernel,
+    addr: &SocketAddr,
+) -> Result<(), String> {
+    match evaluate_bind_auth_safety(addr, any_auth_configured(kernel), allow_no_auth_env()) {
+        BindAuthCheck::Ok => Ok(()),
+        BindAuthCheck::OkWithExplicitOptIn => {
+            tracing::error!(
+                bind = %addr,
+                "SECURITY: librefang is starting on a non-loopback bind with no \
+                 authentication (LIBREFANG_ALLOW_NO_AUTH=1 — operator accepted \
+                 risk). Anyone reachable on this address has full unauthenticated \
+                 admin access including shell-exec, vault, and LLM API keys."
+            );
+            Ok(())
+        }
+        BindAuthCheck::Refuse { reason } => Err(reason),
+    }
+}
+
 /// Returns `true` if the request arrived over TLS, either directly or through
 /// a reverse proxy / tunnel that sets `X-Forwarded-Proto: https` (ngrok,
 /// cloudflared, traefik, nginx, …). Used to decide whether cookies should be
@@ -762,10 +859,41 @@ fn sessions_path(home_dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 /// Load persisted sessions from disk, dropping any that have already expired.
+///
+/// SECURITY (#3725): An older daemon revision wrote `sessions.json` at the
+/// default umask, which on most setups leaves the file world-readable.
+/// New writes go through `save_sessions` and land at 0600 from the first
+/// byte, but a file already on disk from the older revision keeps its
+/// permissive mode until something rewrites it. Tighten on load so a daemon
+/// upgraded onto a multi-user host stops leaking bearer tokens immediately
+/// instead of waiting for the next session mutation.
 fn load_sessions(
     home_dir: &std::path::Path,
 ) -> std::collections::HashMap<String, crate::password_hash::SessionToken> {
     let path = sessions_path(home_dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(&path) {
+            let mode = meta.permissions().mode() & 0o777;
+            if mode & 0o077 != 0 {
+                tracing::warn!(
+                    path = %path.display(),
+                    mode = format!("{mode:o}"),
+                    "sessions.json is group/world-readable; tightening to 0600"
+                );
+                if let Err(e) =
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+                {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %e,
+                        "failed to tighten sessions.json permissions; tokens still readable until next save"
+                    );
+                }
+            }
+        }
+    }
     let content = match std::fs::read_to_string(&path) {
         Ok(s) => s,
         Err(_) => return std::collections::HashMap::new(),
@@ -1232,6 +1360,17 @@ pub async fn run_daemon(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = listen_addr.parse()?;
 
+    // #3572: Refuse to start when the resolved bind is non-loopback AND no
+    // authentication is configured AND the operator has not opted in via
+    // LIBREFANG_ALLOW_NO_AUTH. The middleware already fails closed for
+    // non-loopback origins in the same configuration, but failing closed at
+    // boot makes the misconfiguration impossible to miss — instead of every
+    // unauthenticated request returning 401 indefinitely, the daemon refuses
+    // to come up and prints an actionable error.
+    if let Err(msg) = check_bind_auth_safety(&kernel, &addr) {
+        return Err(msg.into());
+    }
+
     // Acquire an exclusive file lock on `daemon.lock` so two daemons can never
     // open the same SQLite database simultaneously. This is a true cross-process
     // mutex that works even when the old daemon was bound to a different port
@@ -1352,15 +1491,24 @@ pub async fn run_daemon(
 
     // Config file hot-reload watcher (polls every 30 seconds).
     // Spawned after `build_router` so it can access `AppState` for bridge reload.
+    //
+    // Uses `tokio::fs::metadata` (issue #3377): the previous `std::fs::metadata`
+    // call was synchronous and ran on a tokio worker thread, so a slow filesystem
+    // (NFS, sleeping disk) blocked the worker for the duration of `stat()`. With
+    // a single-threaded runtime this stalled every other task on each 30s tick.
     {
         let k = kernel.clone();
         let st = state.clone();
         let config_path = kernel.home_dir().join("config.toml");
         let mut shutdown_rx = bg_shutdown_tx.subscribe();
         bg_tasks.push(tokio::spawn(async move {
-            let mut last_modified = std::fs::metadata(&config_path)
-                .and_then(|m| m.modified())
-                .ok();
+            // Helper: async stat → mtime, swallowing all errors (file may not
+            // exist yet, FS may be unreachable). Identical semantics to the
+            // pre-#3377 `.and_then(|m| m.modified()).ok()` chain.
+            async fn read_mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
+                tokio::fs::metadata(path).await.ok()?.modified().ok()
+            }
+            let mut last_modified = read_mtime(&config_path).await;
             loop {
                 tokio::select! {
                     // Graceful shutdown signal: exit the loop so the task
@@ -1368,9 +1516,7 @@ pub async fn run_daemon(
                     _ = shutdown_rx.wait_for(|v| *v) => break,
                     _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
                 }
-                let current = std::fs::metadata(&config_path)
-                    .and_then(|m| m.modified())
-                    .ok();
+                let current = read_mtime(&config_path).await;
                 if current != last_modified && current.is_some() {
                     last_modified = current;
                     tracing::info!("Config file changed, reloading...");
@@ -1909,6 +2055,29 @@ mod observability_tests {
             "two daemons with distinct home_dirs must NOT share a compose project"
         );
     }
+
+    // #3725: a sessions.json file already on disk at world-readable
+    // permissions (i.e. left over from a daemon revision before the
+    // 0600-on-write fix) must be tightened on the next load so an
+    // upgrade closes the leak immediately.
+    #[cfg(unix)]
+    #[test]
+    fn load_sessions_tightens_permissive_legacy_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+        std::fs::create_dir_all(home.join("data")).unwrap();
+        let path = sessions_path(home);
+        std::fs::write(&path, "{}").unwrap();
+        // Simulate the legacy world-readable file.
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let _ = load_sessions(home);
+        let after = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            after, 0o600,
+            "legacy permissive sessions.json must be tightened on load"
+        );
+    }
 }
 
 /// SECURITY: Restrict file permissions to owner-only (0600) on Unix.
@@ -2109,5 +2278,80 @@ mod derive_require_auth_for_reads_tests {
     #[test]
     fn some_true_is_preserved_even_when_no_auth_configured() {
         assert!(derive_require_auth_for_reads(Some(true), false));
+    }
+}
+
+#[cfg(test)]
+mod evaluate_bind_auth_safety_tests {
+    use super::{evaluate_bind_auth_safety, BindAuthCheck};
+    use std::net::SocketAddr;
+
+    fn addr(s: &str) -> SocketAddr {
+        s.parse().unwrap()
+    }
+
+    // ── Loopback is always safe — auth posture is irrelevant ──────
+
+    #[test]
+    fn loopback_v4_is_ok_without_auth() {
+        let r = evaluate_bind_auth_safety(&addr("127.0.0.1:4545"), false, false);
+        assert_eq!(r, BindAuthCheck::Ok);
+    }
+
+    #[test]
+    fn loopback_v6_is_ok_without_auth() {
+        let r = evaluate_bind_auth_safety(&addr("[::1]:4545"), false, false);
+        assert_eq!(r, BindAuthCheck::Ok);
+    }
+
+    // ── Non-loopback bind requires auth or explicit opt-in ────────
+
+    #[test]
+    fn wildcard_v4_without_auth_refuses() {
+        let r = evaluate_bind_auth_safety(&addr("0.0.0.0:4545"), false, false);
+        match r {
+            BindAuthCheck::Refuse { reason } => {
+                assert!(reason.contains("0.0.0.0"), "got: {reason}");
+                assert!(
+                    reason.contains("api_key") || reason.contains("LIBREFANG_ALLOW_NO_AUTH"),
+                    "operator must learn how to fix: {reason}"
+                );
+            }
+            other => panic!("expected Refuse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wildcard_v6_without_auth_refuses() {
+        let r = evaluate_bind_auth_safety(&addr("[::]:4545"), false, false);
+        assert!(matches!(r, BindAuthCheck::Refuse { .. }));
+    }
+
+    #[test]
+    fn lan_address_without_auth_refuses() {
+        // RFC 1918 LAN bind reaches everyone on the subnet.
+        let r = evaluate_bind_auth_safety(&addr("192.168.1.10:4545"), false, false);
+        assert!(matches!(r, BindAuthCheck::Refuse { .. }));
+    }
+
+    #[test]
+    fn non_loopback_with_auth_is_ok() {
+        let r = evaluate_bind_auth_safety(&addr("0.0.0.0:4545"), true, false);
+        assert_eq!(r, BindAuthCheck::Ok);
+    }
+
+    #[test]
+    fn non_loopback_no_auth_with_explicit_opt_in_is_ok_with_warning() {
+        let r = evaluate_bind_auth_safety(&addr("0.0.0.0:4545"), false, true);
+        assert_eq!(r, BindAuthCheck::OkWithExplicitOptIn);
+    }
+
+    #[test]
+    fn opt_in_does_not_downgrade_when_auth_already_set() {
+        // When both auth is set AND LIBREFANG_ALLOW_NO_AUTH=1, the
+        // configuration is unambiguously safe — return Ok, not the
+        // "warn loudly" variant.
+        let r = evaluate_bind_auth_safety(&addr("0.0.0.0:4545"), true, true);
+        assert_eq!(r, BindAuthCheck::Ok);
     }
 }

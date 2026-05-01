@@ -15479,7 +15479,989 @@
             "type": "string"
           }
         }
-      }
+      ],
+      "default": {
+        "api_key_env": "",
+        "base_url": null,
+        "message_timeout_secs": 300,
+        "model": "",
+        "provider": "auto"
+      },
+      "description": "Default LLM provider configuration."
+    },
+    "docker": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/DockerSandboxConfig"
+        }
+      ],
+      "default": {
+        "blocked_mounts": [],
+        "cap_add": [],
+        "container_prefix": "librefang-sandbox",
+        "cpu_limit": 1.0,
+        "enabled": false,
+        "idle_timeout_secs": 86400,
+        "image": "python:3.12-slim",
+        "max_age_secs": 604800,
+        "memory_limit": "512m",
+        "mode": "off",
+        "network": "none",
+        "pids_limit": 100,
+        "read_only_root": true,
+        "reuse_cool_secs": 300,
+        "scope": "session",
+        "timeout_secs": 60,
+        "tmpfs": [
+          "/tmp:size=64m"
+        ],
+        "workdir": "/workspace"
+      },
+      "description": "Docker container sandbox configuration."
+    },
+    "exec_policy": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ExecPolicy"
+        }
+      ],
+      "default": {
+        "allowed_commands": [],
+        "max_output_bytes": 102400,
+        "mode": "allowlist",
+        "no_output_timeout_secs": 30,
+        "safe_bins": [
+          "sleep",
+          "true",
+          "false",
+          "cat",
+          "sort",
+          "uniq",
+          "cut",
+          "tr",
+          "head",
+          "tail",
+          "wc",
+          "date",
+          "echo",
+          "printf",
+          "basename",
+          "dirname",
+          "pwd",
+          "env"
+        ],
+        "timeout_secs": 30
+      },
+      "description": "Shell/exec security policy."
+    },
+    "extensions": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ExtensionsConfig"
+        }
+      ],
+      "default": {
+        "auto_reconnect": true,
+        "health_check_interval_secs": 60,
+        "reconnect_max_attempts": 10,
+        "reconnect_max_backoff_secs": 300
+      },
+      "description": "Extensions & integrations configuration."
+    },
+    "external_auth": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ExternalAuthConfig"
+        }
+      ],
+      "default": {
+        "allowed_domains": [],
+        "audience": "",
+        "client_id": "",
+        "client_secret_env": "LIBREFANG_OAUTH_CLIENT_SECRET",
+        "enabled": false,
+        "issuer_url": "",
+        "providers": [],
+        "redirect_url": "http://127.0.0.1:4545/api/auth/callback",
+        "require_email_verified": true,
+        "scopes": [
+          "openid",
+          "profile",
+          "email"
+        ],
+        "session_ttl_secs": 86400
+      },
+      "description": "External authentication provider configuration (OAuth2/OIDC)."
+    },
+    "fallback_providers": {
+      "description": "Fallback providers tried in order if the primary fails. Configure in config.toml as `[[fallback_providers]]`.",
+      "items": {
+        "$ref": "#/definitions/FallbackProviderConfig"
+      },
+      "type": "array"
+    },
+    "health_check": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/HealthCheckConfig"
+        }
+      ],
+      "default": {
+        "health_check_interval_secs": 60
+      },
+      "description": "Health check configuration."
+    },
+    "heartbeat": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/HeartbeatTomlConfig"
+        }
+      ],
+      "default": {
+        "check_interval_secs": 30,
+        "default_timeout_secs": 60,
+        "keep_recent": 10
+      },
+      "description": "Heartbeat monitor configuration (global defaults for autonomous agents)."
+    },
+    "home_dir": {
+      "default": "<home>/.librefang",
+      "description": "LibreFang home directory (default: ~/.librefang).",
+      "type": "string"
+    },
+    "inbox": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/InboxConfig"
+        }
+      ],
+      "default": {
+        "default_agent": null,
+        "directory": null,
+        "enabled": false,
+        "poll_interval_secs": 5
+      },
+      "description": "File-based input inbox configuration. Drop text files into a directory and they are dispatched to agents."
+    },
+    "include": {
+      "description": "Config include files — loaded and deep-merged before the root config. Paths are relative to the root config file's directory. Security: absolute paths and `..` components are rejected.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "language": {
+      "default": "en",
+      "description": "Language/locale for CLI and messages (default: \"en\").",
+      "type": "string"
+    },
+    "links": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/LinkConfig"
+        }
+      ],
+      "default": {
+        "enabled": false,
+        "max_content_bytes": 102400,
+        "max_links": 3,
+        "timeout_secs": 10
+      },
+      "description": "Link understanding configuration."
+    },
+    "llm": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/LlmConfig"
+        }
+      ],
+      "default": {
+        "auxiliary": {}
+      },
+      "description": "`[llm]` section — currently carries the auxiliary side-task chain configuration. See [`LlmConfig`] / [`AuxiliaryConfig`]."
+    },
+    "local_probe_interval_secs": {
+      "default": 60,
+      "description": "Interval in seconds between reachability probes of local providers (Ollama, vLLM, LM Studio, lemonade).\n\nLower values make the dashboard react faster to `brew services start/stop ollama` at the cost of extra HTTP calls to `/api/tags`. 60 s is the default — it keeps the UI responsive without noticeably loading a local Ollama daemon. Dev machines flipping Ollama on/off frequently can drop to 10; long-lived production boxes can raise to 300+ since the state rarely changes.\n\nZero or values below the probe timeout (2 s) are treated as 60.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "log_dir": {
+      "default": null,
+      "description": "Custom log directory. When set, log files are written here instead of the default `~/.librefang/` directory.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "log_level": {
+      "default": "info",
+      "description": "Log level (trace, debug, info, warn, error).",
+      "type": "string"
+    },
+    "max_agent_call_depth": {
+      "default": 5,
+      "description": "Maximum inter-agent call depth to prevent infinite recursion (A->B->C->...). Complex workflows may need deeper agent chains.",
+      "format": "uint32",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "max_concurrent_bg_llm": {
+      "default": 5,
+      "description": "Maximum number of concurrent background LLM calls across all agents. Increase on high-core servers that can handle more parallel inference.",
+      "format": "uint",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "max_cron_jobs": {
+      "default": 500,
+      "description": "Cron scheduler max total jobs across all agents. Default: 500.",
+      "format": "uint",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "max_history_messages": {
+      "description": "Operator override for the agent message-history trim cap. When set, any agent without its own `max_history_messages` uses this value instead of the compiled-in default (`agent_loop::DEFAULT_MAX_HISTORY_MESSAGES`). Lower it to bound per-turn token cost; raise it for long-context models. `None` means \"use the compiled-in default\". Values below 4 are silently clamped at runtime with a warning log.",
+      "format": "uint",
+      "minimum": 0.0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "max_request_body_bytes": {
+      "default": 8388608,
+      "description": "Maximum request body size in bytes (global safety net). Individual endpoints may enforce tighter limits.",
+      "format": "uint",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "max_upload_size_bytes": {
+      "default": 10485760,
+      "description": "Maximum upload size in bytes (default: 10 MB). Enterprise deployments may need larger file uploads.",
+      "format": "uint",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "mcp_servers": {
+      "description": "MCP server configurations for external tool integration.",
+      "items": {
+        "$ref": "#/definitions/McpServerConfigEntry"
+      },
+      "type": "array"
+    },
+    "media": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/MediaConfig"
+        }
+      ],
+      "default": {
+        "audio_model": null,
+        "audio_provider": null,
+        "audio_transcription": true,
+        "image_description": true,
+        "image_provider": null,
+        "max_concurrency": 2,
+        "video_description": false
+      },
+      "description": "Media understanding configuration."
+    },
+    "memory": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/MemoryConfig"
+        }
+      ],
+      "default": {
+        "chunking": {
+          "enabled": false,
+          "max_chunk_size": 1500,
+          "overlap": 200
+        },
+        "consolidation_interval_hours": 24,
+        "consolidation_threshold": 10000,
+        "decay": {
+          "agent_ttl_days": 30,
+          "decay_interval_hours": 1,
+          "enabled": false,
+          "session_ttl_days": 7
+        },
+        "decay_rate": 0.1,
+        "embedding_api_key_env": null,
+        "embedding_dimensions": null,
+        "embedding_model": "text-embedding-3-small",
+        "embedding_provider": null,
+        "fts_only": null,
+        "sqlite_path": null,
+        "vector_backend": null,
+        "vector_store_url": null
+      },
+      "description": "Memory substrate configuration."
+    },
+    "mode": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/KernelMode"
+        }
+      ],
+      "default": "default",
+      "description": "Kernel operating mode (stable, default, dev)."
+    },
+    "network": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/NetworkConfig"
+        }
+      ],
+      "default": {
+        "bootstrap_peers": [],
+        "listen_addresses": [
+          "/ip4/0.0.0.0/tcp/0"
+        ],
+        "max_messages_per_peer_per_minute": 60,
+        "max_peers": 50,
+        "mdns_enabled": true,
+        "shared_secret": ""
+      },
+      "description": "Network configuration."
+    },
+    "network_enabled": {
+      "default": false,
+      "description": "Whether to enable the OFP network layer.",
+      "type": "boolean"
+    },
+    "notification": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/NotificationConfig"
+        }
+      ],
+      "default": {
+        "agent_rules": [],
+        "alert_channels": [],
+        "approval_channels": []
+      },
+      "description": "Notification engine configuration for approval alerts and task state notifications."
+    },
+    "oauth": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/OAuthConfig"
+        }
+      ],
+      "default": {
+        "github_client_id": null,
+        "google_client_id": null,
+        "microsoft_client_id": null,
+        "slack_client_id": null
+      },
+      "description": "OAuth client ID overrides for PKCE flows."
+    },
+    "pairing": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PairingConfig"
+        }
+      ],
+      "default": {
+        "enabled": false,
+        "max_devices": 10,
+        "ntfy_topic": null,
+        "ntfy_url": null,
+        "public_base_url": null,
+        "push_provider": "none",
+        "token_expiry_secs": 300
+      },
+      "description": "Device pairing configuration."
+    },
+    "parallel_tools": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ParallelToolsConfig"
+        }
+      ],
+      "default": {
+        "enabled": false,
+        "max_concurrent": 4,
+        "mcp_default_safety": "write_shared",
+        "mcp_readonly_allowlist": []
+      },
+      "description": "Parallel-tool dispatcher configuration. PR-3 schema only — runtime integration lands in PR-4. See [`ParallelToolsConfig`]."
+    },
+    "plugins": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PluginsConfig"
+        }
+      ],
+      "default": {
+        "plugin_registries": []
+      },
+      "description": "Plugin registry configuration."
+    },
+    "privacy": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PrivacyConfig"
+        }
+      ],
+      "default": {
+        "mode": "off",
+        "redact_patterns": []
+      },
+      "description": "PII privacy controls for LLM context filtering."
+    },
+    "proactive_memory": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ProactiveMemoryConfig"
+        }
+      ],
+      "default": {
+        "auto_memorize": true,
+        "auto_retrieve": true,
+        "confidence_decay_rate": 0.01,
+        "duplicate_threshold": 0.5,
+        "enabled": true,
+        "extract_categories": [
+          "communication_style",
+          "preference",
+          "expertise",
+          "work_style",
+          "project_context",
+          "personal_detail",
+          "frustration"
+        ],
+        "extraction_model": null,
+        "extraction_threshold": 0.699999988079071,
+        "max_memories_per_agent": 1000,
+        "max_retrieve": 10,
+        "session_ttl_hours": 24
+      },
+      "description": "Proactive memory (mem0-style) configuration."
+    },
+    "prompt_caching": {
+      "default": true,
+      "description": "Enable LLM provider prompt caching (default: true).\n\nWhen enabled, the runtime adds provider-specific cache hints to system prompts and tool definitions so that repeated prefixes are cached: - **Anthropic**: `cache_control: {\"type\": \"ephemeral\"}` on system blocks. - **OpenAI**: automatic prefix caching (response cache stats are parsed).",
+      "type": "boolean"
+    },
+    "prompt_intelligence": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/PromptIntelligenceConfig"
+        }
+      ],
+      "default": {
+        "enabled": false,
+        "hash_prompts": true,
+        "max_versions_per_agent": 50
+      },
+      "description": "Prompt intelligence configuration (versioning + A/B testing)."
+    },
+    "provider_api_keys": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Provider API key env var overrides (provider ID → env var name). For custom/unknown providers, maps the provider name to the environment variable holding the API key. e.g. `nvidia = \"NVIDIA_API_KEY\"`. If not set, the convention `{PROVIDER_UPPER}_API_KEY` is used automatically.",
+      "type": "object"
+    },
+    "provider_proxy_urls": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Per-provider proxy URL overrides (provider ID → proxy URL). Allows routing specific providers through a proxy while others connect directly. e.g. `openai = \"http://proxy.corp:8080\"`, `ollama = \"\"` (direct)",
+      "type": "object"
+    },
+    "provider_regions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Provider region selection (provider ID → region name). Selects a regional endpoint from the provider's `[provider.regions]` map. e.g. `qwen = \"us\"` to use the US endpoint instead of China mainland.",
+      "type": "object"
+    },
+    "provider_request_timeout_secs": {
+      "additionalProperties": {
+        "format": "uint64",
+        "minimum": 0.0,
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Per-provider HTTP request timeout overrides in seconds (provider ID → seconds).\n\nOverrides the HTTP client's default read timeout for LLM API requests to the specified provider. Useful for slower providers or long-context workloads. e.g. `ollama = 300`, `anthropic = 120`\n\nOnly applies to HTTP API drivers (OpenAI-compatible, Anthropic, Gemini, etc.). CLI-based providers (claude-code, qwen-code, etc.) use `message_timeout_secs`.",
+      "type": "object"
+    },
+    "provider_urls": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Provider base URL overrides (provider ID → custom base URL). e.g. `ollama = \"http://192.168.1.100:11434/v1\"`",
+      "type": "object"
+    },
+    "proxy": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ProxyConfig"
+        }
+      ],
+      "default": {
+        "http_proxy": null,
+        "https_proxy": null,
+        "no_proxy": null
+      },
+      "description": "HTTP proxy configuration for all outbound connections."
+    },
+    "queue": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/QueueConfig"
+        }
+      ],
+      "default": {
+        "concurrency": {
+          "cron_lane": 2,
+          "default_per_agent": 1,
+          "main_lane": 3,
+          "subagent_lane": 3,
+          "trigger_lane": 8
+        },
+        "max_depth_global": 0,
+        "max_depth_per_agent": 0,
+        "task_ttl_secs": 3600
+      },
+      "description": "Message queue configuration (depth limits, TTL, concurrency)."
+    },
+    "qwen_code_path": {
+      "default": null,
+      "description": "Override path to the Qwen Code CLI binary.\n\nWhen LibreFang runs as a daemon/service the subprocess may not inherit the user's full PATH, so the `qwen` binary is not found even though it is installed.  Set this to the absolute path of the CLI (e.g. `\"/home/user/.local/bin/qwen\"`).\n\nAlternatively you can set `provider_urls.qwen-code` to the same value.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "rate_limit": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/RateLimitConfig"
+        }
+      ],
+      "default": {
+        "api_requests_per_minute": 500,
+        "auth_rate_limit_per_ip": 10,
+        "max_ws_per_ip": 5,
+        "retry_after_secs": 60,
+        "ws_debounce_chars": 200,
+        "ws_debounce_ms": 100,
+        "ws_idle_timeout_secs": 1800,
+        "ws_messages_per_minute": 10,
+        "ws_terminal_messages_per_minute": 3600
+      },
+      "description": "API and WebSocket rate limiting configuration."
+    },
+    "registry": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/RegistryConfig"
+        }
+      ],
+      "default": {
+        "cache_ttl_secs": 86400,
+        "registry_mirror": ""
+      },
+      "description": "Registry sync configuration (cache TTL, etc.)."
+    },
+    "reload": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ReloadConfig"
+        }
+      ],
+      "default": {
+        "debounce_ms": 500,
+        "mode": "hybrid"
+      },
+      "description": "Config hot-reload settings."
+    },
+    "require_auth_for_reads": {
+      "description": "Controls whether the dashboard read-endpoint allowlist (agents, config, budget, sessions, approvals, hands, skills, workflows, …) requires a bearer token.\n\n* `None` (default, unset in config.toml) — **derive from configured auth**: the reads allowlist is collapsed *automatically* whenever any authentication is configured (non-empty `api_key`, per-user keys, or dashboard credentials). This is the safe default: operators who already set an `api_key` shouldn't also have to remember a separate flag before their read endpoints stop leaking agent IDs to the LAN. * `Some(true)` — state the intent explicitly. The daemon logs a boot-time warning if no authentication is actually configured (so an accidental `api_key = \"\"` redeploy is visible in the logs), but the middleware itself only enforces the closed allowlist when some form of auth is also configured: with no `api_key`, user keys, or dashboard credentials there is nothing to authenticate against and reads fall through to the unauthenticated local-development bypass. Configure an `api_key` (or per-user keys / dashboard credentials) alongside this flag to actually close the allowlist. * `Some(false)` — force the allowlist open even when `api_key` is set. Provided as an explicit escape hatch for deployments that front the daemon with an external auth proxy and want the in-tree dashboard to keep rendering before the reverse proxy has attached its own credentials.\n\nUnauthenticated static assets, OAuth flow endpoints, and `/api/health*` stay reachable in every mode.",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "sanitize": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/SanitizeConfig"
+        }
+      ],
+      "default": {
+        "custom_block_patterns": [],
+        "disable_input_sanitizer": false,
+        "max_message_length": 32768,
+        "mode": "block"
+      },
+      "description": "Input sanitization / prompt-injection detection for channel messages."
+    },
+    "session": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/SessionConfig"
+        }
+      ],
+      "default": {
+        "cleanup_interval_hours": 24,
+        "context_injection": [],
+        "max_sessions_per_agent": 0,
+        "on_session_start_script": null,
+        "reset": {
+          "daily_at_hour": 4,
+          "idle_minutes": 1440,
+          "mode": "off"
+        },
+        "reset_prompt": null,
+        "retention_days": 0
+      },
+      "description": "Session retention policy (automatic cleanup of old/excess sessions)."
+    },
+    "sidecar_channels": {
+      "description": "Sidecar channel adapters (external process-based).",
+      "items": {
+        "$ref": "#/definitions/SidecarChannelConfig"
+      },
+      "type": "array"
+    },
+    "skills": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/SkillsConfig"
+        }
+      ],
+      "default": {
+        "disabled": [],
+        "env_passthrough_denied_patterns": [
+          "*_KEY",
+          "*_TOKEN",
+          "*_PASSWORD",
+          "*_SECRET",
+          "*_API_KEY",
+          "AWS_*",
+          "GITHUB_*"
+        ],
+        "env_passthrough_per_skill": {},
+        "extra_dirs": [],
+        "load_user": true
+      },
+      "description": "Skills configuration (bundled + user-installed skills)."
+    },
+    "stable_prefix_mode": {
+      "default": false,
+      "description": "Cost optimization mode for stable prompt prefixes.\n\nWhen enabled, LibreFang avoids volatile system-prompt additions that change every turn (for example recalled memory append and canonical context injection), improving provider-side prompt cache hit rates.",
+      "type": "boolean"
+    },
+    "strict_config": {
+      "default": false,
+      "description": "Strict config mode: when `true`, the daemon refuses to start if the config file contains unknown or unrecognised fields. When `false` (the default), unknown fields are logged as warnings but the daemon boots normally. This is the \"tolerant mode\" toggle.",
+      "type": "boolean"
+    },
+    "taint_rules": {
+      "description": "Reusable named taint rule sets referenced by [`McpTaintToolPolicy::rule_sets`]. Each entry defines a group of taint rules with a severity action (block / warn / log) that the MCP scanner applies to every tool that opts in.\n\n**Hot-reload caveat:** the kernel snapshots this list onto each connected MCP server at install / reload time. Edits to `[[taint_rules]]` followed by a config reload do NOT propagate to already-connected MCP servers until the server itself is reloaded (e.g. via `reload_mcp_server_config` or a daemon restart). The snapshot keeps the scanner's view stable for the lifetime of a single tool call.",
+      "items": {
+        "$ref": "#/definitions/NamedTaintRuleSet"
+      },
+      "type": "array"
+    },
+    "task_board": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/TaskBoardConfig"
+        }
+      ],
+      "default": {
+        "claim_ttl_secs": 600,
+        "max_retries": 0,
+        "sweep_interval_secs": 30
+      },
+      "description": "Task-board (shared task queue) safety knobs — see [`TaskBoardConfig`]."
+    },
+    "telemetry": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/TelemetryConfig"
+        }
+      ],
+      "default": {
+        "auto_start_observability_stack": false,
+        "enabled": true,
+        "otlp_endpoint": "http://localhost:4317",
+        "prometheus_enabled": true,
+        "sample_rate": 1.0,
+        "service_name": "librefang"
+      },
+      "description": "Telemetry / observability configuration (OpenTelemetry + Prometheus)."
+    },
+    "terminal": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/TerminalConfig"
+        }
+      ],
+      "default": {
+        "allow_remote": false,
+        "allow_unauthenticated_remote": false,
+        "allowed_origins": [],
+        "enabled": true,
+        "max_windows": 16,
+        "require_proxy_headers": false,
+        "tmux_binary_path": null,
+        "tmux_enabled": true
+      },
+      "description": "Terminal / CLI access control configuration."
+    },
+    "thinking": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ThinkingConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Extended thinking configuration."
+    },
+    "tool_invoke": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ToolInvokeConfig"
+        }
+      ],
+      "default": {
+        "enabled": false
+      },
+      "description": "Direct tool-invocation endpoint allowlist. Fail-closed: the `POST /api/tools/{name}/invoke` route rejects every request unless `tool_invoke.enabled` is `true` and the tool name matches a pattern in `tool_invoke.allowlist`."
+    },
+    "tool_policy": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/ToolPolicy"
+        }
+      ],
+      "default": {
+        "agent_rules": [],
+        "global_rules": [],
+        "groups": [],
+        "subagent_max_concurrent": 5,
+        "subagent_max_depth": 10
+      },
+      "description": "Tool policy configuration (global deny/allow rules, groups, depth limits)."
+    },
+    "tool_timeout_secs": {
+      "default": 120,
+      "description": "Timeout for individual tool executions in seconds. Increase for browser automation or long-running builds.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "tool_timeouts": {
+      "additionalProperties": {
+        "format": "uint64",
+        "minimum": 0.0,
+        "type": "integer"
+      },
+      "default": {},
+      "description": "Per-tool timeout overrides. Exact key matches take priority over glob patterns; among globs, the longest matching pattern wins (most specific first). Falls back to `tool_timeout_secs` when no entry matches.\n\nExample: ```toml [tool_timeouts] agent_send    = 600 agent_spawn   = 600 \"mcp_browser_*\" = 900 shell_exec    = 300 ```",
+      "type": "object"
+    },
+    "triggers": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/TriggersConfig"
+        }
+      ],
+      "default": {
+        "cooldown_secs": 5,
+        "max_depth": 5,
+        "max_per_event": 10,
+        "max_workflow_secs": 3600
+      },
+      "description": "Event-driven trigger system configuration (cooldowns, depth limits, etc.)."
+    },
+    "trusted_hosts": {
+      "description": "Hostnames allowed to drive the OAuth `redirect_uri` when starting an MCP auth flow. The MCP auth-start handler derives the callback URL from the incoming request's `Origin` / `X-Forwarded-Host` / `Host` headers; without an allowlist a spoofed Host header could redirect the authorization code to an attacker-controlled origin. Loopback addresses (`localhost`, `127.0.0.1`, `::1`) are always accepted so local development keeps working with an empty list. Entries are hostnames without port, e.g. `\"dash.example.com\"`.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "trusted_manifest_signers": {
+      "description": "Hex-encoded Ed25519 public keys (32 bytes → 64 hex chars) allowed to sign agent manifests. `verify_signed_manifest` requires the envelope's `signer_public_key` to be on this list before accepting a signature — without a trust anchor, a self-signed envelope from any attacker passes internal-consistency checks and would be indistinguishable from a legitimate one. When empty, `SignedManifest` JSON payloads are rejected outright (fail-closed). Raw unsigned TOML manifests are unaffected; this list only gates the signed-envelope path.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "tts": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/TtsConfig"
+        }
+      ],
+      "default": {
+        "elevenlabs": {
+          "model_id": "eleven_monolingual_v1",
+          "similarity_boost": 0.75,
+          "stability": 0.5,
+          "voice_id": "21m00Tcm4TlvDq8ikWAM"
+        },
+        "enabled": false,
+        "google": {
+          "format": "mp3",
+          "language_code": "en-US",
+          "pitch": 0.0,
+          "speaking_rate": 1.0,
+          "voice": "en-US-Standard-F"
+        },
+        "max_text_length": 4096,
+        "openai": {
+          "format": "mp3",
+          "model": "tts-1",
+          "speed": 1.0,
+          "voice": "alloy"
+        },
+        "provider": null,
+        "timeout_secs": 30
+      },
+      "description": "Text-to-speech configuration."
+    },
+    "update_channel": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/UpdateChannel"
+        }
+      ],
+      "default": "stable",
+      "description": "CLI update channel (stable, beta, rc). Controls which releases `librefang update` considers."
+    },
+    "usage_footer": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/UsageFooterMode"
+        }
+      ],
+      "default": "full",
+      "description": "Usage footer mode (what to show after each response)."
+    },
+    "users": {
+      "description": "User configurations for RBAC multi-user support.",
+      "items": {
+        "$ref": "#/definitions/UserConfig"
+      },
+      "type": "array"
+    },
+    "vault": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/VaultConfig"
+        }
+      ],
+      "default": {
+        "enabled": true,
+        "path": null
+      },
+      "description": "Credential vault configuration."
+    },
+    "vertex_ai": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/VertexAiConfig"
+        }
+      ],
+      "default": {
+        "credentials_path": null,
+        "project_id": null,
+        "region": null
+      },
+      "description": "Vertex AI provider configuration."
+    },
+    "web": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/WebConfig"
+        }
+      ],
+      "default": {
+        "brave": {
+          "api_key_env": "BRAVE_API_KEY",
+          "country": "",
+          "freshness": "",
+          "max_results": 5,
+          "search_lang": ""
+        },
+        "cache_ttl_minutes": 15,
+        "fetch": {
+          "max_chars": 50000,
+          "max_response_bytes": 10485760,
+          "readability": true,
+          "ssrf_allowed_hosts": [],
+          "timeout_secs": 30
+        },
+        "jina": {
+          "api_key_env": "JINA_API_KEY",
+          "country": "",
+          "language": "",
+          "max_results": 5,
+          "no_cache": false,
+          "use_eu_endpoint": false
+        },
+        "perplexity": {
+          "api_key_env": "PERPLEXITY_API_KEY",
+          "model": "sonar"
+        },
+        "search_provider": "auto",
+        "searxng": {
+          "url": ""
+        },
+        "tavily": {
+          "api_key_env": "TAVILY_API_KEY",
+          "include_answer": true,
+          "max_results": 5,
+          "search_depth": "basic"
+        },
+        "timeout_secs": 15
+      },
+      "description": "Web tools configuration (search + fetch)."
+    },
+    "webhook_triggers": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/WebhookTriggerConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Webhook trigger configuration (external event injection)."
+    },
+    "workflow_stale_timeout_minutes": {
+      "default": 60,
+      "description": "How long (in minutes) a workflow run may remain in the `Running` or `Pending` state before it is considered stale after a daemon restart.\n\nOn boot the engine scans all persisted runs and marks any that are older than this threshold as `Failed` with the error `\"Interrupted by daemon restart\"`.  Set to `0` to disable recovery. Default: `60` minutes.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "workspaces_dir": {
+      "default": null,
+      "description": "Root directory for agent workspaces. Default: `~/.librefang/workspaces`",
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }

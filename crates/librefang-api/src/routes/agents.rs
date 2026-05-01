@@ -29,6 +29,14 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
                 .patch(patch_agent),
         )
         .route(
+            "/agents/{id}/stats",
+            axum::routing::get(get_agent_stats),
+        )
+        .route(
+            "/agents/{id}/events",
+            axum::routing::get(list_agent_events),
+        )
+        .route(
             "/agents/{id}/mode",
             axum::routing::put(set_agent_mode),
         )
@@ -747,6 +755,7 @@ pub(crate) fn enrich_agent_json(
     catalog: &Option<
         std::sync::RwLockReadGuard<'_, librefang_runtime::model_catalog::ModelCatalog>,
     >,
+    bulk_stats: Option<&std::collections::HashMap<String, (u64, f64)>>,
 ) -> serde_json::Value {
     let provider = if e.manifest.model.provider.is_empty() || e.manifest.model.provider == "default"
     {
@@ -779,6 +788,12 @@ pub(crate) fn enrich_agent_json(
     let ready =
         matches!(e.state, librefang_types::agent::AgentState::Running) && auth_status != "missing";
 
+    let schedule = format_schedule_mode(&e.manifest.schedule);
+
+    let (sessions_24h, cost_24h) = bulk_stats
+        .and_then(|m| m.get(&e.id.to_string()).copied())
+        .unwrap_or((0, 0.0));
+
     serde_json::json!({
         "id": e.id.to_string(),
         "name": e.name,
@@ -794,6 +809,9 @@ pub(crate) fn enrich_agent_json(
         "supports_thinking": supports_thinking,
         "ready": ready,
         "profile": e.manifest.profile,
+        "schedule": schedule,
+        "sessions_24h": sessions_24h,
+        "cost_24h": cost_24h,
         "identity": {
             "emoji": e.identity.emoji,
             "avatar_url": e.identity.avatar_url,
@@ -804,6 +822,12 @@ pub(crate) fn enrich_agent_json(
         "children": e.children.iter().map(|c| c.to_string()).collect::<Vec<_>>(),
         "session_id": e.session_id.0.to_string(),
         "tags": e.tags,
+        "onboarding_completed": e.onboarding_completed,
+        "onboarding_completed_at": e.onboarding_completed_at.as_ref().map(|t| t.to_rfc3339()),
+        "force_session_wipe": e.force_session_wipe,
+        "resume_pending": e.resume_pending,
+        "reset_reason": e.reset_reason,
+        "has_processed_message": e.has_processed_message,
     })
 }
 
@@ -948,9 +972,14 @@ pub async fn list_agents(
         agents.into_iter().skip(offset).collect()
     };
 
+    // Bulk-fetch 24h sessions/cost so each row carries its own KPI without
+    // forcing the dashboard to re-aggregate from /api/sessions (which is
+    // pagination-clipped).
+    let bulk_stats = state.kernel.memory_substrate().agents_stats_24h_bulk().ok();
+
     let items: Vec<serde_json::Value> = agents
         .iter()
-        .map(|e| enrich_agent_json(e, &dm, &catalog))
+        .map(|e| enrich_agent_json(e, &dm, &catalog, bulk_stats.as_ref()))
         .collect();
 
     Json(PaginatedResponse {
@@ -960,6 +989,236 @@ pub async fn list_agents(
         limit,
     })
     .into_response()
+}
+
+/// 24-hour KPI rollup view returned by `GET /api/agents/{id}/stats`.
+/// Mirrors [`librefang_memory::session::AgentStats24h`] — defined here as a
+/// view so we can derive `utoipa::ToSchema` without forcing utoipa into the
+/// memory crate. Generated SDKs and the OpenAPI spec pick up this shape.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct AgentStats24hView {
+    pub sessions_24h: u64,
+    pub cost_24h: f64,
+    pub p95_latency_ms: u64,
+    pub active_now: u64,
+    pub samples: u64,
+    pub prev: AgentStatsPrevView,
+}
+
+/// Prior 24-48h window scoped fields backing the KPI tile trend deltas.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct AgentStatsPrevView {
+    pub sessions_24h: u64,
+    pub cost_24h: f64,
+    pub p95_latency_ms: u64,
+}
+
+impl From<librefang_memory::session::AgentStats24h> for AgentStats24hView {
+    fn from(s: librefang_memory::session::AgentStats24h) -> Self {
+        Self {
+            sessions_24h: s.sessions_24h,
+            cost_24h: s.cost_24h,
+            p95_latency_ms: s.p95_latency_ms,
+            active_now: s.active_now,
+            samples: s.samples,
+            prev: AgentStatsPrevView {
+                sessions_24h: s.prev.sessions_24h,
+                cost_24h: s.prev.cost_24h,
+                p95_latency_ms: s.prev.p95_latency_ms,
+            },
+        }
+    }
+}
+
+/// GET /api/agents/{id}/stats — 24-hour KPI rollup for one agent.
+///
+/// Returns sessions/cost/P95-latency/active-now in a single round trip so
+/// the dashboard's per-agent KPI tiles don't have to scan the global
+/// `/api/sessions` page (which is paginated and was clipping data for
+/// agents that hadn't appeared in the latest N sessions).
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}/stats",
+    tag = "agents",
+    params(("id" = String, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "24-hour stats rollup", body = AgentStats24hView),
+        (status = 404, description = "Agent not found")
+    )
+)]
+pub async fn get_agent_stats(
+    State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let agent_uuid = match uuid::Uuid::parse_str(&id) {
+        Ok(u) => librefang_types::agent::AgentId(u),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid agent id" })),
+            )
+                .into_response();
+        }
+    };
+    let entry = match state.kernel.agent_registry().get(agent_uuid) {
+        Some(e) => e,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "agent not found" })),
+            )
+                .into_response();
+        }
+    };
+
+    // Owner-scoping: non-admin callers can only read stats for agents
+    // they authored. Mirrors the filter applied in `list_agents` so the
+    // detail-panel rollup can't leak per-agent cost / latency to other
+    // users on the same instance.
+    if let Some(ref user) = api_user {
+        use librefang_kernel::auth::UserRole;
+        if user.0.role < UserRole::Admin
+            && !entry.manifest.author.eq_ignore_ascii_case(&user.0.name)
+        {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "agent not found" })),
+            )
+                .into_response();
+        }
+    }
+
+    let substrate = state.kernel.memory_substrate();
+    match substrate.agent_stats_24h(&id) {
+        Ok(stats) => Json(AgentStats24hView::from(stats)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+/// Wire-shape for one row in [`list_agent_events`]. Mirrors
+/// [`librefang_memory::usage::AgentEventRow`] but defined here as a
+/// utoipa::ToSchema view so we can register it with the OpenAPI doc
+/// without forcing utoipa into the memory crate.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct AgentEventRowView {
+    pub timestamp: String,
+    pub model: String,
+    pub provider: String,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cost_usd: f64,
+    pub tool_calls: u64,
+    pub latency_ms: u64,
+}
+
+impl From<librefang_memory::usage::AgentEventRow> for AgentEventRowView {
+    fn from(r: librefang_memory::usage::AgentEventRow) -> Self {
+        Self {
+            timestamp: r.timestamp,
+            model: r.model,
+            provider: r.provider,
+            input_tokens: r.input_tokens,
+            output_tokens: r.output_tokens,
+            cost_usd: r.cost_usd,
+            tool_calls: r.tool_calls,
+            latency_ms: r.latency_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct AgentEventsResponse {
+    pub events: Vec<AgentEventRowView>,
+}
+
+/// GET /api/agents/{id}/events — Recent turn-level events for one agent.
+///
+/// Backs the dashboard's agent-detail Logs tab. Returns rows sourced
+/// from `usage_events` (newest first) so the panel shows real
+/// operational data — model dispatch, latency, tokens, cost — instead
+/// of the audit ledger, which is mostly admin lifecycle entries.
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}/events",
+    tag = "agents",
+    params(
+        ("id" = String, Path, description = "Agent ID"),
+        ("limit" = Option<u32>, Query, description = "Max rows (default 30, max 200)"),
+    ),
+    responses(
+        (status = 200, description = "Recent agent events", body = AgentEventsResponse),
+        (status = 404, description = "Agent not found")
+    )
+)]
+pub async fn list_agent_events(
+    State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+    Path(id): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> impl IntoResponse {
+    let agent_uuid = match uuid::Uuid::parse_str(&id) {
+        Ok(u) => librefang_types::agent::AgentId(u),
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid agent id" })),
+            )
+                .into_response();
+        }
+    };
+    let entry = match state.kernel.agent_registry().get(agent_uuid) {
+        Some(e) => e,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "agent not found" })),
+            )
+                .into_response();
+        }
+    };
+    // Mirror the owner-scoping on /stats and /sessions — turn-level
+    // event data carries token counts and cost, so it shouldn't leak.
+    if let Some(ref user) = api_user {
+        use librefang_kernel::auth::UserRole;
+        if user.0.role < UserRole::Admin
+            && !entry.manifest.author.eq_ignore_ascii_case(&user.0.name)
+        {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "agent not found" })),
+            )
+                .into_response();
+        }
+    }
+
+    let limit = params
+        .get("limit")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(30)
+        .min(200);
+
+    let substrate = state.kernel.memory_substrate();
+    match substrate
+        .usage()
+        .list_agent_events_recent(agent_uuid, limit)
+    {
+        Ok(events) => {
+            let view = AgentEventsResponse {
+                events: events.into_iter().map(AgentEventRowView::from).collect(),
+            };
+            Json(view).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
 }
 
 /// Hard cap on inlined text-attachment length (chars). Mirrors the PDF
@@ -1202,6 +1461,8 @@ pub fn inject_attachments_into_session(
             messages: Vec::new(),
             context_window_tokens: 0,
             label: None,
+            messages_generation: 0,
+            last_repaired_generation: None,
         },
     };
 
@@ -1219,7 +1480,7 @@ pub fn inject_attachments_into_session(
         })
         .collect();
 
-    session.messages.push(Message {
+    session.push_message(Message {
         role: Role::User,
         content: MessageContent::Blocks(attachment_blocks),
         pinned: false,
@@ -1788,6 +2049,9 @@ pub async fn get_agent_session(
                                                     media_type.rsplit('/').next().unwrap_or("png")
                                                 ),
                                                 content_type: media_type.clone(),
+                                                // Generated content has no
+                                                // operator owner — leave None.
+                                                uploaded_by: None,
                                             },
                                         );
                                         msg_images.push(serde_json::json!({
@@ -2181,6 +2445,7 @@ pub async fn get_agent(
             },
             "skills": entry.manifest.skills,
             "skills_mode": skill_assignment_mode(&entry.manifest),
+            "schedule": format_schedule_mode(&entry.manifest.schedule),
             "skills_disabled": entry.manifest.skills_disabled,
             "tools_disabled": entry.manifest.tools_disabled,
             "mcp_servers": entry.manifest.mcp_servers,
@@ -2541,7 +2806,11 @@ pub async fn attach_session_stream(
     );
 
     Sse::new(sse_stream)
-        .keep_alive(axum::response::sse::KeepAlive::default())
+        .keep_alive(
+            axum::response::sse::KeepAlive::new()
+                .interval(std::time::Duration::from_secs(15))
+                .text("keep-alive"),
+        )
         .into_response()
 }
 
@@ -2558,6 +2827,7 @@ pub async fn list_agent_sessions(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     lang: Option<axum::Extension<RequestLanguage>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
     let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
     let agent_id: AgentId = match id.parse() {
@@ -2569,6 +2839,25 @@ pub async fn list_agent_sessions(
             )
         }
     };
+    // Owner-scoping: non-admins can only list sessions for agents they
+    // authored. Mirrors the filter on `list_agents` so per-agent
+    // session metadata (cost, message count) doesn't leak.
+    if let Some(ref user) = api_user {
+        use librefang_kernel::auth::UserRole;
+        if user.0.role < UserRole::Admin {
+            let entry = state.kernel.agent_registry().get(agent_id);
+            let owned = entry
+                .as_ref()
+                .map(|e| e.manifest.author.eq_ignore_ascii_case(&user.0.name))
+                .unwrap_or(false);
+            if !owned {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({"error": t.t("api-error-agent-not-found")})),
+                );
+            }
+        }
+    }
     match state.kernel.list_agent_sessions(agent_id) {
         Ok(sessions) => (
             StatusCode::OK,
@@ -4645,6 +4934,22 @@ fn skill_assignment_mode(manifest: &librefang_types::agent::AgentManifest) -> &'
     }
 }
 
+/// Render a ScheduleMode as the short string the dashboard's Schedule
+/// tab displays (and what `enrich_agent_json` already exposes on the
+/// agent list). Both endpoints go through this helper so they can't
+/// drift apart.
+fn format_schedule_mode(schedule: &librefang_types::agent::ScheduleMode) -> String {
+    use librefang_types::agent::ScheduleMode;
+    match schedule {
+        ScheduleMode::Reactive => "manual".to_string(),
+        ScheduleMode::Periodic { cron } => cron.clone(),
+        ScheduleMode::Proactive { .. } => "proactive".to_string(),
+        ScheduleMode::Continuous {
+            check_interval_secs,
+        } => format!("continuous · {check_interval_secs}s"),
+    }
+}
+
 /// POST /api/agents/{id}/clone — Clone an agent with its workspace files.
 #[utoipa::path(
     post,
@@ -5283,6 +5588,12 @@ pub(crate) struct UploadMeta {
     #[allow(dead_code)]
     pub(crate) filename: String,
     pub(crate) content_type: String,
+    /// User who uploaded the file (#3361). `None` means "anonymous /
+    /// pre-auth daemon" — readable by any authenticated caller for
+    /// backwards compatibility with content saved before owner-binding
+    /// was introduced. New uploads from authenticated users always set
+    /// this so `serve_upload` can reject cross-user UUID guessing.
+    pub(crate) uploaded_by: Option<librefang_types::agent::UserId>,
 }
 
 /// In-memory upload metadata registry.
@@ -5385,6 +5696,7 @@ pub async fn upload_file(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
     lang: Option<axum::Extension<RequestLanguage>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
 ) -> impl IntoResponse {
@@ -5476,11 +5788,13 @@ pub async fn upload_file(
     }
 
     let size = body.len();
+    let uploaded_by = api_user.as_ref().map(|u| u.0.user_id);
     UPLOAD_REGISTRY.insert(
         file_id.clone(),
         UploadMeta {
             filename: filename.clone(),
             content_type: content_type.clone(),
+            uploaded_by,
         },
     );
 
@@ -5530,7 +5844,10 @@ pub async fn upload_file(
         (status = 200, description = "Serve an uploaded file by ID", body = serde_json::Value)
     )
 )]
-pub async fn serve_upload(Path(file_id): Path<String>) -> impl IntoResponse {
+pub async fn serve_upload(
+    Path(file_id): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+) -> impl IntoResponse {
     // Validate file_id is a UUID to prevent path traversal
     if uuid::Uuid::parse_str(&file_id).is_err() {
         return (
@@ -5549,8 +5866,8 @@ pub async fn serve_upload(Path(file_id): Path<String>) -> impl IntoResponse {
 
     // Look up metadata from registry; fall back to disk probe for generated images
     // (image_generate saves files without registering in UPLOAD_REGISTRY).
-    let content_type = match UPLOAD_REGISTRY.get(&file_id) {
-        Some(m) => m.content_type.clone(),
+    let (content_type, owner) = match UPLOAD_REGISTRY.get(&file_id) {
+        Some(m) => (m.content_type.clone(), m.uploaded_by),
         None => {
             // Infer content type from file magic bytes
             if !file_path.exists() {
@@ -5563,9 +5880,37 @@ pub async fn serve_upload(Path(file_id): Path<String>) -> impl IntoResponse {
                     b"{\"error\":\"File not found\"}".to_vec(),
                 );
             }
-            "image/png".to_string()
+            ("image/png".to_string(), None)
         }
     };
+
+    // SECURITY (#3361): Bind uploads to their uploader. A bare UUID is not
+    // access control — UUIDs leak through audit logs, dashboard responses,
+    // tracing output, and message history. Owner-bound files are readable
+    // only by the uploader or by Admin/Owner callers; un-owned entries (pre-
+    // #3361 uploads, generator output) stay readable for compatibility.
+    if let Some(owner_id) = owner {
+        use librefang_kernel::auth::UserRole;
+        let allowed = match api_user.as_ref().map(|u| &u.0) {
+            Some(u) => u.user_id == owner_id || u.role >= UserRole::Admin,
+            None => false,
+        };
+        if !allowed {
+            tracing::warn!(
+                file_id = %file_id,
+                caller = ?api_user.as_ref().map(|u| u.0.name.clone()),
+                "upload access denied: caller is not the uploader"
+            );
+            return (
+                StatusCode::FORBIDDEN,
+                [(
+                    axum::http::header::CONTENT_TYPE,
+                    "application/json".to_string(),
+                )],
+                b"{\"error\":\"You are not authorized to access this upload\"}".to_vec(),
+            );
+        }
+    }
 
     match std::fs::read(&file_path) {
         Ok(data) => (
@@ -5982,6 +6327,30 @@ mod tests {
         assert_eq!(req.new_name, "clone-2");
         assert!(!req.include_skills);
         assert!(!req.include_tools);
+    }
+
+    /// Issue #3361: UploadMeta carries the uploader's UserId so `serve_upload`
+    /// can reject cross-user UUID guessing. Pre-fix the struct had no owner
+    /// field at all and any caller knowing the UUID could fetch the file.
+    #[test]
+    fn issue_3361_upload_meta_carries_owner() {
+        use librefang_types::agent::UserId;
+        let owner = UserId::from_name("alice");
+        let meta = UploadMeta {
+            filename: "doc.pdf".to_string(),
+            content_type: "application/pdf".to_string(),
+            uploaded_by: Some(owner),
+        };
+        assert_eq!(meta.uploaded_by, Some(owner));
+
+        // Daemon-generated content has no owner — None means "any
+        // authenticated caller may read" (e.g. image_generate output).
+        let generated = UploadMeta {
+            filename: "image.png".to_string(),
+            content_type: "image/png".to_string(),
+            uploaded_by: None,
+        };
+        assert!(generated.uploaded_by.is_none());
     }
 
     #[test]

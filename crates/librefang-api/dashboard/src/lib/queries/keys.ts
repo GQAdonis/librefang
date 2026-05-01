@@ -24,6 +24,10 @@ export const agentKeys = {
   templates: () => [...agentKeys.all, "templates"] as const,
   sessions: (agentId: string) =>
     [...agentKeys.all, "sessions", agentId] as const,
+  stats: (agentId: string) =>
+    [...agentKeys.all, "stats", agentId] as const,
+  events: (agentId: string, limit: number) =>
+    [...agentKeys.all, "events", agentId, limit] as const,
   promptVersions: (agentId: string) =>
     [...agentKeys.all, "promptVersions", agentId] as const,
   experiments: (agentId: string) =>
@@ -231,6 +235,7 @@ export const goalKeys = {
 export const networkKeys = {
   all: ["network"] as const,
   status: () => [...networkKeys.all, "status"] as const,
+  trustedPeers: () => [...networkKeys.all, "trusted-peers"] as const,
 };
 
 export const peerKeys = {

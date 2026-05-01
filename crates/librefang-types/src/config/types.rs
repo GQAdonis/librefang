@@ -1492,6 +1492,25 @@ pub struct VaultConfig {
     pub enabled: bool,
     /// Custom vault file path (default: ~/.librefang/vault.enc).
     pub path: Option<PathBuf>,
+    /// Whether to store the vault master key in the OS keyring
+    /// (Linux Secret Service / macOS Keychain / Windows Credential Manager).
+    ///
+    /// `None` = use the platform default. macOS defaults to `false` because
+    /// the Keychain ACL is per-binary signature: every `cargo build` produces
+    /// a new signature and triggers a fresh "allow" prompt on daemon
+    /// restart. Linux and Windows default to `true`.
+    ///
+    /// The env var `LIBREFANG_VAULT_NO_KEYRING=1` overrides this setting
+    /// and forces the file-based fallback regardless of the config or
+    /// platform default. The fallback path is resolved via
+    /// `dirs::data_local_dir()`:
+    /// - macOS: `~/Library/Application Support/librefang/.keyring`
+    /// - Linux: `~/.local/share/librefang/.keyring`
+    /// - Windows: `%LOCALAPPDATA%\librefang\.keyring`
+    ///
+    /// The file is AES-256-GCM-wrapped with an Argon2id-derived
+    /// machine-fingerprint key and stored mode 0600.
+    pub use_os_keyring: Option<bool>,
 }
 
 impl Default for VaultConfig {
@@ -1499,6 +1518,7 @@ impl Default for VaultConfig {
         Self {
             enabled: true,
             path: None,
+            use_os_keyring: None,
         }
     }
 }
@@ -2309,6 +2329,12 @@ pub struct QueueConcurrencyConfig {
     /// validation. Typed `usize` to match the sibling lane fields and
     /// to feed `Semaphore::new` without a cast.
     pub default_per_agent: usize,
+    /// Per-fire timeout (seconds) for trigger dispatches. Bounds the
+    /// duration a single fire holds its `Lane::Trigger` and per-agent
+    /// permits, preventing one stuck LLM call from starving every
+    /// other agent's triggers kernel-wide (issue #3446). `0` is
+    /// rewritten to the default by validation.
+    pub trigger_fire_timeout_secs: u64,
 }
 
 impl Default for QueueConcurrencyConfig {
@@ -2319,6 +2345,7 @@ impl Default for QueueConcurrencyConfig {
             subagent_lane: 3,
             trigger_lane: 8,
             default_per_agent: 1,
+            trigger_fire_timeout_secs: 300,
         }
     }
 }
@@ -4045,9 +4072,13 @@ fn default_max_agent_call_depth() -> u32 {
     5
 }
 
-/// Default maximum request body size in bytes (1 MB).
+/// Default maximum request body size in bytes (8 MiB).
+///
+/// Raised from 1 MiB so that dashboard uploads of ~1 MiB files (which incur
+/// multipart-form overhead) no longer get rejected with 413. Per-route caps
+/// (A2A 1 MiB, webhook 1 MiB) still bound external attack surface (#3493).
 fn default_max_request_body_bytes() -> usize {
-    1_024 * 1_024
+    8 * 1_024 * 1_024
 }
 
 /// Audit log configuration.

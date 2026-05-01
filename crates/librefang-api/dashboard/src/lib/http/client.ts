@@ -20,6 +20,8 @@ export {
   // agents
   listAgents,
   getAgentDetail,
+  getAgentStats,
+  listAgentEvents,
   listAgentSessions,
   listAgentTemplates,
   listPromptVersions,
@@ -76,6 +78,7 @@ export {
   // network / peers / a2a
   getNetworkStatus,
   listPeers,
+  listTrustedPeers,
   listA2AAgents,
   getA2ATaskStatus,
   // plugins

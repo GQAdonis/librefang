@@ -512,29 +512,20 @@ impl State {
         for m in &models {
             match m.tier {
                 ModelTier::Fast | ModelTier::Local | ModelTier::Custom => {
-                    if fast.is_none() {
-                        fast = Some(&m.id);
-                    }
+                    fast = fast.or(Some(&m.id));
                 }
                 ModelTier::Balanced => {
-                    if balanced.is_none() {
-                        balanced = Some(&m.id);
-                    }
+                    balanced = balanced.or(Some(&m.id));
                 }
                 ModelTier::Smart => {
                     // Smart is a good balanced pick; also good frontier if no frontier exists
-                    if balanced.is_none() {
-                        balanced = Some(&m.id);
-                    }
-                    if frontier.is_none() {
-                        frontier = Some(&m.id);
-                    }
+                    balanced = balanced.or(Some(&m.id));
+                    frontier = frontier.or(Some(&m.id));
                 }
                 ModelTier::Frontier => {
-                    if frontier.is_none() {
-                        frontier = Some(&m.id);
-                    }
+                    frontier = frontier.or(Some(&m.id));
                 }
+                _ => {}
             }
         }
 
@@ -565,6 +556,7 @@ fn tier_label(tier: ModelTier) -> &'static str {
         ModelTier::Fast => "fast",
         ModelTier::Local => "local",
         ModelTier::Custom => "custom",
+        _ => "unknown",
     }
 }
 
@@ -604,6 +596,15 @@ pub fn run() -> InitResult {
     }));
 
     let mut terminal = ratatui::init();
+
+    // Enable bracketed paste so multi-character pastes (e.g. an API key) arrive
+    // as a single `Paste` event instead of thousands of synthesized Key events
+    // (#3638). We disable it again before `ratatui::restore()`.
+    let _ = ratatui::crossterm::execute!(
+        std::io::stdout(),
+        ratatui::crossterm::event::EnableBracketedPaste
+    );
+
     let mut state = State::new();
 
     let (test_tx, test_rx) = std::sync::mpsc::channel::<bool>();
@@ -747,7 +748,24 @@ pub fn run() -> InitResult {
         }
 
         if event::poll(Duration::from_millis(50)).unwrap_or(false) {
-            if let Ok(CtEvent::Key(key)) = event::read() {
+            // Resize falls through to the next loop iteration so the next
+            // `terminal.draw(...)` picks up the new size automatically (#3638).
+            let read = event::read();
+            // Handle bracketed paste — pasting an API key during Step::ApiKey
+            // must arrive as a single string, not synthesized Key events.
+            if let Ok(CtEvent::Paste(text)) = &read {
+                if state.step == Step::ApiKey && state.key_test == KeyTestState::Idle {
+                    // Strip newlines/tabs/control chars; API keys never contain them
+                    // and terminals occasionally append a stray \r.
+                    for c in text.chars() {
+                        if !c.is_control() {
+                            state.api_key_input.push(c);
+                        }
+                    }
+                }
+                continue;
+            }
+            if let Ok(CtEvent::Key(key)) = read {
                 if key.kind != KeyEventKind::Press {
                     continue;
                 }
@@ -999,6 +1017,10 @@ pub fn run() -> InitResult {
         }
     };
 
+    let _ = ratatui::crossterm::execute!(
+        std::io::stdout(),
+        ratatui::crossterm::event::DisableBracketedPaste
+    );
     ratatui::restore();
     result
 }

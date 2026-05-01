@@ -336,7 +336,7 @@ fn build_uar_request(request: &CompletionRequest) -> LlmRequest {
         messages.push(serde_json::json!({ "role": "system", "content": sys }));
     }
 
-    for msg in &request.messages {
+    for msg in request.messages.iter() {
         match (&msg.role, &msg.content) {
             // ── System ──────────────────────────────────────────────────
             // Only include if no dedicated system field was provided.
@@ -422,7 +422,7 @@ fn build_uar_request(request: &CompletionRequest) -> LlmRequest {
                                 "type": "function",
                                 "function": {
                                     "name": name,
-                                    "arguments": serde_json::to_string(input)
+                                    "arguments": serde_json::to_string(&input)
                                         .unwrap_or_else(|_| "{}".to_string()),
                                 }
                             }));

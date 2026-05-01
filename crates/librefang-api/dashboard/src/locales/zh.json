@@ -316,6 +316,15 @@
     "create_failed": "创建智能体失败",
     "manifest_toml": "智能体清单 (TOML)",
     "thinking_toml_hint": "在 TOML 中添加 [thinking] 段可启用扩展思考",
+    "schedule_manual": "手动触发",
+    "kpi": {
+      "sessions": "会话数 · 24h",
+      "sessions_idle": "空闲",
+      "cost": "费用 · 24h",
+      "p95": "P95 延迟",
+      "samples": "{{count}} 次采样",
+      "tools": "工具"
+    },
     "form": {
       "basics": "基本信息",
       "model": "模型配置",
@@ -2167,7 +2176,48 @@
     "batch_disabled_totp": "TOTP 强制启用时不可批量审批",
     "goToAgent": "跳转到 Agent",
     "totpPlaceholder": "000000 / 0000-0000",
-    "totpLabel": "TOTP"
+    "totpLabel": "TOTP",
+    "tabHistory": "历史",
+    "pendingCount": "{{count}} 个待处理",
+    "filter": "筛选",
+    "filterPlaceholder": "按智能体、工具或操作筛选…",
+    "noFilterMatch": "没有匹配此筛选的请求。",
+    "autoRules": "自动规则",
+    "requestedAgo": "{{ago}} 前请求",
+    "approveWithTotp": "使用 TOTP 批准",
+    "editApprove": "编辑并批准",
+    "editApproveTitle": "编辑并批准",
+    "editApproveSubmit": "提交并批准",
+    "deny": "拒绝",
+    "risk": {
+      "high": "高风险",
+      "medium": "中风险",
+      "low": "低风险"
+    },
+    "history": {
+      "empty": "暂无历史",
+      "emptyDesc": "已处理的审批将显示在这里。",
+      "decisions": {
+        "approved": "已批准",
+        "denied": "已拒绝",
+        "edited": "已修改"
+      },
+      "cols": {
+        "decision": "决定",
+        "agent": "智能体",
+        "action": "操作",
+        "risk": "风险",
+        "resolvedBy": "处理者",
+        "when": "时间"
+      }
+    },
+    "totp": {
+      "modalTitle": "TOTP 确认",
+      "modalSubtitle": "高风险操作需要二次验证",
+      "modalContext": "想要执行：{{action}}。请输入身份验证器中的 6 位验证码（或 8 位恢复码）。",
+      "expiresHint": "验证码每 30 秒刷新。",
+      "confirm": "确认并批准"
+    }
   },
   "wizard": {
     "welcome": "欢迎使用 BossFang",
@@ -2393,6 +2443,14 @@
     "connected": "已连接",
     "no_peers": "暂无连接节点",
     "no_peers_desc": "当前没有 OFP 节点连接到此实例。",
+    "identity_fingerprint": "身份指纹",
+    "identity_fingerprint_hint": "在 pin 之前先和远端运维做带外（OOB）比对。",
+    "identity_missing": "未加载 Ed25519 身份。OFP 正在以 HMAC-only 兼容模式运行；针对节点冒充的防御 (#3873) 暂未激活。",
+    "pinned_peers_count_one": "{{count}} 个 TOFU 已固定节点",
+    "pinned_peers_count_other": "{{count}} 个 TOFU 已固定节点",
+    "trusted_peers": "已信任节点",
+    "trusted_peers_pinned": "已 pin {{count}} 个",
+    "trusted_peer_fingerprint_hint": "已 pin 的 Ed25519 公钥 SHA-256 指纹。请带外比对确认。",
     "help": "Network 显示本实例在开放联邦协议（OFP）中的状态——已发现或被发现的对等 LibreFang 节点、本节点身份、使用的 OFP 版本。OFP 是 A2A 之下那一层：节点互相找到对方靠 OFP；连上之后说什么靠 A2A。\n\n使用步骤：\n\n1. 身份。node-id 和协议版本是本 LibreFang 实例对联邦的标识。\n\n2. 节点。显示每个已连接的对等节点和 online / offline 状态。空列表说明你还没在和任何人联邦。\n\n3. 状态。Online 表示 OFP 可达，本节点正在向外宣告自己。\n\n跟 A2A 的区别：\n\n  · Network —— 节点级联邦：外面有谁、连上了谁。\n  · A2A —— agent 级对话：那些节点上的 agent 能为彼此做什么。\n\n典型场景：\n\n  · 调试 A2A 前先确认两个 LibreFang 实例确实互相能看到。\n  · 读 node-id 发给对端做直连。\n\n注意事项：\n\n  · 联邦是可选且配置控制的。默认 \"no peers\" 是预期，除非你已配 peers。\n  · 网络状态是实时读，刷新即重新拉，无缓存。"
   },
   "a2a": {
@@ -2647,6 +2705,25 @@
     "url_hint": "URL 必须以 http:// 或 https:// 开头",
     "env_setup_title": "配置 {{name}}",
     "env_setup_desc": "输入所需的 API 密钥和环境变量以完成安装。",
+    "requires_env_count_one": "{{count}} 个密钥",
+    "requires_env_count_other": "{{count}} 个密钥",
+    "wizard": {
+      "eyebrow": "安装 · MCP 服务器",
+      "step_permissions": "概览",
+      "step_configure": "配置",
+      "step_installing": "安装中",
+      "step_done": "完成",
+      "requires": "需要",
+      "get_credential": "获取凭证",
+      "review_notice": "安装后该服务器的工具会先受审批策略管控 —— 破坏性调用需要人工签字，直到你在策略中放宽。",
+      "confirm_review": "我已了解此服务器能做什么。",
+      "creds_note": "凭证加密存储在本地保险库，仅在该服务器进程连接时释放。",
+      "installing": "正在安装 {{name}}…",
+      "installing_sub": "持久化配置，注册到运行时。",
+      "done_title": "已安装",
+      "done_body": "{{name}} 已连接，工具已对智能体开放。",
+      "view_servers": "查看服务器"
+    },
     "edit_taint_policy": "污点策略",
     "taint_policy_short": "污点",
     "taint_policy_title": "污点策略 — {{name}}",

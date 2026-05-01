@@ -107,7 +107,7 @@ async fn test_mock_llm_driver_recording() {
 
     let request = CompletionRequest {
         model: "test-model".into(),
-        messages: vec![],
+        messages: std::sync::Arc::new(vec![]),
         tools: vec![],
         max_tokens: 100,
         temperature: 0.0,
@@ -465,7 +465,7 @@ async fn test_mock_llm_driver_custom_tokens_and_stop_reason() {
 
     let request = CompletionRequest {
         model: "test-model".into(),
-        messages: vec![],
+        messages: std::sync::Arc::new(vec![]),
         tools: vec![],
         max_tokens: 100,
         temperature: 0.0,
@@ -507,7 +507,7 @@ async fn test_failing_llm_driver() {
 
     let request = CompletionRequest {
         model: "test-model".into(),
-        messages: vec![],
+        messages: std::sync::Arc::new(vec![]),
         tools: vec![],
         max_tokens: 100,
         temperature: 0.0,

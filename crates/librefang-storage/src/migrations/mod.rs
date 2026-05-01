@@ -128,4 +128,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "usage_events_session_id_v1",
         sql: include_str!("sql/020_usage_events_session_id.surql"),
     },
+    Migration {
+        version: 21,
+        name: "totp_used_codes_bound_to_v1",
+        sql: include_str!("sql/021_totp_used_codes_bound_to.surql"),
+    },
 ];

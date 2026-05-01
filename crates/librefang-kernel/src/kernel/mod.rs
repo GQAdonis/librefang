@@ -47,7 +47,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 /// Synthetic `SenderContext.channel` value the cron dispatcher uses for
 /// `[[cron_jobs]]` fires. Matched in [`KernelHandle::resolve_user_tool_decision`]
@@ -60,6 +60,46 @@ pub(crate) const SYSTEM_CHANNEL_CRON: &str = "cron";
 /// carve-out as [`SYSTEM_CHANNEL_CRON`] — both are kernel-internal and
 /// have no user to attribute to. Issue #3243.
 pub(crate) const SYSTEM_CHANNEL_AUTONOMOUS: &str = "autonomous";
+
+/// Minimum tolerated value for `cron_session_max_messages` (#3459).
+/// Mirrors `agent_loop::MIN_HISTORY_MESSAGES`. Smaller values silently
+/// destroy enough history to break prompt cache reuse and tool-result
+/// referencing.  `0` is treated as "disable" before this clamp is applied.
+const MIN_CRON_HISTORY_MESSAGES: usize = 4;
+
+/// Resolve `cron_session_max_messages` from config into an effective cap.
+///
+/// - `None`    → no cap (pass through)
+/// - `Some(0)` → caller set "disable"; treat as no cap
+/// - `Some(n)` where `n < MIN_CRON_HISTORY_MESSAGES` → clamp up, emit warning
+/// - `Some(n)` otherwise → use as-is
+pub(crate) fn resolve_cron_max_messages(raw: Option<usize>) -> Option<usize> {
+    match raw {
+        None => None,
+        Some(0) => None,
+        Some(n) if n < MIN_CRON_HISTORY_MESSAGES => {
+            tracing::warn!(
+                requested = n,
+                applied = MIN_CRON_HISTORY_MESSAGES,
+                "cron_session_max_messages too small; clamped"
+            );
+            Some(MIN_CRON_HISTORY_MESSAGES)
+        }
+        other => other,
+    }
+}
+
+/// Resolve `cron_session_max_tokens` from config into an effective cap.
+///
+/// - `None`    → no cap
+/// - `Some(0)` → disable (treat as no cap)
+/// - `Some(n)` otherwise → use as-is
+pub(crate) fn resolve_cron_max_tokens(raw: Option<u64>) -> Option<u64> {
+    match raw {
+        Some(0) => None,
+        other => other,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Per-task trigger recursion depth (bug #3780)
@@ -173,6 +213,47 @@ fn build_mcp_bridge_cfg(cfg: &KernelConfig) -> librefang_llm_driver::McpBridgeCo
 
 /// TTL for cached prompt metadata entries (30 seconds).
 const PROMPT_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Best-effort load of the raw `config.toml` as a `toml::Value` for
+/// skill config-var injection.  Used **only** at boot and on
+/// `reload_config` — never on the per-message hot path (#3722).
+///
+/// A missing or unparseable file falls back to an empty table, matching
+/// the behaviour the inline read previously had on `read_to_string` /
+/// `from_str` errors.
+fn load_raw_config_toml(config_path: &Path) -> toml::Value {
+    let empty = || toml::Value::Table(toml::map::Map::new());
+    if !config_path.exists() {
+        return empty();
+    }
+    let contents = match std::fs::read_to_string(config_path) {
+        Ok(s) => s,
+        Err(e) => {
+            // Not on the hot path — surface the failure so a misconfigured
+            // file doesn't silently disable `[skills.config.*]` injection
+            // for the whole process lifetime.
+            tracing::warn!(
+                path = %config_path.display(),
+                error = %e,
+                "failed to read raw config.toml for skill config injection; \
+                 falling back to empty table"
+            );
+            return empty();
+        }
+    };
+    match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(
+                path = %config_path.display(),
+                error = %e,
+                "failed to parse raw config.toml for skill config injection; \
+                 falling back to empty table"
+            );
+            empty()
+        }
+    }
+}
 
 /// Cached workspace context and identity files for an agent's workspace.
 #[derive(Clone, Debug)]
@@ -434,6 +515,10 @@ fn resolve_dispatch_session_id(
 pub(crate) struct RunningTask {
     pub(crate) abort: tokio::task::AbortHandle,
     pub(crate) started_at: chrono::DateTime<chrono::Utc>,
+    /// Unique id for this turn — used by cleanup to ensure a task only
+    /// removes its OWN entry from `running_tasks`, never a successor's
+    /// (#3445 stale-entry guard). Compared with `Uuid` equality.
+    pub(crate) task_id: uuid::Uuid,
 }
 
 pub struct LibreFangKernel {
@@ -443,6 +528,14 @@ pub struct LibreFangKernel {
     data_dir_boot: PathBuf,
     /// Kernel configuration (atomically swappable for hot-reload).
     pub(crate) config: ArcSwap<KernelConfig>,
+    /// Cached raw `config.toml` value used for skill config-var injection.
+    ///
+    /// Refreshed once at boot and once per successful `reload_config` call —
+    /// **never** on the per-message hot path (#3722).  `KernelConfig` itself
+    /// is strongly-typed and does not preserve the open-ended
+    /// `[skills.config.<key>]` namespace that `resolve_config_vars`
+    /// walks, so we keep a separate `toml::Value` snapshot.
+    pub(crate) raw_config_toml: ArcSwap<toml::Value>,
     /// Agent registry.
     pub(crate) registry: AgentRegistry,
     /// Capability manager.
@@ -950,23 +1043,40 @@ use workspace_setup::*;
 /// `tokio::spawn` drops panics when the returned `JoinHandle` is not awaited.
 /// This wrapper catches any panic from the inner future and logs it at `error`
 /// level so it surfaces in traces and structured logs.
+///
+/// Thin alias over [`crate::supervised_spawn::spawn_supervised`] (#3740) — kept
+/// for the existing `spawn_logged(tag, fut)` call sites in this file.
 fn spawn_logged(
     tag: &'static str,
     fut: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> tokio::task::JoinHandle<()> {
-    use futures::FutureExt as _;
-    tokio::spawn(async move {
-        if let Err(e) = std::panic::AssertUnwindSafe(fut).catch_unwind().await {
-            let msg = if let Some(s) = e.downcast_ref::<&str>() {
-                (*s).to_string()
-            } else if let Some(s) = e.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "(non-string panic payload)".to_string()
-            };
-            tracing::error!(tag, "spawned task panicked: {msg}");
-        }
-    })
+    crate::supervised_spawn::spawn_supervised(tag, fut)
+}
+
+/// SECURITY (#3533): reject manifest `module` strings that escape the
+/// LibreFang home dir. Centralised so every entry point that accepts a
+/// manifest goes through the same check — without this, hot-reload,
+/// `update_manifest`, and boot-time SQLite restore all bypassed the
+/// validation that lived inline in `spawn_agent_inner` and a hostile
+/// `agent.toml` (peer push, MCP-installed agent, skill bundle, or just
+/// edit on disk + restart) could ship `module = "python:/etc/passwd.py"`
+/// and have the host interpreter exec it under the agent's capabilities.
+///
+/// Returns `Err(KernelError)` ready to be `?`-propagated by callers; logs
+/// a `warn!` with the agent name so the rejection is visible to operators
+/// even when the caller chooses to skip-and-continue (e.g. the boot loop
+/// must not abort the whole process for one bad manifest).
+fn validate_manifest_module_path(manifest: &AgentManifest, agent_name: &str) -> KernelResult<()> {
+    if let Err(reason) = librefang_runtime::python_runtime::validate_module_string(&manifest.module)
+    {
+        warn!(agent = %agent_name, %reason, "Rejecting manifest — invalid module path");
+        return Err(KernelError::LibreFang(
+            librefang_types::error::LibreFangError::Internal(format!(
+                "Invalid module path: {reason}"
+            )),
+        ));
+    }
+    Ok(())
 }
 
 // ── Public Facade Getters ────────────────────────────────────────────
@@ -992,9 +1102,16 @@ impl LibreFangKernel {
     /// runtime via [`update_budget_config`], so callers always see the
     /// latest values set through the API.
     pub fn budget_config(&self) -> librefang_types::config::BudgetConfig {
+        // Recover from poisoning instead of panicking — a panic here would
+        // kill every LLM turn that needs a budget check (#3447).
         self.budget_config
             .read()
-            .unwrap_or_else(|p| p.into_inner())
+            .unwrap_or_else(|p| {
+                tracing::warn!(
+                    "budget_config read lock was poisoned, recovering with last-known state"
+                );
+                p.into_inner()
+            })
             .clone()
     }
 
@@ -1004,10 +1121,12 @@ impl LibreFangKernel {
     /// All writes are serialised through an `RwLock` write-guard, which
     /// eliminates the data-race hazard of the old raw-pointer approach.
     pub fn update_budget_config(&self, f: impl FnOnce(&mut librefang_types::config::BudgetConfig)) {
-        let mut guard = self
-            .budget_config
-            .write()
-            .unwrap_or_else(|p| p.into_inner());
+        let mut guard = self.budget_config.write().unwrap_or_else(|p| {
+            tracing::warn!(
+                "budget_config write lock was poisoned, recovering with last-known state"
+            );
+            p.into_inner()
+        });
         f(&mut guard);
     }
 
@@ -2016,6 +2135,39 @@ impl LibreFangKernel {
             }
         }
 
+        // 3a. session_msg_locks — remove idle entries.  This map grows
+        // unbounded (#3444): every (agent, session) pair gets a fresh
+        // Mutex on first use and was never reclaimed, so long-lived
+        // daemons accumulate entries proportional to total session
+        // count.  SessionId itself does not carry the owning agent
+        // (deterministic UUID-v5 derivations hash that away), so we
+        // can't filter by `live_agents`; instead we rely on Arc strong
+        // count: an entry is safely removable when the only outstanding
+        // reference is the map's own slot — `Arc::strong_count == 1` —
+        // because acquirers always clone the Arc out via `entry().
+        // or_insert().clone()` before awaiting `lock()`.  A reused
+        // session gets a fresh Mutex on next access; that's correct
+        // because the previous lock had no waiters.
+        {
+            let candidates: Vec<SessionId> = self
+                .session_msg_locks
+                .iter()
+                .filter(|e| Arc::strong_count(e.value()) == 1)
+                .map(|e| *e.key())
+                .collect();
+            for sid in candidates {
+                // Re-check under the shard lock so a writer that grabbed
+                // the Arc between iter() and remove() doesn't lose it.
+                if self
+                    .session_msg_locks
+                    .remove_if(&sid, |_, arc| Arc::strong_count(arc) == 1)
+                    .is_some()
+                {
+                    total_removed += 1;
+                }
+            }
+        }
+
         // 3b. agent_concurrency — remove per-agent invocation semaphores
         // for dead agents. Mirrors the agent_msg_locks pass above; lazy
         // re-init on next dispatch will pick up any updated manifest cap.
@@ -2204,6 +2356,12 @@ impl LibreFangKernel {
 
         // Clamp configuration bounds to prevent zero-value or unbounded misconfigs
         config.clamp_bounds();
+
+        // Resolve `vault.use_os_keyring` into the process-global vault state
+        // before any vault operation runs. Must happen before the TOTP
+        // check below (which unlocks the vault) and before any agent boot
+        // path that touches MCP OAuth tokens. Idempotent: first call wins.
+        librefang_extensions::vault::CredentialVault::init_with_config(config.vault.use_os_keyring);
 
         match config.mode {
             KernelMode::Stable => {
@@ -3526,10 +3684,17 @@ impl LibreFangKernel {
             std::sync::Arc::new(config.clone()),
             Arc::clone(&driver),
         );
+        // Pre-parse `config.toml` once at boot so the per-message hot path
+        // never has to re-read it (#3722). Errors here are non-fatal — the
+        // skill config injection layer treats a missing/invalid file as an
+        // empty table, which is the same semantics as the previous on-miss
+        // path.
+        let initial_raw_config_toml = load_raw_config_toml(&config.home_dir.join("config.toml"));
         let kernel = Self {
             home_dir_boot: config.home_dir.clone(),
             data_dir_boot: config.data_dir.clone(),
             config: ArcSwap::new(std::sync::Arc::new(config)),
+            raw_config_toml: ArcSwap::new(std::sync::Arc::new(initial_raw_config_toml)),
             registry: AgentRegistry::new(),
             capabilities: CapabilityManager::new(),
             event_bus: EventBus::new(),
@@ -4167,6 +4332,21 @@ impl LibreFangKernel {
                         }
                     }
 
+                    // SECURITY (#3533): skip any restored agent whose
+                    // on-disk `module` path escapes the LibreFang home
+                    // dir. Logging the rejection is enough — refusing to
+                    // boot the whole daemon for one bad manifest would
+                    // turn a CVE into a DoS, and the agent stays out of
+                    // the registry so no codepath can invoke it.
+                    if let Err(e) = validate_manifest_module_path(&restored_entry.manifest, &name) {
+                        tracing::error!(
+                            agent = %name,
+                            error = %e,
+                            "Refusing to restore agent with invalid module path; \
+                             check agent.toml for absolute paths or '..' traversal"
+                        );
+                        continue;
+                    }
                     if let Err(e) = kernel.registry.register(restored_entry) {
                         tracing::warn!(agent = %name, "Failed to restore agent: {e}");
                     } else {
@@ -4402,6 +4582,14 @@ system_prompt = "You are a helpful assistant."
         predetermined_id: Option<AgentId>,
     ) -> KernelResult<AgentId> {
         let name = manifest.name.clone();
+
+        // SECURITY (#3533): reject manifest `module` strings that escape
+        // the LibreFang home dir before any further work. See
+        // `validate_manifest_module_path` for the full rationale and the
+        // sibling enforcement points (boot restore, hot reload,
+        // update_manifest).
+        validate_manifest_module_path(&manifest, &name)?;
+
         // Use a deterministic agent ID derived from the agent name so the
         // same agent gets the same UUID across daemon restarts. This preserves
         // session history associations in SQLite. Child agents spawned at
@@ -5209,6 +5397,8 @@ system_prompt = "You are a helpful assistant."
             messages: Vec::new(),
             context_window_tokens: 0,
             label: Some("ephemeral /btw".to_string()),
+            messages_generation: 0,
+            last_repaired_generation: None,
         };
 
         info!(
@@ -5402,21 +5592,44 @@ system_prompt = "You are a helpful assistant."
         };
         let _guard = lock.lock().await;
 
-        // Pre-call global budget gate (issue #3616): best-effort check before
-        // dispatching to the LLM so parallel triggers cannot all slip past the
-        // post-call check simultaneously.  Not perfectly atomic — a concurrent
-        // call may have consumed the remaining budget between this read and the
-        // actual LLM round-trip — but it eliminates the common over-spend case
-        // where many triggers fire at the same instant.
-        // (The per-agent quota check is covered by `check_quota_and_reserve`
-        // below — no need to duplicate `check_quota` here.)
-        if let Err(e) = self.metering.check_global_budget(&self.budget_config()) {
-            return Err(KernelError::LibreFang(e));
-        }
-
+        // Pre-call global budget reservation (#3616). Estimate cost from
+        // the model's max output tokens and reserve it on the in-memory
+        // ledger so concurrent trigger fires can't all observe the same
+        // pre-call total and collectively overshoot the cap. Settled
+        // (after success) or released (on failure / suspended target)
+        // alongside the existing token reservation below.
         let entry = self.registry.get(agent_id).ok_or_else(|| {
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
         })?;
+        let estimated_usd = {
+            // Best-effort pre-call estimate: model.max_tokens worth of
+            // output, plus a conservative input estimate equal to the
+            // same token count. Real cost is settled later via
+            // `check_all_and_record`; this only sizes the in-memory hold.
+            let max_out = entry.manifest.model.max_tokens as u64;
+            let est_in = max_out;
+            match self.model_catalog.read() {
+                Ok(catalog) => MeteringEngine::estimate_cost_with_catalog(
+                    &catalog,
+                    &entry.manifest.model.model,
+                    est_in,
+                    max_out,
+                    0,
+                    0,
+                ),
+                Err(_) => MeteringEngine::estimate_cost(
+                    &entry.manifest.model.model,
+                    est_in,
+                    max_out,
+                    0,
+                    0,
+                ),
+            }
+        };
+        let usd_reservation = self
+            .metering
+            .reserve_global_budget(&self.budget_config(), estimated_usd)
+            .map_err(KernelError::LibreFang)?;
 
         // Enforce quota on the effective target agent (after routing).
         // Use check_quota_and_reserve so the estimated token budget is
@@ -5424,18 +5637,26 @@ system_prompt = "You are a helpful assistant."
         // race where N concurrent callers all pass the check before any of
         // them calls record_usage (#3736).
         let estimated_tokens = entry.manifest.model.max_tokens as u64;
-        let token_reservation = self
+        let token_reservation = match self
             .scheduler
             .check_quota_and_reserve(agent_id, estimated_tokens)
-            .map_err(KernelError::LibreFang)?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                // Roll back the USD reservation — the call never dispatched.
+                usd_reservation.release();
+                return Err(KernelError::LibreFang(e));
+            }
+        };
 
         // Skip suspended agents — cron/triggers should not dispatch to them
         if entry.state == AgentState::Suspended {
             tracing::debug!(agent_id = %agent_id, "Skipping message to suspended agent");
-            // No LLM call is made; release reservation without inflating
+            // No LLM call is made; release reservations without inflating
             // llm_calls or the burst window.
             self.scheduler
                 .release_reservation(agent_id, token_reservation);
+            usd_reservation.release();
             return Ok(AgentLoopResult::default());
         }
 
@@ -5483,12 +5704,14 @@ system_prompt = "You are a helpful assistant."
 
         match result {
             Ok(result) => {
-                // Settle the pre-charged reservation with actual usage.
-                // This replaces the old record_usage call — settle_reservation
-                // corrects total_tokens and updates per-dimension counters in
-                // one step so we never double-count.
+                // Settle the pre-charged token reservation with actual
+                // usage. The USD reservation is settled here too — actual
+                // cost will be recorded by `check_all_and_record` further
+                // down the call path; releasing the in-memory hold lets
+                // the next reservation pass see a consistent total.
                 self.scheduler
                     .settle_reservation(agent_id, token_reservation, &result.total_usage);
+                usd_reservation.settle();
                 // Record tool calls for rate limiting
                 let tool_count = result.decision_traces.len() as u32;
                 self.scheduler.record_tool_calls(agent_id, tool_count);
@@ -5692,7 +5915,7 @@ system_prompt = "You are a helpful assistant."
                     let review_agent_id = agent_id;
                     let audit_log_success = audit_log.clone();
                     let agent_id_for_success = agent_id_str.clone();
-                    let review_handle = tokio::spawn(async move {
+                    let review_handle = spawn_logged("auto_memorize", async move {
                         // Move the permit into the task so it's released
                         // on task exit. Binding it to `_permit` keeps
                         // clippy happy (dropped at end of scope).
@@ -5779,10 +6002,11 @@ system_prompt = "You are a helpful assistant."
                 Ok(result)
             }
             Err(e) => {
-                // Release the pre-charged token reservation — the agent loop
-                // failed before completing, no usage to settle.
+                // Release the pre-charged token + USD reservations — the
+                // agent loop failed before completing, no usage to settle.
                 self.scheduler
                     .release_reservation(agent_id, token_reservation);
+                usd_reservation.release();
 
                 // SECURITY: Record failed message in audit trail
                 self.audit_log.record(
@@ -5821,6 +6045,16 @@ system_prompt = "You are a helpful assistant."
                         format!(
                             "Agent \"{}\" exited after {} consecutive tool failures ({} errors in final iteration)",
                             agent_name, iterations, error_count
+                        ),
+                    ),
+                    // Provider safety / content filter — distinct from generic
+                    // task_failed so operators can route refusals separately (#3450).
+                    KernelError::LibreFang(LibreFangError::ContentFiltered { message }) => (
+                        "content_filtered",
+                        format!(
+                            "Agent \"{}\" response blocked by provider safety filter: {}",
+                            agent_name,
+                            message.chars().take(200).collect::<String>()
                         ),
                     ),
                     other => (
@@ -6321,6 +6555,8 @@ system_prompt = "You are a helpful assistant."
             messages: Vec::new(),
             context_window_tokens: 0,
             label: None,
+            messages_generation: 0,
+            last_repaired_generation: None,
         });
 
         // Lifecycle: emit SessionCreated only when get_session returned None.
@@ -6629,6 +6865,11 @@ system_prompt = "You are a helpful assistant."
                 session_id: effective_session_id,
             },
         );
+
+        // Unique id for this turn — used by cleanup-side `remove_if` so a
+        // late-finishing predecessor never wipes out a successor's entry
+        // (#3445 stale-entry guard).
+        let turn_task_id = uuid::Uuid::new_v4();
 
         // Reload session after acquiring the lock so we never act on a stale
         // snapshot captured before a concurrent turn's writes landed.
@@ -7062,9 +7303,14 @@ system_prompt = "You are a helpful assistant."
                         kernel_clone
                             .session_interrupts
                             .remove(&(agent_id, effective_session_id));
+                        // #3445: only remove if THIS turn's entry is still
+                        // present — a faster successor turn may have already
+                        // swapped it for its own RunningTask.
                         kernel_clone
                             .running_tasks
-                            .remove(&(agent_id, effective_session_id));
+                            .remove_if(&(agent_id, effective_session_id), |_, v| {
+                                v.task_id == turn_task_id
+                            });
                     }
                     Ok(result)
                 }
@@ -7089,9 +7335,13 @@ system_prompt = "You are a helpful assistant."
                         kernel_clone
                             .session_interrupts
                             .remove(&(agent_id, effective_session_id));
+                        // #3445: only remove if THIS turn's entry is still
+                        // present — see Ok branch above.
                         kernel_clone
                             .running_tasks
-                            .remove(&(agent_id, effective_session_id));
+                            .remove_if(&(agent_id, effective_session_id), |_, v| {
+                                v.task_id == turn_task_id
+                            });
                     }
                     Err(KernelError::LibreFang(e))
                 }
@@ -7114,20 +7364,43 @@ system_prompt = "You are a helpful assistant."
             // can never both observe an empty slot and lose one of the
             // abort handles.  The earlier `remove(...) → insert(...)`
             // sequence had exactly that race window.
-            let new_task = RunningTask {
-                abort: handle.abort_handle(),
-                started_at: chrono::Utc::now(),
-            };
-            if let Some(old_task) = self
-                .running_tasks
-                .insert((agent_id, effective_session_id), new_task)
-            {
+            //
+            // #3445: skip insert if the task already finished while we
+            // were preparing to register it. The task's own cleanup
+            // path uses `remove_if(... task_id matches ...)`, but if it
+            // ran before our insert, the cleanup found nothing to
+            // remove and our insert here would leave a stale handle
+            // forever. `is_finished()` closes that window.
+            //
+            // Residual race: if the task finishes between is_finished()
+            // returning false and the insert below, cleanup already ran
+            // and found nothing; insert then leaves a completed entry.
+            // The entry is harmless — AbortHandle::abort() on an already-
+            // finished task is a no-op, and the next turn for the same
+            // (agent, session) will overwrite it with a fresh RunningTask.
+            if handle.is_finished() {
                 tracing::debug!(
                     agent_id = %agent_id,
                     session_id = %effective_session_id,
-                    "aborting previous running task before starting new one"
+                    "spawned task already finished; skipping running_tasks registration"
                 );
-                old_task.abort.abort();
+            } else {
+                let new_task = RunningTask {
+                    abort: handle.abort_handle(),
+                    started_at: chrono::Utc::now(),
+                    task_id: turn_task_id,
+                };
+                if let Some(old_task) = self
+                    .running_tasks
+                    .insert((agent_id, effective_session_id), new_task)
+                {
+                    tracing::debug!(
+                        agent_id = %agent_id,
+                        session_id = %effective_session_id,
+                        "aborting previous running task before starting new one"
+                    );
+                    old_task.abort.abort();
+                }
             }
         }
 
@@ -7312,7 +7585,7 @@ system_prompt = "You are a helpful assistant."
         // Note: this is kernel-scoped (not agent-scoped) — sending owner
         // notifications via channel adapters touches `kernel.send_channel_message`
         // which has its own lifecycle. No per-agent tracking needed here.
-        tokio::spawn(async move {
+        spawn_logged("owner_notify", async move {
             let kernel = match weak.upgrade() {
                 Some(k) => k,
                 None => return,
@@ -7373,7 +7646,7 @@ system_prompt = "You are a helpful assistant."
 
         let request = CompletionRequest {
             model: String::new(), // use driver default
-            messages: vec![Message::user(message.to_string())],
+            messages: std::sync::Arc::new(vec![Message::user(message.to_string())]),
             tools: vec![],
             max_tokens: 20,
             temperature: 0.0,
@@ -7854,9 +8127,9 @@ system_prompt = "You are a helpful assistant."
                 messages: Vec::new(),
                 context_window_tokens: 0,
                 label: None,
+                messages_generation: 0,
+                last_repaired_generation: None,
             });
-
-        // ── Session auto-reset policy check ────────────────────────────────
         // Evaluate the global session reset policy against this agent's
         // last_active timestamp.  The `force_session_wipe` flag on the entry
         // acts as an operator-forced hard-wipe signal that always wins
@@ -7892,7 +8165,10 @@ system_prompt = "You are a helpful assistant."
                         event = "session_reset",
                         "Auto-resetting session per policy"
                     );
-                    session.messages.clear();
+                    if !session.messages.is_empty() {
+                        session.messages.clear();
+                        session.mark_messages_mutated();
+                    }
                     // Persist the cleared session immediately so the next
                     // invocation loads an empty transcript from storage rather
                     // than re-loading the stale pre-reset messages.  Without
@@ -8172,7 +8448,9 @@ system_prompt = "You are a helpful assistant."
             // Build a probe request to score complexity
             let probe = CompletionRequest {
                 model: strip_provider_prefix(&manifest.model.model, &manifest.model.provider),
-                messages: vec![librefang_types::message::Message::user(message)],
+                messages: std::sync::Arc::new(vec![librefang_types::message::Message::user(
+                    message,
+                )]),
                 tools: tools.clone(),
                 max_tokens: manifest.model.max_tokens,
                 temperature: manifest.model.temperature,
@@ -8515,6 +8793,7 @@ system_prompt = "You are a helpful assistant."
                 .rposition(|msg| msg.role == librefang_types::message::Role::Assistant)
                 .map(|idx| {
                     session.messages.remove(idx);
+                    session.mark_messages_mutated();
                     true
                 })
                 .unwrap_or(false);
@@ -9186,14 +9465,14 @@ system_prompt = "You are a helpful assistant."
             messages: export.messages,
             context_window_tokens: export.context_window_tokens,
             label: export.label,
+            messages_generation: 0,
+            last_repaired_generation: None,
         };
-
         self.memory
             .save_session(&new_session)
             .map_err(KernelError::LibreFang)?;
 
         info!(
-            agent_id = %agent_id,
             new_session_id = %new_session.id.0,
             imported_messages = new_session.messages.len(),
             "Imported session from export"
@@ -9249,7 +9528,7 @@ system_prompt = "You are a helpful assistant."
         // Phase 1: System-position injections.
         for inj in &all_injections {
             if inj.position == InjectionPosition::System && condition_met(&inj.condition) {
-                session.messages.push(Message::system(inj.content.clone()));
+                session.push_message(Message::system(inj.content.clone()));
                 debug!(
                     session_id = %session.id.0,
                     injection = %inj.name,
@@ -9261,7 +9540,7 @@ system_prompt = "You are a helpful assistant."
         // Phase 2: Legacy reset_prompt.
         if let Some(ref prompt) = cfg.session.reset_prompt {
             if !prompt.is_empty() {
-                session.messages.push(Message::system(prompt.clone()));
+                session.push_message(Message::system(prompt.clone()));
                 debug!(
                     session_id = %session.id.0,
                     "Injected session reset prompt"
@@ -9272,7 +9551,7 @@ system_prompt = "You are a helpful assistant."
         // Phase 3: AfterReset-position injections.
         for inj in &all_injections {
             if inj.position == InjectionPosition::AfterReset && condition_met(&inj.condition) {
-                session.messages.push(Message::system(inj.content.clone()));
+                session.push_message(Message::system(inj.content.clone()));
                 debug!(
                     session_id = %session.id.0,
                     injection = %inj.name,
@@ -9292,7 +9571,7 @@ system_prompt = "You are a helpful assistant."
         let pre_before_user_len = session.messages.len();
         for inj in &all_injections {
             if inj.position == InjectionPosition::BeforeUser && condition_met(&inj.condition) {
-                session.messages.push(Message::system(inj.content.clone()));
+                session.push_message(Message::system(inj.content.clone()));
                 debug!(
                     session_id = %session.id.0,
                     injection = %inj.name,
@@ -9311,6 +9590,7 @@ system_prompt = "You are a helpful assistant."
                 let after_len = session.messages.len();
                 if after_len > pre_before_user_len {
                     session.messages.truncate(pre_before_user_len);
+                    session.mark_messages_mutated();
                 }
                 tracing::error!(
                     session_id = %session.id.0,
@@ -9551,6 +9831,16 @@ system_prompt = "You are a helpful assistant."
             model.to_string()
         };
 
+        // Snapshot the full model state for rollback on DB persist failure (#3499).
+        let prev_model_state = self.registry.get(agent_id).map(|e| {
+            (
+                e.manifest.model.model.clone(),
+                e.manifest.model.provider.clone(),
+                e.manifest.model.api_key_env.clone(),
+                e.manifest.model.base_url.clone(),
+            )
+        });
+
         if let Some(provider) = provider {
             // When the provider changes, also clear any per-agent api_key_env
             // and base_url overrides — they belonged to the previous provider
@@ -9589,9 +9879,22 @@ system_prompt = "You are a helpful assistant."
             info!(agent_id = %agent_id, model = %normalized_model, "Agent model updated (provider unchanged)");
         }
 
-        // Persist the updated entry
+        // Persist the updated entry. On DB failure, roll back the in-memory model
+        // mutation and propagate the error so the API caller sees a 500 instead of
+        // silently drifting registry vs. disk (#3499).
         if let Some(entry) = self.registry.get(agent_id) {
-            let _ = self.agent_store.save_agent(&entry);
+            if let Err(e) = self.agent_store.save_agent(&entry) {
+                if let Some((p_model, p_provider, p_api_key_env, p_base_url)) = prev_model_state {
+                    let _ = self.registry.update_model_provider_config(
+                        agent_id,
+                        p_model,
+                        p_provider,
+                        p_api_key_env,
+                        p_base_url,
+                    );
+                }
+                return Err(KernelError::LibreFang(e));
+            }
         }
 
         // Write updated manifest to agent.toml so changes survive restart (#996, #1018)
@@ -9662,6 +9965,14 @@ system_prompt = "You are a helpful assistant."
                     )))
                 })?;
 
+        // SECURITY (#3533): hot-reload is a separate code path from
+        // spawn — without this check an operator (or anyone with TOML
+        // write access) could swap a running agent's `module` for an
+        // absolute / `..`-traversing host path and have the next
+        // invocation exec it. Reject before touching the registry so
+        // the previous (validated) manifest stays in effect.
+        validate_manifest_module_path(&disk_manifest, &entry.name)?;
+
         // Preserve workspace if TOML leaves it unset — workspace is
         // populated at spawn time with the real directory path.
         if disk_manifest.workspace.is_none() {
@@ -9728,6 +10039,11 @@ system_prompt = "You are a helpful assistant."
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
         })?;
 
+        // SECURITY (#3533): same path-escape check as spawn / hot-reload.
+        // Without it, any caller with `update_manifest` access could
+        // swap a running agent's `module` to an arbitrary host script.
+        validate_manifest_module_path(&new_manifest, &entry.name)?;
+
         // Preserve invariants that the registry indices depend on.
         if new_manifest.workspace.is_none() {
             new_manifest.workspace = entry.manifest.workspace.clone();
@@ -9776,12 +10092,30 @@ system_prompt = "You are a helpful assistant."
             }
         }
 
+        // Snapshot previous skill list AND skills_disabled flag so we can roll
+        // back the in-memory mutation if the DB persist fails (#3499 — previously
+        // `let _ =` swallowed the error and left the registry drifted from disk).
+        // Note: capture both fields because `update_skills` always sets
+        // `skills_disabled = false`, so a rollback that only restored `skills`
+        // would silently leave the disabled flag flipped on persist failure.
+        let prev_skills_state = self
+            .registry
+            .get(agent_id)
+            .map(|e| (e.manifest.skills.clone(), e.manifest.skills_disabled));
+
         self.registry
             .update_skills(agent_id, skills.clone())
             .map_err(KernelError::LibreFang)?;
 
         if let Some(entry) = self.registry.get(agent_id) {
-            let _ = self.agent_store.save_agent(&entry);
+            if let Err(e) = self.agent_store.save_agent(&entry) {
+                if let Some((p_skills, p_disabled)) = prev_skills_state {
+                    let _ = self
+                        .registry
+                        .restore_skills_state(agent_id, p_skills, p_disabled);
+                }
+                return Err(KernelError::LibreFang(e));
+            }
         }
 
         // Invalidate cached tool list — skill allowlist change affects available tools
@@ -9826,12 +10160,23 @@ system_prompt = "You are a helpful assistant."
             }
         }
 
+        // Snapshot previous MCP server allowlist for rollback on DB persist failure (#3499).
+        let prev_servers = self
+            .registry
+            .get(agent_id)
+            .map(|e| e.manifest.mcp_servers.clone());
+
         self.registry
             .update_mcp_servers(agent_id, servers.clone())
             .map_err(KernelError::LibreFang)?;
 
         if let Some(entry) = self.registry.get(agent_id) {
-            let _ = self.agent_store.save_agent(&entry);
+            if let Err(e) = self.agent_store.save_agent(&entry) {
+                if let Some(p_servers) = prev_servers {
+                    let _ = self.registry.update_mcp_servers(agent_id, p_servers);
+                }
+                return Err(KernelError::LibreFang(e));
+            }
         }
 
         // Invalidate cached tool list — MCP server allowlist change affects available tools
@@ -9861,12 +10206,33 @@ system_prompt = "You are a helpful assistant."
             "Agent tool filters updated"
         );
 
+        // Snapshot previous tool config + tools_disabled flag for rollback on
+        // DB persist failure (#3499). Capture all four fields because
+        // `update_tool_config` always sets `tools_disabled = false`, so a
+        // rollback that only restored the lists would silently leave the
+        // disabled flag flipped on persist failure.
+        let prev_tool_state = self.registry.get(agent_id).map(|e| {
+            (
+                e.manifest.capabilities.tools.clone(),
+                e.manifest.tool_allowlist.clone(),
+                e.manifest.tool_blocklist.clone(),
+                e.manifest.tools_disabled,
+            )
+        });
+
         self.registry
             .update_tool_config(agent_id, capabilities_tools, allowlist, blocklist)
             .map_err(KernelError::LibreFang)?;
 
         if let Some(entry) = self.registry.get(agent_id) {
-            let _ = self.agent_store.save_agent(&entry);
+            if let Err(e) = self.agent_store.save_agent(&entry) {
+                if let Some((p_caps, p_allow, p_block, p_disabled)) = prev_tool_state {
+                    let _ = self
+                        .registry
+                        .restore_tool_state(agent_id, p_caps, p_allow, p_block, p_disabled);
+                }
+                return Err(KernelError::LibreFang(e));
+            }
         }
 
         self.persist_manifest_to_disk(agent_id);
@@ -10139,6 +10505,8 @@ system_prompt = "You are a helpful assistant."
                 messages: Vec::new(),
                 context_window_tokens: 0,
                 label: None,
+                messages_generation: 0,
+                last_repaired_generation: None,
             });
 
         let config = CompactionConfig::from_toml(&cfg.compaction);
@@ -10215,7 +10583,7 @@ system_prompt = "You are a helpful assistant."
 
         // Also update the regular session with the repaired messages
         let mut updated_session = session;
-        updated_session.messages = repaired_messages;
+        updated_session.set_messages(repaired_messages);
         self.memory
             .save_session(&updated_session)
             .map_err(KernelError::LibreFang)?;
@@ -10267,8 +10635,9 @@ system_prompt = "You are a helpful assistant."
                 messages: Vec::new(),
                 context_window_tokens: 0,
                 label: None,
+                messages_generation: 0,
+                last_repaired_generation: None,
             });
-
         let system_prompt = &entry.manifest.model.system_prompt;
         // Use the agent's actual filtered tools instead of all builtins
         let tools = self.available_tools(agent_id);
@@ -11481,6 +11850,15 @@ system_prompt = "You are a helpful assistant."
             // edits even when no other hot action fires.
             self.taint_rules_swap
                 .store(std::sync::Arc::new(new_config.taint_rules.clone()));
+            // Refresh the cached raw `config.toml` snapshot (#3722) so
+            // skill config injection picks up `[skills.config.*]` edits
+            // without needing the per-message hot path to re-read the
+            // file. The strongly-typed `KernelConfig` does not preserve
+            // this open-ended namespace, so we keep the raw value
+            // separately.
+            let refreshed_raw = load_raw_config_toml(&config_path);
+            self.raw_config_toml
+                .store(std::sync::Arc::new(refreshed_raw));
             let new_config_arc = std::sync::Arc::new(new_config);
             self.config.store(std::sync::Arc::clone(&new_config_arc));
             // Rebuild the auxiliary LLM client so `[llm.auxiliary]` edits
@@ -11753,7 +12131,7 @@ system_prompt = "You are a helpful assistant."
                         // using the now-updated effective list).
                         if let Some(weak) = self.self_handle.get() {
                             if let Some(kernel) = weak.upgrade() {
-                                tokio::spawn(async move {
+                                spawn_logged("mcp_reconnect", async move {
                                     for name in &to_reconnect {
                                         kernel.disconnect_mcp_server(name).await;
                                     }
@@ -11837,6 +12215,26 @@ system_prompt = "You are a helpful assistant."
                          restart required for the new filter to take effect"
                     ),
                 },
+                HotAction::UpdateQueueConcurrency => {
+                    use librefang_runtime::command_lane::Lane;
+                    let cc = &new_config.queue.concurrency;
+                    info!(
+                        "Hot-reload: resizing lane semaphores (main={}, cron={}, subagent={}, trigger={})",
+                        cc.main_lane, cc.cron_lane, cc.subagent_lane, cc.trigger_lane,
+                    );
+                    // Per-agent caps (cc.default_per_agent, agent.toml's
+                    // max_concurrent_invocations) are NOT rebuilt — those
+                    // semaphores are owned by individual agents. Operators
+                    // need to respawn the agent for those to apply.
+                    self.command_queue
+                        .resize_lane(Lane::Main, cc.main_lane as u32);
+                    self.command_queue
+                        .resize_lane(Lane::Cron, cc.cron_lane as u32);
+                    self.command_queue
+                        .resize_lane(Lane::Subagent, cc.subagent_lane as u32);
+                    self.command_queue
+                        .resize_lane(Lane::Trigger, cc.trigger_lane as u32);
+                }
             }
         }
 
@@ -11906,7 +12304,9 @@ system_prompt = "You are a helpful assistant."
 
             let req = CompletionRequest {
                 model,
-                messages: vec![librefang_types::message::Message::user(prompt)],
+                messages: std::sync::Arc::new(vec![librefang_types::message::Message::user(
+                    prompt,
+                )]),
                 tools: vec![],
                 max_tokens: 32,
                 temperature: 0.2,
@@ -11991,7 +12391,7 @@ system_prompt = "You are a helpful assistant."
 
         let request = CompletionRequest {
             model: model.to_string(),
-            messages: vec![Message::user(prompt.to_string())],
+            messages: std::sync::Arc::new(vec![Message::user(prompt.to_string())]),
             tools: vec![],
             max_tokens: 10,
             temperature: 0.0,
@@ -12165,6 +12565,16 @@ system_prompt = "You are a helpful assistant."
                 });
             }
 
+            // Per-fire timeout cap (#3446): one stuck send_message_full
+            // must NOT pin Lane::Trigger permits indefinitely.
+            let fire_timeout_s = self
+                .config
+                .load()
+                .queue
+                .concurrency
+                .trigger_fire_timeout_secs;
+            let fire_timeout = std::time::Duration::from_secs(fire_timeout_s);
+
             if !dispatches.is_empty() {
                 // CRITICAL: tokio task-locals do NOT propagate across
                 // tokio::spawn.  Without re-establishing the
@@ -12216,8 +12626,15 @@ system_prompt = "You are a helpful assistant."
                                 .and_then(|w| w.upgrade())
                                 .map(|arc| arc as Arc<dyn KernelHandle>);
                             let home_channel = kernel.resolve_agent_home_channel(aid);
-                            if let Err(e) = kernel
-                                .send_message_full(
+                            // Bound permit-hold duration so a stuck LLM
+                            // call cannot pin Lane::Trigger kernel-wide.
+                            // Note: timeout drops this future on expiry,
+                            // but any tokio::spawn'd child tasks inside
+                            // send_message_full are NOT cancelled — they
+                            // run to completion independently.
+                            match tokio::time::timeout(
+                                fire_timeout,
+                                kernel.send_message_full(
                                     aid,
                                     &msg,
                                     handle,
@@ -12226,10 +12643,21 @@ system_prompt = "You are a helpful assistant."
                                     mode_override,
                                     None,
                                     session_id_override,
-                                )
-                                .await
+                                ),
+                            )
+                            .await
                             {
-                                warn!(agent = %aid, "Trigger dispatch failed: {e}");
+                                Ok(Ok(_)) => {}
+                                Ok(Err(e)) => {
+                                    warn!(agent = %aid, "Trigger dispatch failed: {e}");
+                                }
+                                Err(_) => {
+                                    warn!(
+                                        agent = %aid,
+                                        timeout_secs = fire_timeout.as_secs(),
+                                        "Trigger dispatch timed out; releasing lane permit"
+                                    );
+                                }
                             }
                         }
                     });
@@ -12787,7 +13215,7 @@ system_prompt = "You are a helpful assistant."
             let kernel = Arc::clone(self);
             // Stagger agent startup to prevent rate-limit storm on shared providers.
             // Each agent gets a 500ms delay before the next one starts.
-            tokio::spawn(async move {
+            spawn_logged("background_agents_staggered_start", async move {
                 for (i, (id, name, schedule)) in bg_agents.into_iter().enumerate() {
                     kernel.start_background_for_agent(id, &name, &schedule);
                     if i > 0 {
@@ -12807,7 +13235,7 @@ system_prompt = "You are a helpful assistant."
         // Start OFP peer node if network is enabled
         if cfg.network_enabled && !cfg.network.shared_secret.is_empty() {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("ofp_node", async move {
                 kernel.start_ofp_node().await;
             });
         }
@@ -12847,7 +13275,7 @@ system_prompt = "You are a helpful assistant."
                 60
             };
             let mut shutdown_rx = self.supervisor.subscribe();
-            tokio::spawn(async move {
+            spawn_logged("local_provider_probe", async move {
                 let mut interval =
                     tokio::time::interval(std::time::Duration::from_secs(probe_interval_secs));
                 // Race the tick against the shutdown watch so daemon
@@ -12871,7 +13299,7 @@ system_prompt = "You are a helpful assistant."
         // Periodic usage data cleanup (every 24 hours, retain 90 days)
         {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("metering_cleanup", async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(24 * 3600));
                 interval.tick().await; // Skip first immediate tick
                 loop {
@@ -12958,7 +13386,7 @@ system_prompt = "You are a helpful assistant."
             let kernel = Arc::clone(self);
             let retention = cfg.audit.retention_days;
             if retention > 0 {
-                tokio::spawn(async move {
+                spawn_logged("audit_log_pruner", async move {
                     let mut interval =
                         tokio::time::interval(std::time::Duration::from_secs(24 * 3600));
                     interval.tick().await; // Skip first immediate tick
@@ -12991,7 +13419,7 @@ system_prompt = "You are a helpful assistant."
             if trim_interval > 0 {
                 let kernel = Arc::clone(self);
                 let retention = cfg.audit.retention.clone();
-                tokio::spawn(async move {
+                spawn_logged("audit_retention_trim", async move {
                     let mut interval =
                         tokio::time::interval(std::time::Duration::from_secs(trim_interval));
                     interval.tick().await; // Skip first immediate tick.
@@ -13043,7 +13471,7 @@ system_prompt = "You are a helpful assistant."
                 session_cfg.retention_days > 0 || session_cfg.max_sessions_per_agent > 0;
             if needs_cleanup && session_cfg.cleanup_interval_hours > 0 {
                 let kernel = Arc::clone(self);
-                tokio::spawn(async move {
+                spawn_logged("session_retention_cleanup", async move {
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
                         u64::from(session_cfg.cleanup_interval_hours) * 3600,
                     ));
@@ -13132,7 +13560,7 @@ system_prompt = "You are a helpful assistant."
         // Periodic cleanup of expired image uploads (24h TTL)
         {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("upload_cleanup", async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600)); // every hour
                 interval.tick().await; // skip first immediate tick
                 loop {
@@ -13167,7 +13595,7 @@ system_prompt = "You are a helpful assistant."
             let interval_hours = cfg.memory.consolidation_interval_hours;
             if interval_hours > 0 {
                 let kernel = Arc::clone(self);
-                tokio::spawn(async move {
+                spawn_logged("memory_consolidation", async move {
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
                         interval_hours * 3600,
                     ));
@@ -13204,7 +13632,7 @@ system_prompt = "You are a helpful assistant."
             if decay_config.enabled && decay_config.decay_interval_hours > 0 {
                 let kernel = Arc::clone(self);
                 let interval_hours = decay_config.decay_interval_hours;
-                tokio::spawn(async move {
+                spawn_logged("memory_decay", async move {
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(
                         u64::from(interval_hours) * 3600,
                     ));
@@ -13233,7 +13661,7 @@ system_prompt = "You are a helpful assistant."
         // Periodic GC sweep for unbounded in-memory caches (every 5 minutes)
         {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("gc_sweep", async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5 * 60));
                 interval.tick().await; // Skip first immediate tick
                 loop {
@@ -13255,7 +13683,7 @@ system_prompt = "You are a helpful assistant."
             .unwrap_or(false);
         if has_mcp {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("connect_mcp_servers", async move {
                 kernel.connect_mcp_servers().await;
             });
         }
@@ -13436,33 +13864,31 @@ system_prompt = "You are a helpful assistant."
                                 let message_owned = message.clone();
 
                                 // Spawn each AgentTurn job concurrently, bounded
-                                // by the `cron_lane` semaphore (#3738).  Acquiring
-                                // a permit blocks here (inside the tick loop) if
-                                // the lane is full; this back-pressures the
-                                // dispatcher so we never exceed `cron_lane`
-                                // in-flight tasks.
-                                let permit = match cron_sem.clone().acquire_owned().await {
-                                    Ok(p) => p,
-                                    Err(_) => {
-                                        // SemaphoreClosed means the command_queue lane was
-                                        // dropped — every subsequent acquire on the same
-                                        // semaphore will fail too. Bail out of this tick's
-                                        // due batch and let the next tick re-snapshot the
-                                        // lane (or exit on shutdown signal).
-                                        tracing::error!(
-                                            job = %job_name,
-                                            "Cron lane semaphore closed; aborting this tick's batch"
-                                        );
-                                        break;
-                                    }
-                                };
+                                // by the `cron_lane` semaphore (#3738).  We
+                                // acquire the permit INSIDE the spawn so a
+                                // saturated lane queues spawned tasks rather
+                                // than blocking the tick loop — the previous
+                                // design awaited the permit here and stalled
+                                // the entire `for job in due` dispatch behind
+                                // any single slow fire.
+                                let cron_sem_for_job = cron_sem.clone();
                                 let kernel_job = kernel.clone();
                                 // Shadow so outer `job_name` survives the move
                                 // for the post-arm per-job persist warn.
                                 let job_name = job_name.clone();
-                                tokio::spawn(async move {
-                                    // Hold the permit for the full duration of this job.
-                                    let _permit = permit;
+                                spawn_logged("cron_agent_turn", async move {
+                                    // Acquire the lane permit before any work
+                                    // so concurrent fires are still capped.
+                                    let _permit = match cron_sem_for_job.acquire_owned().await {
+                                        Ok(p) => p,
+                                        Err(_) => {
+                                            tracing::error!(
+                                                job = %job_name,
+                                                "Cron lane semaphore closed; skipping fire"
+                                            );
+                                            return;
+                                        }
+                                    };
 
                                     // Prune the persistent cron session before firing
                                     // if the user has configured a size cap.
@@ -13471,8 +13897,26 @@ system_prompt = "You are a helpful assistant."
                                         let max_tokens = cfg_snap.cron_session_max_tokens;
                                         let max_messages = cfg_snap.cron_session_max_messages;
                                         drop(cfg_snap);
+                                        let max_messages = resolve_cron_max_messages(max_messages);
+                                        let max_tokens = resolve_cron_max_tokens(max_tokens);
                                         if max_tokens.is_some() || max_messages.is_some() {
                                             let cron_sid = SessionId::for_channel(agent_id, "cron");
+                                            // #3443: serialize prune through the
+                                            // per-session mutex so two cron fires
+                                            // for the same agent cannot both
+                                            // read-modify-write and clobber each
+                                            // other's keep-set.  The lock is
+                                            // dropped before send_message_full
+                                            // (which uses agent_msg_locks for
+                                            // persistent cron sessions).
+                                            let prune_lock = kernel_job
+                                                .session_msg_locks
+                                                .entry(cron_sid)
+                                                .or_insert_with(|| {
+                                                    Arc::new(tokio::sync::Mutex::new(()))
+                                                })
+                                                .clone();
+                                            let _prune_guard = prune_lock.lock().await;
                                             if let Ok(Some(mut session)) =
                                                 kernel_job.session_store.get_session(cron_sid)
                                             {
@@ -13481,6 +13925,7 @@ system_prompt = "You are a helpful assistant."
                                                         let excess =
                                                             session.messages.len() - max_msgs;
                                                         session.messages.drain(0..excess);
+                                                        session.mark_messages_mutated();
                                                     }
                                                 }
                                                 if let Some(max_tok) = max_tokens {
@@ -13497,6 +13942,7 @@ system_prompt = "You are a helpful assistant."
                                                             break;
                                                         }
                                                         session.messages.remove(0);
+                                                        session.mark_messages_mutated();
                                                     }
                                                 }
                                                 let _ =
@@ -13585,74 +14031,117 @@ system_prompt = "You are a helpful assistant."
                                 let delivery_targets = job.delivery_targets.clone();
                                 let timeout_s = timeout_secs.unwrap_or(300);
                                 let timeout = std::time::Duration::from_secs(timeout_s);
+                                let workflow_id_owned = workflow_id.clone();
 
-                                // Resolve workflow by UUID first, then by name
-                                let resolved_id =
-                                    if let Ok(uuid) = uuid::Uuid::parse_str(workflow_id) {
+                                // Spawn the workflow fire so a long-running
+                                // workflow does not block the cron tick loop
+                                // (#3738). Concurrency is capped by the
+                                // shared cron_lane semaphore acquired inside
+                                // the spawned task.
+                                let cron_sem_for_job = cron_sem.clone();
+                                let kernel_job = kernel.clone();
+                                let job_name = job_name.clone();
+                                tokio::spawn(async move {
+                                    let _permit = match cron_sem_for_job.acquire_owned().await {
+                                        Ok(p) => p,
+                                        Err(_) => {
+                                            tracing::error!(
+                                                job = %job_name,
+                                                "Cron lane semaphore closed; skipping workflow fire"
+                                            );
+                                            return;
+                                        }
+                                    };
+
+                                    // Resolve workflow by UUID first, then by name
+                                    let resolved_id = if let Ok(uuid) =
+                                        uuid::Uuid::parse_str(&workflow_id_owned)
+                                    {
                                         Some(crate::workflow::WorkflowId(uuid))
                                     } else {
                                         // Search by name
-                                        let workflows = kernel.workflows.list_workflows().await;
+                                        let workflows = kernel_job.workflows.list_workflows().await;
                                         workflows
                                             .iter()
-                                            .find(|w| w.name == *workflow_id)
+                                            .find(|w| w.name == workflow_id_owned)
                                             .map(|w| w.id)
                                     };
 
-                                match resolved_id {
-                                    Some(wf_id) => {
-                                        match tokio::time::timeout(
-                                            timeout,
-                                            kernel.run_workflow(wf_id, input_text),
-                                        )
-                                        .await
-                                        {
-                                            Ok(Ok((_run_id, output))) => {
-                                                tracing::info!(job = %job_name, "Cron workflow completed successfully");
-                                                kernel.cron_scheduler.record_success(job_id);
-                                                cron_deliver_response(
-                                                    &kernel, agent_id, &output, &delivery,
-                                                )
-                                                .await;
-                                                cron_fan_out_targets(
-                                                    &kernel,
-                                                    &job_name,
-                                                    &output,
-                                                    &delivery_targets,
-                                                )
-                                                .await;
+                                    match resolved_id {
+                                        Some(wf_id) => {
+                                            match tokio::time::timeout(
+                                                timeout,
+                                                kernel_job.run_workflow(wf_id, input_text),
+                                            )
+                                            .await
+                                            {
+                                                Ok(Ok((_run_id, output))) => {
+                                                    tracing::info!(job = %job_name, "Cron workflow completed successfully");
+                                                    kernel_job
+                                                        .cron_scheduler
+                                                        .record_success(job_id);
+                                                    if let Err(e) =
+                                                        kernel_job.cron_scheduler.persist()
+                                                    {
+                                                        tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                                    }
+                                                    cron_deliver_response(
+                                                        &kernel_job,
+                                                        agent_id,
+                                                        &output,
+                                                        &delivery,
+                                                    )
+                                                    .await;
+                                                    cron_fan_out_targets(
+                                                        &kernel_job,
+                                                        &job_name,
+                                                        &output,
+                                                        &delivery_targets,
+                                                    )
+                                                    .await;
+                                                }
+                                                Ok(Err(e)) => {
+                                                    let err_msg = format!("{e}");
+                                                    tracing::warn!(job = %job_name, error = %err_msg, "Cron workflow failed");
+                                                    kernel_job
+                                                        .cron_scheduler
+                                                        .record_failure(job_id, &err_msg);
+                                                    if let Err(e) =
+                                                        kernel_job.cron_scheduler.persist()
+                                                    {
+                                                        tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                                    }
+                                                }
+                                                Err(_) => {
+                                                    tracing::warn!(job = %job_name, timeout_s, "Cron workflow timed out");
+                                                    kernel_job.cron_scheduler.record_failure(
+                                                        job_id,
+                                                        &format!(
+                                                            "workflow timed out after {timeout_s}s"
+                                                        ),
+                                                    );
+                                                    if let Err(e) =
+                                                        kernel_job.cron_scheduler.persist()
+                                                    {
+                                                        tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
+                                                    }
+                                                }
                                             }
-                                            Ok(Err(e)) => {
-                                                let err_msg = format!("{e}");
-                                                tracing::warn!(job = %job_name, error = %err_msg, "Cron workflow failed");
-                                                kernel
-                                                    .cron_scheduler
-                                                    .record_failure(job_id, &err_msg);
-                                            }
-                                            Err(_) => {
-                                                tracing::warn!(job = %job_name, timeout_s, "Cron workflow timed out");
-                                                kernel.cron_scheduler.record_failure(
-                                                    job_id,
-                                                    &format!(
-                                                        "workflow timed out after {timeout_s}s"
-                                                    ),
-                                                );
+                                        }
+                                        None => {
+                                            let err_msg =
+                                                format!("workflow not found: {workflow_id_owned}");
+                                            tracing::warn!(job = %job_name, error = %err_msg, "Cron workflow lookup failed");
+                                            kernel_job
+                                                .cron_scheduler
+                                                .record_failure(job_id, &err_msg);
+                                            if let Err(e) = kernel_job.cron_scheduler.persist() {
+                                                tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
                                             }
                                         }
                                     }
-                                    None => {
-                                        let err_msg = format!("workflow not found: {workflow_id}");
-                                        tracing::warn!(job = %job_name, error = %err_msg, "Cron workflow lookup failed");
-                                        kernel.cron_scheduler.record_failure(job_id, &err_msg);
-                                    }
-                                }
+                                });
                             }
-                        }
-                        // Persist immediately after each job execution so that
-                        // last_run / next_run are durable on disk even if the
-                        // daemon crashes before the periodic flush fires.
-                        if let Err(e) = kernel.cron_scheduler.persist() {
-                            tracing::warn!(job = %job_name, "Cron per-job persist failed: {e}");
                         }
                     }
 
@@ -13684,7 +14173,7 @@ system_prompt = "You are a helpful assistant."
             if a2a_config.enabled && !a2a_config.external_agents.is_empty() {
                 let kernel = Arc::clone(self);
                 let agents = a2a_config.external_agents.clone();
-                tokio::spawn(async move {
+                spawn_logged("a2a_discover_external", async move {
                     let discovered =
                         librefang_runtime::a2a::discover_external_agents(&agents).await;
                     if let Ok(mut store) = kernel.a2a_external_agents.lock() {
@@ -13697,7 +14186,7 @@ system_prompt = "You are a helpful assistant."
         // Start WhatsApp Web gateway if WhatsApp channel is configured
         if cfg.channels.whatsapp.is_some() {
             let kernel = Arc::clone(self);
-            tokio::spawn(async move {
+            spawn_logged("whatsapp_gateway_starter", async move {
                 crate::whatsapp_gateway::start_whatsapp_gateway(&kernel).await;
             });
         }
@@ -13734,7 +14223,35 @@ system_prompt = "You are a helpful assistant."
                 .unwrap_or_else(|_| "0.0.0.0:9090".parse().unwrap())
         };
 
-        let node_id = uuid::Uuid::new_v4().to_string();
+        // SECURITY (#3873): Load (or generate + persist) this node's
+        // Ed25519 keypair AND a stable node_id from the data directory.
+        // Both are bundled in `peer_keypair.json` so a daemon restart
+        // resumes under the same OFP identity. Falling back to a fresh
+        // `Uuid::new_v4()` per restart — the prior behavior — silently
+        // defeated TOFU pinning, since legitimate peers always presented
+        // a "new" node_id and the mismatch-detection branch never fired.
+        let mut key_mgr = librefang_wire::keys::PeerKeyManager::new(self.data_dir_boot.clone());
+        let (keypair, node_id) = match key_mgr.load_or_generate() {
+            Ok(kp) => {
+                let kp = kp.clone();
+                let id = key_mgr
+                    .node_id()
+                    .expect("node_id is Some after successful load_or_generate")
+                    .to_string();
+                (Some(kp), id)
+            }
+            Err(e) => {
+                // Identity load failed — refuse to start OFP rather than
+                // silently degrading to ephemeral identity, which would
+                // lose TOFU continuity without operator awareness.
+                error!(
+                    error = %e,
+                    data_dir = %self.data_dir_boot.display(),
+                    "OFP: failed to load or generate peer identity; OFP networking will not start",
+                );
+                return;
+            }
+        };
         let node_name = gethostname().unwrap_or_else(|| "librefang-node".to_string());
 
         let peer_config = PeerConfig {
@@ -13750,7 +14267,18 @@ system_prompt = "You are a helpful assistant."
 
         let handle: Arc<dyn librefang_wire::peer::PeerHandle> = self.self_arc();
 
-        match PeerNode::start(peer_config, registry.clone(), handle.clone()).await {
+        // SECURITY (#3873, PR-4): Pass data_dir so the persistent
+        // TrustedPeers store is hydrated on boot and updated whenever a
+        // new peer is pinned via TOFU. Pins now survive daemon restarts.
+        match PeerNode::start_with_identity(
+            peer_config,
+            registry.clone(),
+            handle.clone(),
+            keypair,
+            Some(self.data_dir_boot.clone()),
+        )
+        .await
+        {
             Ok((node, _accept_task)) => {
                 let addr = node.local_addr();
                 info!(
@@ -13812,7 +14340,7 @@ system_prompt = "You are a helpful assistant."
         let config = HeartbeatConfig::from_toml(&kernel.config.load().heartbeat);
         let interval_secs = config.check_interval_secs;
 
-        tokio::spawn(async move {
+        spawn_logged("heartbeat_monitor", async move {
             let mut interval =
                 tokio::time::interval(std::time::Duration::from_secs(config.check_interval_secs));
             // Track which agents are already known-unresponsive to avoid
@@ -15437,7 +15965,7 @@ system_prompt = "You are a helpful assistant."
         let model_for_review = strip_provider_prefix(&default_model.model, &default_model.provider);
         let request = CompletionRequest {
             model: model_for_review,
-            messages: vec![Message::user(user_msg)],
+            messages: std::sync::Arc::new(vec![Message::user(user_msg)]),
             tools: vec![],
             max_tokens: 2000,
             temperature: 0.0,
@@ -15813,7 +16341,12 @@ system_prompt = "You are a helpful assistant."
     /// 3. Return None if no valid JSON object can be found
     fn extract_json_from_llm_response(text: &str) -> Option<String> {
         // Strategy 1: Extract from Markdown code block (```json ... ``` or ``` ... ```)
-        let code_block_re = regex::Regex::new(r"(?s)```(?:json)?\s*\n?(\{.*?\})\s*```").ok()?;
+        // Cached: this runs on every structured-output LLM response (#3491).
+        static CODE_BLOCK_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"(?s)```(?:json)?\s*\n?(\{.*?\})\s*```")
+                .expect("static json code-block regex compiles")
+        });
+        let code_block_re: &regex::Regex = &CODE_BLOCK_RE;
         if let Some(caps) = code_block_re.captures(text) {
             let candidate = caps.get(1)?.as_str().to_string();
             if serde_json::from_str::<serde_json::Value>(&candidate).is_ok() {
@@ -15975,15 +16508,9 @@ system_prompt = "You are a helpful assistant."
         let skills = self.sorted_enabled_skills(skill_allowlist);
         let skill_count = skills.len();
         let skill_config_section = {
-            let config_path = self.home_dir_boot.join("config.toml");
-            let config_toml: toml::Value = if config_path.exists() {
-                std::fs::read_to_string(&config_path)
-                    .ok()
-                    .and_then(|s| toml::from_str(&s).ok())
-                    .unwrap_or(toml::Value::Table(toml::map::Map::new()))
-            } else {
-                toml::Value::Table(toml::map::Map::new())
-            };
+            // Use the boot-time cached `config.toml` value — refreshed by
+            // `reload_config`, never read on this hot path (#3722).
+            let config_toml = self.raw_config_toml.load();
             let declared = librefang_skills::config_injection::collect_config_vars(&skills);
             let resolved =
                 librefang_skills::config_injection::resolve_config_vars(&declared, &config_toml);
@@ -17222,9 +17749,18 @@ impl KernelHandle for LibreFangKernel {
         );
         if let Some(weak) = self.self_handle.get() {
             if let Some(kernel) = weak.upgrade() {
-                tokio::spawn(async move {
-                    kernel.publish_event(event).await;
-                });
+                // Propagate trigger-chain depth across the spawn boundary
+                // (#3735). Without this, a memory_store invoked from inside
+                // a triggered agent would publish into a fresh top-level
+                // depth=0 scope, defeating the depth cap on chains that
+                // travel through memory updates.
+                let parent_depth = PUBLISH_EVENT_DEPTH.try_with(|c| c.get()).unwrap_or(0);
+                spawn_logged(
+                    "memory_event_publish",
+                    PUBLISH_EVENT_DEPTH.scope(std::cell::Cell::new(parent_depth), async move {
+                        kernel.publish_event(event).await;
+                    }),
+                );
             }
         }
         Ok(())
@@ -18090,7 +18626,7 @@ impl KernelHandle for LibreFangKernel {
                     .ok_or_else(|| "Kernel self-handle unavailable".to_string())?,
             );
             let deferred_clone = def.clone();
-            tokio::spawn(async move {
+            spawn_logged("approval_resolution", async move {
                 kernel
                     .handle_approval_resolution(request_id, decision_clone, deferred_clone)
                     .await;
@@ -19160,6 +19696,7 @@ impl LibreFangKernel {
 
             let mut replaced = false;
             let mut already_final = false;
+            let mut messages_mutated = false;
             'outer: for msg in &mut session.messages {
                 let blocks = match &mut msg.content {
                     MessageContent::Blocks(blocks) => blocks,
@@ -19182,6 +19719,7 @@ impl LibreFangKernel {
                                 *status = result.status;
                                 *approval_request_id = None;
                                 replaced = true;
+                                messages_mutated = true;
                                 break 'outer;
                             }
 
@@ -19219,7 +19757,12 @@ impl LibreFangKernel {
                         }
                     }
                     replaced = true;
+                    messages_mutated = true;
                 }
+            }
+
+            if messages_mutated {
+                session.mark_messages_mutated();
             }
 
             replaced || already_final
