@@ -21,6 +21,7 @@ librefang-extensions = { path = "../librefang-extensions" }
 librefang-migrate = { path = "../librefang-migrate" }
 librefang-storage = { path = "../librefang-storage", optional = true, default-features = false }
 librefang-telemetry = { path = "../librefang-telemetry" }
+librefang-http = { path = "../librefang-http" }
 anyhow = { workspace = true }
 dashmap = { workspace = true }
 portable-pty = { workspace = true }
@@ -69,7 +70,8 @@ metrics = { workspace = true, optional = true }
 metrics-exporter-prometheus = { workspace = true, optional = true }
 
 [features]
-default = ["all-channels", "telemetry", "surreal-backend"]
+# Default = core-channels + telemetry + surreal-backend.
+default = ["core-channels", "telemetry", "surreal-backend"]
 
 # Storage backend feature gates (mirrors librefang-storage).
 # `surreal-backend` is the default; `sqlite-backend` is opt-in for
@@ -139,6 +141,21 @@ channel-qq = ["librefang-channels/channel-qq"]
 channel-wechat = ["librefang-channels/channel-wechat"]
 channel-wecom = ["librefang-channels/channel-wecom"]
 
+# Small curated default set: 5 light adapters covering the most common
+# integration points. Each member only uses the workspace HTTP stack
+# (`reqwest` + `rustls`) — no heavy/unmaintained transitive deps at the
+# time of writing. If you add a member, double-check its dep tree before
+# growing this set. Used by `librefang-api`'s `default` and forwarded by
+# `librefang-cli`'s `default`. Anything bigger should opt in via
+# `all-channels` (or pick individual channels).
+core-channels = [
+    "channel-telegram",
+    "channel-discord",
+    "channel-slack",
+    "channel-webhook",
+    "channel-ntfy",
+]
+
 all-channels = [
     "channel-telegram", "channel-discord", "channel-slack", "channel-matrix",
     "channel-email", "channel-webhook", "channel-whatsapp", "channel-signal",
@@ -184,3 +201,5 @@ libc = "0.2"
 tempfile = { workspace = true }
 uuid = { workspace = true }
 http-body-util = "0.1"
+librefang-testing = { path = "../librefang-testing" }
+totp-rs = { workspace = true }

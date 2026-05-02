@@ -5,7 +5,7 @@
 use rusqlite::Connection;
 
 /// Current schema version.
-const SCHEMA_VERSION: u32 = 30;
+const SCHEMA_VERSION: u32 = 31;
 
 /// Run all migrations to bring the database up to date.
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -69,6 +69,63 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     run_step!(28, migrate_v28);
     run_step!(29, migrate_v29);
     run_step!(30, migrate_v30);
+    run_step!(31, migrate_v31);
+
+    // Audit-trail consistency (#3538): user_version must match the count
+    // of distinct rows in `migrations`. Drift means an earlier migration
+    // applied DDL without recording its audit row — operator tooling
+    // that lists `SELECT version FROM migrations` then misses those
+    // versions silently. Backfill the missing rows in place so a
+    // pre-fix DB self-heals on next boot instead of spamming `error!`
+    // every restart, and log a single warn line summarising the rescue.
+    // Idempotent: a clean DB inserts nothing because every version
+    // already has its row.
+    let final_version = get_schema_version(conn);
+    let mut backfilled: u32 = 0;
+    let mut backfill_failed = false;
+    for v in 1..=final_version {
+        let exists: i64 = match conn.query_row(
+            "SELECT COUNT(*) FROM migrations WHERE version = ?1",
+            [v],
+            |row| row.get(0),
+        ) {
+            Ok(n) => n,
+            Err(e) => {
+                tracing::error!(
+                    version = v,
+                    error = %e,
+                    "Migration audit query failed; cannot verify drift for this version"
+                );
+                backfill_failed = true;
+                break;
+            }
+        };
+        if exists == 0 {
+            if let Err(e) = conn.execute(
+                "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+                 VALUES (?1, datetime('now'), 'audit-row backfill (#3538)')",
+                [v],
+            ) {
+                tracing::error!(
+                    version = v,
+                    error = %e,
+                    "Migration audit backfill failed for this version"
+                );
+                backfill_failed = true;
+                break;
+            }
+            backfilled += 1;
+        }
+    }
+    if backfilled > 0 && !backfill_failed {
+        tracing::warn!(
+            user_version = final_version,
+            backfilled,
+            "Migration audit drift detected and self-healed: inserted \
+             missing audit rows for migrations that previously applied DDL \
+             without recording their audit row (#3538)"
+        );
+    }
 
     Ok(())
 }
@@ -500,7 +557,15 @@ fn migrate_v13(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_experiment_variants_experiment ON experiment_variants(experiment_id);
         CREATE INDEX IF NOT EXISTS idx_experiment_metrics_variant ON experiment_metrics(variant_id);
         ",
-    )
+    )?;
+    // Audit row (#3538): every applied migration must produce a row in
+    // `migrations` so `user_version` and the audit trail stay aligned.
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (13, datetime('now'), 'Add prompt versioning, experiments, variants, metrics tables')",
+        [],
+    )?;
+    Ok(())
 }
 
 /// Version 14: Add latency_ms column to usage_events for model performance tracking.
@@ -602,6 +667,12 @@ fn migrate_v17(conn: &Connection) -> Result<(), rusqlite::Error> {
         "ALTER TABLE approval_audit ADD COLUMN second_factor_used INTEGER NOT NULL DEFAULT 0",
         [],
     );
+    // Audit row (#3538): keep migrations table in sync with user_version.
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (17, datetime('now'), 'Persistent approval audit log')",
+        [],
+    )?;
     Ok(())
 }
 
@@ -612,7 +683,14 @@ fn migrate_v18(conn: &Connection) -> Result<(), rusqlite::Error> {
             failures   INTEGER NOT NULL DEFAULT 0,
             locked_at  INTEGER             -- Unix timestamp (seconds) when lockout started, NULL if below threshold
         );",
-    )
+    )?;
+    // Audit row (#3538): keep migrations table in sync with user_version.
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (18, datetime('now'), 'Add totp_lockout table for second-factor brute-force protection')",
+        [],
+    )?;
+    Ok(())
 }
 
 /// Version 19: Add `provider` column to usage_events so the metering engine
@@ -923,6 +1001,24 @@ fn migrate_v30(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Version 31: Bind TOTP used codes to the action they authorized (#3360).
+///
+/// Adds a nullable `bound_to` column on `totp_used_codes` so an auditor can
+/// prove which action a given TOTP code authorized (e.g.
+/// `"approval:<uuid>"`). Replay detection itself is unchanged — it still
+/// keys on `code_hash` so a code is single-use across all actions.
+fn migrate_v31(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if !column_exists(conn, "totp_used_codes", "bound_to") {
+        conn.execute_batch("ALTER TABLE totp_used_codes ADD COLUMN bound_to TEXT;")?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (31, datetime('now'), 'Bind totp_used_codes to the action they authorized (#3360)')",
+        [],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
@@ -955,6 +1051,93 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         run_migrations(&conn).unwrap();
         run_migrations(&conn).unwrap(); // Should not error
+    }
+
+    #[test]
+    fn test_every_migration_records_audit_row() {
+        // Regression for #3538: each migration must insert into the
+        // `migrations` table so that user_version and the audit trail
+        // never drift. The startup check at the end of run_migrations
+        // logs an error on drift; this test catches it before merge.
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let user_version: u32 = conn
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(DISTINCT version) FROM migrations",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            user_version as i64, row_count,
+            "user_version ({user_version}) != distinct migration audit rows ({row_count})"
+        );
+
+        // Every version 1..=user_version must appear in the audit table.
+        for v in 1..=user_version {
+            let exists: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM migrations WHERE version = ?1",
+                    [v],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(
+                exists >= 1,
+                "migration v{v} is applied (user_version={user_version}) but has no audit row"
+            );
+        }
+    }
+
+    /// Regression for #3538 follow-up: a DB whose migrations table is
+    /// already drifted (some audit rows missing) must self-heal on the
+    /// next `run_migrations` call instead of warning forever. Simulates
+    /// a pre-fix prod DB by deleting v13/v17/v18 audit rows after
+    /// migrate, then re-runs and asserts the rows are back. Idempotent
+    /// behaviour: a second run inserts nothing.
+    #[test]
+    fn test_run_migrations_backfills_drifted_audit_rows() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        // Simulate the historical drift: v13 / v17 / v18 audit rows
+        // missing while user_version is at the current latest.
+        for v in [13u32, 17u32, 18u32] {
+            conn.execute("DELETE FROM migrations WHERE version = ?1", [v])
+                .unwrap();
+        }
+
+        // Re-run: migrate_vN bodies do not re-execute (user_version is
+        // already at the head), so the only path that can heal the
+        // missing rows is the backfill at the end of run_migrations.
+        run_migrations(&conn).unwrap();
+
+        for v in [13u32, 17u32, 18u32] {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM migrations WHERE version = ?1",
+                    [v],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                count, 1,
+                "audit row for v{v} should have been backfilled, but found {count}"
+            );
+        }
+
+        // Idempotent: a second backfill pass adds nothing.
+        let before: i64 = conn
+            .query_row("SELECT COUNT(*) FROM migrations", [], |row| row.get(0))
+            .unwrap();
+        run_migrations(&conn).unwrap();
+        let after: i64 = conn
+            .query_row("SELECT COUNT(*) FROM migrations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(before, after, "second backfill must be a no-op");
     }
 
     #[test]
@@ -1161,5 +1344,119 @@ mod tests {
         run_migrations(&conn).unwrap();
         run_migrations(&conn).unwrap();
         assert_eq!(get_schema_version(&conn), SCHEMA_VERSION);
+    }
+
+    /// Issue #3360: v31 adds the `bound_to` column on `totp_used_codes` so
+    /// each consumed TOTP code can be tied to the action it authorized.
+    #[test]
+    fn test_migrate_v31_adds_bound_to_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        assert!(column_exists(&conn, "totp_used_codes", "bound_to"));
+
+        // Inserting with an explicit binding works.
+        conn.execute(
+            "INSERT INTO totp_used_codes (code_hash, used_at, bound_to) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["deadbeef", 2_000_i64, "approval:abc"],
+        )
+        .unwrap();
+        let bound: String = conn
+            .query_row(
+                "SELECT bound_to FROM totp_used_codes WHERE code_hash = 'deadbeef'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(bound, "approval:abc");
+    }
+
+    #[test]
+    fn test_migrate_v10_partial_apply_does_not_panic() {
+        // #3452 — simulate a DB that crashed mid-v10 with the agent_id columns
+        // already added but user_version still at 9.  Re-running migrations
+        // must succeed (idempotent ALTER) rather than panic with
+        // "duplicate column name: agent_id".
+        let conn = Connection::open_in_memory().unwrap();
+
+        // Apply v1..v9 to reach the pre-v10 state.
+        macro_rules! step {
+            ($v:expr, $f:expr) => {{
+                let tx = conn.unchecked_transaction().unwrap();
+                $f(&tx).unwrap();
+                set_schema_version(&tx, $v).unwrap();
+                tx.commit().unwrap();
+            }};
+        }
+        step!(1, migrate_v1);
+        step!(2, migrate_v2);
+        step!(3, migrate_v3);
+        step!(4, migrate_v4);
+        step!(5, migrate_v5);
+        step!(6, migrate_v6);
+        step!(7, migrate_v7);
+        step!(8, migrate_v8);
+        step!(9, migrate_v9);
+
+        // Manually pre-apply the v10 ALTERs as if the previous run crashed
+        // after the schema change but before the version bump.
+        conn.execute(
+            "ALTER TABLE entities ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "ALTER TABLE relations ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .unwrap();
+        // user_version is still 9 — the partial-apply scenario.
+        assert_eq!(get_schema_version(&conn), 9);
+
+        // Resuming migrations from this state must succeed without
+        // "duplicate column name: agent_id".
+        run_migrations(&conn).expect("v10 retry on partial-apply DB must not error");
+        assert_eq!(get_schema_version(&conn), SCHEMA_VERSION);
+
+        // Columns are still present and writable.
+        assert!(column_exists(&conn, "entities", "agent_id"));
+        assert!(column_exists(&conn, "relations", "agent_id"));
+    }
+
+    #[test]
+    fn test_migrate_v10_only_entities_alter_applied() {
+        // #3452 follow-up — also cover the asymmetric crash: entities ALTER
+        // landed but relations ALTER didn't.  The per-ALTER `column_exists`
+        // guards in migrate_v10 must skip entities and apply relations.
+        let conn = Connection::open_in_memory().unwrap();
+        macro_rules! step {
+            ($v:expr, $f:expr) => {{
+                let tx = conn.unchecked_transaction().unwrap();
+                $f(&tx).unwrap();
+                set_schema_version(&tx, $v).unwrap();
+                tx.commit().unwrap();
+            }};
+        }
+        step!(1, migrate_v1);
+        step!(2, migrate_v2);
+        step!(3, migrate_v3);
+        step!(4, migrate_v4);
+        step!(5, migrate_v5);
+        step!(6, migrate_v6);
+        step!(7, migrate_v7);
+        step!(8, migrate_v8);
+        step!(9, migrate_v9);
+        // Only entities ALTER pre-applied; relations ALTER did not run.
+        conn.execute(
+            "ALTER TABLE entities ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .unwrap();
+        assert!(column_exists(&conn, "entities", "agent_id"));
+        assert!(!column_exists(&conn, "relations", "agent_id"));
+
+        run_migrations(&conn).expect("v10 must skip entities ALTER and apply relations ALTER");
+        assert_eq!(get_schema_version(&conn), SCHEMA_VERSION);
+        assert!(column_exists(&conn, "entities", "agent_id"));
+        assert!(column_exists(&conn, "relations", "agent_id"));
     }
 }

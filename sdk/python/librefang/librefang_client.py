@@ -181,6 +181,9 @@ class _AgentsResource(_Resource):
     def get_agent_deliveries(self, id: str):
         return self._c._request("GET", f"/api/agents/{id}/deliveries")
 
+    def list_agent_events(self, id: str, limit: Any = None):
+        return self._c._request("GET", f"/api/agents/{id}/events", None, query={"limit": limit})
+
     def list_agent_files(self, id: str):
         return self._c._request("GET", f"/api/agents/{id}/files")
 
@@ -267,6 +270,9 @@ class _AgentsResource(_Resource):
 
     def set_agent_skills(self, id: str, **data):
         return self._c._request("PUT", f"/api/agents/{id}/skills", data)
+
+    def get_agent_stats(self, id: str):
+        return self._c._request("GET", f"/api/agents/{id}/stats")
 
     def stop_agent(self, id: str):
         return self._c._request("POST", f"/api/agents/{id}/stop")

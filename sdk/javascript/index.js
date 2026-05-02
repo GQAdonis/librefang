@@ -185,6 +185,10 @@ class AgentsResource {
     return this._c._request("GET", `/api/agents/${id}/deliveries`);
   }
 
+  async listAgentEvents(id, query) {
+    return this._c._request("GET", `/api/agents/${id}/events`, undefined, query);
+  }
+
   async listAgentFiles(id) {
     return this._c._request("GET", `/api/agents/${id}/files`);
   }
@@ -299,6 +303,10 @@ class AgentsResource {
 
   async setAgentSkills(id, data) {
     return this._c._request("PUT", `/api/agents/${id}/skills`, data, undefined);
+  }
+
+  async getAgentStats(id) {
+    return this._c._request("GET", `/api/agents/${id}/stats`);
   }
 
   async stopAgent(id) {

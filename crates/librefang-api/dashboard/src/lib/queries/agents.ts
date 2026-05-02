@@ -2,6 +2,8 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import {
   listAgents,
   getAgentDetail,
+  getAgentStats,
+  listAgentEvents,
   listAgentSessions,
   listAgentTemplates,
   listPromptVersions,
@@ -35,6 +37,22 @@ export const agentQueries = {
       queryFn: () => listAgentSessions(agentId),
       enabled: !!agentId,
       staleTime: 10_000,
+    }),
+  stats: (agentId: string) =>
+    queryOptions({
+      queryKey: agentKeys.stats(agentId),
+      queryFn: () => getAgentStats(agentId),
+      enabled: !!agentId,
+      staleTime: 15_000,
+      refetchInterval: 30_000,
+    }),
+  events: (agentId: string, limit = 30) =>
+    queryOptions({
+      queryKey: agentKeys.events(agentId, limit),
+      queryFn: () => listAgentEvents(agentId, limit),
+      enabled: !!agentId,
+      staleTime: 10_000,
+      refetchInterval: 15_000,
     }),
   templates: () =>
     queryOptions({
@@ -74,6 +92,18 @@ export function useAgentDetail(agentId: string, options: QueryOverrides = {}) {
 
 export function useAgentSessions(agentId: string, options: QueryOverrides = {}) {
   return useQuery(withOverrides(agentQueries.sessions(agentId), options));
+}
+
+export function useAgentStats(agentId: string, options: QueryOverrides = {}) {
+  return useQuery(withOverrides(agentQueries.stats(agentId), options));
+}
+
+export function useAgentEvents(
+  agentId: string,
+  limit = 30,
+  options: QueryOverrides = {},
+) {
+  return useQuery(withOverrides(agentQueries.events(agentId, limit), options));
 }
 
 export function useAgentTemplates(options: QueryOverrides = {}) {

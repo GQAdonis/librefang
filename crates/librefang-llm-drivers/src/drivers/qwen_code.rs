@@ -246,7 +246,7 @@ impl QwenCodeDriver {
             parts.push(format!("[System]\n{sys}"));
         }
 
-        for msg in &request.messages {
+        for msg in request.messages.iter() {
             let role_label = match msg.role {
                 Role::User => "User",
                 Role::Assistant => "Assistant",
@@ -934,6 +934,11 @@ impl QwenCodeDriver {
 
 #[async_trait]
 impl LlmDriver for QwenCodeDriver {
+    #[tracing::instrument(
+        name = "llm.complete",
+        skip_all,
+        fields(provider = "qwen_code", model = %request.model)
+    )]
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         // `prepared` cleans up its temp dir via `Drop`, so cancellation at
         // any await point below still releases the dir — no explicit
@@ -942,6 +947,11 @@ impl LlmDriver for QwenCodeDriver {
         self.complete_inner(&prepared, &request).await
     }
 
+    #[tracing::instrument(
+        name = "llm.stream",
+        skip_all,
+        fields(provider = "qwen_code", model = %request.model)
+    )]
     async fn stream(
         &self,
         request: CompletionRequest,
@@ -1052,12 +1062,12 @@ mod tests {
 
         let request = CompletionRequest {
             model: "qwen-code/qwen3-coder".to_string(),
-            messages: vec![Message {
+            messages: std::sync::Arc::new(vec![Message {
                 role: Role::User,
                 content: MessageContent::text("Hello"),
                 pinned: false,
                 timestamp: None,
-            }],
+            }]),
             tools: vec![],
             max_tokens: 1024,
             temperature: 0.7,
@@ -1093,7 +1103,7 @@ mod tests {
 
         let request = CompletionRequest {
             model: "qwen-code/qwen-vl-max".to_string(),
-            messages: vec![Message {
+            messages: std::sync::Arc::new(vec![Message {
                 role: Role::User,
                 content: MessageContent::Blocks(vec![
                     ContentBlock::Text {
@@ -1107,7 +1117,7 @@ mod tests {
                 ]),
                 pinned: false,
                 timestamp: None,
-            }],
+            }]),
             tools: vec![],
             max_tokens: 1024,
             temperature: 0.7,
@@ -1176,7 +1186,7 @@ mod tests {
 
         let request = CompletionRequest {
             model: "qwen-code/qwen-vl-max".to_string(),
-            messages: vec![Message {
+            messages: std::sync::Arc::new(vec![Message {
                 role: Role::User,
                 content: MessageContent::Blocks(vec![ContentBlock::ImageFile {
                     media_type: "image/png".to_string(),
@@ -1184,7 +1194,7 @@ mod tests {
                 }]),
                 pinned: false,
                 timestamp: None,
-            }],
+            }]),
             tools: vec![],
             max_tokens: 1024,
             temperature: 0.7,
@@ -1271,7 +1281,7 @@ mod tests {
 
         let request = CompletionRequest {
             model: "qwen-code/qwen-vl-max".to_string(),
-            messages: vec![Message {
+            messages: std::sync::Arc::new(vec![Message {
                 role: Role::User,
                 content: MessageContent::Blocks(vec![
                     ContentBlock::Text {
@@ -1286,7 +1296,7 @@ mod tests {
                 ]),
                 pinned: false,
                 timestamp: None,
-            }],
+            }]),
             tools: vec![],
             max_tokens: 1024,
             temperature: 0.7,
@@ -1323,7 +1333,7 @@ mod tests {
 
         let request = CompletionRequest {
             model: "qwen-code/qwen-vl-max".to_string(),
-            messages: vec![Message {
+            messages: std::sync::Arc::new(vec![Message {
                 role: Role::User,
                 content: MessageContent::Blocks(vec![ContentBlock::ImageFile {
                     media_type: "image/png".to_string(),
@@ -1331,7 +1341,7 @@ mod tests {
                 }]),
                 pinned: false,
                 timestamp: None,
-            }],
+            }]),
             tools: vec![],
             max_tokens: 1024,
             temperature: 0.7,

@@ -4,8 +4,8 @@
     "title": "LibreFang API",
     "description": "LibreFang Agent Operating System — REST API for managing AI agents, tools, workflows, and more.",
     "license": {
-      "name": "Apache-2.0",
-      "url": "https://www.apache.org/licenses/LICENSE-2.0"
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
     },
     "version": "2026.4.28-beta7"
   },
@@ -703,6 +703,53 @@
                 "schema": {}
               }
             }
+          }
+        }
+      }
+    },
+    "/api/agents/{id}/events": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "GET /api/agents/{id}/events — Recent turn-level events for one agent.",
+        "description": "Backs the dashboard's agent-detail Logs tab. Returns rows sourced\nfrom `usage_events` (newest first) so the panel shows real\noperational data — model dispatch, latency, tokens, cost — instead\nof the audit ledger, which is mostly admin lifecycle entries.",
+        "operationId": "list_agent_events",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Agent ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max rows (default 30, max 200)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent agent events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentEventsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found"
           }
         }
       }
@@ -1949,6 +1996,42 @@
         }
       }
     },
+    "/api/agents/{id}/stats": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "GET /api/agents/{id}/stats — 24-hour KPI rollup for one agent.",
+        "description": "Returns sessions/cost/P95-latency/active-now in a single round trip so\nthe dashboard's per-agent KPI tiles don't have to scan the global\n`/api/sessions` page (which is paginated and was clipping data for\nagents that hadn't appeared in the latest N sessions).",
+        "operationId": "get_agent_stats",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Agent ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "24-hour stats rollup",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentStats24hView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent not found"
+          }
+        }
+      }
+    },
     "/api/agents/{id}/stop": {
       "post": {
         "tags": [
@@ -2173,7 +2256,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Max items (default 100, max 500)",
+            "description": "Max items (default 50, max 500)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -6875,7 +6958,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Max items (default 100, max 500)",
+            "description": "Max items (default 50, max 500)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -8144,6 +8227,135 @@
   },
   "components": {
     "schemas": {
+      "AgentEventRowView": {
+        "type": "object",
+        "description": "Wire-shape for one row in [`list_agent_events`]. Mirrors\n[`librefang_memory::usage::AgentEventRow`] but defined here as a\nutoipa::ToSchema view so we can register it with the OpenAPI doc\nwithout forcing utoipa into the memory crate.",
+        "required": [
+          "timestamp",
+          "model",
+          "provider",
+          "input_tokens",
+          "output_tokens",
+          "cost_usd",
+          "tool_calls",
+          "latency_ms"
+        ],
+        "properties": {
+          "cost_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "model": {
+            "type": "string"
+          },
+          "output_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "provider": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "AgentEventsResponse": {
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentEventRowView"
+            }
+          }
+        }
+      },
+      "AgentStats24hView": {
+        "type": "object",
+        "description": "24-hour KPI rollup view returned by `GET /api/agents/{id}/stats`.\nMirrors [`librefang_memory::session::AgentStats24h`] — defined here as a\nview so we can derive `utoipa::ToSchema` without forcing utoipa into the\nmemory crate. Generated SDKs and the OpenAPI spec pick up this shape.",
+        "required": [
+          "sessions_24h",
+          "cost_24h",
+          "p95_latency_ms",
+          "active_now",
+          "samples",
+          "prev"
+        ],
+        "properties": {
+          "active_now": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "cost_24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "p95_latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "prev": {
+            "$ref": "#/components/schemas/AgentStatsPrevView"
+          },
+          "samples": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sessions_24h": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "AgentStatsPrevView": {
+        "type": "object",
+        "description": "Prior 24-48h window scoped fields backing the KPI tile trend deltas.",
+        "required": [
+          "sessions_24h",
+          "cost_24h",
+          "p95_latency_ms"
+        ],
+        "properties": {
+          "cost_24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "p95_latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sessions_24h": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "AgentUpdateRequest": {
         "type": "object",
         "description": "Request to update an agent's manifest.",

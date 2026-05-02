@@ -1361,6 +1361,18 @@
       "path": "/api/users/{name}/rotate-key",
       "reason": "new upstream endpoint, integration test pending",
       "status": "exempt"
+    },
+    {
+      "owner": "integration-coverage-matrix",
+      "path": "/api/agents/{id}/events",
+      "reason": "new upstream endpoint, integration test pending",
+      "status": "exempt"
+    },
+    {
+      "owner": "integration-coverage-matrix",
+      "path": "/api/agents/{id}/stats",
+      "reason": "new upstream endpoint, integration test pending",
+      "status": "exempt"
     }
   ],
   "policy": "Every OpenAPI path must be marked covered or explicitly exempted. Covered paths must reference a scenario in docs/integration-test-matrix.md. Exemptions are temporary and reviewed with the matrix.",

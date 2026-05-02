@@ -364,9 +364,26 @@ pub trait ChannelBridgeHandle: Send + Sync {
     /// Default returns None (event subscription not available).
     async fn subscribe_events(
         &self,
-    ) -> Option<tokio::sync::broadcast::Receiver<librefang_types::event::Event>> {
+    ) -> Option<tokio::sync::broadcast::Receiver<std::sync::Arc<librefang_types::event::Event>>>
+    {
         None
     }
+
+    /// Record that the consumer side dropped `n` events due to broadcast
+    /// lag. Called by listeners that receive from [`subscribe_events`] when
+    /// they observe `RecvError::Lagged(n)`. The production impl forwards
+    /// to `EventBus::record_consumer_lag` so lag drops show up in the
+    /// kernel's `dropped_count` metric and trigger a rate-limited
+    /// `error!` log (issue #3630).
+    ///
+    /// No default impl on purpose: a default no-op would let any future
+    /// production handle silently inherit the no-op and swallow lag
+    /// drops, re-defeating #3630 with no compiler signal. Test mocks
+    /// that have no event bus to forward to should write an explicit
+    /// `fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {}`
+    /// to acknowledge the requirement; that one line is cheaper than
+    /// chasing another silent-drop regression.
+    fn record_consumer_lag(&self, n: u64, context: &'static str);
 
     // ── Budget, Network, A2A ──
 
@@ -400,7 +417,13 @@ pub trait ChannelBridgeHandle: Send + Sync {
     ) -> Result<mpsc::Receiver<String>, String> {
         let response = self.send_message(agent_id, message).await?;
         let (tx, rx) = mpsc::channel(1);
-        let _ = tx.send(response).await;
+        if let Err(e) = tx.send(response).await {
+            // Receiver was dropped before we could push the single chunk;
+            // caller will see an empty stream. Surface for debugging since
+            // this is the default fallback path used when adapters don't
+            // implement true streaming.
+            warn!(error = %e, "send_message_streaming default fallback: receiver dropped before response delivery");
+        }
         Ok(rx)
     }
 
@@ -450,7 +473,12 @@ pub trait ChannelBridgeHandle: Send + Sync {
             .send_message_streaming_with_sender(agent_id, message, sender)
             .await?;
         let (status_tx, status_rx) = tokio::sync::oneshot::channel();
-        let _ = status_tx.send(Ok(()));
+        if status_tx.send(Ok(())).is_err() {
+            // The receiver half was dropped before we could report status.
+            // Default impl reports fake-success, so losing it just means the
+            // caller stopped caring — log at debug for visibility.
+            debug!("send_message_streaming_with_sender_status: status receiver dropped before fake-success report");
+        }
         Ok((rx, status_rx))
     }
 
@@ -501,6 +529,29 @@ struct MessageDebouncer {
     flush_tx: mpsc::UnboundedSender<String>,
 }
 
+/// Log a `MessageDebouncer` flush-channel send failure at `warn` level.
+///
+/// All five flush trigger paths (max-timer, immediate, debounce-timer,
+/// typing-triggered, typing-stop) share the same failure mode — the
+/// dispatcher's receiver has been dropped, so buffered messages will be
+/// lost. `location` distinguishes the trigger in logs as a structured
+/// field; `key` is the debouncer key when the call site has it on hand
+/// (the spawn'd timer paths consume it before the send and pass `None`).
+fn warn_flush_dropped<E: std::fmt::Display>(
+    result: Result<(), E>,
+    location: &'static str,
+    key: Option<&str>,
+) {
+    if let Err(e) = result {
+        warn!(
+            error = %e,
+            key = key.unwrap_or(""),
+            location,
+            "Debouncer flush dropped: dispatch receiver closed",
+        );
+    }
+}
+
 impl MessageDebouncer {
     fn new(
         debounce_ms: u64,
@@ -534,7 +585,10 @@ impl MessageDebouncer {
             let flush_key = key.to_string();
             let max_timer_handle = Some(tokio::spawn(async move {
                 tokio::time::sleep(max_dur).await;
-                let _ = flush_tx.send(flush_key);
+                // Dispatcher receiver gone — buffered messages for this
+                // sender will be dropped. Usually only happens during
+                // shutdown.
+                warn_flush_dropped(flush_tx.send(flush_key), "max-timer", None);
             }));
             SenderBuffer {
                 messages: Vec::new(),
@@ -559,7 +613,7 @@ impl MessageDebouncer {
             // The double-fire is suppressed by `drain()` below — once the
             // first flush key is processed, the entry is removed from
             // `buffers`, so the stale key will find nothing and return None.
-            let _ = self.flush_tx.send(key.to_string());
+            warn_flush_dropped(self.flush_tx.send(key.to_string()), "immediate", Some(key));
             return;
         }
 
@@ -569,7 +623,7 @@ impl MessageDebouncer {
         let flush_key = key.to_string();
         buf.timer_handle = Some(tokio::spawn(async move {
             tokio::time::sleep(delay).await;
-            let _ = flush_tx.send(flush_key);
+            warn_flush_dropped(flush_tx.send(flush_key), "debounce-timer", None);
         }));
     }
 
@@ -582,7 +636,11 @@ impl MessageDebouncer {
         let max_dur = Duration::from_millis(self.debounce_max_ms);
         let elapsed = buf.first_arrived.elapsed();
         if elapsed >= max_dur {
-            let _ = self.flush_tx.send(key.to_string());
+            warn_flush_dropped(
+                self.flush_tx.send(key.to_string()),
+                "typing-triggered",
+                Some(key),
+            );
             return;
         }
 
@@ -597,7 +655,7 @@ impl MessageDebouncer {
             let flush_key = key.to_string();
             buf.timer_handle = Some(tokio::spawn(async move {
                 tokio::time::sleep(delay).await;
-                let _ = flush_tx.send(flush_key);
+                warn_flush_dropped(flush_tx.send(flush_key), "typing-stop", None);
             }));
         }
     }
@@ -874,14 +932,22 @@ fn flush_debounced(
                                 "Input sanitizer blocked potential prompt injection in {message_type} message from {}"
                                 , merged_msg.sender.display_name,
                             );
-                            let _ = adapter
+                            if let Err(e) = adapter
                                 .send(
                                     &merged_msg.sender,
                                     ChannelContent::Text(
                                         "Your message could not be processed.".to_string(),
                                     ),
                                 )
-                                .await;
+                                .await
+                            {
+                                warn!(
+                                    channel = ct_str,
+                                    recipient = %merged_msg.sender.display_name,
+                                    error = %e,
+                                    "Failed to deliver sanitizer-block notice to user",
+                                );
+                            }
                             return;
                         }
                     }
@@ -1271,7 +1337,7 @@ impl BridgeManager {
                     result = rx.recv() => {
                         match result {
                             Ok(event) => {
-                                if let librefang_types::event::EventPayload::ApprovalRequested(ref approval) = event.payload {
+                                if let librefang_types::event::EventPayload::ApprovalRequested(approval) = &event.payload {
                                     let msg = format!(
                                         "Approval required for agent {}\n\
                                          Tool: {}\n\
@@ -1308,7 +1374,13 @@ impl BridgeManager {
                                 }
                             }
                             Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                warn!("Approval event listener lagged by {n} events");
+                                // Route through the kernel's lag counter so
+                                // approval-event misses contribute to
+                                // EventBus::dropped_count and surface as a
+                                // rate-limited error! log (#3630). Default
+                                // impl is a no-op for test mocks without an
+                                // event bus.
+                                handle.record_consumer_lag(n, "channel_approval_listener");
                             }
                             Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                                 info!("Event bus closed — stopping approval listener");
@@ -1379,8 +1451,12 @@ impl BridgeManager {
     }
 
     pub async fn stop(&mut self) {
-        // Signal the dispatch loops to stop
-        let _ = self.shutdown_tx.send(true);
+        // Signal the dispatch loops to stop. A send error here only means
+        // every receiver was already dropped, which is fine on a duplicate
+        // shutdown call but worth surfacing for diagnostics.
+        if let Err(e) = self.shutdown_tx.send(true) {
+            debug!(error = %e, "Channel bridge shutdown signal had no live receivers");
+        }
 
         // Stop each adapter's internal tasks (WebSocket connections, callback
         // servers, etc.) so they release ports and connections before we
@@ -2067,21 +2143,30 @@ fn default_output_format_for_channel(channel_type: &str) -> OutputFormat {
 
 /// Send a lifecycle reaction (best-effort, non-blocking for supported adapters).
 ///
-/// Silently ignores errors — reactions are non-critical UX polish.
+/// Errors are logged at debug level — reactions are non-critical UX polish, but
+/// repeated failures can hint at adapter / permission issues worth investigating.
 /// For Telegram, the underlying HTTP call is already fire-and-forget (spawned internally),
 /// so this await returns almost immediately.
 async fn send_lifecycle_reaction(
     adapter: &dyn ChannelAdapter,
     user: &ChannelUser,
     message_id: &str,
-    phase: AgentPhase,
+    phase: &AgentPhase,
 ) {
     let reaction = LifecycleReaction {
-        emoji: default_phase_emoji(&phase).to_string(),
-        phase,
+        emoji: default_phase_emoji(phase).to_string(),
+        phase: phase.clone(),
         remove_previous: true,
     };
-    let _ = adapter.send_reaction(user, message_id, &reaction).await;
+    if let Err(e) = adapter.send_reaction(user, message_id, &reaction).await {
+        debug!(
+            adapter = adapter.name(),
+            message_id = message_id,
+            phase = ?phase,
+            error = %e,
+            "Lifecycle reaction send failed (best-effort, ignored)",
+        );
+    }
 }
 
 /// On stale cached agent IDs, re-resolve the channel default by name and retry once.
@@ -2152,11 +2237,11 @@ async fn handle_send_error<F, Fut>(
 {
     // Try re-resolution for stale agent IDs
     if let Some(new_id) = try_reresolution(error, agent_id, channel_key, handle, router).await {
-        send_lifecycle_reaction(adapter, sender, msg_id, AgentPhase::Thinking).await;
+        send_lifecycle_reaction(adapter, sender, msg_id, &AgentPhase::Thinking).await;
 
         match send_fn(new_id).await {
             Ok(response) => {
-                send_lifecycle_reaction(adapter, sender, msg_id, AgentPhase::Done).await;
+                send_lifecycle_reaction(adapter, sender, msg_id, &AgentPhase::Done).await;
                 if !response.is_empty() {
                     let response = maybe_prefix_response(handle, overrides, new_id, response).await;
                     send_response(adapter, sender, response, thread_id, output_format).await;
@@ -2168,7 +2253,7 @@ async fn handle_send_error<F, Fut>(
             }
             Err(e2) => {
                 // Re-resolution succeeded but the retry failed — report retry error
-                send_lifecycle_reaction(adapter, sender, msg_id, AgentPhase::Error).await;
+                send_lifecycle_reaction(adapter, sender, msg_id, &AgentPhase::Error).await;
                 warn!("Agent error for {new_id} (after re-resolution): {e2}");
                 let err_msg = format!("Agent error: {e2}");
                 if !adapter.suppress_error_responses() {
@@ -2190,7 +2275,7 @@ async fn handle_send_error<F, Fut>(
     }
 
     // Not a stale-agent error (or re-resolution not applicable) — report original error
-    send_lifecycle_reaction(adapter, sender, msg_id, AgentPhase::Error).await;
+    send_lifecycle_reaction(adapter, sender, msg_id, &AgentPhase::Error).await;
     warn!("Agent error for {agent_id}: {error}");
     let err_msg = format!("Agent error: {error}");
     if !adapter.suppress_error_responses() {
@@ -2392,14 +2477,22 @@ async fn dispatch_message(
                         "Input sanitizer blocked potential prompt injection in {message_type} message from {}"
                         , message.sender.display_name,
                     );
-                    let _ = adapter
+                    if let Err(e) = adapter
                         .send(
                             &message.sender,
                             ChannelContent::Text(
                                 "Your message could not be processed.".to_string(),
                             ),
                         )
-                        .await;
+                        .await
+                    {
+                        warn!(
+                            channel = ct_str,
+                            recipient = %message.sender.display_name,
+                            error = %e,
+                            "Failed to deliver sanitizer-block notice to user",
+                        );
+                    }
                     return;
                 }
             }
@@ -3211,7 +3304,9 @@ async fn dispatch_message(
                 .await;
                 return;
             }
-            let _ = adapter.send_typing(&message.sender).await;
+            if let Err(e) = adapter.send_typing(&message.sender).await {
+                debug!(adapter = adapter.name(), error = %e, "send_typing failed (best-effort)");
+            }
 
             let strategy = router.broadcast_strategy();
             let mut responses = Vec::new();
@@ -3377,12 +3472,14 @@ async fn dispatch_message(
     }
 
     // Send typing indicator (best-effort)
-    let _ = adapter.send_typing(&message.sender).await;
+    if let Err(e) = adapter.send_typing(&message.sender).await {
+        debug!(adapter = adapter.name(), error = %e, "send_typing failed (best-effort)");
+    }
 
     // Lifecycle reaction: ⏳ Queued → 🤔 Thinking → ✅ Done / ❌ Error
     let msg_id = &message.platform_message_id;
-    send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Queued).await;
-    send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Thinking).await;
+    send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Queued).await;
+    send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Thinking).await;
 
     upsert_sender_into_roster(handle, message).await;
 
@@ -3411,7 +3508,7 @@ async fn dispatch_message(
             .await
         {
             Ok((mut delta_rx, status_rx)) => {
-                send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Streaming)
+                send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Streaming)
                     .await;
 
                 // Resolve the agent-name prefix once up-front so it can be
@@ -3475,7 +3572,7 @@ async fn dispatch_message(
                         } else {
                             AgentPhase::Error
                         };
-                        send_lifecycle_reaction(adapter, &message.sender, msg_id, phase).await;
+                        send_lifecycle_reaction(adapter, &message.sender, msg_id, &phase).await;
                         handle
                             .record_delivery(
                                 agent_id,
@@ -3536,7 +3633,7 @@ async fn dispatch_message(
                             } else {
                                 AgentPhase::Error
                             };
-                            send_lifecycle_reaction(adapter, &message.sender, msg_id, phase).await;
+                            send_lifecycle_reaction(adapter, &message.sender, msg_id, &phase).await;
                             // Pair the err field with the success flag — when
                             // kernel succeeded, the fallback send_response
                             // delivered the real reply, so the transport-side
@@ -3578,7 +3675,7 @@ async fn dispatch_message(
                             adapter,
                             &message.sender,
                             msg_id,
-                            AgentPhase::Error,
+                            &AgentPhase::Error,
                         )
                         .await;
                         let err_str = kernel_err_str.unwrap_or_else(|| e.to_string());
@@ -3647,7 +3744,7 @@ async fn dispatch_message(
         } else {
             AgentPhase::Error
         };
-        send_lifecycle_reaction(adapter, &message.sender, msg_id, phase).await;
+        send_lifecycle_reaction(adapter, &message.sender, msg_id, &phase).await;
         if !accumulated.is_empty() && (success || !adapter.suppress_error_responses()) {
             let accumulated = if success {
                 maybe_prefix_response(handle, overrides.as_ref(), agent_id, accumulated).await
@@ -3692,7 +3789,7 @@ async fn dispatch_message(
         .await
     {
         Ok(response) => {
-            send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Done).await;
+            send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Done).await;
             if !response.is_empty() {
                 let response =
                     maybe_prefix_response(handle, overrides.as_ref(), agent_id, response).await;
@@ -3850,16 +3947,26 @@ fn sanitize_extension(ext: &str) -> String {
     }
 }
 
-/// Validate that a URL uses an allowed scheme (http or https).
+/// Validate that a URL is safe for the daemon to fetch on behalf of an
+/// inbound channel message (#3442).
+///
+/// Delegates to [`crate::http_client::validate_url_for_fetch`], which
+/// enforces:
+/// * `http`/`https` scheme only — rejects `file://`, `ftp://`,
+///   `javascript:`, `data:`, etc.
+/// * No IPv4/IPv6 literal in any private, loopback, link-local,
+///   unique-local, multicast, reserved, or cloud-metadata range —
+///   including the IPv4-mapped (`::ffff:x.x.x.x`) and NAT64
+///   (`64:ff9b::x.x.x.x`) wire-equivalent forms.
+/// * No internal hostname (`localhost`, `*.local`,
+///   `metadata.google.internal`, `169.254.169.254`).
+///
+/// Without this guard, a forged inbound message containing
+/// `attachment.url = "http://169.254.169.254/latest/meta-data/..."`
+/// or `"http://127.0.0.1:4545/api/agents"` would have its body fetched
+/// and base64'd into the agent's LLM context.
 fn validate_url_scheme(url: &str) -> Result<(), String> {
-    if url.starts_with("https://") || url.starts_with("http://") {
-        Ok(())
-    } else {
-        Err(format!(
-            "Rejected URL with unsupported scheme: {}",
-            url.split(':').next().unwrap_or("unknown")
-        ))
-    }
+    crate::http_client::validate_url_for_fetch(url)
 }
 
 /// Download a file from a URL to disk with streaming and size cap.
@@ -4084,25 +4191,16 @@ async fn download_image_to_blocks(
     // 5 MB limit to prevent memory abuse from oversized images
     const MAX_IMAGE_BYTES: usize = 5 * 1024 * 1024;
 
-    // Validate URL scheme — only allow http/https to prevent SSRF via file:// etc.
-    match url::Url::parse(url) {
-        Ok(parsed) => match parsed.scheme() {
-            "http" | "https" => {}
-            scheme => {
-                warn!("Rejecting image download with disallowed scheme: {scheme}");
-                return vec![ContentBlock::Text {
-                    text: format!("[Image download rejected: unsupported URL scheme '{scheme}']"),
-                    provider_metadata: None,
-                }];
-            }
-        },
-        Err(e) => {
-            warn!("Rejecting image download with invalid URL: {e}");
-            return vec![ContentBlock::Text {
-                text: "[Image download rejected: invalid URL]".to_string(),
-                provider_metadata: None,
-            }];
-        }
+    // SSRF guard (#3442): reject not just non-http/https schemes but also
+    // any URL that points at a loopback, private, link-local, or cloud
+    // metadata target.  A forged inbound message could otherwise smuggle
+    // `http://169.254.169.254/...` into the LLM context as an "image".
+    if let Err(reason) = crate::http_client::validate_url_for_fetch(url) {
+        warn!("Rejecting image download: {reason}");
+        return vec![ContentBlock::Text {
+            text: format!("[Image download rejected: {reason}]"),
+            provider_metadata: None,
+        }];
     }
 
     let client = crate::http_client::new_client();
@@ -4417,12 +4515,14 @@ async fn dispatch_with_blocks(
         j.record(entry).await;
     }
 
-    let _ = adapter.send_typing(&message.sender).await;
+    if let Err(e) = adapter.send_typing(&message.sender).await {
+        debug!(adapter = adapter.name(), error = %e, "send_typing failed (best-effort)");
+    }
 
     // Lifecycle reaction: ⏳ Queued → 🤔 Thinking → ✅ Done / ❌ Error
     let msg_id = &message.platform_message_id;
-    send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Queued).await;
-    send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Thinking).await;
+    send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Queued).await;
+    send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Thinking).await;
 
     upsert_sender_into_roster(handle, message).await;
 
@@ -4434,7 +4534,7 @@ async fn dispatch_with_blocks(
         .await
     {
         Ok(response) => {
-            send_lifecycle_reaction(adapter, &message.sender, msg_id, AgentPhase::Done).await;
+            send_lifecycle_reaction(adapter, &message.sender, msg_id, &AgentPhase::Done).await;
             if !response.is_empty() {
                 let response = maybe_prefix_response(handle, overrides, agent_id, response).await;
                 send_response(adapter, &message.sender, response, thread_id, output_format).await;
@@ -4927,6 +5027,9 @@ mod tests {
         }
         async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
             Err("spawn not implemented in mock".to_string())
+        }
+        fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+            // Test mock: no event bus to forward to.
         }
     }
 
@@ -6259,6 +6362,42 @@ mod tests {
             let (drained_msg, _) = result.unwrap();
             assert_content_eq(&drained_msg.content, "1\n2");
         }
+
+        // Regression test for #3742: simulates the race where the manual
+        // max-buffer flush path AND the max_timer task BOTH enqueue the same
+        // key on flush_tx. The receiver loop calls drain() once per dequeued
+        // key, so the second call must be a noop — i.e. drain() relies on
+        // `buffers.remove(key)` as the atomic single-take guard. If anything
+        // ever regresses to e.g. `buffers.get(key)` + side effects, this test
+        // catches the resulting double-send.
+        #[tokio::test]
+        async fn test_debouncer_double_drain_is_idempotent() {
+            let (debouncer, _rx) = MessageDebouncer::new(1000, 5000, 10);
+            let mut buffers: HashMap<String, SenderBuffer> = HashMap::new();
+
+            debouncer.push(
+                "discord:userX",
+                PendingMessage {
+                    message: make_test_message("only"),
+                    image_blocks: None,
+                },
+                &mut buffers,
+            );
+
+            // First drain takes the buffer atomically.
+            let first = debouncer.drain("discord:userX", &mut buffers);
+            assert!(first.is_some());
+            // Second drain on the same key must observe an empty entry and noop.
+            let second = debouncer.drain("discord:userX", &mut buffers);
+            assert!(
+                second.is_none(),
+                "double-flush race must not duplicate-send (#3742)"
+            );
+            assert!(
+                !buffers.contains_key("discord:userX"),
+                "drain must remove the buffer entry"
+            );
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -6680,6 +6819,9 @@ mod tests {
                 *self.captured_bot_name.lock().unwrap() = Some(bot_name.map(|s| s.to_string()));
                 true
             }
+            fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+                // Test mock: no event bus to forward to.
+            }
         }
 
         #[tokio::test]
@@ -6698,6 +6840,9 @@ mod tests {
                 }
                 async fn spawn_agent_by_name(&self, _: &str) -> Result<AgentId, String> {
                     Err("not used in test".into())
+                }
+                fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+                    // Test mock: no event bus to forward to.
                 }
             }
 
@@ -6789,6 +6934,28 @@ mod tests {
             assert!(validate_url_scheme("javascript:alert(1)").is_err());
             assert!(validate_url_scheme("data:text/plain,hello").is_err());
             assert!(validate_url_scheme("/local/path").is_err());
+        }
+
+        /// #3442: an inbound channel message may not smuggle a loopback,
+        /// private, link-local, or cloud-metadata URL through the
+        /// attachment-download path.  Pre-fix this checked scheme only.
+        #[test]
+        fn test_validate_url_scheme_blocks_ssrf_targets() {
+            for url in [
+                "http://127.0.0.1/admin",
+                "http://localhost/admin",
+                "http://169.254.169.254/latest/meta-data/",
+                "http://10.0.0.1/internal",
+                "http://192.168.1.1/router",
+                "http://[::1]/admin",
+                "http://[::ffff:169.254.169.254]/imds",
+                "http://metadata.google.internal/v1/instance",
+            ] {
+                assert!(
+                    validate_url_scheme(url).is_err(),
+                    "expected SSRF reject for {url}"
+                );
+            }
         }
 
         #[tokio::test]

@@ -318,6 +318,10 @@ func (r *AgentsResource) GetAgentDeliveries(id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/deliveries", id), nil, nil)
 }
 
+func (r *AgentsResource) ListAgentEvents(id string, query map[string]string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/events", id), nil, query)
+}
+
 func (r *AgentsResource) ListAgentFiles(id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/files", id), nil, nil)
 }
@@ -432,6 +436,10 @@ func (r *AgentsResource) GetAgentSkills(id string) (interface{}, error) {
 
 func (r *AgentsResource) SetAgentSkills(id string, data map[string]interface{}) (interface{}, error) {
 	return r.client.request("PUT", fmt.Sprintf("/api/agents/%s/skills", id), data, nil)
+}
+
+func (r *AgentsResource) GetAgentStats(id string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/stats", id), nil, nil)
 }
 
 func (r *AgentsResource) StopAgent(id string) (interface{}, error) {

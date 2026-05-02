@@ -255,6 +255,15 @@ export interface AgentIdentity {
   color?: string;
 }
 
+/** Reason for the most recent automatic session reset.
+ *  Mirrors `librefang_types::config::SessionResetReason` — wire form is the
+ *  snake_case variant name. */
+export type SessionResetReason =
+  | "idle"
+  | "daily"
+  | "suspended"
+  | "manual";
+
 export interface AgentItem {
   id: string;
   name: string;
@@ -269,17 +278,49 @@ export interface AgentItem {
   supports_thinking?: boolean;
   ready?: boolean;
   profile?: string;
+  /** Human-readable schedule summary: "manual" for reactive agents,
+   *  the cron expression for periodic agents, "proactive", or
+   *  "continuous · Ns" for continuous agents. */
+  schedule?: string;
+  /** Sessions whose `created_at` is within the last 24 hours. Computed
+   *  in a single grouped SQL pass on the list endpoint so row UIs can
+   *  render KPI without a global /api/sessions aggregation. */
+  sessions_24h?: number;
+  /** Sum of `usage_events.cost_usd` for the agent in the last 24 hours. */
+  cost_24h?: number;
   identity?: AgentIdentity;
   is_hand?: boolean;
   web_search_augmentation?: "off" | "auto" | "always";
-  /** UUID of the parent agent that spawned this one, if any. */
-  parent_agent_id?: string;
-  /** UUIDs of child agents spawned by this agent. */
+  /** UUID of the parent agent that spawned this one, if any.
+   *  Wire field emitted by `GET /api/agents` is `parent_agent_id`; the raw
+   *  `AgentEntry` serde form is `parent`. Both are accepted so the type is
+   *  forward-compatible with endpoints that return the struct directly. */
+  parent_agent_id?: string | null;
+  /** Raw serde field from `AgentEntry::parent` — present on endpoints that
+   *  serialize the kernel struct directly. */
+  parent?: string | null;
+  /** UUIDs of child agents spawned by this agent (fork tree). */
   children?: string[];
   /** Active session UUID. */
   session_id?: string;
   /** Categorisation tags. */
   tags?: string[];
+  /** Whether onboarding (bootstrap) has been completed. */
+  onboarding_completed?: boolean;
+  /** RFC3339 timestamp of when onboarding completed, if any. */
+  onboarding_completed_at?: string | null;
+  /** When `true`, the next dispatch will hard-reset (wipe) the session
+   *  history before processing. Set by operator action or stuck-loop
+   *  recovery. */
+  force_session_wipe?: boolean;
+  /** When `true`, the agent was interrupted by restart/shutdown but
+   *  recovery is expected; the existing `session_id` is preserved. */
+  resume_pending?: boolean;
+  /** Reason for the most recent automatic session reset, if any. */
+  reset_reason?: SessionResetReason | null;
+  /** Sticky flag: `true` once the agent has processed at least one real
+   *  inbound message, channel event, or autonomous tick. */
+  has_processed_message?: boolean;
 }
 
 export interface PaginatedResponse<T> {
@@ -389,6 +430,13 @@ export interface WorkflowStep {
   depends_on?: string[];
 }
 
+export interface WorkflowLastRunSummary {
+  /** Run state: "pending" | "running" | "paused" | "completed" | "failed". */
+  state: string;
+  started_at: string;
+  completed_at: string | null;
+}
+
 export interface WorkflowItem {
   id: string;
   name: string;
@@ -396,6 +444,11 @@ export interface WorkflowItem {
   steps?: number | WorkflowStep[];
   created_at?: string;
   layout?: unknown;
+  /** Most recent run summary, null when the workflow has never been run. */
+  last_run?: WorkflowLastRunSummary | null;
+  /** Completed / (completed + failed) over terminal runs only.
+   * `null` until at least one run reaches a terminal state. */
+  success_rate?: number | null;
 }
 
 export interface WorkflowRunItem {
@@ -877,16 +930,6 @@ export function buildAuthenticatedWebSocket(path: string): {
   return { url, protocols };
 }
 
-/**
- * @deprecated Use `buildAuthenticatedWebSocket()` to avoid leaking the token
- * via the URL. This shim returns the URL without the token; callers must
- * supply the bearer protocol separately.
- */
-export function buildAuthenticatedWebSocketUrl(path: string): string {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}${path}`;
-}
-
 async function parseError(response: Response): Promise<ApiError> {
   // If 401, trigger global logout (only once to prevent infinite loop)
   if (response.status === 401 && _onUnauthorized && !_unauthorizedFired) {
@@ -924,9 +967,22 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function post<T>(path: string, body: unknown, timeout = DEFAULT_POST_TIMEOUT_MS): Promise<T> {
+async function post<T>(
+  path: string,
+  body: unknown,
+  timeout = DEFAULT_POST_TIMEOUT_MS,
+  externalSignal?: AbortSignal,
+): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  // Forward external aborts (e.g. component unmount) into our controller so
+  // the fetch is actually cancelled, not just the awaited promise.
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
 
   try {
     const response = await fetch(path, {
@@ -944,10 +1000,18 @@ async function post<T>(path: string, body: unknown, timeout = DEFAULT_POST_TIMEO
     return (await response.json()) as T;
   } catch (error) {
     clearTimeout(timeoutId);
+    if (externalSignal?.aborted) {
+      // Re-throw as DOMException so callers can identify caller-initiated aborts.
+      throw new DOMException("Aborted", "AbortError");
+    }
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`Request timeout after ${Math.round(timeout / 1000)}s - operation may still be running`);
     }
     throw error;
+  } finally {
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", onExternalAbort);
+    }
   }
 }
 
@@ -1045,6 +1109,16 @@ export interface AgentDetail {
   system_prompt?: string;
   capabilities?: { tools?: boolean; network?: boolean };
   skills?: string[];
+  /** Skill assignment mode derived by the backend:
+   *  - 'all' — manifest doesn't pin an allowlist (the default).
+   *  - 'allowlist' — manifest pinned the list in `skills`.
+   *  - 'none' — skills_disabled = true. */
+  skills_mode?: "all" | "allowlist" | "none";
+  /** Human-readable schedule summary derived from manifest.schedule:
+   *  'manual' for reactive, the cron expression, 'proactive', or
+   *  'continuous · Ns'. Matches what `enrich_agent_json` puts on the
+   *  list endpoint. */
+  schedule?: string;
   tags?: string[];
   mode?: string;
   thinking?: { budget_tokens?: number; stream_thinking?: boolean };
@@ -1054,6 +1128,52 @@ export interface AgentDetail {
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
   return get<AgentDetail>(`/api/agents/${encodeURIComponent(agentId)}`);
+}
+
+/** 24-hour KPI rollup for one agent — backs the AgentsPage detail-panel
+ *  KPI tiles. See `GET /api/agents/{id}/stats`. */
+export interface AgentStats24h {
+  sessions_24h: number;
+  cost_24h: number;
+  p95_latency_ms: number;
+  active_now: number;
+  samples: number;
+  /** Same window-scoped fields, aggregated over the prior 24h (24-48h
+   *  ago). Optional so older backends that don't ship the field don't
+   *  break the type at runtime — the dashboard already gates on
+   *  `live?.prev` and falls back to non-delta subtext. */
+  prev?: {
+    sessions_24h: number;
+    cost_24h: number;
+    p95_latency_ms: number;
+  };
+}
+
+export async function getAgentStats(agentId: string): Promise<AgentStats24h> {
+  return get<AgentStats24h>(`/api/agents/${encodeURIComponent(agentId)}/stats`);
+}
+
+/** Per-agent turn-level events row from `usage_events`, surfaced via
+ *  `GET /api/agents/{id}/events`. Powers the agent-detail Logs tab. */
+export interface AgentEventRow {
+  timestamp: string;
+  model: string;
+  provider: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  tool_calls: number;
+  latency_ms: number;
+}
+
+export async function listAgentEvents(
+  agentId: string,
+  limit = 30,
+): Promise<AgentEventRow[]> {
+  const data = await get<{ events?: AgentEventRow[] }>(
+    `/api/agents/${encodeURIComponent(agentId)}/events?limit=${limit}`,
+  );
+  return data.events ?? [];
 }
 
 export async function patchAgentConfig(
@@ -1505,13 +1625,16 @@ export async function getSkillDetail(name: string): Promise<SkillDetail> {
   return get<SkillDetail>(`/api/skills/${encodeURIComponent(name)}`);
 }
 
-export async function createSkill(params: {
-  name: string;
-  description: string;
-  prompt_context: string;
-  tags?: string[];
-}): Promise<EvolutionResult> {
-  return post<EvolutionResult>("/api/skills/create", params);
+export async function createSkill(
+  params: {
+    name: string;
+    description: string;
+    prompt_context: string;
+    tags?: string[];
+  },
+  signal?: AbortSignal,
+): Promise<EvolutionResult> {
+  return post<EvolutionResult>("/api/skills/create", params, undefined, signal);
 }
 
 export async function reloadSkills(): Promise<ApiActionResponse> {
@@ -1902,8 +2025,11 @@ export async function runSchedule(scheduleId: string): Promise<ApiActionResponse
   return post<ApiActionResponse>(`/api/schedules/${encodeURIComponent(scheduleId)}/run`, {});
 }
 
-export async function listTriggers(): Promise<TriggerItem[]> {
-  const data = await get<{ triggers?: TriggerItem[] }>("/api/triggers");
+export async function listTriggers(agentId?: string): Promise<TriggerItem[]> {
+  const url = agentId
+    ? `/api/triggers?agent_id=${encodeURIComponent(agentId)}`
+    : "/api/triggers";
+  const data = await get<{ triggers?: TriggerItem[] }>(url);
   return data.triggers ?? [];
 }
 
@@ -2361,7 +2487,16 @@ export async function createAgentSession(
 }
 
 export async function listSessions(): Promise<SessionListItem[]> {
-  const data = await get<{ sessions?: SessionListItem[] }>("/api/sessions");
+  // Bumped past the server's default page size (50) so list-row aggregates
+  // (sessions/cost in the agent row) don't silently clip when an agent's
+  // sessions aren't in the latest 50 globally. Modern backends embed
+  // `sessions_24h` / `cost_24h` directly on each AgentItem (see
+  // `enrich_agent_json`), so this scan is now only the *fallback* path
+  // for older daemons; the detail-panel KPI tile reads from
+  // `GET /api/agents/{id}/stats` and never touches this list.
+  // TODO: drop the fallback (and this whole call from AgentsPage) once
+  // the minimum supported daemon version is past the embed change.
+  const data = await get<{ sessions?: SessionListItem[] }>("/api/sessions?limit=500");
   return data.sessions ?? [];
 }
 
@@ -2756,7 +2891,18 @@ export interface NetworkStatusResponse {
   protocol_version?: string;
   listen_addr?: string;
   peer_count?: number;
+  // SECURITY (#3873): null when this node has no Ed25519 identity
+  // (HMAC-only legacy mode); operators should treat that as "new defense
+  // is dormant" and investigate.
+  identity_fingerprint?: string | null;
+  pinned_peers?: number;
   [key: string]: unknown;
+}
+
+export interface TrustedPeerItem {
+  node_id: string;
+  public_key: string;
+  fingerprint: string;
 }
 
 export interface PeerItem {
@@ -2776,6 +2922,13 @@ export async function getNetworkStatus(): Promise<NetworkStatusResponse> {
 
 export async function listPeers(): Promise<PeerItem[]> {
   const data = await get<{ peers?: PeerItem[] }>("/api/peers");
+  return data.peers ?? [];
+}
+
+export async function listTrustedPeers(): Promise<TrustedPeerItem[]> {
+  const data = await get<{ peers?: TrustedPeerItem[] }>(
+    "/api/network/trusted-peers",
+  );
   return data.peers ?? [];
 }
 
