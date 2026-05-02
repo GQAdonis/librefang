@@ -337,6 +337,7 @@ impl ChatGptDriver {
                     return Err(LlmError::Api {
                         status: reqwest::StatusCode::FORBIDDEN.as_u16(),
                         message: body,
+                        code: None,
                     });
                 }
             }
@@ -719,6 +720,7 @@ impl ChatGptDriver {
                         return Err(LlmError::Api {
                             status: 500,
                             message: msg.to_string(),
+                            code: None,
                         });
                     }
 
@@ -990,6 +992,7 @@ impl crate::llm_driver::LlmDriver for ChatGptDriver {
             return Err(LlmError::Api {
                 status: status.as_u16(),
                 message: body,
+                code: None,
             });
         }
 
@@ -1022,6 +1025,7 @@ impl crate::llm_driver::LlmDriver for ChatGptDriver {
             return Err(LlmError::Api {
                 status: status.as_u16(),
                 message: body,
+                code: None,
             });
         }
 

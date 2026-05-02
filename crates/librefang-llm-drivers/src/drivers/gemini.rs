@@ -940,7 +940,11 @@ impl LlmDriver for GeminiDriver {
                 if status == 404 {
                     return Err(LlmError::ModelNotFound(message));
                 }
-                return Err(LlmError::Api { status, message });
+                return Err(LlmError::Api {
+                    status,
+                    message,
+                    code: None,
+                });
             }
 
             let body = resp
@@ -956,6 +960,7 @@ impl LlmDriver for GeminiDriver {
         Err(LlmError::Api {
             status: 0,
             message: "Max retries exceeded".to_string(),
+            code: None,
         })
     }
 
@@ -1066,7 +1071,11 @@ impl LlmDriver for GeminiDriver {
                 if status == 404 {
                     return Err(LlmError::ModelNotFound(message));
                 }
-                return Err(LlmError::Api { status, message });
+                return Err(LlmError::Api {
+                    status,
+                    message,
+                    code: None,
+                });
             }
 
             // Parse SSE stream
@@ -1316,6 +1325,7 @@ impl LlmDriver for GeminiDriver {
         Err(LlmError::Api {
             status: 0,
             message: "Max retries exceeded".to_string(),
+            code: None,
         })
     }
 
