@@ -82,6 +82,8 @@ impl SurrealSessionBackend {
             messages,
             context_window_tokens,
             label,
+            // Generation counter starts at 0 on cold-load; the repair pass
+            // will set last_repaired_generation once it runs.
             messages_generation: 0,
             last_repaired_generation: None,
         })
@@ -107,6 +109,7 @@ impl SessionBackend for SurrealSessionBackend {
             .map_err(|e| LibreFangError::Memory(format!("serialise messages: {e}")))?;
         let label = session.label.clone();
         let context_window_tokens = session.context_window_tokens;
+        let message_count = session.messages.len() as i64;
         let now = chrono::Utc::now().to_rfc3339();
         let db = self.db.clone();
 
@@ -125,6 +128,7 @@ impl SessionBackend for SurrealSessionBackend {
                 "agent_id": agent_id,
                 "messages": messages,
                 "context_window_tokens": context_window_tokens,
+                "message_count": message_count,
                 "label": label,
                 "created_at": created_at,
                 "updated_at": now,
