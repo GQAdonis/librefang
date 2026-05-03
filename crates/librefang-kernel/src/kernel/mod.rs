@@ -18522,7 +18522,7 @@ impl KernelHandle for LibreFangKernel {
         entity: &librefang_types::memory::Entity,
     ) -> Result<String, String> {
         self.knowledge_backend
-            .add_entity(entity)            .await
+            .add_entity(entity.clone())            .await
             .map_err(|e| format!("Knowledge add entity failed: {e}"))
     }
 
@@ -18531,7 +18531,7 @@ impl KernelHandle for LibreFangKernel {
         relation: &librefang_types::memory::Relation,
     ) -> Result<String, String> {
         self.knowledge_backend
-            .add_relation(relation)            .await
+            .add_relation(relation.clone())            .await
             .map_err(|e| format!("Knowledge add relation failed: {e}"))
     }
 
@@ -19562,7 +19562,7 @@ impl KernelHandle for LibreFangKernel {
         let cfg = self.config.load();
         let agent_id = version.agent_id;
         self.prompt_store
-            .create_version(version)            .map_err(|e| format!("Failed to create version: {e}"))?;
+            .create_version(version.clone())            .map_err(|e| format!("Failed to create version: {e}"))?;
         // Prune old versions if over the configured limit
         let max = cfg.prompt_intelligence.max_versions_per_agent;
         let _ = self.prompt_store.prune_old_versions(agent_id, max);
@@ -19604,7 +19604,7 @@ impl KernelHandle for LibreFangKernel {
         experiment: &librefang_types::agent::PromptExperiment,
     ) -> Result<(), String> {
         self.prompt_store
-            .create_experiment(experiment)            .map_err(|e| format!("Failed to create experiment: {e}"))
+            .create_experiment(experiment.clone())            .map_err(|e| format!("Failed to create experiment: {e}"))
     }
 
     fn get_experiment(
