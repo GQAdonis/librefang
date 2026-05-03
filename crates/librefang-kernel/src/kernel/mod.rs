@@ -13631,7 +13631,7 @@ system_prompt = "You are a helpful assistant."
                     if kernel.supervisor.is_shutting_down() {
                         break;
                     }
-                    let upload_dir = std::env::temp_dir().join("librefang_uploads");
+                    let upload_dir = kernel.config_ref().channels.effective_file_download_dir();
                     if let Ok(mut entries) = tokio::fs::read_dir(&upload_dir).await {
                         let cutoff = std::time::SystemTime::now()
                             - std::time::Duration::from_secs(24 * 3600);
@@ -17685,6 +17685,10 @@ impl LibreFangKernel {
 
 #[async_trait]
 impl KernelHandle for LibreFangKernel {
+    fn effective_upload_dir(&self) -> std::path::PathBuf {
+        self.config_ref().channels.effective_file_download_dir()
+    }
+
     async fn spawn_agent(
         &self,
         manifest_toml: &str,
