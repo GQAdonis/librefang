@@ -123,6 +123,7 @@ pub mod stream_dedup;
 pub mod terminal;
 pub mod terminal_tmux;
 pub mod trajectory;
+pub mod triggers;
 pub mod types;
 pub mod validation;
 pub mod versioning;
