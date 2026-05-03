@@ -7,7 +7,6 @@ use librefang_channels::bridge::{BridgeManager, ChannelBridgeHandle};
 use librefang_channels::router::AgentRouter;
 use librefang_channels::sidecar::SidecarAdapter;
 use librefang_channels::types::{ChannelAdapter, SenderContext};
-use librefang_kernel::approval::ApprovalManager;
 
 /// Sanitize LLM/driver errors into user-friendly messages for channel delivery.
 ///
@@ -59,10 +58,12 @@ fn sanitize_channel_error(err: &str) -> String {
 fn looks_like_tool_call(text: &str) -> bool {
     let t = text.trim();
     // Start-of-text patterns: safe regardless of length — a response that
-    // literally begins with a JSON tool call array is always a leak.
+    // literally begins with a JSON tool call array/object is always a leak.
     if t.starts_with("[{")
         || t.starts_with("functions.")
         || t.starts_with("{\"type\":\"function\"")
+        || t.starts_with("{\"tool_calls\":")
+        || t.starts_with("{\"tool_calls\" :")
         || (t.starts_with('[') && t.contains("'type': 'text'"))
     {
         return true;
@@ -325,7 +326,6 @@ use librefang_channels::wechat::WeChatAdapter;
 use librefang_channels::wecom::WeComAdapter;
 
 use async_trait::async_trait;
-use librefang_kernel::error::KernelResult;
 use librefang_kernel::LibreFangKernel;
 use librefang_runtime::llm_driver::StreamEvent;
 use librefang_types::agent::AgentId;
@@ -371,15 +371,18 @@ fn tr_progress_failed(language: &str) -> &'static str {
     }
 }
 
-fn start_stream_text_bridge(
+fn start_stream_text_bridge<E>(
     event_rx: mpsc::Receiver<StreamEvent>,
     kernel_handle: tokio::task::JoinHandle<
-        KernelResult<librefang_runtime::agent_loop::AgentLoopResult>,
+        Result<librefang_runtime::agent_loop::AgentLoopResult, E>,
     >,
     is_group: bool,
     show_progress: bool,
     language: &str,
-) -> mpsc::Receiver<String> {
+) -> mpsc::Receiver<String>
+where
+    E: std::fmt::Display + Send + 'static,
+{
     let (rx, _status) = start_stream_text_bridge_with_status(
         event_rx,
         kernel_handle,
@@ -401,10 +404,10 @@ fn start_stream_text_bridge(
 /// text stream. When `false`, the stream is pure model output — useful for
 /// agents whose responses are consumed by parsers or whose channel context
 /// must not have inline status markers.
-fn start_stream_text_bridge_with_status(
+fn start_stream_text_bridge_with_status<E>(
     mut event_rx: mpsc::Receiver<StreamEvent>,
     kernel_handle: tokio::task::JoinHandle<
-        KernelResult<librefang_runtime::agent_loop::AgentLoopResult>,
+        Result<librefang_runtime::agent_loop::AgentLoopResult, E>,
     >,
     is_group: bool,
     show_progress: bool,
@@ -412,7 +415,10 @@ fn start_stream_text_bridge_with_status(
 ) -> (
     mpsc::Receiver<String>,
     tokio::sync::oneshot::Receiver<Result<(), String>>,
-) {
+)
+where
+    E: std::fmt::Display + Send + 'static,
+{
     let (tx, rx) = mpsc::channel::<String>(64);
     let (status_tx, status_rx) = tokio::sync::oneshot::channel();
     let error_tx = tx.clone();
@@ -1516,7 +1522,9 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                         return "Too many failed TOTP attempts. Try again later.".into();
                     }
                     match totp_code {
-                        Some(code) if ApprovalManager::is_recovery_code_format(code) => {
+                        Some(code)
+                            if self.kernel.approvals().recovery_code_format_matches(code) =>
+                        {
                             // Atomic redeem: read + verify + consume under
                             // the kernel's recovery-code mutex.  The
                             // earlier vault_get → verify → vault_set
@@ -1563,7 +1571,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                                 None => return "TOTP not configured. Set up TOTP first.".into(),
                             };
                             let totp_issuer = self.kernel.approvals().policy().totp_issuer.clone();
-                            match librefang_kernel::approval::ApprovalManager::verify_totp_code_with_issuer(
+                            match self.kernel.approvals().verify_totp_with_issuer(
                                 &secret,
                                 code,
                                 &totp_issuer,
@@ -1857,7 +1865,23 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         }
 
         let (mut overrides, default_agent_name) = match channel_type {
-            "telegram" => find_channel_info!(telegram),
+            // Telegram has the `message_coalesce_window_ms` alias (#4145)
+            // that feeds into `overrides.message_debounce_ms`; resolve via
+            // `effective_overrides()` rather than cloning `overrides` raw.
+            "telegram" => {
+                let entry = if let Some(aid) = account_id {
+                    channels
+                        .telegram
+                        .iter()
+                        .find(|c| c.account_id.as_deref() == Some(aid))
+                } else {
+                    channels.telegram.first()
+                };
+                (
+                    entry.map(|c| c.effective_overrides()),
+                    entry.and_then(|c| c.default_agent.clone()),
+                )
+            }
             "discord" => find_channel_info!(discord),
             "slack" => find_channel_info!(slack),
             "whatsapp" => find_channel_info!(whatsapp),
@@ -2166,8 +2190,8 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
 }
 
 /// Parse a trigger pattern string from chat into a `TriggerPattern`.
-fn parse_trigger_pattern(s: &str) -> Option<librefang_kernel::triggers::TriggerPattern> {
-    use librefang_kernel::triggers::TriggerPattern;
+fn parse_trigger_pattern(s: &str) -> Option<crate::triggers::TriggerPattern> {
+    use crate::triggers::TriggerPattern;
     if let Some(rest) = s.strip_prefix("spawned:") {
         return Some(TriggerPattern::AgentSpawned {
             name_pattern: rest.to_string(),
@@ -3786,6 +3810,59 @@ mod tests {
         assert!(looks_like_tool_call(text));
     }
 
+    /// Short text containing a `<tool_call>` tag should still be flagged —
+    /// the contains()-based heuristic must keep firing under the length
+    /// threshold so genuine compact tool-call leaks are caught (#4028).
+    #[test]
+    fn test_looks_like_tool_call_short_text_with_tool_call_tag_is_flagged() {
+        let text = "Sure, here it is: <tool_call>web_search {\"q\":\"x\"}</tool_call>";
+        assert!(text.len() <= 2000);
+        assert!(looks_like_tool_call(text));
+    }
+
+    /// A long natural-language response (>2000 chars) that merely mentions
+    /// the words "tool_call" / "function_call" must NOT be filtered. Only
+    /// start-of-text patterns apply at this length, so the contains()
+    /// heuristic is suppressed and the legitimate answer survives (#4028).
+    #[test]
+    fn test_looks_like_tool_call_long_natural_language_not_flagged() {
+        let mut text = String::from(
+            "Let me explain how tool_call dispatch works in this system. \
+             A <tool_call> tag is one possible serialization, and providers \
+             may also emit [TOOL_CALL] markers or <function= attributes. ",
+        );
+        // Pad with natural language until the length exceeds the heuristic
+        // cap so that only start-of-text patterns are evaluated.
+        while text.len() <= 2000 {
+            text.push_str(
+                "This sentence discusses how tool calls and function calls \
+                 are represented internally without actually being one. ",
+            );
+        }
+        assert!(text.len() > 2000);
+        assert!(!text.trim_start().starts_with('['));
+        assert!(!text.trim_start().starts_with('{'));
+        assert!(!looks_like_tool_call(&text));
+    }
+
+    /// A long response that *starts* with a raw `{"tool_calls":` JSON
+    /// payload is unambiguously a leaked tool call and must be flagged
+    /// regardless of length (#4028).
+    #[test]
+    fn test_looks_like_tool_call_long_text_starting_with_tool_calls_json_is_flagged() {
+        let mut text = String::from(
+            r#"{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"web_search","arguments":"{\"q\":\"rust\"}"}}"#,
+        );
+        while text.len() <= 5000 {
+            text.push_str(
+                r#",{"id":"call_n","type":"function","function":{"name":"web_search","arguments":"{\"q\":\"rust\"}"}}"#,
+            );
+        }
+        text.push_str("]}");
+        assert!(text.len() > 5000);
+        assert!(looks_like_tool_call(&text));
+    }
+
     /// Verify that tool call JSON emitted as text (without ToolUseStart) is
     /// filtered at ContentComplete, not forwarded to the channel (#2379).
     #[tokio::test]
@@ -3793,7 +3870,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(event_rx, kernel_handle, false, true, "en");
 
@@ -3832,7 +3909,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(event_rx, kernel_handle, false, true, "en");
 
@@ -3895,7 +3972,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(event_rx, kernel_handle, false, true, "en");
 
@@ -3937,7 +4014,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(event_rx, kernel_handle, false, true, "en");
 
@@ -4002,7 +4079,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(
             event_rx,
@@ -4073,7 +4150,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let mut rx = start_stream_text_bridge(event_rx, kernel_handle, false, true, "en");
 
@@ -4109,7 +4186,7 @@ mod tests {
         use librefang_runtime::agent_loop::AgentLoopResult;
 
         let (event_tx, event_rx) = mpsc::channel::<StreamEvent>(16);
-        let kernel_handle = tokio::spawn(async { Ok(AgentLoopResult::default()) });
+        let kernel_handle = tokio::spawn(async { Ok::<_, String>(AgentLoopResult::default()) });
 
         let (mut rx, status_rx) =
             start_stream_text_bridge_with_status(event_rx, kernel_handle, false, true, "en");
@@ -4145,13 +4222,12 @@ mod tests {
     /// to a public timeline) and to record `success=false`.
     #[tokio::test]
     async fn test_stream_bridge_status_error() {
-        use librefang_kernel::error::KernelError;
         use librefang_types::error::LibreFangError;
 
         let (_, event_rx) = mpsc::channel::<StreamEvent>(16);
         let kernel_handle = tokio::spawn(async {
-            Err::<librefang_runtime::agent_loop::AgentLoopResult, KernelError>(
-                LibreFangError::Internal("rate limit hit".to_string()).into(),
+            Err::<librefang_runtime::agent_loop::AgentLoopResult, LibreFangError>(
+                LibreFangError::Internal("rate limit hit".to_string()),
             )
         });
 
@@ -4189,13 +4265,12 @@ mod tests {
     /// like successful empty replies.
     #[tokio::test]
     async fn test_stream_bridge_group_error_suppresses_text_but_reports_err() {
-        use librefang_kernel::error::KernelError;
         use librefang_types::error::LibreFangError;
 
         let (_, event_rx) = mpsc::channel::<StreamEvent>(16);
         let kernel_handle = tokio::spawn(async {
-            Err::<librefang_runtime::agent_loop::AgentLoopResult, KernelError>(
-                LibreFangError::Internal("some internal failure".to_string()).into(),
+            Err::<librefang_runtime::agent_loop::AgentLoopResult, LibreFangError>(
+                LibreFangError::Internal("some internal failure".to_string()),
             )
         });
 
@@ -4234,7 +4309,6 @@ mod tests {
     /// text so they understand the reply may be incomplete.
     #[tokio::test]
     async fn test_stream_bridge_timeout_partial_output_reports_ok_status() {
-        use librefang_kernel::error::KernelError;
         use librefang_types::error::LibreFangError;
 
         let (_, event_rx) = mpsc::channel::<StreamEvent>(16);
@@ -4245,8 +4319,8 @@ mod tests {
                 "agent loop timed out: {}",
                 librefang_runtime::agent_loop::TIMEOUT_PARTIAL_OUTPUT_MARKER
             );
-            Err::<librefang_runtime::agent_loop::AgentLoopResult, KernelError>(
-                LibreFangError::Internal(err).into(),
+            Err::<librefang_runtime::agent_loop::AgentLoopResult, LibreFangError>(
+                LibreFangError::Internal(err),
             )
         });
 

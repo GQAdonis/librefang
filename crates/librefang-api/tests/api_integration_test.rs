@@ -1078,7 +1078,6 @@ async fn test_workflow_crud() {
         .unwrap();
     assert_eq!(resp.status(), 200);
     let body: serde_json::Value = resp.json().await.unwrap();
-    // #3842: canonical PaginatedResponse envelope.
     let workflows = body["items"].as_array().unwrap();
     assert_eq!(workflows.len(), 1);
     assert_eq!(body["total"].as_u64().unwrap(), 1);
@@ -1890,7 +1889,7 @@ metrics = []
         .await
         .expect("read body");
     let json: serde_json::Value = serde_json::from_slice(&body).expect("response is JSON");
-    let instances = json["items"].as_array().expect("instances array");
+    let instances = json["items"].as_array().expect("items array");
     let hand = instances
         .iter()
         .find(|i| i["hand_id"] == "test-grouping-hand")

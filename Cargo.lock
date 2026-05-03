@@ -7442,6 +7442,7 @@ dependencies = [
  "lettre",
  "librefang-types",
  "mailparse",
+ "pdf-extract",
  "regex",
  "regex-lite",
  "reqwest 0.13.3",
@@ -7464,6 +7465,7 @@ dependencies = [
  "url",
  "uuid",
  "webpki-roots 1.0.7",
+ "wiremock",
  "zeroize",
 ]
 
@@ -7613,6 +7615,7 @@ version = "2026.5.2-beta8"
 dependencies = [
  "arc-swap",
  "async-trait",
+ "bytes",
  "chrono",
  "chrono-tz",
  "cron",
@@ -7664,6 +7667,7 @@ name = "librefang-kernel-handle"
 version = "2026.5.2-beta8"
 dependencies = [
  "async-trait",
+ "bytes",
  "librefang-types",
  "serde_json",
  "tokio",
@@ -7785,6 +7789,7 @@ version = "2026.5.2-beta8"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "bytes",
  "chrono",
  "dashmap",
  "dirs 6.0.0",

@@ -99,7 +99,7 @@ async fn create_prompt_version(
     let mut hasher = Sha256::new();
     hasher.update(version.system_prompt.as_bytes());
     version.content_hash = format!("{:x}", hasher.finalize());
-    match state.kernel.create_prompt_version(version.clone()) {
+    match state.kernel.create_prompt_version(&version) {
         Ok(_) => Json(version).into_response(),
         Err(e) => ApiErrorResponse::internal(e)
             .into_json_tuple()
@@ -144,11 +144,20 @@ async fn activate_prompt_version(
                 .into_response()
         }
     };
-    match state.kernel.set_active_prompt_version(&id, agent_id) {
-        Ok(_) => Json(serde_json::json!({"success": true})).into_response(),
-        Err(e) => ApiErrorResponse::internal(e)
+    if let Err(e) = state.kernel.set_active_prompt_version(&id, agent_id) {
+        return ApiErrorResponse::internal(e)
             .into_json_tuple()
-            .into_response(),
+            .into_response();
+    }
+    // Read back the activated version so the caller can patch caches in place
+    // without an extra round-trip. If the version vanished between write and
+    // read (narrow race — concurrent delete) or the kernel implementation
+    // doesn't expose it (e.g. mock kernels in tests, or stores that accept
+    // activate without persisting versions), fall back to the legacy ack
+    // envelope so the activation still appears successful.
+    match state.kernel.get_prompt_version(&id) {
+        Ok(Some(version)) => Json(version).into_response(),
+        Ok(None) | Err(_) => Json(serde_json::json!({"success": true})).into_response(),
     }
 }
 
@@ -201,7 +210,7 @@ async fn create_experiment(
     for variant in &mut experiment.variants {
         variant.id = uuid::Uuid::new_v4();
     }
-    match state.kernel.create_experiment(experiment.clone()) {
+    match state.kernel.create_experiment(&experiment) {
         Ok(_) => Json(experiment).into_response(),
         Err(e) => ApiErrorResponse::internal(e)
             .into_json_tuple()

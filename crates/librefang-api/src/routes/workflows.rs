@@ -95,11 +95,11 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
             axum::routing::get(cron_job_status),
         )
 }
+use crate::triggers::{Trigger, TriggerId, TriggerPatch, TriggerPattern};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use librefang_kernel::triggers::{Trigger, TriggerId, TriggerPatch, TriggerPattern};
 use librefang_kernel::workflow::{
     ErrorMode, StepAgent, StepMode, Workflow, WorkflowId, WorkflowRunId, WorkflowStep,
 };
@@ -498,9 +498,7 @@ pub async fn list_workflows(State(state): State<Arc<AppState>>) -> impl IntoResp
             })
         })
         .collect();
-    // #3842: canonical `PaginatedResponse{items,total,offset,limit}` envelope.
-    // Workflows are loaded from the engine in a single page, so offset=0 /
-    // limit=None.
+    // Workflows load from the engine in a single page (in-memory), so offset=0 / limit=None.
     let total = items.len();
     Json(crate::types::PaginatedResponse {
         items,
@@ -926,8 +924,6 @@ pub async fn save_workflow_as_template(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    use librefang_kernel::workflow::WorkflowEngine;
-
     let workflow_id = WorkflowId(match id.parse() {
         Ok(u) => u,
         Err(_) => {
@@ -948,7 +944,7 @@ pub async fn save_workflow_as_template(
         }
     };
 
-    let template = WorkflowEngine::workflow_to_template(&workflow);
+    let template = workflow.to_template();
 
     // Persist template to TOML file under the active kernel home directory.
     let templates_dir = state.kernel.home_dir().join("workflows").join("templates");
@@ -1147,7 +1143,7 @@ pub async fn list_triggers(
     //   1. With ?agent_id=... — verify the caller owns that agent.
     //   2. Without — post-filter the trigger list by author.
     let restrict_to: Option<String> = match api_user.as_ref() {
-        Some(u) if u.0.role < librefang_kernel::auth::UserRole::Admin => Some(u.0.name.clone()),
+        Some(u) if u.0.role < crate::middleware::UserRole::Admin => Some(u.0.name.clone()),
         _ => None,
     };
     if let (Some(user_name), Some(aid)) = (restrict_to.as_ref(), agent_filter) {
@@ -1207,7 +1203,20 @@ pub async fn get_trigger(
 }
 
 /// DELETE /api/triggers/:id — Remove a trigger.
-#[utoipa::path(delete, path = "/api/triggers/{id}", tag = "workflows", params(("id" = String, Path, description = "Trigger ID")), responses((status = 200, description = "Trigger deleted")))]
+///
+/// Idempotent (RFC 9110 §9.2.2): deleting a trigger that is already gone
+/// returns `200 OK` with `{"status": "already-deleted"}` instead of `404`.
+/// `400` is reserved for the malformed-UUID case alone. Refs #3509.
+#[utoipa::path(
+    delete,
+    path = "/api/triggers/{id}",
+    tag = "workflows",
+    params(("id" = String, Path, description = "Trigger ID")),
+    responses(
+        (status = 200, description = "Trigger deleted (or was already absent — idempotent)"),
+        (status = 400, description = "Malformed trigger ID")
+    )
+)]
 pub async fn delete_trigger(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -1225,7 +1234,13 @@ pub async fn delete_trigger(
             Json(serde_json::json!({"status": "removed", "trigger_id": id})),
         )
     } else {
-        ApiErrorResponse::not_found("Trigger not found").into_json_tuple()
+        // Idempotent DELETE — replayed request, double-click, or already
+        // removed by another caller. Surface success so clients don't have
+        // to special-case 404 on a successful-state outcome.
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "already-deleted", "trigger_id": id})),
+        )
     }
 }
 
@@ -1945,33 +1960,62 @@ pub async fn create_cron_job(
 }
 
 /// DELETE /api/cron/jobs/{id} — Delete a cron job.
-#[utoipa::path(delete, path = "/api/cron/jobs/{id}", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), responses((status = 200, description = "Cron job deleted")))]
+///
+/// Idempotent (RFC 9110 §9.2.2): deleting a cron job that is already gone
+/// returns `200 OK` with `{"status": "already-deleted"}` instead of `404`.
+/// `400` is reserved for the malformed-UUID case alone (Refs #3509). Returns
+/// `500` if the in-memory removal succeeds but persistence to disk fails —
+/// without persistence, the deletion would silently revert on daemon restart
+/// (issue #3515).
+#[utoipa::path(
+    delete,
+    path = "/api/cron/jobs/{id}",
+    tag = "workflows",
+    params(("id" = String, Path, description = "Cron job ID")),
+    responses(
+        (status = 200, description = "Cron job deleted (or was already absent — idempotent)"),
+        (status = 400, description = "Malformed cron job ID"),
+        (status = 500, description = "Persist failed; change will not survive restart")
+    )
+)]
 pub async fn delete_cron_job(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match uuid::Uuid::parse_str(&id) {
-        Ok(uuid) => {
-            let job_id = librefang_types::scheduler::CronJobId(uuid);
-            match state.kernel.cron().remove_job(job_id) {
-                Ok(_) => {
-                    if let Err(e) = state.kernel.cron().persist() {
-                        tracing::warn!("Failed to persist cron scheduler state: {e}");
-                    }
-                    (
-                        StatusCode::OK,
-                        Json(serde_json::json!({"status": "deleted"})),
-                    )
-                }
-                Err(e) => ApiErrorResponse::not_found(format!("{e}")).into_json_tuple(),
+    let uuid = match uuid::Uuid::parse_str(&id) {
+        Ok(u) => u,
+        Err(_) => return ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
+    };
+    let job_id = librefang_types::scheduler::CronJobId(uuid);
+    match state.kernel.cron().remove_job(job_id) {
+        Ok(_) => {
+            if let Err(e) = state.kernel.cron().persist() {
+                tracing::error!("Failed to persist cron scheduler state after delete: {e}");
+                return cron_persist_failed_response("delete", &e.to_string());
             }
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "deleted", "job_id": id})),
+            )
         }
-        Err(_) => ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
+        Err(_) => {
+            // Idempotent DELETE — the cron job is already gone (replayed
+            // request, double-click, or removed by another deleter). Treat
+            // as success so clients don't have to special-case 404.
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"status": "already-deleted", "job_id": id})),
+            )
+        }
     }
 }
 
 /// PUT /api/cron/jobs/{id} — Update a cron job's configuration.
-#[utoipa::path(put, path = "/api/cron/jobs/{id}", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), request_body = crate::types::JsonObject, responses((status = 200, description = "Cron job updated", body = crate::types::JsonObject)))]
+///
+/// Returns 500 if the in-memory update succeeds but persistence to disk
+/// fails — without persistence, the new schedule runs in-memory until the
+/// next restart, then silently reverts to the old schedule (issue #3515).
+#[utoipa::path(put, path = "/api/cron/jobs/{id}", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), request_body = crate::types::JsonObject, responses((status = 200, description = "Cron job updated", body = crate::types::JsonObject), (status = 500, description = "Persist failed; change will not survive restart")))]
 pub async fn update_cron_job(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -1982,7 +2026,10 @@ pub async fn update_cron_job(
             let job_id = librefang_types::scheduler::CronJobId(uuid);
             match state.kernel.cron().update_job(job_id, &body) {
                 Ok(job) => {
-                    let _ = state.kernel.cron().persist();
+                    if let Err(e) = state.kernel.cron().persist() {
+                        tracing::error!("Failed to persist cron scheduler state after update: {e}");
+                        return cron_persist_failed_response("update", &e.to_string());
+                    }
                     (
                         StatusCode::OK,
                         Json(serde_json::to_value(&job).unwrap_or_default()),
@@ -1996,7 +2043,11 @@ pub async fn update_cron_job(
 }
 
 /// PUT /api/cron/jobs/{id}/enable — Enable or disable a cron job.
-#[utoipa::path(put, path = "/api/cron/jobs/{id}/enable", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), request_body = crate::types::JsonObject, responses((status = 200, description = "Cron job toggled", body = crate::types::JsonObject)))]
+///
+/// Returns 500 if the in-memory toggle succeeds but persistence to disk
+/// fails — without persistence, the new enabled state would silently
+/// revert on daemon restart (issue #3515).
+#[utoipa::path(put, path = "/api/cron/jobs/{id}/enable", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), request_body = crate::types::JsonObject, responses((status = 200, description = "Cron job toggled", body = crate::types::JsonObject), (status = 500, description = "Persist failed; change will not survive restart")))]
 pub async fn toggle_cron_job(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -2009,7 +2060,8 @@ pub async fn toggle_cron_job(
             match state.kernel.cron().set_enabled(job_id, enabled) {
                 Ok(()) => {
                     if let Err(e) = state.kernel.cron().persist() {
-                        tracing::warn!("Failed to persist cron scheduler state: {e}");
+                        tracing::error!("Failed to persist cron scheduler state after toggle: {e}");
+                        return cron_persist_failed_response("toggle", &e.to_string());
                     }
                     (
                         StatusCode::OK,
@@ -2021,6 +2073,31 @@ pub async fn toggle_cron_job(
         }
         Err(_) => ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
     }
+}
+
+/// Build a 500 response for cron persist failures.
+///
+/// The in-memory scheduler change has already been applied at this point,
+/// so the response signals two things: (a) the change is live in-memory
+/// right now, but (b) it will silently revert on daemon restart unless
+/// the persist failure is resolved. Clients should surface this clearly
+/// (it is *not* a routine 500).
+fn cron_persist_failed_response(
+    operation: &str,
+    detail: &str,
+) -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({
+            "error": "Failed to persist cron job change",
+            "code": "cron_persist_failed",
+            "type": "cron_persist_failed",
+            "operation": operation,
+            "in_memory_applied": true,
+            "will_survive_restart": false,
+            "detail": detail,
+        })),
+    )
 }
 
 /// GET /api/cron/jobs/{id} — Get a single cron job by ID.

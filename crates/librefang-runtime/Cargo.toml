@@ -19,6 +19,7 @@ librefang-memory = { path = "../librefang-memory" }
 librefang-skills = { path = "../librefang-skills" }
 librefang-storage = { path = "../librefang-storage", default-features = false }
 tokio = { workspace = true }
+bytes = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
@@ -73,3 +74,6 @@ uar-driver = ["librefang-llm-drivers/uar-driver"]
 surreal-backend = ["librefang-storage/surreal-backend", "librefang-memory/surreal-backend", "dep:surrealdb"]
 sqlite-backend = ["librefang-storage/sqlite-backend", "librefang-memory/sqlite-backend"]
 
+
+[lints]
+workspace = true

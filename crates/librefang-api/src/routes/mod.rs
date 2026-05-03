@@ -13,10 +13,13 @@
 // `routes::agents::router()`), so there is no actual conflict.
 #![allow(ambiguous_glob_reexports)]
 
+pub mod agent_templates;
 pub mod agents;
+pub mod approvals;
 pub mod audit;
 pub mod authz;
 pub mod auto_dream;
+pub mod backup;
 pub mod budget;
 pub mod channels;
 pub mod config;
@@ -26,15 +29,19 @@ pub mod mcp_auth;
 pub mod media;
 pub mod memory;
 pub mod network;
+pub mod pairing;
 pub mod plugins;
 pub mod prompts;
 pub mod providers;
 pub mod skills;
 pub mod storage;
 pub mod system;
+pub mod task_queue;
 pub mod terminal;
+pub mod tools_sessions;
 pub mod uar;
 pub mod users;
+pub mod webhooks;
 pub mod workflows;
 
 // Glob re-export to keep `routes::handler_name` backward compatible
@@ -47,10 +54,13 @@ pub mod workflows;
 // All modules export a `router()` function; glob re-export produces an ambiguity
 // warning, but `router()` is only accessed via qualified paths (e.g.
 // `routes::agents::router()`), so there is no actual conflict.
+pub use agent_templates::*;
 pub use agents::*;
+pub use approvals::*;
 pub use audit::*;
 pub use authz::*;
 pub use auto_dream::*;
+pub use backup::*;
 pub use budget::*;
 pub use channels::*;
 pub use config::*;
@@ -60,13 +70,17 @@ pub use mcp_auth::*;
 pub use media::*;
 pub use memory::*;
 pub use network::*;
+pub use pairing::*;
 pub use plugins::*;
 pub use providers::*;
 pub use skills::*;
 pub use storage::*;
 pub use system::*;
+pub use task_queue::*;
 pub use terminal::*;
+pub use tools_sessions::*;
 pub use users::*;
+pub use webhooks::*;
 pub use workflows::*;
 
 use crate::middleware::RequestLanguage;

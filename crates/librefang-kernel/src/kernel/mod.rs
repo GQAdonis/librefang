@@ -911,6 +911,29 @@ pub struct LibreFangKernel {
     /// first request has written the updated list can redeem the same code
     /// twice.
     vault_recovery_codes_mutex: std::sync::Mutex<()>,
+    /// Process-lifetime cache of the unlocked credential vault (#3598).
+    ///
+    /// Without this cache, every `vault_get` / `vault_set` rebuilt a fresh
+    /// `CredentialVault`, re-read `vault.enc` from disk, and re-ran the
+    /// Argon2id KDF inside `unlock()` — which is intentionally slow.
+    /// `dashboard_login` reads two keys (`dashboard_user`, `dashboard_password`)
+    /// per request and so paid two full KDF runs every login attempt.
+    ///
+    /// Lazy-initialised on first `vault_handle()` call so kernels that never
+    /// touch the vault do no I/O. Subsequent reads hit the in-memory
+    /// `HashMap<String, Zeroizing<String>>` directly. Writes still call
+    /// `CredentialVault::set` which re-derives a fresh per-write KDF inside
+    /// `save()` (that path is unchanged — at-rest security is not
+    /// regressed). The vault's `Drop` impl still zeroises entries when the
+    /// kernel is dropped.
+    ///
+    /// `OnceLock<Arc<RwLock<…>>>` because:
+    /// - lazy init must be one-shot and race-safe (`OnceLock`),
+    /// - the cached vault is shared by &-borrowing kernel methods (`Arc`),
+    /// - reads dominate writes (`RwLock`).
+    vault_cache: std::sync::OnceLock<
+        std::sync::Arc<std::sync::RwLock<librefang_extensions::vault::CredentialVault>>,
+    >,
 }
 
 /// Bounded in-memory delivery receipt tracker.
@@ -1134,6 +1157,119 @@ impl LibreFangKernel {
     #[inline]
     pub fn home_dir(&self) -> &Path {
         &self.home_dir_boot
+    }
+
+    /// Snapshot the inbox subsystem's status (config + on-disk file counts).
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to reach
+    /// into the `librefang_kernel::inbox` module directly. See issue #3744.
+    pub fn inbox_status(&self) -> crate::inbox::InboxStatus {
+        let cfg = self.config_ref();
+        crate::inbox::inbox_status(&cfg.inbox, self.home_dir())
+    }
+
+    /// Snapshot of the auto-dream subsystem's status (global config + per-agent
+    /// rows) for the dashboard `/api/auto-dream/status` endpoint.
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to reach
+    /// into the `librefang_kernel::auto_dream` module directly. See issue #3744.
+    pub async fn auto_dream_status(&self) -> crate::auto_dream::AutoDreamStatus {
+        crate::auto_dream::current_status(self).await
+    }
+
+    /// Manually fire an auto-dream consolidation for `agent_id`, bypassing
+    /// time and session gates but respecting the per-agent dream lock.
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to reach
+    /// into the `librefang_kernel::auto_dream` module directly. See issue #3744.
+    pub async fn auto_dream_trigger_manual(
+        self: std::sync::Arc<Self>,
+        agent_id: librefang_types::agent::AgentId,
+    ) -> crate::auto_dream::TriggerOutcome {
+        crate::auto_dream::trigger_manual(self, agent_id).await
+    }
+
+    /// Abort an in-flight manual auto-dream for `agent_id`. Scheduled dreams
+    /// cannot be aborted.
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to reach
+    /// into the `librefang_kernel::auto_dream` module directly. See issue #3744.
+    pub async fn auto_dream_abort(
+        &self,
+        agent_id: librefang_types::agent::AgentId,
+    ) -> crate::auto_dream::AbortOutcome {
+        crate::auto_dream::abort_dream(agent_id).await
+    }
+
+    /// Toggle an agent's `auto_dream_enabled` opt-in flag. Returns `Err` if
+    /// the agent doesn't exist; the scheduler picks up the change on its
+    /// next tick.
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to reach
+    /// into the `librefang_kernel::auto_dream` module directly. See issue #3744.
+    pub fn auto_dream_set_enabled(
+        &self,
+        agent_id: librefang_types::agent::AgentId,
+        enabled: bool,
+    ) -> librefang_types::error::LibreFangResult<()> {
+        crate::auto_dream::set_agent_enabled(self, agent_id, enabled)
+    }
+
+    /// Build a redacted trajectory bundle for an agent's session.
+    ///
+    /// Encapsulates `librefang_kernel::trajectory` (exporter + policy + agent
+    /// context) so API callers do not need to import that module directly.
+    /// Sessions are persisted lazily on first message; if the session row is
+    /// missing but the requested ID matches the agent's currently-registered
+    /// session, an empty bundle is returned instead of a not-found error.
+    /// See issue #3744.
+    pub fn export_session_trajectory(
+        &self,
+        agent_id: AgentId,
+        session_id: SessionId,
+    ) -> KernelResult<crate::trajectory::TrajectoryBundle> {
+        use crate::trajectory::{AgentContext, RedactionPolicy, TrajectoryExporter};
+
+        let entry = self.registry.get(agent_id).ok_or_else(|| {
+            KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
+        })?;
+
+        // Build redaction policy. Use the agent's workspace as the
+        // path-collapse root when present.
+        let mut policy = RedactionPolicy::default();
+        if let Some(ws) = entry.manifest.workspace.clone() {
+            policy = policy.with_workspace_root(ws);
+        }
+
+        let exporter = TrajectoryExporter::new(self.memory.clone(), policy);
+        let agent_ctx = AgentContext {
+            name: entry.name.clone(),
+            model: entry.manifest.model.model.clone(),
+            provider: entry.manifest.model.provider.clone(),
+            system_prompt: entry.manifest.model.system_prompt.clone(),
+        };
+
+        match self.memory.get_session(session_id) {
+            Ok(None) if session_id == entry.session_id => {
+                Ok(exporter.empty_bundle(agent_id, session_id, agent_ctx))
+            }
+            Ok(_) => exporter
+                .export_session(agent_id, session_id, agent_ctx)
+                .map_err(KernelError::LibreFang),
+            Err(e) => Err(KernelError::LibreFang(e)),
+        }
+    }
+
+    /// Validate a `KernelConfig` candidate for hot-reload eligibility.
+    ///
+    /// Provided as a kernel-surface method so API callers do not need to
+    /// reach into the `librefang_kernel::config_reload` module directly.
+    /// See issue #3744.
+    pub fn validate_config_for_reload(
+        &self,
+        config: &librefang_types::config::KernelConfig,
+    ) -> Result<(), Vec<String>> {
+        crate::config_reload::validate_config_for_reload(config)
     }
 
     /// Build the roots list for a specific MCP server config.
@@ -1680,36 +1816,92 @@ impl LibreFangKernel {
         &self.approval_manager
     }
 
-    /// Read a secret from the encrypted vault.
+    /// Lazily open and unlock the credential vault, caching the result for
+    /// the lifetime of this kernel (#3598).
     ///
-    /// Opens and unlocks the vault on each call (stateless). Returns `None` if
-    /// the vault does not exist, cannot be unlocked, or the key is missing.
-    pub fn vault_get(&self, key: &str) -> Option<String> {
-        let vault_path = self.home_dir_boot.join("vault.enc");
-        let mut vault = librefang_extensions::vault::CredentialVault::new(vault_path);
-        if vault.unlock().is_err() {
-            return None;
+    /// The first call pays a single Argon2id KDF (inside `unlock()`) and
+    /// reads `vault.enc` from disk; every subsequent call returns the cached
+    /// `Arc<RwLock<…>>` with no I/O and no KDF. `vault_set` writes through
+    /// the same handle and persists via `CredentialVault::set` →
+    /// `save()` (that path still re-derives a per-write key — at-rest
+    /// security is unchanged).
+    ///
+    /// Returns `Err(_)` only when the vault file exists but cannot be
+    /// unlocked (bad master key, corrupt file, missing keyring entry).
+    /// A missing vault file is **not** an error: the cache is populated
+    /// with an unopened vault and the first `set()` call will `init()` it.
+    fn vault_handle(
+        &self,
+    ) -> Result<
+        std::sync::Arc<std::sync::RwLock<librefang_extensions::vault::CredentialVault>>,
+        String,
+    > {
+        // Fast path: cache already populated.
+        if let Some(handle) = self.vault_cache.get() {
+            return Ok(std::sync::Arc::clone(handle));
         }
-        vault.get(key).map(|s| s.to_string())
-    }
 
-    /// Write a secret to the encrypted vault.
-    ///
-    /// Opens and unlocks the vault on each call (stateless). Creates the vault
-    /// if it does not exist.
-    pub fn vault_set(&self, key: &str, value: &str) -> Result<(), String> {
+        // Slow path: build the vault, unlock if it exists, install once.
+        // OnceLock::set() losing a race is fine — both racers built an
+        // equivalent unlocked vault; we just discard ours and use the
+        // installed one. Argon2id runs at most a small bounded number of
+        // times during the brief race window (in practice ≤ 2).
         let vault_path = self.home_dir_boot.join("vault.enc");
         let mut vault = librefang_extensions::vault::CredentialVault::new(vault_path);
-        if !vault.exists() {
-            vault
-                .init()
-                .map_err(|e| format!("Vault init failed: {e}"))?;
-        } else {
+        if vault.exists() {
             vault
                 .unlock()
                 .map_err(|e| format!("Vault unlock failed: {e}"))?;
         }
-        vault
+        let handle = std::sync::Arc::new(std::sync::RwLock::new(vault));
+        match self.vault_cache.set(std::sync::Arc::clone(&handle)) {
+            Ok(()) => Ok(handle),
+            Err(_) => Ok(std::sync::Arc::clone(self.vault_cache.get().expect(
+                "OnceLock::set() returned Err; another thread must have installed a value",
+            ))),
+        }
+    }
+
+    /// Read a secret from the encrypted vault.
+    ///
+    /// First call lazily unlocks the vault (one Argon2id KDF + one disk
+    /// read) and caches the result on the kernel; subsequent calls — for
+    /// any key — are pure in-memory `HashMap` lookups. See `vault_handle`
+    /// and #3598.
+    ///
+    /// Returns `None` if the vault does not exist, cannot be unlocked, or
+    /// the key is missing.
+    pub fn vault_get(&self, key: &str) -> Option<String> {
+        let handle = match self.vault_handle() {
+            Ok(h) => h,
+            Err(_) => return None,
+        };
+        let guard = handle.read().unwrap_or_else(|e| e.into_inner());
+        if !guard.is_unlocked() {
+            // Vault file did not exist when the cache was populated and no
+            // `set()` has initialised it yet — nothing to read.
+            return None;
+        }
+        guard.get(key).map(|s| s.to_string())
+    }
+
+    /// Write a secret to the encrypted vault.
+    ///
+    /// Uses the cached, already-unlocked vault when available (#3598) so
+    /// the unlock-time Argon2id KDF runs at most once per kernel lifetime
+    /// instead of once per call. The save-time KDF inside
+    /// `CredentialVault::set` still runs on every write — at-rest
+    /// security is unchanged. Creates the vault if it does not exist.
+    pub fn vault_set(&self, key: &str, value: &str) -> Result<(), String> {
+        let handle = self.vault_handle()?;
+        let mut guard = handle.write().unwrap_or_else(|e| e.into_inner());
+        if !guard.is_unlocked() {
+            // Vault did not exist at cache-population time; create it now.
+            guard
+                .init()
+                .map_err(|e| format!("Vault init failed: {e}"))?;
+        }
+        guard
             .set(key.to_string(), zeroize::Zeroizing::new(value.to_string()))
             .map_err(|e| format!("Vault write failed: {e}"))
     }
@@ -1764,6 +1956,19 @@ impl LibreFangKernel {
     #[inline]
     pub fn templates(&self) -> &WorkflowTemplateRegistry {
         &self.template_registry
+    }
+
+    /// Convert a workflow into a reusable template.
+    ///
+    /// Thin wrapper around [`WorkflowEngine::workflow_to_template`] so that
+    /// callers (e.g. `librefang-api`) do not need to import the engine type
+    /// directly. See issue #3744 for the broader API/kernel decoupling effort.
+    #[inline]
+    pub fn workflow_to_template(
+        &self,
+        workflow: &crate::workflow::Workflow,
+    ) -> librefang_types::workflow_template::WorkflowTemplate {
+        WorkflowEngine::workflow_to_template(workflow)
     }
 
     /// Event-driven trigger engine.
@@ -1892,6 +2097,23 @@ impl LibreFangKernel {
             .iter()
             .find(|e| e.key().0 == agent_id)
             .map(|e| e.value().clone())
+    }
+
+    /// First currently-active `(parent_session_id, parent_interrupt)` pair
+    /// for `agent_id`. Same DashMap-iteration-order semantics as
+    /// [`Self::any_session_interrupt_for_agent`], but also returns the
+    /// session key the interrupt was registered under so fork-spawn sites
+    /// can pin themselves to the parent turn's actual session — rather
+    /// than re-reading `entry.session_id`, which is a TOCTOU race against
+    /// `switch_agent_session` (#4291).
+    pub(crate) fn any_session_interrupt_with_id_for_agent(
+        &self,
+        agent_id: AgentId,
+    ) -> Option<(SessionId, librefang_runtime::interrupt::SessionInterrupt)> {
+        self.session_interrupts
+            .iter()
+            .find(|e| e.key().0 == agent_id)
+            .map(|e| (e.key().1, e.value().clone()))
     }
 
     /// Per-agent decision traces.
@@ -2374,6 +2596,73 @@ impl LibreFangKernel {
         // check below (which unlocks the vault) and before any agent boot
         // path that touches MCP OAuth tokens. Idempotent: first call wins.
         librefang_extensions::vault::CredentialVault::init_with_config(config.vault.use_os_keyring);
+
+        // Vault startup-sentinel verification (#3651).
+        //
+        // If a vault file already exists, refuse to boot when it cannot be
+        // unlocked with the resolved master key OR when the sentinel
+        // plaintext does not match. Pre-fix, the daemon would silently
+        // boot with the wrong key and every subsequent vault read would
+        // fail with a generic "Decryption failed" log line — operators
+        // never learned the root cause. The sentinel turns that into a
+        // single, actionable error at boot time.
+        //
+        // If the vault does not yet exist we say nothing — first-run / CLI
+        // bootstrap creates it later via `init()`, which writes the
+        // sentinel automatically.
+        let vault_path = config.home_dir.join("vault.enc");
+        if vault_path.exists() {
+            let mut vault = librefang_extensions::vault::CredentialVault::new(vault_path.clone());
+            match vault.unlock() {
+                Ok(()) => {
+                    if let Err(e) = vault.verify_or_install_sentinel() {
+                        match e {
+                            librefang_extensions::ExtensionError::VaultKeyMismatch { hint } => {
+                                return Err(KernelError::BootFailed(format!(
+                                    "Vault key mismatch — refusing to boot. {hint} \
+                                     Recovery: restore the original LIBREFANG_VAULT_KEY env var, \
+                                     restore the vault file from backup, or run \
+                                     `librefang vault rotate-key` if you intended to rotate."
+                                )));
+                            }
+                            other => {
+                                // Sentinel backfill failed for some other
+                                // reason (disk full, permissions). Surface
+                                // it but don't pretend it's a key mismatch.
+                                return Err(KernelError::BootFailed(format!(
+                                    "Vault sentinel write failed: {other}"
+                                )));
+                            }
+                        }
+                    }
+                }
+                Err(librefang_extensions::ExtensionError::VaultLocked) => {
+                    // No master key available at all — don't refuse boot
+                    // (some deployments run without a vault and rely on env
+                    // vars), but warn loudly so the operator notices the
+                    // mismatch between "vault file exists" and "no key".
+                    warn!(
+                        "Vault file exists at {:?} but no master key is \
+                         resolvable (LIBREFANG_VAULT_KEY unset and OS keyring \
+                         empty). Encrypted credentials will be unreadable until \
+                         the key is restored.",
+                        vault_path
+                    );
+                }
+                Err(e) => {
+                    // Non-locked unlock failure is almost always wrong-key
+                    // (AES-GCM decrypt fails). Refuse to boot — same
+                    // rationale as the sentinel-mismatch branch above.
+                    return Err(KernelError::BootFailed(format!(
+                        "Vault unlock failed at boot ({e}). This usually means \
+                         LIBREFANG_VAULT_KEY does not match the key the vault \
+                         was encrypted with. Recovery: restore the original \
+                         env var, restore the vault file from backup, or run \
+                         `librefang vault rotate-key` if you intended to rotate."
+                    )));
+                }
+            }
+        }
 
         match config.mode {
             KernelMode::Stable => {
@@ -3829,6 +4118,7 @@ impl LibreFangKernel {
             taint_rules_swap: initial_taint_rules,
             log_reloader: OnceLock::new(),
             vault_recovery_codes_mutex: std::sync::Mutex::new(()),
+            vault_cache: std::sync::OnceLock::new(),
         };
 
         // Initialize proactive memory system (mem0-style) from config.
@@ -4545,6 +4835,21 @@ system_prompt = "You are a helpful assistant."
                 ) {
                     warn!(agent = %entry.name, "{warning}");
                 }
+            }
+        }
+
+        // Validate kernel-wide default_routing (issue #4466) so the init
+        // wizard's Smart Router selection surfaces alias / unknown-model
+        // warnings at boot, not silently at first dispatch.
+        if let Some(ref routing_config) = kernel.config.load().default_routing {
+            let router = ModelRouter::new(routing_config.clone());
+            for warning in router.validate_models(
+                &kernel
+                    .model_catalog
+                    .read()
+                    .unwrap_or_else(|e| e.into_inner()),
+            ) {
+                warn!(target: "librefang_kernel::default_routing", "{warning}");
             }
         }
 
@@ -5455,6 +5760,7 @@ system_prompt = "You are a helpful assistant."
                 max_iterations: self.config.load().agent_max_iterations,
                 max_history_messages: self.config.load().max_history_messages,
                 aux_client: Some(self.aux_client.load_full()),
+                parent_session_id: None,
             },
         )
         .await
@@ -6291,9 +6597,23 @@ system_prompt = "You are a helpful assistant."
         // shared Arc<AtomicBool> still work — `stop_agent_run(agent_id)`
         // fans out across all sessions, so no matter which entry we
         // borrowed from, the cascade reaches this fork.
-        let interrupt = self
-            .any_session_interrupt_for_agent(agent_id)
-            .unwrap_or_default();
+        //
+        // We also snapshot the parent session id from the same lookup so
+        // the kernel's session resolver can pin the fork to the parent
+        // turn's session for prompt-cache alignment, instead of
+        // re-reading `entry.session_id` later (which is mutable by
+        // `switch_agent_session`, producing a TOCTOU race — #4291). When
+        // no parent loop is in flight, fall back to the registry pointer
+        // — the only signal we have, and the fork will create/resume
+        // that session on its own.
+        let (parent_session_id, interrupt) =
+            match self.any_session_interrupt_with_id_for_agent(agent_id) {
+                Some((sid, intr)) => (sid, intr),
+                None => (
+                    entry.session_id,
+                    librefang_runtime::interrupt::SessionInterrupt::default(),
+                ),
+            };
         let loop_opts = librefang_runtime::agent_loop::LoopOptions {
             is_fork: true,
             allowed_tools,
@@ -6301,6 +6621,7 @@ system_prompt = "You are a helpful assistant."
             max_iterations: self.config.load().agent_max_iterations,
             max_history_messages: self.config.load().max_history_messages,
             aux_client: Some(self.aux_client.load_full()),
+            parent_session_id: Some(parent_session_id),
         };
         // INVARIANT: forks must use the canonical session so the parent turn's
         // prompt-cache prefix is reused. Do NOT pass a `session_id_override`
@@ -6372,6 +6693,7 @@ system_prompt = "You are a helpful assistant."
             max_iterations: self.config.load().agent_max_iterations,
             max_history_messages: self.config.load().max_history_messages,
             aux_client: Some(self.aux_client.load_full()),
+            parent_session_id: None,
         };
         self.send_message_streaming_with_sender_and_opts(
             agent_id,
@@ -6529,22 +6851,68 @@ system_prompt = "You are a helpful assistant."
                         Some(cid) if !cid.is_empty() => format!("{}:{}", ctx.channel, cid),
                         _ => ctx.channel.clone(),
                     };
-                    SessionId::for_channel(agent_id, &scope)
+                    let derived = SessionId::for_channel(agent_id, &scope);
+                    // #3692: surface when the channel branch silently
+                    // overrides a non-default manifest `session_mode`.
+                    // Operators previously had no way to tell from logs
+                    // why their `session_mode = "new"` declaration was
+                    // not producing per-fire isolation for channel /
+                    // cron traffic. Demoted to `trace!` when the
+                    // manifest is on the default (Persistent) so the
+                    // override is observationally a no-op.
+                    let requested_mode = entry.manifest.session_mode;
+                    if matches!(requested_mode, librefang_types::agent::SessionMode::New) {
+                        debug!(
+                            agent_id = %agent_id,
+                            effective_session_id = %derived,
+                            resolution_source = "channel-derived",
+                            requested_session_mode = ?requested_mode,
+                            channel = %ctx.channel,
+                            chat_id = ctx.chat_id.as_deref().unwrap_or(""),
+                            "session_mode override ignored: channel branch derives a deterministic SessionId::for_channel(agent, channel:chat)"
+                        );
+                    } else {
+                        tracing::trace!(
+                            agent_id = %agent_id,
+                            effective_session_id = %derived,
+                            resolution_source = "channel-derived",
+                            requested_session_mode = ?requested_mode,
+                            channel = %ctx.channel,
+                            "session resolved via channel branch"
+                        );
+                    }
+                    derived
                 }
-                // Fork calls always target the agent's canonical session —
-                // the whole point of fork mode is to share the parent turn's
+                // Fork calls always target the parent turn's session — the
+                // whole point of fork mode is to share the parent's
                 // context (and therefore its prompt-cache prefix). An agent
                 // with `session_mode = "new"` would otherwise land on
                 // `SessionId::new()` here, producing a fresh empty session
                 // and breaking cache alignment. Force Persistent for forks
                 // regardless of manifest.
                 //
+                // We read the parent session id from `loop_opts`, NOT from
+                // `entry.session_id`. The registry pointer is mutable by
+                // `switch_agent_session` / `update_session_id` and can flip
+                // between parent loop start and fork spawn, sending the
+                // fork to the wrong session and polluting that session's
+                // history (#4291). The fork-spawn site
+                // (`run_forked_agent_streaming`) snapshots the parent
+                // session at fork-construction time and threads it through
+                // `LoopOptions::parent_session_id`.
+                //
                 // NOTE: an explicit `session_id_override` (above) wins over
                 // this branch — if you ever plumb an override through a fork
                 // caller, prompt-cache alignment WILL break. The current
                 // `run_forked_agent_streaming` deliberately passes `None` to
                 // preserve this invariant.
-                _ if loop_opts.is_fork => entry.session_id,
+                _ if loop_opts.is_fork => loop_opts.parent_session_id.ok_or_else(|| {
+                    KernelError::LibreFang(LibreFangError::Internal(
+                        "fork loop_opts missing parent_session_id (must be set by \
+                         run_forked_agent_streaming before reaching the session resolver)"
+                            .to_string(),
+                    ))
+                })?,
                 _ => match entry.manifest.session_mode {
                     librefang_types::agent::SessionMode::Persistent => entry.session_id,
                     librefang_types::agent::SessionMode::New => SessionId::new(),
@@ -7566,11 +7934,14 @@ system_prompt = "You are a helpful assistant."
             &config,
         )
         .await
-        .map_err(|e| {
-            KernelError::LibreFang(LibreFangError::Internal(format!(
-                "Python execution failed: {e}"
-            )))
-        })?;
+        // #3711 (4-of-21): propagate the typed `PythonError` instead of
+        // collapsing it to `LibreFangError::Internal(String)`. Display
+        // output ("Python execution failed: …") is preserved byte-for-byte
+        // by the format on `KernelError::Python`, so existing log/UI
+        // strings remain identical while upstream callers gain the ability
+        // to match on typed variants (e.g., `Timeout` → 408, `ScriptError`
+        // → 422).
+        .map_err(KernelError::from)?;
 
         info!(agent = %entry.name, "Python agent execution complete");
 
@@ -8127,7 +8498,40 @@ system_prompt = "You are a helpful assistant."
                         Some(cid) if !cid.is_empty() => format!("{}:{}", ctx.channel, cid),
                         _ => ctx.channel.clone(),
                     };
-                    SessionId::for_channel(agent_id, &scope)
+                    let derived = SessionId::for_channel(agent_id, &scope);
+                    // #3692: surface when the channel branch silently
+                    // overrides a non-default manifest `session_mode`.
+                    // The `execute_llm_agent` path is reached by
+                    // channel bridges (always) and by the cron
+                    // dispatcher (synthetic `SenderContext{channel:
+                    // "cron"}`), so this is the canonical place where
+                    // the manifest declaration gets dropped on the
+                    // floor. Logged at `debug!` when the manifest /
+                    // per-trigger override actually disagrees with the
+                    // channel-derived id; `trace!` otherwise.
+                    let requested_mode =
+                        session_mode_override.unwrap_or(entry.manifest.session_mode);
+                    if matches!(requested_mode, librefang_types::agent::SessionMode::New) {
+                        debug!(
+                            agent_id = %agent_id,
+                            effective_session_id = %derived,
+                            resolution_source = "channel-derived",
+                            requested_session_mode = ?requested_mode,
+                            channel = %ctx.channel,
+                            chat_id = ctx.chat_id.as_deref().unwrap_or(""),
+                            "session_mode override ignored: channel branch derives a deterministic SessionId::for_channel(agent, channel:chat)"
+                        );
+                    } else {
+                        tracing::trace!(
+                            agent_id = %agent_id,
+                            effective_session_id = %derived,
+                            resolution_source = "channel-derived",
+                            requested_session_mode = ?requested_mode,
+                            channel = %ctx.channel,
+                            "session resolved via channel branch"
+                        );
+                    }
+                    derived
                 }
                 _ => {
                     let mode = session_mode_override.unwrap_or(entry.manifest.session_mode);
@@ -8463,7 +8867,9 @@ system_prompt = "You are a helpful assistant."
                 );
                 manifest.model.model = pinned.clone();
             }
-        } else if let Some(ref routing_config) = manifest.routing {
+        } else if let Some(routing_config) =
+            manifest.routing.as_ref().or(cfg.default_routing.as_ref())
+        {
             let mut router = ModelRouter::new(routing_config.clone());
             // Resolve aliases (e.g. "sonnet" -> "claude-sonnet-4-20250514") before scoring
             router.resolve_aliases(&self.model_catalog.read().unwrap_or_else(|e| e.into_inner()));
@@ -8687,6 +9093,7 @@ system_prompt = "You are a helpful assistant."
             max_iterations: cfg.agent_max_iterations,
             max_history_messages: cfg.max_history_messages,
             aux_client: Some(self.aux_client.load_full()),
+            parent_session_id: None,
         };
 
         // Build a per-execution MCP pool that includes the agent workspace as
@@ -9339,15 +9746,22 @@ system_prompt = "You are a helpful assistant."
             .list_agent_sessions(agent_id)
             .map_err(KernelError::LibreFang)?;
 
-        // Mark the active session
+        // `active` means "an agent loop is currently running against this
+        // session" — matching `/api/sessions` (#4290) and the dashboard's
+        // green-dot/pulse rendering. The legacy "is registry pointer"
+        // meaning is preserved as `is_canonical`, which forks /
+        // `agent_send` defaults still rely on. See #4293.
+        let running = self.running_session_ids();
+        let canonical_sid = entry.session_id.0.to_string();
         for s in &mut sessions {
             if let Some(obj) = s.as_object_mut() {
-                let is_active = obj
-                    .get("session_id")
-                    .and_then(|v| v.as_str())
-                    .map(|sid| sid == entry.session_id.0.to_string())
+                let sid_str = obj.get("session_id").and_then(|v| v.as_str()).unwrap_or("");
+                let is_active = uuid::Uuid::parse_str(sid_str)
+                    .map(|u| running.contains(&SessionId(u)))
                     .unwrap_or(false);
+                let is_canonical = sid_str == canonical_sid;
                 obj.insert("active".to_string(), serde_json::json!(is_active));
+                obj.insert("is_canonical".to_string(), serde_json::json!(is_canonical));
             }
         }
 
@@ -10434,6 +10848,17 @@ system_prompt = "You are a helpful assistant."
         self.running_tasks.iter().any(|e| e.key().0 == agent_id)
     }
 
+    /// Snapshot of every `SessionId` whose agent loop is currently in flight,
+    /// kernel-wide. Used by `/api/sessions` and per-agent session-listing
+    /// endpoints to populate the `active` field with "loop is currently
+    /// running" semantics — matching the dashboard's green-dot/pulse
+    /// rendering (see #4290, #4293). DashMap iteration is unordered; the
+    /// caller treats the result as a set lookup, never as a list. Cheap:
+    /// one `(AgentId, SessionId)` clone per running task.
+    pub fn running_session_ids(&self) -> std::collections::HashSet<SessionId> {
+        self.running_tasks.iter().map(|e| e.key().1).collect()
+    }
+
     /// Suspend an agent — sets state to Suspended, persists enabled=false to TOML.
     pub fn suspend_agent(&self, agent_id: AgentId) -> KernelResult<()> {
         use librefang_types::agent::AgentState;
@@ -11410,6 +11835,15 @@ system_prompt = "You are a helpful assistant."
         let (added, updated) = self.hand_registry.reload_from_disk(&self.home_dir_boot);
         info!(added, updated, "Reloaded hand definitions from disk");
         (added, updated)
+    }
+
+    /// Invalidate the hand route resolution cache.
+    ///
+    /// Thin wrapper around `librefang_kernel_router::invalidate_hand_route_cache`
+    /// so API callers don't need to reach into the router crate path directly
+    /// (refs #3744).
+    pub fn invalidate_hand_route_cache(&self) {
+        router::invalidate_hand_route_cache();
     }
 
     /// Persist active hand state to disk.
@@ -13622,7 +14056,7 @@ system_prompt = "You are a helpful assistant."
                     if kernel.supervisor.is_shutting_down() {
                         break;
                     }
-                    let upload_dir = std::env::temp_dir().join("librefang_uploads");
+                    let upload_dir = kernel.config_ref().channels.effective_file_download_dir();
                     if let Ok(mut entries) = tokio::fs::read_dir(&upload_dir).await {
                         let cutoff = std::time::SystemTime::now()
                             - std::time::Duration::from_secs(24 * 3600);
@@ -13888,14 +14322,42 @@ system_prompt = "You are a helpful assistant."
                                 // `session_mode` so that agents with
                                 // `session_mode = "new"` in agent.toml get
                                 // per-fire isolation for cron jobs as well.
-                                let effective_session_mode = job.session_mode.or_else(|| {
-                                    kernel
-                                        .registry
-                                        .get(agent_id)
-                                        .map(|entry| entry.manifest.session_mode)
-                                });
+                                // Snapshot the manifest's declared session_mode
+                                // separately so the trace below can show what
+                                // the agent.toml actually asked for, in
+                                // addition to the per-job override.
+                                let manifest_session_mode = kernel
+                                    .registry
+                                    .get(agent_id)
+                                    .map(|entry| entry.manifest.session_mode);
+                                let effective_session_mode =
+                                    job.session_mode.or(manifest_session_mode);
                                 let wants_new_session = effective_session_mode
                                     == Some(librefang_types::agent::SessionMode::New);
+                                // #3692: emit a structured event recording how
+                                // the cron fire's session id was resolved, so
+                                // operators can grep logs to confirm whether
+                                // their `session_mode = "new"` (per-job or
+                                // manifest) was honored — or silently ignored
+                                // because neither path set it.
+                                let resolution_source = if job.session_mode.is_some() {
+                                    "cron-job-override"
+                                } else if manifest_session_mode
+                                    == Some(librefang_types::agent::SessionMode::New)
+                                {
+                                    "cron-manifest-fallback"
+                                } else {
+                                    "cron-default-persistent"
+                                };
+                                debug!(
+                                    agent_id = %agent_id,
+                                    job = %job_name,
+                                    resolution_source = resolution_source,
+                                    job_session_mode = ?job.session_mode,
+                                    manifest_session_mode = ?manifest_session_mode,
+                                    effective_session_mode = ?effective_session_mode,
+                                    "cron session_mode resolved"
+                                );
                                 let cron_sender = SenderContext {
                                     channel: SYSTEM_CHANNEL_CRON.to_string(),
                                     user_id: job.peer_id.clone().unwrap_or_default(),
@@ -17645,6 +18107,10 @@ impl LibreFangKernel {
 
 #[async_trait]
 impl KernelHandle for LibreFangKernel {
+    fn effective_upload_dir(&self) -> std::path::PathBuf {
+        self.config_ref().channels.effective_file_download_dir()
+    }
+
     async fn spawn_agent(
         &self,
         manifest_toml: &str,
@@ -18053,21 +18519,19 @@ impl KernelHandle for LibreFangKernel {
 
     async fn knowledge_add_entity(
         &self,
-        entity: librefang_types::memory::Entity,
+        entity: &librefang_types::memory::Entity,
     ) -> Result<String, String> {
         self.knowledge_backend
-            .add_entity(entity)
-            .await
+            .add_entity(entity)            .await
             .map_err(|e| format!("Knowledge add entity failed: {e}"))
     }
 
     async fn knowledge_add_relation(
         &self,
-        relation: librefang_types::memory::Relation,
+        relation: &librefang_types::memory::Relation,
     ) -> Result<String, String> {
         self.knowledge_backend
-            .add_relation(relation)
-            .await
+            .add_relation(relation)            .await
             .map_err(|e| format!("Knowledge add relation failed: {e}"))
     }
 
@@ -18894,7 +19358,7 @@ impl KernelHandle for LibreFangKernel {
         &self,
         channel: &str,
         recipient: &str,
-        data: Vec<u8>,
+        data: bytes::Bytes,
         filename: &str,
         mime_type: &str,
         thread_id: Option<&str>,
@@ -18932,8 +19396,14 @@ impl KernelHandle for LibreFangKernel {
             librefang_user: None,
         };
 
+        // `ChannelContent::FileData` still carries `Vec<u8>` (changing it
+        // is out of scope for #3553 — that's a follow-up that touches
+        // every channel adapter). `Vec::from(Bytes)` is O(1) when the
+        // Bytes uniquely owns its allocation, which is the common case
+        // here (caller built it via `Bytes::from(vec)` straight from
+        // `tokio::fs::read`).
         let content = librefang_channels::types::ChannelContent::FileData {
-            data,
+            data: Vec::from(data),
             filename: filename.to_string(),
             mime_type: mime_type.to_string(),
         };
@@ -19087,13 +19557,12 @@ impl KernelHandle for LibreFangKernel {
 
     fn create_prompt_version(
         &self,
-        version: librefang_types::agent::PromptVersion,
+        version: &librefang_types::agent::PromptVersion,
     ) -> Result<(), String> {
         let cfg = self.config.load();
         let agent_id = version.agent_id;
         self.prompt_store
-            .create_version(version)
-            .map_err(|e| format!("Failed to create version: {e}"))?;
+            .create_version(version)            .map_err(|e| format!("Failed to create version: {e}"))?;
         // Prune old versions if over the configured limit
         let max = cfg.prompt_intelligence.max_versions_per_agent;
         let _ = self.prompt_store.prune_old_versions(agent_id, max);
@@ -19132,11 +19601,10 @@ impl KernelHandle for LibreFangKernel {
 
     fn create_experiment(
         &self,
-        experiment: librefang_types::agent::PromptExperiment,
+        experiment: &librefang_types::agent::PromptExperiment,
     ) -> Result<(), String> {
         self.prompt_store
-            .create_experiment(experiment)
-            .map_err(|e| format!("Failed to create experiment: {e}"))
+            .create_experiment(experiment)            .map_err(|e| format!("Failed to create experiment: {e}"))
     }
 
     fn get_experiment(
@@ -19426,6 +19894,10 @@ impl KernelHandle for LibreFangKernel {
             .map_err(|e| format!("Failed to save goals: {e}"))?;
 
         Ok(result)
+    }
+
+    fn channel_file_download_dir(&self) -> Option<std::path::PathBuf> {
+        Some(self.config.load().channels.effective_file_download_dir())
     }
 
     fn readonly_workspace_prefixes(&self, agent_id: &str) -> Vec<std::path::PathBuf> {
@@ -19952,6 +20424,21 @@ impl LibreFangKernel {
 /// `log_offline_as_warn = true` for providers in the default-or-fallback set
 /// (a real misconfiguration), `false` for incidentally-defined local
 /// providers (not configured — expected to be offline).
+impl LibreFangKernel {
+    /// Method-style facade over [`probe_and_update_local_provider`] so callers
+    /// outside this crate (e.g. `librefang-api`) do not need to import the
+    /// free function from `librefang_kernel::kernel`. Tracks the
+    /// KernelHandle boundary cleanup in #3744.
+    pub async fn probe_local_provider(
+        self: &Arc<Self>,
+        provider_id: &str,
+        base_url: &str,
+        log_offline_as_warn: bool,
+    ) -> librefang_runtime::provider_health::ProbeResult {
+        probe_and_update_local_provider(self, provider_id, base_url, log_offline_as_warn).await
+    }
+}
+
 pub async fn probe_and_update_local_provider(
     kernel: &Arc<LibreFangKernel>,
     provider_id: &str,

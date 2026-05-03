@@ -1761,6 +1761,20 @@ pub struct LoopOptions {
     /// Kernel populates this from the boot-time-built [`AuxClient`].
     /// Tests typically leave it as `None`.
     pub aux_client: Option<std::sync::Arc<crate::aux_client::AuxClient>>,
+    /// When `is_fork = true`, the session id the *parent* turn was actually
+    /// invoked on (i.e. the parent's resolved `effective_session_id`, NOT
+    /// the registry's mutable `entry.session_id` pointer). The kernel's
+    /// session resolver consumes this to land the fork on the parent's
+    /// session for prompt-cache alignment, regardless of whether the
+    /// agent registry pointer has since been re-pointed by
+    /// `switch_agent_session` / `update_session_id`.
+    ///
+    /// MUST be `Some(parent_session)` whenever `is_fork = true`. The
+    /// kernel surfaces a hard error if `is_fork && parent_session_id ==
+    /// None`, because reading `entry.session_id` at fork-spawn time is a
+    /// TOCTOU race against `switch_agent_session` (#4291). For
+    /// non-fork loops this field is ignored and should be left `None`.
+    pub parent_session_id: Option<librefang_types::agent::SessionId>,
 }
 
 /// Result of an agent loop execution.
@@ -4449,8 +4463,20 @@ async fn stream_with_retry(
                     inactivity_secs,
                     partial_text_len, last_activity, "LLM stream timed out with partial output"
                 );
-                if !partial_text.is_empty() {
-                    let _ = tx.send(StreamEvent::TextDelta { text: partial_text }).await;
+                // #3552: `partial_text` is `Option<Arc<str>>` — copy the body
+                // into the owned `String` that `TextDelta` requires only when
+                // we actually have one to forward. Most consumers (failover
+                // classification, log lines, error stringification through
+                // `LibreFangError::LlmDriver(e.to_string())`) only ever read
+                // `partial_text_len` and pay nothing for the body.
+                if let Some(body) = partial_text.as_deref() {
+                    if !body.is_empty() {
+                        let _ = tx
+                            .send(StreamEvent::TextDelta {
+                                text: body.to_string(),
+                            })
+                            .await;
+                    }
                 }
                 return Err(LibreFangError::LlmDriver(format!(
                     "Task timed out after {inactivity_secs}s of inactivity \

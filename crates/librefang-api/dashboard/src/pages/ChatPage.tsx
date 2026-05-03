@@ -162,6 +162,13 @@ function useWebSocket(
   const retriesRef = useRef(0);
   // Callback fired when WS closes while a response is pending
   const onDropRef = useRef<(() => void) | null>(null);
+  // Issue #3550: every in-flight slash-command listener registers its
+  // AbortController here so ws.onclose can detach them all at once.
+  // Without this the listeners stay attached on the dead WebSocket
+  // reference and re-issuing the command silently no-ops on the new
+  // socket. Each registrant is responsible for removing its own entry
+  // on the success/error/timeout paths.
+  const pendingCommandsRef = useRef<Set<AbortController>>(new Set());
   // Bug #3847: store the current URL + WS sub-protocols in refs so the
   // reconnect closure always reads the latest values rather than capturing
   // them from the previous agent via a stale closure.
@@ -232,6 +239,16 @@ function useWebSocket(
           if (onDropRef.current) {
             onDropRef.current();
             onDropRef.current = null;
+          }
+          // Issue #3550: detach any pending slash-command listeners.
+          // Their handlers were registered with { signal } so abort()
+          // both removes the listener from the (about-to-be-replaced)
+          // socket AND fires the abort handler that surfaces a system
+          // message to the user.
+          if (pendingCommandsRef.current.size > 0) {
+            const pending = Array.from(pendingCommandsRef.current);
+            pendingCommandsRef.current.clear();
+            for (const ctrl of pending) ctrl.abort();
           }
 
           // Bug #3854: stop reconnecting on auth-failure close codes
@@ -306,6 +323,15 @@ function useWebSocket(
       authErrorRef.current = false;
       gaveUpRef.current = false;
       onDropRef.current = null;
+      // Issue #3550: agent/session change tears down the socket. Any
+      // command listener still pending would be orphaned, so abort
+      // them here too — abort() detaches the listener via the
+      // AbortSignal we registered with addEventListener.
+      if (pendingCommandsRef.current.size > 0) {
+        const pending = Array.from(pendingCommandsRef.current);
+        pendingCommandsRef.current.clear();
+        for (const ctrl of pending) ctrl.abort();
+      }
       const ws = wsRef.current;
       if (ws) {
         ws.onclose = null; // prevent reconnect on intentional close
@@ -321,11 +347,17 @@ function useWebSocket(
     };
   }, [agentId, sessionId]);
 
-  return { ws: wsRef, wsConnected, onDropRef, ariaAnnouncement, ariaNonce };
+  return { ws: wsRef, wsConnected, onDropRef, pendingCommandsRef, ariaAnnouncement, ariaNonce };
 }
 
-// Per-agent session cache — survives agent switches within the same page lifecycle
+// Per-(agent, session) message cache — survives agent/session switches within
+// the same page lifecycle. Keying by agent alone (issue #4295) returned the
+// previously-viewed session's messages whenever the user switched sessions on
+// the same agent, because the cache hit on a fresh mount didn't consult the
+// requested sessionId.
 const sessionCache = new Map<string, ChatMessage[]>();
+const cacheKey = (agentId: string, sessionId: string | null): string =>
+  `${agentId}:${sessionId ?? ""}`;
 
 // Chat message management - includes history loading and sending (with WS streaming)
 // sessionVersion: bump to force reload after session switch
@@ -392,7 +424,7 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
       if (!alive.has(id)) delete latestTurns[id];
     }
   }, [agents]);
-  const { ws, wsConnected, onDropRef, ariaAnnouncement, ariaNonce } = useWebSocket(agentId, sessionId, onClearError);
+  const { ws, wsConnected, onDropRef, pendingCommandsRef, ariaAnnouncement, ariaNonce } = useWebSocket(agentId, sessionId, onClearError);
   const addSkillOutput = useUIStore((s) => s.addSkillOutput);
   const deepThinking = useUIStore((s) => s.deepThinking);
   const showThinkingProcess = useUIStore((s) => s.showThinkingProcess);
@@ -401,6 +433,10 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
   // during a previous render can tell whether their target is still on screen.
   const currentAgentRef = useRef<string | null>(agentId);
   useEffect(() => { currentAgentRef.current = agentId; }, [agentId]);
+  // Track the currently-viewed sessionId too so off-screen cache writes target
+  // the right (agent, session) bucket (issue #4295).
+  const currentSessionRef = useRef<string | null>(sessionId);
+  useEffect(() => { currentSessionRef.current = sessionId; }, [sessionId]);
 
   // Route a message update to either live React state (when the target agent
   // is on screen) or straight to the session cache (when the user has
@@ -415,8 +451,16 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
     if (id === currentAgentRef.current) {
       setMessages(updater);
     } else {
-      const current = sessionCache.get(id) ?? [];
-      sessionCache.set(id, updater(current));
+      // Off-screen update: route into the cache bucket for whichever session
+      // was active for that agent at the time we swapped away. We don't track
+      // per-agent session pointers, so fall back to the live currentSessionRef
+      // when the off-screen agent matches; otherwise key by agent only with an
+      // empty session segment (best-effort — the load-effect will overwrite on
+      // next view anyway).
+      const sid = id === currentAgentRef.current ? currentSessionRef.current : null;
+      const key = cacheKey(id, sid);
+      const current = sessionCache.get(key) ?? [];
+      sessionCache.set(key, updater(current));
     }
   }, []);
 
@@ -465,25 +509,27 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
 
     prevAgentRef.current = agentId;
     const ownedAgentId = agentId;
+    const ownedSessionId = sessionId;
 
     return () => {
-      sessionCache.set(ownedAgentId, messagesRef.current);
+      sessionCache.set(cacheKey(ownedAgentId, ownedSessionId), messagesRef.current);
     };
-  }, [agentId]);
+  }, [agentId, sessionId]);
 
   // Load history — use cache if available, otherwise fetch
   // sessionVersion changes force a fresh load (skip cache)
   useEffect(() => {
     if (!agentId) { setMessages([]); return; }
 
+    const key = cacheKey(agentId, sessionId);
     if (sessionVersion === 0) {
-      const cached = sessionCache.get(agentId);
+      const cached = sessionCache.get(key);
       if (cached) {
         setMessages(cached);
         return;
       }
     } else {
-      sessionCache.delete(agentId);
+      sessionCache.delete(key);
     }
 
     setMessages([]);
@@ -536,8 +582,8 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
           // for loadId. Only touch live React state when the user is still
           // viewing loadId; otherwise a slow A load resolving after the
           // user has swapped to B would overwrite B's displayed messages.
-          sessionCache.set(loadId, historical);
-          if (loadId === currentAgentRef.current) {
+          sessionCache.set(cacheKey(loadId, sessionId), historical);
+          if (loadId === currentAgentRef.current && sessionId === currentSessionRef.current) {
             setMessages(historical);
           }
         }
@@ -551,7 +597,12 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
         onClearError?.(message);
       })
       .finally(() => setAgentLoading(loadId, false));
-  }, [agentId, sessionVersion]);
+    // sessionId is in the deps so picking a different session in the dropdown
+    // re-runs the loader. Without it, the navigate() URL update lands a render
+    // after setSessionVersion, but the effect doesn't re-run on that render —
+    // so the previous session's messages stay on screen until a second click
+    // bumps sessionVersion again (issue #4295, Bug A).
+  }, [agentId, sessionId, sessionVersion]);
 
   const clearHistory = useCallback(async () => {
     if (!agentId) {
@@ -560,7 +611,7 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
     }
     try {
       await clearAgentHistory(agentId);
-      sessionCache.delete(agentId);
+      sessionCache.delete(cacheKey(agentId, sessionId));
       if (prevAgentRef.current === agentId) {
         messagesRef.current = [];
       }
@@ -568,7 +619,7 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
     } catch (error) {
       onClearError?.(error instanceof Error ? error.message : t("common.error"));
     }
-  }, [agentId, onClearError, t]);
+  }, [agentId, sessionId, onClearError, t]);
 
   // Send message - WS first, HTTP fallback. `attachments` is the list of
   // already-uploaded files that the agent should attach to this turn (image
@@ -618,11 +669,32 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
           { id: makeMessageId("user"), role: "user" as const, content: trimmed, timestamp: new Date() },
         ]);
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+          // Issue #3550: a one-shot listener that's only removed inside the
+          // handler leaks on dead-socket scenarios (network blip, daemon
+          // restart, route navigation between send and response). The dead
+          // socket is replaced by the reconnect path; the leaked listener
+          // sits on the old reference and the user's retry silently no-ops.
+          // Wrap the listener in an AbortController + 30s watchdog and
+          // register the controller in `pendingCommandsRef` so the WS
+          // close path (in useWebSocket) can mass-abort on disconnect.
+          const ctrl = new AbortController();
+          let settled = false;
+          let timer: ReturnType<typeof setTimeout> | null = null;
+          const finalize = () => {
+            if (settled) return;
+            settled = true;
+            if (timer) { clearTimeout(timer); timer = null; }
+            pendingCommandsRef.current.delete(ctrl);
+            // abort() is idempotent and doubles as the listener removal —
+            // calling it on success keeps us off the socket for any late
+            // straggler frames.
+            ctrl.abort();
+          };
           const handleCmdResponse = (event: MessageEvent) => {
             try {
               const data = JSON.parse(event.data as string);
               if (data.type === "command_result" || data.type === "error") {
-                ws.current?.removeEventListener("message", handleCmdResponse);
+                finalize();
                 const responseText = data.message || data.content || "";
                 // /new and /reset clear the backend session, so clear frontend too
                 if (data.type === "command_result" && (cmd === "new" || cmd === "reset")) {
@@ -646,8 +718,30 @@ function useChatMessages(agentId: string | null, agents: AgentItem[] = [], sessi
               }
             } catch { /* ignore non-JSON */ }
           };
-          ws.current.addEventListener("message", handleCmdResponse);
+          // When the abort fires (timeout, ws close, or success), surface
+          // a system message ONLY if we got there from timeout / drop,
+          // not from the success path which already pushed its own reply.
+          ctrl.signal.addEventListener("abort", () => {
+            if (timer) { clearTimeout(timer); timer = null; }
+            pendingCommandsRef.current.delete(ctrl);
+            if (!settled) {
+              // We got aborted before the response landed — either the
+              // 30s timer expired or the WS dropped. Either way the user
+              // needs a visible "command lost" hint so the silent no-op
+              // doesn't repeat.
+              settled = true;
+              setMessages(prev => [...prev,
+                { id: makeMessageId("sys"), role: "system" as const, content: t("chat.command_timeout"), timestamp: new Date() }
+              ]);
+            }
+          });
+          pendingCommandsRef.current.add(ctrl);
+          ws.current.addEventListener("message", handleCmdResponse, { signal: ctrl.signal });
           ws.current.send(JSON.stringify({ type: "command", command: cmd, args: cmdArgs }));
+          // 30s watchdog mirrors the slash-command UX expectation that
+          // backend commands are near-instant; LLM turns get the longer
+          // 180s window further down.
+          timer = setTimeout(() => { ctrl.abort(); }, 30_000);
         } else {
           sysMsg(t("chat.ws_not_connected"));
         }
@@ -2440,8 +2534,18 @@ export function ChatPage() {
     setSelectedAgentId(id);
     setVisibleCount(50);
     setMobileSheetOpen(false);
-    navigate({ to: "/chat", search: { agentId: id }, replace: true });
-  }, [navigate]);
+    // Preserve sessionId only when the URL already targets the same agent —
+    // otherwise the session is invalid for the new agent and would 404. This
+    // is the last line of defense against the bootstrap race in issue #4296
+    // (Bug C): without it, auto-select clobbers a URL-pinned sessionId via
+    // `replace: true`, and the back button can't recover it.
+    const keepSession = search?.agentId === id ? search?.sessionId : undefined;
+    navigate({
+      to: "/chat",
+      search: keepSession ? { agentId: id, sessionId: keepSession } : { agentId: id },
+      replace: true,
+    });
+  }, [navigate, search]);
 
   // Check TTS provider availability
   const mediaProvidersQuery = useMediaProviders();
@@ -2645,11 +2749,31 @@ export function ChatPage() {
   // (multi-tab safety, issue #2959); if absent, fall back to the server's
   // canonical active session so initial navigation still highlights correctly.
   const sessionsQuery = useAgentSessions(selectedAgentId);
-  const serverActiveSessionId = useMemo(() => {
-    const active = sessionsQuery.data?.find((s: SessionListItem) => s.active);
-    return active?.session_id;
+  // Fallback session pick when the URL has no `?sessionId=`. The server's
+  // `active` field is broken for trigger-driven agents using
+  // `session_mode = "new"` — the registry pointer often lands on a session
+  // not yet in the SQL listing, so zero rows report `active: true` and the
+  // chat lands with no session selected (issue #4295 Bug C, root cause #4293).
+  // Pick the most-recently-created session instead — that's what users
+  // actually want when they click an agent with many stored sessions, and it
+  // matches what the Agent detail Conversation tab does.
+  const fallbackSessionId = useMemo(() => {
+    const sessions = sessionsQuery.data;
+    if (!sessions || sessions.length === 0) return undefined;
+    let newest: SessionListItem | undefined;
+    let newestTs = -Infinity;
+    for (const s of sessions) {
+      const ts = s.created_at ? Date.parse(s.created_at) : NaN;
+      if (Number.isFinite(ts) && ts > newestTs) {
+        newestTs = ts;
+        newest = s;
+      }
+    }
+    // If no row had a parseable created_at, fall back to the first entry so
+    // the dropdown still highlights something rather than going blank.
+    return (newest ?? sessions[0]).session_id;
   }, [sessionsQuery.data]);
-  const activeSessionId = urlSessionId ?? serverActiveSessionId;
+  const activeSessionId = urlSessionId ?? fallbackSessionId;
 
   // Multi-attach SSE viewer (issue #3078). Opt-in behind ?attach=1 — the
   // server-side route ships in a separate PR; until that lands the hook
@@ -2705,6 +2829,10 @@ export function ChatPage() {
   useEffect(() => {
     if (!selectedAgentId) return;
     if (agentsQuery.data === undefined) return;
+    // Wait for the hands query too when hand agents are visible — otherwise
+    // `agents` is missing every is_hand entry mid-bootstrap and we'd clear a
+    // URL-pinned hand-agent selection on a stale list (issue #4296 Bug B).
+    if (showHandAgents && handsQuery.data === undefined) return;
     if (agents.some(a => a.id === selectedAgentId)) return;
     // Not in the current list — before clearing, try expanding the query
     // to include hand-spawned agents. The URL may point at a hand agent
@@ -2715,7 +2843,7 @@ export function ChatPage() {
       return;
     }
     setSelectedAgentId("");
-  }, [agents, selectedAgentId, agentsQuery.data, showHandAgents]);
+  }, [agents, selectedAgentId, agentsQuery.data, handsQuery.data, showHandAgents]);
 
   useEffect(() => {
     // Auto-select first running agent

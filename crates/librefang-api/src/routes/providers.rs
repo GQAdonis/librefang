@@ -396,7 +396,13 @@ pub async fn set_model_overrides(
         return ApiErrorResponse::internal(format!("Failed to persist overrides: {e}"))
             .into_json_tuple();
     }
-    (StatusCode::OK, Json(serde_json::json!({"status": "ok"})))
+    // Return the persisted overrides entity so callers can `setQueryData`
+    // without a follow-up GET. (Refs #3832.)
+    let persisted = catalog.get_overrides(&id).cloned().unwrap_or_default();
+    (
+        StatusCode::OK,
+        Json(serde_json::to_value(persisted).unwrap_or_else(|_| serde_json::json!({}))),
+    )
 }
 
 /// DELETE /api/models/overrides/{id} — Remove inference parameter overrides for a model.
@@ -1304,13 +1310,12 @@ pub async fn test_provider(
     // in-memory cache — users could start Ollama after LibreFang booted and
     // the dashboard would stay stuck on `local_offline` forever.
     if librefang_runtime::provider_health::is_local_provider(&name) {
-        let result = librefang_kernel::kernel::probe_and_update_local_provider(
-            &state.kernel,
-            &name,
-            &base_url,
-            false, // user-triggered test — don't escalate to warn!
-        )
-        .await;
+        let result = state
+            .kernel
+            .probe_local_provider(
+                &name, &base_url, false, // user-triggered test — don't escalate to warn!
+            )
+            .await;
         let latency = result.latency_ms as u128;
         state.provider_test_cache.insert(
             name.clone(),
@@ -2236,7 +2241,7 @@ pub async fn detect_ollama() -> impl IntoResponse {
 
 #[cfg(test)]
 mod tests {
-    use crate::routes::system::{get_profile, list_profiles};
+    use crate::routes::agent_templates::{get_profile, list_profiles};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::routing::get;

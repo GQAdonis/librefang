@@ -5,13 +5,13 @@
 //! authorization.
 
 use super::AppState;
+use crate::mcp_oauth::KernelOAuthProvider;
 use crate::middleware::AuthenticatedApiUser;
 use crate::types::ApiErrorResponse;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use librefang_kernel::mcp_oauth_provider::KernelOAuthProvider;
 use librefang_runtime::mcp_oauth::{self, McpAuthState, OAuthTokens};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -334,10 +334,24 @@ pub async fn auth_start(
             {
                 Ok(cid) => {
                     tracing::info!(client_id = %cid, "Dynamic Client Registration succeeded");
-                    let _ = provider.vault_set(
-                        &KernelOAuthProvider::vault_key(&server_url, "client_id"),
-                        &cid,
-                    );
+                    // #3651: replaced `let _ = vault_set(...)` so a vault
+                    // crypto failure here is no longer silently swallowed.
+                    // Behavior is intentionally unchanged on the happy path
+                    // (continue with the freshly-registered client_id even
+                    // if persistence failed — the OAuth flow can still
+                    // complete in-memory) but the audit trail now records
+                    // every failure so operators can detect a
+                    // wrong-`LIBREFANG_VAULT_KEY` boot from the logs.
+                    let vault_key = KernelOAuthProvider::vault_key(&server_url, "client_id");
+                    if let Err(e) = provider.vault_set(&vault_key, &cid) {
+                        tracing::error!(
+                            target: "audit",
+                            op = "vault_set",
+                            key = %vault_key,
+                            error = %e,
+                            "vault op failed during MCP Dynamic Client Registration persistence"
+                        );
+                    }
                     client_id = Some(cid);
                 }
                 Err(e) => {
@@ -811,6 +825,13 @@ pub async fn auth_callback(
     }
 
     // Clean up one-time PKCE values from vault (per-flow key — #3727).
+    //
+    // #3651: replaced `let _ = vault_remove(...)` so vault crypto failures
+    // during PKCE cleanup are no longer silently dropped. Behavior is
+    // intentionally unchanged on success (one-time cleanup, errors don't
+    // abort the OAuth callback path), but every failure now produces an
+    // `audit` log line so operators can correlate stale PKCE entries with
+    // a misconfigured `LIBREFANG_VAULT_KEY`.
     for field in &[
         "pkce_verifier",
         "pkce_state",
@@ -818,7 +839,16 @@ pub async fn auth_callback(
         "token_endpoint",
         "client_id",
     ] {
-        let _ = provider.vault_remove(&KernelOAuthProvider::vault_key(&flow_key_prefix, field));
+        let vault_key = KernelOAuthProvider::vault_key(&flow_key_prefix, field);
+        if let Err(e) = provider.vault_remove(&vault_key) {
+            tracing::error!(
+                target: "audit",
+                op = "vault_remove",
+                key = %vault_key,
+                error = %e,
+                "vault op failed during PKCE cleanup"
+            );
+        }
     }
 
     // Retry the MCP connection now that we have tokens.
@@ -939,9 +969,9 @@ fn token_endpoint_host_matches(token_endpoint: &str, expected_host: &str) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::middleware::UserRole;
     use axum::body::to_bytes;
     use axum::http::{HeaderName, HeaderValue};
-    use librefang_kernel::auth::UserRole;
     use librefang_types::agent::UserId;
 
     #[test]

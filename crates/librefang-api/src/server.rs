@@ -51,6 +51,7 @@ fn api_v1_routes() -> Router<Arc<AppState>> {
         .merge(routes::authz::router())
         .merge(routes::channels::router())
         .merge(routes::system::router())
+        .merge(routes::task_queue::router())
         .merge(routes::memory::router())
         .merge(routes::workflows::router())
         .merge(routes::skills::router())
@@ -67,6 +68,7 @@ fn api_v1_routes() -> Router<Arc<AppState>> {
         .merge(routes::uar::router())
         .merge(routes::storage::router())
         .merge(routes::users::router())
+        .merge(routes::webhooks::router())
         // Dashboard credential login (handler defined locally in server.rs)
         .route(
             "/auth/dashboard-login",
@@ -211,7 +213,7 @@ pub(crate) fn configured_user_api_keys(kernel: &LibreFangKernel) -> Vec<middlewa
             }
             Some(middleware::ApiUserAuth {
                 name: user.name.clone(),
-                role: librefang_kernel::auth::UserRole::from_str_role(&user.role),
+                role: middleware::UserRole::from_str_role(&user.role),
                 api_key_hash: api_key_hash.to_string(),
                 user_id: librefang_types::agent::UserId::from_name(&user.name),
             })
@@ -233,7 +235,7 @@ pub(crate) fn paired_device_user_keys(kernel: &LibreFangKernel) -> Vec<middlewar
             let name = format!("device:{device_id}");
             middleware::ApiUserAuth {
                 user_id: librefang_types::agent::UserId::from_name(&name),
-                role: librefang_kernel::auth::UserRole::User,
+                role: middleware::UserRole::User,
                 api_key_hash,
                 name,
             }
@@ -465,9 +467,11 @@ pub(crate) async fn dashboard_login(
                     // Verify TOTP code
                     let secret = state.kernel.vault_get("totp_secret").unwrap_or_default();
                     let issuer = policy.totp_issuer.clone();
-                    match librefang_kernel::approval::ApprovalManager::verify_totp_code_with_issuer(
-                        &secret, totp_code, &issuer,
-                    ) {
+                    match state
+                        .kernel
+                        .approvals()
+                        .verify_totp(&secret, totp_code, &issuer)
+                    {
                         Ok(true) => {
                             // Mark code as used so it cannot be replayed.
                             state.kernel.approvals().record_totp_code_used(totp_code);

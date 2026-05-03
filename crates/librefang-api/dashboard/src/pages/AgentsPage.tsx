@@ -38,9 +38,10 @@ import { toastErr } from "../lib/errors";
 import { filterVisible } from "../lib/hiddenModels";
 import { Search, Users, MessageCircle, X, Cpu, Wrench, Shield, Plus, Loader2, Pause, Play, Clock, Brain, Zap, FlaskConical, GitBranch, Trash2, Check, BarChart3, Copy, RotateCcw, Pencil, Bot, Database, FileText, MoreHorizontal, Sparkles } from "lucide-react";
 import { truncateId } from "../lib/string";
+import { pickLatestSessionId } from "../lib/sessionSelector";
 import { getStatusVariant } from "../lib/status";
 import { useDashboardSnapshot } from "../lib/queries/overview";
-import { useSessions, useSessionDetails } from "../lib/queries/sessions";
+import { useSessionDetails } from "../lib/queries/sessions";
 import { useAgentKvMemory } from "../lib/queries/memory";
 import { useCronJobs } from "../lib/queries/runtime";
 import { useAgentTriggers } from "../lib/queries/schedules";
@@ -481,10 +482,6 @@ export function AgentsPage() {
   // deduplicates the poll when both pages are mounted, and agent counts on the
   // Overview tab stay in sync with this list automatically.
   const agentsQuery = useDashboardSnapshot();
-  // Sessions index, used by both the list row's per-agent "sessions · cost"
-  // suffix and the detail panel's KPI tiles. Single fetch per render so the
-  // 30s refetch interval is the only network cost.
-  const sessionsQuery = useSessions();
   // Detail-panel data sources. Memory + audit are global lists filtered
   // client-side by agent id; cron is server-side filtered (its own
   // `enabled` flag gates the network request on `detailAgent?.id`).
@@ -514,36 +511,15 @@ export function AgentsPage() {
   // global /api/sessions used previously was paginated to 50, so the
   // agent's latest session was often not in the page.
   const agentSessionsQuery = useAgentSessions(detailAgent?.id ?? "");
-  const latestSessionForAgent = useMemo(() => {
-    const list = agentSessionsQuery.data ?? [];
-    if (list.length === 0) return undefined;
-    let best: { session_id: string; ts: number } | undefined;
-    for (const s of list) {
-      const ts = s.created_at ? Date.parse(s.created_at) : 0;
-      if (!best || ts > best.ts) best = { session_id: s.session_id, ts };
-    }
-    return best?.session_id;
-  }, [agentSessionsQuery.data]);
+  // Sourced from useAgentSessions (/api/agents/{id}/sessions) — NOT the
+  // global useSessions() — to avoid the global endpoint's 50-row pagination
+  // cap silently hiding this agent's newest session on busy systems. See
+  // issue #4294 and lib/sessionSelector.ts for the regression test.
+  const latestSessionForAgent = useMemo(
+    () => pickLatestSessionId(agentSessionsQuery.data),
+    [agentSessionsQuery.data],
+  );
   const sessionDetailQuery = useSessionDetails(latestSessionForAgent ?? "");
-  // Row-level aggregate only — detail-panel KPI reads from the per-agent
-  // /stats endpoint (useAgentStats) which doesn't suffer from the global
-  // /api/sessions pagination cap.
-  const sessionsByAgent = useMemo(() => {
-    const map = new Map<string, { sessions24h: number; cost24h: number }>();
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    for (const s of sessionsQuery.data ?? []) {
-      const id = s.agent_id;
-      if (!id) continue;
-      const ts = s.created_at ? Date.parse(s.created_at) : 0;
-      if (ts < cutoff) continue;
-      const entry = map.get(id) ?? { sessions24h: 0, cost24h: 0 };
-      entry.sessions24h += 1;
-      entry.cost24h += typeof s.cost_usd === "number" ? s.cost_usd : 0;
-      map.set(id, entry);
-    }
-    return map;
-  }, [sessionsQuery.data]);
-
 
   const modelsQuery = useModels(
     { provider: modelDraft.provider },
@@ -717,15 +693,10 @@ export function AgentsPage() {
 
   const renderAgentRow = (agent: AgentItem) => {
     const isSelected = detailAgent?.id === agent.id;
-    // Prefer the row-embedded stats from /api/agents (single grouped SQL
-    // pass). Fall back to the global aggregation only if the backend is
-    // older and didn't ship the field.
-    const sessions24h = typeof agent.sessions_24h === "number"
-      ? agent.sessions_24h
-      : (sessionsByAgent.get(agent.id)?.sessions24h ?? 0);
-    const cost24h = typeof agent.cost_24h === "number"
-      ? agent.cost_24h
-      : (sessionsByAgent.get(agent.id)?.cost24h ?? 0);
+    // Row-embedded stats from /api/agents (single grouped SQL pass). The
+    // canonical envelope always ships these fields; see `enrich_agent_json`.
+    const sessions24h = typeof agent.sessions_24h === "number" ? agent.sessions_24h : 0;
+    const cost24h = typeof agent.cost_24h === "number" ? agent.cost_24h : 0;
     const stats = { sessions24h, cost24h };
     const stateLower = (agent.state || "").toLowerCase();
     return (

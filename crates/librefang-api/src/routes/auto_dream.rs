@@ -12,14 +12,14 @@
 
 use std::sync::Arc;
 
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::Json;
-use librefang_types::agent::AgentId;
 use serde::Deserialize;
 
 use super::AppState;
+use crate::extractors::AgentIdPath;
 
 pub fn router() -> axum::Router<Arc<AppState>> {
     axum::Router::new()
@@ -45,7 +45,7 @@ pub fn router() -> axum::Router<Arc<AppState>> {
     responses((status = 200, description = "Auto-dream status", body = crate::types::JsonObject))
 )]
 pub async fn auto_dream_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let status = librefang_kernel::auto_dream::current_status(&state.kernel).await;
+    let status = state.kernel.auto_dream_status().await;
     Json(status)
 }
 
@@ -61,20 +61,11 @@ pub async fn auto_dream_status(State(state): State<Arc<AppState>>) -> impl IntoR
 )]
 pub async fn auto_dream_trigger(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
+    AgentIdPath(agent_id): AgentIdPath,
 ) -> impl IntoResponse {
-    let agent_id = match id.parse::<AgentId>() {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid agent id"})),
-            )
-                .into_response();
-        }
-    };
-    let outcome =
-        librefang_kernel::auto_dream::trigger_manual(Arc::clone(&state.kernel), agent_id).await;
+    let outcome = Arc::clone(&state.kernel)
+        .auto_dream_trigger_manual(agent_id)
+        .await;
     Json(outcome).into_response()
 }
 
@@ -89,20 +80,10 @@ pub async fn auto_dream_trigger(
     )
 )]
 pub async fn auto_dream_abort(
-    State(_state): State<Arc<AppState>>,
-    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    AgentIdPath(agent_id): AgentIdPath,
 ) -> impl IntoResponse {
-    let agent_id = match id.parse::<AgentId>() {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid agent id"})),
-            )
-                .into_response();
-        }
-    };
-    let outcome = librefang_kernel::auto_dream::abort_dream(agent_id).await;
+    let outcome = state.kernel.auto_dream_abort(agent_id).await;
     Json(outcome).into_response()
 }
 
@@ -124,20 +105,10 @@ pub struct SetEnabledRequest {
 )]
 pub async fn auto_dream_set_enabled(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
+    AgentIdPath(agent_id): AgentIdPath,
     Json(req): Json<SetEnabledRequest>,
 ) -> impl IntoResponse {
-    let agent_id = match id.parse::<AgentId>() {
-        Ok(id) => id,
-        Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({"error": "invalid agent id"})),
-            )
-                .into_response();
-        }
-    };
-    match librefang_kernel::auto_dream::set_agent_enabled(&state.kernel, agent_id, req.enabled) {
+    match state.kernel.auto_dream_set_enabled(agent_id, req.enabled) {
         Ok(()) => Json(serde_json::json!({
             "agent_id": agent_id.to_string(),
             "enabled": req.enabled,

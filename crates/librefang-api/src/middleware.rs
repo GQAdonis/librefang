@@ -10,7 +10,12 @@
 use axum::body::Body;
 use axum::http::{Request, Response, StatusCode};
 use axum::middleware::Next;
-use librefang_kernel::auth::UserRole;
+// Re-export `UserRole` through the api-layer auth boundary so that route
+// modules (and tests) don't need to reach into `librefang_kernel::auth`
+// directly. This keeps the `librefang-api` <-> `librefang-kernel` import
+// surface narrow per issue #3744 — the underlying type still lives in the
+// kernel; only the import path is centralized here.
+pub use librefang_kernel::auth::UserRole;
 use librefang_types::agent::UserId;
 use librefang_types::i18n;
 use std::collections::HashMap;
@@ -291,6 +296,18 @@ pub async fn request_logging(request: Request<Body>, next: Next) -> Response<Bod
     let elapsed = start.elapsed();
     let status = response.status().as_u16();
 
+    // Lift handler-resolved identifiers (currently `agent_id`) out of the
+    // response extensions and onto the structured access-log line. Closes
+    // #3511 — without this, tracing all requests for a specific agent
+    // across the kernel boundary requires `RUST_LOG=debug` and string
+    // matching on raw URI paths. `session_id` will land in a follow-up PR
+    // once `KernelHandle::send_message` surfaces the resolved `SessionId`.
+    let agent_id = response
+        .extensions()
+        .get::<crate::extensions::AgentIdField>()
+        .map(|f| f.0.to_string());
+    let agent_id_field = agent_id.as_deref().unwrap_or("");
+
     // 4xx/5xx elevated so auth storms and server faults surface; GET successes suppressed to avoid poll noise.
     if status >= 500 {
         error!(
@@ -299,6 +316,7 @@ pub async fn request_logging(request: Request<Body>, next: Next) -> Response<Bod
             path = %uri,
             status = status,
             latency_ms = elapsed.as_millis() as u64,
+            agent_id = %agent_id_field,
             "API request"
         );
     } else if status >= 400 {
@@ -308,6 +326,7 @@ pub async fn request_logging(request: Request<Body>, next: Next) -> Response<Bod
             path = %uri,
             status = status,
             latency_ms = elapsed.as_millis() as u64,
+            agent_id = %agent_id_field,
             "API request"
         );
     } else if method == axum::http::Method::GET {
@@ -317,6 +336,7 @@ pub async fn request_logging(request: Request<Body>, next: Next) -> Response<Bod
             path = %uri,
             status = status,
             latency_ms = elapsed.as_millis() as u64,
+            agent_id = %agent_id_field,
             "API request"
         );
     } else {
@@ -326,6 +346,7 @@ pub async fn request_logging(request: Request<Body>, next: Next) -> Response<Bod
             path = %uri,
             status = status,
             latency_ms = elapsed.as_millis() as u64,
+            agent_id = %agent_id_field,
             "API request"
         );
     }

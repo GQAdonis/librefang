@@ -20,6 +20,7 @@ librefang-wire = { path = "../librefang-wire" }
 librefang-channels = { path = "../librefang-channels", default-features = false }
 librefang-storage = { path = "../librefang-storage", default-features = false }
 tokio = { workspace = true }
+bytes = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
@@ -80,3 +81,6 @@ tempfile = { workspace = true }
 serial_test = "3"
 librefang-testing = { path = "../librefang-testing" }
 librefang-kernel-handle = { path = "../librefang-kernel-handle" }
+
+[lints]
+workspace = true

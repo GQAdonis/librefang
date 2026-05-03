@@ -5,6 +5,14 @@ use dashmap::DashMap;
 use librefang_types::agent::{AgentEntry, AgentId, AgentMode, AgentState};
 use librefang_types::error::{LibreFangError, LibreFangResult};
 use std::sync::Arc;
+use tokio::sync::broadcast;
+
+/// Capacity of the registry-change broadcast channel (#3513).
+///
+/// Subscribers only need to learn "something changed" — not what changed —
+/// so the buffer can be small. A lagging receiver is treated as a signal
+/// to re-fetch the full state, which is exactly what we want.
+const CHANGE_CHANNEL_CAPACITY: usize = 16;
 
 /// Registry of all agents in the kernel.
 pub struct AgentRegistry {
@@ -14,34 +22,81 @@ pub struct AgentRegistry {
     name_index: DashMap<String, AgentId>,
     /// Tag index: tag → list of agent IDs.
     tag_index: DashMap<String, Vec<AgentId>>,
+    /// Broadcast that fires after every successful registry mutation (#3513).
+    ///
+    /// Replaces the per-WS-client 5s polling loop in `librefang-api/src/ws.rs`
+    /// with an event-driven push: every dashboard tab subscribes once and only
+    /// rebuilds the agent snapshot when an actual mutation occurred.
+    /// Capacity is intentionally small — losing a tick is benign because
+    /// receivers re-snapshot from the registry on every signal anyway, and
+    /// `RecvError::Lagged` is treated as "send a fresh snapshot".
+    changed_tx: broadcast::Sender<()>,
 }
 
 impl AgentRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
+        let (changed_tx, _) = broadcast::channel(CHANGE_CHANNEL_CAPACITY);
         Self {
             agents: DashMap::new(),
             name_index: DashMap::new(),
             tag_index: DashMap::new(),
+            changed_tx,
         }
     }
 
+    /// Subscribe to registry-change events (#3513).
+    ///
+    /// Each successful mutator (`register`, `remove`, `set_state`, `set_mode`,
+    /// `update_*`, `mark_*`, `schedule_session_wipe`, `add_child`, `touch`,
+    /// `mark_processed_message`) publishes one `()` after the mutation
+    /// completes. Subscribers should re-snapshot the registry on each recv,
+    /// and treat `RecvError::Lagged` the same way (snapshot, then keep
+    /// listening).
+    pub fn subscribe_changes(&self) -> broadcast::Receiver<()> {
+        self.changed_tx.subscribe()
+    }
+
+    /// Publish a "registry changed" event. Ignores send failures: when no
+    /// receivers are connected `send` returns `Err`, which is the expected
+    /// state for headless operation (no dashboard, no WS).
+    fn notify_changed(&self) {
+        let _ = self.changed_tx.send(());
+    }
+
     /// Register a new agent.
+    ///
+    /// Publication ordering is load-bearing for concurrent lookups (#3338):
+    /// the entry is inserted into `agents` **before** the name binding is
+    /// finalized in `name_index`. A concurrent `find_by_name(name)` either
+    /// sees no name binding at all, or — once `vacant.insert(id)` runs —
+    /// resolves to an `id` that is already addressable via `agents.get(id)`.
+    /// This closes the spawn-before-publish gap that surfaced as flaky load
+    /// tests in `crates/librefang-api/tests/load_test.rs`.
     pub fn register(&self, entry: AgentEntry) -> LibreFangResult<()> {
         let id = entry.id;
-        // Use atomic entry() API to avoid TOCTOU race between contains_key and insert.
+        // Use atomic entry() API to avoid TOCTOU race between contains_key
+        // and insert. The Vacant guard holds the DashMap shard lock for
+        // this name across the agents/tag publish below, so no concurrent
+        // register for the same name can race past the duplicate check.
         match self.name_index.entry(entry.name.clone()) {
             Entry::Occupied(_) => {
                 return Err(LibreFangError::AgentAlreadyExists(entry.name));
             }
             Entry::Vacant(vacant) => {
+                // Publish the agent entry and tag index entries BEFORE
+                // binding the name to the id. Any concurrent reader that
+                // resolves the name once `vacant.insert(id)` returns is
+                // guaranteed to find the entry under `id`.
+                let tags = entry.tags.clone();
+                self.agents.insert(id, entry);
+                for tag in &tags {
+                    self.tag_index.entry(tag.clone()).or_default().push(id);
+                }
                 vacant.insert(id);
             }
         }
-        for tag in &entry.tags {
-            self.tag_index.entry(tag.clone()).or_default().push(id);
-        }
-        self.agents.insert(id, entry);
+        self.notify_changed();
         Ok(())
     }
 
@@ -81,38 +136,67 @@ impl AgentRegistry {
 
     /// Update agent state.
     pub fn set_state(&self, id: AgentId, state: AgentState) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.state = state;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.state = state;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update agent operational mode.
     pub fn set_mode(&self, id: AgentId, mode: AgentMode) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.mode = mode;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.mode = mode;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Remove an agent from the registry.
+    ///
+    /// Tear-down ordering mirrors `register` to keep concurrent
+    /// `find_by_name` lookups monotone (#3338): the name binding is dropped
+    /// **before** the entry is removed from `agents`, so a reader that still
+    /// resolves the name will find the entry, and a reader that observes
+    /// the name as gone will not be handed a stale id pointing at a
+    /// vanished entry.
     pub fn remove(&self, id: AgentId) -> LibreFangResult<AgentEntry> {
+        // Snapshot name + tags without removing yet so we can drop the
+        // name binding first.
+        let (name, tags) = {
+            let snap = self
+                .agents
+                .get(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            (snap.name.clone(), snap.tags.clone())
+        };
+        // Drop the name binding first — but only if it still resolves to
+        // this id, otherwise a concurrent rename could have re-bound the
+        // name to a different agent.
+        self.name_index
+            .remove_if(&name, |_, mapped_id| *mapped_id == id);
+        // Now retract the entry. If a racing remove already took it,
+        // surface AgentNotFound rather than silently succeeding.
         let (_, entry) = self
             .agents
             .remove(&id)
             .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        self.name_index.remove(&entry.name);
-        for tag in &entry.tags {
+        for tag in &tags {
             if let Some(mut ids) = self.tag_index.get_mut(tag) {
                 ids.retain(|&agent_id| agent_id != id);
             }
         }
+        self.notify_changed();
         Ok(entry)
     }
 
@@ -160,8 +244,16 @@ impl AgentRegistry {
 
     /// Add a child agent ID to a parent's children list.
     pub fn add_child(&self, parent_id: AgentId, child_id: AgentId) {
-        if let Some(mut entry) = self.agents.get_mut(&parent_id) {
-            entry.children.push(child_id);
+        let mutated = {
+            if let Some(mut entry) = self.agents.get_mut(&parent_id) {
+                entry.children.push(child_id);
+                true
+            } else {
+                false
+            }
+        };
+        if mutated {
+            self.notify_changed();
         }
     }
 
@@ -176,12 +268,15 @@ impl AgentRegistry {
         id: AgentId,
         new_session_id: librefang_types::agent::SessionId,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.session_id = new_session_id;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.session_id = new_session_id;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -191,12 +286,15 @@ impl AgentRegistry {
         id: AgentId,
         workspace: Option<std::path::PathBuf>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.workspace = workspace;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.workspace = workspace;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -206,12 +304,15 @@ impl AgentRegistry {
         id: AgentId,
         source_toml_path: Option<std::path::PathBuf>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.source_toml_path = source_toml_path;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.source_toml_path = source_toml_path;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -223,12 +324,15 @@ impl AgentRegistry {
         id: AgentId,
         manifest: librefang_types::agent::AgentManifest,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest = manifest;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest = manifest;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -238,23 +342,29 @@ impl AgentRegistry {
         id: AgentId,
         identity: librefang_types::agent::AgentIdentity,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.identity = identity;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.identity = identity;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's model configuration.
     pub fn update_model(&self, id: AgentId, new_model: String) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.model = new_model;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.model = new_model;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -265,13 +375,16 @@ impl AgentRegistry {
         new_model: String,
         new_provider: String,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.model = new_model;
-        entry.manifest.model.provider = new_provider;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.model = new_model;
+            entry.manifest.model.provider = new_provider;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -284,37 +397,46 @@ impl AgentRegistry {
         api_key_env: Option<String>,
         base_url: Option<String>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.model = new_model;
-        entry.manifest.model.provider = new_provider;
-        entry.manifest.model.api_key_env = api_key_env;
-        entry.manifest.model.base_url = base_url;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.model = new_model;
+            entry.manifest.model.provider = new_provider;
+            entry.manifest.model.api_key_env = api_key_env;
+            entry.manifest.model.base_url = base_url;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's max_tokens (response length limit).
     pub fn update_max_tokens(&self, id: AgentId, max_tokens: u32) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.max_tokens = max_tokens;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.max_tokens = max_tokens;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's sampling temperature.
     pub fn update_temperature(&self, id: AgentId, temperature: f32) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.temperature = temperature;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.temperature = temperature;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -324,12 +446,15 @@ impl AgentRegistry {
         id: AgentId,
         mode: librefang_types::agent::WebSearchAugmentationMode,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.web_search_augmentation = mode;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.web_search_augmentation = mode;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -339,35 +464,44 @@ impl AgentRegistry {
         id: AgentId,
         fallback_models: Vec<librefang_types::agent::FallbackModel>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.fallback_models = fallback_models;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.fallback_models = fallback_models;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's skill allowlist.
     pub fn update_skills(&self, id: AgentId, skills: Vec<String>) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.skills = skills;
-        entry.manifest.skills_disabled = false;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.skills = skills;
+            entry.manifest.skills_disabled = false;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's MCP server allowlist.
     pub fn update_mcp_servers(&self, id: AgentId, servers: Vec<String>) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.mcp_servers = servers;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.mcp_servers = servers;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -380,21 +514,24 @@ impl AgentRegistry {
         allowlist: Option<Vec<String>>,
         blocklist: Option<Vec<String>>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        if let Some(ct) = capabilities_tools {
-            entry.manifest.capabilities.tools = ct;
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            if let Some(ct) = capabilities_tools {
+                entry.manifest.capabilities.tools = ct;
+            }
+            if let Some(al) = allowlist {
+                entry.manifest.tool_allowlist = al;
+            }
+            if let Some(bl) = blocklist {
+                entry.manifest.tool_blocklist = bl;
+            }
+            entry.manifest.tools_disabled = false;
+            entry.last_active = chrono::Utc::now();
         }
-        if let Some(al) = allowlist {
-            entry.manifest.tool_allowlist = al;
-        }
-        if let Some(bl) = blocklist {
-            entry.manifest.tool_blocklist = bl;
-        }
-        entry.manifest.tools_disabled = false;
-        entry.last_active = chrono::Utc::now();
+        self.notify_changed();
         Ok(())
     }
 
@@ -409,13 +546,16 @@ impl AgentRegistry {
         skills: Vec<String>,
         skills_disabled: bool,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.skills = skills;
-        entry.manifest.skills_disabled = skills_disabled;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.skills = skills;
+            entry.manifest.skills_disabled = skills_disabled;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -431,26 +571,32 @@ impl AgentRegistry {
         blocklist: Vec<String>,
         tools_disabled: bool,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.capabilities.tools = capabilities_tools;
-        entry.manifest.tool_allowlist = allowlist;
-        entry.manifest.tool_blocklist = blocklist;
-        entry.manifest.tools_disabled = tools_disabled;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.capabilities.tools = capabilities_tools;
+            entry.manifest.tool_allowlist = allowlist;
+            entry.manifest.tool_blocklist = blocklist;
+            entry.manifest.tools_disabled = tools_disabled;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's system prompt (hot-swap, takes effect on next message).
     pub fn update_system_prompt(&self, id: AgentId, new_prompt: String) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.model.system_prompt = new_prompt;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.model.system_prompt = new_prompt;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -476,17 +622,21 @@ impl AgentRegistry {
         entry.last_active = chrono::Utc::now();
         drop(entry);
         self.name_index.remove(&old_name);
+        self.notify_changed();
         Ok(())
     }
 
     /// Update an agent's description.
     pub fn update_description(&self, id: AgentId, new_desc: String) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.description = new_desc;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.description = new_desc;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -495,12 +645,15 @@ impl AgentRegistry {
     /// In-memory only — persisting to the agent manifest file is a separate
     /// concern (matches the pattern of `update_system_prompt`).
     pub fn update_auto_dream_enabled(&self, id: AgentId, enabled: bool) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.manifest.auto_dream_enabled = enabled;
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.manifest.auto_dream_enabled = enabled;
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -526,35 +679,41 @@ impl AgentRegistry {
         monthly: Option<f64>,
         tokens_per_hour: Option<u64>,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        if let Some(v) = hourly {
-            entry.manifest.resources.max_cost_per_hour_usd = v;
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            if let Some(v) = hourly {
+                entry.manifest.resources.max_cost_per_hour_usd = v;
+            }
+            if let Some(v) = daily {
+                entry.manifest.resources.max_cost_per_day_usd = v;
+            }
+            if let Some(v) = monthly {
+                entry.manifest.resources.max_cost_per_month_usd = v;
+            }
+            if let Some(v) = tokens_per_hour {
+                entry.manifest.resources.max_llm_tokens_per_hour = Some(v);
+            }
+            entry.last_active = chrono::Utc::now();
         }
-        if let Some(v) = daily {
-            entry.manifest.resources.max_cost_per_day_usd = v;
-        }
-        if let Some(v) = monthly {
-            entry.manifest.resources.max_cost_per_month_usd = v;
-        }
-        if let Some(v) = tokens_per_hour {
-            entry.manifest.resources.max_llm_tokens_per_hour = Some(v);
-        }
-        entry.last_active = chrono::Utc::now();
+        self.notify_changed();
         Ok(())
     }
 
     /// Mark an agent's onboarding as complete.
     pub fn mark_onboarding_complete(&self, id: AgentId) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.onboarding_completed = true;
-        entry.onboarding_completed_at = Some(chrono::Utc::now());
-        entry.last_active = chrono::Utc::now();
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.onboarding_completed = true;
+            entry.onboarding_completed_at = Some(chrono::Utc::now());
+            entry.last_active = chrono::Utc::now();
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -571,13 +730,16 @@ impl AgentRegistry {
         id: AgentId,
         reason: librefang_types::config::SessionResetReason,
     ) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.force_session_wipe = false;
-        entry.resume_pending = false;
-        entry.reset_reason = Some(reason);
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.force_session_wipe = false;
+            entry.resume_pending = false;
+            entry.reset_reason = Some(reason);
+        }
+        self.notify_changed();
         Ok(())
     }
 
@@ -588,23 +750,34 @@ impl AgentRegistry {
     /// Named `schedule_session_wipe` to avoid confusion with
     /// `suspend_agent()` / `AgentState::Suspended`.
     pub fn schedule_session_wipe(&self, id: AgentId) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        entry.force_session_wipe = true;
+        {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            entry.force_session_wipe = true;
+        }
+        self.notify_changed();
         Ok(())
     }
 
     /// Mark an agent's session as `resume_pending` after an interrupted
     /// restart.  Ignored when `force_session_wipe` is already set (hard-wipe wins).
     pub fn mark_resume_pending(&self, id: AgentId) -> LibreFangResult<()> {
-        let mut entry = self
-            .agents
-            .get_mut(&id)
-            .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
-        if !entry.force_session_wipe {
-            entry.resume_pending = true;
+        let mutated = {
+            let mut entry = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            if !entry.force_session_wipe {
+                entry.resume_pending = true;
+                true
+            } else {
+                false
+            }
+        };
+        if mutated {
+            self.notify_changed();
         }
         Ok(())
     }
@@ -822,6 +995,92 @@ mod tests {
         assert!(!registry.is_auto_dream_enabled(bogus));
     }
 
+    /// Regression for #3338 / #3817: under concurrent register+remove,
+    /// `find_by_name` must be atomic — it must never return `None` because
+    /// publication of the entry hasn't caught up with the name binding,
+    /// nor return a half-cloned/torn entry. The contract is: when a
+    /// register call returns `Ok`, every subsequent `find_by_name(name)`
+    /// either returns `Some(entry)` for that name or returns `None`
+    /// because the agent is genuinely gone.
+    ///
+    /// Before the fix, `register` inserted into `name_index` before
+    /// `agents`, and `remove` retracted `agents` before `name_index`. A
+    /// concurrent `find_by_name` could observe the name resolved to an id
+    /// while the corresponding entry was either not yet published or
+    /// already gone — the entire row would silently come back as `None`.
+    /// This is the spawn-before-publish gap referenced in the issue.
+    #[test]
+    fn find_by_name_is_atomic_under_concurrent_register_and_remove() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::Arc;
+        use std::thread;
+
+        let registry = Arc::new(AgentRegistry::new());
+        let stop = Arc::new(AtomicBool::new(false));
+        // Count cases where `find_by_name` returned `Some` but the entry's
+        // name disagreed with the lookup key (impossible if registry is
+        // self-consistent; would catch torn reads).
+        let torn = Arc::new(AtomicUsize::new(0));
+        let lookups = Arc::new(AtomicUsize::new(0));
+        let hits = Arc::new(AtomicUsize::new(0));
+
+        let writer = {
+            let registry = Arc::clone(&registry);
+            let stop = Arc::clone(&stop);
+            thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    let entry = test_entry("racy");
+                    let id = entry.id;
+                    if registry.register(entry).is_ok() {
+                        registry.remove(id).ok();
+                    }
+                }
+            })
+        };
+
+        let reader = {
+            let registry = Arc::clone(&registry);
+            let stop = Arc::clone(&stop);
+            let torn = Arc::clone(&torn);
+            let lookups = Arc::clone(&lookups);
+            let hits = Arc::clone(&hits);
+            thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    lookups.fetch_add(1, Ordering::Relaxed);
+                    if let Some(found) = registry.find_by_name("racy") {
+                        hits.fetch_add(1, Ordering::Relaxed);
+                        if found.name != "racy" {
+                            torn.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                }
+            })
+        };
+
+        thread::sleep(std::time::Duration::from_millis(100));
+        stop.store(true, Ordering::Relaxed);
+        writer.join().unwrap();
+        reader.join().unwrap();
+
+        // Sanity: reader actually ran enough iterations and saw the agent
+        // some of the time, otherwise a clean pass is vacuous.
+        assert!(
+            lookups.load(Ordering::Relaxed) > 1_000,
+            "reader did not run enough iterations to be a meaningful probe"
+        );
+        assert!(
+            hits.load(Ordering::Relaxed) > 0,
+            "reader never observed the agent — the writer/reader interleaving \
+             produced a vacuous pass; widen the test if this fires on slow CI"
+        );
+        assert_eq!(
+            torn.load(Ordering::Relaxed),
+            0,
+            "find_by_name returned an entry whose name does not match the lookup key — \
+             register/remove ordering exposes a torn read across name_index and agents"
+        );
+    }
+
     #[test]
     fn test_update_auto_dream_enabled_missing_agent_errors() {
         let registry = AgentRegistry::new();
@@ -831,5 +1090,113 @@ mod tests {
             result,
             Err(librefang_types::error::LibreFangError::AgentNotFound(_))
         ));
+    }
+
+    /// #3513: every successful mutation must publish a change event so
+    /// dashboard WebSockets can re-snapshot without polling. Verifies the
+    /// broadcast channel fires on `register` (and that the receiver wakes up).
+    #[tokio::test]
+    async fn change_broadcast_fires_on_register() {
+        let registry = AgentRegistry::new();
+        let mut rx = registry.subscribe_changes();
+
+        registry.register(test_entry("first")).unwrap();
+
+        // The receiver must wake up promptly; bound the wait so a missed
+        // broadcast surfaces as a test failure rather than a hang.
+        let recv = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(
+            matches!(recv, Ok(Ok(()))),
+            "expected change event, got {recv:?}"
+        );
+    }
+
+    /// #3513: a burst of mutations must all be observable by a subscriber.
+    /// `Lagged` is acceptable — subscribers handle it by re-snapshotting —
+    /// what is not acceptable is a silent miss with no signal at all.
+    #[tokio::test]
+    async fn change_broadcast_handles_burst_of_mutations() {
+        let registry = AgentRegistry::new();
+        let mut rx = registry.subscribe_changes();
+
+        // Fire 5 in rapid succession.
+        for i in 0..5 {
+            registry
+                .register(test_entry(&format!("burst-{i}")))
+                .unwrap();
+        }
+
+        // Drain — we must observe at least one event (Ok or Lagged), and
+        // total events seen plus any lag must cover all 5 mutations or
+        // signal lag explicitly.
+        let mut got_ok = 0usize;
+        let mut got_lagged = false;
+        loop {
+            match tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await {
+                Ok(Ok(())) => got_ok += 1,
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {
+                    got_lagged = true;
+                }
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => break,
+                Err(_) => break, // timeout — channel quiesced
+            }
+        }
+
+        assert!(
+            got_ok > 0 || got_lagged,
+            "subscriber received no signal at all from a burst of 5 mutations"
+        );
+        if !got_lagged {
+            assert_eq!(
+                got_ok, 5,
+                "expected 5 change events without lag, got {got_ok}"
+            );
+        }
+    }
+
+    /// #3513: subscribe_changes() must hand out independent receivers so
+    /// multiple WS clients can all listen.
+    #[tokio::test]
+    async fn change_broadcast_supports_multiple_subscribers() {
+        let registry = AgentRegistry::new();
+        let mut rx_a = registry.subscribe_changes();
+        let mut rx_b = registry.subscribe_changes();
+
+        registry.register(test_entry("multi")).unwrap();
+
+        let a = tokio::time::timeout(std::time::Duration::from_secs(1), rx_a.recv()).await;
+        let b = tokio::time::timeout(std::time::Duration::from_secs(1), rx_b.recv()).await;
+        assert!(matches!(a, Ok(Ok(()))), "rx_a expected event, got {a:?}");
+        assert!(matches!(b, Ok(Ok(()))), "rx_b expected event, got {b:?}");
+    }
+
+    /// #3513: mutators other than register must also publish — otherwise a
+    /// dashboard tab opened after agent creation would never observe model
+    /// changes, state transitions, etc.
+    #[tokio::test]
+    async fn change_broadcast_fires_on_state_and_model_updates() {
+        let registry = AgentRegistry::new();
+        let entry = test_entry("mutable");
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        // Subscribe AFTER register so we observe only post-subscribe mutations.
+        let mut rx = registry.subscribe_changes();
+
+        registry
+            .set_state(id, AgentState::Running)
+            .expect("set_state");
+        let s1 = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(s1, Ok(Ok(()))), "set_state should fire event");
+
+        registry
+            .update_model(id, "claude-sonnet-4-7".to_string())
+            .expect("update_model");
+        let s2 = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(s2, Ok(Ok(()))), "update_model should fire event");
+
+        registry.remove(id).expect("remove");
+        let s3 = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(s3, Ok(Ok(()))), "remove should fire event");
     }
 }

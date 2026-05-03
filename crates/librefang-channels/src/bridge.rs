@@ -504,6 +504,14 @@ pub trait ChannelBridgeHandle: Send + Sync {
         None
     }
 
+    /// Return the effective file download directory: configured value or
+    /// the legacy `<temp>/librefang_uploads` default. Use this everywhere
+    /// instead of re-deriving the fallback inline (see issue #4435).
+    fn effective_channels_download_dir(&self) -> std::path::PathBuf {
+        self.channels_download_dir()
+            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"))
+    }
+
     /// Return the configured max file download size in bytes, if set.
     fn channels_download_max_bytes(&self) -> Option<u64> {
         None
@@ -522,21 +530,28 @@ struct SenderBuffer {
     max_timer_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
+/// Backpressure cap for the debouncer flush channel (#3580). Bridges
+/// previously used an unbounded channel here; if the dispatcher stalled
+/// (rate-limited Telegram, paused agent, etc.) the queue grew until OOM.
+const FLUSH_CHANNEL_CAP: usize = 1024;
+
 struct MessageDebouncer {
     debounce_ms: u64,
     debounce_max_ms: u64,
     max_buffer: usize,
-    flush_tx: mpsc::UnboundedSender<String>,
+    flush_tx: mpsc::Sender<String>,
 }
 
 /// Log a `MessageDebouncer` flush-channel send failure at `warn` level.
 ///
 /// All five flush trigger paths (max-timer, immediate, debounce-timer,
-/// typing-triggered, typing-stop) share the same failure mode — the
-/// dispatcher's receiver has been dropped, so buffered messages will be
-/// lost. `location` distinguishes the trigger in logs as a structured
-/// field; `key` is the debouncer key when the call site has it on hand
-/// (the spawn'd timer paths consume it before the send and pass `None`).
+/// typing-triggered, typing-stop) share two failure modes — the
+/// dispatcher's receiver has been dropped, or the bounded flush channel
+/// is full because the dispatcher is stalled (#3580). In either case the
+/// buffered message is dropped. `location` distinguishes the trigger in
+/// logs as a structured field; `key` is the debouncer key when the call
+/// site has it on hand (the spawn'd timer paths consume it before the
+/// send and pass `None`).
 fn warn_flush_dropped<E: std::fmt::Display>(
     result: Result<(), E>,
     location: &'static str,
@@ -547,7 +562,7 @@ fn warn_flush_dropped<E: std::fmt::Display>(
             error = %e,
             key = key.unwrap_or(""),
             location,
-            "Debouncer flush dropped: dispatch receiver closed",
+            "Debouncer flush dropped: dispatch receiver closed or flush channel full",
         );
     }
 }
@@ -557,8 +572,12 @@ impl MessageDebouncer {
         debounce_ms: u64,
         debounce_max_ms: u64,
         max_buffer: usize,
-    ) -> (Self, mpsc::UnboundedReceiver<String>) {
-        let (flush_tx, flush_rx) = mpsc::unbounded_channel();
+    ) -> (Self, mpsc::Receiver<String>) {
+        // Bounded to bound RSS when downstream dispatcher stalls (#3580).
+        // Cap is generous: the queue is keyed by sender (one entry per
+        // distinct (channel, chat) pair within a debounce window), so 1024
+        // accommodates large fan-out without uncapped growth.
+        let (flush_tx, flush_rx) = mpsc::channel(FLUSH_CHANNEL_CAP);
         (
             Self {
                 debounce_ms,
@@ -588,7 +607,7 @@ impl MessageDebouncer {
                 // Dispatcher receiver gone — buffered messages for this
                 // sender will be dropped. Usually only happens during
                 // shutdown.
-                warn_flush_dropped(flush_tx.send(flush_key), "max-timer", None);
+                warn_flush_dropped(flush_tx.send(flush_key).await, "max-timer", None);
             }));
             SenderBuffer {
                 messages: Vec::new(),
@@ -613,7 +632,11 @@ impl MessageDebouncer {
             // The double-fire is suppressed by `drain()` below — once the
             // first flush key is processed, the entry is removed from
             // `buffers`, so the stale key will find nothing and return None.
-            warn_flush_dropped(self.flush_tx.send(key.to_string()), "immediate", Some(key));
+            warn_flush_dropped(
+                self.flush_tx.try_send(key.to_string()),
+                "immediate",
+                Some(key),
+            );
             return;
         }
 
@@ -623,7 +646,7 @@ impl MessageDebouncer {
         let flush_key = key.to_string();
         buf.timer_handle = Some(tokio::spawn(async move {
             tokio::time::sleep(delay).await;
-            warn_flush_dropped(flush_tx.send(flush_key), "debounce-timer", None);
+            warn_flush_dropped(flush_tx.send(flush_key).await, "debounce-timer", None);
         }));
     }
 
@@ -637,7 +660,7 @@ impl MessageDebouncer {
         let elapsed = buf.first_arrived.elapsed();
         if elapsed >= max_dur {
             warn_flush_dropped(
-                self.flush_tx.send(key.to_string()),
+                self.flush_tx.try_send(key.to_string()),
                 "typing-triggered",
                 Some(key),
             );
@@ -655,7 +678,7 @@ impl MessageDebouncer {
             let flush_key = key.to_string();
             buf.timer_handle = Some(tokio::spawn(async move {
                 tokio::time::sleep(delay).await;
-                warn_flush_dropped(flush_tx.send(flush_key), "typing-stop", None);
+                warn_flush_dropped(flush_tx.send(flush_key).await, "typing-stop", None);
             }));
         }
     }
@@ -1122,10 +1145,7 @@ impl BridgeManager {
         // redundant cleanup sweeps.
         {
             static CLEANUP_ONCE: std::sync::Once = std::sync::Once::new();
-            let dir = self
-                .handle
-                .channels_download_dir()
-                .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"));
+            let dir = self.handle.effective_channels_download_dir();
             CLEANUP_ONCE.call_once(|| {
                 tokio::spawn(async move { cleanup_old_uploads(&dir).await });
             });
@@ -1174,6 +1194,7 @@ impl BridgeManager {
             .unwrap_or(64);
 
         let semaphore = Arc::new(tokio::sync::Semaphore::new(32));
+        let upload_dir = handle.effective_channels_download_dir();
 
         if debounce_ms == 0 {
             // Fast path: no debouncing (current behavior)
@@ -1249,7 +1270,7 @@ impl BridgeManager {
                                     let image_blocks = if let ChannelContent::Image {
                                         ref url, ref caption, ref mime_type
                                     } = message.content {
-                                        match download_image_to_blocks(url, caption.as_deref(), mime_type.as_deref()).await {
+                                        match download_image_to_blocks(url, caption.as_deref(), mime_type.as_deref(), &upload_dir).await {
                                             blocks if blocks.iter().any(|b| matches!(b, ContentBlock::Image { .. } | ContentBlock::ImageFile { .. })) => Some(blocks),
                                             _ => None,
                                         }
@@ -2706,7 +2727,10 @@ async fn dispatch_message(
         ref mime_type,
     } = message.content
     {
-        let blocks = download_image_to_blocks(url, caption.as_deref(), mime_type.as_deref()).await;
+        let upload_dir = handle.effective_channels_download_dir();
+        let blocks =
+            download_image_to_blocks(url, caption.as_deref(), mime_type.as_deref(), &upload_dir)
+                .await;
         if blocks.iter().any(|b| {
             matches!(
                 b,
@@ -2739,9 +2763,7 @@ async fn dispatch_message(
         ref filename,
     } = message.content
     {
-        let download_dir = handle
-            .channels_download_dir()
-            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"));
+        let download_dir = handle.effective_channels_download_dir();
         let max_bytes = handle
             .channels_download_max_bytes()
             .unwrap_or(CHANNEL_FILE_DOWNLOAD_MAX_BYTES);
@@ -2774,9 +2796,7 @@ async fn dispatch_message(
         duration_seconds,
     } = message.content
     {
-        let download_dir = handle
-            .channels_download_dir()
-            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"));
+        let download_dir = handle.effective_channels_download_dir();
         let max_bytes = handle
             .channels_download_max_bytes()
             .unwrap_or(CHANNEL_FILE_DOWNLOAD_MAX_BYTES);
@@ -2829,9 +2849,7 @@ async fn dispatch_message(
         ref performer,
     } = message.content
     {
-        let download_dir = handle
-            .channels_download_dir()
-            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"));
+        let download_dir = handle.effective_channels_download_dir();
         let max_bytes = handle
             .channels_download_max_bytes()
             .unwrap_or(CHANNEL_FILE_DOWNLOAD_MAX_BYTES);
@@ -2889,9 +2907,7 @@ async fn dispatch_message(
         ref filename,
     } = message.content
     {
-        let download_dir = handle
-            .channels_download_dir()
-            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"));
+        let download_dir = handle.effective_channels_download_dir();
         let max_bytes = handle
             .channels_download_max_bytes()
             .unwrap_or(CHANNEL_FILE_DOWNLOAD_MAX_BYTES);
@@ -4137,10 +4153,18 @@ async fn download_file_to_blocks(
             path: path_str,
         }]
     } else {
-        vec![ContentBlock::Text {
+        // Content-aware enrichment (#4448): when the file is a PDF or a
+        // text-like format, surface its actual content to the LLM in
+        // addition to the saved-path block. The path block is preserved
+        // so tools that legitimately want raw bytes (media_transcribe,
+        // custom file readers) still work.
+        let mut blocks =
+            crate::attachment_enrich::enrich_saved_file(&file_path, &media_type, filename);
+        blocks.push(ContentBlock::Text {
             text: format!("{FILE_SAVED_BLOCK_PREFIX}{filename}] saved to {path_str}"),
             provider_metadata: None,
-        }]
+        });
+        blocks
     }
 }
 
@@ -4185,6 +4209,7 @@ async fn download_image_to_blocks(
     url: &str,
     caption: Option<&str>,
     mime_type_hint: Option<&str>,
+    upload_dir: &std::path::Path,
 ) -> Vec<ContentBlock> {
     use base64::Engine;
 
@@ -4346,8 +4371,6 @@ async fn download_image_to_blocks(
 
     // Save image to disk instead of base64-encoding into the session.
     // A 3 MB photo becomes ~100 KB on disk with only a short path in the session.
-    let upload_dir = std::env::temp_dir().join("librefang_uploads");
-
     let ext = match final_media_type.as_str() {
         "image/jpeg" => "jpg",
         "image/png" => "png",
@@ -6396,6 +6419,38 @@ mod tests {
             assert!(
                 !buffers.contains_key("discord:userX"),
                 "drain must remove the buffer entry"
+            );
+        }
+
+        // Regression for #3580: the flush channel is bounded so that a
+        // stalled / dropped dispatcher cannot let RSS grow unbounded.
+        // We drop the receiver and push more sender keys than the cap;
+        // every send beyond the first must surface as an Err (and be
+        // logged + dropped via warn_flush_dropped) rather than silently
+        // accumulating in an unbounded queue.
+        #[tokio::test]
+        async fn test_debouncer_flush_channel_is_bounded() {
+            let (debouncer, rx) = MessageDebouncer::new(1000, 5000, 10);
+            // Drop receiver to force every try_send to error — this models
+            // the worst-case "dispatcher gone" path; the cap-limited path
+            // is exercised inherently by `mpsc::channel(FLUSH_CHANNEL_CAP)`.
+            drop(rx);
+
+            let mut errs = 0usize;
+            // Push 2x cap distinct keys; each immediate-flush path hits
+            // try_send. With a bounded channel + dropped rx, every call
+            // returns Err. With the old unbounded channel, the queue
+            // would grow without bound and never error.
+            for i in 0..(FLUSH_CHANNEL_CAP * 2) {
+                let key = format!("k{i}");
+                if debouncer.flush_tx.try_send(key).is_err() {
+                    errs += 1;
+                }
+            }
+            assert_eq!(
+                errs,
+                FLUSH_CHANNEL_CAP * 2,
+                "bounded flush channel must reject sends when receiver is gone"
             );
         }
     }

@@ -584,15 +584,36 @@ async fn handle_agent_ws(
     )
     .await;
 
-    // Spawn background task: periodic agent list updates with change detection
+    // Spawn background task: event-driven agent list updates (#3513).
+    //
+    // Replaces the previous per-client 5s polling loop, which rebuilt and
+    // hashed the entire agent list for every connected dashboard tab on
+    // every tick (50 agents x 10 tabs = 500 manifest reads + serializations
+    // every 5s, even when nothing changed). We now subscribe to a single
+    // shared broadcast on `AgentRegistry` and only rebuild the snapshot when
+    // a real mutation fires. A 200ms debounce coalesces bursts (one user
+    // action can trigger several mutations in rapid succession), and a
+    // `last_hash` comparison preserves the existing belt-and-suspenders
+    // suppression for no-op mutations.
+    //
+    // Initial snapshot is sent once on connect so a freshly opened tab
+    // doesn't have to wait for the next mutation to populate the agent list.
     let sender_clone = Arc::clone(&sender);
     let state_clone = Arc::clone(&state);
     let update_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        use tokio::sync::broadcast::error::RecvError;
+
+        let mut rx = state_clone.kernel.agent_registry().subscribe_changes();
         let mut last_hash: u64 = 0;
-        loop {
-            interval.tick().await;
-            let agents: Vec<serde_json::Value> = state_clone
+
+        // Helper closure: snapshot, hash, and send on change.
+        // Returns Err(()) when the websocket peer is gone (terminate task).
+        async fn snapshot_and_send(
+            state: &Arc<AppState>,
+            sender: &Arc<Mutex<SplitSink<WebSocket, Message>>>,
+            last_hash: &mut u64,
+        ) -> Result<(), ()> {
+            let agents: Vec<serde_json::Value> = state
                 .kernel
                 .agent_registry()
                 .list()
@@ -608,7 +629,9 @@ async fn handle_agent_ws(
                 })
                 .collect();
 
-            // Change detection: hash the agent list and only send on change
+            // Belt-and-suspenders: even though broadcasts only fire on real
+            // mutations, a no-op mutation (e.g. update_skills with the same
+            // list) still publishes — suppress those at the send boundary.
             let mut hasher = DefaultHasher::new();
             for a in &agents {
                 serde_json::to_string(a)
@@ -616,13 +639,13 @@ async fn handle_agent_ws(
                     .hash(&mut hasher);
             }
             let new_hash = hasher.finish();
-            if new_hash == last_hash {
-                continue; // No change — skip broadcast
+            if new_hash == *last_hash {
+                return Ok(());
             }
-            last_hash = new_hash;
+            *last_hash = new_hash;
 
             if send_json(
-                &sender_clone,
+                sender,
                 &serde_json::json!({
                     "type": "agents_updated",
                     "agents": agents,
@@ -630,6 +653,52 @@ async fn handle_agent_ws(
             )
             .await
             .is_err()
+            {
+                return Err(());
+            }
+            Ok(())
+        }
+
+        // 1) Initial snapshot — guarantees a freshly connected dashboard tab
+        //    sees the current agent list without waiting for a mutation.
+        if snapshot_and_send(&state_clone, &sender_clone, &mut last_hash)
+            .await
+            .is_err()
+        {
+            return;
+        }
+
+        // 2) Event loop: wait for a registry change, debounce, then snapshot.
+        const DEBOUNCE: Duration = Duration::from_millis(200);
+        loop {
+            // Block until something happens.
+            match rx.recv().await {
+                Ok(()) => {}
+                // Lagged means the channel buffer overflowed before we got
+                // to drain it — perfectly fine, just snapshot the current
+                // state and keep listening (we don't care about individual
+                // events, only that "something changed").
+                Err(RecvError::Lagged(_)) => {}
+                // Sender dropped (kernel teardown) — exit cleanly.
+                Err(RecvError::Closed) => break,
+            }
+
+            // 3) Debounce: drain further events that arrive within the
+            //    debounce window so a burst of N mutations only produces
+            //    one snapshot+send instead of N.
+            let deadline = tokio::time::Instant::now() + DEBOUNCE;
+            loop {
+                match tokio::time::timeout_at(deadline, rx.recv()).await {
+                    Ok(Ok(())) => continue,
+                    Ok(Err(RecvError::Lagged(_))) => continue,
+                    Ok(Err(RecvError::Closed)) => return,
+                    Err(_) => break, // debounce window elapsed
+                }
+            }
+
+            if snapshot_and_send(&state_clone, &sender_clone, &mut last_hash)
+                .await
+                .is_err()
             {
                 break; // Client disconnected
             }
@@ -880,7 +949,7 @@ async fn handle_text_message(
                     .filter_map(|a| serde_json::from_value(a.clone()).ok())
                     .collect();
                 if !refs.is_empty() {
-                    let image_blocks = crate::routes::resolve_attachments(&refs);
+                    let image_blocks = crate::routes::resolve_attachments(state, &refs);
                     if !image_blocks.is_empty() {
                         has_images = true;
                         crate::routes::inject_attachments_into_session(
@@ -1682,7 +1751,10 @@ fn sanitize_text(s: &str) -> String {
 ///
 /// Uses the proper LLM error classifier from `librefang_runtime::llm_errors`
 /// for comprehensive 20-provider coverage with actionable advice.
-fn classify_streaming_error(err: &librefang_kernel::error::KernelError) -> String {
+// Accepts any `Display` error so this module does not have to depend on
+// `librefang_kernel::error::KernelError` directly. Keeping the API↔kernel
+// boundary thin (see #3744) — the function only ever formats the error.
+fn classify_streaming_error(err: &dyn std::fmt::Display) -> String {
     let inner = format!("{err}");
 
     // Check for agent-specific errors first (not LLM errors)
@@ -1905,6 +1977,25 @@ mod tests {
         assert_eq!(VerboseLevel::Off.label(), "off");
         assert_eq!(VerboseLevel::On.label(), "on");
         assert_eq!(VerboseLevel::Full.label(), "full");
+    }
+
+    // Regression for #3744: classify_streaming_error must accept any Display
+    // type, so this module no longer needs to import KernelError.
+    #[test]
+    fn test_classify_streaming_error_accepts_any_display() {
+        // A plain &str (not a KernelError) is sufficient.
+        let msg = classify_streaming_error(&"Agent not found");
+        assert!(msg.contains("Agent not found"));
+
+        // A custom Display impl also works.
+        struct E;
+        impl std::fmt::Display for E {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("quota exceeded")
+            }
+        }
+        let msg = classify_streaming_error(&E);
+        assert!(msg.to_lowercase().contains("quota"));
     }
 
     #[test]

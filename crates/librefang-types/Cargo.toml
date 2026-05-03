@@ -35,3 +35,6 @@ storage-sqlite = ["librefang-storage/sqlite-backend"]
 [dev-dependencies]
 rmp-serde = { workspace = true }
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

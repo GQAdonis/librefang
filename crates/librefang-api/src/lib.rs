@@ -107,6 +107,9 @@ pub(crate) fn atomic_write(path: &std::path::Path, content: &[u8]) -> std::io::R
 }
 
 pub mod channel_bridge;
+pub mod extensions;
+pub mod extractors;
+pub mod mcp_oauth;
 pub mod middleware;
 pub mod oauth;
 pub mod openai_compat;
@@ -119,6 +122,8 @@ pub mod stream_chunker;
 pub mod stream_dedup;
 pub mod terminal;
 pub mod terminal_tmux;
+pub mod trajectory;
+pub mod triggers;
 pub mod types;
 pub mod validation;
 pub mod versioning;

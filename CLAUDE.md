@@ -90,109 +90,81 @@ cargo clippy --workspace --all-targets -- -D warnings  # Zero warnings
 cargo test -p <crate>                                  # Only when verifying behavior in one crate
 ```
 
-## MANDATORY: Live Integration Testing
-**This section is a HUMAN workflow.** Claude must NOT execute these steps —
-they require `cargo build` and starting a long-lived daemon, both forbidden
-to the AI per the rules above. Claude's role is to prepare exact commands /
-payloads and ask the user to run them, then read the user's pasted output.
-Do not auto-spawn the daemon or `cargo build --release` yourself.
+## MANDATORY: Integration Testing (refs #3721)
 
-**After implementing any new endpoint, feature, or wiring change, the user MUST run live integration tests.** Unit tests alone are not enough — they can pass while the feature is actually dead code. Live tests catch:
-- Missing route registrations in server.rs
-- Config fields not being deserialized from TOML
-- Type mismatches between kernel and API layers
-- Endpoints that compile but return wrong/empty data
+**Primary verification is automated.** The repo has comprehensive
+`#[tokio::test]` integration coverage in `crates/librefang-api/tests/`,
+landed via the #3571 PR series (~30 PRs). Every major route domain —
+`agents`, `a2a`, `approvals`, `audit`, `authz`, `auto-dream`, `budget`,
+`channels` (incl. webhooks), `config`, `goals`, `hands`, `hooks`,
+`inbox`, `mcp_auth`, `media`, `memory`, `network`/`peers`/`comms`,
+`oauth`, `pairing`/`backup`, `plugins`, `profiles`/`templates`,
+`prompts`, `providers`/`models`, `skills`, `terminal`, `tools`/`sessions`,
+`v1` (OpenAI compat), `workflows` — is exercised against a real axum
+router via `TestServer` (see `start_test_server*` in
+`tests/api_integration_test.rs`). Plus dedicated files:
+`auth_public_allowlist.rs`, `daemon_lifecycle_test.rs`, `load_test.rs`,
+`mcp_oauth_flow_test.rs`, `openapi_spec_test.rs`, `pairing_test.rs`,
+`tools_invoke_test.rs`, `totp_flow_test.rs`, `users_test.rs`. CI runs
+these on every push.
 
-### How to Run Live Integration Tests
+### What you MUST do for any route / wiring change
 
-#### Step 1: Stop any running daemon
+1. **Add a `#[tokio::test]` against `TestServer`** in the matching
+   `tests/*.rs` file. Pattern: spawn router via `start_test_server()`,
+   hit the endpoint with `reqwest`, assert status and response shape;
+   for write endpoints, follow up with a read and assert the side
+   effect. This is the canonical replacement for the old curl checklist
+   — it catches missing `server.rs` registrations, un-deserialized
+   config fields, kernel↔API type drift, and empty/null payloads.
+2. **Run scoped tests locally**: `cargo test -p librefang-api`
+   (workspace-wide `cargo test` is forbidden — see Build & Verify above).
+3. **Reviewers gate PRs** on the presence of an integration test for
+   each new endpoint. PRs that change route shape without a test
+   should be sent back.
+
+### When live LLM verification is required (HUMAN-only)
+
+Live daemon + real LLM is needed **only** when the change touches an
+LLM call path or end-to-end prompt/metering wiring that integration
+tests can't simulate (e.g., real provider streaming, real Groq token
+accounting, dashboard HTML smoke). Claude must NOT execute these steps
+— they require `cargo build --release` and a long-lived daemon on
+port 4545, both blocked by `.claude/hooks/`. Prepare commands and
+payloads for the user; they paste output back.
+
 ```bash
-tasklist | grep -i librefang
-taskkill //PID <pid> //F
-# Wait 2-3 seconds for port to release
-sleep 3
-```
+# Stop any running daemon (Windows / Git Bash):
+tasklist | grep -i librefang && taskkill //PID <pid> //F && sleep 3
 
-#### Step 2: Build fresh release binary
-```bash
+# Build + start with provider key:
 cargo build --release -p librefang-cli
+GROQ_API_KEY=<key> target/release/librefang.exe start &
+sleep 6 && curl -s http://127.0.0.1:4545/api/health
+
+# Real LLM round-trip + side-effect check:
+AGENT_ID=$(curl -s http://127.0.0.1:4545/api/agents | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+curl -s -X POST "http://127.0.0.1:4545/api/agents/$AGENT_ID/message" \
+  -H "Content-Type: application/json" -d '{"message":"Say hello in 5 words."}'
+curl -s http://127.0.0.1:4545/api/budget          # cost should have increased
+curl -s http://127.0.0.1:4545/api/budget/agents   # per-agent spend visible
+
+# Cleanup:
+taskkill //PID <pid> //F
 ```
 
-#### Step 3: Start daemon with required API keys
-```bash
-GROQ_API_KEY=<key> target/release/librefang.exe start &
-sleep 6  # Wait for full boot
-curl -s http://127.0.0.1:4545/api/health  # Verify it's up
-```
 The daemon command is `start` (not `daemon`).
 
-#### Step 4: Test every new endpoint
-```bash
-# GET endpoints — verify they return real data, not empty/null
-curl -s http://127.0.0.1:4545/api/<new-endpoint>
+### What was retired
 
-# POST/PUT endpoints — send real payloads
-curl -s -X POST http://127.0.0.1:4545/api/<endpoint> \
-  -H "Content-Type: application/json" \
-  -d '{"field": "value"}'
-
-# Verify write endpoints persist — read back after writing
-curl -s -X PUT http://127.0.0.1:4545/api/<endpoint> -d '...'
-curl -s http://127.0.0.1:4545/api/<endpoint>  # Should reflect the update
-```
-
-#### Step 5: Test real LLM integration
-```bash
-# Get an agent ID
-curl -s http://127.0.0.1:4545/api/agents | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])"
-
-# Send a real message (triggers actual LLM call to Groq/OpenAI)
-curl -s -X POST "http://127.0.0.1:4545/api/agents/<id>/message" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Say hello in 5 words."}'
-```
-
-#### Step 6: Verify side effects
-After an LLM call, verify that any metering/cost/usage tracking updated:
-```bash
-curl -s http://127.0.0.1:4545/api/budget       # Cost should have increased
-curl -s http://127.0.0.1:4545/api/budget/agents  # Per-agent spend should show
-```
-
-#### Step 7: Verify dashboard HTML
-```bash
-# Check that new UI components exist in the served HTML
-curl -s http://127.0.0.1:4545/ | grep -c "newComponentName"
-# Should return > 0
-```
-
-#### Step 8: Cleanup
-```bash
-tasklist | grep -i librefang
-taskkill //PID <pid> //F
-```
-
-### Key API Endpoints for Testing
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/health` | GET | Basic health check |
-| `/api/agents` | GET | List all agents |
-| `/api/agents/{id}/message` | POST | Send message (triggers LLM) |
-| `/api/budget` | GET/PUT | Global budget status/update |
-| `/api/budget/agents` | GET | Per-agent cost ranking |
-| `/api/budget/agents/{id}` | GET | Single agent budget detail |
-| `/api/network/status` | GET | OFP network status |
-| `/api/peers` | GET | Connected OFP peers |
-| `/api/skills/{name}` | GET | Skill detail with evolution history |
-| `/api/a2a/agents` | GET | External A2A agents |
-| `/api/a2a/discover` | POST | Discover A2A agent at URL |
-| `/api/a2a/send` | POST | Send task to external A2A agent |
-| `/api/a2a/tasks/{id}/status` | GET | Check external A2A task status |
-| `/api/approvals/{id}/approve` | POST | Approve (body: `{totp_code?}`) |
-| `/api/approvals/totp/setup` | POST | Generate TOTP secret + URI |
-| `/api/approvals/totp/confirm` | POST | Confirm TOTP enrollment |
-| `/api/approvals/totp/status` | GET | Check TOTP enrollment status |
-| `/api/approvals/totp` | DELETE | Revoke TOTP enrollment |
+- The old 8-step manual curl checklist (Steps 1–8) is gone; Steps 4
+  and 6 are now `#[tokio::test]` cases. Step 7 (dashboard
+  `grep -c newComponentName`) is dropped — it broke under Vite
+  minification. Dashboard UI verification is the dashboard test
+  suite's responsibility (see `crates/librefang-api/dashboard/`).
+- The "Key API Endpoints for Testing" table is gone; the canonical
+  enumeration is the OpenAPI spec (`openapi.json`, regenerated by the
+  pre-commit hook) and the integration tests themselves.
 
 ## Architecture Notes
 - **Deterministic prompt ordering (#3298)**: anything that reaches an LLM prompt — tool definitions, MCP server summaries, skill registries, hand registries, capability lists, env passthrough lists — MUST be ordered before stringifying. Prefer `BTreeMap` / `BTreeSet` over `HashMap` / `HashSet` for those types so the compiler enforces it; otherwise sort at the boundary. HashMap iteration order varies across processes and silently invalidates provider prompt caches even when content is unchanged. Regression tests live next to each boundary — see `kernel::tests::mcp_summary_is_byte_identical_across_input_orders`, `kernel::tests::mcp_summary_inner_tool_list_is_sorted`, and `librefang_skills::registry::tests::all_tool_definitions_is_deterministic_across_insertion_orders` / `tool_definitions_for_skills_is_deterministic_across_insertion_orders`.
@@ -210,10 +182,14 @@ taskkill //PID <pid> //F
 - **Auth middleware allowlist**: Unauthenticated endpoints must be added to the `is_public` allowlist in `middleware.rs` — NOT by reordering routes in `server.rs`. The auth layer applies to all routes.
 - **Docker callback URLs**: Never bind ephemeral localhost ports for OAuth callbacks in daemon code — the port is unreachable from outside Docker. Route callbacks through the API server's existing port instead.
 - **MCP OAuth flow**: Entirely UI-driven — daemon only detects 401 and sets `NeedsAuth` state. PKCE + callback handled by API layer (`routes/mcp_auth.rs`). Dynamic Client Registration (RFC 7591) used when server has `registration_endpoint` but no `client_id`.
-- `session_mode` in `AgentManifest` (agent.toml, **not** config.toml) controls whether automated invocations reuse the persistent session (`"persistent"`, default) or create a fresh one (`"new"`). Per-trigger override via `Trigger.session_mode: Option<SessionMode>`. Resolution order: per-trigger override > agent manifest default. Session resolution in `execute_llm_agent` (`kernel/mod.rs` ~6959).
-  - **Honors `session_mode`**: event triggers, `agent_send`.
-  - **Ignores `session_mode`**: channel messages (always `SessionId::for_channel(agent,"<channel>:<chat>")`), **cron jobs** (synthesize `SenderContext{channel:"cron"}` at `kernel/mod.rs` ~12195, which takes the channel branch before `session_mode` is consulted — all cron fires for an agent share one `(agent,"cron")` session), forks (forced `Persistent` at ~5543 to preserve prompt cache).
-  - When creating a trigger or cron, consciously pick: persistent (continuity, cache reuse) vs new (isolation). Don't rely on `session_mode` for per-fire fresh cron sessions — it won't work without dispatcher changes.
+- `session_mode` in `AgentManifest` (agent.toml, **not** config.toml) controls whether automated invocations reuse the persistent session (`"persistent"`, default) or create a fresh one (`"new"`). Per-trigger override via `Trigger.session_mode: Option<SessionMode>`. Per-cron override via `CronJob.session_mode: Option<SessionMode>`. Resolution order: per-trigger / per-job override > agent manifest default. Session resolution in `execute_llm_agent` (`kernel/mod.rs` ~6959).
+  - **Honors `session_mode`**: event triggers, `agent_send`, **cron jobs** (since #3597 / #3657 — see below).
+  - **Ignores `session_mode`**: channel messages (always `SessionId::for_channel(agent,"<channel>:<chat>")`), forks (forced `Persistent` at ~5543 to preserve prompt cache).
+  - **Cron + `session_mode`** (resolution at `kernel/mod.rs` ~13609, helper `cron::cron_fire_session_override`):
+    - Effective mode = per-job `CronJob.session_mode` > agent manifest `session_mode` > historical `Persistent`.
+    - `Persistent` (or unset): the cron tick synthesizes `SenderContext{channel:"cron"}` and `send_message_full` derives `SessionId::for_channel(agent,"cron")`, so all fires of all cron jobs for that agent share one `(agent,"cron")` persistent session (historical behaviour, prompt-cache reuse).
+    - `New`: `cron_fire_session_override` returns an explicit `SessionId::for_cron_run(agent, "<job_id>:<rfc3339_fire_time>")` which is passed as `session_id_override` into `send_message_full`. The override path wins over the channel-derived branch, so each fire lands on its own deterministic, isolated session — prior fires never leak into the current run, and the persistent `(agent,"cron")` session stays untouched.
+  - When creating a trigger or cron, consciously pick: `Persistent` (continuity, cache reuse) vs `New` (isolation, fresh context per fire).
 - **Message-history trim cap** is configurable per-agent
   (`agent.toml: max_history_messages`) and globally
   (`config.toml: max_history_messages`). Default is

@@ -2619,6 +2619,13 @@ pub struct KernelConfig {
     /// at runtime with a warning log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_history_messages: Option<usize>,
+    /// Kernel-wide Smart Model Router defaults applied to any agent whose
+    /// `agent.toml` does not set its own `[routing]` block. The `init` wizard
+    /// writes user-selected tier models here under `[default_routing]` so the
+    /// chosen routing actually reaches the kernel — see issue #4466. Per-agent
+    /// `routing` always wins when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_routing: Option<crate::agent::ModelRoutingConfig>,
     /// Default LLM provider configuration.
     pub default_model: DefaultModelConfig,
     /// Memory substrate configuration.
@@ -4836,6 +4843,7 @@ impl Default for KernelConfig {
             network_enabled: false,
             agent_max_iterations: None,
             max_history_messages: None,
+            default_routing: None,
             default_model: DefaultModelConfig::default(),
             memory: MemoryConfig::default(),
             network: NetworkConfig::default(),
@@ -5371,7 +5379,7 @@ impl std::fmt::Debug for NetworkConfig {
 ///
 /// Each field uses `OneOrMany<T>` to support both single-instance (`[channels.telegram]`)
 /// and multi-instance (`[[channels.telegram]]`) TOML syntax for multi-bot routing.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct ChannelsConfig {
     /// Telegram bot configuration(s).
@@ -5482,6 +5490,86 @@ fn default_file_download_max_bytes() -> u64 {
     50 * 1024 * 1024
 }
 
+impl Default for ChannelsConfig {
+    // Manual impl so `file_download_max_bytes` matches the
+    // `#[serde(default = "default_file_download_max_bytes")]` value (50 MiB)
+    // instead of `u64::default() == 0`. Without this, code paths that build
+    // a `ChannelsConfig` programmatically (e.g. `KernelConfig::default()`,
+    // tests, configs without a `[channels]` section) would silently set
+    // `file_download_max_bytes = 0`, causing the bridge to reject every
+    // channel attachment as oversized. See issue #4436.
+    fn default() -> Self {
+        Self {
+            telegram: OneOrMany::default(),
+            discord: OneOrMany::default(),
+            slack: OneOrMany::default(),
+            whatsapp: OneOrMany::default(),
+            signal: OneOrMany::default(),
+            matrix: OneOrMany::default(),
+            email: OneOrMany::default(),
+            teams: OneOrMany::default(),
+            mattermost: OneOrMany::default(),
+            irc: OneOrMany::default(),
+            google_chat: OneOrMany::default(),
+            twitch: OneOrMany::default(),
+            rocketchat: OneOrMany::default(),
+            zulip: OneOrMany::default(),
+            xmpp: OneOrMany::default(),
+            line: OneOrMany::default(),
+            viber: OneOrMany::default(),
+            messenger: OneOrMany::default(),
+            reddit: OneOrMany::default(),
+            mastodon: OneOrMany::default(),
+            bluesky: OneOrMany::default(),
+            feishu: OneOrMany::default(),
+            revolt: OneOrMany::default(),
+            nextcloud: OneOrMany::default(),
+            guilded: OneOrMany::default(),
+            keybase: OneOrMany::default(),
+            threema: OneOrMany::default(),
+            nostr: OneOrMany::default(),
+            webex: OneOrMany::default(),
+            pumble: OneOrMany::default(),
+            flock: OneOrMany::default(),
+            twist: OneOrMany::default(),
+            mumble: OneOrMany::default(),
+            dingtalk: OneOrMany::default(),
+            qq: OneOrMany::default(),
+            discourse: OneOrMany::default(),
+            gitter: OneOrMany::default(),
+            ntfy: OneOrMany::default(),
+            gotify: OneOrMany::default(),
+            webhook: OneOrMany::default(),
+            voice: OneOrMany::default(),
+            linkedin: OneOrMany::default(),
+            wechat: OneOrMany::default(),
+            wecom: OneOrMany::default(),
+            file_download_max_bytes: default_file_download_max_bytes(),
+            file_download_dir: None,
+        }
+    }
+}
+
+impl ChannelsConfig {
+    /// Resolve the effective directory for storing downloaded channel
+    /// attachments (and any other code path that historically wrote into
+    /// `<temp>/librefang_uploads`). Returns the operator-configured
+    /// `[channels].file_download_dir` when set, otherwise the legacy
+    /// `std::env::temp_dir()/librefang_uploads` default.
+    ///
+    /// This helper is the single source of truth — no other site in the
+    /// codebase should hardcode the literal `"librefang_uploads"` so the
+    /// kernel can hand the same path to the file-read sandbox and agents
+    /// can actually open the files the bridge tells them about. See
+    /// issues #4434 and #4435.
+    pub fn effective_file_download_dir(&self) -> std::path::PathBuf {
+        self.file_download_dir
+            .as_ref()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("librefang_uploads"))
+    }
+}
+
 /// Telegram channel adapter configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -5515,6 +5603,19 @@ pub struct TelegramConfig {
     /// Per-channel behavior overrides.
     #[serde(default)]
     pub overrides: ChannelOverrides,
+    /// Message coalescing window in milliseconds for Telegram-specific
+    /// ergonomics (#4145). When set, messages from the same sender arriving
+    /// within this window are buffered and dispatched to the agent as a
+    /// single batched context. This prevents out-of-order processing in the
+    /// common pattern where a user forwards a message and immediately follows
+    /// up with a comment.
+    ///
+    /// This is a thin alias for [`ChannelOverrides::message_debounce_ms`]:
+    /// if `overrides.message_debounce_ms` is non-zero it wins; otherwise the
+    /// value here is applied. `Some(0)` explicitly disables coalescing.
+    /// `None` (default) leaves behavior unchanged.
+    #[serde(default)]
+    pub message_coalesce_window_ms: Option<u64>,
     /// Thread-based agent routing for forum topics.
     ///
     /// Maps Telegram `message_thread_id` (as string) to an agent name.
@@ -5543,8 +5644,31 @@ impl Default for TelegramConfig {
             max_backoff_secs: default_channel_max_backoff_secs(),
             long_poll_timeout_secs: default_telegram_long_poll_timeout_secs(),
             overrides: ChannelOverrides::default(),
+            message_coalesce_window_ms: None,
             thread_routes: std::collections::HashMap::new(),
         }
+    }
+}
+
+impl TelegramConfig {
+    /// Returns a [`ChannelOverrides`] with the Telegram-specific
+    /// `message_coalesce_window_ms` alias applied to
+    /// [`ChannelOverrides::message_debounce_ms`].
+    ///
+    /// Resolution rules (#4145):
+    /// 1. If `overrides.message_debounce_ms` is non-zero, it wins.
+    /// 2. Otherwise, if `message_coalesce_window_ms` is `Some`, that value
+    ///    is copied into `message_debounce_ms` (including `Some(0)`, which
+    ///    is a no-op since the existing field is already 0).
+    /// 3. Otherwise the unmodified clone of `overrides` is returned.
+    pub fn effective_overrides(&self) -> ChannelOverrides {
+        let mut ov = self.overrides.clone();
+        if ov.message_debounce_ms == 0 {
+            if let Some(window) = self.message_coalesce_window_ms {
+                ov.message_debounce_ms = window;
+            }
+        }
+        ov
     }
 }
 
@@ -7484,6 +7608,58 @@ impl Default for ParallelToolsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn telegram_message_coalesce_window_default_is_none() {
+        let tg = TelegramConfig::default();
+        assert!(tg.message_coalesce_window_ms.is_none());
+        // Backward compat: effective overrides leaves debounce disabled.
+        assert_eq!(tg.effective_overrides().message_debounce_ms, 0);
+    }
+
+    #[test]
+    fn telegram_message_coalesce_window_alias_fills_debounce() {
+        let tg = TelegramConfig {
+            message_coalesce_window_ms: Some(2000),
+            ..Default::default()
+        };
+        assert_eq!(tg.effective_overrides().message_debounce_ms, 2000);
+    }
+
+    #[test]
+    fn telegram_explicit_overrides_debounce_wins_over_alias() {
+        let tg = TelegramConfig {
+            message_coalesce_window_ms: Some(2000),
+            overrides: ChannelOverrides {
+                message_debounce_ms: 500,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        // The explicit `overrides.message_debounce_ms` is non-zero, so the
+        // alias must NOT clobber it.
+        assert_eq!(tg.effective_overrides().message_debounce_ms, 500);
+    }
+
+    #[test]
+    fn telegram_message_coalesce_window_zero_keeps_disabled() {
+        let tg = TelegramConfig {
+            message_coalesce_window_ms: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(tg.effective_overrides().message_debounce_ms, 0);
+    }
+
+    #[test]
+    fn telegram_message_coalesce_window_parses_from_toml() {
+        let toml_str = r#"
+            bot_token_env = "TG"
+            message_coalesce_window_ms = 1500
+        "#;
+        let tg: TelegramConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(tg.message_coalesce_window_ms, Some(1500));
+        assert_eq!(tg.effective_overrides().message_debounce_ms, 1500);
+    }
 
     #[test]
     fn test_session_config_defaults_backward_compatible() {

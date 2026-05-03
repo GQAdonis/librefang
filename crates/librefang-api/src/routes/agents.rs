@@ -870,7 +870,7 @@ pub async fn list_agents(
     // username automatically.
     if params.owner.is_none() {
         if let Some(ref user) = api_user {
-            use librefang_kernel::auth::UserRole;
+            use crate::middleware::UserRole;
             if user.0.role < UserRole::Admin {
                 params.owner = Some(user.0.name.clone());
             }
@@ -1073,7 +1073,7 @@ pub async fn get_agent_stats(
     // detail-panel rollup can't leak per-agent cost / latency to other
     // users on the same instance.
     if let Some(ref user) = api_user {
-        use librefang_kernel::auth::UserRole;
+        use crate::middleware::UserRole;
         if user.0.role < UserRole::Admin
             && !entry.manifest.author.eq_ignore_ascii_case(&user.0.name)
         {
@@ -1180,7 +1180,7 @@ pub async fn list_agent_events(
     // Mirror the owner-scoping on /stats and /sessions — turn-level
     // event data carries token counts and cost, so it shouldn't leak.
     if let Some(ref user) = api_user {
-        use librefang_kernel::auth::UserRole;
+        use crate::middleware::UserRole;
         if user.0.role < UserRole::Admin
             && !entry.manifest.author.eq_ignore_ascii_case(&user.0.name)
         {
@@ -1294,11 +1294,16 @@ fn is_text_like_attachment(content_type: &str, filename: &str) -> bool {
 ///     truncated at 200K chars.
 ///   - everything else → skipped with a warn log.
 pub fn resolve_attachments(
+    state: &AppState,
     attachments: &[AttachmentRef],
 ) -> Vec<librefang_types::message::ContentBlock> {
     use base64::Engine;
 
-    let upload_dir = std::env::temp_dir().join("librefang_uploads");
+    let upload_dir = state
+        .kernel
+        .config_ref()
+        .channels
+        .effective_file_download_dir();
     let mut blocks = Vec::new();
 
     for att in attachments {
@@ -1671,17 +1676,22 @@ pub async fn send_message(
     // SECURITY: Reject oversized messages to prevent OOM / LLM token abuse.
     const MAX_MESSAGE_SIZE: usize = 64 * 1024; // 64KB
     if req.message.len() > MAX_MESSAGE_SIZE {
-        return ApiErrorResponse::bad_request(err_too_large)
-            .with_code("message_too_large")
-            .with_status(StatusCode::PAYLOAD_TOO_LARGE)
-            .into_response();
+        // #3511: tag every response for which `agent_id` is known so
+        // request_logging middleware can emit it as a structured field.
+        return crate::extensions::with_agent_id(
+            agent_id,
+            ApiErrorResponse::bad_request(err_too_large)
+                .with_code("message_too_large")
+                .with_status(StatusCode::PAYLOAD_TOO_LARGE),
+        );
     }
 
     // Check agent exists before processing
     if state.kernel.agent_registry().get(agent_id).is_none() {
-        return ApiErrorResponse::not_found(err_not_found)
-            .with_code("agent_not_found")
-            .into_response();
+        return crate::extensions::with_agent_id(
+            agent_id,
+            ApiErrorResponse::not_found(err_not_found).with_code("agent_not_found"),
+        );
     }
 
     // Reject messages when the agent's provider has no API key configured
@@ -1709,14 +1719,16 @@ pub async fn send_message(
             if let Some(catalog) = state.kernel.model_catalog_ref().read().ok().as_ref() {
                 if let Some(p) = catalog.get_provider(provider) {
                     if !p.auth_status.is_available() {
-                        return ApiErrorResponse {
-                            error: format!("{} (provider: {})", err_auth_missing, provider),
-                            code: Some("provider_auth_missing".to_string()),
-                            r#type: Some("provider_auth_missing".to_string()),
-                            details: None,
-                            status: StatusCode::PRECONDITION_FAILED,
-                        }
-                        .into_response();
+                        return crate::extensions::with_agent_id(
+                            agent_id,
+                            ApiErrorResponse {
+                                error: format!("{} (provider: {})", err_auth_missing, provider),
+                                code: Some("provider_auth_missing".to_string()),
+                                r#type: Some("provider_auth_missing".to_string()),
+                                details: None,
+                                status: StatusCode::PRECONDITION_FAILED,
+                            },
+                        );
                     }
                 }
             }
@@ -1725,7 +1737,7 @@ pub async fn send_message(
 
     // Resolve file attachments into image content blocks
     if !req.attachments.is_empty() {
-        let image_blocks = resolve_attachments(&req.attachments);
+        let image_blocks = resolve_attachments(&state, &req.attachments);
         if !image_blocks.is_empty() {
             inject_attachments_into_session(&state.kernel, agent_id, image_blocks);
         }
@@ -2025,7 +2037,11 @@ pub async fn get_agent_session(
                                     // Persist image to upload dir so it can be
                                     // served back when loading session history.
                                     let file_id = uuid::Uuid::new_v4().to_string();
-                                    let upload_dir = std::env::temp_dir().join("librefang_uploads");
+                                    let upload_dir = state
+                                        .kernel
+                                        .config_ref()
+                                        .channels
+                                        .effective_file_download_dir();
                                     if let Err(e) = std::fs::create_dir_all(&upload_dir) {
                                         tracing::warn!("Failed to create upload directory: {e}");
                                     }
@@ -2196,14 +2212,21 @@ pub async fn get_agent_session(
 }
 
 /// DELETE /api/agents/:id — Kill an agent.
+///
+/// Idempotent (RFC 9110 §9.2.2 / §9.3.5): deleting an agent that is already
+/// gone returns `200 OK` with `{"status": "already-deleted"}` instead of
+/// `404`. `404` is reserved for the malformed-UUID case alone, so retried
+/// or replayed DELETEs by clients (network blips, dashboard double-clicks)
+/// no longer surface a phantom error. Refs #3509.
 #[utoipa::path(
     delete,
     path = "/api/agents/{id}",
     tag = "agents",
     params(("id" = String, Path, description = "Agent ID")),
     responses(
-        (status = 200, description = "Agent killed"),
-        (status = 404, description = "Agent not found")
+        (status = 200, description = "Agent killed (or was already absent — idempotent)"),
+        (status = 400, description = "Malformed agent ID"),
+        (status = 409, description = "Agent is hand-owned and cannot be deleted directly")
     )
 )]
 pub async fn kill_agent(
@@ -2226,29 +2249,65 @@ pub async fn kill_agent(
     // can respawn or produce stale instance state — require callers to
     // deactivate or uninstall the owning hand instead. The dashboard hides
     // Delete for hand agents already; this closes the direct-API loophole.
-    if let Some(entry) = state.kernel.agent_registry().get(agent_id) {
-        if entry.is_hand {
+    match state.kernel.agent_registry().get(agent_id) {
+        Some(entry) if entry.is_hand => {
             return ApiErrorResponse::conflict(
                 "Cannot delete a hand-spawned agent directly; deactivate or uninstall the owning hand instead.",
             )
             .with_code("hand_agent_delete_denied")
             .into_response();
         }
+        Some(_) => {}
+        None => {
+            // Idempotent DELETE: the agent is already gone (replayed request,
+            // double-click, race with another deleter). Treat as success per
+            // RFC 9110 §9.2.2 — DELETE is idempotent.
+            return crate::extensions::with_agent_id(
+                agent_id,
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"status": "already-deleted", "agent_id": id})),
+                ),
+            );
+        }
     }
 
-    match state.kernel.kill_agent(agent_id) {
+    let body = match state.kernel.kill_agent(agent_id) {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "killed", "agent_id": id})),
         )
             .into_response(),
         Err(e) => {
+            // The agent existed when we checked above but vanished mid-flight
+            // (concurrent delete). Still treat as idempotent success — the
+            // caller's intent ("agent {id} should be gone") is satisfied.
+            if matches!(
+                e,
+                librefang_kernel::error::KernelError::LibreFang(
+                    librefang_types::error::LibreFangError::AgentNotFound(_)
+                )
+            ) {
+                tracing::debug!(
+                    "kill_agent: agent {id} vanished mid-flight; treating as already-deleted"
+                );
+                return crate::extensions::with_agent_id(
+                    agent_id,
+                    (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"status": "already-deleted", "agent_id": id})),
+                    ),
+                );
+            }
             tracing::warn!("kill_agent failed for {id}: {e}");
-            ApiErrorResponse::not_found(t.t("api-error-agent-not-found-or-terminated"))
-                .with_code("agent_not_found")
+            ApiErrorResponse::internal(format!("Failed to kill agent {id}: {e}"))
+                .with_code("agent_kill_failed")
                 .into_response()
         }
-    }
+    };
+    // #3511: tag response so request_logging middleware can emit
+    // `agent_id` as a structured field on the access-log line.
+    crate::extensions::with_agent_id(agent_id, body)
 }
 
 /// PUT /api/agents/:id/suspend — Suspend an agent (stops cron, keeps in registry).
@@ -2265,7 +2324,7 @@ pub async fn suspend_agent(
                 .into_response();
         }
     };
-    match state.kernel.suspend_agent(agent_id) {
+    let body = match state.kernel.suspend_agent(agent_id) {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "suspended", "agent_id": id})),
@@ -2274,7 +2333,8 @@ pub async fn suspend_agent(
         Err(e) => ApiErrorResponse::not_found(e.to_string())
             .with_code("agent_not_found")
             .into_response(),
-    }
+    };
+    crate::extensions::with_agent_id(agent_id, body)
 }
 
 /// PUT /api/agents/:id/resume — Resume a suspended agent.
@@ -2291,7 +2351,7 @@ pub async fn resume_agent(
                 .into_response();
         }
     };
-    match state.kernel.resume_agent(agent_id) {
+    let body = match state.kernel.resume_agent(agent_id) {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "running", "agent_id": id})),
@@ -2300,7 +2360,8 @@ pub async fn resume_agent(
         Err(e) => ApiErrorResponse::not_found(e.to_string())
             .with_code("agent_not_found")
             .into_response(),
-    }
+    };
+    crate::extensions::with_agent_id(agent_id, body)
 }
 
 /// PUT /api/agents/:id/mode — Change an agent's operational mode.
@@ -2330,7 +2391,7 @@ pub async fn set_agent_mode(
         }
     };
 
-    match state.kernel.agent_registry().set_mode(agent_id, body.mode) {
+    let body = match state.kernel.agent_registry().set_mode(agent_id, body.mode) {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({
@@ -2343,7 +2404,8 @@ pub async fn set_agent_mode(
         Err(_) => ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
             .with_code("agent_not_found")
             .into_response(),
-    }
+    };
+    crate::extensions::with_agent_id(agent_id, body)
 }
 
 // ---------------------------------------------------------------------------
@@ -2510,7 +2572,7 @@ pub async fn send_message_stream(
 
     // Resolve file attachments into image content blocks (same as non-streaming)
     if !req.attachments.is_empty() {
-        let image_blocks = resolve_attachments(&req.attachments);
+        let image_blocks = resolve_attachments(&state, &req.attachments);
         if !image_blocks.is_empty() {
             inject_attachments_into_session(&state.kernel, agent_id, image_blocks);
         }
@@ -2839,7 +2901,7 @@ pub async fn list_agent_sessions(
     // authored. Mirrors the filter on `list_agents` so per-agent
     // session metadata (cost, message count) doesn't leak.
     if let Some(ref user) = api_user {
-        use librefang_kernel::auth::UserRole;
+        use crate::middleware::UserRole;
         if user.0.role < UserRole::Admin {
             let entry = state.kernel.agent_registry().get(agent_id);
             let owned = entry
@@ -3045,7 +3107,6 @@ pub async fn export_session_trajectory(
 ) -> axum::response::Response {
     use axum::http::header;
     use axum::response::IntoResponse;
-    use librefang_kernel::trajectory::{AgentContext, RedactionPolicy, TrajectoryExporter};
 
     let (
         err_invalid_id,
@@ -3088,71 +3149,28 @@ pub async fn export_session_trajectory(
         }
     };
 
-    // Lookup agent → 404 if missing.
-    let agent_entry = match state.kernel.agent_registry().get(agent_id) {
-        Some(e) => e,
-        None => {
+    // Build the redacted bundle via the kernel surface so this route does
+    // not need to import `librefang_kernel::trajectory` directly (#3744).
+    let bundle = match state.kernel.export_session_trajectory(agent_id, session_id) {
+        Ok(b) => b,
+        Err(librefang_kernel::error::KernelError::LibreFang(
+            librefang_types::error::LibreFangError::AgentNotFound(_),
+        )) => {
             return (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": err_not_found})),
             )
                 .into_response();
         }
-    };
-
-    // Build redaction policy. Use the agent's workspace as the path-collapse
-    // root when present.
-    let mut policy = RedactionPolicy::default();
-    if let Some(ws) = agent_entry.manifest.workspace.clone() {
-        policy = policy.with_workspace_root(ws);
-    }
-
-    let exporter = TrajectoryExporter::new(state.kernel.memory_substrate().clone(), policy);
-    let agent_ctx = AgentContext {
-        name: agent_entry.name.clone(),
-        model: agent_entry.manifest.model.model.clone(),
-        provider: agent_entry.manifest.model.provider.clone(),
-        system_prompt: agent_entry.manifest.model.system_prompt.clone(),
-    };
-
-    // Sessions are persisted lazily on first message. If the row is missing
-    // but the requested session_id matches the agent's currently-registered
-    // session (authoritative ownership signal from the registry), treat it
-    // as an empty session rather than 404.
-    let bundle = match state.kernel.memory_substrate().get_session(session_id) {
-        Ok(None) if session_id == agent_entry.session_id => {
-            exporter.empty_bundle(agent_id, session_id, agent_ctx)
+        Err(librefang_kernel::error::KernelError::LibreFang(
+            librefang_types::error::LibreFangError::Memory(msg),
+        )) if msg.contains("not found") || msg.contains("does not belong") => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": err_session_not_found})),
+            )
+                .into_response();
         }
-        Ok(_) => match exporter.export_session(agent_id, session_id, agent_ctx) {
-            Ok(b) => b,
-            Err(librefang_types::error::LibreFangError::Memory(msg))
-                if msg.contains("not found") =>
-            {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(serde_json::json!({"error": err_session_not_found})),
-                )
-                    .into_response();
-            }
-            Err(librefang_types::error::LibreFangError::Memory(msg))
-                if msg.contains("does not belong") =>
-            {
-                return (
-                    StatusCode::NOT_FOUND,
-                    Json(serde_json::json!({"error": err_session_not_found})),
-                )
-                    .into_response();
-            }
-            Err(e) => {
-                let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
-                let msg = t.t_args(&err_generic_key, &[("error", &e.to_string())]);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": msg})),
-                )
-                    .into_response();
-            }
-        },
         Err(e) => {
             let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
             let msg = t.t_args(&err_generic_key, &[("error", &e.to_string())]);
@@ -5751,7 +5769,11 @@ pub async fn upload_file(
 
     // Generate file ID and save
     let file_id = uuid::Uuid::new_v4().to_string();
-    let upload_dir = std::env::temp_dir().join("librefang_uploads");
+    let upload_dir = state
+        .kernel
+        .config_ref()
+        .channels
+        .effective_file_download_dir();
     if let Err(e) = std::fs::create_dir_all(&upload_dir) {
         tracing::warn!("Failed to create upload dir: {e}");
         return (
@@ -5827,6 +5849,7 @@ pub async fn upload_file(
     )
 )]
 pub async fn serve_upload(
+    State(state): State<Arc<AppState>>,
     Path(file_id): Path<String>,
     api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
@@ -5842,8 +5865,11 @@ pub async fn serve_upload(
         );
     }
 
-    let file_path = std::env::temp_dir()
-        .join("librefang_uploads")
+    let file_path = state
+        .kernel
+        .config_ref()
+        .channels
+        .effective_file_download_dir()
         .join(&file_id);
 
     // Look up metadata from registry; fall back to disk probe for generated images
@@ -5872,7 +5898,7 @@ pub async fn serve_upload(
     // only by the uploader or by Admin/Owner callers; un-owned entries (pre-
     // #3361 uploads, generator output) stay readable for compatibility.
     if let Some(owner_id) = owner {
-        use librefang_kernel::auth::UserRole;
+        use crate::middleware::UserRole;
         let allowed = match api_user.as_ref().map(|u| &u.0) {
             Some(u) => u.user_id == owner_id || u.role >= UserRole::Admin,
             None => false,
