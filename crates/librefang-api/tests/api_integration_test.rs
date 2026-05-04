@@ -1213,7 +1213,7 @@ async fn test_invalid_agent_id_returns_400() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_kill_nonexistent_agent_returns_404() {
+async fn test_kill_nonexistent_agent_returns_200_idempotent() {
     let server = start_test_server().await;
     let client = reqwest::Client::new();
 
@@ -1223,7 +1223,11 @@ async fn test_kill_nonexistent_agent_returns_404() {
         .send()
         .await
         .unwrap();
-    assert_eq!(resp.status(), 404);
+    // DELETE is idempotent (RFC 9110 §9.2.2): unknown-but-valid UUID returns
+    // 200 with {"status":"already-deleted"}, not 404. 404 is reserved for
+    // malformed IDs only. Mirrors test_delete_agent_unknown_uuid_is_idempotent_200
+    // in agents_routes_integration.rs.
+    assert_eq!(resp.status(), 200);
 }
 
 #[tokio::test(flavor = "multi_thread")]
