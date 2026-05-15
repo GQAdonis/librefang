@@ -6,14 +6,14 @@
   "backend": "native-tool",
   "backend_rationale": "No OpenSpec in this project. Single-tool (Claude Code) execution with progress.json bookkeeping. Hybrid not warranted at this scale.",
   "next_action": {
-    "command": "/kbd-execute m10-legacy-key-removal-planning",
-    "description": "M9b DONE (PR #19). Execute change 3 of 3: add TODO(drop-legacy-key) comments to 4 sites in crates/librefang-api/dashboard/src/api.ts and add v2026.8.x removal notice to CHANGELOG.md [Unreleased]."
+    "command": "/kbd-reflect phase-2-rebrand-cleanup",
+    "description": "M10 DONE (PR #20). All 3/3 Phase-2 changes complete. Run /kbd-reflect to produce phase reflection doc, summarize what was delivered vs plan, and identify any carryover for Phase 3."
   },
-  "phase_progress": "Phase 2: 2/3 changes DONE (M8+M11, M9b). Advance to /kbd-execute m10-legacy-key-removal-planning.",
+  "phase_progress": "Phase 2: 3/3 changes DONE (M8+M11, M9b, M10). Advance to /kbd-reflect.",
   "last_completed": {
-    "change_id": "m9b-config-defaults-doc-sweep",
-    "milestones": ["M9b"],
+    "change_id": "m10-legacy-key-removal-planning",
+    "milestones": ["M10"],
     "completed_at": "2026-05-15T00:00:00Z",
-    "pr": "https://github.com/GQAdonis/librefang/pull/19"
+    "pr": "https://github.com/GQAdonis/librefang/pull/20"
   }
 }

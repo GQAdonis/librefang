@@ -8,10 +8,10 @@
   "plan_complete": true,
   "plan_completed_at": "2026-05-15T00:00:00Z",
   "changes_total": 3,
-  "changes_completed": 2,
+  "changes_completed": 3,
   "changes_in_progress": 0,
   "changes_blocked": 0,
-  "changes_pending": 1,
+  "changes_pending": 0,
   "changes": [
     {
       "id": "m8-m11-dashboard-prose-cleanup",
@@ -71,11 +71,19 @@
     {
       "id": "m10-legacy-key-removal-planning",
       "milestones": ["M10"],
-      "status": "PENDING",
+      "status": "DONE",
+      "started": "2026-05-15T00:00:00Z",
+      "started_by": "kbd-execute",
+      "completed": "2026-05-15T00:00:00Z",
+      "tool": "claude-code",
       "scope": [
-        "crates/librefang-api/dashboard/src/api.ts — 4x TODO(drop-legacy-key) comments at API_KEY_LEGACY sites",
-        "CHANGELOG.md — add v2026.8.x removal notice to [Unreleased] Upcoming Breaking Changes"
-      ]
+        "crates/librefang-api/dashboard/src/api.ts — 4x TODO(drop-legacy-key) comments at all API_KEY_LEGACY sites",
+        "CHANGELOG.md — added ### Upcoming Breaking Changes subsection with v2026.8.x removal notice"
+      ],
+      "verification": {
+        "diff_review": "PASS — 4 TODO comments added, CHANGELOG section inserted, no logic changed"
+      },
+      "pr": "https://github.com/GQAdonis/librefang/pull/20"
     }
   ],
   "decisions_recorded": {
@@ -86,7 +94,7 @@
   "goal_completion": {
     "M8_dashboard_jsx_prose": "MET",
     "M9b_config_defaults_doc_sweep": "MET",
-    "M10_legacy_key_removal_planning": "PENDING",
+    "M10_legacy_key_removal_planning": "MET",
     "M11_app_tsx_ts6133": "MET"
   }
 }

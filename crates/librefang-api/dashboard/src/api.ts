@@ -1016,7 +1016,7 @@ export function setOnUnauthorized(fn: (() => void) | null) {
 // API_KEY_LEGACY is the old "librefang-api-key" accepted as a read-fallback
 // for users upgrading from an older dashboard build. On a legacy hit the value
 // is promoted to the new key automatically (read-old/write-new shim).
-// Drop the legacy branch in ~2 release cycles once the upgrade window closes.
+// TODO(drop-legacy-key): remove API_KEY_LEGACY and all its usage sites after v2026.8.x
 const API_KEY = "bossfang-api-key";
 const API_KEY_LEGACY = "librefang-api-key";
 
@@ -1030,7 +1030,7 @@ export function getStoredApiKey(): string {
     sessionStorage.getItem(API_KEY) || localStorage.getItem(API_KEY);
   if (newKey) return newKey;
 
-  // Legacy fallback + promote to new key name.
+  // TODO(drop-legacy-key): remove this legacy fallback block after v2026.8.x
   const legacy =
     sessionStorage.getItem(API_KEY_LEGACY) ||
     localStorage.getItem(API_KEY_LEGACY);
@@ -3360,6 +3360,7 @@ export function setApiKey(key: string) {
   // users upgrading from an older build start clean on the next login.
   sessionStorage.setItem(API_KEY, key);
   localStorage.removeItem(API_KEY);
+  // TODO(drop-legacy-key): remove these two legacy-key clears after v2026.8.x
   sessionStorage.removeItem(API_KEY_LEGACY);
   localStorage.removeItem(API_KEY_LEGACY);
   // Reset the 401-fired guard so future unauthorized responses
@@ -3370,7 +3371,7 @@ export function setApiKey(key: string) {
 export function clearApiKey() {
   sessionStorage.removeItem(API_KEY);
   localStorage.removeItem(API_KEY);
-  // Also clear the legacy key so upgraded sessions don't ghost-persist.
+  // TODO(drop-legacy-key): remove these two legacy-key clears after v2026.8.x
   sessionStorage.removeItem(API_KEY_LEGACY);
   localStorage.removeItem(API_KEY_LEGACY);
 }

@@ -970,6 +970,19 @@ _338 PRs from 7 contributors since v2026.4.28-beta7._
 
 ## [Unreleased]
 
+### Upcoming Breaking Changes
+
+- **`librefang-api-key` localStorage key removed (v2026.8.x)**. The dashboard
+  migrated to `bossfang-api-key` in an earlier release and has been writing the
+  new key while silently reading the old one as a fallback for sessions upgrading
+  from an older build. The fallback shim (`API_KEY_LEGACY`) and all four of its
+  usage sites in `crates/librefang-api/dashboard/src/api.ts` will be dropped in
+  v2026.8.x. **Action required for upgraders**: no manual action is needed —
+  any session that has loaded the dashboard at least once since the new key
+  shipped will have been automatically promoted to `bossfang-api-key`. Sessions
+  that have never loaded the new dashboard will need to re-enter their API key
+  after upgrading past v2026.8.x.
+
 ### Added
 
 - **Configurable prompt-cache breakpoint strategy for Anthropic and compatible providers** (#4970). The driver already placed cache breakpoints at system + tools-last + the last 3 messages (`system_and_3`, the strategy used by Hermes Agent for the ~75% input-token savings reported on Anthropic), but the placement was hard-coded — operators couldn't dial it back for thrashy workloads or disable it independently of the global `prompt_caching` master switch. New `[prompt_cache]` config section with `strategy = "disabled" | "system_only" | "system_and_<N>"` and `cache_ttl_hint_secs` (default `300`). `PromptCacheStrategy::SystemAndN(N)` is parametric — `N` is a *hint*; Anthropic's 4-breakpoint hard cap is enforced by the driver in most-stable-first order (system → tools-last → newest message backward), so `system_and_8` still emits at most 4 markers and never over-spends the budget. `prompt_caching = false` (master switch) wins over any per-request strategy, preserving the global kill switch for operators who don't want cache hints on any provider. Surface: a parsed string round-trips through `PromptCacheStrategy::FromStr` + custom serde with `deny_unknown_fields` on the section, so a typo like `strategy = "sytem_and_3"` fails at config load with an error pointing at the bad value instead of silently falling back to a default. Wire-through: kernel forwards `prompt_cache.strategy` as a string via existing per-agent manifest metadata; agent loop parses back into the enum and sets `CompletionRequest.prompt_cache_strategy`; only the Anthropic driver currently honours the field — OpenAI/DeepSeek cache automatically above their own length thresholds (no per-request annotation needed) and Gemini's `cached_content` API is deferred to a follow-up issue since it requires server-side context registration rather than per-request annotation. Tests: 11 in `librefang_types::config::types::prompt_cache_tests` (parse happy paths incl. `system_and_0`, `system_and_255`; rejection of negative tail, non-numeric tail, u8 overflow, typos, empty; display round-trip; default = `system_and_3`; serde via string; serde error mentions bad value; TOML round-trip; `deny_unknown_fields`; helpers), 6 new in `librefang_llm_drivers::drivers::anthropic::tests` (`strategy_disabled_emits_no_markers`, `strategy_system_only_marks_only_system`, `strategy_system_and_zero_marks_tools_but_no_messages`, `strategy_system_and_n_clips_to_4_breakpoint_cap` exercising the 4-cap with `system_and_8`, `strategy_none_falls_back_to_system_and_3` for backward compatibility, `master_switch_off_suppresses_strategy`, `strategy_system_and_3_snapshot_json_shape` literal-string compare on the wire body). Closes #4970. (@houko)
