@@ -2,34 +2,20 @@
   "active_phase": "phase-3-upstream-sync-and-ci-hardening",
   "active_change": null,
   "last_updated": "2026-05-23T00:00:00Z",
-  "last_updated_by": "kbd-assess",
+  "last_updated_by": "kbd-execute",
   "backend": "native-tool",
   "backend_rationale": "No OpenSpec in this project. Single-tool (Claude Code) execution with progress.json bookkeeping. Hybrid not warranted at this scale.",
   "next_action": {
-    "command": "/kbd-plan phase-3-upstream-sync-and-ci-hardening",
-    "description": "Assessment complete. Two decisions required before planning: (1) upstream merge strategy — proper git merge vs continue squash-merge; (2) .gitattributes orchestrator merge=ours — implement or document only. After decisions recorded, run /kbd-plan."
+    "command": "/kbd-execute m2-upstream-merge-224-commits",
+    "description": "M1+M3 in progress. After PR-A lands, execute M2: git merge upstream/main + SurrealDB v030 + golden regen."
   },
-  "phase_progress": "Phase 3: assessment written. AWAITING 2 DECISIONS before plan.",
+  "phase_progress": "Phase 3: 0/2 changes done. Executing M1+M3 (PR-A) first.",
   "assessment_complete": true,
   "assessment_completed_at": "2026-05-23T00:00:00Z",
-  "decisions_pending": [
-    {
-      "id": "upstream-merge-strategy",
-      "question": "Use proper git merge for M2 (recommended) or continue squash-merge approach?",
-      "options": ["proper-merge (recommended)", "squash-continue"],
-      "impact": "Proper merge eliminates growing merge-base debt permanently; squash compounds with each cycle"
-    },
-    {
-      "id": "gitattributes-orchestrator",
-      "question": "Add merge=ours gitattribute for .kbd-orchestrator/ files (M3)?",
-      "options": ["YES-implement", "NO-document-only"],
-      "impact": "YES automates manual git checkout --theirs on orchestrator files; requires git config merge.ours.driver true per clone"
-    }
-  ],
-  "phase_3_scope_preview": {
-    "milestones": ["M1 (kreuzberg CI fix)", "M2 (upstream merge 224 commits + SurrealDB v030)", "M3 (.gitattributes orchestrator)"],
-    "proposed_prs": 2,
-    "pr_a": "M1+M3 (kreuzberg .cargo/config.toml + .gitattributes)",
-    "pr_b": "M2 (upstream merge — full git merge upstream/main + SurrealDB migration + golden regen)"
+  "plan_complete": true,
+  "plan_completed_at": "2026-05-23T00:00:00Z",
+  "decisions_recorded": {
+    "upstream-merge-strategy": "proper-merge",
+    "gitattributes-orchestrator": "YES-implement"
   }
 }
