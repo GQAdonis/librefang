@@ -2,32 +2,34 @@
   "active_phase": "phase-3-upstream-sync-and-ci-hardening",
   "active_change": null,
   "last_updated": "2026-05-23T00:00:00Z",
-  "last_updated_by": "kbd-reflect",
+  "last_updated_by": "kbd-assess",
   "backend": "native-tool",
   "backend_rationale": "No OpenSpec in this project. Single-tool (Claude Code) execution with progress.json bookkeeping. Hybrid not warranted at this scale.",
   "next_action": {
-    "command": "/kbd-assess phase-3-upstream-sync-and-ci-hardening",
-    "description": "Phase 2 reflection complete. Start Phase 3 with an assessment: kreuzberg SSH/CI fix, upstream merge audit (PRs #21/#22 — 114 commits), gitattributes orchestrator merge strategy, execution.md tooling."
+    "command": "/kbd-plan phase-3-upstream-sync-and-ci-hardening",
+    "description": "Assessment complete. Two decisions required before planning: (1) upstream merge strategy — proper git merge vs continue squash-merge; (2) .gitattributes orchestrator merge=ours — implement or document only. After decisions recorded, run /kbd-plan."
   },
-  "phase_progress": "Phase 2: COMPLETE (reflection written). Phase 3: NOT STARTED.",
-  "last_completed": {
-    "change_id": "phase-2-rebrand-cleanup",
-    "phase_action": "kbd-reflect",
-    "completed_at": "2026-05-23T00:00:00Z",
-    "reflection_doc": ".kbd-orchestrator/phases/phase-2-rebrand-cleanup/reflection.md"
-  },
-  "phase_2_summary": {
-    "milestones_met": ["M8", "M9b", "M10", "M11"],
-    "prs": [
-      "https://github.com/GQAdonis/librefang/pull/18",
-      "https://github.com/GQAdonis/librefang/pull/19",
-      "https://github.com/GQAdonis/librefang/pull/20"
-    ],
-    "debt_carried_forward": [
-      "kreuzberg SSH URL blocks CI --all-features jobs",
-      "TODO(drop-legacy-key) scheduled v2026.8.x",
-      "execution.md gaps for m9b and m10",
-      "shellcheck pre-push hook DEFERRED"
-    ]
+  "phase_progress": "Phase 3: assessment written. AWAITING 2 DECISIONS before plan.",
+  "assessment_complete": true,
+  "assessment_completed_at": "2026-05-23T00:00:00Z",
+  "decisions_pending": [
+    {
+      "id": "upstream-merge-strategy",
+      "question": "Use proper git merge for M2 (recommended) or continue squash-merge approach?",
+      "options": ["proper-merge (recommended)", "squash-continue"],
+      "impact": "Proper merge eliminates growing merge-base debt permanently; squash compounds with each cycle"
+    },
+    {
+      "id": "gitattributes-orchestrator",
+      "question": "Add merge=ours gitattribute for .kbd-orchestrator/ files (M3)?",
+      "options": ["YES-implement", "NO-document-only"],
+      "impact": "YES automates manual git checkout --theirs on orchestrator files; requires git config merge.ours.driver true per clone"
+    }
+  ],
+  "phase_3_scope_preview": {
+    "milestones": ["M1 (kreuzberg CI fix)", "M2 (upstream merge 224 commits + SurrealDB v030)", "M3 (.gitattributes orchestrator)"],
+    "proposed_prs": 2,
+    "pr_a": "M1+M3 (kreuzberg .cargo/config.toml + .gitattributes)",
+    "pr_b": "M2 (upstream merge — full git merge upstream/main + SurrealDB migration + golden regen)"
   }
 }
