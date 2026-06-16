@@ -154,3 +154,107 @@ None recorded (no refiner run). No clippy/brand violations survived any change.
 3. **Pre-existing test-suite repair** (separate, small): `api_integration_test`
    `sync_registry` arity; consider whether the sqlite-only API build should be
    fixed or formally dropped.
+
+---
+
+## Addendum — Cutover complete + C-005c/C-005d settings-to-store (2026-06-16)
+
+This addendum closes the two items the 2026-06-08 reflection left open (the
+human cutover and `config_set`) and records the **C-005d** follow-on sub-phase
+that finished the settings-to-store migration. Phase 9 is now **fully done in
+code**; only PR #89 remains in review.
+
+### Goal-table updates (since 2026-06-08)
+
+| Gap | Was | Now | Where |
+| --- | --- | --- | --- |
+| G-8 / G-9 | CODE MET, human-pending | **MET — deployed to prod** | cutover run; read-only ConfigMap live |
+| G-5 (`config_set`) | deferred → C-005c | **MET** | C-005c generic `config_overrides` (one DB key, `{dotted.path: value}`) |
+| G-d (new) | — | **MET (code)** | C-005d: budget + memory + channels typed handlers → store |
+
+### What landed after the original reflection
+
+- **Prod cutover** — deployed the config-store image, ran the C-008 import on the
+  prod PVC, applied the C-009 read-only ConfigMap revert. **Root-cause prod
+  blocker fixed (#78):** `open_remote` signed the SurrealDB `root` user in at the
+  `Namespace` auth level; `root` is a ROOT-level user → "authentication failed".
+  Now branches on `username == "root"` → `auth::Root`. Without this the entire
+  config store was non-functional in prod.
+- **C-005c — generic `config_set` → store**: `config_overrides` map +
+  `resolve_config_with_overrides` (config.toml ⊕ overrides) applied at boot and
+  on reload via `replace_config` (= reload minus disk read, always swaps). Guarded
+  by the `is_writable_config_path` allowlist (`_env` / depth-2 / SCRUB rules).
+- **C-005d — typed settings handlers → store** (the last file-writers):
+  - **C-005d.1** (in #88): `TRUSTED_SECTION_KEYS` apply path so typed handlers can
+    persist a whole section without widening the untrusted `config_set` surface;
+    `budget` folded off the `config_set` allowlist.
+  - **C-005d.2** (#89): `PATCH /api/memory/config` → `memory` + `proactive_memory`
+    overrides, merged from the **live** config so PATCHes accumulate.
+  - **C-005d.3** (#89): `configure_sidecar_channel` → `sidecar_channels` override
+    via in-memory `upsert_sidecar_in_vec`; `secrets.env` write + include-shadow
+    guard unchanged.
+  - budget shipped earlier as **#84**.
+
+### Security invariant held throughout C-005d
+
+No credential VALUE ever enters the database. Channel secrets stay in
+`secrets.env`; `*_env` fields are env-var pointers (names), which are config not
+secrets; the untrusted `config_set` endpoint remains unable to write
+`memory` / `channels` / `sidecar_channels`. Unit-tested at the sidecar boundary.
+
+### Artifact Quality Summary (C-005c/C-005d)
+
+`artifact-refiner` still unavailable — QA enforced per-change by project gates.
+
+| Metric | Value |
+| --- | --- |
+| Code changes delivered | C-005c, C-005d.1, C-005d.2, C-005d.3 |
+| Per-change `clippy -p librefang-api --all-targets -D warnings` | pass (all) |
+| Per-change brand audit | clean (all) |
+| `config_store_overlay_test` | 17 passing (budget, trusted-section, memory, sidecar) |
+| Other gates | `config::` unit 18; `routes::sidecar_toml` unit 1 |
+
+### Technical debt / risks introduced
+
+1. **`base_url` → `registry_host` config-key change** (from the 2026-06-15
+   upstream merge, #87, not C-005d): a stale `[registry] base_url` in an existing
+   config.toml is silently ignored (no `deny_unknown_fields`). Flagged in #87 for
+   the maintainer; revertable.
+2. **memory.rs diff noise**: the legacy sqlite body was wrapped in
+   `#[cfg(not(surreal-backend))]`, re-indenting ~160 unchanged lines. Reviewers
+   must use `git diff -w`. Extraction into a helper was the cleaner alternative;
+   deferred to keep the change surgical.
+3. **HashMap ordering in `sidecar_channels` override**: `SidecarChannelConfig.env`
+   is `HashMap`, so the stored override's JSON key order varies → the
+   content-hash can differ across byte-identical writes (cosmetic revision bumps,
+   no correctness impact). Not on a prompt path, so #3298 does not require a fix.
+
+### Lessons captured
+
+1. **A toolchain bump surfaces latent lints across the whole graph.** clippy 1.95
+   (tracked `stable`) flagged `large_enum_variant` in `librefang-runtime`
+   (#85) *and* `librefang-api`'s `McpMutation`, plus `doc_list_item_overindented`.
+   `clippy -p api -D warnings` escalates **dependency-crate** lints too, so a
+   sibling-crate lint blocks any api PR. Saved as memory
+   `feedback-clippy-dep-crate-denies`; fix in a standalone PR first (#85).
+2. **Serialized `Option::None` → JSON `null` → TOML `""` breaks round-trip.** The
+   whole-section override path only worked once `json_to_toml_edit_value` was
+   taught to **omit** null object keys. Any future typed section with `Option`
+   fields depends on this.
+3. **Merge the patch into the LIVE config, not config.toml.** Under a read-only
+   config.toml, re-reading the file as the base loses prior runtime overrides;
+   partial-patch handlers (memory) must accumulate against `kernel.config_ref()`.
+4. **A PR title is not its merged contents.** #88 was titled "C-005d.1+.2" but
+   merged with only `.1`. Trusting the title nearly dropped the memory work when
+   rebuilding the branch; always verify with `git log origin/main` /
+   `git grep origin/main` which commits actually landed. (Caught via a missing
+   test before any loss.)
+
+### Recommended focus for next phase
+
+1. **Merge #89**, then this phase is closed end-to-end.
+2. **Optional cleanup (small, own PR):** extract the memory.rs legacy body to kill
+   the cfg-wrap diff noise; consider `BTreeMap` for `SidecarChannelConfig.env` if
+   override hash-stability ever matters.
+3. **Operational:** the researcher-agent OpenAI 429/quota panics observed in prod
+   remain pre-existing and unrelated to the store — revisit only if it recurs.

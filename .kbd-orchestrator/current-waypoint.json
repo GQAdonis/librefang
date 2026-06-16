@@ -1,13 +1,14 @@
 {
   "active_phase": "phase-9-config-store-migration",
   "previous_phase": "phase-8-fixture-rebuilds",
-  "active_change": "C-005d (complete)",
+  "active_change": "C-005d (complete) — phase REFLECTED",
   "last_updated": "2026-06-16T00:00:00Z",
-  "last_updated_by": "kbd-execute",
+  "last_updated_by": "kbd-reflect",
   "backend": "native-tool",
-  "phase_progress": "C-005d CLUSTER COMPLETE on branch feat/memory-channels-to-store (PR #88), rebased onto main after upstream merge #87. C-005d.1: trusted-section apply path (TRUSTED_SECTION_KEYS). C-005d.2: memory + proactive_memory to store (+ json_to_toml_edit_value null-omit fix for Option round-trip). C-005d.3: sidecar_channels to store via in-memory upsert_sidecar_in_vec; secrets.env write + include-shadow guard unchanged; config.toml never written under surreal. All settings handlers (budget, memory, channels) now persist to the SurrealDB config store under read-only config.toml. Verified: overlay 17/17, config unit 18/18, sidecar unit 1/1, clippy + branding clean. No secret VALUE enters the store. Awaiting PR #88 review/merge.",
+  "phase_status": "reflected",
+  "phase_progress": "Phase 9 REFLECTED (reflection.md 2026-06-08 + 2026-06-16 C-005d addendum). Config-store migration complete end-to-end: SurrealDB config store deployed to prod (root-signin fix #78); MCP/default-model (C-005/C-005b), config_set (C-005c), budget (#84), and the C-005d settings cluster — trusted-section infra C-005d.1 (#88, merged), memory + channels C-005d.2/.3 (#89, open). Every runtime-mutable settings handler now persists to the DB store under a read-only config.toml; no secret VALUE enters the DB. PR #88 merged with ONLY C-005d.1 (title said .1+.2); the actual memory+channels work is in #89.",
   "next_action": {
-    "command": "review/merge PR #88; then /kbd-reflect phase-9-config-store-migration",
-    "description": "C-005d (memory + channels settings migration) is code-complete on PR #88. After it merges, the phase-9 config-store migration is fully done (budget #84, memory+channels #88, MCP/default-model/config_set earlier). Run /kbd-reflect to close the phase."
+    "command": "merge PR #89, then /kbd-new-phase (or close phase 9)",
+    "description": "Phase 9 is code-complete and reflected. Last open item: merge PR #89 (C-005d.2+.3 — memory + channels). After merge the phase is fully closed; start the next phase with /kbd-new-phase. Optional small follow-ups noted in reflection.md (extract memory.rs legacy body; BTreeMap for SidecarChannelConfig.env)."
   }
 }
