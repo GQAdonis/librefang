@@ -5,6 +5,50 @@ All notable changes to LibreFang will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 
+## [2026.6.29] - 2026-06-29
+
+_14 PRs from 4 contributors since v2026.6.26-beta.24._
+
+### Highlights
+
+- **Korean language support** — full UI, CLI/TUI, and error message translations added (233 keys covered)
+- **ARM64 Linux packages** — aarch64 binaries now published alongside x86_64 via AUR and the project's pacman repo
+- **Telegram setup resilience** — the setup form stays available after a describe timeout instead of disappearing
+- **Codex CLI flexibility** — Codex CLI can now be used outside of Git repositories
+- **Mixed-media message enrichment** — coalesced batches with mixed content types are now correctly enriched on the debounced path
+
+### Added
+
+- UI Korean translation (#6349) (@seungjin)
+- Complete Korean error translations (43 → 233 keys) (#6353) (@houko)
+- Add Korean (ko) translation for the CLI/TUI (#6356) (@houko)
+- Publish aarch64 packages alongside x86_64 (#6334) (#6358) (@houko)
+
+### Fixed
+
+- Bump pdf-extract 0.10→0.12 to patch lopdf RUSTSEC-2026-0187 (#6339) (@houko)
+- Keep Telegram setup form available after describe timeout (#6345) (@pavver)
+- Allow Codex CLI outside Git repositories (#6347) (@pavver)
+- Enrich coalesced mixed-media batches on the debounced path (#6348) (#6351) (@houko)
+
+<details>
+<summary>Documentation, maintenance, and other internal changes</summary>
+
+### Maintenance
+
+- Symlink legacy NDK binutils so vendored OpenSSL cross-compiles for Android (#6335) (@houko)
+- Put NDK bin on PATH so openssl-src finds the legacy ranlib symlink (#6338) (@houko)
+- Enable auto-merge instead of forcing --admin (#6340) (@houko)
+- Publish AUR packages on release (#6334) (#6341) (@houko)
+- Publish project-maintained pacman repo to R2 (#6334) (#6352) (@houko)
+
+### Other
+
+- Fix[flake.nix]: Add perl to nativeBuildInputs (#6346) (@FrantaNautilus)
+
+</details>
+
+
 ## [2026.6.26] - 2026-06-26
 
 _10 PRs from 2 contributors since v2026.6.24-beta.23._
@@ -91,8 +135,16 @@ _33 PRs from 5 contributors since v2026.6.22-beta.22._
 
 ## [Unreleased]
 
+### Added
+
+- Publish an official project-maintained pacman repository for Arch Linux — GPG-signed packages on Cloudflare R2, installable via `pacman -Syu`, sidestepping the closed AUR registration that blocks #6341 (#6334) (@houko)
+- Add aarch64 (Arch Linux ARM) packages to the pacman repository for `librefang-bin` and `librefang-docker`, published under `arch/aarch64/` and selected automatically by pacman's `$arch`; `librefang-desktop-bin` stays x86_64-only since upstream ships no ARM Linux desktop bundle (#6334) (@houko)
+
 ### Fixed
 
+- Enrich coalesced mixed-media batches on the debounced channel path: audio/voice attachments are transcribed and documents are extracted, not just images, so a photo+voice+pdf burst reaches the agent fully enriched instead of as bare `[Voice message …: url]` / `[File …: url]` placeholders — generalizing the image-only #6321 / #6323 fix via shared `download_media_blocks` + `enrich_media` helpers both inbound paths funnel through (#6348) (@houko)
+- Keep the Telegram dashboard setup form available when its first cold Python `--describe` import exceeds the five-second boot timeout; the catalog now falls back to the adapter's compile-time schema, and the unavailable-form hint no longer claims that channel reload refreshes the boot-only schema cache (@pavver)
+- Allow the Codex CLI provider to run from desktop and daemon processes outside a Git repository, and replace its deprecated `--full-auto` flag (@pavver)
 - Accept the empty-recipient handshake HMAC binding so `bootstrap_peers` connections succeed instead of failing with `403 HMAC authentication failed` (regression from #3920) (#6330) (@houko)
 - Bump `pdf-extract` 0.10→0.12 to pull the patched `lopdf` 0.42, fixing RUSTSEC-2026-0187 — a stack overflow on deeply nested PDF objects reachable via attacker-supplied PDF attachments (the existing `catch_unwind` guards do not mitigate it, since a stack overflow aborts rather than unwinds) (@houko)
 
