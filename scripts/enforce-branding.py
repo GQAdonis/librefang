@@ -33,7 +33,23 @@ What it does:
      (LibreFangKernel, LibreFangError, etc.) are preserved by the same
      word-boundary regex \bLibreFang\b used in the docs prose pass.
 
-  Both modes are safe to run multiple times (idempotent).
+  4. Locale prose pass (i18n strings in crates/librefang-api/dashboard/src/locales/)
+     Scans *.json under crates/librefang-api/dashboard/src/locales/ for the
+     product name "LibreFang" inside help/onboarding/prose strings (en, zh,
+     uk, ko, and any other translations). Uses a separator-aware boundary
+     (LOCALE_NAME_RE) that excludes the token when it is glued to an
+     identifier separator — so internal identifiers, URLs, package names,
+     and the back-compat vendor prefix stay intact:
+       - lowercase paths / crates / headers: ~/.librefang/, librefang-api,
+         x-librefang-agent, @librefang/sdk, github.com/librefang,
+         application/vnd.librefang.* — never match (product name is PascalCase)
+       - PascalCase glued to a separator: LibreFang/, LibreFang-, LibreFang@,
+         LibreFang_, .LibreFang — excluded by the surrounding lookarounds
+       - sentence-ending "LibreFang." — STILL rewritten (a trailing '.' is
+         prose, not an identifier dot, so it is not in the trailing exclusion
+         set)
+
+  All modes are safe to run multiple times (idempotent).
 
   --check mode performs the same scans without writing — exits 0 if
   everything is clean, exits 1 if any upstream token survives. Designed
@@ -103,6 +119,14 @@ DASHBOARD_PROSE_SCAN_DIRS = [
 ]
 DASHBOARD_PROSE_EXTENSIONS = {".ts", ".tsx"}
 
+# Locale prose pass: i18n JSON catalogs in the dashboard SPA.
+# Catches the product name "LibreFang" inside help/onboarding prose strings
+# that upstream i18n merges keep reintroducing across all translations.
+LOCALE_SCAN_DIRS = [
+    REPO_ROOT / "crates/librefang-api/dashboard/src/locales",
+]
+LOCALE_EXTENSIONS = {".json"}
+
 # ── Color replacement table ───────────────────────────────────────────────────
 #
 # Order matters: longer / more-specific patterns must come first so that a
@@ -143,6 +167,26 @@ PROSE_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
 
 # Audit pattern for --check mode (no replacement, just detection).
 PROSE_AUDIT_PATTERNS: list[re.Pattern[str]] = [p for p, _ in PROSE_REPLACEMENTS]
+
+# ── Locale replacement table ──────────────────────────────────────────────────
+#
+# Locale JSON strings embed identifier-shaped references inline (paths like
+# ~/.librefang/, headers like x-librefang-agent, the vnd.librefang.* media
+# type). The product name is always PascalCase "LibreFang", and every one of
+# those references is lowercase, so a PascalCase anchor already avoids them.
+# The lookarounds add a second layer of defense against a PascalCase token
+# glued to a separator (LibreFang/, LibreFang-, LibreFang@, .LibreFang):
+#
+#   (?<![\w./@-])  not preceded by a word char or  . / @ -
+#   (?![\w/@-])    not followed by a word char or  / @ -   (trailing '.' is
+#                  allowed so sentence-ending "LibreFang." is still rewritten)
+LOCALE_NAME_RE = re.compile(r"(?<![\w./@-])LibreFang(?![\w/@-])")
+
+LOCALE_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
+    (LOCALE_NAME_RE, "BossFang"),
+]
+
+LOCALE_AUDIT_PATTERNS: list[re.Pattern[str]] = [p for p, _ in LOCALE_REPLACEMENTS]
 
 
 # ── Code-fence and inline-code awareness ──────────────────────────────────────
@@ -303,6 +347,35 @@ def audit_prose_file(path: Path) -> list[str]:
     return audit_prose_in_tsx(content)
 
 
+def enforce_locale_file(path: Path) -> bool:
+    """Apply locale prose replacements. Returns True if the file was modified."""
+    try:
+        original = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError):
+        return False
+
+    content = original
+    for pat, repl in LOCALE_REPLACEMENTS:
+        content = pat.sub(repl, content)
+
+    if content == original:
+        return False
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
+def audit_locale_file(path: Path) -> list[str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError):
+        return []
+    hits: list[str] = []
+    for pat in LOCALE_AUDIT_PATTERNS:
+        for found in pat.findall(content):
+            hits.append(found if isinstance(found, str) else "".join(found))
+    return sorted(set(hits))
+
+
 def scan_dir(root: Path, extensions: set[str]) -> list[Path]:
     if not root.exists():
         return []
@@ -366,6 +439,24 @@ def main() -> int:
                     offending.append((f, hits))
             else:
                 if enforce_prose_file(f):
+                    changed.append(f)
+
+    # ── Pass 4: locale prose ──────────────────────────────────────────────────
+    for scan_root in LOCALE_SCAN_DIRS:
+        label = scan_root.relative_to(REPO_ROOT)
+        files = scan_dir(scan_root, LOCALE_EXTENSIONS)
+        if not files:
+            print(f"[enforce-branding] {label}: no files found — skipping")
+            continue
+        verb = "auditing" if check_mode else "scanning"
+        print(f"[enforce-branding] {verb} {label} (locale prose, {len(files)} files) …")
+        for f in files:
+            if check_mode:
+                hits = audit_locale_file(f)
+                if hits:
+                    offending.append((f, hits))
+            else:
+                if enforce_locale_file(f):
                     changed.append(f)
 
     if check_mode:

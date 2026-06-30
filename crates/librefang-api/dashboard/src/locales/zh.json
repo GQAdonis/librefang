@@ -581,7 +581,7 @@
     "hand_agent_hint": "你正在编辑由 Hand 创建的活动运行时智能体。改动仅在内存中生效；守护进程重启或 Hand 重新加载后会回退到 Hand 的配置。",
     "tools_cap": "工具",
     "network": "网络",
-    "help": "Agents 是这个 LibreFang 实例运行的所有自治单元。每个 agent 都有独立的身份、prompt、工具集、记忆与预算——以一行的形式存在于本页，直到被删除。从这里可以创建新 agent、编辑已有 agent、暂停 / 恢复，以及克隆好用的配置。\n\n使用步骤：\n\n1. 创建。点 \"Create agent\" 选择创建方式：表单、模板或裸 TOML。表单最简单；模板是预置原型（researcher、coder 等）；TOML 适合已经清楚要写什么的场景。\n\n2. 查看与编辑。点击某行打开详情面板——能看到 capabilities、hands、模型、最近活动。\"Edit\" 改名字 / prompt / 模型 / 工具策略；\"Edit template TOML\" 直接编辑完整 manifest。\n\n3. 生命周期。Suspend 暂停 agent（停触发器，状态保留）。Resume 恢复。Clone 把 manifest 复制到新 agent，方便 fork 而不破坏原版。Delete 是永久的——会话和记忆一起带走。\n\n典型场景：\n\n  · 起一个按领域分工的 agent（research / code / ops），每个独立 channel 和预算。\n  · Fork 一个跑得好的 agent，改 prompt 后并行 A/B 对比。\n  · 配额吃紧时暂停部分 agent，不丢配置和记忆。\n\n注意事项：\n\n  · agent.toml manifest 控制运行时行为——session_mode、max_concurrent_invocations、max_history_messages、命名工作区。表单覆盖常见情况；TOML 编辑器是兜底入口。\n  · 身份文件（SOUL.md、IDENTITY.md 等）放在 {workspace}/.identity/ 下。升级后首次 spawn 会自动迁移。\n  · 删除不可逆。要保留的话先 Suspend。",
+    "help": "Agents 是这个 BossFang 实例运行的所有自治单元。每个 agent 都有独立的身份、prompt、工具集、记忆与预算——以一行的形式存在于本页，直到被删除。从这里可以创建新 agent、编辑已有 agent、暂停 / 恢复，以及克隆好用的配置。\n\n使用步骤：\n\n1. 创建。点 \"Create agent\" 选择创建方式：表单、模板或裸 TOML。表单最简单；模板是预置原型（researcher、coder 等）；TOML 适合已经清楚要写什么的场景。\n\n2. 查看与编辑。点击某行打开详情面板——能看到 capabilities、hands、模型、最近活动。\"Edit\" 改名字 / prompt / 模型 / 工具策略；\"Edit template TOML\" 直接编辑完整 manifest。\n\n3. 生命周期。Suspend 暂停 agent（停触发器，状态保留）。Resume 恢复。Clone 把 manifest 复制到新 agent，方便 fork 而不破坏原版。Delete 是永久的——会话和记忆一起带走。\n\n典型场景：\n\n  · 起一个按领域分工的 agent（research / code / ops），每个独立 channel 和预算。\n  · Fork 一个跑得好的 agent，改 prompt 后并行 A/B 对比。\n  · 配额吃紧时暂停部分 agent，不丢配置和记忆。\n\n注意事项：\n\n  · agent.toml manifest 控制运行时行为——session_mode、max_concurrent_invocations、max_history_messages、命名工作区。表单覆盖常见情况；TOML 编辑器是兜底入口。\n  · 身份文件（SOUL.md、IDENTITY.md 等）放在 {workspace}/.identity/ 下。升级后首次 spawn 会自动迁移。\n  · 删除不可逆。要保留的话先 Suspend。",
     "builtin": {
       "academic-researcher": {
         "name": "学术研究员",
@@ -2809,7 +2809,7 @@
     "col_vision": "视觉",
     "col_streaming": "流式",
     "col_thinking": "思考",
-    "help": "模型目录是本实例对所有已配置 provider 上可用 LLM 模型的视图——ID、能力（tools / vision / streaming / thinking）、上下文窗口、输入 / 输出价格、tier。目录喂给每个 agent 的模型选择器和 Analytics 页的成本计算。\n\n使用步骤：\n\n1. 筛选与排序。按 provider、tier 或 \"available only\"（排除未配置 provider 的模型）过滤。按名字 / 别名搜索。\n\n2. 比较。列并排：上下文、输入价、输出价、tools、vision、thinking。给 agent 分配前先选合适的。\n\n3. 添加自定义。\"Add custom model\" 注册目录里没有的模型——适合刚发布的新模型或自托管端点。填 ID、显示名、provider、价格。\n\n4. 编辑 / 删除。微调显示名或价格。删除只对你添加的自定义条目可用。\n\n典型场景：\n\n  · 给做截图分析的 agent 选 vision-capable 模型。\n  · 在 LibreFang 还没出更新前，模型一发布就先注册进来。\n  · 在分配 agent 前审计哪些模型支持 tool-use。\n\n注意事项：\n\n  · \"available\" 取决于 provider 是否已配置且可达。先去 Providers 页配。\n  · 这里的价格就是成本计算器认为的——不准确就会让预算数字漂移。\n  · Aliases 让一个底层模型挂多个名字（例如 \"smart\" → claude-opus）。",
+    "help": "模型目录是本实例对所有已配置 provider 上可用 LLM 模型的视图——ID、能力（tools / vision / streaming / thinking）、上下文窗口、输入 / 输出价格、tier。目录喂给每个 agent 的模型选择器和 Analytics 页的成本计算。\n\n使用步骤：\n\n1. 筛选与排序。按 provider、tier 或 \"available only\"（排除未配置 provider 的模型）过滤。按名字 / 别名搜索。\n\n2. 比较。列并排：上下文、输入价、输出价、tools、vision、thinking。给 agent 分配前先选合适的。\n\n3. 添加自定义。\"Add custom model\" 注册目录里没有的模型——适合刚发布的新模型或自托管端点。填 ID、显示名、provider、价格。\n\n4. 编辑 / 删除。微调显示名或价格。删除只对你添加的自定义条目可用。\n\n典型场景：\n\n  · 给做截图分析的 agent 选 vision-capable 模型。\n  · 在 BossFang 还没出更新前，模型一发布就先注册进来。\n  · 在分配 agent 前审计哪些模型支持 tool-use。\n\n注意事项：\n\n  · \"available\" 取决于 provider 是否已配置且可达。先去 Providers 页配。\n  · 这里的价格就是成本计算器认为的——不准确就会让预算数字漂移。\n  · Aliases 让一个底层模型挂多个名字（例如 \"smart\" → claude-opus）。",
     "add_model": "添加模型",
     "add_custom_model": "添加自定义模型",
     "model_id": "模型 ID",
@@ -2995,7 +2995,7 @@
     "no_trusted_peers": "暂无已信任节点",
     "no_trusted_peers_desc": "尚未通过 TOFU 固定任何节点。先 pin 一个节点的指纹，才能启用针对节点冒充的防御 (#3873)。",
     "ofp_disabled": "OFP 网络未启用。在 config.toml 设置 `network_enabled = true` 并配置非空 `shared_secret`，Ed25519 身份会在首次启动时自动生成并持久化。",
-    "help": "Network 显示本实例在开放联邦协议（OFP）中的状态——已发现或被发现的对等 LibreFang 节点、本节点身份、使用的 OFP 版本。OFP 是 A2A 之下那一层：节点互相找到对方靠 OFP；连上之后说什么靠 A2A。\n\n使用步骤：\n\n1. 身份。node-id 和协议版本是本 LibreFang 实例对联邦的标识。\n\n2. 节点。显示每个已连接的对等节点和 online / offline 状态。空列表说明你还没在和任何人联邦。\n\n3. 状态。Online 表示 OFP 可达，本节点正在向外宣告自己。\n\n跟 A2A 的区别：\n\n  · Network —— 节点级联邦：外面有谁、连上了谁。\n  · A2A —— agent 级对话：那些节点上的 agent 能为彼此做什么。\n\n典型场景：\n\n  · 调试 A2A 前先确认两个 LibreFang 实例确实互相能看到。\n  · 读 node-id 发给对端做直连。\n\n注意事项：\n\n  · 联邦是可选且配置控制的。默认 \"no peers\" 是预期，除非你已配 peers。\n  · 网络状态是实时读，刷新即重新拉，无缓存。"
+    "help": "Network 显示本实例在开放联邦协议（OFP）中的状态——已发现或被发现的对等 BossFang 节点、本节点身份、使用的 OFP 版本。OFP 是 A2A 之下那一层：节点互相找到对方靠 OFP；连上之后说什么靠 A2A。\n\n使用步骤：\n\n1. 身份。node-id 和协议版本是本 BossFang 实例对联邦的标识。\n\n2. 节点。显示每个已连接的对等节点和 online / offline 状态。空列表说明你还没在和任何人联邦。\n\n3. 状态。Online 表示 OFP 可达，本节点正在向外宣告自己。\n\n跟 A2A 的区别：\n\n  · Network —— 节点级联邦：外面有谁、连上了谁。\n  · A2A —— agent 级对话：那些节点上的 agent 能为彼此做什么。\n\n典型场景：\n\n  · 调试 A2A 前先确认两个 BossFang 实例确实互相能看到。\n  · 读 node-id 发给对端做直连。\n\n注意事项：\n\n  · 联邦是可选且配置控制的。默认 \"no peers\" 是预期，除非你已配 peers。\n  · 网络状态是实时读，刷新即重新拉，无缓存。"
   },
   "a2a": {
     "section": "智能体互联",
@@ -3016,7 +3016,7 @@
     "status_completed": "已完成",
     "status_failed": "失败",
     "status_working": "处理中",
-    "help": "A2A（Agent-to-Agent）是 Google 推出的开放协议，让不同的 agent 运行时之间可以互相发现并调用。每个 A2A agent 在 /.well-known/agent.json 暴露一张\"agent card\"，描述自己的名字、能做的事（skills）以及如何接受任务。LibreFang 自己也在同一路径暴露 agent card，所以其他 A2A 客户端也能发现这个实例。\n\n使用步骤：\n\n1. 发现（Discover）。点右上角 \"Discover\"（快捷键：n），粘贴对方 agent 的 URL（例如 https://example.com/agents/research-bot）。LibreFang 会拉取 /.well-known/agent.json 并把对方加入\"外部智能体\"列表，显示它的能力和在线状态。\n\n2. 发送任务（Send task）。在任何 agent 卡片上点 \"Send task\"，用自然语言描述任务，提交。LibreFang 通过 JSON-RPC 发出任务并收到 task_id，新任务出现在\"任务追踪\"区。\n\n3. 追踪（Track）。点击任务上的 \"Refresh\" 查询状态：pending → completed / failed。远端完成后返回的结果会内嵌显示。\n\n跟 Channels 和 MCP 的区别：\n\n  · Channels —— 用户通过 Telegram / Slack / 等通讯软件跟你的 agent 聊天。方向：人 → agent。\n  · MCP —— 你的 agent 调用外部工具服务器。方向：agent → 工具。\n  · A2A —— 你的 agent 跟别人的 agent 对等通信。方向：agent ↔ agent。\n\n典型场景：\n\n  · 两台 LibreFang 实例（你 + 同事，或家里 + 公司）互相分发任务。\n  · 订阅某个专精的公开 A2A agent（研究 / 翻译 / 搜索等），把合适的任务转发出去。\n  · 内部多个 LibreFang 实例按领域分工，互相路由任务。\n\n注意事项：\n\n  · \"任务追踪\" 列表只保存在浏览器内存里——刷新页面会丢。远端有自己的任务存储，需要长期查询请记下 task_id。\n  · LibreFang 默认的 SSRF 防护会拦截 localhost / 内网地址的 discover。如果要发现局域网内的 agent，在 config.toml 把对方 host 加到 ssrf_allowed_hosts。\n  · A2A 生态还很年轻，公开的 A2A endpoint 目前很少。最直接的试用方式是再起一台 LibreFang 实例，互相 discover。"
+    "help": "A2A（Agent-to-Agent）是 Google 推出的开放协议，让不同的 agent 运行时之间可以互相发现并调用。每个 A2A agent 在 /.well-known/agent.json 暴露一张\"agent card\"，描述自己的名字、能做的事（skills）以及如何接受任务。BossFang 自己也在同一路径暴露 agent card，所以其他 A2A 客户端也能发现这个实例。\n\n使用步骤：\n\n1. 发现（Discover）。点右上角 \"Discover\"（快捷键：n），粘贴对方 agent 的 URL（例如 https://example.com/agents/research-bot）。BossFang 会拉取 /.well-known/agent.json 并把对方加入\"外部智能体\"列表，显示它的能力和在线状态。\n\n2. 发送任务（Send task）。在任何 agent 卡片上点 \"Send task\"，用自然语言描述任务，提交。BossFang 通过 JSON-RPC 发出任务并收到 task_id，新任务出现在\"任务追踪\"区。\n\n3. 追踪（Track）。点击任务上的 \"Refresh\" 查询状态：pending → completed / failed。远端完成后返回的结果会内嵌显示。\n\n跟 Channels 和 MCP 的区别：\n\n  · Channels —— 用户通过 Telegram / Slack / 等通讯软件跟你的 agent 聊天。方向：人 → agent。\n  · MCP —— 你的 agent 调用外部工具服务器。方向：agent → 工具。\n  · A2A —— 你的 agent 跟别人的 agent 对等通信。方向：agent ↔ agent。\n\n典型场景：\n\n  · 两台 BossFang 实例（你 + 同事，或家里 + 公司）互相分发任务。\n  · 订阅某个专精的公开 A2A agent（研究 / 翻译 / 搜索等），把合适的任务转发出去。\n  · 内部多个 BossFang 实例按领域分工，互相路由任务。\n\n注意事项：\n\n  · \"任务追踪\" 列表只保存在浏览器内存里——刷新页面会丢。远端有自己的任务存储，需要长期查询请记下 task_id。\n  · BossFang 默认的 SSRF 防护会拦截 localhost / 内网地址的 discover。如果要发现局域网内的 agent，在 config.toml 把对方 host 加到 ssrf_allowed_hosts。\n  · A2A 生态还很年轻，公开的 A2A endpoint 目前很少。最直接的试用方式是再起一台 BossFang 实例，互相 discover。"
   },
   "plugins": {
     "section": "扩展",
@@ -3404,7 +3404,7 @@
     "title": "用户与权限",
     "subtitle": "管理操作员账号、渠道绑定，并通过 CSV 批量导入。",
     "badge": "Phase 4 / M6",
-    "help": "Users & RBAC 管理操作员账户和外部身份——每行是一个人或服务账户，含一个或多个 channel binding（Telegram / Discord / Slack / 邮箱）映射到 LibreFang 角色（admin / operator / viewer 等）。程序化访问的 API key 也在这里发放。仅管理员可访问。\n\n使用步骤：\n\n1. 创建。\"Create user\" → 填 ID、名字、角色；可选地加 channel binding 和 API key。保存。\n\n2. 编辑。点击行更新角色、增删 binding，设 per-user 预算 / memory / policy 提示（行上的徽标显示已设的项）。\n\n3. 批量入职。\"Paste CSV\" 一次导入多个用户——团队首日入职很方便。\n\n4. 轮换 / 撤销。Rotate 流程换 API key（旧 key 立即失效）。Delete 移除用户及所有 binding。\n\n典型场景：\n\n  · 加一个同事，让他在 Slack 上 DM 时按本人和正确角色路由。\n  · 给 CI 机器人发 API key 做程序化 agent 调用。\n  · 通过 CSV 批量入职一个团队 / 班级。\n\n注意事项：\n\n  · Rotate 对在途客户端是破坏性的——它们会立刻拿到 401。轮换生产 key 前要协调。\n  · Channel binding 在 (channel, identity) 上唯一——同一个 Telegram id 不能映射到两个 LibreFang 用户。\n  · per-user policy / 预算覆盖单独存放；行上的徽标告诉你哪个用户配了什么。",
+    "help": "Users & RBAC 管理操作员账户和外部身份——每行是一个人或服务账户，含一个或多个 channel binding（Telegram / Discord / Slack / 邮箱）映射到 BossFang 角色（admin / operator / viewer 等）。程序化访问的 API key 也在这里发放。仅管理员可访问。\n\n使用步骤：\n\n1. 创建。\"Create user\" → 填 ID、名字、角色；可选地加 channel binding 和 API key。保存。\n\n2. 编辑。点击行更新角色、增删 binding，设 per-user 预算 / memory / policy 提示（行上的徽标显示已设的项）。\n\n3. 批量入职。\"Paste CSV\" 一次导入多个用户——团队首日入职很方便。\n\n4. 轮换 / 撤销。Rotate 流程换 API key（旧 key 立即失效）。Delete 移除用户及所有 binding。\n\n典型场景：\n\n  · 加一个同事，让他在 Slack 上 DM 时按本人和正确角色路由。\n  · 给 CI 机器人发 API key 做程序化 agent 调用。\n  · 通过 CSV 批量入职一个团队 / 班级。\n\n注意事项：\n\n  · Rotate 对在途客户端是破坏性的——它们会立刻拿到 401。轮换生产 key 前要协调。\n  · Channel binding 在 (channel, identity) 上唯一——同一个 Telegram id 不能映射到两个 BossFang 用户。\n  · per-user policy / 预算覆盖单独存放；行上的徽标告诉你哪个用户配了什么。",
     "simulator_link": "权限模拟器",
     "import_csv": "批量导入 (CSV)",
     "create": "新建用户",
@@ -3458,7 +3458,7 @@
     "wizard_example": "示例",
     "wizard_confirm_desc": "确认后将写入 config.toml。内核会就地重建 RBAC 渠道索引，无需重启。",
     "wizard_unverified_title": "无自动归属校验",
-    "wizard_unverified_body": "LibreFang 暂未通过平台回查该 id 是否真正属于 {{user}}。具备 Owner 权限的人可以将任意 id 绑定到任意用户，导致后续 RBAC 与限流决策被悄悄改向。请在保存前与用户线下核对 platform_id。",
+    "wizard_unverified_body": "BossFang 暂未通过平台回查该 id 是否真正属于 {{user}}。具备 Owner 权限的人可以将任意 id 绑定到任意用户，导致后续 RBAC 与限流决策被悄悄改向。请在保存前与用户线下核对 platform_id。",
     "wizard_unverified_ack": "我已通过线下渠道核实 {{platformId}} 属于 {{user}}。",
     "wizard_ack_required": "请先确认归属警告再保存。",
     "wizard_commit": "保存绑定",
@@ -3616,7 +3616,7 @@
     "clearing": "清除中…",
     "discard": "放弃更改",
     "zero_means_unlimited": "将任意时间窗口设为 0 表示该窗口不限额。阈值是任一限额触发 BudgetExceeded 审计事件时的比例。",
-    "help": "单个用户的开销上限。这个用户在所有 agent、所有 channel 上的总花销都计入这个上限。给同事或外人开放你的 LibreFang 实例又不想被刷爆 provider 额度时用。\n\n预算如何叠加：\n\n  · 全局预算（/dashboard/runtime 设置）——kernel 整体上限。撞到了所有 agent 都停。\n  · 单 agent 预算（agent.toml 里设）——限制某个 agent。\n  · 单用户预算（本页）——限制某个用户的总花销。\n  · **最严格的限额生效**。全局还剩 $5、用户还剩 $50，那这个用户就只能再花 $5。\n\n本页显示：\n\n  · 当前周期花销、上限、已用百分比、滚动窗口（日 / 周 / 月）。\n  · 跨过告警阈值但未撞硬上限时显示 \"alert breach\" 徽章。\n  · 按 provider 拆分：每家 provider 在这个用户身上花了多少。\n\n注意事项：\n\n  · 没配预算的用户是无限额（仍受全局和 agent 级上限约束）。\n  · 改动在用户下一次请求时生效，正在跑的 LLM 调用不会被中断。\n  · 花销历史持久化在 SQLite，删用户不会删历史（审计需要）。",
+    "help": "单个用户的开销上限。这个用户在所有 agent、所有 channel 上的总花销都计入这个上限。给同事或外人开放你的 BossFang 实例又不想被刷爆 provider 额度时用。\n\n预算如何叠加：\n\n  · 全局预算（/dashboard/runtime 设置）——kernel 整体上限。撞到了所有 agent 都停。\n  · 单 agent 预算（agent.toml 里设）——限制某个 agent。\n  · 单用户预算（本页）——限制某个用户的总花销。\n  · **最严格的限额生效**。全局还剩 $5、用户还剩 $50，那这个用户就只能再花 $5。\n\n本页显示：\n\n  · 当前周期花销、上限、已用百分比、滚动窗口（日 / 周 / 月）。\n  · 跨过告警阈值但未撞硬上限时显示 \"alert breach\" 徽章。\n  · 按 provider 拆分：每家 provider 在这个用户身上花了多少。\n\n注意事项：\n\n  · 没配预算的用户是无限额（仍受全局和 agent 级上限约束）。\n  · 改动在用户下一次请求时生效，正在跑的 LLM 调用不会被中断。\n  · 花销历史持久化在 SQLite，删用户不会删历史（审计需要）。",
     "of_cap": "/ {{cap}}",
     "over_threshold": "已超阈值",
     "no_cap": "本窗口未设上限"
@@ -3745,11 +3745,11 @@
     "error_default_connect": "连接失败",
     "error_default_pairing": "配对失败",
     "btn_try_again": "重试",
-    "device_name_default": "LibreFang Mobile"
+    "device_name_default": "BossFang Mobile"
   },
   "mobile_pairing": {
     "title": "移动配对",
-    "subtitle": "打开 LibreFang 移动 App，点击 <strong>扫描 QR</strong> 即可连接到本守护进程。",
+    "subtitle": "打开 BossFang 移动 App，点击 <strong>扫描 QR</strong> 即可连接到本守护进程。",
     "expired_message": "QR 码已过期 — 点击刷新获取新码。",
     "refresh": "刷新",
     "expired_label": "已过期",

@@ -198,6 +198,96 @@ class DashboardProseTests(unittest.TestCase):
         self.assertEqual(once, 'const x = "BossFang mobile app";\n')
 
 
+class LocaleProseTests(unittest.TestCase):
+    """Tests for the Pass 4 locale prose scope.
+
+    Locale .json files use LOCALE_NAME_RE — a separator-aware boundary that
+    flips the PascalCase product name in i18n prose while leaving lowercase
+    identifiers, URLs, package names, and the vnd.librefang.* media type
+    untouched.
+    """
+
+    @staticmethod
+    def _flip(text: str) -> str:
+        return eb.LOCALE_NAME_RE.sub("BossFang", text)
+
+    def test_product_name_in_prose_flips(self) -> None:
+        before = '"help": "Agents this LibreFang instance runs."'
+        after = '"help": "Agents this BossFang instance runs."'
+        self.assertEqual(self._flip(before), after)
+
+    def test_sentence_ending_period_flips(self) -> None:
+        # A trailing '.' is prose punctuation, not an identifier dot.
+        self.assertEqual(self._flip("point at this LibreFang."), "point at this BossFang.")
+        self.assertEqual(self._flip('cap on LibreFang.\\n bullet'), 'cap on BossFang.\\n bullet')
+
+    def test_lowercase_paths_and_crates_preserved(self) -> None:
+        # Product name is PascalCase; every identifier-shaped reference is
+        # lowercase, so the PascalCase anchor never touches them.
+        for text in (
+            "SQLite in `~/.librefang/`. Backups too.",
+            "resolved from ~/.librefang/plugins/<name>",
+            "Emit x-librefang-agent/session headers",
+            "the librefang-api crate",
+            "import from @librefang/sdk",
+            "see github.com/librefang for issues",
+            "media type application/vnd.librefang.agent+json",
+        ):
+            self.assertEqual(self._flip(text), text)
+
+    def test_pascalcase_glued_to_separator_preserved(self) -> None:
+        # Defense-in-depth: a PascalCase token fused to an identifier
+        # separator is NOT a standalone product-name reference.
+        for text in (
+            "LibreFang/agent-os repo",
+            "LibreFang-mobile package",
+            "the LibreFang_SDK symbol",
+            "vnd.LibreFang.agent media type",
+        ):
+            self.assertEqual(self._flip(text), text)
+
+    def test_layer_internal_struct_names_preserved(self) -> None:
+        # A trailing word char (the K / E) keeps the lookahead from matching,
+        # so LibreFangKernel / LibreFangError are left intact.
+        text = "Boots via LibreFangKernel; raises LibreFangError."
+        self.assertEqual(self._flip(text), text)
+
+    def test_locale_idempotent(self) -> None:
+        once = self._flip("Open the LibreFang mobile app.")
+        twice = self._flip(once)
+        self.assertEqual(once, twice)
+        self.assertEqual(once, "Open the BossFang mobile app.")
+
+    def test_enforce_and_audit_locale_file(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = Path(tmpdir) / "en.json"
+            f.write_text(
+                json.dumps(
+                    {
+                        "help": "This LibreFang instance lives in ~/.librefang/.",
+                        "dev": "Open the LibreFang mobile app.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            # Audit flags the prose hits before the fix.
+            self.assertEqual(eb.audit_locale_file(f), ["LibreFang"])
+
+            # Enforce flips the product name, leaves ~/.librefang/ path intact.
+            self.assertTrue(eb.enforce_locale_file(f))
+            data = json.loads(f.read_text(encoding="utf-8"))
+            self.assertIn("This BossFang instance lives in ~/.librefang/.", data["help"])
+            self.assertEqual(data["dev"], "Open the BossFang mobile app.")
+
+            # Idempotent: a second pass changes nothing and audit is clean.
+            self.assertFalse(eb.enforce_locale_file(f))
+            self.assertEqual(eb.audit_locale_file(f), [])
+
+
 class FileLevelTests(unittest.TestCase):
     def test_enforce_color_file_does_not_touch_docs_prose(self) -> None:
         # Use a tempdir to confirm the color pass does NOT scan docs/.
