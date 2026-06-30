@@ -288,6 +288,85 @@ class LocaleProseTests(unittest.TestCase):
             self.assertEqual(eb.audit_locale_file(f), [])
 
 
+class LocaleStorageTests(unittest.TestCase):
+    """Tests for the Pass 4 storage-substrate rewrite (SQLite -> SurrealDB).
+
+    BossFang defaults to SurrealDB; upstream prose calls the default store
+    SQLite. replace_locale_content() flips the proper-noun in user-visible
+    prose but skips any line that declares a *sqlite* config-field key — those
+    labels name the retained legacy `legacy_sqlite_path` backend field.
+    """
+
+    def test_generic_storage_prose_flips(self) -> None:
+        before = '    "help": "Storage is SQLite in `~/.librefang/`. Backups too.",'
+        after = '    "help": "Storage is SurrealDB in `~/.librefang/`. Backups too.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_sqlite_under_non_sqlite_key_flips(self) -> None:
+        before = '    "budget_help": "Spend totals are persisted in SQLite; kept for audit.",'
+        after = '    "budget_help": "Spend totals are persisted in SurrealDB; kept for audit.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_legacy_field_label_line_preserved(self) -> None:
+        # Line declares a *sqlite* key — the legacy backend field label. The
+        # SQLite token in its value must survive untouched.
+        for line in (
+            '    "fld_sqlite_path": "SQLite Path",',
+            '    "desc_sqlite_path": "Path to the SQLite database file for memory storage",',
+            '    "fld_sqlite_path": "SQLite 路径",',  # zh — skip is key-based, language-independent
+            '    "desc_sqlite_path": "Шлях до файлу бази даних SQLite",',  # uk
+        ):
+            self.assertEqual(eb.replace_locale_content(line), line)
+
+    def test_product_name_and_sqlite_on_same_line(self) -> None:
+        before = '    "x": "This LibreFang instance stores in SQLite.",'
+        after = '    "x": "This BossFang instance stores in SurrealDB.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_storage_idempotent(self) -> None:
+        once = eb.replace_locale_content('"k": "data lives in SQLite."')
+        twice = eb.replace_locale_content(once)
+        self.assertEqual(once, twice)
+        self.assertEqual(once, '"k": "data lives in SurrealDB."')
+
+    def test_audit_flags_generic_sqlite_but_not_legacy_label(self) -> None:
+        content = (
+            '    "help": "Storage is SQLite here.",\n'
+            '    "fld_sqlite_path": "SQLite Path",\n'
+        )
+        # Only the generic prose SQLite is flagged; the legacy-key line is skipped.
+        self.assertEqual(eb.audit_locale_content(content), ["SQLite"])
+
+    def test_enforce_locale_file_preserves_legacy_label(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = Path(tmpdir) / "en.json"
+            # indent=2 → one key per line, mirroring the real catalog format
+            # the key-aware skip relies on.
+            f.write_text(
+                json.dumps(
+                    {
+                        "memory": {"help": "Storage is SQLite in ~/.librefang/."},
+                        "config": {"fld_sqlite_path": "SQLite Path"},
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(eb.audit_locale_file(f), ["SQLite"])  # only the generic one
+            self.assertTrue(eb.enforce_locale_file(f))
+
+            data = json.loads(f.read_text(encoding="utf-8"))
+            self.assertEqual(data["memory"]["help"], "Storage is SurrealDB in ~/.librefang/.")
+            self.assertEqual(data["config"]["fld_sqlite_path"], "SQLite Path")  # legacy intact
+
+            self.assertFalse(eb.enforce_locale_file(f))  # idempotent
+            self.assertEqual(eb.audit_locale_file(f), [])
+
+
 class FileLevelTests(unittest.TestCase):
     def test_enforce_color_file_does_not_touch_docs_prose(self) -> None:
         # Use a tempdir to confirm the color pass does NOT scan docs/.

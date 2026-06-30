@@ -34,20 +34,28 @@ What it does:
      word-boundary regex \bLibreFang\b used in the docs prose pass.
 
   4. Locale prose pass (i18n strings in crates/librefang-api/dashboard/src/locales/)
-     Scans *.json under crates/librefang-api/dashboard/src/locales/ for the
-     product name "LibreFang" inside help/onboarding/prose strings (en, zh,
-     uk, ko, and any other translations). Uses a separator-aware boundary
-     (LOCALE_NAME_RE) that excludes the token when it is glued to an
-     identifier separator — so internal identifiers, URLs, package names,
-     and the back-compat vendor prefix stay intact:
-       - lowercase paths / crates / headers: ~/.librefang/, librefang-api,
-         x-librefang-agent, @librefang/sdk, github.com/librefang,
-         application/vnd.librefang.* — never match (product name is PascalCase)
-       - PascalCase glued to a separator: LibreFang/, LibreFang-, LibreFang@,
-         LibreFang_, .LibreFang — excluded by the surrounding lookarounds
-       - sentence-ending "LibreFang." — STILL rewritten (a trailing '.' is
-         prose, not an identifier dot, so it is not in the trailing exclusion
-         set)
+     Scans *.json under crates/librefang-api/dashboard/src/locales/ (en, zh,
+     uk, ko, and any other translations) and restores two fork facts:
+
+     a. Product name "LibreFang" → "BossFang". Uses a separator-aware boundary
+        (LOCALE_NAME_RE) that excludes the token when it is glued to an
+        identifier separator — so internal identifiers, URLs, package names,
+        and the back-compat vendor prefix stay intact:
+          - lowercase paths / crates / headers: ~/.librefang/, librefang-api,
+            x-librefang-agent, @librefang/sdk, github.com/librefang,
+            application/vnd.librefang.* — never match (product name is PascalCase)
+          - PascalCase glued to a separator: LibreFang/, LibreFang-, LibreFang@,
+            LibreFang_, .LibreFang — excluded by the surrounding lookarounds
+          - sentence-ending "LibreFang." — STILL rewritten (a trailing '.' is
+            prose, not an identifier dot, so it is not in the trailing exclusion
+            set)
+
+     b. Storage substrate "SQLite" → "SurrealDB". BossFang defaults to SurrealDB
+        (embedded or server); upstream prose calls the default store SQLite.
+        The rewrite is suppressed on any line that declares a config-field key
+        whose name contains "sqlite" (fld_sqlite_path / desc_sqlite_path) — those
+        labels name the *retained* legacy backend field (`legacy_sqlite_path`),
+        which BossFang keeps as an opt-in, so they must keep saying SQLite.
 
   All modes are safe to run multiple times (idempotent).
 
@@ -70,6 +78,10 @@ Color tokens replaced → BossFang tokens:
 
 Prose tokens replaced:
   \bLibreFang\b  →  BossFang   (word-bounded; preserves LibreFangKernel etc.)
+
+Locale prose tokens replaced (crates/librefang-api/dashboard/src/locales/):
+  LibreFang  →  BossFang     (separator-aware; preserves ~/.librefang/ etc.)
+  SQLite     →  SurrealDB    (skips legacy *_sqlite_path field-label lines)
 
 NOT handled automatically (fix manually):
   - New components that render an SVG fang glyph inside a gradient box as
@@ -170,23 +182,63 @@ PROSE_AUDIT_PATTERNS: list[re.Pattern[str]] = [p for p, _ in PROSE_REPLACEMENTS]
 
 # ── Locale replacement table ──────────────────────────────────────────────────
 #
-# Locale JSON strings embed identifier-shaped references inline (paths like
-# ~/.librefang/, headers like x-librefang-agent, the vnd.librefang.* media
-# type). The product name is always PascalCase "LibreFang", and every one of
-# those references is lowercase, so a PascalCase anchor already avoids them.
-# The lookarounds add a second layer of defense against a PascalCase token
-# glued to a separator (LibreFang/, LibreFang-, LibreFang@, .LibreFang):
+# Two fork facts are restored in the locale catalogs, line by line (the JSON is
+# pretty-printed one key per line, which the key-aware SQLite rule relies on):
 #
-#   (?<![\w./@-])  not preceded by a word char or  . / @ -
-#   (?![\w/@-])    not followed by a word char or  / @ -   (trailing '.' is
-#                  allowed so sentence-ending "LibreFang." is still rewritten)
+# 1. Product name. Locale JSON strings embed identifier-shaped references
+#    inline (paths like ~/.librefang/, headers like x-librefang-agent, the
+#    vnd.librefang.* media type). The product name is always PascalCase
+#    "LibreFang", and every one of those references is lowercase, so a
+#    PascalCase anchor already avoids them. The lookarounds add a second layer
+#    of defense against a PascalCase token glued to a separator (LibreFang/,
+#    LibreFang-, LibreFang@, .LibreFang):
+#
+#      (?<![\w./@-])  not preceded by a word char or  . / @ -
+#      (?![\w/@-])    not followed by a word char or  / @ -   (trailing '.' is
+#                     allowed so sentence-ending "LibreFang." is still rewritten)
+#
+# 2. Storage substrate. BossFang defaults to SurrealDB (embedded or server);
+#    upstream prose describes the default store as SQLite. The proper-noun
+#    "SQLite" is rewritten to "SurrealDB" in user-visible prose — EXCEPT on a
+#    line that declares a config-field key whose name contains "sqlite"
+#    (fld_sqlite_path / desc_sqlite_path). Those labels name the *retained*
+#    legacy backend field (`legacy_sqlite_path`, kept as an opt-in), so they
+#    must keep saying SQLite. Keying off the JSON key name (not a phrase) makes
+#    the skip language-independent — it holds for en / uk / zh / future locales.
 LOCALE_NAME_RE = re.compile(r"(?<![\w./@-])LibreFang(?![\w/@-])")
+LOCALE_SQLITE_RE = re.compile(r"\bSQLite\b")
+LOCALE_SQLITE_REPL = "SurrealDB"
 
-LOCALE_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
-    (LOCALE_NAME_RE, "BossFang"),
-]
+# A JSON line that declares a key whose name contains "sqlite" — i.e. a legacy
+# backend field label. The SQLite→SurrealDB rewrite is suppressed on such lines.
+LOCALE_LEGACY_SQLITE_KEY_RE = re.compile(
+    r'"[A-Za-z0-9_]*sqlite[A-Za-z0-9_]*"\s*:', re.IGNORECASE
+)
 
-LOCALE_AUDIT_PATTERNS: list[re.Pattern[str]] = [p for p, _ in LOCALE_REPLACEMENTS]
+
+def replace_locale_content(content: str) -> str:
+    """Restore product name + storage substrate in locale JSON prose.
+
+    Line-oriented so the SQLite skip can key off the per-line JSON key name and
+    so the file's exact formatting (indentation, key order) is preserved.
+    """
+    out: list[str] = []
+    for line in content.split("\n"):
+        line = LOCALE_NAME_RE.sub("BossFang", line)
+        if not LOCALE_LEGACY_SQLITE_KEY_RE.search(line):
+            line = LOCALE_SQLITE_RE.sub(LOCALE_SQLITE_REPL, line)
+        out.append(line)
+    return "\n".join(out)
+
+
+def audit_locale_content(content: str) -> list[str]:
+    """Read-only scan mirroring replace_locale_content's skip logic."""
+    hits: list[str] = []
+    for line in content.split("\n"):
+        hits.extend(LOCALE_NAME_RE.findall(line))
+        if not LOCALE_LEGACY_SQLITE_KEY_RE.search(line) and LOCALE_SQLITE_RE.search(line):
+            hits.append("SQLite")
+    return sorted(set(hits))
 
 
 # ── Code-fence and inline-code awareness ──────────────────────────────────────
@@ -354,10 +406,7 @@ def enforce_locale_file(path: Path) -> bool:
     except (UnicodeDecodeError, PermissionError):
         return False
 
-    content = original
-    for pat, repl in LOCALE_REPLACEMENTS:
-        content = pat.sub(repl, content)
-
+    content = replace_locale_content(original)
     if content == original:
         return False
     path.write_text(content, encoding="utf-8")
@@ -369,11 +418,7 @@ def audit_locale_file(path: Path) -> list[str]:
         content = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, PermissionError):
         return []
-    hits: list[str] = []
-    for pat in LOCALE_AUDIT_PATTERNS:
-        for found in pat.findall(content):
-            hits.append(found if isinstance(found, str) else "".join(found))
-    return sorted(set(hits))
+    return audit_locale_content(content)
 
 
 def scan_dir(root: Path, extensions: set[str]) -> list[Path]:
