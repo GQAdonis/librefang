@@ -36,8 +36,22 @@ fn generate_schema_json() -> String {
     // user-specific absolute paths would make the fixture machine-local.
     let mut value = serde_json::to_value(&schema).expect("schema → Value");
     normalize_volatile_defaults(&mut value);
-    // Deterministic output: pretty-print via serde_json (maps are BTreeMap in
-    // the schemars output, so ordering is stable across runs).
+    // Deterministic output: pretty-print via serde_json. Key order is stable
+    // ACROSS RUNS, but it is NOT stable across changes to the dependency graph,
+    // and that distinction has bitten us:
+    //
+    // `serde_json::Value`'s map is a `BTreeMap` (alphabetical) by default, and an
+    // `IndexMap` (insertion order) when the `preserve_order` feature is on. Cargo
+    // unions features across the whole graph, so ANY crate anywhere enabling
+    // `serde_json/preserve_order` silently re-orders every key in this fixture.
+    // Because `kernel_config_schema_matches_golden_fixture` compares the rendered
+    // text, that flips the test red with a ~6.7k-line diff and no semantic change.
+    //
+    // This is exactly what happened when `uar-driver` stopped being force-enabled:
+    // dropping UAR from the default build dropped `preserve_order` with it, and the
+    // committed golden (insertion-ordered) no longer matched the generator
+    // (alphabetical). If you see a huge reorder-only diff here, suspect a feature
+    // change in the graph before you suspect the schema.
     serde_json::to_string_pretty(&value).expect("serialize schema")
 }
 
