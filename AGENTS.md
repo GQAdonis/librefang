@@ -56,6 +56,27 @@ cargo test --workspace               # Run all tests
 cargo clippy --workspace --all-targets -- -D warnings  # Lint (zero warnings policy)
 ```
 
+## OpenSpec
+
+The repo is initialized for [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec-driven development.
+`openspec/` (config + specs + changes) is tracked and is the shared artefact.
+
+The per-tool instruction shims — the `/opsx:*` slash commands and skills that OpenSpec writes into `.claude/`, `.codex/`, `.opencode/`, `.kimi/` — are **not** tracked.
+They are generated files, and this repo keeps every agent-tool config local (see the `.claude/*` allowlist and `.codex` entry in `.gitignore`).
+
+Generate them for your own tool once per clone:
+
+```bash
+openspec init --tools claude        # or: codex, opencode, kimi, cursor, windsurf, cline, …
+openspec update                     # refresh the shims after an OpenSpec upgrade
+```
+
+`openspec init --tools` accepts `all`, `none`, or a comma-separated list.
+Zed is not among the supported targets.
+
+Note on the KBD lifecycle: `.kbd-orchestrator/project.json` pins `specBackend: native-kbd` while phase-10 is in flight, because that phase's change specs were written as native KBD change files.
+New phases should adopt the OpenSpec backend.
+
 ## Key Architecture Patterns
 
 ### KernelHandle trait

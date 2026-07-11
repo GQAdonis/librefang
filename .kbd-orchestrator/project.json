@@ -14,9 +14,9 @@
   },
   "constraints": {
     "three_layer_rebrand": {
-      "internal": "never rename — Cargo crate names, Rust modules, function names, Python SDK module names, workspace member paths, test fixture filenames",
-      "boundary": "additive aliases only — BOSSFANG_* primary + LIBREFANG_* fallback, default values stay LibreFang-flavoured",
-      "surface": "full rename OK — CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
+      "internal": "never rename \u2014 Cargo crate names, Rust modules, function names, Python SDK module names, workspace member paths, test fixture filenames",
+      "boundary": "additive aliases only \u2014 BOSSFANG_* primary + LIBREFANG_* fallback, default values stay LibreFang-flavoured",
+      "surface": "full rename OK \u2014 CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
     },
     "edits_blocked_in_main_worktree": true,
     "cargo_build_blocked_in_main_worktree": true,
@@ -44,5 +44,7 @@
     "brand_audit": "python3 scripts/enforce-branding.py --check"
   },
   "initialized": "2026-05-14",
-  "initialized_via": "kbd-execute bootstrap (informal init triggered from /kbd-execute when .kbd-orchestrator/ was absent)"
+  "initialized_via": "kbd-execute bootstrap (informal init triggered from /kbd-execute when .kbd-orchestrator/ was absent)",
+  "specBackend": "native-kbd",
+  "specBackendNote": "OpenSpec is initialized (openspec/config.yaml, schema: spec-driven) but the spec backend is deliberately pinned to native-kbd for phase-10, whose 8 change specs (C-001..C-008) were already written and reviewed as native change files. Migrating them mid-phase would rewrite eight specs purely to change file format without improving their content. Adopt OpenSpec from phase-11: drop this key (or set it to \"openspec\") and /kbd-spec + /kbd-plan will emit openspec/changes/<id>/{proposal.md,tasks.md} via /opsx:new."
 }
