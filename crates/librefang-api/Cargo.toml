@@ -89,6 +89,11 @@ metrics-exporter-prometheus = { workspace = true, optional = true }
 # BossFang fork: `surreal-backend` is on by default (SurrealDB-as-default
 # storage — zero-config live deployment path).
 default = ["telemetry", "surreal-backend"]
+# BossFang: opt-in Universal Agent Runtime LLM driver. Forwards to
+# `librefang-kernel/uar-driver`, which continues the chain down to
+# `librefang-llm-drivers`. Not in `default` — see the note in
+# `librefang-kernel/Cargo.toml`.
+uar-driver = ["librefang-kernel/uar-driver"]
 
 # Storage backend feature gates (mirrors librefang-storage).
 # `surreal-backend` is the default; `sqlite-backend` is opt-in for

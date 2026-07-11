@@ -13,7 +13,7 @@ librefang-memory = { path = "../librefang-memory" }
 librefang-memory-wiki = { path = "../librefang-memory-wiki" }
 librefang-kernel-router = { path = "../librefang-kernel-router" }
 librefang-kernel-metering = { path = "../librefang-kernel-metering" }
-librefang-runtime = { path = "../librefang-runtime", features = ["uar-driver"] }
+librefang-runtime = { path = "../librefang-runtime" }
 librefang-skills = { path = "../librefang-skills" }
 librefang-hands = { path = "../librefang-hands" }
 librefang-extensions = { path = "../librefang-extensions" }
@@ -70,6 +70,22 @@ libc = "0.2"
 
 [features]
 default = ["surreal-backend"]
+## BossFang: opt-in Universal Agent Runtime LLM driver.
+##
+## This forwards down the chain
+## `librefang-kernel` -> `librefang-runtime` -> `librefang-llm-drivers` ->
+## `dep:universal-agent-runtime`, and is deliberately NOT in `default`.
+##
+## Until 2026-07-11 the `librefang-runtime` dependency below carried a hardcoded
+## `features = ["uar-driver"]`. Cargo unions features across the graph and
+## `librefang-cli` -> `librefang-kernel` is not feature-gated, so that one line
+## force-compiled UAR into EVERY build with no way to turn it off — pulling in
+## UAR's whole transitive tree (liter-llm, burn, tonic) plus a `build.rs` that
+## fetches models.dev over the network, and imposing UAR's exact
+## `surrealdb = "=3.2.1"` pin on the entire workspace (cargo cannot unify two
+## exact `=` pins, so a UAR-side surrealdb bump broke every build, not just an
+## opt-in one).
+uar-driver = ["librefang-runtime/uar-driver"]
 ## Storage backend selection (Phase 4 of `surrealdb-storage-swap`).
 ## The Surreal-backed implementations of `MemoryBackend`, `AuditStore`,
 ## `TraceBackend` and the TOTP lockout store land in Phases 5–6; until

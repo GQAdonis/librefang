@@ -38,6 +38,20 @@ telemetry = ["librefang-api/telemetry", "dep:opentelemetry", "dep:tracing-opente
 # to librefang-storage so the underlying implementations compile.
 surreal-backend = ["dep:librefang-storage", "librefang-storage/surreal-backend", "librefang-api/surreal-backend"]
 sqlite-backend = ["dep:librefang-storage", "librefang-storage/sqlite-backend"]
+# BossFang: opt-in Universal Agent Runtime LLM driver. Forwards to
+# `librefang-api/uar-driver` -> `librefang-kernel` -> `librefang-runtime` ->
+# `librefang-llm-drivers` -> `dep:universal-agent-runtime`.
+#
+# This feature MUST be declared here even though no `librefang-cli` source file
+# gates on it: the production image builds the daemon with
+# `cargo build --bin librefang --features telemetry,surreal-backend,uar-driver`
+# (Dockerfile), and `--features` names are resolved against the SELECTED PACKAGE
+# — which for `--bin librefang` is `librefang-cli`. Before this entry existed the
+# feature was silently supplied by `librefang-kernel` force-enabling it on its
+# runtime dependency; once that hardcode was removed, the Dockerfile's
+# `--features …,uar-driver` would have failed outright with "none of the selected
+# packages contains these features". Removing this line re-breaks the image build.
+uar-driver = ["librefang-api/uar-driver"]
 
 [[bin]]
 name = "librefang"
