@@ -3140,6 +3140,110 @@ pub struct UarConfig {
     /// preserved). Defaults to `false`.
     #[serde(default)]
     pub share_librefang_storage: bool,
+
+    /// Supervision of UAR as an out-of-process sidecar (`[uar.sidecar]`).
+    ///
+    /// Deliberately a nested block rather than more fields on `UarConfig`: the
+    /// fields above configure the UAR *LLM driver* (which provider to call, with
+    /// which key), while these configure a *process* (whether to spawn it, how to
+    /// restart it). Flattening the two invites exactly the confusion called out on
+    /// [`Self::base_url`].
+    #[serde(default)]
+    pub sidecar: UarSidecarConfig,
+}
+
+/// Supervision settings for UAR running as an out-of-process sidecar.
+///
+/// UAR ships a purpose-built `uar-sidecar` binary that binds `127.0.0.1:0`, prints
+/// one `READY:{port}` line to stdout once its listener is bound, and exits cleanly
+/// on stdin EOF. When [`Self::enabled`] is set, the daemon spawns and supervises
+/// that binary; the driver then talks to it over loopback HTTP.
+///
+/// Field names deliberately mirror [`SidecarChannelConfig`] so operators learn one
+/// vocabulary for every supervised child process, not two.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct UarSidecarConfig {
+    /// Spawn and supervise the UAR sidecar. Defaults to `false` — UAR is opt-in,
+    /// matching the `uar-driver` cargo feature it pairs with.
+    pub enabled: bool,
+
+    /// Program to execute.
+    ///
+    /// Empty (the default) or the bare stem `uar-sidecar` is *implicit*: the daemon
+    /// resolves the bundled binary next to its own executable, then in
+    /// `<home>/bin/`, and only then falls back to `PATH`. An absolute or relative
+    /// path is *explicit* and is used verbatim — operator intent always wins.
+    ///
+    /// Leave this empty unless you are running a custom build. Pointing it at a
+    /// binary that does not exist is the one way to reintroduce a `PATH` dependency.
+    pub command: String,
+
+    /// Connect to an already-running UAR at this base URL instead of spawning one
+    /// (e.g. `"http://uar-svc.uar.svc.cluster.local:1906"`).
+    ///
+    /// **Takes precedence over spawning.** When set, no child process is started and
+    /// [`Self::command`] is ignored — the daemon health-checks the remote and uses
+    /// it. This is how an existing standalone UAR deployment stays usable.
+    ///
+    /// Not to be confused with [`UarConfig::base_url`], which overrides the *LLM
+    /// provider* endpoint passed through to liter-llm. This one addresses UAR itself.
+    pub endpoint: Option<String>,
+
+    /// Restart the sidecar when it exits unexpectedly.
+    pub restart: bool,
+
+    /// Initial reconnect backoff, in milliseconds.
+    pub restart_initial_backoff_ms: u64,
+
+    /// Ceiling for the exponential reconnect backoff, in milliseconds.
+    pub restart_max_backoff_ms: u64,
+
+    /// Give up after this many consecutive failed restarts. A crash-loop is an
+    /// operator problem (bad key, bad config); retrying it forever hides that.
+    pub restart_max_retries: u32,
+
+    /// Reset the consecutive-failure counter after the child has stayed up this
+    /// long, so an occasional fault does not eventually exhaust the retry budget.
+    pub restart_reset_after_secs: u64,
+
+    /// How long to wait for the child's `READY:{port}` line before declaring the
+    /// spawn failed. A child that never announces itself must not hang boot.
+    pub ready_timeout_secs: u64,
+
+    /// Grace period after closing the child's stdin — UAR's documented shutdown
+    /// signal, chosen because SIGTERM is unreliable on Windows — before escalating
+    /// to a kill.
+    pub shutdown_grace_secs: u64,
+}
+
+impl Default for UarSidecarConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            command: String::new(),
+            endpoint: None,
+            restart: default_sidecar_restart(),
+            restart_initial_backoff_ms: default_sidecar_restart_initial_backoff_ms(),
+            restart_max_backoff_ms: default_sidecar_restart_max_backoff_ms(),
+            restart_max_retries: default_sidecar_restart_max_retries(),
+            restart_reset_after_secs: default_sidecar_restart_reset_after_secs(),
+            ready_timeout_secs: default_sidecar_ready_timeout_secs(),
+            shutdown_grace_secs: default_sidecar_shutdown_grace_secs(),
+        }
+    }
+}
+
+impl UarSidecarConfig {
+    /// Whether the daemon should spawn a child process.
+    ///
+    /// `endpoint` wins over spawning: pointing at a running UAR and also launching
+    /// our own would leave two instances competing, so the two are mutually
+    /// exclusive by construction rather than by operator discipline.
+    #[must_use]
+    pub fn should_spawn(&self) -> bool {
+        self.enabled && self.endpoint.is_none()
+    }
 }
 
 /// Selects where runtime `/api/mcp/servers` writes are persisted.
@@ -7540,6 +7644,79 @@ impl Default for ToolResultsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uar_sidecar_is_off_by_default_and_absent_config_still_parses() {
+        // A `[uar]` block that predates the sidecar keys must keep deserializing,
+        // and must not start spawning a process just because it upgraded.
+        let cfg: UarConfig = toml::from_str(
+            r#"
+            model = "openai/gpt-4o"
+        "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.model, "openai/gpt-4o");
+        assert!(!cfg.sidecar.enabled, "the UAR sidecar must be opt-in");
+        assert!(!cfg.sidecar.should_spawn());
+        // Defaults are inherited from the shared sidecar vocabulary, not reinvented.
+        assert!(cfg.sidecar.restart);
+        assert_eq!(cfg.sidecar.restart_initial_backoff_ms, 500);
+        assert_eq!(cfg.sidecar.restart_max_backoff_ms, 30_000);
+        assert_eq!(cfg.sidecar.ready_timeout_secs, 30);
+    }
+
+    #[test]
+    fn uar_sidecar_endpoint_wins_over_spawning() {
+        // Pointing at a running UAR and also launching our own would leave two
+        // instances competing. `endpoint` must suppress the spawn, so the two are
+        // mutually exclusive by construction rather than by operator discipline.
+        let cfg: UarConfig = toml::from_str(
+            r#"
+            [sidecar]
+            enabled = true
+            command = "uar-sidecar"
+            endpoint = "http://127.0.0.1:1906"
+        "#,
+        )
+        .unwrap();
+        assert!(cfg.sidecar.enabled);
+        assert_eq!(
+            cfg.sidecar.endpoint.as_deref(),
+            Some("http://127.0.0.1:1906")
+        );
+        assert!(
+            !cfg.sidecar.should_spawn(),
+            "an explicit endpoint must suppress spawning, even with a command set"
+        );
+
+        // Without an endpoint, enabling it does spawn.
+        let spawning: UarConfig = toml::from_str(
+            r#"
+            [sidecar]
+            enabled = true
+        "#,
+        )
+        .unwrap();
+        assert!(spawning.sidecar.should_spawn());
+    }
+
+    #[test]
+    fn uar_sidecar_round_trips_without_field_loss() {
+        let mut original = UarConfig::default();
+        original.sidecar.enabled = true;
+        original.sidecar.command = "/opt/custom/uar-sidecar".to_string();
+        original.sidecar.restart_max_retries = 3;
+        original.sidecar.ready_timeout_secs = 90;
+
+        let encoded = toml::to_string(&original).expect("serialize");
+        let decoded: UarConfig = toml::from_str(&encoded).expect("deserialize");
+
+        assert!(decoded.sidecar.enabled);
+        assert_eq!(decoded.sidecar.command, "/opt/custom/uar-sidecar");
+        assert_eq!(decoded.sidecar.restart_max_retries, 3);
+        assert_eq!(decoded.sidecar.ready_timeout_secs, 90);
+        assert!(decoded.sidecar.should_spawn());
+    }
 
     #[test]
     fn sidecar_command_policy_and_coalesce_defaults_are_backward_compatible() {

@@ -339,6 +339,28 @@ pub fn build_reload_plan_with_caps(
             .push("memory config changed".to_string());
     }
 
+    // BossFang: storage backend (SurrealDB). The pool / embedded RocksDB handle is
+    // opened once at boot and held for the process lifetime — repointing it at a
+    // different namespace or endpoint cannot be picked up without a rebuild.
+    if field_changed(&old.storage, &new.storage) {
+        plan.restart_required = true;
+        plan.restart_reasons
+            .push("storage config changed".to_string());
+    }
+
+    // BossFang: UAR. Two reasons this cannot hot-reload, and both matter:
+    //   * the LLM-driver half (api_key / model / base_url / surreal_data_dir) is
+    //     baked into the driver at construction time; and
+    //   * the `[uar.sidecar]` half supervises a CHILD PROCESS. Toggling `enabled`,
+    //     repointing `command`, or switching to an `endpoint` means spawning or
+    //     killing a process, which the reload path does not do.
+    // Mark restart-required so the operator gets a loud signal instead of the
+    // silent no-op they would otherwise get from `POST /api/config/reload`.
+    if field_changed(&old.uar, &new.uar) {
+        plan.restart_required = true;
+        plan.restart_reasons.push("uar config changed".to_string());
+    }
+
     // Memory wiki config (#3329) — the vault is constructed once at
     // boot and held in `LibreFangKernel.wiki_vault`; toggling
     // `enabled`, switching `mode` / `render_mode`, or pointing
@@ -934,6 +956,8 @@ pub fn classified_reload_fields() -> std::collections::BTreeSet<&'static str> {
         "network_enabled",
         "network",
         "memory",
+        "storage",
+        "uar",
         "memory_wiki",
         "proxy",
         "default_model",
