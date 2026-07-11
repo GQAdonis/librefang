@@ -379,6 +379,58 @@ jobs:
         # and resolve the out-of-workspace `../librefang-sidecar` path dep.
         run: cross build --release --target aarch64-unknown-linux-musl --manifest-path sdk/rust/librefang-sidecar-telegram/Cargo.toml
 
+  # ── UAR driver (opt-in feature) ────────────────────────────────────────────────
+  # BossFang-exclusive. Compile-checks the `uar-driver` feature path, which NO other
+  # CI lane builds: it is off by default, and the only job that enabled it was the
+  # Docker image build — which triggers on `push: [main]`, i.e. AFTER merge. So drift
+  # in UAR's API was invisible until it had already landed and turned main red.
+  #
+  # That is not hypothetical: the 2026-07-11 upstream merge bumped UAR to a rev whose
+  # `LlmRequest` had gained an `extra_params` field. `cargo check --workspace --lib`
+  # stayed green (the feature is off by default), the PR merged, and Docker Publish
+  # then failed on main with E0063. This lane makes that a PR-time failure.
+  #
+  # Scoped to `-p librefang-llm-drivers` — the only crate whose source is cfg-gated on
+  # the feature. The SKIP_* vars stop UAR's build.rs fetching models.dev over the
+  # network and building its pnpm frontend; the Dockerfile sets the same ones.
+  uar-driver:
+    name: UAR Driver (opt-in feature)
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Feature chain is unbroken (cli → api → kernel → runtime → llm-drivers)
+        # `--features` resolves against the SELECTED package, so the Dockerfile's
+        # `cargo build --bin librefang --features …,uar-driver` resolves `uar-driver`
+        # against `librefang-cli`. If any crate in the chain stops declaring it, this
+        # fails here instead of in the post-merge image build.
+        run: cargo tree -p librefang-cli --features uar-driver -i universal-agent-runtime --depth 0
+      - name: UAR is absent from the DEFAULT build
+        # Guards the opt-in property itself. If UAR ever gets force-enabled again, it
+        # drags its whole tree into every build and re-imposes its exact
+        # `surrealdb = "=3.2.x"` pin on the entire workspace.
+        run: |
+          if cargo tree -i universal-agent-runtime >/dev/null 2>&1; then
+            echo "::error::universal-agent-runtime is in the DEFAULT dependency graph. \
+          The uar-driver feature must stay opt-in — check for a hardcoded \
+          features = [\"uar-driver\"] on a path dependency."
+            exit 1
+          fi
+          echo "ok: UAR absent from the default graph"
+      - name: Compile-check the uar-driver path
+        env:
+          SKIP_FRONTEND_BUILD: "1"
+          SKIP_MODEL_BUILD: "1"
+          SKIP_CATALOG_BUILD: "1"
+        run: |
+          cargo check -p librefang-llm-drivers --features uar-driver
+          cargo clippy -p librefang-llm-drivers --features uar-driver -- -D warnings
+
   # ── CHANGELOG attribution check ────────────────────────────────────────────────
   # Enforces the `(@username)` suffix on bullets *added* to the [Unreleased]
   # section in this PR. Historical entries (1,800+ bullets, many predating
@@ -1031,6 +1083,7 @@ jobs:
       - quality
       - skills-wasm-sdk
       - rust-telegram-sidecar
+      - uar-driver
       - changelog-attribution
       - changelog-attribution-full
       - openapi-drift

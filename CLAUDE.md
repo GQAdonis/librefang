@@ -623,9 +623,39 @@ a unified liter-llm interface.
 - `librefang-llm-drivers/src/drivers/uar.rs` — `UarDriver` LLM driver implementation
 
 **Feature flags**:
-- `librefang-llm-drivers`: `uar-driver` (off by default, opt-in)
-- `librefang-runtime`: `uar-driver` (forwards to llm-drivers)
+`uar-driver` is **off by default and opt-in**, and forwards down an unbroken chain so that
+enabling it on any crate in the chain reaches the dependency:
+
+- `librefang-cli`: `uar-driver` → `librefang-api/uar-driver`
+- `librefang-api`: `uar-driver` → `librefang-kernel/uar-driver`
+- `librefang-kernel`: `uar-driver` → `librefang-runtime/uar-driver`
+- `librefang-runtime`: `uar-driver` → `librefang-llm-drivers/uar-driver`
+- `librefang-llm-drivers`: `uar-driver` → `dep:universal-agent-runtime`
 - When `uar-driver` is enabled, pass `surreal-backend` to UAR so it shares our SurrealDB version
+
+**Every crate in that chain must declare the feature.** `--features` names are resolved
+against the *selected package*, so the production image's
+`cargo build --bin librefang --features telemetry,surreal-backend,uar-driver`
+(`Dockerfile`) resolves `uar-driver` against **`librefang-cli`**. If any link is missing, the
+image build fails with *"none of the selected packages contains these features"*.
+
+History worth knowing (fixed 2026-07-11, #C-001): the claim above used to be false.
+`librefang-kernel/Cargo.toml` carried a hardcoded
+`librefang-runtime = { …, features = ["uar-driver"] }`, and since cargo unions features
+across the graph and `librefang-cli → librefang-kernel` is not feature-gated, **every** build
+compiled UAR in with no way to turn it off. That single line:
+
+- pulled UAR's entire transitive tree (`liter-llm`, `burn`, `tonic`, `mimalloc`) plus a
+  `build.rs` that fetches `models.dev` over the network and builds a pnpm frontend, into
+  every build; and
+- imposed UAR's exact `surrealdb = "=3.2.1"` pin on the whole workspace. Cargo cannot unify
+  two exact `=` pins, so a UAR-side surrealdb bump broke **every** build rather than an
+  opt-in feature.
+
+It also masked a latent bug: `librefang-cli` never declared `uar-driver` at all, so the
+Dockerfile's `--features …,uar-driver` only "worked" because the kernel was force-enabling
+it behind cargo's back. Never re-add a hardcoded `features = […]` to a path dependency to
+paper over a missing feature declaration — declare the feature and forward it.
 
 **After every upstream merge:**
 1. If upstream changes the `LlmDriver` trait signature, update `UarDriver` in

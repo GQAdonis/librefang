@@ -472,6 +472,12 @@ fn build_uar_request(request: &CompletionRequest) -> LlmRequest {
         cache_strategy: None,
         thinking_config: None,
         anthropic_system: None,
+        // Dialect-specific extra request-body params, merged into liter-llm's
+        // `ChatCompletionRequest::extra_body`. They are produced by UAR's
+        // `PromptDialectEngine`, which this driver does not run — librefang builds the
+        // request itself — so there is nothing to forward. `None` is what UAR's own
+        // non-dialect call sites pass.
+        extra_params: None,
     }
 }
 
