@@ -10,15 +10,15 @@
   "changes_completed": 0,
   "changes": {
     "C-001": {
-      "status": "SPECCED",
+      "status": "PR OPEN (#108) \u2014 feature chain repaired; also unbreaks main (Docker Publish was red)",
       "spec": "changes/C-001-uar-driver-unforce.md"
     },
     "C-002": {
-      "status": "SPECCED",
+      "status": "PR OPEN (GQAdonis/universal-agent-runtime#1) \u2014 uar-sidecar binary now built + shipped in image and tarball; cargo check --bin uar-sidecar clean",
       "spec": "changes/C-002-uar-publish-sidecar-binary.md"
     },
     "C-003": {
-      "status": "SPECCED",
+      "status": "PR OPEN (#109) \u2014 bundled-binary resolution generalized; actionable multi-path error",
       "spec": "changes/C-003-generalize-bundled-binary-resolution.md"
     },
     "C-004": {
@@ -95,5 +95,6 @@
       "C-007 (needs C-006)",
       "C-008 (needs C-006, C-007)"
     ]
-  }
+  },
+  "execution_note": "3 of 8 changes implemented and in review (C-001 #108, C-002 UAR#1, C-003 #109); none merged yet, so changes_completed stays 0. C-002 was the phase's long pole and is now unblocked: UAR builds and ships `uar-sidecar` in both the container image and the release tarball. IMPORTANT for C-004: the binary is NOT self-contained \u2014 it calls AppConfig::load() + start_server_sidecar, so it resolves assets via UAR_STATIC_DIR / UAR_MODELS_DIR / UAR_BUILTIN_SKILLS_DIR. librefang's image must COPY /opt/uar/{static,skills,models} AND set those env vars, not just the executable. Also: UAR's release-tarball job stays continue-on-error with a self-described stale bun/Node18 toolchain, so the CONTAINER IMAGE is the dependable source for C-004; desktop/local support must not be promised off that tarball until it is seen to build. C-004 must also bump librefang's UAR rev pin (currently 0cd664ce) to the merge commit of UAR#1."
 }
