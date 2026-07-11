@@ -69,4 +69,6 @@ jobs:
           # injection vector — #3938 hardened release.yml and
           # discussion-to-issue.yml the same way but missed this site.
           HEAD_REF: ${{ github.head_ref || github.ref_name }}
-        run: npx -y wrangler@4 pages deploy web/dist --project-name=librefang --branch="$HEAD_REF"
+        # BossFang fork: deploys to the fork's own Cloudflare Pages project
+        # (bossfang.pages.dev), not upstream's `librefang`.
+        run: npx -y wrangler@4 pages deploy web/dist --project-name=bossfang --branch="$HEAD_REF"
