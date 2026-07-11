@@ -1,0 +1,19 @@
+{
+  "stage": "plan",
+  "phase": "phase-10-uar-sidecar-availability",
+  "completed_at": "2026-07-11",
+  "backend": "native-kbd",
+  "artifact": "plan.md",
+  "changes_total": 8,
+  "summary": "8 changes ordered by UNBLOCKED VALUE rather than by the dependency chain, because two changes deliver real value with no dependency on UAR at all. Wave 1 (parallel, start now): C-002 [UPSTREAM, the long pole], C-001 (one line; removes the surrealdb lockstep pin and UAR's whole transitive tree from the DEFAULT build), C-003 (the actual bug fix: resolve_sidecar_command is hardcoded to the Telegram stem so UAR falls through to a bare PATH lookup; also replaces the opaque `os error 2` with an error naming every path searched), C-005 (config). Wave 2: C-004 (ship the binary), C-006 (supervisor). Wave 3: C-007 (HTTP/SSE driver), C-008 (console controls). Zero new third-party dependencies.",
+  "critical_path": [
+    "C-002",
+    "C-004",
+    "C-006",
+    "C-007",
+    "C-008"
+  ],
+  "key_insight": "C-006's fake contract-honouring `uar-sidecar` (prints READY:<port>, serves /healthz, exits on stdin EOF) means librefang's TESTS do not wait on the upstream C-002 blocker \u2014 only the real end-to-end verification does. That keeps C-006/C-007/C-008 implementable and reviewable while the upstream change is in flight.",
+  "first_change_to_apply": "C-001 (smallest, unblocked, immediately valuable) or C-003 (the bug fix). Open C-002 upstream in parallel \u2014 it is the long pole and every day it is not started adds a day to the phase.",
+  "next_stage": "execute"
+}

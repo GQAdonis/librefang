@@ -1,0 +1,107 @@
+{
+  "phase": "phase-10-uar-sidecar-availability",
+  "backend": "native-kbd",
+  "generated": "2026-07-11",
+  "zeespec_verdict": "n/a (no .zeespec/ — gate inactive, opt-in)",
+  "changes_total": 8,
+  "changes": [
+    {
+      "id": "C-001",
+      "title": "Make uar-driver genuinely opt-in",
+      "spec": ".kbd-orchestrator/changes/C-001-uar-driver-unforce.md",
+      "closes": ["G-9", "G-10"],
+      "depends_on": [],
+      "repo": "librefang",
+      "size": "XS",
+      "independently_shippable": true,
+      "note": "Highest leverage per line changed. Removes the surrealdb lockstep pin and UAR's whole transitive tree from the DEFAULT build. Ships first, independent of the sidecar work."
+    },
+    {
+      "id": "C-002",
+      "title": "[UPSTREAM] Build and publish the uar-sidecar binary",
+      "spec": ".kbd-orchestrator/changes/C-002-uar-publish-sidecar-binary.md",
+      "closes": ["G-1 (upstream half)"],
+      "depends_on": [],
+      "repo": "GQAdonis/universal-agent-runtime",
+      "size": "S",
+      "independently_shippable": true,
+      "blocks": ["C-004", "C-006", "C-007", "C-008"],
+      "note": "HARD BLOCKER. uar-sidecar is never built (0 refs in release.yml; Dockerfile:225 builds only --bin universal-agent-runtime). Start this in parallel with C-001/C-003 — everything that spawns UAR waits on it."
+    },
+    {
+      "id": "C-003",
+      "title": "Generalize bundled-binary resolution; fail loudly when unresolvable",
+      "spec": ".kbd-orchestrator/changes/C-003-generalize-bundled-binary-resolution.md",
+      "closes": ["G-4", "G-8"],
+      "depends_on": [],
+      "repo": "librefang",
+      "size": "S",
+      "independently_shippable": true,
+      "note": "This is the actual bug fix. resolve_sidecar_command (sidecar.rs:728) is hardcoded to the Telegram stem, so UAR falls through to a bare PATH lookup. Testable with NO UAR binary present — that is precisely what the regression test asserts."
+    },
+    {
+      "id": "C-004",
+      "title": "Ship the UAR binary in the BossFang image and release tarball",
+      "spec": ".kbd-orchestrator/changes/C-004-ship-uar-binary-in-image.md",
+      "closes": ["G-1 (librefang half)"],
+      "depends_on": ["C-002"],
+      "repo": "librefang",
+      "size": "M",
+      "independently_shippable": false,
+      "note": "COPY --from=<uar-image>, landing the binary beside /usr/local/bin/librefang so C-003 step-1 resolves it. Image-size delta MUST be measured, not assumed."
+    },
+    {
+      "id": "C-005",
+      "title": "UAR sidecar config surface",
+      "spec": ".kbd-orchestrator/changes/C-005-uar-sidecar-config-surface.md",
+      "closes": ["G-6"],
+      "depends_on": [],
+      "repo": "librefang",
+      "size": "S",
+      "independently_shippable": false,
+      "note": "UarConfig has no enable flag and nothing to spawn. Trap: base_url is an LLM-PROVIDER override (drivers/uar.rs:97), NOT a UAR endpoint — reusing it is a silent semantic collision."
+    },
+    {
+      "id": "C-006",
+      "title": "UAR sidecar supervisor (spawn, READY handshake, health, restart, shutdown)",
+      "spec": ".kbd-orchestrator/changes/C-006-uar-sidecar-supervisor.md",
+      "closes": ["G-3"],
+      "depends_on": ["C-002", "C-003", "C-005"],
+      "repo": "librefang",
+      "size": "L",
+      "independently_shippable": false,
+      "note": "REUSE the existing supervisor (sidecar.rs:502-520 already has restart+backoff). Genuinely new: the READY:{port} stdout handshake and stdin-EOF shutdown. Build a FAKE contract-honouring uar-sidecar so CI is hermetic."
+    },
+    {
+      "id": "C-007",
+      "title": "UarDriver becomes an HTTP + SSE client",
+      "spec": ".kbd-orchestrator/changes/C-007-uar-driver-http-client.md",
+      "closes": ["G-5"],
+      "depends_on": ["C-006"],
+      "repo": "librefang",
+      "size": "M",
+      "independently_shippable": false,
+      "note": "Zero new dependencies — reqwest 0.13 (stream) + futures + tokio-stream are already in the workspace. Add a startup version check: with the cargo pin gone, drift becomes a silent runtime failure instead of a compile error."
+    },
+    {
+      "id": "C-008",
+      "title": "Web console: run, stop, restart, and test the UAR",
+      "spec": ".kbd-orchestrator/changes/C-008-web-console-uar-controls.md",
+      "closes": ["G-7"],
+      "depends_on": ["C-006", "C-007"],
+      "repo": "librefang",
+      "size": "M",
+      "independently_shippable": false,
+      "note": "The user-visible goal. Status must expose the RESOLVED BINARY PATH so a resolution failure is diagnosable from the console, not the logs."
+    }
+  ],
+  "critical_path": ["C-002", "C-004", "C-006", "C-007", "C-008"],
+  "parallelizable_now": ["C-001", "C-002", "C-003", "C-005"],
+  "open_questions_carried": [
+    "Which of UAR's /opt/uar/{static,skills,models} does uar-sidecar need at runtime? (C-002 task 3 — determines C-004's COPY set and image size)",
+    "Image-size budget for baking UAR into the BossFang image (C-004)",
+    "Is desktop/local support in v1? UAR's release.yml:160 calls its cross-platform binaries 'aspirational' — Linux/container is unaffected",
+    "Loopback auth for the in-container UAR — sufficient, or add a shared token?",
+    "Does the existing standalone `uar` Deployment stay? It is operator-managed and may serve other consumers — not ours to delete unilaterally"
+  ]
+}
