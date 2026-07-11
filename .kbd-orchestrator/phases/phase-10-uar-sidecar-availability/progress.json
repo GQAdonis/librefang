@@ -1,7 +1,7 @@
 {
   "phase": "phase-10-uar-sidecar-availability",
   "assessment_complete": true,
-  "plan_complete": false,
+  "plan_complete": true,
   "execution_started": false,
   "backend": "native-tool",
   "assessment_date": "2026-07-11",
@@ -51,7 +51,7 @@
     "G-4 no bundled-binary resolution for UAR (generalize resolve_sidecar_command, sidecar.rs:728)"
   ],
   "research_doc": "docs/architecture/uar-runtime-integration-research.md",
-  "next_action": "/kbd-plan phase-10-uar-sidecar-availability",
+  "next_action": "/kbd-execute phase-10-uar-sidecar-availability",
   "analysis_complete": true,
   "analysis_date": "2026-07-11",
   "decisions": {
@@ -78,5 +78,22 @@
     "C-002",
     "C-003",
     "C-005"
-  ]
+  ],
+  "plan_date": "2026-07-11",
+  "waves": {
+    "wave_1_parallel_now": [
+      "C-002 (UPSTREAM, long pole)",
+      "C-001",
+      "C-003",
+      "C-005"
+    ],
+    "wave_2": [
+      "C-004 (needs C-002)",
+      "C-006 (needs C-002, C-003, C-005)"
+    ],
+    "wave_3": [
+      "C-007 (needs C-006)",
+      "C-008 (needs C-006, C-007)"
+    ]
+  }
 }
