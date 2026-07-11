@@ -698,64 +698,123 @@ fn build_spawn_env(
 /// any platform extension.
 const TELEGRAM_SIDECAR_STEM: &str = "librefang-sidecar-telegram";
 
-/// Platform-correct file name of the bundled Telegram sidecar binary
-/// (`.exe` suffix on Windows).
-fn telegram_sidecar_file_name() -> &'static str {
+/// Bare program name of the bundled Universal Agent Runtime sidecar binary.
+///
+/// UAR ships a purpose-built `uar-sidecar` target (distinct from its
+/// `universal-agent-runtime` server binary) that binds `127.0.0.1:0`, prints one
+/// `READY:{port}` line to stdout, and exits on stdin EOF.
+const UAR_SIDECAR_STEM: &str = "uar-sidecar";
+
+/// Bare program names of every sidecar binary LibreFang bundles beside its own
+/// executable. A command that is exactly one of these — with no path component —
+/// is resolved against the bundled locations rather than `PATH`.
+const BUNDLED_SIDECAR_STEMS: [&str; 2] = [TELEGRAM_SIDECAR_STEM, UAR_SIDECAR_STEM];
+
+/// Platform-correct file name for a bundled sidecar stem (`.exe` on Windows).
+fn bundled_sidecar_file_name(stem: &str) -> String {
     if cfg!(windows) {
-        "librefang-sidecar-telegram.exe"
+        format!("{stem}.exe")
     } else {
-        "librefang-sidecar-telegram"
+        stem.to_string()
     }
 }
 
-/// Resolve a sidecar channel's configured `command` to the bundled Rust
-/// Telegram sidecar binary when the operator left it implicit.
+/// The bundled locations searched for `stem`, in priority order.
 ///
-/// The binary ships inside the release tarballs (#5936) and lands in
-/// `~/.librefang/bin/` via `librefang update`, so the common case is a bare
-/// program name that the daemon can locate without a PATH entry. Resolution
-/// only kicks in when `command` is empty or the bare stem
-/// `librefang-sidecar-telegram` — an absolute / relative path, or any other
-/// program (`python3`, `uv`, …), is returned unchanged so explicit operator
-/// intent always wins.
+/// Shared by the resolver and by the spawn-failure diagnostic so the paths we
+/// *report* can never drift from the paths we actually *searched*.
+fn bundled_search_paths(stem: &str, home_dir: &Path) -> Vec<PathBuf> {
+    let file_name = bundled_sidecar_file_name(stem);
+    let mut paths = Vec::with_capacity(2);
+    // 1. Next to the daemon's own executable — binaries shipped side by side in
+    //    the same tarball or copied into the same image directory land here.
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        paths.push(dir.join(&file_name));
+    }
+    // 2. `<home_dir>/bin/` — the `librefang update` install location.
+    paths.push(home_dir.join("bin").join(&file_name));
+    paths
+}
+
+/// The bundled stem a `command` implicitly refers to, if any.
+///
+/// Only the implicit forms are eligible: an empty command, or a bare stem with no
+/// path component. An absolute / relative path, or any other program (`python3`,
+/// `uv`, …), is **not** eligible — explicit operator intent always wins.
+///
+/// An empty command means the Telegram sidecar, preserving the historical
+/// behaviour from #5936 (it predates any other bundled binary, and its config
+/// leaves `command` unset).
+fn implicit_bundled_stem(command: &str) -> Option<&'static str> {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return Some(TELEGRAM_SIDECAR_STEM);
+    }
+    BUNDLED_SIDECAR_STEMS
+        .iter()
+        .find(|stem| **stem == trimmed)
+        .copied()
+}
+
+/// Resolve a sidecar's configured `command` to a bundled binary when the operator
+/// left it implicit.
+///
+/// Bundled binaries ship inside the release tarball and the container image, and
+/// land in `~/.librefang/bin/` via `librefang update`, so the common case is a bare
+/// program name the daemon can locate **without a PATH entry**.
 ///
 /// Search order, first hit wins:
-///   1. the daemon's own executable directory (binaries shipped side by side
-///      in the same tarball land here);
-///   2. `<home_dir>/bin/` (the `librefang update` install location);
+///   1. the daemon's own executable directory;
+///   2. `<home_dir>/bin/`;
 ///   3. the original command, leaving PATH lookup to `Command::new` (the
-///      historical behaviour).
+///      historical behaviour, kept so an operator who placed the binary on PATH
+///      manually still works).
+///
+/// When step 3 is reached for an *eligible* stem the binary is missing from every
+/// bundled location, and `Command::new` will fail with a bare `No such file or
+/// directory (os error 2)`. `bundled_binary_hint` turns that into an actionable
+/// message; see its call site in `spawn_once`.
 fn resolve_sidecar_command(command: &str, home_dir: &Path) -> String {
-    let trimmed = command.trim();
-
-    // Only the implicit forms are eligible: empty, or the bare stem with no
-    // path component. Anything path-shaped or any other program is explicit.
-    let is_bare_stem = trimmed == TELEGRAM_SIDECAR_STEM;
-    let is_implicit = trimmed.is_empty() || is_bare_stem;
-    if !is_implicit {
+    let Some(stem) = implicit_bundled_stem(command) else {
         return command.to_string();
-    }
+    };
 
-    let file_name = telegram_sidecar_file_name();
-
-    let exe_dir_candidate = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(file_name)));
-    if let Some(path) = exe_dir_candidate {
-        if path.is_file() {
-            return path.to_string_lossy().into_owned();
+    for candidate in bundled_search_paths(stem, home_dir) {
+        if candidate.is_file() {
+            return candidate.to_string_lossy().into_owned();
         }
     }
 
-    let home_candidate = home_dir.join("bin").join(file_name);
-    if home_candidate.is_file() {
-        return home_candidate.to_string_lossy().into_owned();
-    }
-
-    // No bundled binary found — fall back to the original command so PATH
-    // lookup still works for an operator who placed it there manually. An
-    // empty command stays empty and surfaces the existing spawn error.
+    // No bundled binary found — fall back to the original command so PATH lookup
+    // still works. An empty command stays empty and surfaces the spawn error.
     command.to_string()
+}
+
+/// Actionable diagnostic for a spawn that failed on an *implicit* bundled binary.
+///
+/// Returns `None` when the command was explicit (a path, or a foreign program) —
+/// there is nothing useful we can add to the OS error in that case.
+///
+/// This exists because the bare failure is actively misleading: an operator who
+/// sees `No such file or directory (os error 2)` concludes their `PATH` is wrong
+/// and starts editing it, when in fact the binary was never installed and `PATH`
+/// is not consulted first at all. Naming the locations we searched points them at
+/// the real problem.
+fn bundled_binary_hint(command: &str, home_dir: &Path) -> Option<String> {
+    let stem = implicit_bundled_stem(command)?;
+    let searched = bundled_search_paths(stem, home_dir)
+        .iter()
+        .map(|p| format!("\n  - {}", p.display()))
+        .collect::<String>();
+    Some(format!(
+        "`{stem}` was not found in any bundled location. Searched:{searched}\n  - $PATH\n\
+         It ships beside the `librefang` executable in the release tarball and the container \
+         image, and `librefang update` installs it into `<home>/bin/`. If you are running a \
+         custom build, set the sidecar's `command` to an explicit path."
+    ))
 }
 
 /// Cheap, dependency-free jitter: 0..=20% of `base`, seeded off the
@@ -820,10 +879,18 @@ async fn spawn_once(
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     let mut child = cmd.spawn().map_err(|e| {
-        format!(
+        let base = format!(
             "Failed to spawn sidecar '{}' ({}): {e}",
             ctx.name, ctx.command
-        )
+        );
+        // `ctx.command` still holds the bare stem when `resolve_sidecar_command`
+        // found no bundled binary and fell through to PATH. In that case the OS
+        // error alone ("No such file or directory") sends operators off editing
+        // PATH; append the locations we actually searched.
+        match bundled_binary_hint(&ctx.command, &ctx.home_dir) {
+            Some(hint) => format!("{base}\n{hint}"),
+            None => base,
+        }
     })?;
 
     let child_stdin = child
@@ -2029,7 +2096,7 @@ mod tests {
         let home = tempfile::tempdir().expect("tempdir");
         let bin_dir = home.path().join("bin");
         std::fs::create_dir_all(&bin_dir).expect("mkdir bin");
-        let bundled = bin_dir.join(telegram_sidecar_file_name());
+        let bundled = bin_dir.join(bundled_sidecar_file_name(TELEGRAM_SIDECAR_STEM));
         std::fs::write(&bundled, b"#!/bin/sh\n").expect("write bundled binary");
 
         // The bare stem resolves to the bundled binary under <home>/bin.
@@ -2063,7 +2130,11 @@ mod tests {
         let home = tempfile::tempdir().expect("tempdir");
         let bin_dir = home.path().join("bin");
         std::fs::create_dir_all(&bin_dir).expect("mkdir bin");
-        std::fs::write(bin_dir.join(telegram_sidecar_file_name()), b"x").expect("write");
+        std::fs::write(
+            bin_dir.join(bundled_sidecar_file_name(TELEGRAM_SIDECAR_STEM)),
+            b"x",
+        )
+        .expect("write");
 
         for explicit in [
             "python3",
@@ -2076,6 +2147,75 @@ mod tests {
                 resolve_sidecar_command(explicit, home.path()),
                 explicit,
                 "explicit command must pass through: {explicit}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_sidecar_command_resolves_the_uar_sidecar_stem() {
+        // The UAR sidecar is bundled exactly like the Telegram one, and must go
+        // through the same current_exe() -> <home>/bin -> PATH search. Before this
+        // was generalized, `uar-sidecar` fell straight through to a bare PATH
+        // lookup — the root cause of the "UAR cannot be found in PATH" report.
+        let home = tempfile::tempdir().expect("tempdir");
+        let bin_dir = home.path().join("bin");
+        std::fs::create_dir_all(&bin_dir).expect("mkdir bin");
+        let bundled = bin_dir.join(bundled_sidecar_file_name(UAR_SIDECAR_STEM));
+        std::fs::write(&bundled, b"#!/bin/sh\n").expect("write bundled binary");
+
+        assert_eq!(
+            resolve_sidecar_command(UAR_SIDECAR_STEM, home.path()),
+            bundled.to_string_lossy(),
+            "the bare `uar-sidecar` stem must resolve to the bundled binary"
+        );
+    }
+
+    #[test]
+    fn bundled_binary_hint_names_every_searched_path_for_a_missing_binary() {
+        // THE regression test for the reported bug. With no binary installed
+        // anywhere, spawning `uar-sidecar` used to surface only the OS error
+        // ("No such file or directory (os error 2)"), which sends operators off
+        // editing PATH when the binary was simply never shipped. The diagnostic
+        // must name every location searched.
+        //
+        // Deliberately resolves against a nonexistent temp path rather than
+        // relying on any host path existing, so this is platform-independent
+        // (see #5716).
+        let home = tempfile::tempdir().expect("tempdir");
+        let hint = bundled_binary_hint(UAR_SIDECAR_STEM, home.path())
+            .expect("an implicit bundled stem must produce a hint");
+
+        assert!(
+            hint.contains(UAR_SIDECAR_STEM),
+            "hint must name the binary: {hint}"
+        );
+        assert!(
+            hint.contains("$PATH"),
+            "hint must disclose that PATH was the last resort: {hint}"
+        );
+        for searched in bundled_search_paths(UAR_SIDECAR_STEM, home.path()) {
+            assert!(
+                hint.contains(&searched.display().to_string()),
+                "hint must name every searched path; missing {}: {hint}",
+                searched.display()
+            );
+        }
+    }
+
+    #[test]
+    fn bundled_binary_hint_is_absent_for_explicit_commands() {
+        // An explicit path or a foreign program is operator intent; we have
+        // nothing useful to add to the OS error, so we must not editorialize.
+        let home = tempfile::tempdir().expect("tempdir");
+        for explicit in [
+            "python3",
+            "uv",
+            "/usr/local/bin/uar-sidecar",
+            "./uar-sidecar",
+        ] {
+            assert!(
+                bundled_binary_hint(explicit, home.path()).is_none(),
+                "explicit command must not get a bundled-binary hint: {explicit}"
             );
         }
     }
