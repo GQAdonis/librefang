@@ -1,0 +1,34 @@
+{
+  "stage": "spec",
+  "phase": "phase-10-uar-sidecar-availability",
+  "completed_at": "2026-07-11",
+  "backend": "native-kbd",
+  "zeespec_verdict": "n/a (no .zeespec/ \u2014 gate inactive, opt-in)",
+  "changes_created": 8,
+  "artifacts": [
+    ".kbd-orchestrator/changes/C-001-uar-driver-unforce.md",
+    ".kbd-orchestrator/changes/C-002-uar-publish-sidecar-binary.md",
+    ".kbd-orchestrator/changes/C-003-generalize-bundled-binary-resolution.md",
+    ".kbd-orchestrator/changes/C-004-ship-uar-binary-in-image.md",
+    ".kbd-orchestrator/changes/C-005-uar-sidecar-config-surface.md",
+    ".kbd-orchestrator/changes/C-006-uar-sidecar-supervisor.md",
+    ".kbd-orchestrator/changes/C-007-uar-driver-http-client.md",
+    ".kbd-orchestrator/changes/C-008-web-console-uar-controls.md",
+    ".kbd-orchestrator/phases/phase-10-uar-sidecar-availability/tasks.json"
+  ],
+  "summary": "8 changes specced against the assessment's gaps, honouring the analyze verdict of ZERO new third-party dependencies (adopt UAR's published image; reuse librefang's own supervisor and reqwest/futures/tokio-stream stack). C-002 is a HARD BLOCKER in GQAdonis/universal-agent-runtime: the `uar-sidecar` binary is never built (0 refs in release.yml; Dockerfile:225 builds only --bin universal-agent-runtime), so nothing exists to COPY, resolve, or spawn. C-001 and C-003 are independently shippable and deliver real value before any UAR change lands: C-001 removes the surrealdb lockstep pin and UAR's whole transitive tree from the default build, and C-003 fixes the reported bug's actual mechanism (resolve_sidecar_command is hardcoded to the Telegram stem, so UAR falls through to a bare PATH lookup) plus replaces the opaque `os error 2` with an error naming every path searched.",
+  "critical_path": [
+    "C-002",
+    "C-004",
+    "C-006",
+    "C-007",
+    "C-008"
+  ],
+  "parallelizable_now": [
+    "C-001",
+    "C-002",
+    "C-003",
+    "C-005"
+  ],
+  "next_stage": "plan"
+}
