@@ -265,6 +265,12 @@
       "owner": "integration-coverage-matrix"
     },
     {
+      "path": "/api/agents/{id}/session/context",
+      "status": "covered",
+      "scenario": "GET returns the session's used/max token counts; unknown agent id 404s.",
+      "proof": "crates/librefang-api/tests/agents_routes_integration.rs::context_endpoint_returns_used_and_max_tokens"
+    },
+    {
       "path": "/api/agents/{id}/session/reboot",
       "status": "exempt",
       "reason": "deferred-product-surface",
@@ -695,6 +701,12 @@
       "status": "exempt",
       "reason": "requires external provider, credential, browser, or long-running scheduler fixture",
       "owner": "integration-coverage-matrix"
+    },
+    {
+      "path": "/api/channels/sidecar/{name}",
+      "status": "covered",
+      "scenario": "DELETE removes a configured sidecar channel; a repeat delete 404s.",
+      "proof": "crates/librefang-api/tests/channel_remove_test.rs::delete_removes_configured_sidecar_then_404s_on_repeat"
     },
     {
       "path": "/api/channels/sidecar/{name}/configure",
@@ -1925,6 +1937,12 @@
       "status": "exempt",
       "reason": "workflow endpoint; dedicated integration test pending",
       "owner": "integration-coverage-matrix"
+    },
+    {
+      "path": "/api/workflows/runs/{run_id}/rerun",
+      "status": "covered",
+      "scenario": "POST starts a new run with the original run's input; an unknown run_id 404s.",
+      "proof": "crates/librefang-api/tests/workflow_lifecycle_test.rs::rerun_workflow_run_starts_new_run_with_same_input"
     },
     {
       "path": "/api/workflows/runs/{run_id}/resume",
