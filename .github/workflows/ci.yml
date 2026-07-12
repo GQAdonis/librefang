@@ -422,8 +422,19 @@ jobs:
             exit 1
           fi
           echo "ok: UAR absent from the default graph"
+      - name: Install protoc
+        # UAR's build.rs unconditionally runs `tonic_prost_build::compile_protos`
+        # on proto/a2a.proto (build.rs:24) — there is no SKIP_* escape hatch for it,
+        # unlike the catalog / frontend / model steps. prost-build shells out to
+        # `protoc`, which is NOT preinstalled on ubuntu-latest, so the lane died with
+        # "Could not find `protoc`". It compiles locally only because dev machines
+        # tend to have it.
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Compile-check the uar-driver path
         env:
+          # These three are honoured by UAR's build.rs and keep the network fetch
+          # (models.dev), the pnpm frontend build, and the model download out of CI.
+          # `protoc` above covers the one step they cannot skip.
           SKIP_FRONTEND_BUILD: "1"
           SKIP_MODEL_BUILD: "1"
           SKIP_CATALOG_BUILD: "1"
