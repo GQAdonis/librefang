@@ -5880,12 +5880,103 @@
           "description": "When `true`, UAR reuses the same `RemoteSurrealConfig` as `KernelConfig.storage` (with `namespace = \"uar\"` so isolation is preserved). Defaults to `false`.",
           "type": "boolean"
         },
+        "sidecar": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarSidecarConfig"
+            }
+          ],
+          "default": {
+            "command": "",
+            "enabled": false,
+            "endpoint": null,
+            "ready_timeout_secs": 30,
+            "restart": true,
+            "restart_initial_backoff_ms": 500,
+            "restart_max_backoff_ms": 30000,
+            "restart_max_retries": 10,
+            "restart_reset_after_secs": 60,
+            "shutdown_grace_secs": 5
+          },
+          "description": "Supervision of UAR as an out-of-process sidecar (`[uar.sidecar]`).\n\nDeliberately a nested block rather than more fields on `UarConfig`: the fields above configure the UAR *LLM driver* (which provider to call, with which key), while these configure a *process* (whether to spawn it, how to restart it). Flattening the two invites exactly the confusion called out on [`Self::base_url`]."
+        },
         "surreal_data_dir": {
           "description": "Filesystem path for the embedded SurrealDB (RocksDB) data store.\n\nDefaults to `<kernel.data_dir>/uar-surreal`.  Set an explicit path when you want to place the UAR database on a separate volume.",
           "type": [
             "string",
             "null"
           ]
+        }
+      },
+      "type": "object"
+    },
+    "UarSidecarConfig": {
+      "description": "Supervision settings for UAR running as an out-of-process sidecar.\n\nUAR ships a purpose-built `uar-sidecar` binary that binds `127.0.0.1:0`, prints one `READY:{port}` line to stdout once its listener is bound, and exits cleanly on stdin EOF. When [`Self::enabled`] is set, the daemon spawns and supervises that binary; the driver then talks to it over loopback HTTP.\n\nField names deliberately mirror [`SidecarChannelConfig`] so operators learn one vocabulary for every supervised child process, not two.",
+      "properties": {
+        "command": {
+          "default": "",
+          "description": "Program to execute.\n\nEmpty (the default) or the bare stem `uar-sidecar` is *implicit*: the daemon resolves the bundled binary next to its own executable, then in `<home>/bin/`, and only then falls back to `PATH`. An absolute or relative path is *explicit* and is used verbatim — operator intent always wins.\n\nLeave this empty unless you are running a custom build. Pointing it at a binary that does not exist is the one way to reintroduce a `PATH` dependency.",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Spawn and supervise the UAR sidecar. Defaults to `false` — UAR is opt-in, matching the `uar-driver` cargo feature it pairs with.",
+          "type": "boolean"
+        },
+        "endpoint": {
+          "default": null,
+          "description": "Connect to an already-running UAR at this base URL instead of spawning one (e.g. `\"http://uar-svc.uar.svc.cluster.local:1906\"`).\n\n**Takes precedence over spawning.** When set, no child process is started and [`Self::command`] is ignored — the daemon health-checks the remote and uses it. This is how an existing standalone UAR deployment stays usable.\n\nNot to be confused with [`UarConfig::base_url`], which overrides the *LLM provider* endpoint passed through to liter-llm. This one addresses UAR itself.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready_timeout_secs": {
+          "default": 30,
+          "description": "How long to wait for the child's `READY:{port}` line before declaring the spawn failed. A child that never announces itself must not hang boot.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "restart": {
+          "default": true,
+          "description": "Restart the sidecar when it exits unexpectedly.",
+          "type": "boolean"
+        },
+        "restart_initial_backoff_ms": {
+          "default": 500,
+          "description": "Initial reconnect backoff, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "restart_max_backoff_ms": {
+          "default": 30000,
+          "description": "Ceiling for the exponential reconnect backoff, in milliseconds.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "restart_max_retries": {
+          "default": 10,
+          "description": "Give up after this many consecutive failed restarts. A crash-loop is an operator problem (bad key, bad config); retrying it forever hides that.",
+          "format": "uint32",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "restart_reset_after_secs": {
+          "default": 60,
+          "description": "Reset the consecutive-failure counter after the child has stayed up this long, so an occasional fault does not eventually exhaust the retry budget.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "shutdown_grace_secs": {
+          "default": 5,
+          "description": "Grace period after closing the child's stdin — UAR's documented shutdown signal, chosen because SIGTERM is unreliable on Windows — before escalating to a kill.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
         }
       },
       "type": "object"

@@ -192,6 +192,8 @@ classified differently — the row note spells out which is which.
 | Field | Class | Meaning |
 |---|---|---|
 | `memory` | R | Memory substrate config (restarts SQLite connections). |
+| `storage` | R | **BossFang.** SurrealDB storage backend. The pool / embedded RocksDB handle is opened once at boot and held for the process lifetime, so repointing it cannot be picked up in place. |
+| `uar` | R | **BossFang.** Universal Agent Runtime. The LLM-driver half (`api_key`, `model`, `base_url`, `surreal_data_dir`) is baked into the driver at construction; the `[uar.sidecar]` half supervises a **child process**, so toggling `enabled`, repointing `command`, or switching to an `endpoint` means spawning or killing a process — which the reload path does not do. |
 | `memory_wiki` | R | Memory wiki vault (constructed once at boot). |
 | `proactive_memory` | H | mem0-style proactive memory config — updated in place. Also pushes `duplicate_threshold` into the background `ConsolidationEngine` so the kernel-wide sweep and the per-agent on-demand consolidate stay in lockstep (audit findings #5839 H5). |
 | `auto_dream` | R | Background memory-consolidation config. |
