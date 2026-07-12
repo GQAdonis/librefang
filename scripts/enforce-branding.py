@@ -33,7 +33,31 @@ What it does:
      (LibreFangKernel, LibreFangError, etc.) are preserved by the same
      word-boundary regex \bLibreFang\b used in the docs prose pass.
 
-  Both modes are safe to run multiple times (idempotent).
+  4. Locale prose pass (i18n strings in crates/librefang-api/dashboard/src/locales/)
+     Scans *.json under crates/librefang-api/dashboard/src/locales/ (en, zh,
+     uk, ko, and any other translations) and restores two fork facts:
+
+     a. Product name "LibreFang" → "BossFang". Uses a separator-aware boundary
+        (LOCALE_NAME_RE) that excludes the token when it is glued to an
+        identifier separator — so internal identifiers, URLs, package names,
+        and the back-compat vendor prefix stay intact:
+          - lowercase paths / crates / headers: ~/.librefang/, librefang-api,
+            x-librefang-agent, @librefang/sdk, github.com/librefang,
+            application/vnd.librefang.* — never match (product name is PascalCase)
+          - PascalCase glued to a separator: LibreFang/, LibreFang-, LibreFang@,
+            LibreFang_, .LibreFang — excluded by the surrounding lookarounds
+          - sentence-ending "LibreFang." — STILL rewritten (a trailing '.' is
+            prose, not an identifier dot, so it is not in the trailing exclusion
+            set)
+
+     b. Storage substrate "SQLite" → "SurrealDB". BossFang defaults to SurrealDB
+        (embedded or server); upstream prose calls the default store SQLite.
+        The rewrite is suppressed on any line that declares a config-field key
+        whose name contains "sqlite" (fld_sqlite_path / desc_sqlite_path) — those
+        labels name the *retained* legacy backend field (`legacy_sqlite_path`),
+        which BossFang keeps as an opt-in, so they must keep saying SQLite.
+
+  All modes are safe to run multiple times (idempotent).
 
   --check mode performs the same scans without writing — exits 0 if
   everything is clean, exits 1 if any upstream token survives. Designed
@@ -54,6 +78,10 @@ Color tokens replaced → BossFang tokens:
 
 Prose tokens replaced:
   \bLibreFang\b  →  BossFang   (word-bounded; preserves LibreFangKernel etc.)
+
+Locale prose tokens replaced (crates/librefang-api/dashboard/src/locales/):
+  LibreFang  →  BossFang     (separator-aware; preserves ~/.librefang/ etc.)
+  SQLite     →  SurrealDB    (skips legacy *_sqlite_path field-label lines)
 
 NOT handled automatically (fix manually):
   - New components that render an SVG fang glyph inside a gradient box as
@@ -103,6 +131,14 @@ DASHBOARD_PROSE_SCAN_DIRS = [
 ]
 DASHBOARD_PROSE_EXTENSIONS = {".ts", ".tsx"}
 
+# Locale prose pass: i18n JSON catalogs in the dashboard SPA.
+# Catches the product name "LibreFang" inside help/onboarding prose strings
+# that upstream i18n merges keep reintroducing across all translations.
+LOCALE_SCAN_DIRS = [
+    REPO_ROOT / "crates/librefang-api/dashboard/src/locales",
+]
+LOCALE_EXTENSIONS = {".json"}
+
 # ── Color replacement table ───────────────────────────────────────────────────
 #
 # Order matters: longer / more-specific patterns must come first so that a
@@ -143,6 +179,81 @@ PROSE_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
 
 # Audit pattern for --check mode (no replacement, just detection).
 PROSE_AUDIT_PATTERNS: list[re.Pattern[str]] = [p for p, _ in PROSE_REPLACEMENTS]
+
+# ── Locale replacement table ──────────────────────────────────────────────────
+#
+# Two fork facts are restored in the locale catalogs, line by line (the JSON is
+# pretty-printed one key per line, which the key-aware SQLite rule relies on):
+#
+# 1. Product name. Locale JSON strings embed identifier-shaped references
+#    inline (paths like ~/.librefang/, headers like x-librefang-agent, the
+#    vnd.librefang.* media type). The product name is always PascalCase
+#    "LibreFang", and every one of those references is lowercase, so a
+#    PascalCase anchor already avoids them. The lookarounds add a second layer
+#    of defense against a PascalCase token glued to a separator (LibreFang/,
+#    LibreFang-, LibreFang@, .LibreFang):
+#
+#      (?<![\w./@-])  not preceded by a word char or  . / @ -
+#      (?![\w/@-])    not followed by a word char or  / @ -   (trailing '.' is
+#                     allowed so sentence-ending "LibreFang." is still rewritten)
+#
+# 2. Storage substrate. BossFang defaults to SurrealDB (embedded or server);
+#    upstream prose describes the default store as SQLite. The proper-noun
+#    "SQLite" is rewritten to "SurrealDB" in user-visible prose — EXCEPT on a
+#    line that declares a config-field key whose name contains "sqlite"
+#    (fld_sqlite_path / desc_sqlite_path). Those labels name the *retained*
+#    legacy backend field (`legacy_sqlite_path`, kept as an opt-in), so they
+#    must keep saying SQLite. Keying off the JSON key name (not a phrase) makes
+#    the skip language-independent — it holds for en / uk / zh / future locales.
+# The lookarounds are deliberately ASCII-scoped, NOT `\w`.
+#
+# In Python 3, `\w` on a `str` is Unicode-aware, so every Hangul / CJK / Cyrillic
+# letter counts as a word character. With `(?![\w/@-])` the token in a Korean
+# string like "LibreFang에 오신 것을 환영합니다" is followed by 에 — a `\w` char —
+# so the lookahead rejected the match and the product name survived untouched.
+# Korean is agglutinative: particles (에 / 이 / 은 / 의) attach directly to the noun
+# with no space, so this silently skipped 8 user-visible strings in ko.json, and
+# `--check` reported clean because it shares this pattern. (ko.json arrived with the
+# 2026-07-11 upstream merge, after this rule was written, so it was never exercised.)
+#
+# The exclusions only ever needed to protect ASCII constructs — identifiers glued in
+# PascalCase (LibreFangKernel), and path/separator forms (LibreFang/, .LibreFang,
+# LibreFang-). Scoping them to ASCII keeps that intact while letting any non-ASCII
+# script follow the token.
+LOCALE_NAME_RE = re.compile(r"(?<![A-Za-z0-9_./@-])LibreFang(?![A-Za-z0-9_/@-])")
+LOCALE_SQLITE_RE = re.compile(r"\bSQLite\b")
+LOCALE_SQLITE_REPL = "SurrealDB"
+
+# A JSON line that declares a key whose name contains "sqlite" — i.e. a legacy
+# backend field label. The SQLite→SurrealDB rewrite is suppressed on such lines.
+LOCALE_LEGACY_SQLITE_KEY_RE = re.compile(
+    r'"[A-Za-z0-9_]*sqlite[A-Za-z0-9_]*"\s*:', re.IGNORECASE
+)
+
+
+def replace_locale_content(content: str) -> str:
+    """Restore product name + storage substrate in locale JSON prose.
+
+    Line-oriented so the SQLite skip can key off the per-line JSON key name and
+    so the file's exact formatting (indentation, key order) is preserved.
+    """
+    out: list[str] = []
+    for line in content.split("\n"):
+        line = LOCALE_NAME_RE.sub("BossFang", line)
+        if not LOCALE_LEGACY_SQLITE_KEY_RE.search(line):
+            line = LOCALE_SQLITE_RE.sub(LOCALE_SQLITE_REPL, line)
+        out.append(line)
+    return "\n".join(out)
+
+
+def audit_locale_content(content: str) -> list[str]:
+    """Read-only scan mirroring replace_locale_content's skip logic."""
+    hits: list[str] = []
+    for line in content.split("\n"):
+        hits.extend(LOCALE_NAME_RE.findall(line))
+        if not LOCALE_LEGACY_SQLITE_KEY_RE.search(line) and LOCALE_SQLITE_RE.search(line):
+            hits.append("SQLite")
+    return sorted(set(hits))
 
 
 # ── Code-fence and inline-code awareness ──────────────────────────────────────
@@ -303,6 +414,28 @@ def audit_prose_file(path: Path) -> list[str]:
     return audit_prose_in_tsx(content)
 
 
+def enforce_locale_file(path: Path) -> bool:
+    """Apply locale prose replacements. Returns True if the file was modified."""
+    try:
+        original = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError):
+        return False
+
+    content = replace_locale_content(original)
+    if content == original:
+        return False
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
+def audit_locale_file(path: Path) -> list[str]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError):
+        return []
+    return audit_locale_content(content)
+
+
 def scan_dir(root: Path, extensions: set[str]) -> list[Path]:
     if not root.exists():
         return []
@@ -366,6 +499,24 @@ def main() -> int:
                     offending.append((f, hits))
             else:
                 if enforce_prose_file(f):
+                    changed.append(f)
+
+    # ── Pass 4: locale prose ──────────────────────────────────────────────────
+    for scan_root in LOCALE_SCAN_DIRS:
+        label = scan_root.relative_to(REPO_ROOT)
+        files = scan_dir(scan_root, LOCALE_EXTENSIONS)
+        if not files:
+            print(f"[enforce-branding] {label}: no files found — skipping")
+            continue
+        verb = "auditing" if check_mode else "scanning"
+        print(f"[enforce-branding] {verb} {label} (locale prose, {len(files)} files) …")
+        for f in files:
+            if check_mode:
+                hits = audit_locale_file(f)
+                if hits:
+                    offending.append((f, hits))
+            else:
+                if enforce_locale_file(f):
                     changed.append(f)
 
     if check_mode:
