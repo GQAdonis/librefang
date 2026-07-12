@@ -7,38 +7,38 @@
   "assessment_date": "2026-07-11",
   "verdict": "proceed-with-architecture-change",
   "changes_total": 8,
-  "changes_completed": 0,
+  "changes_completed": 4,
   "changes": {
     "C-001": {
-      "status": "PR OPEN (#108) \u2014 feature chain repaired; also unbreaks main (Docker Publish was red)",
+      "status": "DONE (merged #108 + follow-ups #111 golden, #115 protoc). Repaired the whole uar-driver feature chain \u2014 it was not merely force-enabled, it was BROKEN: librefang-cli never declared the feature the Dockerfile passes it. Now cli -> api -> kernel -> runtime -> llm-drivers, opt-in. Also fixed the extra_params API drift that was breaking the image build.",
       "spec": "changes/C-001-uar-driver-unforce.md"
     },
     "C-002": {
-      "status": "PR OPEN (GQAdonis/universal-agent-runtime#1) \u2014 uar-sidecar binary now built + shipped in image and tarball; cargo check --bin uar-sidecar clean",
+      "status": "DONE (merged GQAdonis/universal-agent-runtime#1). uar-sidecar is now built and shipped in both the container image and the release tarball. cargo build --release was ALREADY compiling it; packaging simply never copied it.",
       "spec": "changes/C-002-uar-publish-sidecar-binary.md"
     },
     "C-003": {
-      "status": "PR OPEN (#109) \u2014 bundled-binary resolution generalized; actionable multi-path error",
+      "status": "DONE (merged #109). resolve_sidecar_command generalized beyond the Telegram stem; a missing bundled binary now names every path searched instead of surfacing a bare os error 2.",
       "spec": "changes/C-003-generalize-bundled-binary-resolution.md"
     },
     "C-004": {
-      "status": "SPECCED",
+      "status": "IN PROGRESS \u2014 packaging blocker resolved, asset question being settled empirically. See c004_notes.",
       "spec": "changes/C-004-ship-uar-binary-in-image.md"
     },
     "C-005": {
-      "status": "SPECCED",
+      "status": "DONE (merged #112). [uar.sidecar] config block; also classified `storage` and `uar` as restart-required, fixing a pre-existing red drift guard.",
       "spec": "changes/C-005-uar-sidecar-config-surface.md"
     },
     "C-006": {
-      "status": "SPECCED",
+      "status": "PENDING \u2014 supervisor. Implementable against the FAKE contract-honouring sidecar without waiting on C-004.",
       "spec": "changes/C-006-uar-sidecar-supervisor.md"
     },
     "C-007": {
-      "status": "SPECCED",
+      "status": "PENDING \u2014 UarDriver becomes an HTTP + SSE client.",
       "spec": "changes/C-007-uar-driver-http-client.md"
     },
     "C-008": {
-      "status": "SPECCED",
+      "status": "PENDING \u2014 web console run/stop/restart/test controls.",
       "spec": "changes/C-008-web-console-uar-controls.md"
     }
   },
@@ -51,7 +51,7 @@
     "G-4 no bundled-binary resolution for UAR (generalize resolve_sidecar_command, sidecar.rs:728)"
   ],
   "research_doc": "docs/architecture/uar-runtime-integration-research.md",
-  "next_action": "/kbd-execute phase-10-uar-sidecar-availability",
+  "next_action": "Finish C-004 (asset test -> Dockerfile COPY + rev-pin bump), or start C-006 against the fake sidecar.",
   "analysis_complete": true,
   "analysis_date": "2026-07-11",
   "decisions": {
@@ -96,5 +96,7 @@
       "C-008 (needs C-006, C-007)"
     ]
   },
-  "execution_note": "3 of 8 changes implemented and in review (C-001 #108, C-002 UAR#1, C-003 #109); none merged yet, so changes_completed stays 0. C-002 was the phase's long pole and is now unblocked: UAR builds and ships `uar-sidecar` in both the container image and the release tarball. IMPORTANT for C-004: the binary is NOT self-contained \u2014 it calls AppConfig::load() + start_server_sidecar, so it resolves assets via UAR_STATIC_DIR / UAR_MODELS_DIR / UAR_BUILTIN_SKILLS_DIR. librefang's image must COPY /opt/uar/{static,skills,models} AND set those env vars, not just the executable. Also: UAR's release-tarball job stays continue-on-error with a self-described stale bun/Node18 toolchain, so the CONTAINER IMAGE is the dependable source for C-004; desktop/local support must not be promised off that tarball until it is seen to build. C-004 must also bump librefang's UAR rev pin (currently 0cd664ce) to the merge commit of UAR#1."
+  "execution_note": "3 of 8 changes implemented and in review (C-001 #108, C-002 UAR#1, C-003 #109); none merged yet, so changes_completed stays 0. C-002 was the phase's long pole and is now unblocked: UAR builds and ships `uar-sidecar` in both the container image and the release tarball. IMPORTANT for C-004: the binary is NOT self-contained \u2014 it calls AppConfig::load() + start_server_sidecar, so it resolves assets via UAR_STATIC_DIR / UAR_MODELS_DIR / UAR_BUILTIN_SKILLS_DIR. librefang's image must COPY /opt/uar/{static,skills,models} AND set those env vars, not just the executable. Also: UAR's release-tarball job stays continue-on-error with a self-described stale bun/Node18 toolchain, so the CONTAINER IMAGE is the dependable source for C-004; desktop/local support must not be promised off that tarball until it is seen to build. C-004 must also bump librefang's UAR rev pin (currently 0cd664ce) to the merge commit of UAR#1.",
+  "c004_notes": "BLOCKER FOUND: C-004 assumed it could `COPY --from=<uar-image>`, but no pullable image contained the binary. build-image.yml pushes to us-docker.pkg.dev (GCP Artifact Registry) which is PRIVATE and needs Workload Identity Federation to pull \u2014 unusable as a COPY --from source, since BuildKit would need GCP credentials on every dev machine and CI runner. The public GHCR v1.0.0 image predates the uar-sidecar change. RESOLVED by GQAdonis/universal-agent-runtime#3, which adds a public GHCR publish (same Dockerfile, same contents; only the destination registry differs), triggered on push to sync-gqadonis-* so a pullable image stays in lockstep with the rev librefang pins. It also self-verifies that /usr/local/bin/uar-sidecar is executable in the image it just pushed. OPEN: the asset requirement. start_server_sidecar is a one-line passthrough to start_server (server.rs:1179-1181), so the sidecar mounts the same ServeDir and resolves UAR_MODELS_DIR / skills identically to the full server. Whether /opt/uar/{static,skills,models} are load-bearing is being determined EMPIRICALLY (build the binary, run it with the dirs absent, observe) rather than guessed \u2014 an image that boots and then fails on first request is worse than one that does not ship. REMAINING for C-004: bump the UAR rev pin 0cd664ce -> 87c95c8 in librefang-llm-drivers/Cargo.toml; COPY the binary (+ whichever assets the test proves necessary) into the Dockerfile and set the UAR_*_DIR env vars; ship it in the release tarball; add a CI guard asserting it is present in the image.",
+  "merge_fallout_fixed": "The 2026-07-11 upstream merge (#104) left THREE tests red on main, all traceable to it, all now fixed: #111 (golden fixture \u2014 removing UAR from the default graph dropped serde_json/preserve_order, flipping Value from IndexMap to BTreeMap and re-sorting every key; 6,759 lines, zero semantic change), #112 (every_config_field_is_reload_classified \u2014 `storage` and `uar` were never classified), and #116 (openapi coverage matrix \u2014 3 new upstream routes never mapped). Plus #115: the uar-driver CI lane added in #108 needed protoc, which dev machines have and GitHub runners do not."
 }
