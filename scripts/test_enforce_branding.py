@@ -198,6 +198,203 @@ class DashboardProseTests(unittest.TestCase):
         self.assertEqual(once, 'const x = "BossFang mobile app";\n')
 
 
+class LocaleProseTests(unittest.TestCase):
+    """Tests for the Pass 4 locale prose scope.
+
+    Locale .json files use LOCALE_NAME_RE — a separator-aware boundary that
+    flips the PascalCase product name in i18n prose while leaving lowercase
+    identifiers, URLs, package names, and the vnd.librefang.* media type
+    untouched.
+    """
+
+    @staticmethod
+    def _flip(text: str) -> str:
+        return eb.LOCALE_NAME_RE.sub("BossFang", text)
+
+    def test_product_name_in_prose_flips(self) -> None:
+        before = '"help": "Agents this LibreFang instance runs."'
+        after = '"help": "Agents this BossFang instance runs."'
+        self.assertEqual(self._flip(before), after)
+
+    def test_sentence_ending_period_flips(self) -> None:
+        # A trailing '.' is prose punctuation, not an identifier dot.
+        self.assertEqual(self._flip("point at this LibreFang."), "point at this BossFang.")
+        self.assertEqual(self._flip('cap on LibreFang.\\n bullet'), 'cap on BossFang.\\n bullet')
+
+    def test_lowercase_paths_and_crates_preserved(self) -> None:
+        # Product name is PascalCase; every identifier-shaped reference is
+        # lowercase, so the PascalCase anchor never touches them.
+        for text in (
+            "SQLite in `~/.librefang/`. Backups too.",
+            "resolved from ~/.librefang/plugins/<name>",
+            "Emit x-librefang-agent/session headers",
+            "the librefang-api crate",
+            "import from @librefang/sdk",
+            "see github.com/librefang for issues",
+            "media type application/vnd.librefang.agent+json",
+        ):
+            self.assertEqual(self._flip(text), text)
+
+    def test_pascalcase_glued_to_separator_preserved(self) -> None:
+        # Defense-in-depth: a PascalCase token fused to an identifier
+        # separator is NOT a standalone product-name reference.
+        for text in (
+            "LibreFang/agent-os repo",
+            "LibreFang-mobile package",
+            "the LibreFang_SDK symbol",
+            "vnd.LibreFang.agent media type",
+        ):
+            self.assertEqual(self._flip(text), text)
+
+    def test_layer_internal_struct_names_preserved(self) -> None:
+        # A trailing word char (the K / E) keeps the lookahead from matching,
+        # so LibreFangKernel / LibreFangError are left intact.
+        text = "Boots via LibreFangKernel; raises LibreFangError."
+        self.assertEqual(self._flip(text), text)
+
+    def test_locale_idempotent(self) -> None:
+        once = self._flip("Open the LibreFang mobile app.")
+        twice = self._flip(once)
+        self.assertEqual(once, twice)
+        self.assertEqual(once, "Open the BossFang mobile app.")
+
+    def test_agglutinative_particles_do_not_block_the_match(self) -> None:
+        # Korean particles attach directly to the noun with no space. The rule
+        # originally used `(?![\w/@-])`, and Python's `\w` is Unicode-aware, so a
+        # trailing Hangul char looked like a word character and rejected the match.
+        # That silently left 8 user-visible strings in ko.json saying "LibreFang"
+        # while --check reported clean. Only ASCII may block the boundary.
+        self.assertEqual(
+            self._flip("LibreFang에 오신 것을 환영합니다"),
+            "BossFang에 오신 것을 환영합니다",
+        )
+        self.assertEqual(self._flip("LibreFang이 준비되었습니다"), "BossFang이 준비되었습니다")
+        self.assertEqual(self._flip("LibreFang은 이 ID를"), "BossFang은 이 ID를")
+
+    def test_non_ascii_scripts_generally(self) -> None:
+        # The same class of bug would hit any script whose characters are `\w`:
+        # CJK and Cyrillic included.
+        self.assertEqual(self._flip("LibreFang的模型目录"), "BossFang的模型目录")
+        self.assertEqual(self._flip("LibreFangу"), "BossFangу")
+
+    def test_ascii_identifiers_still_preserved_after_the_fix(self) -> None:
+        # The ASCII-scoped lookarounds must still protect Layer-Internal names and
+        # path/separator forms — that was the whole point of the boundary.
+        for intact in [
+            "Boots via LibreFangKernel; raises LibreFangError.",
+            "See LibreFang/docs and .LibreFang and LibreFang-beta and LibreFang_x",
+        ]:
+            self.assertEqual(self._flip(intact), intact)
+
+    def test_enforce_and_audit_locale_file(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = Path(tmpdir) / "en.json"
+            f.write_text(
+                json.dumps(
+                    {
+                        "help": "This LibreFang instance lives in ~/.librefang/.",
+                        "dev": "Open the LibreFang mobile app.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            # Audit flags the prose hits before the fix.
+            self.assertEqual(eb.audit_locale_file(f), ["LibreFang"])
+
+            # Enforce flips the product name, leaves ~/.librefang/ path intact.
+            self.assertTrue(eb.enforce_locale_file(f))
+            data = json.loads(f.read_text(encoding="utf-8"))
+            self.assertIn("This BossFang instance lives in ~/.librefang/.", data["help"])
+            self.assertEqual(data["dev"], "Open the BossFang mobile app.")
+
+            # Idempotent: a second pass changes nothing and audit is clean.
+            self.assertFalse(eb.enforce_locale_file(f))
+            self.assertEqual(eb.audit_locale_file(f), [])
+
+
+class LocaleStorageTests(unittest.TestCase):
+    """Tests for the Pass 4 storage-substrate rewrite (SQLite -> SurrealDB).
+
+    BossFang defaults to SurrealDB; upstream prose calls the default store
+    SQLite. replace_locale_content() flips the proper-noun in user-visible
+    prose but skips any line that declares a *sqlite* config-field key — those
+    labels name the retained legacy `legacy_sqlite_path` backend field.
+    """
+
+    def test_generic_storage_prose_flips(self) -> None:
+        before = '    "help": "Storage is SQLite in `~/.librefang/`. Backups too.",'
+        after = '    "help": "Storage is SurrealDB in `~/.librefang/`. Backups too.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_sqlite_under_non_sqlite_key_flips(self) -> None:
+        before = '    "budget_help": "Spend totals are persisted in SQLite; kept for audit.",'
+        after = '    "budget_help": "Spend totals are persisted in SurrealDB; kept for audit.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_legacy_field_label_line_preserved(self) -> None:
+        # Line declares a *sqlite* key — the legacy backend field label. The
+        # SQLite token in its value must survive untouched.
+        for line in (
+            '    "fld_sqlite_path": "SQLite Path",',
+            '    "desc_sqlite_path": "Path to the SQLite database file for memory storage",',
+            '    "fld_sqlite_path": "SQLite 路径",',  # zh — skip is key-based, language-independent
+            '    "desc_sqlite_path": "Шлях до файлу бази даних SQLite",',  # uk
+        ):
+            self.assertEqual(eb.replace_locale_content(line), line)
+
+    def test_product_name_and_sqlite_on_same_line(self) -> None:
+        before = '    "x": "This LibreFang instance stores in SQLite.",'
+        after = '    "x": "This BossFang instance stores in SurrealDB.",'
+        self.assertEqual(eb.replace_locale_content(before), after)
+
+    def test_storage_idempotent(self) -> None:
+        once = eb.replace_locale_content('"k": "data lives in SQLite."')
+        twice = eb.replace_locale_content(once)
+        self.assertEqual(once, twice)
+        self.assertEqual(once, '"k": "data lives in SurrealDB."')
+
+    def test_audit_flags_generic_sqlite_but_not_legacy_label(self) -> None:
+        content = (
+            '    "help": "Storage is SQLite here.",\n'
+            '    "fld_sqlite_path": "SQLite Path",\n'
+        )
+        # Only the generic prose SQLite is flagged; the legacy-key line is skipped.
+        self.assertEqual(eb.audit_locale_content(content), ["SQLite"])
+
+    def test_enforce_locale_file_preserves_legacy_label(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f = Path(tmpdir) / "en.json"
+            # indent=2 → one key per line, mirroring the real catalog format
+            # the key-aware skip relies on.
+            f.write_text(
+                json.dumps(
+                    {
+                        "memory": {"help": "Storage is SQLite in ~/.librefang/."},
+                        "config": {"fld_sqlite_path": "SQLite Path"},
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(eb.audit_locale_file(f), ["SQLite"])  # only the generic one
+            self.assertTrue(eb.enforce_locale_file(f))
+
+            data = json.loads(f.read_text(encoding="utf-8"))
+            self.assertEqual(data["memory"]["help"], "Storage is SurrealDB in ~/.librefang/.")
+            self.assertEqual(data["config"]["fld_sqlite_path"], "SQLite Path")  # legacy intact
+
+            self.assertFalse(eb.enforce_locale_file(f))  # idempotent
+            self.assertEqual(eb.audit_locale_file(f), [])
+
+
 class FileLevelTests(unittest.TestCase):
     def test_enforce_color_file_does_not_touch_docs_prose(self) -> None:
         # Use a tempdir to confirm the color pass does NOT scan docs/.
