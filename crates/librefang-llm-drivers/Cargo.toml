@@ -43,7 +43,24 @@ uar-driver = ["dep:universal-agent-runtime"]
 #   This SSH-submodule fragility is itself another reason to migrate UAR to a
 #   supervised SIDECAR (a prebuilt binary sidesteps the whole submodule fetch).
 #   See docs/architecture/uar-sidecar-assessment.md.
-universal-agent-runtime = { git = "https://github.com/GQAdonis/universal-agent-runtime.git", rev = "0cd664ce52a19556ae273f231d3e0e3578aba40a", optional = true, default-features = false, features = ["surreal-backend"] }
+# * 2026-07-12: bumped 0cd664ce → fb2e0a8c, same branch, three commits ahead: the
+#   `uar-sidecar` binary target is now built and shipped in UAR's image + release
+#   tarball, and a public GHCR publish workflow was added so that image is
+#   pullable without GCP credentials (the operator-managed image lives in a
+#   private GCP Artifact Registry). The first attempt at this bump (127e0632)
+#   pinned a commit whose GHCR publish had never actually succeeded — its
+#   `.gitmodules` inherited `update = none` on the frontend and skill-system
+#   submodules from the older `sync-gqadonis-745b4c1` pattern, which is fine for
+#   Cargo (never touches submodules) but makes `actions/checkout`'s
+#   `submodules: recursive` skip them, so the image build's own frontend `pnpm
+#   install` failed on a missing workspace package. fb2e0a8c fixes that; its
+#   GHCR publish run completed successfully and its self-check confirmed
+#   `uar-sidecar` present and executable in the pushed image. This bump does not
+#   change this dependency's own build — `uar-driver` still links UAR as an
+#   in-process library — but it moves the pin onto the commit whose GHCR image
+#   `Dockerfile` (this repo's, not UAR's) `COPY --from=` targets for the
+#   phase-10 sidecar migration.
+universal-agent-runtime = { git = "https://github.com/GQAdonis/universal-agent-runtime.git", rev = "fb2e0a8ce07c904755dc06aa4ce7aa8df605002e", optional = true, default-features = false, features = ["surreal-backend"] }
 
 librefang-types = { path = "../librefang-types" }
 librefang-llm-driver = { path = "../librefang-llm-driver" }

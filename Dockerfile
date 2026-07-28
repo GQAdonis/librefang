@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# UAR sidecar source image (phase-10 UAR-as-sidecar migration). Pinned to the
+# commit that matches crates/librefang-llm-drivers/Cargo.toml's `rev` for the
+# in-process `uar-driver` dependency, so the sidecar binary and the (optional)
+# in-process library always agree on which UAR revision is running. Bump both
+# together. Published by GQAdonis/universal-agent-runtime's publish-ghcr.yml —
+# GHCR because it is pullable with no credentials, unlike the operator's private
+# GCP Artifact Registry image.
+ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:fb2e0a8ce07c904755dc06aa4ce7aa8df605002e
+FROM ${UAR_IMAGE} AS uar-sidecar-src
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1 — Dashboard builder (Node.js 24 LTS)
 # Updated from Node 20 to Node 24 (Active LTS as of 2026-05).
@@ -304,6 +315,31 @@ RUN addgroup --system --gid 1001 librefang && \
 
 COPY --from=builder /usr/local/bin/librefang /usr/local/bin/
 COPY --from=builder /build/packages /opt/librefang/packages
+
+# ── UAR sidecar (phase-10 UAR-as-sidecar migration) ──────────────────────────
+# The `uar-sidecar` binary lands in the SAME directory as `librefang` — that is
+# what makes `resolve_sidecar_command`'s std::env::current_exe() search (step 1,
+# crates/librefang-channels/src/sidecar.rs) find it without any PATH entry.
+COPY --from=uar-sidecar-src /usr/local/bin/uar-sidecar /usr/local/bin/uar-sidecar
+# Runtime assets uar-sidecar resolves via UAR_MODELS_DIR / UAR_STATIC_DIR /
+# UAR_BUILTIN_SKILLS_DIR — see the env block below. It is NOT self-contained
+# without them, but the requirement is not uniform, and each was verified
+# empirically (2026-07-12) rather than assumed, by running the binary with every
+# asset dir pointed at a nonexistent path and observing /healthz + /readyz:
+#   - models (33MB, embedding assets for VectorMatcher / semantic skill
+#     matching): missing degrades to a logged ERROR ("Failed to initialize
+#     VectorMatcher: ... not found") but the process still boots and serves.
+#     Copied anyway — cheap, and it is a real feature, not a nice-to-have log
+#     line.
+#   - static (20K, UAR's own Leptos/HTMX web UI): NOT copied. BossFang has its
+#     own dashboard; shipping a second, unused UI surface serves no purpose and
+#     is pure image-size and attack-surface cost for a component that is meant
+#     to be reached only over loopback by the librefang driver.
+#   - skills/builtin: NOT copied. Same graceful-degradation pattern observed for
+#     models/static — a missing dir does not block boot or health. Revisit if
+#     C-006/C-007 usage shows the built-in skill library is actually needed for
+#     librefang's completion path.
+COPY --from=uar-sidecar-src /opt/uar/models /opt/uar/models
 # wasmtime C-API runtime libs + headers — staged by the builder stage above.
 # Path 1 from the phase-4 plan: ship the shared lib + header so a future
 # plugin host can dlopen wasmtime, but DO NOT ship the wasmtime CLI or any
@@ -319,6 +355,11 @@ RUN usermod -s /sbin/nologin librefang && \
 
 EXPOSE 4545
 ENV LIBREFANG_HOME=/data
+# UAR sidecar assets (see the COPY block above). Set unconditionally — the
+# sidecar is off by default ([uar.sidecar] enabled = false, C-005) and these
+# vars sit unused until an operator opts in; no different from LIBREFANG_HOME
+# above. C-006's supervisor passes this into the spawned child's environment.
+ENV UAR_MODELS_DIR=/opt/uar/models
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD curl -fsS http://127.0.0.1:${PORT:-4545}/api/health || exit 1
 # docker-entrypoint.sh runs as root for bind-mount chown/init, then gosu drops
