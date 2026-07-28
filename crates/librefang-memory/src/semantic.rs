@@ -23,6 +23,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, warn};
 
+/// Upper bound on how many candidate rows the in-process (SQLite) semantic
+/// recall scans and cosine re-ranks when a query embedding is supplied.
+///
+/// The candidate SELECT for the embedding path is ordered by a
+/// similarity-neutral key (`created_at`), NOT by recency, so the true nearest
+/// neighbor is never excluded just because it was last accessed long ago (see
+/// the `fetch_limit` / `ORDER BY` logic in `recall_impl`). This cap only bounds
+/// the brute-force scan for very large stores; deployments that exceed it
+/// should attach an external `VectorStore` backend.
+const MAX_BRUTEFORCE_CANDIDATES: usize = 5000;
+
 /// Semantic store backed by SQLite with optional vector search.
 ///
 /// When a [`VectorStore`] backend is provided, vector similarity search in
@@ -172,6 +183,29 @@ impl SemanticStore {
             ],
         )
         .map_err(LibreFangError::memory)?;
+
+        // Release the pooled connection before the (potentially blocking)
+        // external vector-store write so a single-connection pool is never
+        // held across it.
+        drop(conn);
+
+        // Mirror the write into an external vector backend when one is attached
+        // (config.toml: vector_backend = "http"). The default SQLite path
+        // leaves vector_store = None, so this is a no-op there. Without it the
+        // external store is write-blind: every embedding recall against it
+        // hydrates zero ids and silently returns empty. Uses the same
+        // async->sync bridge as recall_via_vector_store.
+        if let (Some(vs), Some(emb)) = (&self.vector_store, embedding) {
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(vs.insert(
+                    &id.0.to_string(),
+                    emb,
+                    content,
+                    metadata.clone(),
+                ))
+            })?;
+        }
+
         Ok(id)
     }
 
@@ -242,8 +276,13 @@ impl SemanticStore {
 
         // Build SQL: fetch candidates (broader than limit for vector re-ranking)
         let fetch_limit = if query_embedding.is_some() {
-            // Fetch more candidates for vector search re-ranking
-            (limit * 10).max(100)
+            // Cosine re-ranking (below) decides final relevance, so the
+            // candidate set must NOT be pre-filtered by recency — an old,
+            // rarely-accessed memory can still be the nearest neighbor. Scan a
+            // large, similarity-neutral window bounded by
+            // MAX_BRUTEFORCE_CANDIDATES rather than the 100 most-recently
+            // accessed rows, which silently dropped relevant older memories.
+            (limit * 10).max(MAX_BRUTEFORCE_CANDIDATES)
         } else {
             limit
         };
@@ -296,17 +335,66 @@ impl SemanticStore {
                 params.push(Box::new(before.to_rfc3339()));
                 param_idx += 1;
             }
-            // Metadata filtering via json_extract (keys must be alphanumeric/underscore only)
+            // Metadata filtering via json_extract. Keys must be
+            // alphanumeric/underscore only (interpolated into the JSON path,
+            // so a non-identifier key would be an injection vector); a
+            // rejected key is logged, never silently dropped. Every scalar
+            // value type yields a predicate so the filter is actually applied
+            // rather than silently widening the result set.
             for (key, value) in &f.metadata {
-                if let Some(s) = value.as_str() {
-                    // Reject keys with non-alphanumeric characters to prevent injection
-                    if key.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    tracing::warn!(
+                        metadata_key = %key,
+                        "recall: ignoring metadata filter with non-identifier key (allowed: [A-Za-z0-9_]); filter not applied"
+                    );
+                    continue;
+                }
+                match value {
+                    serde_json::Value::String(s) => {
                         sql.push_str(&format!(
                             " AND json_extract(metadata, '$.{}') = ?{param_idx}",
                             key
                         ));
                         params.push(Box::new(s.to_string()));
                         param_idx += 1;
+                    }
+                    serde_json::Value::Bool(b) => {
+                        // SQLite's json_extract yields integer 1/0 for JSON
+                        // booleans; bind the matching integer so the equality
+                        // holds (a text "true"/"false" would never match).
+                        sql.push_str(&format!(
+                            " AND json_extract(metadata, '$.{}') = ?{param_idx}",
+                            key
+                        ));
+                        params.push(Box::new(if *b { 1_i64 } else { 0_i64 }));
+                        param_idx += 1;
+                    }
+                    serde_json::Value::Number(n) => {
+                        // Bind numbers with their native SQLite type so the
+                        // comparison against json_extract's numeric result
+                        // holds under SQLite type affinity rules.
+                        sql.push_str(&format!(
+                            " AND json_extract(metadata, '$.{}') = ?{param_idx}",
+                            key
+                        ));
+                        if let Some(i) = n.as_i64() {
+                            params.push(Box::new(i));
+                        } else if let Some(f) = n.as_f64() {
+                            params.push(Box::new(f));
+                        } else {
+                            // u64 beyond i64 range — fall back to text form.
+                            params.push(Box::new(n.to_string()));
+                        }
+                        param_idx += 1;
+                    }
+                    // Null / array / object filters have no equality predicate;
+                    // warn rather than silently drop them.
+                    other => {
+                        tracing::warn!(
+                            metadata_key = %key,
+                            value_kind = ?other,
+                            "recall: ignoring metadata filter with unsupported value type (only string/bool/number); filter not applied"
+                        );
                     }
                 }
             }
@@ -318,7 +406,16 @@ impl SemanticStore {
             let _ = param_idx;
         }
 
-        sql.push_str(" ORDER BY confidence DESC, accessed_at DESC, access_count DESC");
+        if query_embedding.is_some() {
+            // Similarity-neutral candidate ordering: recency (accessed_at) must
+            // not decide which rows reach cosine re-ranking, or an
+            // old-but-relevant memory outside the recency window is silently
+            // dropped. `created_at DESC` only breaks ties when the store is
+            // larger than the cap.
+            sql.push_str(" ORDER BY created_at DESC");
+        } else {
+            sql.push_str(" ORDER BY confidence DESC, accessed_at DESC, access_count DESC");
+        }
         sql.push_str(&format!(" LIMIT {fetch_limit}"));
 
         let mut stmt = conn.prepare(&sql).map_err(LibreFangError::memory)?;
@@ -361,6 +458,7 @@ impl SemanticStore {
             .map_err(LibreFangError::memory)?;
 
         let mut fragments = Vec::new();
+        let mut candidate_count = 0usize;
         for row_result in rows {
             let (
                 id_str,
@@ -378,6 +476,7 @@ impl SemanticStore {
                 image_embedding_bytes,
                 modality_str,
             ) = row_result.map_err(LibreFangError::memory)?;
+            candidate_count += 1;
 
             let id = uuid::Uuid::parse_str(&id_str)
                 .map(MemoryId)
@@ -463,10 +562,14 @@ impl SemanticStore {
             });
             fragments.truncate(limit);
             debug!(
-                "Vector recall: {} results from {} candidates",
+                "Vector recall: {} results from {candidate_count} candidates",
                 fragments.len(),
-                fetch_limit
             );
+            if candidate_count >= fetch_limit {
+                debug!(
+                    "Vector recall candidate scan hit the cap ({fetch_limit}); the true nearest neighbor may lie beyond it — attach an external VectorStore backend for large stores"
+                );
+            }
         }
 
         // Drop the prepared SELECT explicitly so `conn` is no
@@ -538,12 +641,29 @@ impl SemanticStore {
                 .map_err(LibreFangError::memory)?;
             ordered_ids.push(mem_id);
         }
-        let mut by_id = self.get_by_ids_batch(&ordered_ids, false)?;
+        let mut by_id = self.get_by_ids_batch(
+            &ordered_ids,
+            false,
+            filter.as_ref().and_then(|f| f.peer_id.as_deref()),
+        )?;
         let mut fragments: Vec<MemoryFragment> = Vec::with_capacity(ordered_ids.len());
         for mem_id in &ordered_ids {
             if let Some(frag) = by_id.remove(mem_id) {
                 fragments.push(frag);
             }
+        }
+
+        // Defense-in-depth (audit: vector-store-hydrate-tenant-filter). The
+        // external VectorStore backend is untrusted — a misbehaving or
+        // compromised backend can return ids belonging to another agent /
+        // scope / source than the caller's filter requested, and
+        // `get_by_ids_batch` only enforces `deleted = 0` (plus peer_id, passed
+        // above) at the SQL layer. Re-apply the caller's MemoryFilter to the
+        // hydrated fragments so tenant isolation never depends on the backend
+        // honouring the filter. This mirrors the WHERE clauses `recall_impl`
+        // pushes into SQLite for the fields carried by MemoryFragment.
+        if let Some(ref f) = filter {
+            fragments.retain(|frag| fragment_matches_filter(frag, f));
         }
 
         // Update access counts — see note on the SQLite-path
@@ -572,6 +692,7 @@ impl SemanticStore {
         &self,
         ids: &[MemoryId],
         include_deleted: bool,
+        peer_id: Option<&str>,
     ) -> LibreFangResult<HashMap<MemoryId, MemoryFragment>> {
         if ids.is_empty() {
             return Ok(HashMap::new());
@@ -582,18 +703,31 @@ impl SemanticStore {
         } else {
             " AND deleted = 0"
         };
+        // Enforce peer isolation in SQL when the caller filters by peer, so an
+        // untrusted vector backend returning another peer's id never hydrates
+        // (MemoryFragment does not carry peer_id, so this cannot be re-checked
+        // after hydration — it must be a query-time predicate). Mirrors the
+        // `peer_id = ?` clause in `recall_impl`.
+        let peer_clause = if peer_id.is_some() {
+            " AND peer_id = ?"
+        } else {
+            ""
+        };
         let placeholders = std::iter::repeat_n("?", ids.len())
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
             "SELECT id, agent_id, content, source, scope, confidence, metadata, created_at, accessed_at, access_count, embedding, image_url, image_embedding, modality
-             FROM memories WHERE id IN ({placeholders}){deleted_clause}",
+             FROM memories WHERE id IN ({placeholders}){deleted_clause}{peer_clause}",
         );
         let id_strs: Vec<String> = ids.iter().map(|m| m.0.to_string()).collect();
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = id_strs
+        let mut param_refs: Vec<&dyn rusqlite::types::ToSql> = id_strs
             .iter()
             .map(|s| s as &dyn rusqlite::types::ToSql)
             .collect();
+        if let Some(ref p) = peer_id {
+            param_refs.push(p as &dyn rusqlite::types::ToSql);
+        }
 
         let mut stmt = conn.prepare(&sql).map_err(LibreFangError::memory)?;
         let rows = stmt
@@ -756,6 +890,56 @@ impl SemanticStore {
             rusqlite::params![bytes, id.0.to_string()],
         )
         .map_err(LibreFangError::memory)?;
+
+        // Mirror the re-embedding into an external vector backend when one is
+        // attached (config.toml: vector_backend = "http"). `VectorStore::insert`
+        // is an upsert, so re-inserting with the same id and the NEW embedding
+        // replaces the stale vector. Without this the external store keeps the
+        // OLD embedding after a content re-embed and `recall_via_vector_store`
+        // ranks against it — the same write-blindness the `remember` path fixes,
+        // on the update side. The default SQLite path leaves vector_store = None,
+        // so this is a no-op there.
+        if let Some(vs) = &self.vector_store {
+            let row = conn.query_row(
+                "SELECT content, metadata FROM memories WHERE id = ?1 AND deleted = 0",
+                rusqlite::params![id.0.to_string()],
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            );
+            // Release the pooled connection before the (potentially blocking)
+            // external vector-store write so a single-connection pool is never
+            // held across it (mirrors the `remember` path).
+            drop(conn);
+            let (content, meta_str) = match row {
+                Ok(v) => v,
+                // Row gone (deleted between UPDATE and this read) — nothing to
+                // mirror; the embedding write above is harmless.
+                Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(()),
+                Err(e) => return Err(LibreFangError::memory(e)),
+            };
+            // Match the recall path: refuse to disguise a corrupt metadata blob
+            // as empty. Skip the mirror with a loud log rather than upserting
+            // wrong metadata; the SQLite embedding update still stands.
+            match serde_json::from_str::<HashMap<String, serde_json::Value>>(&meta_str) {
+                Ok(metadata) => {
+                    tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(vs.insert(
+                            &id.0.to_string(),
+                            embedding,
+                            &content,
+                            metadata,
+                        ))
+                    })?;
+                }
+                Err(e) => {
+                    error!(
+                        memory_id = %id.0,
+                        error = %e,
+                        "update_embedding: metadata column unparseable, skipping external \
+                         vector-store mirror (embedding recall may stay stale for this id)"
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
@@ -997,6 +1181,51 @@ fn embedding_to_bytes(embedding: &[f32]) -> Vec<u8> {
         bytes.extend_from_slice(&val.to_le_bytes());
     }
     bytes
+}
+
+/// Re-apply a [`MemoryFilter`]'s tenant / scope predicates to an already
+/// hydrated fragment.
+///
+/// Used by `recall_via_vector_store` as defense in depth: the external vector
+/// backend is untrusted, so tenant isolation must not rely on it honouring the
+/// filter it was handed. Mirrors the SQL WHERE clauses `recall_impl` pushes
+/// into SQLite for the fields carried by [`MemoryFragment`] (`agent_id`,
+/// `scope`, `min_confidence`, `source`, `after`, `before`). `peer_id` is
+/// enforced in the hydration query (`get_by_ids_batch`) rather than here,
+/// because `MemoryFragment` does not carry `peer_id`.
+fn fragment_matches_filter(frag: &MemoryFragment, f: &MemoryFilter) -> bool {
+    if let Some(agent_id) = f.agent_id {
+        if frag.agent_id != agent_id {
+            return false;
+        }
+    }
+    if let Some(ref scope) = f.scope {
+        if &frag.scope != scope {
+            return false;
+        }
+    }
+    if let Some(min_conf) = f.min_confidence {
+        if frag.confidence < min_conf {
+            return false;
+        }
+    }
+    if let Some(ref source) = f.source {
+        if &frag.source != source {
+            return false;
+        }
+    }
+    // SQLite path uses strict `>`/`<` bounds; keep the same semantics.
+    if let Some(ref after) = f.after {
+        if frag.created_at <= *after {
+            return false;
+        }
+    }
+    if let Some(ref before) = f.before {
+        if frag.created_at >= *before {
+            return false;
+        }
+    }
+    true
 }
 
 /// Deserialize embedding from bytes.
@@ -1426,6 +1655,59 @@ mod tests {
     }
 
     #[test]
+    fn recall_honors_non_string_metadata_filters() {
+        // Regression: a bool / number metadata filter must emit a predicate
+        // and actually narrow the result set, not be silently dropped
+        // (which returned a superset — the filter appeared to have no effect).
+        let store = setup();
+        let agent_id = AgentId::new();
+
+        let mut meta_pinned = HashMap::new();
+        meta_pinned.insert("pinned".to_string(), serde_json::Value::Bool(true));
+        meta_pinned.insert("priority".to_string(), serde_json::Value::Number(5.into()));
+        store
+            .remember(
+                agent_id,
+                "Pinned high-priority memory",
+                MemorySource::Conversation,
+                "episodic",
+                meta_pinned,
+            )
+            .unwrap();
+
+        let mut meta_other = HashMap::new();
+        meta_other.insert("pinned".to_string(), serde_json::Value::Bool(false));
+        meta_other.insert("priority".to_string(), serde_json::Value::Number(1.into()));
+        store
+            .remember(
+                agent_id,
+                "Unpinned low-priority memory",
+                MemorySource::Conversation,
+                "episodic",
+                meta_other,
+            )
+            .unwrap();
+
+        // Bool filter must select exactly the pinned row.
+        let mut f_bool = MemoryFilter::agent(agent_id);
+        f_bool
+            .metadata
+            .insert("pinned".to_string(), serde_json::Value::Bool(true));
+        let by_bool = store.recall("memory", 10, Some(f_bool)).unwrap();
+        assert_eq!(by_bool.len(), 1, "bool metadata filter must be applied");
+        assert_eq!(by_bool[0].content, "Pinned high-priority memory");
+
+        // Number filter must select exactly the priority-5 row.
+        let mut f_num = MemoryFilter::agent(agent_id);
+        f_num
+            .metadata
+            .insert("priority".to_string(), serde_json::Value::Number(5.into()));
+        let by_num = store.recall("memory", 10, Some(f_num)).unwrap();
+        assert_eq!(by_num.len(), 1, "number metadata filter must be applied");
+        assert_eq!(by_num[0].content, "Pinned high-priority memory");
+    }
+
+    #[test]
     fn test_recall_with_peer_filter_isolates_users() {
         // Regression for per-peer memory isolation (#2058 follow-up).
         // Two users A and B share an agent; recalling with peer_id=Some("A")
@@ -1479,6 +1761,392 @@ mod tests {
         let results = store.recall("coffee", 10, Some(f)).unwrap();
         assert_eq!(results.len(), 1);
         assert!(results[0].content.starts_with("Bob"));
+    }
+
+    /// A VectorStore backend that ignores the MemoryFilter it is handed and
+    /// returns every id it was seeded with — modelling a misbehaving or
+    /// compromised external backend. Used to prove tenant isolation does not
+    /// depend on the backend honouring the filter.
+    struct LeakyVectorStore {
+        ids: Vec<String>,
+    }
+
+    #[async_trait]
+    impl VectorStore for LeakyVectorStore {
+        async fn insert(
+            &self,
+            _id: &str,
+            _embedding: &[f32],
+            _payload: &str,
+            _metadata: HashMap<String, serde_json::Value>,
+        ) -> LibreFangResult<()> {
+            Ok(())
+        }
+
+        async fn search(
+            &self,
+            _query_embedding: &[f32],
+            _limit: usize,
+            _filter: Option<MemoryFilter>,
+        ) -> LibreFangResult<Vec<VectorSearchResult>> {
+            // Deliberately ignore `_filter` and leak every seeded id.
+            Ok(self
+                .ids
+                .iter()
+                .map(|id| VectorSearchResult {
+                    id: id.clone(),
+                    payload: String::new(),
+                    score: 1.0,
+                    metadata: HashMap::new(),
+                })
+                .collect())
+        }
+
+        async fn delete(&self, _id: &str) -> LibreFangResult<()> {
+            Ok(())
+        }
+
+        async fn get_embeddings(
+            &self,
+            _ids: &[&str],
+        ) -> LibreFangResult<HashMap<String, Vec<f32>>> {
+            Ok(HashMap::new())
+        }
+
+        fn backend_name(&self) -> &str {
+            "leaky-test"
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn recall_via_vector_store_reapplies_filter_against_leaky_backend() {
+        // Defense-in-depth regression: even when the external VectorStore
+        // returns ids for a different agent / peer than the filter requested,
+        // the hydration path must re-enforce the MemoryFilter so no
+        // cross-tenant content leaks.
+        let mut store = setup();
+        let agent_a = AgentId::new();
+        let agent_b = AgentId::new();
+
+        let id_a = store
+            .remember_with_embedding_and_peer(
+                agent_a,
+                "Alpha secret for agent A",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+                None,
+                None,
+                None,
+                Default::default(),
+                Some("user-A"),
+            )
+            .unwrap();
+        let id_b = store
+            .remember(
+                agent_b,
+                "Beta secret for agent B",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+            )
+            .unwrap();
+        let id_a_peer_b = store
+            .remember_with_embedding_and_peer(
+                agent_a,
+                "Alpha content but a different peer",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+                None,
+                None,
+                None,
+                Default::default(),
+                Some("user-B"),
+            )
+            .unwrap();
+
+        // Backend leaks all three ids regardless of the filter.
+        store.set_vector_store(Arc::new(LeakyVectorStore {
+            ids: vec![
+                id_a.0.to_string(),
+                id_b.0.to_string(),
+                id_a_peer_b.0.to_string(),
+            ],
+        }));
+
+        // Recall as agent A / peer user-A. Only the matching fragment must
+        // survive hydration; agent B's row and agent A's other-peer row are
+        // filtered out despite the backend returning them.
+        let mut filter = MemoryFilter::agent(agent_a);
+        filter.peer_id = Some("user-A".into());
+        let query = [0.1_f32, 0.2, 0.3];
+        let results = store
+            .recall_with_embedding("secret", 10, Some(filter), Some(&query))
+            .unwrap();
+
+        assert_eq!(
+            results.len(),
+            1,
+            "leaky backend must not bypass tenant isolation, got: {:?}",
+            results.iter().map(|r| &r.content).collect::<Vec<_>>()
+        );
+        assert_eq!(results[0].agent_id, agent_a);
+        assert_eq!(results[0].content, "Alpha secret for agent A");
+    }
+
+    /// A VectorStore backend that records every `insert` it receives and can
+    /// answer `search` over what it was given — models a real external store
+    /// (e.g. Qdrant over HTTP) closely enough to prove the write path reaches
+    /// it.
+    struct RecordingVectorStore {
+        inserted: std::sync::Mutex<Vec<(String, Vec<f32>)>>,
+    }
+
+    #[async_trait]
+    impl VectorStore for RecordingVectorStore {
+        async fn insert(
+            &self,
+            id: &str,
+            embedding: &[f32],
+            _payload: &str,
+            _metadata: HashMap<String, serde_json::Value>,
+        ) -> LibreFangResult<()> {
+            // Upsert by id, matching the trait contract ("Insert or update")
+            // and a real backend (e.g. Qdrant): a re-insert for the same id
+            // replaces the stored vector rather than accumulating duplicates.
+            let mut guard = self.inserted.lock().unwrap();
+            if let Some(existing) = guard.iter_mut().find(|(rid, _)| rid == id) {
+                existing.1 = embedding.to_vec();
+            } else {
+                guard.push((id.to_string(), embedding.to_vec()));
+            }
+            Ok(())
+        }
+
+        async fn search(
+            &self,
+            query_embedding: &[f32],
+            limit: usize,
+            _filter: Option<MemoryFilter>,
+        ) -> LibreFangResult<Vec<VectorSearchResult>> {
+            let mut scored: Vec<VectorSearchResult> = self
+                .inserted
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|(id, emb)| {
+                    cosine_similarity(query_embedding, emb).map(|score| VectorSearchResult {
+                        id: id.clone(),
+                        payload: String::new(),
+                        score,
+                        metadata: HashMap::new(),
+                    })
+                })
+                .collect();
+            scored.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            scored.truncate(limit);
+            Ok(scored)
+        }
+
+        async fn delete(&self, _id: &str) -> LibreFangResult<()> {
+            Ok(())
+        }
+
+        async fn get_embeddings(
+            &self,
+            _ids: &[&str],
+        ) -> LibreFangResult<HashMap<String, Vec<f32>>> {
+            Ok(HashMap::new())
+        }
+
+        fn backend_name(&self) -> &str {
+            "recording-test"
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn remember_writes_through_to_external_vector_store() {
+        // Regression: with an external vector backend attached, `remember`
+        // must push the embedding to that backend. Pre-fix the write path only
+        // touched SQLite, so the external store stayed empty and every
+        // embedding recall against it silently returned nothing.
+        let mut store = setup();
+        let vs = Arc::new(RecordingVectorStore {
+            inserted: std::sync::Mutex::new(Vec::new()),
+        });
+        store.set_vector_store(vs.clone());
+
+        let agent_id = AgentId::new();
+        let embedding = vec![1.0_f32, 0.0, 0.0];
+        let id = store
+            .remember_with_embedding(
+                agent_id,
+                "Rust is great",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+                Some(&embedding),
+                None,
+                None,
+                Default::default(),
+            )
+            .unwrap();
+
+        // The external backend must have received the insert.
+        {
+            let inserted = vs.inserted.lock().unwrap();
+            assert_eq!(
+                inserted.len(),
+                1,
+                "remember must write through to the external vector store"
+            );
+            assert_eq!(inserted[0].0, id.0.to_string());
+        }
+
+        // And the memory must be recallable through the vector-store path.
+        let query = vec![1.0_f32, 0.0, 0.0];
+        let results = store
+            .recall_with_embedding("", 5, None, Some(&query))
+            .unwrap();
+        assert_eq!(
+            results.len(),
+            1,
+            "memory written through must be recallable via the vector backend"
+        );
+        assert_eq!(results[0].content, "Rust is great");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn update_embedding_writes_through_to_external_vector_store() {
+        // Regression: a content re-embed (`update_embedding`) must mirror the
+        // NEW vector to the external backend too. Pre-fix only `remember` wrote
+        // through, so after an update the external store kept the OLD embedding
+        // and `recall_via_vector_store` ranked against a stale vector — a query
+        // matching the new content failed to surface the memory.
+        let mut store = setup();
+        let vs = Arc::new(RecordingVectorStore {
+            inserted: std::sync::Mutex::new(Vec::new()),
+        });
+        store.set_vector_store(vs.clone());
+
+        let agent_id = AgentId::new();
+        let old = vec![1.0_f32, 0.0, 0.0];
+        let id = store
+            .remember_with_embedding(
+                agent_id,
+                "cats are great",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+                Some(&old),
+                None,
+                None,
+                Default::default(),
+            )
+            .unwrap();
+
+        // Re-embed with an orthogonal vector, as a content update would.
+        let new = vec![0.0_f32, 1.0, 0.0];
+        store.update_embedding(id, &new).unwrap();
+
+        // The external backend must have received the NEW embedding for this id
+        // (a second upsert), not just the original from `remember`.
+        {
+            let inserted = vs.inserted.lock().unwrap();
+            let last_for_id = inserted
+                .iter()
+                .rev()
+                .find(|(rid, _)| *rid == id.0.to_string())
+                .expect("update must write through to the external vector store");
+            assert_eq!(
+                last_for_id.1, new,
+                "external store must hold the re-embedded vector, not the stale one"
+            );
+        }
+
+        // And a query matching the NEW vector must recall the memory via the
+        // vector-store path (proves the stale vector was actually replaced).
+        let results = store
+            .recall_with_embedding("", 5, None, Some(&new))
+            .unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].content, "cats are great");
+    }
+
+    #[test]
+    fn vector_recall_considers_old_unaccessed_memories_not_just_recent_window() {
+        // Regression: cosine re-ranking must scan a similarity-neutral
+        // candidate window, not the N most-recently-accessed rows. An old,
+        // rarely-accessed memory that is the true nearest neighbor must still
+        // be recalled. Pre-fix the candidate SELECT used
+        // `ORDER BY confidence DESC, accessed_at DESC LIMIT 100`, so the target
+        // below (oldest accessed_at) fell outside the window and was never
+        // cosine-ranked.
+        let store = setup();
+        let agent_id = AgentId::new();
+
+        // The single best semantic match, stored first and then marked as
+        // accessed long ago so it falls outside any recency-ordered window.
+        let target_emb = vec![1.0_f32, 0.0, 0.0];
+        let target_id = store
+            .remember_with_embedding(
+                agent_id,
+                "old but highly relevant memory",
+                MemorySource::Conversation,
+                "episodic",
+                HashMap::new(),
+                Some(&target_emb),
+                None,
+                None,
+                Default::default(),
+            )
+            .unwrap();
+        {
+            let conn = store.pool.get().unwrap();
+            conn.execute(
+                "UPDATE memories SET accessed_at = ?1 WHERE id = ?2",
+                rusqlite::params!["2000-01-01T00:00:00+00:00", target_id.0.to_string()],
+            )
+            .unwrap();
+        }
+
+        // Flood the store with more recently-accessed, poorly-matching
+        // memories so the target is pushed outside the old 100-row recency
+        // window.
+        let filler_emb = vec![0.0_f32, 1.0, 0.0];
+        for i in 0..120 {
+            store
+                .remember_with_embedding(
+                    agent_id,
+                    &format!("unrelated filler memory {i}"),
+                    MemorySource::Conversation,
+                    "episodic",
+                    HashMap::new(),
+                    Some(&filler_emb),
+                    None,
+                    None,
+                    Default::default(),
+                )
+                .unwrap();
+        }
+
+        let query = vec![1.0_f32, 0.0, 0.0];
+        let results = store
+            .recall_with_embedding("", 5, None, Some(&query))
+            .unwrap();
+
+        assert!(
+            results.iter().any(|r| r.id == target_id),
+            "the old-but-most-relevant memory must be recalled, got: {:?}",
+            results.iter().map(|r| &r.content).collect::<Vec<_>>()
+        );
+        // It is the exact nearest neighbor, so it must rank first.
+        assert_eq!(results[0].id, target_id);
     }
 
     #[test]

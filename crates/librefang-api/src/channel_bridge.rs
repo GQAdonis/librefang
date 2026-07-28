@@ -884,7 +884,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
     ) -> Result<String, String> {
         let result = self
             .kernel
-            .send_message_ephemeral(agent_id, message, sender)
+            .send_message_ephemeral(agent_id, message, sender, None)
             .await
             .map_err(|e| format!("{e}"))?;
         if result.silent {
@@ -1028,6 +1028,9 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
     }
 
     async fn list_models_text(&self) -> String {
+        // This listing spans every provider, so both TTL-backed catalogs have to be refreshed — unlike `list_models_by_provider` below, which only needs the one being asked about.
+        let _ = crate::openrouter_catalog::refresh_if_stale(&self.kernel).await;
+        let _ = crate::everyapi_catalog::refresh_if_stale(&self.kernel).await;
         let catalog = self.kernel.model_catalog_ref().load();
         let available = catalog.available_models();
         if available.is_empty() {
@@ -1051,7 +1054,9 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                 .unwrap_or(provider);
             msg.push_str(&format!("\n{}:\n", provider_name));
             for m in &by_provider[provider] {
-                let cost = if m.input_cost_per_m > 0.0 {
+                let cost = if !m.pricing_known {
+                    "pricing unavailable".to_string()
+                } else if m.input_cost_per_m > 0.0 {
                     format!(
                         " (${:.2}/${:.2} per M)",
                         m.input_cost_per_m, m.output_cost_per_m
@@ -1076,6 +1081,12 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
     }
 
     async fn list_models_by_provider(&self, provider_id: &str) -> Vec<(String, String)> {
+        if provider_id == "openrouter" {
+            let _ = crate::openrouter_catalog::refresh_if_stale(&self.kernel).await;
+        }
+        if provider_id == "everyapi" {
+            let _ = crate::everyapi_catalog::refresh_if_stale(&self.kernel).await;
+        }
         let catalog = self.kernel.model_catalog_ref().load();
         catalog
             .models_by_provider(provider_id)
@@ -2627,6 +2638,18 @@ pub async fn start_channel_bridge_with_config(
     if sidecar_cfg.sidecar_channels.is_empty() {
         return (None, Vec::new(), axum::Router::new());
     }
+
+    // #6169 follow-up — warn when two sidecar instance names collapse to the
+    // same per-instance secret prefix after normalization, so an operator
+    // relying on per-instance secret isolation is told the namespaces
+    // cross-apply instead of a `<PREFIX>__KEY` token silently leaking from one
+    // instance into another.
+    let sidecar_names: Vec<String> = sidecar_cfg
+        .sidecar_channels
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    librefang_channels::sidecar::warn_secret_prefix_collisions(&sidecar_names);
 
     let handle = KernelBridgeAdapter {
         kernel: kernel.clone(),

@@ -45,6 +45,7 @@ pub mod supervised_spawn;
 pub mod supervisor;
 pub mod trajectory;
 pub mod triggers;
+pub mod user_provider_credentials;
 // whatsapp_gateway module removed alongside the whatsapp sidecar
 // migration — the Baileys gateway is no longer embedded /
 // auto-spawned by the kernel. Operators run it separately as a
@@ -54,6 +55,7 @@ pub mod workflow;
 
 pub use kernel::DeliveryTracker;
 pub use kernel::LibreFangKernel;
+pub use kernel::SkillReloadOutcome;
 pub use kernel::{SYSTEM_CHANNEL_AUTONOMOUS, SYSTEM_CHANNEL_CRON, SYSTEM_CHANNEL_WEBUI};
 pub use kernel_api::KernelApi;
 

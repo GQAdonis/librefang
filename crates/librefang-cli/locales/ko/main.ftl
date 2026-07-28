@@ -727,6 +727,23 @@ maintenance-service-start-hint = 지금 시작하려면: systemctl --user start 
 maintenance-service-linger-hint = 헤드리스 서버의 경우 다음도 실행하십시오: loginctl enable-linger
 maintenance-systemctl-enable-failed = systemctl --user enable librefang.service 실패
 maintenance-launchagent-loaded = LaunchAgent 로드됨 (로그인 시 및 지금 시작됩니다)
+maintenance-service-install-system-hint = 로그인 후가 아니라 부팅 시 시작되는 서비스가 필요하면 다음을 사용하십시오: sudo librefang service install --system
+maintenance-service-system-needs-root = --system은 /Library/LaunchDaemons에 기록하므로 root 권한이 필요합니다.
+maintenance-service-system-sudo-hint = sudo로 다시 실행하십시오: sudo librefang service install --system
+maintenance-service-system-macos-only = --system은 macOS LaunchDaemon을 설치하며, 이 플랫폼에서는 구현되지 않았습니다.
+maintenance-service-system-linux-hint = NixOS에서는 services.librefang 모듈을 사용하십시오. 다른 Linux 배포판에서는 /etc/systemd/system/에 시스템 유닛을 작성하거나 `librefang service install`이 만든 사용자 서비스를 그대로 사용하십시오.
+maintenance-service-system-no-sudo-user = 데몬이 어느 계정으로 실행되어야 하는지 확인할 수 없습니다. SUDO_USER가 설정되지 않았으므로 sudo가 아니라 root로 직접 로그인한 것으로 보입니다.
+maintenance-service-system-chown-failed = { $path }의 소유권을 { $user }에게 넘기지 못했습니다: { $error }
+maintenance-service-system-agent-conflict = { $path }에 사용자별 LaunchAgent가 이미 설치되어 있습니다. 부팅 시 실행되는 LaunchDaemon과 ai.librefang.daemon 레이블 및 상태 디렉터리를 공유하므로, 둘 다 설치하면 로그인할 때마다 에이전트가 실패하고 재시작을 반복하게 됩니다.
+maintenance-service-system-agent-conflict-fix = 본인 계정으로(sudo가 아니라) 먼저 제거하십시오: librefang service uninstall
+maintenance-service-system-chmod-failed = { $path }의 권한을 설정하지 못했습니다: { $error }
+maintenance-launchdaemon-loaded = LaunchDaemon 로드됨 — 부팅 시 시작되며 { $user } 계정으로 실행됩니다
+maintenance-launchdaemon-removed = LaunchDaemon 제거됨
+maintenance-launchdaemon-remove-failed = LaunchDaemon plist 제거 실패: { $error }
+maintenance-launchdaemon-not-found = LaunchDaemon을 찾을 수 없습니다 — 제거할 항목이 없습니다.
+maintenance-launchdaemon-status-registered = 부팅 시 시작되는 LaunchDaemon이 등록되어 있습니다
+maintenance-launchdaemon-status-not-registered = 부팅 시 시작되는 LaunchDaemon이 등록되지 않았습니다 (데몬은 로그인 후에만 시작됩니다).
+maintenance-status-label-daemon-loaded =   LaunchDaemon 로드됨
 maintenance-launchctl-load-failed = launchctl load 실패: { $error }
 maintenance-launchctl-run-failed = launchctl 실행 실패: { $error }
 maintenance-windows-startup-added = Windows 시작 프로그램에 추가됨 (HKCU\Software\Microsoft\Windows\CurrentVersion\Run)
@@ -930,6 +947,69 @@ doctor-audit-config-ok = { $path }이(가) TOML로 파싱됩니다.
 doctor-audit-config-syntax-error = { $path }에 TOML 구문 오류가 있습니다: { $error }
 doctor-audit-config-syntax-error-hint = { $path }을(를) 편집하거나 백업에서 복원하십시오.
 
+doctor-everyapi-absent = EveryAPI 게이트웨이가 감지되지 않았습니다(PATH에 CLI 없음, 자격 증명 파일 없음) — 연결할 대상이 없습니다.
+doctor-everyapi-cli-not-logged-in = EveryAPI CLI는 PATH에 있지만 자격 증명 파일을 찾을 수 없습니다. LibreFang을 이 게이트웨이로 라우팅하려면 먼저 `everyapi login`을 실행하십시오.
+doctor-everyapi-credentials-incomplete = EveryAPI 자격 증명 파일은 있으나 사용 가능한 relay_key가 없습니다. `everyapi login`을 다시 실행하여 갱신하십시오.
+doctor-everyapi-not-connected = EveryAPI 자격 증명을 찾았지만 LibreFang에 everyapi 프로바이더 항목이 없습니다 — `librefang models connect everyapi`를 실행하면 게이트웨이를 LLM 프로바이더로 등록할 수 있습니다.
+doctor-everyapi-provider-only = EveryAPI 프로바이더 항목이 { $path }에서 활성화되어 있습니다. API 드라이버는 이 게이트웨이를 경유합니다.
+doctor-everyapi-provider-without-credentials = EveryAPI 프로바이더 항목이 { $path }에 있지만 사용 가능한 relay key를 찾을 수 없습니다. 이 게이트웨이를 통한 요청은 인증에 실패합니다.
+doctor-everyapi-provider-without-credentials-hint = `everyapi login`을 실행한 뒤 `librefang models connect everyapi`로 저장된 키를 갱신하세요.
+doctor-everyapi-env-route-only = 환경 변수 { $var }가 CLI 하위 프로세스 드라이버(claude-code, codex-cli)를 { $host }로 보냅니다. LibreFang에 대응하는 프로바이더 항목이 없으므로 API 드라이버는 기존에 설정된 프로바이더를 계속 사용합니다.
+doctor-everyapi-both-routes = 서로 독립적인 두 개의 게이트웨이 경로가 동시에 활성화되어 있습니다. { $var }는 CLI 하위 프로세스 드라이버(claude-code, codex-cli)를 { $host }로 보내고, { $path }의 프로바이더 항목은 API 드라이버를 별도로 라우팅합니다. 특정 에이전트에 어느 쪽이 적용되는지는 두 설정이 아니라 해당 에이전트의 드라이버에 따라 결정됩니다.
+doctor-everyapi-both-routes-hint = CLI 드라이버와 API 드라이버를 의도적으로 따로 처리하는 경우에만 둘 다 유지하십시오. 그렇지 않다면 { $var }를 해제하거나 { $path }를 삭제하여 하나의 경로만 적용되도록 하십시오.
+
+# `librefang models connect everyapi`
+everyapi-connect-title = EveryAPI 게이트웨이 연결 중
+everyapi-connect-unknown-target = 알 수 없는 게이트웨이 '{ $target }'입니다.
+everyapi-connect-unknown-target-fix = 현재 지원되는 유일한 대상은 `librefang models connect everyapi`입니다.
+everyapi-connect-credentials-missing = EveryAPI가 자격 증명을 저장하는 위치를 확인할 수 없습니다.
+everyapi-connect-credentials-missing-fix = 먼저 `everyapi login`을 실행한 뒤 이 명령을 다시 실행하십시오.
+everyapi-connect-credentials-unreadable = { $path }에 있는 EveryAPI 자격 증명 파일을 읽을 수 없습니다.
+everyapi-connect-credentials-malformed = { $path }에 있는 EveryAPI 자격 증명 파일이 올바른 JSON이 아닙니다.
+everyapi-connect-credentials-no-api-base = { $path }에 있는 EveryAPI 자격 증명 파일에 api_base가 없습니다.
+everyapi-connect-credentials-no-relay-key = { $path }에 있는 EveryAPI 자격 증명 파일에 relay_key가 없습니다.
+everyapi-connect-models-fetch-failed = 게이트웨이의 모델 목록을 가져오지 못했습니다. 모델 없이 프로바이더만 등록합니다.
+everyapi-connect-models-fetch-failed-fix = 게이트웨이에 접근할 수 있는지 확인한 뒤 이 명령을 다시 실행하여 모델 목록을 채우십시오.
+everyapi-connect-models-fetch-unauthorized = 게이트웨이가 relay key를 거부하여 아무것도 기록하지 않았습니다.
+everyapi-connect-models-fetch-unauthorized-fix = `everyapi login`으로 키를 갱신한 뒤 이 명령을 다시 실행하세요.
+everyapi-connect-models-fetch-failed-would-clobber = 게이트웨이 모델 목록을 가져올 수 없고 기존 프로바이더 항목에 이미 모델이 있어, 빈 항목으로 덮어쓰지 않습니다.
+everyapi-connect-provider-rejected = 데몬이 프로바이더 정의를 거부했습니다: { $error }
+everyapi-connect-pricing-fetch-failed = 게이트웨이의 가격 정보를 가져오지 못했습니다. 모델은 토큰당 가격 없이 등록됩니다.
+everyapi-connect-pricing-fetch-failed-fix = 게이트웨이에 접근할 수 있는지 확인한 뒤 이 명령을 다시 실행하여 가격을 채우십시오. 그때까지 이 모델들의 지출은 어떤 예산에도 집계되지 않습니다.
+everyapi-connect-serialize-failed = 프로바이더 카탈로그를 만들지 못했습니다: { $error }
+everyapi-connect-key-saved = relay key를 LibreFang .env 파일에 { $env_var }(으)로 저장했습니다.
+everyapi-connect-key-save-failed = relay key 저장에 실패했습니다: { $error }
+everyapi-connect-provider-written-daemon = 실행 중인 데몬을 통해 { $path }에 프로바이더를 등록했습니다. 재시작이 필요 없습니다.
+everyapi-connect-provider-written-file = 프로바이더를 { $path }에 기록했습니다.
+everyapi-connect-provider-write-failed = 프로바이더 파일 기록에 실패했습니다: { $error }
+everyapi-connect-restart-required = 새 프로바이더를 반영하려면 데몬을 재시작하십시오.
+everyapi-connect-models-registered = 모델 { $count }개를 등록했습니다.
+everyapi-connect-models-skipped = 모델 { $count }개를 건너뛰었습니다.
+everyapi-connect-skip-no-metadata = { $model }: 이 모델의 컨텍스트 윈도우와 출력 한도를 모두 알 수 없으며, 둘 중 하나라도 없는 텍스트 모델은 카탈로그 로드 시 폐기됩니다.
+everyapi-connect-skip-no-context-window = { $model }: 이 모델의 출력 한도는 알 수 있으나 컨텍스트 윈도우를 알 수 없으며, 둘 중 하나라도 없는 텍스트 모델은 카탈로그 로드 시 폐기됩니다.
+everyapi-connect-skip-no-output-limit = { $model }: 이 모델의 컨텍스트 윈도우는 알 수 있으나 출력 한도를 알 수 없으며, 둘 중 하나라도 없는 텍스트 모델은 카탈로그 로드 시 폐기됩니다.
+everyapi-connect-token-limits-borrowed = 게이트웨이가 이 모델들의 컨텍스트 윈도우 및/또는 출력 한도를 공개하지 않아 빠진 값을 내장된 OpenRouter 스냅샷에서 가져왔습니다. 따라서 이 수치는 이 게이트웨이가 아니라 스냅샷에 담긴 모델 사본을 설명합니다: { $models }
+everyapi-connect-models-unpriced = 다음 모델은 토큰당 가격이 없어(게이트웨이 가격 목록에 없거나 호출당 과금) 지출이 무료가 아니라 알 수 없음으로 기록됩니다: { $models }
+everyapi-connect-streaming-only = 다음 모델은 스트리밍 요청만 허용하므로 비스트리밍 호출(컨텍스트 압축, 프로액티브 메모리, 스킬 워크숍, 웹 보강)은 모두 실패합니다: { $models }
+everyapi-connect-default-hint = --set-default를 붙여 다시 실행하면 { $model }을(를) 데몬 기본 모델로 지정합니다.
+everyapi-connect-default-set = 기본 모델을 { $model }(으)로 설정했습니다.
+everyapi-connect-default-failed = { $model }을(를) 기본 모델로 설정하지 못했습니다(HTTP { $status }).
+everyapi-connect-default-needs-daemon = 데몬이 실행 중이 아니어서 기본 모델이 변경되지 않았습니다. 데몬을 시작한 뒤 `librefang models connect everyapi --set-default`를 다시 실행하세요.
+everyapi-connect-default-url-pin-failed = 게이트웨이 URL을 config.toml에 고정하지 못했습니다. 기본 모델은 설정되었지만 데몬을 재시작하면 확인하지 못할 수 있습니다.
+everyapi-connect-default-no-candidate = 등록된 텍스트 모델이 없으므로 기본 모델로 지정할 대상이 없습니다.
+
+doctor-audit-desktop-deps-no-pkg-config = pkg-config를 찾을 수 없음 — 데스크톱 앱에 필요한 GTK/WebKit 스택을 확인할 수 없습니다. CLI만 설치한 경우에는 필요하지 않습니다.
+doctor-audit-desktop-deps-ok = 데스크톱 GTK/WebKit 스택이 준비됨 — pkg-config가 { $module }와(과) { $tray }을(를) 확인했습니다.
+doctor-audit-desktop-deps-tray-missing = pkg-config가 { $module }은(는) 확인했지만 { $tray }은(는) 찾지 못했습니다. 데스크톱 앱은 시스템 트레이 아이콘 없이 실행됩니다.
+doctor-audit-desktop-deps-webkit-missing = pkg-config가 { $gtk }은(는) 확인했지만 WebKitGTK({ $webkit })는 찾지 못했습니다. 데스크톱 앱이 창을 렌더링할 수 없습니다.
+doctor-audit-desktop-deps-stack-missing = 데스크톱용 GTK/WebKit 스택을 찾을 수 없습니다 — 데스크톱 앱에는 { $modules }이(가) 필요하지만 CLI 자체에는 필요하지 않습니다.
+doctor-audit-desktop-deps-distro-unknown = 이 Linux 배포판
+doctor-audit-desktop-deps-hint-apt = { $distro }에서는 `apt-cache search webkit2gtk`와 `apt-cache search appindicator`로 { $modules }을(를) 제공하는 패키지를 찾은 뒤 `sudo apt install <package>`로 설치하십시오. 패키지 이름은 릴리스마다 다르므로 추측하지 말고 검색하십시오.
+doctor-audit-desktop-deps-hint-pacman = { $distro }에서는 `pacman -Ss webkit2gtk`와 `pacman -Ss appindicator`로 { $modules }을(를) 제공하는 패키지를 찾은 뒤 `sudo pacman -S <package>`로 설치하십시오. 패키지 이름은 릴리스마다 다르므로 추측하지 말고 검색하십시오.
+doctor-audit-desktop-deps-hint-dnf = { $distro }에서는 `dnf search webkit2gtk`와 `dnf search appindicator`로 { $modules }을(를) 제공하는 패키지를 찾은 뒤 `sudo dnf install <package>`로 설치하십시오. 패키지 이름은 릴리스마다 다르므로 추측하지 말고 검색하십시오.
+doctor-audit-desktop-deps-hint-nix = { $distro }에서는 개발 라이브러리를 명령형으로 설치하는 방식이 동작하지 않습니다 — { $modules }을(를) 직접 설치하는 대신 flake의 devShell 또는 librefang-desktop 패키지를 사용하십시오.
+doctor-audit-desktop-deps-hint-generic = { $distro }에서는 패키지 관리자가 제공하는 GTK 3, WebKitGTK, Ayatana AppIndicator 개발 패키지를 pkg-config가 { $modules }을(를) 확인할 수 있을 때까지 설치하십시오.
+
 # launcher menu items
 launcher-menu-get-started = 시작하기
 launcher-menu-get-started-hint = 공급자, API 키, 모델, 마이그레이션
@@ -1017,6 +1097,7 @@ model-picker-item =     { $idx }. { $id } { $tier }
 
 # Approvals command specific keys
 approval-none-pending = 대기 중인 승인이 없습니다.
+approval-header-status = 상태
 approval-header-request = 요청
 
 # Auth command specific keys
@@ -1089,6 +1170,7 @@ skill-removed = 제거된 스킬: { $name }
 skill-remove-failed = 스킬 제거 실패: { $error }
 skill-search-none = "{ $query }"에 대한 스킬을 찾을 수 없습니다.
 skill-search-results-header = "{ $query }"와(과) 일치하는 스킬:
+skill-search-install-hint = 설치 명령: librefang skill install { $id }
 skill-search-failed = 검색 실패: { $error }
 skill-validation-failed = 스킬 검증 실패: { $error }
 skill-execution-failed = 스킬 실행 실패: { $error }
@@ -1227,6 +1309,8 @@ desktop-install-error-copy-appimage = AppImage 복사 실패: { $error }
 desktop-install-error-http = HTTP 요청 실패: { $error }
 desktop-install-error-create = { $path }을(를) 생성할 수 없습니다: { $error }
 desktop-install-error-write = 쓰기 오류: { $error }
+desktop-install-error-too-large = 다운로드한 설치 파일이 { $limit } MiB 안전 한도를 초과했습니다(최소 { $bytes }바이트 관찰됨). 중단합니다
+desktop-install-gatekeeper-notice = macOS가 첫 실행 시 LibreFang 열기를 확인하도록 요청할 수 있습니다. 이는 Gatekeeper가 앱의 공증을 확인하는 것입니다.
 
 maintenance-error-github-request = GitHub 요청 실패: { $error }
 maintenance-error-github-status = GitHub API가 { $status }을(를) 반환했습니다
@@ -1335,7 +1419,6 @@ tui-event-comms-send-not-supported-in-process = 인프로세스에서는 전송�
 tui-event-comms-task-posted = 작업을 게시했습니다
 tui-event-comms-post-failed = 게시 실패
 tui-event-comms-post-not-supported-in-process = 인프로세스에서는 작업 게시를 지원하지 않습니다
-tui-event-stream-runtime-error = 런타임 오류: { $error }
 tui-event-stream-connection-failed = 연결 실패: { $error }
 tui-event-agent-spawn-failed-fallback = 에이전트 생성에 실패했습니다
 

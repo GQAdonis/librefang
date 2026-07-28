@@ -542,6 +542,11 @@ pub(super) struct ToolExecutionContext<'a> {
     /// conversation (group OR DM). `None` for non-channel call
     /// sites; the deferred payload falls back to `sender_user_id`.
     pub(super) sender_chat_id: Option<&'a str>,
+    /// The bot account / tenant the originating turn arrived on. Threaded into
+    /// `execute_tool_with_sender_account` so `channel_send` can reject a
+    /// cross-account (cross-tenant) dispatch (#6443). `None` for non-channel
+    /// call sites and single-tenant deployments.
+    pub(super) sender_account_id: Option<&'a str>,
     pub(super) checkpoint_manager: Option<&'a Arc<CheckpointManager>>,
     pub(super) context_budget: &'a ContextBudget,
     pub(super) context_engine: Option<&'a dyn ContextEngine>,
@@ -698,6 +703,8 @@ pub(super) async fn execute_tool_group(
                     Some(executed.result.status),
                     executed.execution_ms,
                 );
+                // `executed` is already `Box<ExecutedToolCall>` (the precheck
+                // variant is now boxed), so hand it straight to `Member::Blocked`.
                 members.push((idx, Member::Blocked(executed)));
             }
             LoopGuardPrecheck::CircuitBreak(err) => {
@@ -814,8 +821,9 @@ pub(super) enum LoopGuardPrecheck {
     Proceed(LoopGuardVerdict),
     /// Guard blocked this single call (soft). The call yields the carried
     /// error result without running the tool body; the batch continues.
-    /// Boxed: `ExecutedToolCall` (~272 bytes) dwarfs the other variants, so
-    /// boxing keeps the enum small (clippy::large_enum_variant).
+    /// Boxed because `ExecutedToolCall` is far larger than the sibling
+    /// variants, matching the `Member::Blocked(Box<ExecutedToolCall>)`
+    /// pattern above (avoids `clippy::large_enum_variant`).
     Blocked(Box<ExecutedToolCall>),
     /// Circuit breaker tripped. The whole turn aborts with this error —
     /// session already repaired + saved and the `AgentLoopEnd` hook fired.
@@ -1058,7 +1066,7 @@ pub(super) async fn execute_single_tool_call_core(
     let trace_timestamp = chrono::Utc::now();
     let result = match tokio::time::timeout(
         Duration::from_secs(tool_timeout),
-        tool_runner::execute_tool(
+        tool_runner::execute_tool_with_sender_account(
             &tool_call.id,
             &tool_call.name,
             &tool_call.input,
@@ -1093,6 +1101,13 @@ pub(super) async fn execute_single_tool_call_core(
             Some(ctx.available_tools),
             tr_cfg.spill_threshold_bytes,
             tr_cfg.max_artifact_bytes,
+            // #6443: thread the turn's originating account for the
+            // cross-account dispatch guard in `channel_send`.
+            ctx.sender_account_id,
+            // #6463: system-internal forks (currently auto_dream) set this so
+            // their `memory_*` tool calls bypass the RBAC guest gate instead
+            // of hitting NeedsApproval every cycle.
+            ctx.opts.system_call,
         ),
     )
     .await

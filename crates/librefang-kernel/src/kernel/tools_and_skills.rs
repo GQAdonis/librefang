@@ -19,6 +19,22 @@
 use super::*;
 use super::{sanitize_reviewer_block, sanitize_reviewer_line, ReviewError};
 
+/// Outcome of [`LibreFangKernel::reload_skills`], so callers can report an honest result instead of assuming the reload always fully succeeded (#6540).
+///
+/// In Stable mode the registry is frozen: `frozen` is `true`, `refreshed` lists the already-loaded skills whose on-disk content was re-read (freeze-safe), and `skipped_new` lists brand-new skill directories that were found on disk but deliberately NOT loaded (they need an operator restart).
+/// Outside Stable mode `frozen` is `false` and `refreshed` is the full reloaded set.
+#[derive(Debug, Clone, Default)]
+pub struct SkillReloadOutcome {
+    /// Whether the registry was frozen (Stable mode) at reload time.
+    pub frozen: bool,
+    /// Skill names whose content was (re)loaded from disk.
+    pub refreshed: Vec<String>,
+    /// New on-disk skill directories skipped because the registry is frozen.
+    pub skipped_new: Vec<String>,
+    /// Total number of skills loaded after the reload.
+    pub count: usize,
+}
+
 impl LibreFangKernel {
     /// Get the list of tools available to an agent based on its manifest.
     ///
@@ -46,7 +62,7 @@ impl LibreFangKernel {
             }
         }
 
-        let all_builtins = if cfg.browser.enabled {
+        let mut all_builtins = if cfg.browser.enabled {
             builtin_tool_definitions()
         } else {
             // When built-in browser is disabled (replaced by an external
@@ -56,6 +72,13 @@ impl LibreFangKernel {
                 .filter(|t| !t.name.starts_with("browser_"))
                 .collect()
         };
+
+        // Canvas / A2UI tool is opt-in (`[canvas] enabled`, default false).
+        // When disabled, strip `canvas_present` so it is neither advertised to
+        // the LLM nor dispatchable — mirroring the browser gate above.
+        if !cfg.canvas.enabled {
+            all_builtins.retain(|t| t.name != "canvas_present");
+        }
 
         // Look up agent entry for profile, skill/MCP allowlists, and declared tools
         let entry = self.agents.registry.get(agent_id);
@@ -291,11 +314,14 @@ impl LibreFangKernel {
             })
             .unwrap_or_default();
 
+        // Match with glob_matches (mirroring the Step 1 builtin filter above), not exact string equality.
+        // MCP tool names are runtime-generated and namespaced (`mcp__<server>__<tool>`), so they can never be enumerated as static literals in a manifest — a non-empty exact-match allowlist silently dropped every mcp__* tool, and a `mcp__*` glob entry was itself treated as a literal and matched nothing (#6495).
+        // glob_matches still matches a bare tool name exactly (`pattern == value`), so plain native-tool allowlists behave exactly as before.
         if !tool_allowlist.is_empty() {
-            all_tools.retain(|t| tool_allowlist.iter().any(|a| a == &t.name));
+            all_tools.retain(|t| tool_allowlist.iter().any(|a| glob_matches(a, &t.name)));
         }
         if !tool_blocklist.is_empty() {
-            all_tools.retain(|t| !tool_blocklist.iter().any(|b| b == &t.name));
+            all_tools.retain(|t| !tool_blocklist.iter().any(|b| glob_matches(b, &t.name)));
         }
 
         // Step 5: Apply global tool_policy rules (deny/allow with glob patterns).
@@ -355,15 +381,54 @@ impl LibreFangKernel {
     ///
     /// Called after install/uninstall to make new skills immediately visible
     /// to agents without restarting the kernel.
-    pub fn reload_skills(&self) {
+    ///
+    /// Returns a [`SkillReloadOutcome`] describing what actually happened so callers (e.g. the `POST /api/skills/reload` handler) can report an honest result instead of claiming success on a no-op.
+    /// In Stable mode the registry is frozen at boot and never gains new skills without an operator-initiated restart; rather than silently skipping the whole reload, this refreshes the on-disk content of already-loaded skills (the freeze-safe `reload_skill` path) and reports any brand-new skill directories it is deliberately not loading (#6540).
+    /// Most callers invoke this for its side effect and ignore the return value.
+    pub fn reload_skills(&self) -> SkillReloadOutcome {
         let mut registry = self
             .skills
             .skill_registry
             .write()
             .unwrap_or_else(|e| e.into_inner());
         if registry.is_frozen() {
-            warn!("Skill registry is frozen (Stable mode) — reload skipped");
-            return;
+            // Frozen (Stable mode): do NOT add new skills — that boundary is intentional.
+            // But refresh the content of already-loaded skills (freeze-safe) and surface any new on-disk dirs we are skipping, so the reload is honest rather than a silent no-op (#6540).
+            let mut refreshed = Vec::new();
+            for name in registry.skill_names() {
+                match registry.reload_skill(&name) {
+                    Ok(()) => refreshed.push(name),
+                    Err(e) => warn!(skill = %name, error = %e, "Frozen reload_skill failed"),
+                }
+            }
+            refreshed.sort();
+            let skipped_new = registry.unloaded_on_disk_dirs();
+            let count = registry.count();
+            drop(registry);
+
+            // Refreshed content still needs the caches invalidated.
+            self.prompt_metadata_cache.skills.clear();
+            self.skills
+                .skill_generation
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            if skipped_new.is_empty() {
+                info!(
+                    refreshed = refreshed.len(),
+                    "Skill registry frozen (Stable mode) — refreshed existing skills only"
+                );
+            } else {
+                warn!(
+                    ?skipped_new,
+                    "Skill registry frozen (Stable mode) — new skill directories require a restart to load"
+                );
+            }
+            return SkillReloadOutcome {
+                frozen: true,
+                refreshed,
+                skipped_new,
+                count,
+            };
         }
         let skills_dir = self.home_dir_boot.join("skills");
         let mut fresh = librefang_skills::registry::SkillRegistry::new(skills_dir);
@@ -382,6 +447,9 @@ impl LibreFangKernel {
             0
         };
         info!(user, external, "Skill registry hot-reloaded");
+        let mut refreshed = fresh.skill_names();
+        refreshed.sort();
+        let count = fresh.count();
         *registry = fresh;
 
         // Invalidate cached skill metadata so next message picks up changes
@@ -391,6 +459,13 @@ impl LibreFangKernel {
         self.skills
             .skill_generation
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        SkillReloadOutcome {
+            frozen: false,
+            refreshed,
+            skipped_new: Vec::new(),
+            count,
+        }
     }
 
     /// Approve a pending skill candidate and, for a CREATE, auto-assign the
@@ -1366,7 +1441,9 @@ impl LibreFangKernel {
     /// evolution path is active). Extracted as a named predicate so the gate
     /// condition is shared between `available_tools` and unit tests — no
     /// inline duplication of the tool-name list.
-    pub(crate) fn is_evolve_tool(name: &str) -> bool {
+    ///
+    /// Public because these tools bypass the `capabilities.tools` filter, which makes the predicate load-bearing outside the kernel too: the API layer's inert-`tool_allowlist`-entry diagnostic (#6609, `routes::agents::config`) must not flag an entry naming one of them as unable to match, since Step 1's post-filter injects them regardless of what `capabilities.tools` declares.
+    pub fn is_evolve_tool(name: &str) -> bool {
         matches!(
             name,
             "skill_read_file"
@@ -1704,6 +1781,50 @@ mod tests {
 
     fn agent(uuid_str: &str) -> AgentId {
         AgentId(uuid::Uuid::parse_str(uuid_str).unwrap())
+    }
+
+    // ── canvas.enabled gate over the `canvas_present` builtin ───────────────
+
+    fn kernel_with_canvas(enabled: bool) -> (LibreFangKernel, tempfile::TempDir) {
+        let dir = tempdir().unwrap();
+        let home = dir.path().to_path_buf();
+        std::fs::create_dir_all(home.join("data")).unwrap();
+        let cfg = KernelConfig {
+            home_dir: home.clone(),
+            data_dir: home.join("data"),
+            canvas: librefang_types::config::CanvasConfig {
+                enabled,
+                ..Default::default()
+            },
+            ..KernelConfig::default()
+        };
+        let k = LibreFangKernel::boot_with_config(cfg).expect("kernel should boot");
+        (k, dir)
+    }
+
+    /// With `[canvas] enabled = false` (the default), the opt-in `canvas_present`
+    /// tool must not be advertised to the LLM.
+    #[test]
+    fn canvas_present_absent_when_canvas_disabled() {
+        let (kernel, _dir) = kernel_with_canvas(false);
+        let tools = kernel.available_tools(AgentId::new());
+        assert!(
+            !tools.iter().any(|t| t.name == "canvas_present"),
+            "canvas_present must be filtered out when [canvas] enabled = false"
+        );
+        kernel.shutdown();
+    }
+
+    /// With `[canvas] enabled = true`, the tool is present in the tool list.
+    #[test]
+    fn canvas_present_available_when_canvas_enabled() {
+        let (kernel, _dir) = kernel_with_canvas(true);
+        let tools = kernel.available_tools(AgentId::new());
+        assert!(
+            tools.iter().any(|t| t.name == "canvas_present"),
+            "canvas_present must be advertised when [canvas] enabled = true"
+        );
+        kernel.shutdown();
     }
 
     // ── build_reviewer_candidate ────────────────────────────────────────────

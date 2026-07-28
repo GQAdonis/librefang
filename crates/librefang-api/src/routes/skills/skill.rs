@@ -238,10 +238,10 @@ pub async fn uninstall_skill(
     }
 }
 
-/// POST /api/skills/reload — Rescan `~/.librefang/skills/` and refresh the
-/// in-memory registry. Use this after dropping a skill directory into the
-/// skills folder manually (install/uninstall via API already reload
-/// automatically). Returns the new installed skill count.
+/// POST /api/skills/reload — Rescan `~/.librefang/skills/` and refresh the in-memory registry.
+/// Use this after dropping a skill directory into the skills folder manually (install/uninstall via API already reload automatically).
+/// Outside Stable mode, returns `{"status":"reloaded","count":N}`.
+/// In Stable mode the registry is frozen: new skill directories are NOT loaded, only the on-disk content of already-loaded skills is refreshed, and the response reports this honestly as `{"frozen":true,"refreshed":[...],"skipped_new":[...],"detail":...}` (#6540).
 #[utoipa::path(
     post,
     path = "/api/skills/reload",
@@ -251,17 +251,27 @@ pub async fn uninstall_skill(
     )
 )]
 pub async fn reload_skills(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    state.kernel.reload_skills();
-    let count = state
-        .kernel
-        .skill_registry_ref()
-        .read()
-        .map(|r| r.count())
-        .unwrap_or(0);
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({"status": "reloaded", "count": count})),
-    )
+    let outcome = state.kernel.reload_skills();
+    // Honest reporting (#6540): in Stable mode the registry is frozen, so a full reload cannot add new skills.
+    // Rather than claiming "reloaded" on a no-op, surface that the registry is frozen and list any brand-new skill directories that were skipped (they need an operator restart).
+    // The already-loaded skills whose content was refreshed are reported too.
+    let body = if outcome.frozen {
+        serde_json::json!({
+            "status": if outcome.skipped_new.is_empty() { "refreshed" } else { "partial" },
+            "frozen": true,
+            "refreshed": outcome.refreshed,
+            "skipped_new": outcome.skipped_new,
+            "count": outcome.count,
+            "detail": if outcome.skipped_new.is_empty() {
+                "registry frozen (Stable mode); refreshed existing skills only"
+            } else {
+                "registry frozen (Stable mode); new skill directories require a daemon restart to load"
+            },
+        })
+    } else {
+        serde_json::json!({"status": "reloaded", "count": outcome.count})
+    };
+    (StatusCode::OK, Json(body))
 }
 
 /// GET /api/skills/pending — list skill-workshop pending candidates,
@@ -734,32 +744,76 @@ pub async fn marketplace_search(
             if !path.is_dir() {
                 continue;
             }
-            let manifest_path = path.join("skill.toml");
-            if !manifest_path.exists() {
+            let dir_name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            // Accept SKILL.md as well as skill.toml (#6569).
+            // Every skill in the registry ships as SKILL.md, so the skill.toml-only check made this endpoint return an empty list on every install — the same gap `GET /api/skills/registry` had already solved.
+            let (name, desc) = if let Some(meta) = read_registry_skill_entry(&path, &dir_name) {
+                meta
+            } else {
                 continue;
-            }
-            if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-                if let Ok(manifest) = toml::from_str::<librefang_skills::SkillManifest>(&content) {
-                    let name = &manifest.skill.name;
-                    let desc = &manifest.skill.description;
-                    if query.is_empty()
-                        || name.to_lowercase().contains(&query)
-                        || desc.to_lowercase().contains(&query)
-                    {
-                        results.push(serde_json::json!({
-                            "name": name,
-                            "description": desc,
-                            "stars": 0,
-                            "url": "",
-                        }));
-                    }
-                }
+            };
+            if query.is_empty()
+                || name.to_lowercase().contains(&query)
+                || desc.to_lowercase().contains(&query)
+            {
+                results.push(serde_json::json!({
+                    "name": name,
+                    "description": desc,
+                    "stars": 0,
+                    "url": "",
+                    // The directory name is what `POST /api/skills/install` and `librefang skill install` take; it can differ from the frontmatter name.
+                    "install_id": dir_name,
+                }));
             }
         }
     }
 
+    // Deterministic ordering — `read_dir` order is filesystem-dependent.
+    results.sort_by(|a, b| {
+        a["name"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(b["name"].as_str().unwrap_or_default())
+    });
     let total = results.len();
     Json(serde_json::json!({"results": results, "total": total}))
+}
+
+/// Read `(name, description)` for one registry skill directory.
+///
+/// Handles both on-disk shapes — `SKILL.md` with YAML frontmatter (what the registry ships) and the native `skill.toml` — and falls back to the directory name when the metadata is present but unparsable.
+/// Returns `None` for a directory holding neither, so unrelated directories are skipped.
+fn read_registry_skill_entry(dir: &std::path::Path, dir_name: &str) -> Option<(String, String)> {
+    let skill_md = dir.join("SKILL.md");
+    if skill_md.exists() {
+        if let Ok(content) = std::fs::read_to_string(&skill_md) {
+            if let Some(fm) = parse_skill_md_frontmatter(&content) {
+                let name = if fm.name.trim().is_empty() {
+                    dir_name.to_string()
+                } else {
+                    fm.name.trim().to_string()
+                };
+                return Some((name, fm.description));
+            }
+        }
+        return Some((dir_name.to_string(), String::new()));
+    }
+
+    let manifest_path = dir.join("skill.toml");
+    if manifest_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+            if let Ok(manifest) = toml::from_str::<librefang_skills::SkillManifest>(&content) {
+                return Some((manifest.skill.name, manifest.skill.description));
+            }
+        }
+        return Some((dir_name.to_string(), String::new()));
+    }
+
+    None
 }
 
 #[utoipa::path(
@@ -773,6 +827,7 @@ pub async fn marketplace_search(
 )]
 pub async fn create_skill(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
@@ -815,7 +870,13 @@ pub async fn create_skill(
         Some("dashboard"),
     ) {
         Ok(result) => {
-            audit_evolve(&state, "create", &result.skill_name, &result.message);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "create",
+                &result.skill_name,
+                &result.message,
+            );
             // Hot-reload skills so the new skill is available immediately
             state.kernel.reload_skills();
 
@@ -1291,6 +1352,7 @@ pub async fn get_supporting_file(
 pub async fn evolve_update_skill(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
@@ -1314,7 +1376,13 @@ pub async fn evolve_update_skill(
         Some("dashboard"),
     ) {
         Ok(r) => {
-            audit_evolve(&state, "update", &r.skill_name, changelog);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "update",
+                &r.skill_name,
+                changelog,
+            );
             state.kernel.reload_skills();
             evolution_ok_response(r)
         }
@@ -1338,6 +1406,7 @@ pub async fn evolve_update_skill(
 pub async fn evolve_patch_skill(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
@@ -1367,7 +1436,13 @@ pub async fn evolve_patch_skill(
         Some("dashboard"),
     ) {
         Ok(r) => {
-            audit_evolve(&state, "patch", &r.skill_name, changelog);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "patch",
+                &r.skill_name,
+                changelog,
+            );
             state.kernel.reload_skills();
             evolution_ok_response(r)
         }
@@ -1389,6 +1464,7 @@ pub async fn evolve_patch_skill(
 pub async fn evolve_rollback_skill(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
         return resp;
@@ -1401,6 +1477,7 @@ pub async fn evolve_rollback_skill(
         Ok(r) => {
             audit_evolve(
                 &state,
+                api_user.as_ref().map(|u| u.0.user_id),
                 "rollback",
                 &r.skill_name,
                 "rolled back to previous version",
@@ -1427,6 +1504,7 @@ pub async fn evolve_rollback_skill(
 pub async fn evolve_delete_skill(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
         return resp;
@@ -1434,7 +1512,13 @@ pub async fn evolve_delete_skill(
     let skills_dir = state.kernel.home_dir().join("skills");
     match librefang_skills::evolution::delete_skill(&skills_dir, &name) {
         Ok(r) => {
-            audit_evolve(&state, "delete", &r.skill_name, &r.message);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "delete",
+                &r.skill_name,
+                &r.message,
+            );
             state.kernel.reload_skills();
             evolution_ok_response(r)
         }
@@ -1458,6 +1542,7 @@ pub async fn evolve_delete_skill(
 pub async fn evolve_write_file(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
@@ -1475,7 +1560,13 @@ pub async fn evolve_write_file(
     };
     match librefang_skills::evolution::write_supporting_file(&skill, path, content) {
         Ok(r) => {
-            audit_evolve(&state, "write_file", &r.skill_name, path);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "write_file",
+                &r.skill_name,
+                path,
+            );
             state.kernel.reload_skills();
             evolution_ok_response(r)
         }
@@ -1504,6 +1595,7 @@ pub async fn evolve_remove_file(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
     Query(params): Query<std::collections::HashMap<String, String>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
     if let Some(resp) = reject_if_frozen(&state) {
         return resp;
@@ -1517,7 +1609,13 @@ pub async fn evolve_remove_file(
     };
     match librefang_skills::evolution::remove_supporting_file(&skill, path) {
         Ok(r) => {
-            audit_evolve(&state, "remove_file", &r.skill_name, path);
+            audit_evolve(
+                &state,
+                api_user.as_ref().map(|u| u.0.user_id),
+                "remove_file",
+                &r.skill_name,
+                path,
+            );
             state.kernel.reload_skills();
             evolution_ok_response(r)
         }

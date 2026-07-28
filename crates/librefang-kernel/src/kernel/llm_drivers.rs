@@ -106,6 +106,33 @@ impl LibreFangKernel {
         &self,
         manifest: &AgentManifest,
     ) -> KernelResult<Arc<dyn LlmDriver>> {
+        // Owner-agnostic entry point — every current call site.
+        // Delegates with no owner, so credential resolution is byte-identical to the historical env-var / credential-pool behaviour.
+        // Owner-aware dispatch (per-user provider credentials, #6460) goes through `resolve_driver_for_owner`; wiring the human owner of a turn in from request context is a follow-up (see the PR's Deferred section).
+        self.resolve_driver_for_owner(manifest, None)
+    }
+
+    /// Resolve the LLM driver for an agent turn on behalf of an optional human owner.
+    ///
+    /// Credential precedence (#6460): when `owner` is `Some` and that user has stored their own provider key for the resolved provider (see [`crate::user_provider_credentials`]), that user-scoped key wins over the daemon-global credential — both the credential pool and the env-var key.
+    /// When `owner` is `None`, or the user has no key for the provider, resolution is identical to the historical behaviour.
+    ///
+    /// An agent that pins an explicit `api_key_env` in its manifest is treated as an operator-level override and is NOT shadowed by a user-scoped key.
+    ///
+    /// Full credential precedence for the resolved provider, highest first (#6460 OQ#5 decision):
+    ///   1. Org-wide provider allowlist (#6459) — a disallowed provider is refused before any key is chosen.
+    ///   2. Agent-pinned `api_key_env` in the manifest — operator override.
+    ///   3. The owner's user-scoped key (`get_user_provider_key`) — bills that user; wins over the daemon-global pool and rotation chain.
+    ///   4. The daemon-global credential pool.
+    ///   5. Operator rotation chain — `[provider_api_keys]` / `[auth_profiles]` via `resolve_non_default_api_key_env`.
+    ///   6. Catalog `api_key_env`, then convention env var.
+    ///
+    /// The user-scoped key sits above the operator rotation chain because a user key means "bill THIS user's quota," which must not be silently overridden by the org's shared-key failover. The same owner-key preference is applied to every fallback-chain slot (not just the primary) so a provider failover cannot leak spend back onto the operator's credential.
+    pub(crate) fn resolve_driver_for_owner(
+        &self,
+        manifest: &AgentManifest,
+        owner: Option<librefang_types::agent::UserId>,
+    ) -> KernelResult<Arc<dyn LlmDriver>> {
         let cfg = self.config.load();
 
         // Use the effective default model: hot-reloaded override takes priority
@@ -131,6 +158,24 @@ impl LibreFangKernel {
                 manifest.model.provider.clone()
             };
         let agent_provider = &resolved_provider_str;
+
+        // Governance: org-wide provider allowlist (issue #6459). Fail-closed —
+        // when a non-empty `[providers] allowed` list does not contain the
+        // resolved provider, refuse to build ANY driver for this agent turn.
+        // This runs before every construction branch below (CLI-profile
+        // rotation, credential pool, single-key, boot-default fallback) so a
+        // disallowed provider can never reach a live driver. Read live from
+        // `self.config.load()`, so an operator's allowlist edit takes effect on
+        // the next turn after a config swap.
+        if !cfg.providers.is_provider_allowed(agent_provider) {
+            warn!(
+                provider = %agent_provider,
+                allowed = ?cfg.providers.allowed,
+                "LLM provider blocked by org-wide allowlist ([providers] allowed)"
+            );
+            let reason = cfg.providers.rejection_reason(agent_provider);
+            return Err(LibreFangError::CapabilityDenied(reason).into());
+        }
 
         let has_custom_key = manifest.model.api_key_env.is_some();
         let has_custom_url = manifest.model.base_url.is_some();
@@ -187,15 +232,34 @@ impl LibreFangKernel {
                 .unwrap_or_else(|| DriverConfig::default().max_retries),
         };
 
+        // Per-user provider credential (#6460): resolve the human owner's own key for this provider, if any.
+        // A user-scoped key takes precedence over BOTH the credential pool and the env-var global key (and bypasses the pool below).
+        // Skipped when the agent pinned an explicit `api_key_env` — that operator-level override wins.
+        let user_scoped_key: Option<String> = if has_custom_key {
+            None
+        } else {
+            // Canonicalize the (possibly alias) manifest provider to the same
+            // namespace the write surface stores keys under. The Owner CRUD
+            // (`validate_provider`) only accepts canonical `known_providers()`
+            // names, so an alias-configured agent (e.g. `provider = "google"`,
+            // an alias of `gemini`) would look the user's key up under "google",
+            // miss the key stored under "gemini", and silently fall back to the
+            // operator's global credential — billing the org for the user's turn
+            // (a chargeback leak) and mis-attributing per-user spend.
+            let canonical_provider =
+                librefang_llm_drivers::drivers::canonical_provider_name(agent_provider);
+            owner.and_then(|uid| self.get_user_provider_key(uid, canonical_provider))
+        };
+
         // Check for a credential pool for this provider.
         // When the pool exists and the agent didn't set a custom API key,
         // create a PooledDriver that acquires keys from the pool on every
         // call. If the pool is empty / all keys exhausted at call time, the
         // PooledDriver returns a 503 which triggers fallback to the next
         // provider (handled by FallbackDriver below).
-        // When the agent explicitly sets a custom API key env var, skip the
-        // pool and use the agent-specified key directly.
-        let pool_opt = if has_custom_key {
+        // When the agent explicitly sets a custom API key env var, skip the pool and use the agent-specified key directly.
+        // A user-scoped key (above) likewise bypasses the daemon-global pool.
+        let pool_opt = if has_custom_key || user_scoped_key.is_some() {
             None
         } else {
             self.llm
@@ -214,7 +278,7 @@ impl LibreFangKernel {
         } else {
             // No credential pool — resolve a single API key the traditional
             // way.
-            let api_key = if has_custom_key {
+            let global_api_key = if has_custom_key {
                 manifest
                     .model
                     .api_key_env
@@ -234,6 +298,15 @@ impl LibreFangKernel {
                 let env_var = self.resolve_non_default_api_key_env(&cfg, agent_provider);
                 std::env::var(&env_var).ok()
             };
+            // #6460: route through the shared precedence helper so the
+            // tested `resolve_provider_credential` contract (user-scoped key
+            // wins, global-only behaviour unchanged when no user key exists)
+            // is the actual production logic rather than a parallel inline
+            // copy of it.
+            let api_key = crate::user_provider_credentials::resolve_provider_credential(
+                user_scoped_key,
+                global_api_key,
+            );
 
             let driver_config = make_driver_config(api_key);
 
@@ -277,7 +350,12 @@ impl LibreFangKernel {
                 String,
             )> = vec![(
                 primary.clone(),
-                agent_provider.clone(),
+                // Empty model name: the primary slot keeps the request's own
+                // model field as-is. A non-empty middle element is a per-slot
+                // model OVERRIDE (FallbackDriver rewrites `req.model` with it),
+                // so the provider name here would clobber the primary model and
+                // force it to 404. Mirrors the boot.rs primary slot.
+                String::new(),
                 agent_provider.clone(),
             )];
             for fb in &effective_fallbacks {
@@ -290,17 +368,51 @@ impl LibreFangKernel {
                 } else {
                     fb.provider.clone()
                 };
-                let fb_api_key = if let Some(env) = &fb.api_key_env {
+                // Governance allowlist (issue #6459): never add a disallowed
+                // provider to the fallback chain. Fail-closed skip + WARN,
+                // mirroring the init-failure skip below.
+                if !cfg.providers.is_provider_allowed(&fb_provider) {
+                    warn!(
+                        provider = %fb_provider,
+                        allowed = ?cfg.providers.allowed,
+                        "Fallback LLM provider blocked by org-wide allowlist; skipping slot"
+                    );
+                    continue;
+                }
+                // Global credential candidate for this fallback slot. An
+                // agent-pinned `api_key_env` on the fallback is an operator
+                // override; otherwise use the same operator-explicit > catalog
+                // `api_key_env` > convention resolution as the primary path. A
+                // custom catalog provider used only as a fallback model would
+                // otherwise 401 on the convention-only env var — the same #5755
+                // bug as the primary branch above. Refs: #5755, #5807.
+                let fb_global_key = if let Some(env) = &fb.api_key_env {
                     std::env::var(env).ok()
                 } else {
-                    // Same precedence as the primary path (operator-explicit >
-                    // catalog `api_key_env` > convention). A custom catalog
-                    // provider used only as a fallback model would otherwise
-                    // 401 on the convention-only env var — the same #5755 bug
-                    // as the primary branch above. Refs: #5755, #5807.
                     let env_var = self.resolve_non_default_api_key_env(&cfg, &fb_provider);
                     std::env::var(&env_var).ok()
                 };
+                // #6460 chargeback integrity: if the turn has a human owner
+                // with their own stored key for THIS fallback provider, the
+                // fallback slot must bill that user's key too — otherwise a
+                // failover from the primary would silently charge the operator's
+                // credential (a chargeback leak). An agent-pinned `api_key_env`
+                // on the fallback still wins (operator override), so it is not
+                // shadowed by a user key. Route through the same shared
+                // `resolve_provider_credential` helper the primary path uses
+                // (ae1f59b9) rather than a parallel inline copy of the
+                // precedence contract.
+                let fb_user_key: Option<String> = if fb.api_key_env.is_some() {
+                    None
+                } else {
+                    let canonical_fb_provider =
+                        librefang_llm_drivers::drivers::canonical_provider_name(&fb_provider);
+                    owner.and_then(|uid| self.get_user_provider_key(uid, canonical_fb_provider))
+                };
+                let fb_api_key = crate::user_provider_credentials::resolve_provider_credential(
+                    fb_user_key,
+                    fb_global_key,
+                );
                 let config = DriverConfig {
                     provider: fb_provider.clone(),
                     api_key: fb_api_key,
@@ -606,6 +718,184 @@ key_required = true
         assert_eq!(
             resolved_no_explicit, "OTHER_CUSTOM_PROVIDER_API_KEY",
             "no explicit + no catalog must fall back to convention"
+        );
+    }
+
+    /// Regression: the FallbackDriver primary slot built by `resolve_driver`
+    /// must carry an EMPTY model name, not the provider name. The middle tuple
+    /// element is a per-slot model OVERRIDE — `FallbackDriver` rewrites
+    /// `req.model` with it whenever it is non-empty. Setting it to the provider
+    /// string ("anthropic"/"openai"/…) clobbers the agent's primary model, so
+    /// the primary request 404s and silently fails over. This mirrors the exact
+    /// primary-slot construction in `resolve_driver` above.
+    #[tokio::test]
+    async fn fallback_primary_slot_preserves_request_model() {
+        use librefang_types::message::{ContentBlock, StopReason, TokenUsage};
+        use std::sync::Mutex;
+
+        // Records the model each dispatch actually saw.
+        struct RecordingDriver(Arc<Mutex<Option<String>>>);
+        #[async_trait]
+        impl LlmDriver for RecordingDriver {
+            async fn complete(
+                &self,
+                req: CompletionRequest,
+            ) -> Result<CompletionResponse, LlmError> {
+                *self.0.lock().unwrap() = Some(req.model.clone());
+                Ok(CompletionResponse {
+                    content: vec![ContentBlock::Text {
+                        text: "ok".to_string(),
+                        provider_metadata: None,
+                    }],
+                    stop_reason: StopReason::EndTurn,
+                    tool_calls: vec![],
+                    usage: TokenUsage::default(),
+                    actual_provider: None,
+                    actual_model: None,
+                })
+            }
+        }
+
+        let seen = Arc::new(Mutex::new(None));
+        let primary = Arc::new(RecordingDriver(Arc::clone(&seen)));
+        let agent_provider = "anthropic".to_string();
+
+        // Exact shape of the primary slot in `resolve_driver`.
+        let chain: Vec<(Arc<dyn LlmDriver>, String, String)> = vec![(
+            primary as Arc<dyn LlmDriver>,
+            String::new(),
+            agent_provider.clone(),
+        )];
+        let fb =
+            librefang_runtime::drivers::fallback::FallbackDriver::with_models_and_providers(chain);
+
+        let req = CompletionRequest {
+            model: "claude-sonnet-4-5".to_string(),
+            ..Default::default()
+        };
+        fb.complete(req).await.expect("primary serves");
+
+        assert_eq!(
+            seen.lock().unwrap().as_deref(),
+            Some("claude-sonnet-4-5"),
+            "primary slot must leave req.model unchanged, not overwrite it with the provider name"
+        );
+    }
+
+    /// #6459 — `resolve_driver` enforces the org-wide provider allowlist
+    /// fail-closed at driver resolution time: an empty allowlist allows any
+    /// provider, a non-empty allowlist rejects a disallowed provider with a
+    /// governance error before any driver is constructed, and permits a
+    /// listed one.
+    #[test]
+    fn resolve_driver_enforces_provider_allowlist() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let home = tmp.path().to_path_buf();
+        let data_dir = home.join("data");
+        std::fs::create_dir_all(&data_dir).unwrap();
+        std::fs::create_dir_all(home.join("skills")).unwrap();
+        std::fs::create_dir_all(home.join("workspaces").join("agents")).unwrap();
+        std::fs::create_dir_all(home.join("workspaces").join("hands")).unwrap();
+        let registry_dir = home.join("registry");
+        std::fs::create_dir_all(&registry_dir).unwrap();
+        std::fs::write(registry_dir.join(".sync_marker"), "").unwrap();
+
+        let config = KernelConfig {
+            home_dir: home.clone(),
+            data_dir: data_dir.clone(),
+            network_enabled: false,
+            memory: MemoryConfig {
+                sqlite_path: Some(data_dir.join("test.db")),
+                ..Default::default()
+            },
+            ..KernelConfig::default()
+        };
+        let kernel = LibreFangKernel::boot_with_config(config).expect("kernel boot");
+
+        // Swap only the allowlist on the live ArcSwap config, mirroring what a
+        // `POST /api/config/reload` does — the field is read live per turn.
+        let set_allowlist = |allowed: &[&str]| {
+            let mut cfg = (*kernel.config.load_full()).clone();
+            cfg.providers.allowed = allowed.iter().map(|s| s.to_string()).collect();
+            kernel.config.store(std::sync::Arc::new(cfg));
+        };
+
+        // Empty allowlist → no restriction: a default agent resolves.
+        set_allowlist(&[]);
+        assert!(
+            kernel.resolve_driver(&AgentManifest::default()).is_ok(),
+            "empty allowlist must allow everything"
+        );
+
+        // Non-empty allowlist that excludes the requested provider →
+        // fail-closed rejection before any driver is constructed.
+        set_allowlist(&["ollama"]);
+        let mut disallowed = AgentManifest::default();
+        disallowed.model.provider = "anthropic".to_string();
+        // `Box<dyn LlmDriver>` is not `Debug`, so `expect_err` (which formats the
+        // Ok value) will not compile — match the error out explicitly instead.
+        let err = match kernel.resolve_driver(&disallowed) {
+            Ok(_) => panic!("disallowed provider must be rejected"),
+            Err(e) => e,
+        };
+        assert!(
+            err.to_string().contains("allowlist"),
+            "rejection must be a governance error, got: {err}"
+        );
+
+        // The same allowlist permits the listed provider. `ollama` is a local
+        // provider (no API key required), so the driver builds
+        // deterministically regardless of the test environment's env vars.
+        let mut allowed = AgentManifest::default();
+        allowed.model.provider = "ollama".to_string();
+        assert!(
+            kernel.resolve_driver(&allowed).is_ok(),
+            "listed provider must resolve"
+        );
+    }
+
+    /// #6459 / #6484 — regression guard for the fail-closed allowlist gates.
+    /// The allowlist is only a real governance control if EVERY kernel-side
+    /// driver-construction path checks it; a refactor that drops the gate at
+    /// one site silently reopens the bypass. Pin the two kernel gate sites by
+    /// source-grep so their removal fails CI. (The aux/cheap-tier gate lives in
+    /// `librefang-runtime::aux_client` and is guarded in that crate.)
+    #[test]
+    fn provider_allowlist_gates_are_present_at_every_kernel_driver_site() {
+        // resolve_driver's per-slot fallback gate (#6459). A file-wide
+        // `contains()` would be VACUOUS — this file embeds this very test,
+        // whose own source mentions `is_provider_allowed` — so anchor to the
+        // `for fb in &effective_fallbacks` loop with a bounded window that ends
+        // well before this test's source.
+        let this = include_str!("llm_drivers.rs");
+        let rd_loop = this
+            .find("for fb in &effective_fallbacks {")
+            .expect("resolve_driver must build a fallback chain");
+        // Wide enough to comfortably span the loop preamble + the gate (the
+        // `is_provider_allowed` check sits deep in the loop body), so a small
+        // edit to the preamble cannot push the token out of the window.
+        let rd_window = 1400.min(this.len() - rd_loop);
+        assert!(
+            this.get(rd_loop..rd_loop + rd_window)
+                .unwrap_or("")
+                .contains("is_provider_allowed"),
+            "resolve_driver's fallback loop must gate each slot via is_provider_allowed (#6459)"
+        );
+
+        // The boot default_driver fallback chain (#6484): scope the assertion
+        // to the `for fb in &config.fallback_providers` loop so we prove the
+        // gate sits inside that specific loop, not merely elsewhere in boot.rs.
+        // Without it, a failover reaches a disallowed provider through
+        // aux.primary and the CLI-profile / init-failure primary shortcuts.
+        let boot = include_str!("boot.rs");
+        let loop_start = boot
+            .find("for fb in &config.fallback_providers {")
+            .expect("boot.rs must build the default_driver fallback chain");
+        let window = 800.min(boot.len() - loop_start);
+        assert!(
+            boot[loop_start..loop_start + window].contains("is_provider_allowed"),
+            "the boot default_driver fallback loop must gate each slot via \
+             is_provider_allowed (#6484)"
         );
     }
 }

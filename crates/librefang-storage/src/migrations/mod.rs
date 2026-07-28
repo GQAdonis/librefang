@@ -188,4 +188,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "canonical_sessions_compacted_summary_session_id_v1",
         sql: include_str!("sql/032_canonical_sessions_compacted_summary_session_id.surql"),
     },
+    Migration {
+        version: 33,
+        name: "knowledge_graph_peer_scope_v1",
+        sql: include_str!("sql/033_knowledge_graph_peer_scope.surql"),
+    },
 ];

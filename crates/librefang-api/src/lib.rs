@@ -123,6 +123,7 @@ pub mod client_ip;
 #[cfg(feature = "surreal-backend")]
 pub mod config_store_overlay;
 pub mod error;
+pub mod everyapi_catalog;
 pub mod extensions;
 pub mod extractors;
 pub mod idempotency;
@@ -131,6 +132,7 @@ pub mod middleware;
 pub mod oauth;
 pub mod openai_compat;
 pub mod openapi;
+pub mod openrouter_catalog;
 pub mod passkey;
 pub mod password_hash;
 pub mod rate_limiter;

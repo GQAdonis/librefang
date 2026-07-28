@@ -1291,6 +1291,27 @@ fn format_missing_agent_error(step_name: &str, agent: &StepAgent) -> String {
     }
 }
 
+/// Mark a run as `Failed` with `error` (unless it was already `Cancelled`)
+/// and stamp `completed_at`. Used by every step-mode agent-resolution failure
+/// path so a run never hangs in `Running` when a referenced agent has been
+/// deleted — the `StepMode::Sequential` arm already did this inline; the
+/// Conditional / Loop / DAG paths previously returned `Err` via a bare `?`
+/// without touching run state, leaving the run stuck until the next
+/// stale-recovery sweep at daemon boot.
+fn mark_run_failed(
+    runs: &DashMap<WorkflowRunId, WorkflowRun>,
+    run_id: &WorkflowRunId,
+    error: &str,
+) {
+    if let Some(mut r) = runs.get_mut(run_id) {
+        if !matches!(r.state, WorkflowRunState::Cancelled) {
+            r.state = WorkflowRunState::Failed;
+            r.error = Some(error.to_string());
+            r.completed_at = Some(Utc::now());
+        }
+    }
+}
+
 /// Evaluate a conditional expression against the previous step output.
 ///
 /// Supports:
@@ -2111,6 +2132,16 @@ impl WorkflowEngine {
             let to_remove = self.runs.len() - Self::MAX_RETAINED_RUNS;
             for (id, _) in evictable.into_iter().take(to_remove) {
                 self.runs.remove(&id);
+                // Drop the per-run auxiliary maps alongside the run itself.
+                // These are keyed by run id and only ever removed on the
+                // terminal-cleanup path (`cancel_notify` at the retry-loop
+                // exit, `operator_resume_notify` when an operator gate
+                // resolves). A run evicted here may never have hit that path
+                // (e.g. a Pending-then-Cancelled run, or one evicted in the
+                // cleanup race window), so without this the Arc<Notify>
+                // entries would leak and grow without bound under churn.
+                self.cancel_notify.remove(&id);
+                self.operator_resume_notify.remove(&id);
                 debug!(run_id = %id, "Evicted old workflow run");
             }
         }
@@ -4192,8 +4223,14 @@ impl WorkflowEngine {
                     }
 
                     // Condition met — execute like sequential
-                    let (agent_id, agent_name, agent_inherit) = agent_resolver(&step.agent)
-                        .ok_or_else(|| format_missing_agent_error(&step.name, &step.agent))?;
+                    let (agent_id, agent_name, agent_inherit) = match agent_resolver(&step.agent) {
+                        Some(v) => v,
+                        None => {
+                            let e = format_missing_agent_error(&step.name, &step.agent);
+                            mark_run_failed(&self.runs, &run_id, &e);
+                            return Err(e);
+                        }
+                    };
 
                     let raw_prompt =
                         Self::expand_variables(&step.prompt_template, &current_input, &variables);
@@ -4264,8 +4301,14 @@ impl WorkflowEngine {
                     max_iterations,
                     until,
                 } => {
-                    let (agent_id, agent_name, agent_inherit) = agent_resolver(&step.agent)
-                        .ok_or_else(|| format_missing_agent_error(&step.name, &step.agent))?;
+                    let (agent_id, agent_name, agent_inherit) = match agent_resolver(&step.agent) {
+                        Some(v) => v,
+                        None => {
+                            let e = format_missing_agent_error(&step.name, &step.agent);
+                            mark_run_failed(&self.runs, &run_id, &e);
+                            return Err(e);
+                        }
+                    };
 
                     let until_lower = until.to_lowercase();
 
@@ -5236,8 +5279,14 @@ impl WorkflowEngine {
                     }
                 }
 
-                let (agent_id, agent_name, _agent_inherit) = agent_resolver(&step.agent)
-                    .ok_or_else(|| format_missing_agent_error(&step.name, &step.agent))?;
+                let (agent_id, agent_name, _agent_inherit) = match agent_resolver(&step.agent) {
+                    Some(v) => v,
+                    None => {
+                        let e = format_missing_agent_error(&step.name, &step.agent);
+                        mark_run_failed(&self.runs, &run_id, &e);
+                        return Err(e);
+                    }
+                };
 
                 let prompt = Self::expand_variables(&step.prompt_template, input, &variables);
                 let prompt_sent = prompt.clone();
@@ -5307,8 +5356,24 @@ impl WorkflowEngine {
 
                     let dep_failed = step.depends_on.iter().any(|dep| failed_steps.contains(dep));
 
-                    let (agent_id, agent_name, _agent_inherit) = agent_resolver(&step.agent)
-                        .ok_or_else(|| format_missing_agent_error(&step.name, &step.agent))?;
+                    // Resolve the agent only for steps that will actually run. A
+                    // step whose dependency already failed is skipped below, so a
+                    // stale/deleted agent ref on it must not hard-error the whole
+                    // DAG — mirror the single-step path, which short-circuits on
+                    // dep_failed before resolving. (agent_id is unused for the
+                    // skip future.)
+                    let (agent_id, agent_name, _agent_inherit) = if dep_failed {
+                        (AgentId::new(), String::new(), false)
+                    } else {
+                        match agent_resolver(&step.agent) {
+                            Some(v) => v,
+                            None => {
+                                let e = format_missing_agent_error(&step.name, &step.agent);
+                                mark_run_failed(&self.runs, &run_id, &e);
+                                return Err(e);
+                            }
+                        }
+                    };
 
                     step_metas.push((
                         step_idx,
@@ -6706,6 +6771,65 @@ mod tests {
     fn mock_resolver_no_inherit(agent: &StepAgent) -> Option<(AgentId, String, bool)> {
         let _ = agent;
         Some((AgentId::new(), "mock-agent".to_string(), false))
+    }
+
+    /// Resolver for a deleted / unregistered agent — always `None`.
+    fn none_resolver(_agent: &StepAgent) -> Option<(AgentId, String, bool)> {
+        None
+    }
+
+    /// Regression (#6441 follow-up): a Conditional step whose referenced agent
+    /// no longer resolves must transition the run to `Failed`, not leave it
+    /// hanging in `Running`. Before the fix the Conditional / Loop / DAG paths
+    /// returned `Err` via a bare `?` without touching run state (only the
+    /// Sequential arm set `Failed`), so the run stayed `Running` until the next
+    /// stale-recovery sweep at daemon boot.
+    #[tokio::test]
+    async fn missing_agent_on_conditional_step_marks_run_failed() {
+        let engine = WorkflowEngine::new();
+        let wf = Workflow {
+            id: WorkflowId::new(),
+            name: "cond-missing-agent".to_string(),
+            description: String::new(),
+            steps: vec![WorkflowStep {
+                name: "cond".to_string(),
+                agent: StepAgent::ByName {
+                    name: "deleted-agent".to_string(),
+                },
+                prompt_template: "go".to_string(),
+                // Condition matches the run input ("input") so the step runs and
+                // reaches agent resolution.
+                mode: StepMode::Conditional {
+                    condition: "input".to_string(),
+                },
+                timeout_secs: 10,
+                error_mode: ErrorMode::Fail,
+                output_var: None,
+                inherit_context: None,
+                depends_on: vec![],
+                session_mode: None,
+            }],
+            created_at: Utc::now(),
+            layout: None,
+            total_timeout_secs: None,
+            input_schema: None,
+        };
+        let wf_id = engine.register(wf).await;
+        let run_id = engine.create_run(wf_id, "input".to_string()).await.unwrap();
+
+        let sender = |_id: AgentId, msg: String, _sm: Option<SessionMode>| async move {
+            Ok((msg, 0u64, 0u64))
+        };
+        let result = engine.execute_run(run_id, none_resolver, sender).await;
+        assert!(result.is_err(), "a missing agent must fail the run");
+
+        let run = engine.get_run(run_id).await.unwrap();
+        assert!(
+            matches!(run.state, WorkflowRunState::Failed),
+            "run must be Failed, not stuck in Running: {:?}",
+            run.state
+        );
+        assert!(run.error.is_some(), "run-level error must be set");
     }
 
     #[tokio::test]
@@ -10897,6 +11021,57 @@ prompt_template = "do {{x}}"
             all_runs.len() <= 200,
             "cancelled runs over the cap must be evictable, retained {} (cap 200)",
             all_runs.len()
+        );
+    }
+
+    /// Regression: evicting a terminal run must also drop its per-run
+    /// `cancel_notify` (and `operator_resume_notify`) entry. Each
+    /// `create_run` seats a fresh `Arc<Notify>` in `cancel_notify`; if the
+    /// eviction loop only removes from `runs`, a Pending-then-Cancelled run
+    /// evicted before the terminal-cleanup path runs orphans its notify
+    /// entry forever, so the auxiliary map grows past the run cap.
+    #[tokio::test(flavor = "current_thread")]
+    async fn evicting_terminal_run_drops_cancel_notify_entry() {
+        let engine = WorkflowEngine::new();
+        let wf = Workflow {
+            id: WorkflowId::new(),
+            name: "evict-notify-test".to_string(),
+            description: "".to_string(),
+            steps: vec![WorkflowStep {
+                name: "s".to_string(),
+                agent: StepAgent::ByName {
+                    name: "a".to_string(),
+                },
+                prompt_template: "x".to_string(),
+                mode: StepMode::Sequential,
+                timeout_secs: 1,
+                error_mode: ErrorMode::Fail,
+                output_var: None,
+                inherit_context: None,
+                depends_on: vec![],
+                session_mode: None,
+            }],
+            created_at: Utc::now(),
+            layout: None,
+            total_timeout_secs: None,
+            input_schema: None,
+        };
+        let wf_id = engine.register(wf).await;
+
+        for _ in 0..250usize {
+            let run_id = engine
+                .create_run(wf_id, "x".to_string())
+                .await
+                .expect("create_run");
+            engine.cancel_run(run_id).await.expect("cancel_run");
+        }
+
+        // The notify map must track the runs map — it must not grow past the
+        // retention cap even though every create seated a fresh entry.
+        assert!(
+            engine.cancel_notify.len() <= 200,
+            "cancel_notify must not outgrow the run cap, retained {} (cap 200)",
+            engine.cancel_notify.len()
         );
     }
 

@@ -5,8 +5,8 @@
 //! newline-delimited JSON (one JSON object per line) over stdin/stdout.
 
 use crate::types::{
-    ChannelAdapter, ChannelContent, ChannelMessage, ChannelStatus, ChannelType, ChannelUser,
-    GroupMember, InteractiveMessage, LifecycleReaction, ParticipantRef, TypingEvent,
+    AgentPhase, ChannelAdapter, ChannelContent, ChannelMessage, ChannelStatus, ChannelType,
+    ChannelUser, GroupMember, InteractiveMessage, LifecycleReaction, ParticipantRef, TypingEvent,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -296,11 +296,27 @@ pub struct SidecarTypingCmdParams {
 }
 
 /// `reaction` command params (P0 skeleton — wired in P2).
+///
+/// `reaction` carries the phase-appropriate emoji; `phase` and
+/// `tool_name` (added for the Slack multi-step task display, #6451)
+/// carry the structured lifecycle detail an emoji-only frame drops.
+/// Both are skipped from the wire when empty so a plain phase reaction
+/// serializes to exactly the legacy `{channel_id, message_id, reaction}`
+/// frame — adapters that predate the fields ignore them, adapters that
+/// want a step list read them.
 #[derive(Debug, Serialize)]
 pub struct SidecarReactionParams {
     pub channel_id: String,
     pub message_id: String,
     pub reaction: String,
+    /// Lifecycle phase tag: one of `queued`, `thinking`, `tool_use`,
+    /// `streaming`, `done`, `error` (matches `AgentPhase`'s snake_case
+    /// serde tags). Empty only when a caller constructs a bare reaction.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub phase: String,
+    /// The tool being executed, present for the `tool_use` phase only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
 }
 
 /// `interactive` command params — full button shape.
@@ -652,6 +668,62 @@ fn instance_secret_prefix(name: &str) -> String {
             }
         })
         .collect()
+}
+
+/// Group configured sidecar instance names by their `instance_secret_prefix`
+/// and return every bucket that more than one *distinct* name collapses into.
+///
+/// `instance_secret_prefix` is many-to-one — `bot-1`, `bot.1`, `bot_1` and
+/// `BOT+1` all normalize to `BOT_1` — so two instances whose names collide
+/// share the `<PREFIX>__` per-instance secret namespace in `secrets.env`, and
+/// each child receives the others' `<PREFIX>__KEY` secrets (#6169 follow-up).
+/// An operator relying on per-instance secret isolation would not anticipate
+/// that, so the boot / config-reload path surfaces it (see
+/// `warn_secret_prefix_collisions`).
+///
+/// Returned as `(prefix, sorted distinct names)` pairs, themselves sorted by
+/// prefix, so the output is deterministic for logging and tests.
+fn secret_prefix_collisions(names: &[String]) -> Vec<(String, Vec<String>)> {
+    let mut by_prefix: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        std::collections::BTreeMap::new();
+    for name in names {
+        by_prefix
+            .entry(instance_secret_prefix(name))
+            .or_default()
+            .insert(name.clone());
+    }
+    by_prefix
+        .into_iter()
+        .filter(|(_, group)| group.len() > 1)
+        .map(|(prefix, group)| (prefix, group.into_iter().collect()))
+        .collect()
+}
+
+/// Emit a targeted WARN for each set of sidecar instance names that collapse
+/// to the same per-instance secret prefix (see [`secret_prefix_collisions`]).
+///
+/// Call this once from the channel-bridge boot / reload loop with the full list
+/// of configured `[[sidecar_channels]]` names. An operator storing
+/// `<PREFIX>__KEY` secrets for per-instance isolation is then told when two
+/// instances share the namespace and would cross-apply each other's secrets,
+/// instead of the token silently leaking from (e.g.) `bot-1` into `bot.1`.
+///
+/// Returns the number of colliding groups so callers and tests can assert the
+/// outcome without standing up a tracing subscriber.
+pub fn warn_secret_prefix_collisions(names: &[String]) -> usize {
+    let collisions = secret_prefix_collisions(names);
+    for (prefix, group) in &collisions {
+        warn!(
+            secret_prefix = %prefix,
+            instances = %group.join(", "),
+            "Sidecar instance names collapse to the same per-instance secret \
+             prefix '{prefix}__' after normalization; each of these instances \
+             receives the others' '{prefix}__KEY' secrets from secrets.env. \
+             Rename the instances so they differ after uppercasing and mapping \
+             non-alphanumeric characters to '_'."
+        );
+    }
+    collisions.len()
 }
 
 fn build_spawn_env(
@@ -1464,7 +1536,14 @@ fn overrides_from_sidecar_config(
     let coalesce_ms = config.message_coalesce_window_ms;
 
     let has_command_policy = policy != SidecarCommandPolicy::Allow;
-    if !has_command_policy && coalesce_ms == 0 {
+    // #6445: a sidecar may now carry behavioural overrides too.
+    // Any one of them being set must produce an override struct, otherwise the new knobs would be inert.
+    // When nothing at all is set we still return `None` so a plain sidecar contributes no override and the bridge keeps falling back.
+    let has_behavioural = config.dm_policy.is_some()
+        || config.group_policy.is_some()
+        || config.threading.is_some()
+        || config.output_format.is_some();
+    if !has_command_policy && coalesce_ms == 0 && !has_behavioural {
         return None;
     }
 
@@ -1509,6 +1588,21 @@ fn overrides_from_sidecar_config(
     // sidecar-facing name is `message_coalesce_window_ms`, matching the
     // pre-migration `[[channels.telegram]]` field operators knew (#4441).
     ov.message_debounce_ms = coalesce_ms;
+
+    // #6445: project ONLY the behavioural fields the operator explicitly set, so an unset knob stays at the `ChannelOverrides::default()` value (which is now `None` for the policies — no gating) rather than materializing a concrete default.
+    // This is the whole point of the fix: a sidecar that sets only `group_policy` must not also flip `dm_policy`.
+    if let Some(p) = config.dm_policy {
+        ov.dm_policy = Some(p);
+    }
+    if let Some(p) = config.group_policy {
+        ov.group_policy = Some(p);
+    }
+    if let Some(t) = config.threading {
+        ov.threading = t;
+    }
+    if let Some(f) = config.output_format {
+        ov.output_format = Some(f);
+    }
     Some(ov)
 }
 
@@ -1896,11 +1990,24 @@ impl ChannelAdapter for SidecarAdapter {
         if !self.has_cap("reaction") {
             return Ok(());
         }
+        // Project the structured phase onto the wire tag + optional tool
+        // name so a reaction consumer can render a live step list, not
+        // just an emoji (the `⚙️` tool_use emoji alone drops which tool).
+        let (phase, tool_name) = match &reaction.phase {
+            AgentPhase::Queued => ("queued", None),
+            AgentPhase::Thinking => ("thinking", None),
+            AgentPhase::ToolUse { tool_name } => ("tool_use", Some(tool_name.clone())),
+            AgentPhase::Streaming => ("streaming", None),
+            AgentPhase::Done => ("done", None),
+            AgentPhase::Error => ("error", None),
+        };
         self.send_command(&SidecarCommand::Reaction {
             params: SidecarReactionParams {
                 channel_id: user.platform_id.clone(),
                 message_id: message_id.to_string(),
                 reaction: reaction.emoji.clone(),
+                phase: phase.to_string(),
+                tool_name,
             },
         })
         .await
@@ -2778,6 +2885,8 @@ mod tests {
                     channel_id: "c".to_string(),
                     message_id: "m".to_string(),
                     reaction: "👍".to_string(),
+                    phase: String::new(),
+                    tool_name: None,
                 },
             },
             SidecarCommand::Interactive {
@@ -3262,6 +3371,68 @@ mod tests {
         assert!(ov.allowed_commands.is_empty());
         assert!(ov.blocked_commands.is_empty());
         assert_eq!(ov.message_debounce_ms, 3000);
+    }
+
+    #[test]
+    fn overrides_projects_only_set_behavioural_fields_6445() {
+        use librefang_types::config::{DmPolicy, GroupPolicy};
+        // A sidecar that sets only `group_policy` must project exactly that, leaving `dm_policy` at `None` — not the pre-#6445 materialized `Respond`/`MentionOnly` default that would have gated every other channel behaviour the operator never touched.
+        let c = cfg_json(serde_json::json!({
+            "name": "bot",
+            "command": "python3",
+            "group_policy": "all",
+        }));
+        let ov =
+            super::overrides_from_sidecar_config(&c).expect("behavioural field builds override");
+        assert_eq!(ov.group_policy, Some(GroupPolicy::All));
+        assert_eq!(
+            ov.dm_policy, None,
+            "unset dm_policy must stay None (no gating)"
+        );
+        assert!(!ov.threading);
+        assert!(ov.output_format.is_none());
+        // Command-gating fields are untouched by a behavioural-only config.
+        assert!(!ov.disable_commands);
+
+        // All four behavioural knobs at once round-trip to their Some values.
+        let full = cfg_json(serde_json::json!({
+            "name": "bot",
+            "command": "python3",
+            "dm_policy": "ignore",
+            "group_policy": "mention_only",
+            "threading": true,
+            "output_format": "slack_mrkdwn",
+        }));
+        let ov = super::overrides_from_sidecar_config(&full).expect("override built");
+        assert_eq!(ov.dm_policy, Some(DmPolicy::Ignore));
+        assert_eq!(ov.group_policy, Some(GroupPolicy::MentionOnly));
+        assert!(ov.threading);
+        assert!(ov.output_format.is_some());
+    }
+
+    #[test]
+    fn overrides_threading_only_yields_override_6445() {
+        // A single behavioural knob (threading) must produce an override even with the command policy at its allow default and no coalescing — otherwise the new knob would be inert.
+        let c = cfg_json(serde_json::json!({
+            "name": "bot",
+            "command": "python3",
+            "threading": true,
+        }));
+        let ov = super::overrides_from_sidecar_config(&c)
+            .expect("threading-only must build an override");
+        assert!(ov.threading);
+        assert_eq!(ov.group_policy, None);
+        assert_eq!(ov.dm_policy, None);
+    }
+
+    #[test]
+    fn overrides_none_when_nothing_set_even_with_new_fields_6445() {
+        // A plain sidecar with none of the behavioural knobs set still yields no override (the widened guard must not fire on all-None).
+        let c = cfg_json(serde_json::json!({
+            "name": "telegram",
+            "command": "python3",
+        }));
+        assert!(super::overrides_from_sidecar_config(&c).is_none());
     }
 
     #[test]
@@ -3873,6 +4044,46 @@ mod tests {
                 && !got.contains_key("AGENT_B__LIBREFANG_TEST_BSE_LEAK"),
             "agent-b's namespaced secret must not leak into agent-a's child env"
         );
+    }
+
+    #[test]
+    fn secret_prefix_collisions_flag_names_that_collapse_together() {
+        // `bot-1` and `bot.1` both normalize to `BOT_1`, so a `BOT_1__TOKEN`
+        // secret meant for one is cross-applied to the other. The detector must
+        // report the collision; distinct-prefix names must not be flagged.
+        let names = vec![
+            "bot-1".to_string(),
+            "bot.1".to_string(),
+            "agent-a".to_string(),
+            "agent-b".to_string(),
+        ];
+        let collisions = secret_prefix_collisions(&names);
+        assert_eq!(
+            collisions,
+            vec![(
+                "BOT_1".to_string(),
+                vec!["bot-1".to_string(), "bot.1".to_string()],
+            )],
+            "bot-1 and bot.1 collapse to BOT_1; agent-a / agent-b are distinct \
+             (AGENT_A vs AGENT_B) and must not be flagged"
+        );
+        assert_eq!(
+            warn_secret_prefix_collisions(&names),
+            1,
+            "exactly one colliding group is reported"
+        );
+    }
+
+    #[test]
+    fn secret_prefix_collisions_ignore_duplicate_identical_names() {
+        // The same name listed twice is a single instance's prefix, not a
+        // cross-application hazard, so it must not be reported as a collision.
+        let names = vec!["bot-1".to_string(), "bot-1".to_string()];
+        assert!(
+            secret_prefix_collisions(&names).is_empty(),
+            "a repeated identical name is not a prefix collision"
+        );
+        assert_eq!(warn_secret_prefix_collisions(&names), 0);
     }
 
     /// Find python3 or python on PATH.

@@ -253,18 +253,23 @@ impl KnowledgeGraph for AclKernel {
     async fn knowledge_add_entity(
         &self,
         _: &librefang_types::memory::Entity,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, librefang_kernel_handle::KernelOpError> {
         Err("not implemented".into())
     }
     async fn knowledge_add_relation(
         &self,
         _: &librefang_types::memory::Relation,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, librefang_kernel_handle::KernelOpError> {
         Err("not implemented".into())
     }
     async fn knowledge_query(
         &self,
         _: librefang_types::memory::GraphPattern,
+        _: Option<&str>,
     ) -> Result<Vec<librefang_types::memory::GraphMatch>, librefang_kernel_handle::KernelOpError>
     {
         Err("not implemented".into())
@@ -325,6 +330,7 @@ fn make_ctx<'a>(
         sender_id,
         channel,
         chat_id: None,
+        sender_account_id: None,
         session_id: None,
         spill_threshold_bytes: 0,
         max_artifact_bytes: 0,

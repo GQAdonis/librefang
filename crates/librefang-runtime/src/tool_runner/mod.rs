@@ -54,7 +54,10 @@ use self::channel::tool_channel_send;
 use self::cron::{tool_cron_cancel, tool_cron_create, tool_cron_enable, tool_cron_list};
 pub(crate) use self::definitions::tool_name;
 pub use self::definitions::{builtin_tool_definitions, select_native_tools, ALWAYS_NATIVE_TOOLS};
-pub use self::dispatch::{current_agent_depth, execute_tool, execute_tool_raw, ToolExecContext};
+pub use self::dispatch::{
+    current_agent_depth, execute_tool, execute_tool_raw, execute_tool_with_sender_account,
+    ToolExecContext,
+};
 #[allow(unused_imports)] // Re-exported for incremental migration of submodules (#3576).
 pub(super) use self::error::{ToolError, ToolResult as TypedToolResult};
 use self::event::tool_event_publish;
@@ -124,6 +127,9 @@ tokio::task_local! {
     pub(super) static AGENT_CALL_DEPTH: std::cell::Cell<u32>;
     /// Canvas max HTML size in bytes (set from kernel config at loop start).
     pub static CANVAS_MAX_BYTES: usize;
+    /// Canvas allowed-tag override (set from kernel config at loop start).
+    /// Empty → the canvas sanitizer falls back to its hardcoded `ALLOWED_TAGS`.
+    pub static CANVAS_ALLOWED_TAGS: std::sync::Arc<Vec<String>>;
 }
 
 /// Shared `Option<&Arc<dyn KernelHandle>>` -> `&Arc<dyn KernelHandle>` unwrap

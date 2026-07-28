@@ -169,6 +169,14 @@ pub fn describe_observability_metrics() {
          schedule-fallback misses, labeled by agent. Alert on any increase: \
          the job has silently stopped firing until re-enabled."
     );
+    metrics::describe_counter!(
+        "librefang_media_understanding_failures_total",
+        "Media understanding (vision describe / STT transcribe) failures, \
+         labeled by kind (image|audio), provider, and model. A rising rate for \
+         a given provider/model flags a hosted model that has been retired or \
+         is otherwise failing — the agent degrades to a raw-media passthrough, \
+         so without this counter the rot is only visible days later (#6538)."
+    );
 }
 
 /// Render an HTTP metrics summary.
@@ -252,5 +260,39 @@ mod tests {
     #[test]
     fn test_not_dynamic_regular_word() {
         assert!(!is_dynamic_segment("agents"));
+    }
+
+    #[test]
+    fn test_normalize_is_noop_on_route_template() {
+        // A path that already carries route-template placeholders must pass
+        // through unchanged, so the request-logging middleware can hand a
+        // `MatchedPath` template straight to `record_http_request` and get a
+        // single stable series regardless of the concrete value.
+        for template in [
+            "/api/models/aliases/{alias}",
+            "/api/memory/agents/{id}/kv/{key}",
+            "/api/backups/{filename}",
+            "/api/commands/{name}",
+        ] {
+            assert_eq!(normalize_path(template), template);
+        }
+    }
+
+    #[test]
+    fn test_normalize_does_not_collapse_free_text_segment() {
+        // Regression guard for the cardinality leak (finding #14): free-text
+        // route params are NOT UUID/hex, so `normalize_path` alone leaves them
+        // verbatim -> unbounded label cardinality. This is exactly why the
+        // middleware must normalize on the matched route TEMPLATE instead of
+        // the concrete URI. Two distinct alias values would otherwise produce
+        // two different `path` labels here.
+        assert_eq!(
+            normalize_path("/api/models/aliases/my-fancy-alias"),
+            "/api/models/aliases/my-fancy-alias"
+        );
+        assert_ne!(
+            normalize_path("/api/models/aliases/alias-a"),
+            normalize_path("/api/models/aliases/alias-b")
+        );
     }
 }

@@ -1,12 +1,8 @@
 //! Config hot-reload — diffs two `KernelConfig` instances and produces a `ReloadPlan`.
 //!
-//! **Hot-reload safe**: channels, skills, usage footer, web config, browser,
-//! approval policy, cron settings, webhook triggers, extensions, tool policy,
-//! api_key, dashboard credentials, stable_prefix_mode, proxy, provider_api_keys,
-//! sanitize, default model, language, mode, log_level (when a
-//! [`crate::log_reload::LogLevelReloader`] is installed by the binary).
+//! **Hot-reload safe**: channels, skills, usage footer, web config, approval policy, cron settings, webhook triggers, extensions, tool policy, api_key, dashboard credentials, stable_prefix_mode, proxy, provider_api_keys, sanitize, default model, language, mode, log_level (when a [`crate::log_reload::LogLevelReloader`] is installed by the binary).
 //!
-//! **Restart required**: api_listen, network, memory, home_dir, data_dir, vault.
+//! **Restart required**: api_listen, network, memory, home_dir, data_dir, vault, browser.
 
 use librefang_types::config::{KernelConfig, ReloadMode};
 use tracing::{info, warn};
@@ -26,8 +22,6 @@ pub enum HotAction {
     UpdateUsageFooter,
     /// Web config changed — rebuild web tools context.
     ReloadWebConfig,
-    /// Browser config changed.
-    ReloadBrowserConfig,
     /// Approval policy changed.
     UpdateApprovalPolicy,
     /// Cron max jobs changed.
@@ -160,12 +154,17 @@ impl ReloadPlan {
 // build_reload_plan
 // ---------------------------------------------------------------------------
 
-/// Compare JSON-serialized forms of a field. Returns `true` when the
-/// serialized representations differ (or if one side fails to serialize).
+/// Compare two config fields for a semantic change.
+/// Returns `true` when they differ (or if one side fails to serialize).
+///
+/// Compares canonicalized `serde_json::Value`s, NOT raw JSON strings.
+/// Several reload-classified fields transitively contain `HashMap`s (users, channel_role_mapping, broadcast routes, audit retention, per-skill env, …).
+/// `serde_json::to_string` serializes a `HashMap` in its per-instance iteration order, so two content-identical maps built from separate deserializations (the live config vs the reload candidate) produce different strings and `field_changed` fired spuriously — emitting a needless `ReloadAuth` / `restart_required` on every reload for any multi-entry deployment.
+/// `to_value` normalizes every (possibly nested) map to a `BTreeMap`-backed `Value::Object` (the workspace does not enable serde_json's `preserve_order`), so semantically-equal configs compare equal regardless of map iteration order.
 fn field_changed<T: serde::Serialize>(old: &T, new: &T) -> bool {
-    let old_json = serde_json::to_string(old).ok();
-    let new_json = serde_json::to_string(new).ok();
-    old_json != new_json
+    let old_val = serde_json::to_value(old).ok();
+    let new_val = serde_json::to_value(new).ok();
+    old_val != new_val
 }
 
 /// Decide whether two `[external_auth]` snapshots disagree on a field
@@ -442,7 +441,14 @@ pub fn build_reload_plan_with_caps(
     }
 
     if field_changed(&old.browser, &new.browser) {
-        plan.hot_actions.push(HotAction::ReloadBrowserConfig);
+        // The live `BrowserManager` captures `BrowserConfig` by value at boot (`subsystems/media.rs`, constructed once in `boot.rs`) with no rebuild path, and every new-session read is from that frozen field (`max_sessions` / `cdp_endpoint` / `headless`).
+        // The old `ReloadBrowserConfig` hot action only logged "new sessions will use updated config" — which was false — so a reload reported success while nothing changed until a full restart.
+        // Classify browser changes as restart-required so the reload report is honest.
+        plan.restart_required = true;
+        plan.restart_reasons.push(
+            "browser config changed (BrowserManager is boot-captured; restart required)"
+                .to_string(),
+        );
     }
 
     if field_changed(&old.approval, &new.approval) {
@@ -872,6 +878,12 @@ pub fn build_reload_plan_with_caps(
             field_changed(&old.default_routing, &new.default_routing),
             "default_routing",
         );
+        // #6459 — the org-wide provider allowlist is read live from
+        // `self.config.load()` by `resolve_driver` on every agent turn, and
+        // the aux client is rebuilt from the swapped config on reload
+        // (`config_reload_ops.rs`). A bare ArcSwap swap therefore makes an
+        // allowlist edit effective on the next turn with no explicit reapply.
+        noop_if_changed(field_changed(&old.providers, &new.providers), "providers");
         noop_if_changed(old.prompt_caching != new.prompt_caching, "prompt_caching");
         noop_if_changed(
             field_changed(&old.prompt_cache, &new.prompt_cache),
@@ -1073,6 +1085,7 @@ pub fn classified_reload_fields() -> std::collections::BTreeSet<&'static str> {
         "prompt_caching",
         "prompt_cache",
         "compaction",
+        "providers",
         "qwen_code_path",
         "cron_session_max_tokens",
         "cron_session_max_messages",
@@ -1172,6 +1185,41 @@ pub fn should_store_config(mode: ReloadMode, plan: &ReloadPlan) -> bool {
 mod tests {
     use super::*;
     use librefang_types::config::KernelConfig;
+
+    /// Regression (#6441 follow-up): `field_changed` must not report a change
+    /// for two content-identical `HashMap`s that merely iterate in different
+    /// orders. The old `serde_json::to_string` comparison did, producing
+    /// spurious `ReloadAuth` / `restart_required` on every reload for
+    /// multi-entry deployments. `to_value` normalizes map key order, so equal
+    /// content compares equal — while a real value change is still detected.
+    #[test]
+    fn field_changed_ignores_hashmap_iteration_order() {
+        use std::collections::HashMap;
+        // Enough keys that two independently-seeded maps almost never iterate
+        // identically — so a regression to string comparison would fire.
+        let keys = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"];
+        let forward: HashMap<String, String> = keys
+            .iter()
+            .map(|k| (k.to_string(), format!("v-{k}")))
+            .collect();
+        let reversed: HashMap<String, String> = keys
+            .iter()
+            .rev()
+            .map(|k| (k.to_string(), format!("v-{k}")))
+            .collect();
+        assert!(
+            !field_changed(&forward, &reversed),
+            "content-identical maps must not be reported as changed"
+        );
+
+        // A genuine value change is still detected.
+        let mut changed = forward.clone();
+        changed.insert("a".to_string(), "DIFFERENT".to_string());
+        assert!(
+            field_changed(&forward, &changed),
+            "a real value change must be detected"
+        );
+    }
 
     /// Helper: create a default config for diffing.
     fn default_cfg() -> KernelConfig {

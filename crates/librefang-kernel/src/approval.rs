@@ -18,6 +18,12 @@ use totp_rs::{Algorithm, Secret, TOTP};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+/// Namespace prefix every MCP tool name carries.
+///
+/// Mirrors `format_mcp_tool_name` / `is_mcp_tool` in `librefang-runtime-mcp`.
+/// Duplicated as a literal rather than imported because `classify_risk` is a pure string classifier and pulling the MCP crate into this module's dependency path for one prefix is not worth the coupling.
+const MCP_TOOL_PREFIX: &str = "mcp_";
+
 /// Max pending requests per agent.
 const MAX_PENDING_PER_AGENT: usize = 5;
 /// Max recent approval records to retain for history and UI visibility.
@@ -29,6 +35,11 @@ const MAX_ESCALATIONS: u8 = 3;
 const TOTP_MAX_FAILURES: u32 = 5;
 /// TOTP lockout duration after max failures.
 const TOTP_LOCKOUT_SECS: u64 = 300;
+/// TOTP time step in seconds (RFC 6238 default).
+const TOTP_STEP_SECS: u64 = 30;
+/// TOTP skew tolerance in steps: a code is accepted while the current step is
+/// within ±`TOTP_SKEW_STEPS` of the code's own step.
+const TOTP_SKEW_STEPS: u8 = 1;
 
 /// Re-export from librefang-types so approval.rs consumers don't need two imports.
 pub use librefang_types::tool::DeferredToolExecution;
@@ -115,7 +126,10 @@ impl ApprovalManager {
             .count()
     }
 
-    pub fn new(policy: ApprovalPolicy) -> Self {
+    pub fn new(mut policy: ApprovalPolicy) -> Self {
+        // Normalize the `auto_approve` shorthand at the single point where a policy is installed, so no construction site can forget it (#6492 Bug 1).
+        // See `new_with_db` / `update_policy` for the other two.
+        policy.apply_shorthands();
         let (events_tx, _) = broadcast::channel(256);
         Self {
             pending: DashMap::new(),
@@ -139,7 +153,9 @@ impl ApprovalManager {
     /// restart (issue #3611). Restored entries have no live `oneshot::Sender`,
     /// so they cannot be auto-resolved by the agent loop — they surface in
     /// the dashboard / API as pending items that require operator action.
-    pub fn new_with_db(policy: ApprovalPolicy, pool: Pool<SqliteConnectionManager>) -> Self {
+    pub fn new_with_db(mut policy: ApprovalPolicy, pool: Pool<SqliteConnectionManager>) -> Self {
+        // Normalize the `auto_approve` shorthand here (the daemon-boot path, `boot.rs`) so `auto_approve = true` actually clears `require_approval` — previously it was a silent no-op because `apply_shorthands` was only ever called in unit tests (#6492 Bug 1).
+        policy.apply_shorthands();
         let failures = Self::load_totp_lockout(&pool);
         let pending: DashMap<Uuid, PendingRequest> = DashMap::new();
         // Restore pending approvals from the previous session.
@@ -577,6 +593,27 @@ impl ApprovalManager {
         ) {
             warn!(request_id = %id, error = %e, "Failed to delete pending approval from database");
         }
+    }
+
+    /// Look up the terminal decision for an already-resolved approval from the durable audit log (`approval_audit`).
+    ///
+    /// The in-memory `recent` ring buffer only holds the last `MAX_RECENT_APPROVALS` resolutions, so a double-resolve arriving after the entry has aged out — or after a daemon restart — would otherwise be indistinguishable from a never-existed id.
+    /// `approval_audit` is the authoritative record: every resolution writes a terminal row (decision != "pending") via [`Self::push_recent`].
+    /// Consulting it lets `resolve` answer "already resolved" (→ HTTP 409) deterministically instead of degrading to "not found" (→ 404).
+    /// See issue #6492 Bug 3.
+    ///
+    /// Returns `(decision, decided_by)` for the most recent terminal row, or `None` when no resolution has been recorded (id never existed, still pending, or no audit DB is attached).
+    fn db_lookup_resolved_decision(&self, id: Uuid) -> Option<(String, String)> {
+        let db = self.audit_db.as_ref()?;
+        let conn = db.get().ok()?;
+        conn.query_row(
+            "SELECT decision, COALESCE(decided_by, 'unknown') FROM approval_audit \
+             WHERE request_id = ?1 AND decision != 'pending' \
+             ORDER BY decided_at DESC LIMIT 1",
+            rusqlite::params![id.to_string()],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .ok()
     }
 
     /// Load persisted TOTP lockout state from the database.
@@ -1163,7 +1200,8 @@ impl ApprovalManager {
                 Ok((response, pending.deferred))
             }
             None => {
-                // Check recent records for who already handled this
+                // Not pending. Distinguish "already resolved" (→ 409 at the api boundary) from "never existed / long expired" (→ 404).
+                // Check the in-memory `recent` ring first for the fast path, then fall back to the durable audit log so the answer stays stable after `recent` evicts the entry or the daemon restarts (issue #6492 Bug 3).
                 let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
                 let handler_info = recent.iter().find(|r| r.request.id == request_id).map(|r| {
                     let who = r.decided_by.as_deref().unwrap_or("unknown");
@@ -1171,6 +1209,10 @@ impl ApprovalManager {
                     format!("Already {decision} by {who}")
                 });
                 drop(recent);
+                let handler_info = handler_info.or_else(|| {
+                    self.db_lookup_resolved_decision(request_id)
+                        .map(|(decision, who)| format!("Already {decision} by {who}"))
+                });
                 Err(handler_info.unwrap_or_else(|| {
                     format!("Approval request {request_id} not found or expired")
                 }))
@@ -1432,7 +1474,9 @@ impl ApprovalManager {
     }
 
     /// Update the approval policy (for hot-reload).
-    pub fn update_policy(&self, policy: ApprovalPolicy) {
+    pub fn update_policy(&self, mut policy: ApprovalPolicy) {
+        // Apply the `auto_approve` shorthand on the reload path too (#6492 Bug 1) so a `POST /api/config/reload` that flips `auto_approve = true` takes effect, mirroring the boot-time normalization in `new_with_db`.
+        policy.apply_shorthands();
         *self.policy.write().unwrap_or_else(|e| e.into_inner()) = policy;
     }
 
@@ -1460,6 +1504,11 @@ impl ApprovalManager {
             }
             "file_write" | "file_delete" | "apply_patch" => RiskLevel::High,
             "web_fetch" | "browser_navigate" => RiskLevel::Medium,
+            // Tools from an MCP server are third-party code whose effects this table cannot enumerate.
+            // The arms above are a closed list of built-ins, so before this arm existed every `mcp_*` tool fell into the `Low` default and the `trusted_senders` bypass waived approval on all of them — including ones that move money or upload a plaintext credential.
+            // The operator's `require_approval` globs were never consulted, because the bypass returns before that check.
+            // Grading them High keeps the bypass to the built-ins it was written for; an operator who genuinely wants an MCP tool unattended can still allow it per-channel or per-user.
+            name if name.starts_with(MCP_TOOL_PREFIX) => RiskLevel::High,
             _ => RiskLevel::Low,
         }
     }
@@ -1525,8 +1574,8 @@ impl ApprovalManager {
         let totp = TOTP::new(
             Algorithm::SHA1,
             6,
-            1,
-            30,
+            TOTP_SKEW_STEPS,
+            TOTP_STEP_SECS,
             raw,
             Some(issuer.to_string()),
             String::new(),
@@ -1937,15 +1986,21 @@ impl ApprovalManager {
 
     /// Check whether a TOTP code has already been used within the replay window.
     ///
-    /// The window is 60 seconds (two 30-second TOTP steps) to cover both the
-    /// current step and the immediately preceding one.
+    /// The window is 90 seconds (three 30-second TOTP steps: the current step
+    /// plus one before and one after, matching `TOTP_SKEW_STEPS = 1`). It must
+    /// be at least as wide as the cryptographic acceptance window so a code
+    /// first accepted during its future-skew branch (client clock ahead of the
+    /// server) cannot be replayed after the record has aged out but while the
+    /// code still verifies. Derived as `TOTP_STEP_SECS * (2 * TOTP_SKEW_STEPS + 1)`
+    /// so a future skew change stays consistent with `verify_totp_code_with_issuer`.
     pub fn is_totp_code_used(&self, code: &str) -> bool {
         let hash = Self::totp_code_hash(code);
         let now_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let window_start = now_unix - 60;
+        let replay_window_secs = TOTP_STEP_SECS as i64 * (2 * TOTP_SKEW_STEPS as i64 + 1);
+        let window_start = now_unix - replay_window_secs;
 
         // SurrealDB path
         if let Some(store) = &self.used_codes_store {
@@ -1968,7 +2023,9 @@ impl ApprovalManager {
 
     /// Record a successfully-verified TOTP code to prevent replay.
     ///
-    /// Also prunes entries older than 120 seconds from the table to keep it small.
+    /// Also prunes entries older than the replay window plus one extra step
+    /// (120 seconds at the current step/skew) from the table to keep it small,
+    /// staying strictly wider than `is_totp_code_used`'s lookup window.
     pub fn record_totp_code_used(&self, code: &str) {
         // Ignore errors for non-action callers (enrollment confirm, revoke) —
         // those flows don't have a structured error path to return a 500.
@@ -1998,7 +2055,8 @@ impl ApprovalManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let prune_before = now_unix - 120;
+        let prune_before = now_unix
+            - (TOTP_STEP_SECS as i64 * (2 * TOTP_SKEW_STEPS as i64 + 1) + TOTP_STEP_SECS as i64);
 
         // SurrealDB path — check before acquiring the SQLite lock.
         if let Some(store) = &self.used_codes_store {
@@ -2219,6 +2277,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -2701,6 +2760,40 @@ mod tests {
     // requires_approval_with_context
     // -----------------------------------------------------------------------
 
+    /// A trusted sender must not be able to waive approval on a tool that came from an MCP server.
+    ///
+    /// `classify_risk` matches a closed list of built-in names, so every `mcp_*` tool used to fall into the `Low` default and the trust bypass returned before `require_approval` was consulted — the operator's globs were dead config.
+    /// Real MCP servers ship tools that move money or take a plaintext credential as an argument, so the bypass has to stop at the built-ins it was written for.
+    #[test]
+    fn test_trusted_sender_cannot_bypass_an_mcp_tool() {
+        let policy = ApprovalPolicy {
+            require_approval: vec!["mcp_everyapi_*".to_string()],
+            trusted_senders: vec!["admin_123".to_string()],
+            ..Default::default()
+        };
+        let mgr = ApprovalManager::new(policy);
+
+        assert!(
+            mgr.requires_approval_with_context(
+                "mcp_everyapi_seller_withdraw",
+                Some("admin_123"),
+                None
+            ),
+            "a trusted sender must not waive approval on an MCP write tool"
+        );
+        assert!(
+            mgr.requires_approval_with_context(
+                "mcp_everyapi_seller_add_key",
+                Some("admin_123"),
+                None
+            ),
+            "the one MCP write with no confirm gate of its own must stay gated here"
+        );
+        // A built-in low-risk tool keeps its exemption — this narrows the
+        // bypass to MCP tools rather than disabling it.
+        assert!(!mgr.requires_approval_with_context("web_search", Some("admin_123"), None));
+    }
+
     #[test]
     fn test_context_trusted_sender_bypasses_low_risk_only() {
         let policy = ApprovalPolicy {
@@ -2938,6 +3031,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -2970,6 +3064,7 @@ mod tests {
             sender_id: Some("user-123".to_string()),
             channel: Some("telegram".to_string()),
             chat_id: None,
+            account_id: None,
             workspace_root: Some(std::path::PathBuf::from("/tmp")),
             force_human: false,
             session_id: None,
@@ -3014,6 +3109,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3056,6 +3152,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3092,6 +3189,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3132,6 +3230,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3152,6 +3251,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3180,6 +3280,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3198,6 +3299,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3228,6 +3330,7 @@ mod tests {
                 sender_id: None,
                 channel: None,
                 chat_id: None,
+                account_id: None,
                 workspace_root: None,
                 force_human: false,
                 session_id: None,
@@ -3249,6 +3352,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3270,6 +3374,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -3305,6 +3410,7 @@ mod tests {
                     sender_id: None,
                     channel: None,
                     chat_id: None,
+                    account_id: None,
                     workspace_root: None,
                     force_human: false,
                     session_id: None,
@@ -3349,6 +3455,7 @@ mod tests {
                     sender_id: None,
                     channel: None,
                     chat_id: None,
+                    account_id: None,
                     workspace_root: None,
                     force_human: false,
                     session_id: None,
@@ -3756,6 +3863,154 @@ mod tests {
         ApprovalManager::new_with_db(ApprovalPolicy::default(), pool)
     }
 
+    // -----------------------------------------------------------------------
+    // #6492 Bug 1 — `auto_approve` shorthand is applied when a policy is installed (not just in a unit test that manually calls apply_shorthands)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn auto_approve_shorthand_applied_at_construction() {
+        // A default policy gates shell_exec; with `auto_approve = true` the manager must ungate everything at construction time.
+        // Before #6492 this only happened if a caller remembered to call apply_shorthands, which no production path did.
+        let policy = ApprovalPolicy {
+            auto_approve: true,
+            ..Default::default()
+        };
+        assert!(
+            !policy.require_approval.is_empty(),
+            "precondition: default policy has a non-empty require list"
+        );
+        let mgr = ApprovalManager::new(policy);
+        assert!(
+            mgr.policy().require_approval.is_empty(),
+            "auto_approve must clear require_approval at construction"
+        );
+        assert!(!mgr.requires_approval("shell_exec"));
+    }
+
+    #[test]
+    fn auto_approve_shorthand_applied_at_construction_with_db() {
+        // Same guarantee on the daemon-boot path (`new_with_db`).
+        let pool = Pool::builder()
+            .max_size(1)
+            .build(SqliteConnectionManager::memory())
+            .unwrap();
+        {
+            let conn = pool.get().unwrap();
+            librefang_memory::migration::run_migrations(&conn).unwrap();
+        }
+        let policy = ApprovalPolicy {
+            auto_approve: true,
+            ..Default::default()
+        };
+        let mgr = ApprovalManager::new_with_db(policy, pool);
+        assert!(mgr.policy().require_approval.is_empty());
+        assert!(!mgr.requires_approval("file_write"));
+    }
+
+    #[test]
+    fn auto_approve_shorthand_applied_on_hot_reload() {
+        // A `POST /api/config/reload` that flips `auto_approve = true` routes through `update_policy`, which must also apply the shorthand.
+        let mgr = default_manager();
+        assert!(mgr.requires_approval("shell_exec"));
+        mgr.update_policy(ApprovalPolicy {
+            auto_approve: true,
+            ..Default::default()
+        });
+        assert!(mgr.policy().require_approval.is_empty());
+        assert!(!mgr.requires_approval("shell_exec"));
+    }
+
+    // -----------------------------------------------------------------------
+    // #6492 Bug 3 — double-resolve is a deterministic conflict, never a 404
+    // -----------------------------------------------------------------------
+
+    fn seed_pending(mgr: &ApprovalManager, req: ApprovalRequest) -> Uuid {
+        let id = req.id;
+        mgr.db_insert_pending(&req, None);
+        mgr.pending.insert(
+            id,
+            PendingRequest {
+                request: req,
+                sender: None,
+                deferred: None,
+                submitted_at: chrono::Utc::now(),
+            },
+        );
+        id
+    }
+
+    #[test]
+    fn double_resolve_reports_already_resolved() {
+        let mgr = make_manager_with_db();
+        let id = seed_pending(&mgr, make_request("agent-x", "shell_exec", 300));
+        mgr.resolve(
+            id,
+            ApprovalDecision::Approved,
+            Some("api".into()),
+            false,
+            None,
+        )
+        .expect("first resolve succeeds");
+        let err = mgr
+            .resolve(
+                id,
+                ApprovalDecision::Approved,
+                Some("api".into()),
+                false,
+                None,
+            )
+            .expect_err("second resolve must be rejected");
+        assert!(err.starts_with("Already "), "got: {err}");
+        assert!(err.contains("approved"), "got: {err}");
+    }
+
+    #[test]
+    fn double_resolve_stays_a_conflict_after_recent_eviction() {
+        // Once the in-memory `recent` ring evicts the resolution, a re-resolve must still report "Already …" (→ 409) via the durable audit log — not degrade to "not found" (→ 404), which was the pre-#6492 flip.
+        let mgr = make_manager_with_db();
+        let id = seed_pending(&mgr, make_request("agent-x", "shell_exec", 300));
+        mgr.resolve(
+            id,
+            ApprovalDecision::Denied,
+            Some("api".into()),
+            false,
+            None,
+        )
+        .expect("first resolve succeeds");
+        // Simulate the 100-slot ring buffer aging the entry out.
+        mgr.recent.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        let err = mgr
+            .resolve(
+                id,
+                ApprovalDecision::Denied,
+                Some("api".into()),
+                false,
+                None,
+            )
+            .expect_err("second resolve must still be rejected");
+        assert!(
+            err.starts_with("Already "),
+            "audit-log fallback must keep it a conflict, got: {err}"
+        );
+        assert!(err.contains("denied"), "got: {err}");
+    }
+
+    #[test]
+    fn resolve_genuinely_unknown_id_is_not_found() {
+        // A never-existed id must stay "not found" (→ 404), never a false 409.
+        let mgr = make_manager_with_db();
+        let err = mgr
+            .resolve(
+                Uuid::new_v4(),
+                ApprovalDecision::Approved,
+                Some("api".into()),
+                false,
+                None,
+            )
+            .expect_err("unknown id must be rejected");
+        assert!(err.contains("not found"), "got: {err}");
+    }
+
     #[test]
     fn test_totp_replay_prevention_code_not_used_initially() {
         let mgr = make_manager_with_db();
@@ -3822,6 +4077,38 @@ mod tests {
         // as used. Without this an attacker rewriting the path could replay
         // a captured TOTP request to authorize a higher-impact approval.
         assert!(mgr.is_totp_code_used("987654"));
+    }
+
+    /// Finding #27: the replay-detection window must be at least as wide as the
+    /// cryptographic acceptance window (90 s = three 30-second steps under
+    /// `TOTP_SKEW_STEPS = 1`). A code first accepted during its future-skew
+    /// branch (client clock ahead of the server) is recorded with `used_at` up
+    /// to ~30 s before its own step begins; with the old 60 s lookup window it
+    /// stopped being flagged as used ~30 s before it stopped verifying, leaving
+    /// a replay gap. A record aged 75 s (>60 s, <90 s) must still count as used.
+    #[test]
+    fn finding_27_replay_window_covers_full_skew_acceptance() {
+        let mgr = make_manager_with_db();
+        let hash = ApprovalManager::totp_code_hash("135790");
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        // Simulate a code recorded 75 seconds ago — inside the 90 s acceptance
+        // window but outside the old 60 s replay window.
+        let used_at = now_unix - 75;
+        {
+            let conn = mgr.audit_db.as_ref().unwrap().get().unwrap();
+            conn.execute(
+                "INSERT INTO totp_used_codes (code_hash, used_at, bound_to)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![hash, used_at, Option::<&str>::None],
+            )
+            .unwrap();
+        }
+        // With the widened (90 s) window this must be detected as used; the old
+        // 60 s window would have returned false, reopening the replay gap.
+        assert!(mgr.is_totp_code_used("135790"));
     }
 
     /// #5136: `load_totp_lockout` reconstructs `Instant::now() - elapsed`.
@@ -4114,6 +4401,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -4140,6 +4428,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -4170,6 +4459,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -4590,6 +4880,7 @@ mod tests {
             sender_id: Some("operator-7".to_string()),
             channel: Some("acp".to_string()),
             chat_id: None,
+            account_id: None,
             workspace_root: Some(std::path::PathBuf::from("/tmp/restart-test")),
             force_human: false,
             session_id: Some(original_session_id),
@@ -4693,6 +4984,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             session_id: None,
@@ -4776,6 +5068,7 @@ mod tests {
             sender_id: None,
             channel: None,
             chat_id: None,
+            account_id: None,
             workspace_root: None,
             force_human: false,
             // *** mismatch *** — row column carries `row_session`.

@@ -254,6 +254,7 @@ export {
   installHandFromMarketplace,
   setHandSecret,
   updateHandSettings,
+  updateHandManifestToml,
   sendHandMessage,
   // mcp
   addMcpServer,

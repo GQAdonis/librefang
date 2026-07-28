@@ -1136,7 +1136,15 @@ impl ProactiveMemoryStore {
     /// Store extracted relation triples into the knowledge graph.
     ///
     /// Deduplicates: skips if an identical (source, relation, target) already exists.
-    pub fn store_relations(&self, triples: &[RelationTriple], agent_id: &str) {
+    /// `peer_id` scopes every write to a single user on a multi-user agent
+    /// (#6494); `None` writes shared/unscoped triples (the pre-migration
+    /// behaviour, and correct for single-user agents).
+    pub fn store_relations(
+        &self,
+        triples: &[RelationTriple],
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) {
         for triple in triples {
             let source_type = parse_entity_type(&triple.subject_type);
             let target_type = parse_entity_type(&triple.object_type);
@@ -1152,6 +1160,7 @@ impl ProactiveMemoryStore {
                     updated_at: chrono::Utc::now(),
                 },
                 agent_id,
+                peer_id,
             ) {
                 Ok(id) => id,
                 Err(e) => {
@@ -1171,6 +1180,7 @@ impl ProactiveMemoryStore {
                     updated_at: chrono::Utc::now(),
                 },
                 agent_id,
+                peer_id,
             ) {
                 Ok(id) => id,
                 Err(e) => {
@@ -1183,7 +1193,7 @@ impl ProactiveMemoryStore {
             let relation_type = parse_relation_type(&triple.relation);
             match self
                 .knowledge
-                .has_relation(&source_id, &relation_type, &target_id)
+                .has_relation(&source_id, &relation_type, &target_id, peer_id)
             {
                 Ok(true) => {
                     tracing::debug!(
@@ -1204,6 +1214,7 @@ impl ProactiveMemoryStore {
                             created_at: chrono::Utc::now(),
                         },
                         agent_id,
+                        peer_id,
                     ) {
                         tracing::warn!(
                             "Failed to add relation '{}' -> '{}': {}",
@@ -1581,6 +1592,24 @@ impl ProactiveMemoryStore {
         pattern: GraphPattern,
     ) -> LibreFangResult<Vec<librefang_types::memory::GraphMatch>> {
         self.knowledge.query_graph(pattern)
+    }
+
+    /// Query the knowledge graph for relations matching a pattern, scoped to
+    /// a single agent and optionally a single user.
+    ///
+    /// The per-agent relations HTTP endpoint must never leak another agent's
+    /// triples, so it routes through this scoped variant instead of the
+    /// unscoped [`query_relations`]. When `peer_id` is `Some`, the read is
+    /// further narrowed to that user's triples (#6494); `None` returns every
+    /// user's rows for the agent (shared semantics).
+    pub fn query_relations_for_agent(
+        &self,
+        pattern: GraphPattern,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<Vec<librefang_types::memory::GraphMatch>> {
+        self.knowledge
+            .query_graph_scoped(pattern, Some(agent_id), peer_id)
     }
 
     /// Find duplicate/near-duplicate memories for a user/agent.
@@ -2048,9 +2077,11 @@ impl ProactiveMemory for ProactiveMemoryStore {
         // already includes the ADDs, and eviction will trim only the true excess.
         self.evict_if_over_cap(agent_id, 0)?;
 
-        // Step 6: Store extracted relations in knowledge graph
+        // Step 6: Store extracted relations in knowledge graph. This path has
+        // no per-message peer context (it extracts from the level-defaulting
+        // add() flow), so relations are stored shared/unscoped (#6494).
         if !extraction.relations.is_empty() {
-            self.store_relations(&extraction.relations, user_id);
+            self.store_relations(&extraction.relations, user_id, None);
         }
 
         Ok(results)
@@ -2181,20 +2212,27 @@ impl ProactiveMemory for ProactiveMemoryStore {
         // Update content in-place (preserves ID, agent, scope, access stats)
         self.semantic.update_content(mid, content, Some(metadata))?;
 
-        // Re-embed the updated content so vector search stays accurate
+        // Re-embed the updated content so vector search stays accurate. A
+        // failure here leaves the stored vector pointing at the OLD content
+        // while the row now holds the NEW content — a silently stale index
+        // that returns the wrong memory for a semantic query. The content
+        // write above is already committed, but we must not report
+        // unqualified success (`Ok(true)`) with a known-stale vector: surface
+        // the error so the caller knows the update did not fully land and can
+        // retry (a retry re-commits the content and re-embeds). Returning
+        // `Ok(false)` is not an option — the API maps it to `404 Not Found`,
+        // which is wrong for a row that does exist and was written.
         if let Some(ref embed_fn) = self.embedding {
-            match embed_fn.embed_one(content).await {
-                Ok(vec) => {
-                    if let Err(e) = self.semantic.update_embedding(mid, &vec) {
-                        tracing::warn!("Failed to update embedding for memory {memory_id}: {e}");
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to compute embedding for updated memory {memory_id}: {e}"
-                    );
-                }
-            }
+            let vec = embed_fn.embed_one(content).await.map_err(|e| {
+                LibreFangError::Internal(format!(
+                    "memory {memory_id} content updated but re-embedding failed (stored vector is stale): {e}"
+                ))
+            })?;
+            self.semantic.update_embedding(mid, &vec).map_err(|e| {
+                LibreFangError::Internal(format!(
+                    "memory {memory_id} content updated but embedding write failed (stored vector is stale): {e}"
+                ))
+            })?;
         }
 
         let _ = user_id; // KV mirror removed; semantic.update_content is authoritative.
@@ -2605,9 +2643,10 @@ impl ProactiveMemoryHooks for ProactiveMemoryStore {
             }
         }
 
-        // Store extracted relations in knowledge graph
+        // Store extracted relations in knowledge graph, scoped to the peer
+        // whose conversation produced them (#6494).
         if !extraction_result.relations.is_empty() {
-            self.store_relations(&extraction_result.relations, user_id);
+            self.store_relations(&extraction_result.relations, user_id, peer_id);
         }
 
         // Auto-consolidation: merge duplicates every AUTO_CONSOLIDATE_EVERY
@@ -3921,6 +3960,58 @@ mod tests {
         assert!(count >= 1);
     }
 
+    /// Regression: `update()` commits the new content, then re-embeds. If the
+    /// re-embed fails the stored vector still points at the OLD content — a
+    /// silently stale index. Pre-fix the failure was swallowed with a `warn!`
+    /// and the method returned `Ok(true)`, reporting unqualified success on a
+    /// stale vector. It must surface the failure instead so the caller knows
+    /// the update did not fully land.
+    #[tokio::test]
+    async fn update_surfaces_error_when_reembedding_fails() {
+        struct FailingEmbedding;
+        #[async_trait]
+        impl EmbeddingFn for FailingEmbedding {
+            async fn embed_one(
+                &self,
+                _text: &str,
+            ) -> librefang_types::error::LibreFangResult<Vec<f32>> {
+                Err(librefang_types::error::LibreFangError::Internal(
+                    "embedding backend unavailable".to_string(),
+                ))
+            }
+        }
+
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let store = ProactiveMemoryStore::with_default_config(Arc::new(substrate))
+            .with_embedding(Arc::new(FailingEmbedding));
+        let agent_id = AgentId::new().to_string();
+
+        // `add` / `search` swallow embed failures and fall back to text, so
+        // the memory is created and findable despite the failing embedder.
+        store
+            .add(
+                &[serde_json::json!({"role": "user", "content": "I prefer dark mode always"})],
+                &agent_id,
+            )
+            .await
+            .unwrap();
+        let results = store.search("dark mode", &agent_id, 10).await.unwrap();
+        assert!(
+            !results.is_empty(),
+            "memory must be findable via text fallback"
+        );
+        let mem_id = results[0].id.clone();
+
+        let err = store
+            .update(&mem_id, &agent_id, "I prefer light mode now")
+            .await
+            .expect_err("re-embed failure must surface as Err, not Ok(true)");
+        assert!(
+            err.to_string().contains("stale"),
+            "error must flag the stored vector as stale, got: {err}"
+        );
+    }
+
     #[tokio::test]
     async fn test_knowledge_graph_stores_relations() {
         let substrate = Arc::new(MemorySubstrate::open_in_memory(0.1).unwrap());
@@ -3934,7 +4025,7 @@ mod tests {
             object: "Acme Corp".to_string(),
             object_type: "organization".to_string(),
         }];
-        store.store_relations(&triples, "test-agent");
+        store.store_relations(&triples, "test-agent", None);
 
         // Query the knowledge graph
         let matches = substrate
@@ -4137,8 +4228,8 @@ mod tests {
         }];
 
         // Store twice
-        store.store_relations(&triples, "test-agent");
-        store.store_relations(&triples, "test-agent");
+        store.store_relations(&triples, "test-agent", None);
+        store.store_relations(&triples, "test-agent", None);
 
         // Should only have 1 relation (deduped)
         let matches = substrate

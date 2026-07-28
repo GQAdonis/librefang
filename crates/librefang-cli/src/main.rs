@@ -586,6 +586,10 @@ fn main() {
             ModelsCommands::Aliases { json } => cmd_models_aliases(json),
             ModelsCommands::Providers { json } => cmd_models_providers(json),
             ModelsCommands::Set { model } => cmd_models_set(model),
+            ModelsCommands::Connect {
+                target,
+                set_default,
+            } => cmd_models_connect(&target, set_default),
         },
         Some(Commands::Gateway(sub)) => match sub {
             GatewayCommands::Start { tail, foreground } => {
@@ -709,8 +713,8 @@ fn main() {
             SystemCommands::Version { json } => cmd_system_version(json),
         },
         Some(Commands::Service(sub)) => match sub {
-            ServiceCommands::Install => cmd_service_install(),
-            ServiceCommands::Uninstall => cmd_service_uninstall(),
+            ServiceCommands::Install { system } => cmd_service_install(system),
+            ServiceCommands::Uninstall { system } => cmd_service_uninstall(system),
             ServiceCommands::Status => cmd_service_status(),
         },
         Some(Commands::Reset { confirm }) => cmd_reset(confirm),

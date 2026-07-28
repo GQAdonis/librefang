@@ -2147,6 +2147,18 @@ impl HandsResource {
         .await
     }
 
+    pub async fn update_hand_manifest(&self, hand_id: &str, data: Value) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::PUT,
+            &format!("/api/hands/{}/manifest", hand_id),
+            Some(data),
+            &[],
+        )
+        .await
+    }
+
     pub async fn set_hand_secret(&self, hand_id: &str, data: Value) -> Result<Value> {
         do_req(
             &self.client,
@@ -4721,6 +4733,47 @@ impl UsersResource {
             reqwest::Method::PUT,
             &format!("/api/users/{}/policy", name),
             Some(data),
+            &[],
+        )
+        .await
+    }
+
+    pub async fn list_user_provider_keys(&self, name: &str) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::GET,
+            &format!("/api/users/{}/provider-keys", name),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn set_user_provider_key(
+        &self,
+        name: &str,
+        provider: &str,
+        data: Value,
+    ) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::PUT,
+            &format!("/api/users/{}/provider-keys/{}", name, provider),
+            Some(data),
+            &[],
+        )
+        .await
+    }
+
+    pub async fn delete_user_provider_key(&self, name: &str, provider: &str) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::DELETE,
+            &format!("/api/users/{}/provider-keys/{}", name, provider),
+            None,
             &[],
         )
         .await

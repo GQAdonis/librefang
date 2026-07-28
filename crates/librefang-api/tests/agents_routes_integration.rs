@@ -16,6 +16,10 @@
 //!   PUT   /api/agents/{id}/resume  (resume → state Running, unknown 404)
 //!   PUT   /api/agents/{id}/mode    (mode change persisted + read-after-write,
 //!                                   unknown 404, invalid id 400)
+//!   PATCH /api/agents/{id}/identity (merge semantics: a partial body preserves
+//!                                   the fields it omits, empty string clears,
+//!                                   and the result matches PATCH /config for
+//!                                   the same body — refs #6608)
 //!
 //! Run: cargo test -p librefang-api --test agents_routes_integration
 
@@ -232,6 +236,57 @@ async fn test_get_agent_happy_path() {
     assert_eq!(body["name"], "lookup-target");
     assert!(body["model"].is_object());
     assert!(body["capabilities"].is_object());
+}
+
+/// #6565: a consumer deciding whether an MCP server is reachable needs both halves of the kernel's gate (`!mcp_disabled && !mcp_servers.is_empty()`).
+/// `mcp_servers` / `mcp_servers_mode` were already emitted; `mcp_disabled` was not, so `mcp_servers = ["*"]` on a disabled agent looked like a live grant.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_agent_exposes_the_full_mcp_grant_state_6565() {
+    let h = boot(TEST_TOKEN).await;
+    let manifest = AgentManifest {
+        name: "mcp-granted".to_string(),
+        mcp_servers: vec!["server-x".to_string()],
+        ..AgentManifest::default()
+    };
+    let id = h
+        .state
+        .kernel
+        .spawn_agent_typed(manifest)
+        .expect("spawn_agent");
+
+    let (status, body) = send(h.app.clone(), get(&format!("/api/agents/{}", id))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["mcp_servers"], serde_json::json!(["server-x"]));
+    assert_eq!(body["mcp_servers_mode"], "allowlist");
+    assert_eq!(
+        body["mcp_disabled"], false,
+        "mcp_disabled must be present, not absent: {body}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_agent_reports_mcp_disabled_even_with_a_wildcard_grant_6565() {
+    let h = boot(TEST_TOKEN).await;
+    let manifest = AgentManifest {
+        name: "mcp-off".to_string(),
+        // The combination that used to read as "all servers granted".
+        mcp_servers: vec!["*".to_string()],
+        mcp_disabled: true,
+        ..AgentManifest::default()
+    };
+    let id = h
+        .state
+        .kernel
+        .spawn_agent_typed(manifest)
+        .expect("spawn_agent");
+
+    let (status, body) = send(h.app.clone(), get(&format!("/api/agents/{}", id))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["mcp_servers_mode"], "all");
+    assert_eq!(
+        body["mcp_disabled"], true,
+        "the hard off switch must be visible alongside the wildcard: {body}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1997,5 +2052,277 @@ async fn test_patch_config_empty_string_clears_api_key_env_but_preserves_base_ur
         entry.manifest.model.base_url.as_deref(),
         Some("https://seed.example"),
         "an absent base_url must be left unchanged"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_config_can_restore_global_default_inheritance() {
+    let h = boot(TEST_TOKEN).await;
+    let id = spawn_named(&h.state, "default-inheriting-agent");
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/config"),
+            serde_json::json!({
+                "provider": "custom-provider",
+                "model": "custom-model",
+                "api_key_env": "CUSTOM_KEY",
+                "base_url": "https://custom.example/v1",
+            }),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body:?}");
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/config"),
+            serde_json::json!({
+                "provider": "default",
+                "model": "default",
+            }),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "body: {body:?}");
+
+    let entry = h
+        .state
+        .kernel
+        .agent_registry()
+        .get(id)
+        .expect("agent exists");
+    assert_eq!(entry.manifest.model.provider, "default");
+    assert_eq!(entry.manifest.model.model, "default");
+    assert!(entry.manifest.model.api_key_env.is_none());
+    assert!(entry.manifest.model.base_url.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/agents/{id}/identity — merge semantics (refs #6608)
+// ---------------------------------------------------------------------------
+
+/// The full six-field identity used as the "before" state of the merge tests.
+/// `color` must start with `#` and `avatar_url` with `http`/`https`/`data:` to pass both handlers' validators.
+fn full_identity_body() -> serde_json::Value {
+    serde_json::json!({
+        "emoji": "🦊",
+        "avatar_url": "https://example.invalid/avatar.png",
+        "color": "#123456",
+        "archetype": "researcher",
+        "vibe": "technical",
+        "greeting_style": "brief",
+    })
+}
+
+/// Read all six identity fields straight off the registry entry.
+///
+/// `GET /api/agents/{id}` exposes only `emoji` / `avatar_url` / `color` (`routes::agents::agent_json`), so the three personality fields have no HTTP read surface at all.
+/// Extending that response to make the assertions uniform would be a response-shape change well beyond this fix (it would drag in the dashboard's `AgentIdentity` type and the generated OpenAPI), so the test reads the same state the handler wrote instead.
+fn stored_identity(state: &Arc<AppState>, id: AgentId) -> librefang_types::agent::AgentIdentity {
+    state
+        .kernel
+        .agent_registry()
+        .get(id)
+        .expect("agent exists")
+        .identity
+}
+
+/// A single-field PATCH must change that field and leave the other five untouched.
+/// Before #6608 this handler built a fresh `AgentIdentity` from the request body alone, so the five omitted fields were nulled and the response was still 200.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_identity_merges_instead_of_replacing() {
+    let h = boot(TEST_TOKEN).await;
+    let id = spawn_named(&h.state, "identity-merge");
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/identity"),
+            full_identity_body(),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "seeding identity failed: {body:?}");
+
+    // Partial update: one field only.
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/identity"),
+            serde_json::json!({"emoji": "🤖"}),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "partial patch failed: {body:?}");
+
+    let identity = stored_identity(&h.state, id);
+    // The patched field really changed — without this the test would pass on a
+    // handler that ignored the body entirely.
+    assert_eq!(
+        identity.emoji.as_deref(),
+        Some("🤖"),
+        "the submitted field must be applied"
+    );
+    // The five omitted fields survived.
+    assert_eq!(
+        identity.avatar_url.as_deref(),
+        Some("https://example.invalid/avatar.png"),
+        "avatar_url must survive a partial PATCH"
+    );
+    assert_eq!(
+        identity.color.as_deref(),
+        Some("#123456"),
+        "color must survive a partial PATCH"
+    );
+    assert_eq!(
+        identity.archetype.as_deref(),
+        Some("researcher"),
+        "archetype must survive a partial PATCH"
+    );
+    assert_eq!(
+        identity.vibe.as_deref(),
+        Some("technical"),
+        "vibe must survive a partial PATCH"
+    );
+    assert_eq!(
+        identity.greeting_style.as_deref(),
+        Some("brief"),
+        "greeting_style must survive a partial PATCH"
+    );
+
+    // The three fields the HTTP read surface does expose agree with the above.
+    let (status, body) = send(h.app.clone(), get(&format!("/api/agents/{id}"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["identity"]["emoji"], serde_json::json!("🤖"));
+    assert_eq!(
+        body["identity"]["avatar_url"],
+        serde_json::json!("https://example.invalid/avatar.png")
+    );
+    assert_eq!(body["identity"]["color"], serde_json::json!("#123456"));
+}
+
+/// `PATCH /identity` and `PATCH /config` write the same six identity fields, so the same partial body must produce the same stored identity through either route.
+/// Two PATCH endpoints on one resource having opposite semantics is the core of #6608, and this equivalence is what keeps them from diverging again.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_identity_and_patch_config_agree_on_partial_updates() {
+    let h = boot(TEST_TOKEN).await;
+    let via_identity = spawn_named(&h.state, "identity-route-agent");
+    let via_config = spawn_named(&h.state, "config-route-agent");
+
+    for id in [via_identity, via_config] {
+        let (status, body) = send(
+            h.app.clone(),
+            patch_json(
+                &format!("/api/agents/{id}/identity"),
+                full_identity_body(),
+                Some(TEST_TOKEN),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "seeding identity failed: {body:?}");
+    }
+
+    // Same partial body, one through each route.
+    let partial = serde_json::json!({"vibe": "playful", "emoji": "🐙"});
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{via_identity}/identity"),
+            partial.clone(),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{via_config}/config"),
+            partial,
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let from_identity = stored_identity(&h.state, via_identity);
+    let from_config = stored_identity(&h.state, via_config);
+
+    assert_eq!(from_identity.emoji, from_config.emoji, "emoji diverged");
+    assert_eq!(
+        from_identity.avatar_url, from_config.avatar_url,
+        "avatar_url diverged"
+    );
+    assert_eq!(from_identity.color, from_config.color, "color diverged");
+    assert_eq!(
+        from_identity.archetype, from_config.archetype,
+        "archetype diverged"
+    );
+    assert_eq!(from_identity.vibe, from_config.vibe, "vibe diverged");
+    assert_eq!(
+        from_identity.greeting_style, from_config.greeting_style,
+        "greeting_style diverged"
+    );
+
+    // Pin the shared expectation too, so the test cannot pass by both routes
+    // being broken in the same way.
+    assert_eq!(from_identity.vibe.as_deref(), Some("playful"));
+    assert_eq!(from_identity.emoji.as_deref(), Some("🐙"));
+    assert_eq!(from_identity.archetype.as_deref(), Some("researcher"));
+    assert_eq!(from_identity.greeting_style.as_deref(), Some("brief"));
+}
+
+/// Sending an empty string is as close as either route gets to clearing an identity field, since `null` / omitted is already spoken for by "not provided".
+/// It must land as a stored `""` rather than being folded back to the previous value — the field ends up empty, not absent.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_patch_identity_empty_string_clears_a_single_field() {
+    let h = boot(TEST_TOKEN).await;
+    let id = spawn_named(&h.state, "identity-clear");
+
+    let (status, _) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/identity"),
+            full_identity_body(),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = send(
+        h.app.clone(),
+        patch_json(
+            &format!("/api/agents/{id}/identity"),
+            serde_json::json!({"color": ""}),
+            Some(TEST_TOKEN),
+        ),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "empty color must validate: {body:?}"
+    );
+
+    let identity = stored_identity(&h.state, id);
+    assert_eq!(
+        identity.color.as_deref(),
+        Some(""),
+        "an empty string must clear the field, not merge back the old value"
+    );
+    assert_eq!(
+        identity.emoji.as_deref(),
+        Some("🦊"),
+        "clearing one field must not disturb the others"
     );
 }

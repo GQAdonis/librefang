@@ -218,6 +218,18 @@ enum ResponseContentBlock {
     },
     #[serde(rename = "thinking")]
     Thinking { thinking: String },
+    /// Catch-all for block types this driver does not explicitly model
+    /// (e.g. `redacted_thinking`, `server_tool_use`,
+    /// `web_search_tool_result`). Anthropic returns these in normal
+    /// HTTP-200 bodies — notably `redacted_thinking` whenever extended
+    /// thinking is enabled and the reasoning is safety-flagged. Without a
+    /// catch-all the strict internally-tagged enum hard-errors on the
+    /// unknown tag and discards the entire turn, including the valid text
+    /// answer. This mirrors the streaming path's `ContentBlockAccum::Unknown`
+    /// placeholder; the block's payload is dropped and the block is skipped
+    /// during conversion.
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
@@ -979,6 +991,32 @@ impl LlmDriver for AnthropicDriver {
                                 usage.output_tokens = ot;
                             }
                         }
+                        "error" => {
+                            // Mid-stream error frame delivered over an already-HTTP-200 SSE body — Anthropic emits `event: error` with e.g. `overloaded_error` under load.
+                            // Without this arm the frame falls into `_ => {}` below and the stream ends "successfully" with truncated/empty content, so no retry or failover engages and a recoverable overload becomes silent data loss.
+                            // Surface it as a typed Err (mirroring the pre-stream error mapping above) so the caller discards any partial deltas already sent on `tx` and fails over.
+                            // Returning Err mid-loop matches the existing mid-stream IO-error path (`chunk_result.map_err`).
+                            let err = &json["error"];
+                            let kind = err["type"].as_str();
+                            let message = err["message"]
+                                .as_str()
+                                .unwrap_or("Anthropic streaming error")
+                                .to_string();
+                            return Err(match kind {
+                                Some("overloaded_error") => LlmError::Overloaded {
+                                    retry_after_ms: 5000,
+                                },
+                                Some("rate_limit_error") => LlmError::RateLimited {
+                                    retry_after_ms: 5000,
+                                    message: Some(message),
+                                },
+                                _ => LlmError::Api {
+                                    status: 200,
+                                    message,
+                                    code: anthropic_error_code(kind, 200),
+                                },
+                            });
+                        }
                         _ => {} // message_stop, ping, etc.
                     }
                 }
@@ -1401,6 +1439,10 @@ fn convert_response(api: ApiResponse) -> CompletionResponse {
                     provider_metadata: None,
                 });
             }
+            // Unrecognized block types (e.g. redacted_thinking) carry no
+            // payload we can surface; skip them rather than aborting the
+            // whole response parse.
+            ResponseContentBlock::Unknown => {}
         }
     }
 
@@ -1485,6 +1527,37 @@ mod tests {
             content.contains(NOTICE),
             "aggregation notice must survive into the Anthropic ToolResult content, got: {content}"
         );
+    }
+
+    /// Regression (#14): a non-streaming 200 body containing an unknown
+    /// content block (e.g. `redacted_thinking`, emitted when extended
+    /// thinking is enabled and the reasoning is safety-flagged) must not
+    /// fail the whole `ApiResponse` deserialization. The unknown block is
+    /// skipped and the real text answer survives, mirroring the streaming
+    /// path's tolerance of unknown blocks.
+    #[test]
+    fn convert_response_tolerates_unknown_content_block() {
+        let body = r#"{
+            "content": [
+                {"type": "redacted_thinking", "data": "EncryptedBlob..."},
+                {"type": "text", "text": "The answer is 42"}
+            ],
+            "stop_reason": "end_turn",
+            "usage": {"input_tokens": 10, "output_tokens": 5}
+        }"#;
+        let api: ApiResponse = serde_json::from_str(body)
+            .expect("unknown content block must not fail the response parse");
+        let resp = convert_response(api);
+        let texts: Vec<&str> = resp
+            .content
+            .iter()
+            .filter_map(|b| match b {
+                ContentBlock::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(texts, vec!["The answer is 42"]);
+        assert!(matches!(resp.stop_reason, StopReason::EndTurn));
     }
 
     /// Regression: `ContentBlock::ImageFile` paths must be read via
@@ -2667,5 +2740,59 @@ mod tests {
                 "message[{i}] last block carries ephemeral marker",
             );
         }
+    }
+
+    /// Spawn a minimal server that answers any request with the given raw SSE body as `text/event-stream`, then closes the socket.
+    async fn spawn_sse_server(sse_body: String) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = [0u8; 8192];
+                let _ = sock.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    sse_body.len(),
+                    sse_body
+                );
+                let _ = sock.write_all(resp.as_bytes()).await;
+                let _ = sock.flush().await;
+            }
+        });
+        format!("http://{addr}")
+    }
+
+    fn stream_test_request() -> CompletionRequest {
+        CompletionRequest {
+            model: "claude-test".to_string(),
+            messages: std::sync::Arc::new(vec![Message::user("hi")]),
+            max_tokens: 16,
+            ..Default::default()
+        }
+    }
+
+    /// Regression: Anthropic can emit `event: error` mid-stream over an already-HTTP-200 SSE body (commonly `overloaded_error` under load).
+    /// Such a frame used to fall into the catch-all match arm and be dropped, so the stream ended "successfully" with truncated/empty content — no retry or failover engaged and a recoverable overload became silent data loss.
+    /// It must now surface as a typed `Err`.
+    #[tokio::test]
+    async fn streaming_error_frame_surfaces_as_error() {
+        let sse_body = "event: error\n\
+                        data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}\n\n"
+            .to_string();
+        let base = spawn_sse_server(sse_body).await;
+        let driver = AnthropicDriver::new("test-key".to_string(), base);
+
+        let (tx, _rx) = tokio::sync::mpsc::channel(64);
+        let err = driver
+            .stream(stream_test_request(), tx)
+            .await
+            .expect_err("mid-stream error frame must surface as Err, not Ok(truncated)");
+        assert!(
+            matches!(err, LlmError::Overloaded { .. }),
+            "an overloaded_error frame must map to LlmError::Overloaded so failover/retry engages, got {err:?}"
+        );
     }
 }

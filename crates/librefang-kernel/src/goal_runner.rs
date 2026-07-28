@@ -73,13 +73,32 @@ pub fn parse_tick(reply: &str) -> ParsedTick {
             if let Ok(n) = rest.trim().parse::<u32>() {
                 out.progress = Some(n.min(100) as u8);
             }
-        } else if upper.starts_with("GOAL_DONE") || upper.starts_with("GOAL_COMPLETE") {
+        } else if marker_present(&upper, "GOAL_DONE") || marker_present(&upper, "GOAL_COMPLETE") {
             out.done = true;
-        } else if upper.starts_with("GOAL_BLOCKED") {
+        } else if marker_present(&upper, "GOAL_BLOCKED") {
             out.blocked = true;
         }
     }
     out
+}
+
+/// Match `marker` as a standalone token at the start of `line`, not a bare
+/// prefix. The marker counts only when the line begins with it AND the byte
+/// immediately after is a word boundary — end-of-line, or any character that is
+/// not a word-continuation char (i.e. not alphanumeric and not `_`). That
+/// admits the bare form (`GOAL_DONE`), trailing punctuation the model tends to
+/// add (`GOAL_DONE!`, `GOAL_DONE.`), and the trailing-note form the prompt
+/// suggests (`GOAL_BLOCKED: need a key`), while still rejecting a longer
+/// identifier that merely starts with the token (`GOAL_DONE_CRITERIA`,
+/// `GOAL_DONENESS`). `line` is expected to be already uppercased.
+fn marker_present(line: &str, marker: &str) -> bool {
+    match line.strip_prefix(marker) {
+        Some(rest) => rest
+            .chars()
+            .next()
+            .is_none_or(|c| !c.is_alphanumeric() && c != '_'),
+        None => false,
+    }
 }
 
 /// Build the per-iteration prompt that frames the goal for the agent.
@@ -217,6 +236,14 @@ pub struct GoalRunner {
     /// `run_loop` directly); the in-memory DashMap remains the hot path either
     /// way.
     store: Option<GoalRunStore>,
+    /// Serializes the compound `start()` / `stop()` sequences for one goal so a
+    /// concurrent `start()` cannot observe an empty registry slot between an
+    /// in-flight `start()`'s stop and its insert and spawn a second, orphaned
+    /// loop. The per-generation self-cleanup guard only protects the sequential
+    /// replace path; it does nothing for two `start()` calls racing on the same
+    /// goal id. The guarded region is fully synchronous (no `.await`), so this
+    /// std `Mutex` is never held across an await point.
+    start_lock: std::sync::Mutex<()>,
 }
 
 impl GoalRunner {
@@ -228,6 +255,7 @@ impl GoalRunner {
             shutdown_rx,
             next_gen: Arc::new(AtomicU64::new(0)),
             store: None,
+            start_lock: std::sync::Mutex::new(()),
         }
     }
 
@@ -239,6 +267,7 @@ impl GoalRunner {
             shutdown_rx,
             next_gen: Arc::new(AtomicU64::new(0)),
             store: Some(store),
+            start_lock: std::sync::Mutex::new(()),
         }
     }
 
@@ -255,6 +284,21 @@ impl GoalRunner {
     /// dropped too — a stopped run must not be resurrected as "stale" at the
     /// next boot.
     pub fn stop(&self, goal_id: GoalId) -> bool {
+        // Serialize against `start()` so the two never interleave on the same
+        // goal id. The critical section is synchronous, so this std guard never
+        // spans an await point. Poison is irrelevant for a `Mutex<()>` used
+        // purely for mutual exclusion — recover the guard rather than panic.
+        let _guard = self
+            .start_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.stop_locked(goal_id)
+    }
+
+    /// Stop body assuming the caller already holds `start_lock`. Split out so
+    /// `start()` can run it inside its own critical section without re-locking
+    /// the non-reentrant `start_lock` (which would deadlock).
+    fn stop_locked(&self, goal_id: GoalId) -> bool {
         if let Some((_, handle)) = self.runs.remove(&goal_id) {
             handle.stop.store(true, Ordering::SeqCst);
             // A recovered terminal entry has no live loop task to abort.
@@ -286,8 +330,20 @@ impl GoalRunner {
         F: Fn(AgentId, String) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<String, String>> + Send + 'static,
     {
-        // Replace any prior run for this goal.
-        self.stop(goal_id);
+        // Hold `start_lock` for the whole stop→gen→spawn→insert sequence so a
+        // concurrent `start()` for the same goal cannot observe the empty slot
+        // this creates between the stop and the insert and spawn a second,
+        // orphaned loop. The sequence is synchronous (no `.await`), so this std
+        // guard is never held across an await point; `tokio::spawn` only
+        // enqueues the task and does not block.
+        let _guard = self
+            .start_lock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        // Replace any prior run for this goal. `stop_locked` (not `stop`)
+        // because we already hold `start_lock`, which is non-reentrant.
+        self.stop_locked(goal_id);
 
         let now = Utc::now();
         let initial = GoalRunState {
@@ -656,6 +712,27 @@ mod tests {
 
         // No markers → all default.
         assert_eq!(parse_tick("just a normal reply"), ParsedTick::default());
+    }
+
+    #[test]
+    fn parse_tick_requires_marker_token_boundary() {
+        // Substrings that merely start with a control marker must NOT trip it.
+        assert!(!parse_tick("GOAL_DONENESS: not yet").done);
+        assert!(!parse_tick("GOAL_DONE_CRITERIA: ship it").done);
+        assert!(!parse_tick("GOAL_COMPLETENESS: 40%").done);
+        assert!(!parse_tick("GOAL_BLOCKEDNESS is low").blocked);
+
+        // Bare and boundary-delimited forms still register, including the
+        // trailing punctuation the model commonly appends.
+        assert!(parse_tick("GOAL_DONE").done);
+        assert!(parse_tick("GOAL_DONE now").done);
+        assert!(parse_tick("GOAL_DONE.").done);
+        assert!(parse_tick("GOAL_DONE!").done);
+        assert!(parse_tick("GOAL_DONE - shipped the report").done);
+        assert!(parse_tick("GOAL_COMPLETE").done);
+        assert!(parse_tick("GOAL_BLOCKED").blocked);
+        assert!(parse_tick("GOAL_BLOCKED! waiting on a key").blocked);
+        assert!(parse_tick("GOAL_BLOCKED: need a key").blocked);
     }
 
     fn seed_goal(substrate: &MemorySubstrate, goal: &Goal) {
@@ -1168,5 +1245,105 @@ mod tests {
         let row = store.get_run(&goal_id.to_string()).unwrap().unwrap();
         assert_eq!(row.phase, GoalRunPhase::Running.to_string());
         assert!(row.last_error.is_none());
+    }
+
+    // --- Concurrent-start atomicity (finding #8) ---
+
+    /// Two `start()` calls racing on the same goal must never leave a second,
+    /// orphaned loop running. Before the `start_lock` fix the non-atomic
+    /// stop→spawn→insert let both racing calls pass their (no-op) stop while the
+    /// slot was empty, spawn two loops, and have the second `insert` overwrite
+    /// the first's handle — orphaning the first loop, which `stop()` could then
+    /// never reach (it only aborts the currently-mapped generation) and which
+    /// kept issuing agent turns invisibly.
+    ///
+    /// Detection: each turn registers its loop as "live" (an RAII guard that
+    /// decrements on task abort) and then parks. After the racing starts settle,
+    /// `stop()` cancels the single mapped run; if an orphan slipped through it is
+    /// not in the map, so `stop()` cannot abort it and `live` never returns to
+    /// zero. We do NOT assert a peak of one concurrent loop: `JoinHandle::abort`
+    /// is asynchronous, so during a legitimate replace the outgoing loop can
+    /// still be parked (live) when the incoming one registers — a transient the
+    /// fix does not (and need not) eliminate. The load-bearing invariant is that
+    /// no loop survives `stop()`. Repeated over many rounds because the race is
+    /// timing-dependent; without the fix it manifests within a few rounds.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_starts_never_leave_an_orphan_loop() {
+        let substrate = Arc::new(MemorySubstrate::open_in_memory(0.01).unwrap());
+        let agent_id = AgentId::new();
+        let goal = test_goal(agent_id);
+        seed_goal(&substrate, &goal);
+        let goal_id = goal.id;
+
+        let (_tx, rx) = watch::channel(false);
+        let runner = Arc::new(GoalRunner::new(rx));
+
+        for round in 0..30 {
+            // Fresh counter + gate per round so state never leaks between them.
+            let live = Arc::new(AtomicU64::new(0));
+            let gate = Arc::new(tokio::sync::Notify::new());
+
+            // Each turn registers the loop as live and then blocks forever on
+            // `gate` (simulating a long agent turn). The RAII `Dec` guard is
+            // held across the await, so an aborted loop still decrements `live`.
+            let send = {
+                let live = live.clone();
+                let gate = gate.clone();
+                move |_a: AgentId, _p: String| {
+                    let live = live.clone();
+                    let gate = gate.clone();
+                    async move {
+                        struct Dec(Arc<AtomicU64>);
+                        impl Drop for Dec {
+                            fn drop(&mut self) {
+                                self.0.fetch_sub(1, Ordering::SeqCst);
+                            }
+                        }
+                        live.fetch_add(1, Ordering::SeqCst);
+                        let _dec = Dec(live.clone());
+                        gate.notified().await;
+                        Ok::<String, String>("GOAL_PROGRESS: 1".to_string())
+                    }
+                }
+            };
+
+            // Two genuinely-parallel starts (spawned, since `start()` is
+            // synchronous — `join!` alone would run them sequentially).
+            let r1 = runner.clone();
+            let r2 = runner.clone();
+            let s1 = send.clone();
+            let s2 = send.clone();
+            let sub1 = substrate.clone();
+            let sub2 = substrate.clone();
+            let h1 = tokio::spawn(async move {
+                r1.start(goal_id, agent_id, 100, sub1, s1);
+            });
+            let h2 = tokio::spawn(async move {
+                r2.start(goal_id, agent_id, 100, sub2, s2);
+            });
+            let _ = tokio::join!(h1, h2);
+
+            // Wait for at least one loop to reach `send_message`, then give a
+            // possible second (orphan) loop time to reach it too.
+            let deadline = std::time::Instant::now() + Duration::from_secs(1);
+            while live.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+
+            // Stop the (single, mapped) run. If an orphan exists it is not in
+            // the map, so `stop()` cannot reach it and `live` never returns to 0.
+            runner.stop(goal_id);
+            let deadline = std::time::Instant::now() + Duration::from_secs(2);
+            while live.load(Ordering::SeqCst) != 0 && std::time::Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+
+            assert_eq!(
+                live.load(Ordering::SeqCst),
+                0,
+                "round {round}: an orphaned goal loop survived stop()"
+            );
+        }
     }
 }
