@@ -2710,6 +2710,41 @@ async fn call_mcp_channel_send(
     resp.json().await.expect("mcp body parse")
 }
 
+/// #6443 bridge parity: `channel_send` with an explicit `account_id`, routed through `/mcp` with the turn's account scope forwarded on `X-LibreFang-Current-Account-Id` (plus the #6117 peer scope so the recipient guard context matches the in-process path).
+async fn call_mcp_channel_send_with_account(
+    server: &TestServer,
+    agent_id: &str,
+    explicit_account: &str,
+    account_header: Option<&str>,
+) -> serde_json::Value {
+    let client = reqwest::Client::new();
+    let mut req = client
+        .post(format!("{}/mcp", server.base_url))
+        .header("X-LibreFang-Agent-Id", agent_id)
+        .header("X-LibreFang-Current-Peer-Jid", "owner-jid")
+        .header("X-LibreFang-Current-Channel", "whatsapp")
+        .json(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "channel_send",
+                "arguments": {
+                    "channel": "whatsapp",
+                    "recipient": "owner-jid",
+                    "message": "hi",
+                    "account_id": explicit_account,
+                },
+            },
+        }));
+    if let Some(account) = account_header {
+        req = req.header("X-LibreFang-Current-Account-Id", account);
+    }
+    let resp = req.send().await.expect("mcp request send");
+    assert_eq!(resp.status(), 200);
+    resp.json().await.expect("mcp body parse")
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_mcp_http_channel_send_cross_chat_guard_uses_peer_headers() {
     let server = start_test_server().await;
@@ -2752,6 +2787,59 @@ async fn test_mcp_http_channel_send_cross_chat_guard_uses_peer_headers() {
     assert!(
         !content.contains("Cross-chat dispatch is forbidden"),
         "without peer headers the guard must not fire: {content}"
+    );
+}
+
+/// #6443: a `channel_send` with an explicit `account_id` routed through the `/mcp` bridge must honour the cross-account guard using the account scope forwarded on `X-LibreFang-Current-Account-Id`.
+/// Before the parity fix `mcp_http` never read the header (the driver never sent it), so a subprocess-driver agent could dispatch through another tenant's bot account even though the in-process path (#6449) already rejected it.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_mcp_http_channel_send_cross_account_guard_uses_account_header() {
+    let server = start_test_server().await;
+    let client = reqwest::Client::new();
+    let spawn = client
+        .post(format!("{}/api/agents", server.base_url))
+        .json(&serde_json::json!({"manifest_toml": MCP_CHANNEL_MANIFEST}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(spawn.status(), 201);
+    let agent_id = spawn.json::<serde_json::Value>().await.unwrap()["agent_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Turn arrived on `tenant-a`; the model explicitly targets `tenant-b` on
+    // the SAME channel → the guard must reject it before any send.
+    let body =
+        call_mcp_channel_send_with_account(&server, &agent_id, "tenant-b", Some("tenant-a")).await;
+    let content = body["result"]["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        body["result"]["isError"].as_bool().unwrap_or(false),
+        "cross-account send must be an error: {content}"
+    );
+    assert!(
+        content.contains("Cross-account (cross-tenant) dispatch is forbidden"),
+        "expected the cross-account guard message, got: {content}"
+    );
+
+    // Matching account → the guard passes; the failure — if any — must NOT be
+    // the guard's (the test kernel has no real whatsapp adapter registered).
+    let body =
+        call_mcp_channel_send_with_account(&server, &agent_id, "tenant-a", Some("tenant-a")).await;
+    let content = body["result"]["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        !content.contains("Cross-account (cross-tenant) dispatch is forbidden"),
+        "matching account must not trip the guard: {content}"
+    );
+
+    // No account header (external MCP client / out-of-band turn): the guard
+    // no-ops even for an explicit foreign account, preserving pre-parity
+    // behaviour for clients that never carried account scope.
+    let body = call_mcp_channel_send_with_account(&server, &agent_id, "tenant-b", None).await;
+    let content = body["result"]["content"][0]["text"].as_str().unwrap_or("");
+    assert!(
+        !content.contains("Cross-account (cross-tenant) dispatch is forbidden"),
+        "without the account header the guard must not fire: {content}"
     );
 }
 
@@ -4629,5 +4717,387 @@ async fn test_upload_over_limit_returns_413() {
         StatusCode::PAYLOAD_TOO_LARGE,
         "upload one byte over max_upload_size_bytes must be rejected with 413 \
          by the route-local RequestBodyLimitLayer"
+    );
+}
+
+/// #6530 round-trip: a file uploaded via `POST /upload` is persisted on disk as
+/// `<uuid>.<ext>`, but the client-facing `file_id` stays a bare UUID. Serving
+/// it back by that bare `file_id` must still find the file — this proves the
+/// write-side `on_disk_name` matches the read-side reconstruction in
+/// `serve_upload`. Covers a typed content type (PNG → `.png`) and the generic
+/// `application/octet-stream` (no extension → bare `<uuid>`) so both arms of
+/// `on_disk_name` are exercised end to end.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_upload_roundtrip_serves_by_bare_file_id() {
+    let harness = start_full_router("").await;
+
+    async fn upload_then_serve(
+        harness: &FullRouterHarness,
+        content_type: &str,
+        filename: &str,
+        body: Vec<u8>,
+    ) {
+        // The upload route validates the agent-id *format* (parses as a UUID);
+        // it does not require the agent to exist, so a fresh UUID is enough.
+        let agent_id = uuid::Uuid::new_v4();
+        let mut up = Request::builder()
+            .method("POST")
+            .uri(format!("/api/agents/{agent_id}/upload"))
+            .header("content-type", content_type)
+            .header("x-filename", filename)
+            .header("content-length", body.len().to_string())
+            .body(Body::from(body.clone()))
+            .unwrap();
+        up.extensions_mut()
+            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                [127, 0, 0, 1],
+                0,
+            ))));
+        let up_resp = harness.app.clone().oneshot(up).await.unwrap();
+        let up_status = up_resp.status();
+        let bytes = axum::body::to_bytes(up_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            up_status,
+            StatusCode::CREATED,
+            "upload of {content_type} must succeed, got {up_status}: {}",
+            String::from_utf8_lossy(&bytes)
+        );
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let file_id = json["file_id"].as_str().expect("file_id in response");
+        // The client-facing id is a bare UUID (the traversal/owner guards parse it).
+        assert!(
+            uuid::Uuid::parse_str(file_id).is_ok(),
+            "file_id must stay a bare UUID, got {file_id}"
+        );
+
+        let mut serve = Request::builder()
+            .method("GET")
+            .uri(format!("/api/uploads/{file_id}"))
+            .body(Body::empty())
+            .unwrap();
+        serve
+            .extensions_mut()
+            .insert(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                [127, 0, 0, 1],
+                0,
+            ))));
+        let serve_resp = harness.app.clone().oneshot(serve).await.unwrap();
+        assert_eq!(
+            serve_resp.status(),
+            StatusCode::OK,
+            "serve_upload must find the {content_type} file by its bare id"
+        );
+        let served = axum::body::to_bytes(serve_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(
+            served.as_ref(),
+            body.as_slice(),
+            "served bytes must match the uploaded bytes"
+        );
+    }
+
+    // PNG → persisted as `<uuid>.png`, served by bare id. The bare-uuid arm of
+    // on_disk_name (generic content type) is covered by the media.rs unit tests;
+    // application/octet-stream is not an allowed upload content type so it can't
+    // exercise that arm through this route.
+    upload_then_serve(
+        &harness,
+        "image/png",
+        "shot.png",
+        b"\x89PNG\r\n\x1a\nHELLO-6530".to_vec(),
+    )
+    .await;
+    // text/plain → persisted as `<uuid>.txt`; also round-trips by bare id.
+    upload_then_serve(&harness, "text/plain", "note.txt", b"hello-6530".to_vec()).await;
+}
+
+// ---------------------------------------------------------------------------
+// Per-user LLM provider credentials (#6460 Follow-up B)
+//
+// Owner-gated CRUD over `/api/users/{name}/provider-keys[/{provider}]`.
+// These run against the full auth middleware stack (owner-only write gate
+// + the Owner gate on the list GET) so the security posture is exercised
+// end-to-end, not just the handler body.
+// ---------------------------------------------------------------------------
+
+/// Owner can PUT a provider key and then see the provider NAME (only) come
+/// back from the list GET. The list must never surface the secret value.
+#[tokio::test(flavor = "multi_thread")]
+async fn users_provider_keys_put_then_list_shows_name_not_secret() {
+    let server = start_test_server_with_rbac_users(
+        "any-key",
+        vec![
+            ("Owner1", "owner", "owner-key"),
+            ("Alice", "user", "alice-key"),
+        ],
+    )
+    .await;
+    let client = reqwest::Client::new();
+    let secret = "sk-super-secret-value-do-not-leak";
+
+    // PUT Alice's anthropic key as Owner.
+    let resp = client
+        .put(format!(
+            "{}/api/users/Alice/provider-keys/anthropic",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .json(&serde_json::json!({ "api_key": secret }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        200,
+        "Owner must be allowed to set a user's provider key"
+    );
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["provider"], "anthropic");
+    // The write response must not echo the key.
+    let body_str = body.to_string();
+    assert!(
+        !body_str.contains(secret),
+        "PUT response leaked the secret key value: {body_str}"
+    );
+
+    // GET the list as Owner — name is present, value is not.
+    let resp = client
+        .get(format!("{}/api/users/Alice/provider-keys", server.base_url))
+        .header("authorization", "Bearer owner-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "Owner must be allowed to list keys");
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains("anthropic"),
+        "list must show the provider name: {text}"
+    );
+    assert!(
+        !text.contains(secret),
+        "list GET leaked the secret key value: {text}"
+    );
+}
+
+/// Owner can DELETE a provider key; a subsequent list no longer shows it,
+/// and the delete response reports whether a value actually existed.
+#[tokio::test(flavor = "multi_thread")]
+async fn users_provider_keys_delete_removes_entry() {
+    let server = start_test_server_with_rbac_users(
+        "any-key",
+        vec![
+            ("Owner1", "owner", "owner-key"),
+            ("Alice", "user", "alice-key"),
+        ],
+    )
+    .await;
+    let client = reqwest::Client::new();
+
+    // Seed a key.
+    let resp = client
+        .put(format!(
+            "{}/api/users/Alice/provider-keys/openai",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .json(&serde_json::json!({ "api_key": "sk-openai-xyz" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    // Delete it — `removed` must be true.
+    let resp = client
+        .delete(format!(
+            "{}/api/users/Alice/provider-keys/openai",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "Owner must be allowed to delete a key");
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(
+        body["removed"], true,
+        "delete must report the existing key was removed: {body}"
+    );
+
+    // List is now empty for Alice.
+    let resp = client
+        .get(format!("{}/api/users/Alice/provider-keys", server.base_url))
+        .header("authorization", "Bearer owner-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let providers = body["providers"].as_array().unwrap();
+    assert!(
+        providers.is_empty(),
+        "provider list must be empty after delete: {body}"
+    );
+}
+
+/// Non-Owner (Admin) callers are rejected on every provider-key route by
+/// the middleware gate — PUT / DELETE via `is_owner_only_write`, and the
+/// list GET via `min_role_for_privileged_get`. An Admin must never be able
+/// to read or write another user's upstream provider credentials.
+#[tokio::test(flavor = "multi_thread")]
+async fn users_provider_keys_reject_non_owner() {
+    let server = start_test_server_with_rbac_users(
+        "any-key",
+        vec![
+            ("Owner1", "owner", "owner-key"),
+            ("Alice", "admin", "alice-admin-key"),
+        ],
+    )
+    .await;
+    let client = reqwest::Client::new();
+
+    // Admin PUT — 403.
+    let resp = client
+        .put(format!(
+            "{}/api/users/Alice/provider-keys/anthropic",
+            server.base_url
+        ))
+        .header("authorization", "Bearer alice-admin-key")
+        .json(&serde_json::json!({ "api_key": "sk-nope" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        403,
+        "Admin must NOT be able to set a provider key — Owner only"
+    );
+
+    // Admin DELETE — 403.
+    let resp = client
+        .delete(format!(
+            "{}/api/users/Alice/provider-keys/anthropic",
+            server.base_url
+        ))
+        .header("authorization", "Bearer alice-admin-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        403,
+        "Admin must NOT be able to delete a provider key — Owner only"
+    );
+
+    // Admin GET (list) — 403 via the Owner gate on the read.
+    let resp = client
+        .get(format!("{}/api/users/Alice/provider-keys", server.base_url))
+        .header("authorization", "Bearer alice-admin-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        403,
+        "Admin must NOT be able to enumerate another user's providers — Owner only"
+    );
+
+    // Sanity: the Owner IS allowed the same GET, proving the 403 is a role
+    // gate and not a broken route.
+    let resp = client
+        .get(format!("{}/api/users/Alice/provider-keys", server.base_url))
+        .header("authorization", "Bearer owner-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200, "Owner must be allowed to list keys");
+}
+
+/// An invalid provider segment is rejected with 400 by the handler's
+/// `validate_provider` guard — an unknown provider name never reaches the
+/// vault. (An empty or `/`-containing segment cannot route to the handler
+/// at all, so the reachable invalid case is the unknown-name one.)
+#[tokio::test(flavor = "multi_thread")]
+async fn users_provider_keys_invalid_provider_rejected() {
+    let server = start_test_server_with_rbac_users(
+        "any-key",
+        vec![
+            ("Owner1", "owner", "owner-key"),
+            ("Alice", "user", "alice-key"),
+        ],
+    )
+    .await;
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .put(format!(
+            "{}/api/users/Alice/provider-keys/not-a-real-provider",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .json(&serde_json::json!({ "api_key": "sk-whatever" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        400,
+        "an unknown provider name must be rejected with 400, not stored"
+    );
+
+    // An empty api_key for a valid provider is also a 400.
+    let resp = client
+        .put(format!(
+            "{}/api/users/Alice/provider-keys/anthropic",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .json(&serde_json::json!({ "api_key": "" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        400,
+        "an empty api_key must be rejected with 400"
+    );
+}
+
+/// Managing provider keys for a user that does not exist yields 404, so an
+/// Owner typo never seeds an orphaned vault entry keyed to a phantom user.
+#[tokio::test(flavor = "multi_thread")]
+async fn users_provider_keys_unknown_user_404() {
+    let server =
+        start_test_server_with_rbac_users("any-key", vec![("Owner1", "owner", "owner-key")]).await;
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .put(format!(
+            "{}/api/users/Ghost/provider-keys/anthropic",
+            server.base_url
+        ))
+        .header("authorization", "Bearer owner-key")
+        .json(&serde_json::json!({ "api_key": "sk-ghost" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        404,
+        "setting a key for an unknown user must 404"
+    );
+
+    let resp = client
+        .get(format!("{}/api/users/Ghost/provider-keys", server.base_url))
+        .header("authorization", "Bearer owner-key")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        404,
+        "listing keys for an unknown user must 404"
     );
 }

@@ -740,6 +740,23 @@ maintenance-service-start-hint = Запустіть зараз за допомо
 maintenance-service-linger-hint = Для серверів без графічної оболонки також виконайте: loginctl enable-linger
 maintenance-systemctl-enable-failed = помилка виконання systemctl --user enable librefang.service
 maintenance-launchagent-loaded = LaunchAgent завантажено (запускатиметься при вході в систему та зараз)
+maintenance-service-install-system-hint = Якщо потрібна служба, що запускається під час завантаження, а не після входу, скористайтеся: sudo librefang service install --system
+maintenance-service-system-needs-root = --system записує до /Library/LaunchDaemons, що вимагає прав root.
+maintenance-service-system-sudo-hint = Повторіть із sudo: sudo librefang service install --system
+maintenance-service-system-macos-only = --system встановлює LaunchDaemon для macOS і не реалізований на цій платформі.
+maintenance-service-system-linux-hint = У NixOS використовуйте модуль services.librefang; в інших дистрибутивах Linux створіть системний unit у /etc/systemd/system/ або залиште користувацьку службу, яку створює `librefang service install`.
+maintenance-service-system-no-sudo-user = Не вдалося визначити, від якого облікового запису має працювати демон: SUDO_USER не встановлено, тож це схоже на прямий вхід під root, а не на sudo.
+maintenance-service-system-chown-failed = Не вдалося передати { $user } право власності на { $path }: { $error }
+maintenance-service-system-agent-conflict = За шляхом { $path } уже встановлено LaunchAgent для користувача. Він має ту саму мітку ai.librefang.daemon і той самий каталог стану, що й завантажуваний під час запуску LaunchDaemon, тож встановлення обох залишить агент, який після кожного входу падає і перезапускається.
+maintenance-service-system-agent-conflict-fix = Спершу видаліть його від власного облікового запису, а не через sudo: librefang service uninstall
+maintenance-service-system-chmod-failed = Не вдалося встановити права на { $path }: { $error }
+maintenance-launchdaemon-loaded = LaunchDaemon завантажено — запускається під час завантаження та працює від імені { $user }
+maintenance-launchdaemon-removed = LaunchDaemon вилучено
+maintenance-launchdaemon-remove-failed = Не вдалося вилучити plist LaunchDaemon: { $error }
+maintenance-launchdaemon-not-found = LaunchDaemon не знайдено — нічого вилучати.
+maintenance-launchdaemon-status-registered = Зареєстровано LaunchDaemon, що запускається під час завантаження
+maintenance-launchdaemon-status-not-registered = LaunchDaemon для запуску під час завантаження не зареєстровано (демон запускається лише після входу).
+maintenance-status-label-daemon-loaded =   LaunchDaemon завантажено
 maintenance-launchctl-load-failed = помилка виконання launchctl load: { $error }
 maintenance-launchctl-run-failed = Не вдалося запустити launchctl: { $error }
 maintenance-windows-startup-added = Додано до автозавантаження Windows (HKCU\Software\Microsoft\Windows\CurrentVersion\Run)
@@ -943,6 +960,69 @@ doctor-audit-config-ok = { $path } успішно розбирається як 
 doctor-audit-config-syntax-error = { $path } містить синтаксичні помилки TOML: { $error }
 doctor-audit-config-syntax-error-hint = Відредагуйте { $path } або відновіть її з бекапу.
 
+doctor-everyapi-absent = Шлюз EveryAPI не виявлено (немає CLI у PATH, немає файлу облікових даних) — підключати нічого.
+doctor-everyapi-cli-not-logged-in = EveryAPI CLI є у PATH, але файл облікових даних не знайдено; спершу виконайте `everyapi login`, якщо хочете спрямувати LibreFang через цей шлюз.
+doctor-everyapi-credentials-incomplete = Файл облікових даних EveryAPI існує, але не містить придатного relay_key; виконайте `everyapi login` ще раз, щоб оновити його.
+doctor-everyapi-not-connected = Облікові дані EveryAPI знайдено, але LibreFang не має запису провайдера everyapi — виконайте `librefang models connect everyapi`, щоб зареєструвати шлюз як LLM-провайдера.
+doctor-everyapi-provider-only = Запис провайдера EveryAPI активний у { $path }; API-драйвери йдуть через шлюз.
+doctor-everyapi-provider-without-credentials = Запис провайдера EveryAPI існує у { $path }, але придатного relay-ключа не знайдено; запити через шлюз не пройдуть автентифікацію.
+doctor-everyapi-provider-without-credentials-hint = Виконайте `everyapi login`, потім `librefang models connect everyapi`, щоб оновити збережений ключ.
+doctor-everyapi-env-route-only = Змінна середовища { $var } спрямовує драйвери-підпроцеси CLI (claude-code, codex-cli) на { $host }; у LibreFang немає відповідного запису провайдера, тож API-драйвери й далі використовують налаштованих провайдерів.
+doctor-everyapi-both-routes = Одночасно активні два незалежні маршрути до шлюзу: { $var } спрямовує драйвери-підпроцеси CLI (claude-code, codex-cli) на { $host }, а запис провайдера у { $path } окремо маршрутизує API-драйвери. Який саме маршрут діє для конкретного агента, залежить від його драйвера, а не від жодного з цих налаштувань.
+doctor-everyapi-both-routes-hint = Залиште обидва лише якщо ви свідомо покриваєте CLI- та API-драйвери окремо; інакше приберіть { $var } або видаліть { $path }, щоб діяв один маршрут.
+
+# `librefang models connect everyapi`
+everyapi-connect-title = Підключення шлюзу EveryAPI
+everyapi-connect-unknown-target = Невідомий шлюз '{ $target }'.
+everyapi-connect-unknown-target-fix = Наразі підтримується єдина ціль: `librefang models connect everyapi`.
+everyapi-connect-credentials-missing = Не вдалося визначити, де EveryAPI зберігає облікові дані.
+everyapi-connect-credentials-missing-fix = Спершу виконайте `everyapi login`, потім запустіть цю команду ще раз.
+everyapi-connect-credentials-unreadable = Не вдалося прочитати файл облікових даних EveryAPI за шляхом { $path }.
+everyapi-connect-credentials-malformed = Файл облікових даних EveryAPI за шляхом { $path } не є коректним JSON.
+everyapi-connect-credentials-no-api-base = Файл облікових даних EveryAPI за шляхом { $path } не містить api_base.
+everyapi-connect-credentials-no-relay-key = Файл облікових даних EveryAPI за шляхом { $path } не містить relay_key.
+everyapi-connect-models-fetch-failed = Не вдалося отримати список моделей шлюзу; провайдер буде зареєстровано без моделей.
+everyapi-connect-models-fetch-failed-fix = Переконайтеся, що шлюз доступний, і запустіть команду ще раз, щоб заповнити список моделей.
+everyapi-connect-models-fetch-unauthorized = Шлюз відхилив relay-ключ, тому нічого не записано.
+everyapi-connect-models-fetch-unauthorized-fix = Виконайте `everyapi login`, щоб оновити ключ, потім повторіть цю команду.
+everyapi-connect-models-fetch-failed-would-clobber = Не вдалося отримати список моделей шлюзу, а наявний запис провайдера вже містить моделі; відмова замінювати його порожнім.
+everyapi-connect-provider-rejected = Демон відхилив визначення провайдера: { $error }
+everyapi-connect-pricing-fetch-failed = Не вдалося отримати тарифи шлюзу; моделі буде зареєстровано без потокенної ціни.
+everyapi-connect-pricing-fetch-failed-fix = Переконайтеся, що шлюз доступний, і запустіть команду ще раз, щоб заповнити тарифи. До того часу витрати на ці моделі не враховуються в жодному бюджеті.
+everyapi-connect-serialize-failed = Не вдалося побудувати каталог провайдера: { $error }
+everyapi-connect-key-saved = Relay-ключ збережено у файлі .env LibreFang під іменем { $env_var }.
+everyapi-connect-key-save-failed = Не вдалося зберегти relay-ключ: { $error }
+everyapi-connect-provider-written-daemon = Провайдера зареєстровано через запущений демон у { $path }; перезапуск не потрібен.
+everyapi-connect-provider-written-file = Провайдера записано до { $path }.
+everyapi-connect-provider-write-failed = Не вдалося записати файл провайдера: { $error }
+everyapi-connect-restart-required = Перезапустіть демон, щоб він підхопив нового провайдера.
+everyapi-connect-models-registered = Зареєстровано моделей: { $count }.
+everyapi-connect-models-skipped = Пропущено моделей: { $count }.
+everyapi-connect-skip-no-metadata = { $model }: для цієї моделі невідомі ані контекстне вікно, ані ліміт виводу, а текстова модель без обох цих значень відкидається під час завантаження каталогу.
+everyapi-connect-skip-no-context-window = { $model }: для цієї моделі відомий ліміт виводу, але невідоме контекстне вікно, а текстова модель без обох цих значень відкидається під час завантаження каталогу.
+everyapi-connect-skip-no-output-limit = { $model }: для цієї моделі відоме контекстне вікно, але невідомий ліміт виводу, а текстова модель без обох цих значень відкидається під час завантаження каталогу.
+everyapi-connect-token-limits-borrowed = Шлюз не публікує контекстного вікна та/або ліміту виводу для цих моделей, тому відсутнє значення запозичено з вбудованого знімка OpenRouter — воно описує ту копію моделі, а не цей шлюз: { $models }
+everyapi-connect-models-unpriced = Ці моделі не мають потокенної ціни — їх немає в тарифах шлюзу або вони тарифікуються за виклик — тому їхні витрати записуються як невідомі, а не як безкоштовні: { $models }
+everyapi-connect-streaming-only = Ці моделі приймають лише потокові запити й завершаться помилкою на будь-якому непотоковому виклику (ущільнення контексту, проактивна пам'ять, майстерня навичок, веб-доповнення): { $models }
+everyapi-connect-default-hint = Запустіть ще раз із --set-default, щоб зробити { $model } типовою моделлю демона.
+everyapi-connect-default-set = Типову модель встановлено на { $model }.
+everyapi-connect-default-failed = Не вдалося зробити { $model } типовою моделлю (HTTP { $status }).
+everyapi-connect-default-needs-daemon = Демон не запущено, тому модель за замовчуванням не змінено. Запустіть його та повторіть `librefang models connect everyapi --set-default`.
+everyapi-connect-default-url-pin-failed = Не вдалося закріпити URL шлюзу в config.toml; модель за замовчуванням встановлено, але перезапущений демон може її не розв'язати.
+everyapi-connect-default-no-candidate = Жодної текстової моделі не зареєстровано, тому немає що робити типовою моделлю.
+
+doctor-audit-desktop-deps-no-pkg-config = pkg-config не знайдено — неможливо перевірити стек GTK/WebKit, потрібний застосунку для стільниці. Для встановлення лише CLI він не потрібен.
+doctor-audit-desktop-deps-ok = Стек GTK/WebKit для стільниці наявний — pkg-config знаходить { $module } і { $tray }.
+doctor-audit-desktop-deps-tray-missing = pkg-config знаходить { $module }, але не { $tray }; застосунок для стільниці працюватиме без піктограми в системному лотку.
+doctor-audit-desktop-deps-webkit-missing = pkg-config знаходить { $gtk }, але не WebKitGTK ({ $webkit }); застосунок для стільниці не зможе відмалювати вікно.
+doctor-audit-desktop-deps-stack-missing = Стек GTK/WebKit для стільниці не знайдено — застосунку для стільниці потрібні { $modules }, самому CLI — ні.
+doctor-audit-desktop-deps-distro-unknown = цей дистрибутив Linux
+doctor-audit-desktop-deps-hint-apt = У { $distro } знайдіть пакунки, що надають { $modules }, за допомогою `apt-cache search webkit2gtk` та `apt-cache search appindicator`, а потім встановіть їх через `sudo apt install <package>`. Назви пакунків різняться між випусками, тому шукайте, а не вгадуйте.
+doctor-audit-desktop-deps-hint-pacman = У { $distro } знайдіть пакунки, що надають { $modules }, за допомогою `pacman -Ss webkit2gtk` та `pacman -Ss appindicator`, а потім встановіть їх через `sudo pacman -S <package>`. Назви пакунків різняться між випусками, тому шукайте, а не вгадуйте.
+doctor-audit-desktop-deps-hint-dnf = У { $distro } знайдіть пакунки, що надають { $modules }, за допомогою `dnf search webkit2gtk` та `dnf search appindicator`, а потім встановіть їх через `sudo dnf install <package>`. Назви пакунків різняться між випусками, тому шукайте, а не вгадуйте.
+doctor-audit-desktop-deps-hint-nix = У { $distro } імперативне встановлення бібліотек розробки не працює — скористайтеся devShell з flake або пакунком librefang-desktop замість того, щоб встановлювати { $modules } вручну.
+doctor-audit-desktop-deps-hint-generic = У { $distro } встановіть пакунки розробки GTK 3, WebKitGTK та Ayatana AppIndicator, які надає ваш менеджер пакунків, доки pkg-config не почне знаходити { $modules }.
+
 # launcher menu items
 launcher-menu-get-started = Налаштувати та запустити
 launcher-menu-get-started-hint = Провайдери, API-ключі, моделі, міграція
@@ -1031,6 +1111,7 @@ model-picker-item =     { $idx }. { $id } { $tier }
 
 # Approvals command specific keys
 approval-none-pending = Немає апрувів у черзі.
+approval-header-status = СТАТУС
 approval-header-request = ЗАПИТ
 
 # Auth command specific keys
@@ -1103,6 +1184,7 @@ skill-removed = Видалено скіл: { $name }
 skill-remove-failed = Не вдалося видалити скіл: { $error }
 skill-search-none = Не знайдено скілів за запитом "{ $query }".
 skill-search-results-header = Знайдено скіли за запитом "{ $query }":
+skill-search-install-hint = встановити: librefang skill install { $id }
 skill-search-failed = Помилка пошуку: { $error }
 skill-validation-failed = Помилка валідації скіла: { $error }
 skill-execution-failed = Помилка виконання скіла: { $error }
@@ -1241,6 +1323,8 @@ desktop-install-error-copy-appimage =  Не вдалося скопіювати 
 desktop-install-error-http = HTTP-запит завершився помилкою: { $error }
 desktop-install-error-create = Не вдалося створити { $path }: { $error }
 desktop-install-error-write = Помилка запису: { $error }
+desktop-install-error-too-large = завантажений інсталятор перевищує ліміт безпеки { $limit } МіБ (спостережено щонайменше { $bytes } байт); перервано
+desktop-install-gatekeeper-notice = macOS може попросити підтвердити відкриття LibreFang під час першого запуску; це Gatekeeper перевіряє нотаризацію застосунку.
 
 maintenance-error-github-request = GitHub-запит завершився помилкою: { $error }
 maintenance-error-github-status = GitHub API повернув статус { $status }
@@ -1349,7 +1433,6 @@ tui-event-comms-send-not-supported-in-process = Надсилання не під
 tui-event-comms-task-posted = Завдання опубліковано
 tui-event-comms-post-failed = Не вдалося опублікувати
 tui-event-comms-post-not-supported-in-process = Публікація завдань не підтримується в інпроцес-режимі
-tui-event-stream-runtime-error = Помилка виконання: { $error }
 tui-event-stream-connection-failed = З'єднання не вдалося: { $error }
 tui-event-agent-spawn-failed-fallback = Не вдалося запустити агента
 

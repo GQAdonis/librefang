@@ -148,6 +148,8 @@ impl KnowledgeGraph for NoopKernelHandle {
     async fn knowledge_add_entity(
         &self,
         _entity: &Entity,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, librefang_kernel_handle::KernelOpError> {
         Err("noop".into())
     }
@@ -155,6 +157,8 @@ impl KnowledgeGraph for NoopKernelHandle {
     async fn knowledge_add_relation(
         &self,
         _relation: &Relation,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, librefang_kernel_handle::KernelOpError> {
         Err("noop".into())
     }
@@ -162,6 +166,7 @@ impl KnowledgeGraph for NoopKernelHandle {
     async fn knowledge_query(
         &self,
         _pattern: GraphPattern,
+        _: Option<&str>,
     ) -> Result<Vec<GraphMatch>, librefang_kernel_handle::KernelOpError> {
         Err("noop".into())
     }
@@ -180,7 +185,8 @@ impl ToolPolicy for NoopKernelHandle {}
 #[test]
 fn test_resolve_user_tool_decision_default_allow() {
     let handle = NoopKernelHandle;
-    let result = handle.resolve_user_tool_decision("any_tool", Some("sender"), Some("channel"));
+    let result =
+        handle.resolve_user_tool_decision("any_tool", Some("sender"), Some("channel"), false);
     assert_eq!(result, UserToolGate::Allow);
 }
 

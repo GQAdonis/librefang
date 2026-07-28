@@ -129,18 +129,22 @@ pub struct ChannelOverrides {
     #[serde(default)]
     pub system_prompt: Option<String>,
     /// DM policy.
-    #[serde(default)]
-    pub dm_policy: DmPolicy,
+    /// `None` means no DM gating is configured — DMs flow, matching the historical behaviour when the whole `ChannelOverrides` was absent.
+    /// This must stay distinct from `Some(DmPolicy::Respond)` so that setting an unrelated field (e.g. `threading`) does not silently materialize a DM policy the operator never wrote (#6445).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dm_policy: Option<DmPolicy>,
     /// Group message policy.
-    #[serde(default)]
-    pub group_policy: GroupPolicy,
+    /// `None` means no group gating is configured — every group message is processed, matching the historical behaviour when the whole `ChannelOverrides` was absent.
+    /// This must stay distinct from `Some(GroupPolicy::MentionOnly)` (the enum default): before #6445, writing any single override field silently flipped an unset group policy to `MentionOnly` and dropped all non-mention group traffic.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_policy: Option<GroupPolicy>,
     /// Regex patterns that can trigger a reply in group chats when
     /// `group_policy` is `mention_only`.
     #[serde(default)]
     pub group_trigger_patterns: Vec<String>,
     /// Enable LLM-based reply-intent precheck for group messages.
-    /// When true and group_policy is "all", a lightweight classifier decides
-    /// whether to reply before running the full agent loop.
+    /// When true and the group is processed unconditionally — an explicit `group_policy = "all"`, or an unset `group_policy` with no `group_trigger_patterns` (the #6445 "process all" default) — a lightweight classifier decides whether to reply before running the full agent loop.
+    /// Has no effect under mention-only / commands-only / ignore gating, where the policy itself already filters group traffic.
     #[serde(default)]
     pub reply_precheck: bool,
     /// Model override for the reply precheck classifier (default: agent's model).
@@ -259,8 +263,8 @@ impl Default for ChannelOverrides {
         Self {
             model: None,
             system_prompt: None,
-            dm_policy: DmPolicy::default(),
-            group_policy: GroupPolicy::default(),
+            dm_policy: None,
+            group_policy: None,
             group_trigger_patterns: Vec::new(),
             reply_precheck: false,
             reply_precheck_model: None,
@@ -2038,7 +2042,10 @@ impl Default for TelemetryConfig {
 pub struct PromptIntelligenceConfig {
     /// Enable prompt versioning and A/B testing. Default: false.
     pub enabled: bool,
-    /// Hash prompts using SHA-256 for version identification. Default: true.
+    /// Retained for compatibility; effectively always `true`.
+    /// The SHA-256 `content_hash` is load-bearing — it drives prompt-version dedup and is stored NOT NULL — so it is always computed regardless of this flag.
+    /// Setting it to `false` is ignored and logs a warning at boot.
+    /// Default: true.
     pub hash_prompts: bool,
     /// Maximum number of versions to keep per agent. Default: 50.
     pub max_versions_per_agent: u32,
@@ -2490,6 +2497,26 @@ pub struct SidecarChannelConfig {
     /// guessing a recipient. Set it to the owner / home chat to opt in.
     #[serde(default)]
     pub default_conversation: Option<String>,
+    /// Per-channel DM policy for this sidecar instance (#6445).
+    /// `None` (the default) inherits the bridge default — DMs flow — and, crucially, is distinct from an explicit value so setting only one behavioural knob here does not materialize a policy the operator never wrote.
+    /// Projected onto `ChannelOverrides.dm_policy` only when `Some`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dm_policy: Option<DmPolicy>,
+    /// Per-channel group policy for this sidecar instance (#6445).
+    /// `None` (the default) inherits the bridge default — every group message is processed.
+    /// Projected onto `ChannelOverrides.group_policy` only when `Some`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_policy: Option<GroupPolicy>,
+    /// Enable thread replies for this sidecar instance (#6445).
+    /// `None` (the default) inherits the bridge default (off).
+    /// Projected onto `ChannelOverrides.threading` only when `Some`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threading: Option<bool>,
+    /// Output-format override for this sidecar instance (#6445).
+    /// `None` (the default) inherits the channel default.
+    /// Projected onto `ChannelOverrides.output_format` only when `Some`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_format: Option<OutputFormat>,
 }
 
 fn default_sidecar_restart() -> bool {
@@ -3261,6 +3288,65 @@ pub enum McpRuntimeStore {
     Db,
 }
 
+/// Org-wide LLM provider governance (issue #6459).
+///
+/// Configure in `config.toml` as:
+/// ```toml
+/// [providers]
+/// allowed = ["anthropic", "openai"]
+/// ```
+///
+/// The list names provider *identifiers* — the same strings used in
+/// `[default_model] provider`, `[[fallback_providers]] provider`, and
+/// `[llm.auxiliary]` `provider:model` specs (e.g. `anthropic`, `openai`,
+/// `groq`, `ollama`, `claude_code`). Matching is normalized
+/// (case-insensitive; `-` and `_` are treated as equivalent) so
+/// `"Claude-Code"` in the list matches a resolved provider of
+/// `claude_code`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ProvidersConfig {
+    /// Allowlist of provider identifiers agents may use.
+    ///
+    /// An **empty** list (the default) means "no restriction — every
+    /// provider is allowed", preserving pre-#6459 behaviour. When the list
+    /// is **non-empty**, driver resolution is fail-closed: any provider not
+    /// present here is rejected with a clear error to the agent and a `WARN`
+    /// for the operator.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed: Vec<String>,
+}
+
+impl ProvidersConfig {
+    /// Normalize a provider identifier for allowlist comparison: trim,
+    /// lowercase, and unify `-`/`_` separators so `"Claude-Code"` and
+    /// `"claude_code"` compare equal.
+    fn normalize(provider: &str) -> String {
+        provider.trim().to_ascii_lowercase().replace('-', "_")
+    }
+
+    /// Whether `provider` is permitted under this allowlist.
+    ///
+    /// An empty allowlist allows everything (backward compatible); a
+    /// non-empty allowlist is fail-closed — only listed providers pass.
+    pub fn is_provider_allowed(&self, provider: &str) -> bool {
+        if self.allowed.is_empty() {
+            return true;
+        }
+        let want = Self::normalize(provider);
+        self.allowed.iter().any(|p| Self::normalize(p) == want)
+    }
+
+    /// Human-readable rejection reason for a disallowed provider. Lists the
+    /// configured allowlist so the operator / agent sees what IS permitted.
+    pub fn rejection_reason(&self, provider: &str) -> String {
+        format!(
+            "LLM provider '{provider}' is not in the org-wide allowlist [{}] \
+             (config.toml [providers] allowed); blocked by governance policy",
+            self.allowed.join(", ")
+        )
+    }
+}
+
 /// Top-level kernel configuration.
 #[derive(Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -3548,6 +3634,13 @@ pub struct KernelConfig {
     /// Configure in config.toml as `[[credential_pools]]`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub credential_pools: Vec<CredentialPoolConfig>,
+    /// Org-wide LLM provider allowlist (governance, issue #6459).
+    /// Configure in config.toml as `[providers]`. Empty (default) means
+    /// "no restriction — all providers allowed"; a non-empty `allowed` list
+    /// is enforced fail-closed at driver resolution time. See
+    /// [`ProvidersConfig`].
+    #[serde(default)]
+    pub providers: ProvidersConfig,
     /// `[llm]` section — currently carries the auxiliary side-task chain
     /// configuration. See [`LlmConfig`] / [`AuxiliaryConfig`].
     #[serde(default)]
@@ -6506,6 +6599,7 @@ impl Default for KernelConfig {
             web: WebConfig::default(),
             fallback_providers: Vec::new(),
             credential_pools: Vec::new(),
+            providers: ProvidersConfig::default(),
             llm: LlmConfig::default(),
             browser: BrowserConfig::default(),
             extensions: ExtensionsConfig::default(),
@@ -7198,15 +7292,13 @@ pub struct ChannelsConfig {
 
     // --- Global file-upload settings ---
     /// Maximum file size in bytes for channel file uploads (bot → server),
-    /// applied uniformly by the Matrix and Telegram adapters before sending
-    /// outbound media (default: 50 MB).
+    /// default 50 MB.
     ///
-    /// Distinct from `file_download_max_bytes` (inbound: server → agent →
-    /// disk). An operator who wants a larger inbound budget but a smaller
-    /// outbound budget — or vice versa — must set both independently. The
-    /// 50 MiB default matches both the Matrix homeserver convention and
-    /// Telegram's bot API ceiling, so omitting the field leaves behaviour
-    /// unchanged from the pre-#4882 hardcoded constants.
+    /// NOTE: this knob is currently NOT enforced.
+    /// It configured the in-process Matrix / Telegram adapters' `with_max_upload_bytes` builders, but those adapters were replaced by out-of-process sidecars in the #5317–#5459 migration (`start_channel_bridge_with_config` no longer consults its config).
+    /// Outbound uploads are instead bounded by the sidecar's own hardcoded cap.
+    /// The kernel logs a WARN at boot when this is set below that effective cap so an operator is not misled into thinking a tighter value took effect; honouring a custom value requires threading it into the sidecar send path (a sidecar-crate change).
+    /// Distinct from `file_download_max_bytes` (inbound: server → agent → disk), which IS enforced.
     #[serde(default = "default_file_upload_max_bytes")]
     pub file_upload_max_bytes: u64,
 }
@@ -7604,8 +7696,14 @@ pub struct ToolResultsConfig {
     pub artifact_max_age_days: u32,
 }
 
+/// Default artifact-spill threshold in bytes (16 KB).
+///
+/// A tool result larger than this is written to the artifact store and replaced with a small recoverable stub.
+/// Exposed as a constant so the tool-result sanitizer's fallback size cap can be tied to it rather than drifting apart as an independent literal (issue #6545).
+pub const DEFAULT_SPILL_THRESHOLD_BYTES: u64 = 16_384;
+
 fn default_spill_threshold_bytes() -> u64 {
-    16_384
+    DEFAULT_SPILL_THRESHOLD_BYTES
 }
 
 fn default_max_artifact_bytes() -> u64 {
@@ -7644,6 +7742,101 @@ impl Default for ToolResultsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #6459 — an empty `[providers] allowed` list means "no restriction":
+    /// every provider is permitted, preserving pre-allowlist behaviour.
+    #[test]
+    fn provider_allowlist_empty_allows_everything() {
+        let cfg = ProvidersConfig::default();
+        assert!(cfg.allowed.is_empty(), "default allowlist must be empty");
+        for p in [
+            "anthropic",
+            "openai",
+            "groq",
+            "ollama",
+            "some-custom-provider",
+        ] {
+            assert!(
+                cfg.is_provider_allowed(p),
+                "empty allowlist must allow '{p}'"
+            );
+        }
+    }
+
+    /// #6459 — a non-empty allowlist is fail-closed: only listed providers
+    /// pass; everything else is rejected.
+    #[test]
+    fn provider_allowlist_non_empty_is_fail_closed() {
+        let cfg = ProvidersConfig {
+            allowed: vec!["anthropic".to_string(), "openai".to_string()],
+        };
+        assert!(cfg.is_provider_allowed("anthropic"));
+        assert!(cfg.is_provider_allowed("openai"));
+        assert!(
+            !cfg.is_provider_allowed("groq"),
+            "unlisted provider must be rejected"
+        );
+        assert!(
+            !cfg.is_provider_allowed("ollama"),
+            "unlisted provider must be rejected"
+        );
+    }
+
+    /// #6459 — matching is normalized: case-insensitive and `-`/`_`
+    /// equivalent, so operators can list `"Claude-Code"` and a resolved
+    /// `claude_code` still matches.
+    #[test]
+    fn provider_allowlist_matching_is_normalized() {
+        let cfg = ProvidersConfig {
+            allowed: vec!["Claude-Code".to_string(), " OpenAI ".to_string()],
+        };
+        assert!(cfg.is_provider_allowed("claude_code"));
+        assert!(cfg.is_provider_allowed("CLAUDE-CODE"));
+        assert!(cfg.is_provider_allowed("openai"));
+        assert!(!cfg.is_provider_allowed("anthropic"));
+    }
+
+    /// #6459 — an absent `[providers]` section deserializes to the empty
+    /// (allow-all) allowlist, so existing configs keep working unchanged.
+    #[test]
+    fn provider_allowlist_absent_section_is_backward_compatible() {
+        let cfg: KernelConfig = toml::from_str("").expect("empty config parses");
+        assert!(cfg.providers.allowed.is_empty());
+        assert!(cfg.providers.is_provider_allowed("anthropic"));
+
+        let cfg2: KernelConfig = toml::from_str(
+            r#"
+            [providers]
+            allowed = ["groq"]
+            "#,
+        )
+        .expect("providers section parses");
+        assert_eq!(cfg2.providers.allowed, vec!["groq".to_string()]);
+        assert!(cfg2.providers.is_provider_allowed("groq"));
+        assert!(!cfg2.providers.is_provider_allowed("anthropic"));
+    }
+
+    /// #6459 — the rejection reason names the offending provider and points
+    /// the operator at the allowlist so the block is actionable.
+    #[test]
+    fn provider_allowlist_rejection_reason_is_actionable() {
+        let cfg = ProvidersConfig {
+            allowed: vec!["openai".to_string()],
+        };
+        let reason = cfg.rejection_reason("anthropic");
+        assert!(
+            reason.contains("anthropic"),
+            "reason must name the provider"
+        );
+        assert!(
+            reason.contains("allowlist"),
+            "reason must mention the allowlist"
+        );
+        assert!(
+            reason.contains("openai"),
+            "reason must list what IS allowed"
+        );
+    }
 
     #[test]
     fn uar_sidecar_is_off_by_default_and_absent_config_still_parses() {

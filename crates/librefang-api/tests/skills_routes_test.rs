@@ -45,6 +45,24 @@ async fn boot() -> Harness {
     }
 }
 
+/// Same as [`boot`] but with the kernel booted in Stable mode, which freezes
+/// the skill registry at boot (`KernelConfig::mode`). Used to exercise the
+/// frozen-reload honesty path (#6540).
+async fn boot_stable() -> Harness {
+    let test = TestAppState::with_builder(MockKernelBuilder::new().with_config(|cfg| {
+        cfg.mode = librefang_types::config::KernelMode::Stable;
+    }));
+    let state = test.state.clone();
+    let app = Router::new()
+        .nest("/api", routes::skills::router())
+        .with_state(state.clone());
+    Harness {
+        app,
+        _state: state,
+        test,
+    }
+}
+
 async fn json_request(
     h: &Harness,
     method: Method,
@@ -346,6 +364,106 @@ async fn skills_registry_lists_cached_entries_and_install_state() {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/marketplace/search (#6569)
+// ---------------------------------------------------------------------------
+
+/// The registry ships `SKILL.md`, but this endpoint only looked for `skill.toml`, so it returned an empty result set on every install — the same gap `/api/skills/registry` had already solved.
+#[tokio::test(flavor = "multi_thread")]
+async fn marketplace_search_finds_skillmd_registry_entries_6569() {
+    let h = boot().await;
+    install_registry_skill(h.home(), "web-search", "Search the web for answers");
+
+    let (status, body) = json_request(
+        &h,
+        Method::GET,
+        "/api/marketplace/search?q=web-search",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let rows = body["results"].as_array().expect("results array");
+    let row = rows
+        .iter()
+        .find(|r| r["name"] == "web-search")
+        .unwrap_or_else(|| panic!("web-search missing in {body}"));
+    assert_eq!(row["description"], "Search the web for answers");
+    // The directory name is what the install endpoints take; it can differ from the frontmatter name.
+    assert_eq!(row["install_id"], "web-search");
+    assert_eq!(
+        body["total"].as_u64().unwrap() as usize,
+        rows.len(),
+        "total must match array length: {body}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn marketplace_search_matches_the_description_too_6569() {
+    let h = boot().await;
+    install_registry_skill(h.home(), "postgres-expert", "Tune slow SQL queries");
+
+    let (status, body) = json_request(
+        &h,
+        Method::GET,
+        "/api/marketplace/search?q=slow%20SQL",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert!(
+        body["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["name"] == "postgres-expert"),
+        "description match missing in {body}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn marketplace_search_returns_no_rows_for_a_miss_6569() {
+    let h = boot().await;
+    install_registry_skill(h.home(), "web-search", "Search the web");
+
+    let (status, body) = json_request(
+        &h,
+        Method::GET,
+        "/api/marketplace/search?q=definitely-not-a-skill",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["results"], serde_json::json!([]));
+    assert_eq!(body["total"], 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn marketplace_search_rows_are_sorted_by_name_6569() {
+    let h = boot().await;
+    install_registry_skill(h.home(), "zzz-last", "sortable marker skill");
+    install_registry_skill(h.home(), "aaa-first", "sortable marker skill");
+
+    let (status, body) = json_request(
+        &h,
+        Method::GET,
+        "/api/marketplace/search?q=sortable%20marker",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let names: Vec<&str> = body["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["aaa-first", "zzz-last"],
+        "read_dir order is filesystem-dependent, so the handler must sort"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/skills/reload
 // ---------------------------------------------------------------------------
 
@@ -365,6 +483,34 @@ async fn skills_reload_picks_up_filesystem_drops() {
     let (_, after) = json_request(&h, Method::GET, "/api/skills", None).await;
     assert_eq!(after["total"], 1);
     assert_eq!(after["items"][0]["name"], "dropped");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn skills_reload_frozen_stable_mode_reports_honest_result() {
+    // #6540: a frozen (Stable-mode) reload must not silently no-op — the HTTP
+    // response must surface `frozen: true` and the skipped new skill dir
+    // instead of pretending a full reload happened, and the freeze boundary
+    // must actually hold (the new skill must not be loaded).
+    let h = boot_stable().await;
+
+    install_skill(h.home(), "added-after-boot", &[]);
+
+    let (status, body) = json_request(&h, Method::POST, "/api/skills/reload", None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["frozen"], true, "{body:?}");
+    assert_eq!(body["status"], "partial", "{body:?}");
+    assert_eq!(
+        body["skipped_new"],
+        serde_json::json!(["added-after-boot"]),
+        "{body:?}"
+    );
+    assert_eq!(body["count"], 0, "{body:?}");
+
+    let (_, after) = json_request(&h, Method::GET, "/api/skills", None).await;
+    assert_eq!(
+        after["total"], 0,
+        "frozen registry must not load the new skill: {after:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------

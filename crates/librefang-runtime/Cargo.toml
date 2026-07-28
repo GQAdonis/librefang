@@ -26,6 +26,10 @@ bytes = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
+# Charset-aware decoding of fetched response bodies. reqwest already pulls this
+# in for its own `text()`; the size-capped streaming read decodes with it so a
+# non-UTF-8 page (Shift-JIS / GBK / EUC-JP / ISO-8859-1) is not mangled.
+encoding_rs = "0.8"
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
@@ -102,7 +106,7 @@ seccompiler = { version = "0.5", optional = true }
 [dev-dependencies]
 # Phase-8 C-005: test-stub feature enables KernelHandleStub used by plugin_example_* tests.
 librefang-kernel-handle = { path = "../librefang-kernel-handle", features = ["test-stub"] }
-serial_test = "3"
+serial_test = "4"
 proptest = "1"
 metrics-util = { version = "0.20", features = ["debugging"] }
 # Used by the Daytona backend wire-shape tests (#4677 review). Same

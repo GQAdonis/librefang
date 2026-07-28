@@ -46,7 +46,7 @@ pub const API_VERSIONS: &[(&str, &str)] = &[("v1", "stable")];
 ///
 /// To add v2 in the future, just create `api_v2_routes()`, mount it at `/api/v2`,
 /// and update `API_VERSION_LATEST`.
-fn api_v1_routes() -> Router<Arc<AppState>> {
+fn api_v1_routes(webhook_body_limit: usize) -> Router<Arc<AppState>> {
     Router::new()
         .merge(routes::config::router())
         .merge(routes::agents::router())
@@ -71,7 +71,7 @@ fn api_v1_routes() -> Router<Arc<AppState>> {
         .merge(routes::uar::router())
         .merge(routes::storage::router())
         .merge(routes::users::router())
-        .merge(routes::webhooks::router())
+        .merge(routes::webhooks::router(webhook_body_limit))
         // Passkey (WebAuthn/FIDO2) login + credential management (#5981)
         .merge(routes::passkey::router())
         // Dashboard credential login (handler defined locally in server.rs)
@@ -534,9 +534,43 @@ pub(crate) async fn dashboard_login(
                         }))
                         .into_response();
                     }
+                    // Brute-force lockout gate (mirror of the approval path in
+                    // routes/approvals.rs): reject before verifying if the
+                    // shared "api_admin" identity is locked out. Without this
+                    // the 6-digit login TOTP could be brute-forced with a known
+                    // password, bounded only by the generic per-IP limiter.
+                    if state.kernel.approvals().is_totp_locked_out("api_admin") {
+                        return (
+                            axum::http::StatusCode::UNAUTHORIZED,
+                            axum::response::Json(serde_json::json!({
+                                "ok": false,
+                                "error": "Too many failed TOTP attempts. Try again later.",
+                            })),
+                        )
+                            .into_response();
+                    }
                     // Replay-prevention check (#3359): reject a code already used
                     // in the last 60 seconds.
                     if state.kernel.approvals().is_totp_code_used(totp_code) {
+                        // Atomic check + record (#3584) preserves fail-secure on
+                        // DB persist failure (#3372): Err(false) = DB write
+                        // dropped, so reject with 500; Err(true) = already locked
+                        // out, fall through to the "already used" response so the
+                        // lockout state is not leaked here.
+                        if let Err(false) = state
+                            .kernel
+                            .approvals()
+                            .check_and_record_totp_failure("api_admin")
+                        {
+                            return (
+                                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                axum::response::Json(serde_json::json!({
+                                    "ok": false,
+                                    "error": "Failed to persist TOTP failure counter",
+                                })),
+                            )
+                                .into_response();
+                        }
                         return (
                             axum::http::StatusCode::UNAUTHORIZED,
                             axum::response::Json(serde_json::json!({
@@ -556,9 +590,55 @@ pub(crate) async fn dashboard_login(
                     {
                         Ok(true) => {
                             // Mark code as used so it cannot be replayed.
-                            state.kernel.approvals().record_totp_code_used(totp_code);
+                            // Fail-secure (#3372 parity): if the DB write fails
+                            // the code is NOT in the replay table and could be
+                            // reused, so reject with 500 rather than logging in.
+                            if state
+                                .kernel
+                                .approvals()
+                                .record_totp_code_used_for(totp_code, Some("login"))
+                                .is_err()
+                            {
+                                return (
+                                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                    axum::response::Json(serde_json::json!({
+                                        "ok": false,
+                                        "error": "Failed to persist TOTP used-code record",
+                                    })),
+                                )
+                                    .into_response();
+                            }
                         }
                         Ok(false) => {
+                            // Fail-secure: atomically check lockout + record the
+                            // failure (#3372/#3584), mirroring the approval path.
+                            match state
+                                .kernel
+                                .approvals()
+                                .check_and_record_totp_failure("api_admin")
+                            {
+                                Err(true) => {
+                                    return (
+                                        axum::http::StatusCode::UNAUTHORIZED,
+                                        axum::response::Json(serde_json::json!({
+                                            "ok": false,
+                                            "error": "Too many failed TOTP attempts. Try again later.",
+                                        })),
+                                    )
+                                        .into_response();
+                                }
+                                Err(false) => {
+                                    return (
+                                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                                        axum::response::Json(serde_json::json!({
+                                            "ok": false,
+                                            "error": "Failed to persist TOTP failure counter",
+                                        })),
+                                    )
+                                        .into_response();
+                                }
+                                Ok(()) => {}
+                            }
                             return (
                                 axum::http::StatusCode::UNAUTHORIZED,
                                 axum::response::Json(serde_json::json!({
@@ -1597,10 +1677,23 @@ pub async fn build_router(
     };
     let auth_rl_max_attempts = rl_cfg.auth_rate_limit_per_ip;
 
+    // Per-webhook body cap for the external-trigger endpoints. Sourced from
+    // `webhook_triggers.max_payload_bytes` (default 64 KiB per its doc) so the
+    // documented cap is actually enforced at the wire level instead of only
+    // the global `max_request_body_bytes` (default 8 MiB). Applied both to the
+    // versioned `/api/hooks/*` routes (inside `api_v1_routes`) and the
+    // unversioned `/hooks/*` alias below.
+    let webhook_body_limit = kernel
+        .config_ref()
+        .webhook_triggers
+        .as_ref()
+        .map(|c| c.max_payload_bytes)
+        .unwrap_or(64 * 1024);
+
     // Build the versioned API routes. All /api/* endpoints are defined once
     // in api_v1_routes() and mounted at both /api and /api/v1 for backward
     // compatibility. Future versions (v2, v3) can be added as separate routers.
-    let v1_routes = api_v1_routes();
+    let v1_routes = api_v1_routes(webhook_body_limit);
 
     // Upload routes are defined separately so they can share the auth/rate-limit
     // layers but bypass the *global* `RequestBodyLimitLayer` applied at
@@ -1671,9 +1764,15 @@ pub async fn build_router(
         .nest("/api/v1", v1_routes.clone())
         // Mount the same routes at /api (latest version alias for backward compat)
         .nest("/api", v1_routes)
-        // Webhook trigger endpoints (not versioned — external callers use fixed URLs)
-        .route("/hooks/wake", axum::routing::post(routes::webhook_wake))
-        .route("/hooks/agent", axum::routing::post(routes::webhook_agent))
+        // Webhook trigger endpoints (not versioned — external callers use fixed
+        // URLs). Same per-webhook body cap as the versioned `/api/hooks/*`
+        // routes so `webhook_triggers.max_payload_bytes` is enforced on both.
+        .merge(
+            Router::new()
+                .route("/hooks/wake", axum::routing::post(routes::webhook_wake))
+                .route("/hooks/agent", axum::routing::post(routes::webhook_agent))
+                .layer(RequestBodyLimitLayer::new(webhook_body_limit)),
+        )
         // A2A protocol endpoints + MCP HTTP (protocol-level, not versioned).
         // Apply an explicit body limit (1 MB) to inbound A2A task payloads so
         // that external callers cannot exhaust server memory via oversized JSON
@@ -1706,6 +1805,17 @@ pub async fn build_router(
         // from RequestBodyLimitLayer (applied below) because the handler
         // enforces its own configurable limit.
         .merge(upload_routes)
+        // JSON depth guard — buffers `application/json` bodies once,
+        // checks nesting depth against MAX_JSON_BODY_DEPTH, rejects
+        // adversarial `[[[[…]]]]` payloads before any handler sees them.
+        // Added FIRST in the builder so it is the innermost layer and
+        // therefore executes AFTER auth + rate-limit on the request path
+        // (Axum runs the last-added layer first): the cost of buffering the
+        // body and parsing it with serde_json is gated by auth and the rate
+        // limiters upstream. request_logging is added later (outermost of
+        // these), so it still wraps the guard and a depth rejection surfaces
+        // in the request log with the right status. Audit: check-json-depth-unused.
+        .layer(axum::middleware::from_fn(middleware::enforce_json_body_depth))
         .layer(axum::middleware::from_fn_with_state(
             auth_state,
             middleware::auth,
@@ -1729,14 +1839,6 @@ pub async fn build_router(
             rate_limiter::auth_rate_limit_layer,
         ))
         .layer(axum::middleware::from_fn(middleware::api_version_headers))
-        // JSON depth guard — buffers `application/json` bodies once,
-        // checks nesting depth against MAX_JSON_BODY_DEPTH, rejects
-        // adversarial `[[[[…]]]]` payloads at the layer boundary
-        // before any handler sees them. Sits below auth/rate-limit
-        // (so the cost of buffering is gated by auth) and above
-        // request-logging (so rejections show up in the request log
-        // with the right status). Audit: check-json-depth-unused.
-        .layer(axum::middleware::from_fn(middleware::enforce_json_body_depth))
         .layer(axum::middleware::from_fn(middleware::security_headers))
         .layer(axum::middleware::from_fn(middleware::request_logging))
         .layer(CompressionLayer::new())
@@ -2611,6 +2713,77 @@ fn stop_observability_stack(
 }
 
 #[cfg(test)]
+mod layer_order_tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use librefang_types::config::{DefaultModelConfig, KernelConfig};
+    use tower::ServiceExt;
+
+    /// Regression for finding #10: the JSON body-depth guard must execute
+    /// AFTER auth so the cost of buffering + parsing an adversarial body is
+    /// gated by authentication. An unauthenticated request carrying an
+    /// over-deep JSON body must be rejected by auth with 401 — the depth
+    /// guard (which would return 400 `BAD_REQUEST`) must never run.
+    ///
+    /// Before the fix the depth guard was the outermost of the two layers and
+    /// ran first, so this request returned 400 (depth) instead of 401 (auth),
+    /// letting an unauthenticated caller drive body buffering + `serde_json`
+    /// parsing on every request.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn json_depth_guard_runs_after_auth() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        // Seed the pinned registry fixture so the kernel boots offline.
+        librefang_kernel::registry_sync::seed_registry_fixture_for_tests(tmp.path());
+
+        let config = KernelConfig {
+            home_dir: tmp.path().to_path_buf(),
+            data_dir: tmp.path().join("data"),
+            api_key: "secret-token".to_string(),
+            default_model: DefaultModelConfig {
+                provider: "ollama".to_string(),
+                model: "test-model".to_string(),
+                api_key_env: "OLLAMA_API_KEY".to_string(),
+                base_url: None,
+                message_timeout_secs: 300,
+                extra_params: std::collections::BTreeMap::new(),
+                cli_profile_dirs: Vec::new(),
+            },
+            ..KernelConfig::default()
+        };
+
+        let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("kernel boots"));
+        kernel.clone().set_self_handle();
+        let (app, state) = build_router(kernel, "127.0.0.1:0".parse().unwrap()).await;
+
+        // Nesting depth 60 comfortably exceeds MAX_JSON_BODY_DEPTH (32), so the
+        // depth guard WOULD reject this body with 400 if it ran before auth.
+        let deep_body = format!("{}{}", "[".repeat(60), "]".repeat(60));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    // A protected write route: not on the public allowlist.
+                    .method("POST")
+                    .uri("/api/agents/some-agent/message")
+                    .header("content-type", "application/json")
+                    .body(Body::from(deep_body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "auth must reject the unauthenticated request (401) before the depth guard \
+             (400) ever buffers and parses the body"
+        );
+
+        state.kernel.shutdown();
+    }
+}
+
+#[cfg(test)]
 mod observability_tests {
     use super::*;
 
@@ -3358,5 +3531,163 @@ mod evaluate_bind_auth_safety_tests {
         // "warn loudly" variant.
         let r = evaluate_bind_auth_safety(&addr("0.0.0.0:4545"), true, true);
         assert_eq!(r, BindAuthCheck::Ok);
+    }
+}
+
+#[cfg(test)]
+mod dashboard_login_totp_lockout_tests {
+    use super::*;
+    use librefang_types::approval::SecondFactor;
+    use librefang_types::config::{DefaultModelConfig, KernelConfig};
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const DASH_USER: &str = "admin";
+    const DASH_PASS: &str = "correct horse battery staple";
+
+    /// Produce `count` 6-digit codes that are guaranteed NOT to match the
+    /// enrolled secret in the current TOTP window (or the adjacent windows a
+    /// clock skew during the test could land in), so every login attempt takes
+    /// the wrong-code (`Ok(false)`) branch deterministically.
+    fn wrong_codes(secret_base32: &str, issuer: &str, count: usize) -> Vec<String> {
+        use totp_rs::{Algorithm, Secret, TOTP};
+        let raw = Secret::Encoded(secret_base32.to_string())
+            .to_bytes()
+            .expect("decode base32 secret");
+        let totp = TOTP::new(
+            Algorithm::SHA1,
+            6,
+            1,
+            30,
+            raw,
+            Some(issuer.to_string()),
+            String::new(),
+        )
+        .expect("totp init");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let mut forbidden = std::collections::HashSet::new();
+        for dt in [-60i64, -30, 0, 30, 60] {
+            let t = (now as i64 + dt).max(0) as u64;
+            forbidden.insert(totp.generate(t));
+        }
+        let mut out = Vec::new();
+        let mut n = 0u32;
+        while out.len() < count {
+            let candidate = format!("{n:06}");
+            if !forbidden.contains(&candidate) {
+                out.push(candidate);
+            }
+            n += 1;
+        }
+        out
+    }
+
+    async fn login_with_totp(
+        state: &Arc<AppState>,
+        totp_code: &str,
+    ) -> (axum::http::StatusCode, serde_json::Value) {
+        let body = serde_json::json!({
+            "username": DASH_USER,
+            "password": DASH_PASS,
+            "totp_code": totp_code,
+        });
+        let addr: std::net::SocketAddr = "127.0.0.1:5000".parse().unwrap();
+        let resp = super::dashboard_login(
+            axum::extract::State(state.clone()),
+            axum::extract::ConnectInfo(addr),
+            axum::http::HeaderMap::new(),
+            axum::Json(body),
+        )
+        .await;
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap();
+        let value = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+        (status, value)
+    }
+
+    /// Repeated wrong TOTP codes on the dashboard login path must trip the
+    /// shared brute-force lockout (mirroring the approval path), not be treated
+    /// as an unbounded stream of merely-"invalid" codes. Before the fix the
+    /// login block never called the lockout guard, so this attempt count would
+    /// keep returning "Invalid TOTP code" forever.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dashboard_login_locks_out_after_repeated_wrong_totp_codes() {
+        let tmp = tempfile::tempdir().expect("temp dir");
+        librefang_kernel::registry_sync::seed_registry_fixture_for_tests(tmp.path());
+        let mut config = KernelConfig {
+            home_dir: tmp.path().to_path_buf(),
+            data_dir: tmp.path().join("data"),
+            api_key: "secret-token".to_string(),
+            dashboard_user: DASH_USER.to_string(),
+            dashboard_pass: DASH_PASS.to_string(),
+            default_model: DefaultModelConfig {
+                provider: "ollama".to_string(),
+                model: "test-model".to_string(),
+                api_key_env: "OLLAMA_API_KEY".to_string(),
+                base_url: None,
+                message_timeout_secs: 300,
+                extra_params: std::collections::BTreeMap::new(),
+                cli_profile_dirs: Vec::new(),
+            },
+            ..KernelConfig::default()
+        };
+        config.approval.second_factor = SecondFactor::Login;
+        config.approval.totp_issuer = "LibreFang".to_string();
+        let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("kernel boots"));
+        kernel.clone().set_self_handle();
+        let addr: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let (_app, state) = build_router(kernel, addr).await;
+
+        // Enroll + confirm a TOTP secret so the login second-factor gate runs.
+        let (secret, _uri, _qr) = state
+            .kernel
+            .approvals()
+            .new_totp_secret("LibreFang", DASH_USER)
+            .expect("generate totp secret");
+        state
+            .kernel
+            .vault_set("totp_secret", &secret)
+            .expect("persist totp secret");
+        state
+            .kernel
+            .vault_set("totp_confirmed", "true")
+            .expect("persist totp confirmed flag");
+
+        let issuer = state.kernel.approvals().policy().totp_issuer.clone();
+        // TOTP_MAX_FAILURES is 5 — five wrong codes, then one more to observe
+        // the lockout response.
+        let codes = wrong_codes(&secret, &issuer, 6);
+
+        // The first five wrong codes are each rejected as invalid and counted.
+        for code in codes.iter().take(5) {
+            let (status, body) = login_with_totp(&state, code).await;
+            assert_eq!(
+                status,
+                axum::http::StatusCode::UNAUTHORIZED,
+                "wrong code should be rejected; body: {body:?}"
+            );
+            assert_eq!(
+                body["error"], "Invalid TOTP code",
+                "expected invalid-code response; body: {body:?}"
+            );
+        }
+
+        // The sixth attempt must now hit the lockout gate instead of the
+        // generic invalid-code branch.
+        let (status, body) = login_with_totp(&state, &codes[5]).await;
+        assert_eq!(
+            status,
+            axum::http::StatusCode::UNAUTHORIZED,
+            "locked-out login should be unauthorized; body: {body:?}"
+        );
+        assert_eq!(
+            body["error"], "Too many failed TOTP attempts. Try again later.",
+            "dashboard login must lock out after repeated TOTP failures; body: {body:?}"
+        );
     }
 }

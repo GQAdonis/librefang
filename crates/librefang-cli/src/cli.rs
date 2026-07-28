@@ -292,7 +292,7 @@ pub(crate) enum Commands {
     /// Browse models, aliases, and providers [*].
     #[command(
         subcommand,
-        long_about = "Browse and manage LLM models, aliases, and providers.\n\nExamples:\n  librefang models list                  # List all models\n  librefang models list --provider groq  # Filter by provider\n  librefang models aliases               # Show model aliases\n  librefang models providers             # List providers and auth status\n  librefang models set gpt-4o            # Set default model"
+        long_about = "Browse and manage LLM models, aliases, and providers.\n\nExamples:\n  librefang models list                  # List all models\n  librefang models list --provider groq  # Filter by provider\n  librefang models aliases               # Show model aliases\n  librefang models providers             # List providers and auth status\n  librefang models set gpt-4o            # Set default model\n  librefang models connect everyapi      # Register the EveryAPI gateway"
     )]
     Models(ModelsCommands),
     /// Daemon control (start, stop, status) [*].
@@ -1378,6 +1378,17 @@ pub(crate) enum ModelsCommands {
         /// Model ID or alias (e.g. "gpt-4o", "claude-sonnet"). Interactive picker if omitted.
         model: Option<String>,
     },
+    /// Register an external AI gateway as an LLM provider.
+    #[command(
+        long_about = "Register an external AI gateway as a custom LLM provider.\n\nReads the gateway's own credentials file, fetches its live model list, and writes a provider entry plus the API key into the LibreFang home directory.\n\nSupported targets:\n  everyapi  # reads ~/.config/everyapi/credentials.json\n\nExamples:\n  librefang models connect everyapi\n  librefang models connect everyapi --set-default"
+    )]
+    Connect {
+        /// Gateway to connect (currently only "everyapi").
+        target: String,
+        /// Also make this gateway's best model the daemon default.
+        #[arg(long)]
+        set_default: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1689,14 +1700,22 @@ pub(crate) enum SystemCommands {
 pub(crate) enum ServiceCommands {
     /// Register auto-start service so LibreFang starts on boot/login.
     #[command(
-        long_about = "Register a system service so LibreFang starts automatically.\n\nOn Linux:   creates a systemd user service (~/.config/systemd/user/librefang.service)\nOn macOS:   creates a LaunchAgent (~/Library/LaunchAgents/ai.librefang.daemon.plist)\nOn Windows: adds a registry entry (HKCU\\...\\Run)\n\nExamples:\n  librefang service install"
+        long_about = "Register a system service so LibreFang starts automatically.\n\nOn Linux:   creates a systemd user service (~/.config/systemd/user/librefang.service)\nOn macOS:   creates a LaunchAgent (~/Library/LaunchAgents/ai.librefang.daemon.plist)\nOn Windows: adds a registry entry (HKCU\\...\\Run)\n\nAll three start the daemon once the user logs in. Pass --system on macOS for a\nLaunchDaemon that starts at boot instead, before any login.\n\nExamples:\n  librefang service install\n  sudo librefang service install --system"
     )]
-    Install,
+    Install {
+        /// macOS only: install a boot-time LaunchDaemon instead of a login-time LaunchAgent. Requires sudo.
+        #[arg(long)]
+        system: bool,
+    },
     /// Remove the auto-start service.
     #[command(
-        long_about = "Remove the previously installed auto-start service.\n\nExamples:\n  librefang service uninstall"
+        long_about = "Remove the previously installed auto-start service.\n\nExamples:\n  librefang service uninstall\n  sudo librefang service uninstall --system"
     )]
-    Uninstall,
+    Uninstall {
+        /// macOS only: remove the boot-time LaunchDaemon instead of the login-time LaunchAgent. Requires sudo.
+        #[arg(long)]
+        system: bool,
+    },
     /// Show whether the auto-start service is registered.
     #[command(
         long_about = "Check whether the auto-start service is currently registered.\n\nExamples:\n  librefang service status"

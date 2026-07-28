@@ -446,6 +446,60 @@ fn host_fs_list(state: &GuestState, params: &serde_json::Value) -> serde_json::V
 // Network (capability-checked)
 // ---------------------------------------------------------------------------
 
+/// Maximum number of decompressed response bytes `host_net_fetch` will buffer
+/// into host memory before aborting.
+///
+/// A `NetConnect`-capable WASM guest chooses the fetch URL, so an unbounded
+/// `resp.text()` on a large chunked or compressed response is fully buffered
+/// into host memory, defeating sandbox isolation. This fixed cap mirrors
+/// `web_fetch`'s default `max_response_bytes` of 10 MiB. No per-fetch config
+/// is threaded into the WASM host path, so the cap is a compiled constant
+/// rather than a configurable field.
+const MAX_NET_FETCH_RESPONSE_BYTES: usize = 10 * 1024 * 1024;
+
+/// Append `chunk` to `buf`, aborting if doing so would exceed `max_bytes`.
+///
+/// The size check runs against the accumulated length reqwest has already
+/// decompressed (gzip/deflate/brotli), so it bounds the true in-memory cost
+/// even when the wire response is chunked or its `Content-Length` is absent or
+/// understated — cases a header-only guard (like `web_fetch`'s) misses.
+fn append_capped(buf: &mut Vec<u8>, chunk: &[u8], max_bytes: usize) -> Result<(), String> {
+    if buf.len().saturating_add(chunk.len()) > max_bytes {
+        return Err(format!("Response too large: exceeds {max_bytes} byte cap"));
+    }
+    buf.extend_from_slice(chunk);
+    Ok(())
+}
+
+/// Read a response body, streaming chunk-by-chunk and aborting once the
+/// accumulated decompressed size exceeds `max_bytes`, instead of buffering the
+/// whole body with `resp.text()`.
+async fn read_body_capped(mut resp: reqwest::Response, max_bytes: usize) -> Result<String, String> {
+    // Capture the charset before the body is consumed so the decode matches the
+    // Content-Type, exactly as the previous `resp.text()` did.
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        match resp.chunk().await {
+            Ok(Some(chunk)) => append_capped(&mut buf, &chunk, max_bytes)?,
+            Ok(None) => break,
+            Err(e) => return Err(format!("Failed to read response: {e}")),
+        }
+    }
+    // Decode via the shared charset-aware helper (lossy for invalid sequences),
+    // matching web_fetch and the prior `text()`. A non-UTF-8 or binary body no
+    // longer hard-errors and denies the guest a response it could read before.
+    Ok(crate::web_fetch::decode_body_with_charset(
+        &buf,
+        &content_type,
+    ))
+}
+
 fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json::Value {
     let url = match params.get("url").and_then(|u| u.as_str()) {
         Some(u) => u,
@@ -513,9 +567,9 @@ fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json:
                 let status = resp.status();
                 if !status.is_redirection() {
                     let status_u16 = status.as_u16();
-                    return match resp.text().await {
+                    return match read_body_capped(resp, MAX_NET_FETCH_RESPONSE_BYTES).await {
                         Ok(text) => json!({"ok": {"status": status_u16, "body": text}}),
-                        Err(e) => json!({"error": format!("Failed to read response: {e}")}),
+                        Err(e) => json!({"error": e}),
                     };
                 }
 
@@ -529,9 +583,9 @@ fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json:
                 else {
                     // 3xx with no usable Location — return it rather than loop.
                     let status_u16 = status.as_u16();
-                    return match resp.text().await {
+                    return match read_body_capped(resp, MAX_NET_FETCH_RESPONSE_BYTES).await {
                         Ok(text) => json!({"ok": {"status": status_u16, "body": text}}),
-                        Err(e) => json!({"error": format!("Failed to read response: {e}")}),
+                        Err(e) => json!({"error": e}),
                     };
                 };
                 let base = match url::Url::parse(&current_url) {
@@ -750,102 +804,10 @@ async fn run_shell_exec(command: &str, args: &[String]) -> serde_json::Value {
 // Environment (capability-checked)
 // ---------------------------------------------------------------------------
 
-/// Hard-coded blocklist of env var name substrings that WASM plugins can
-/// NEVER read, regardless of their declared `EnvRead` capability.
-///
-/// The check is case-insensitive. Any variable whose upper-cased name
-/// contains one of these substrings is silently suppressed — the caller
-/// receives `null` rather than the real value, and no error is returned so
-/// that well-behaved plugins can't probe for the existence of secrets.
-const BLOCKED_ENV_SUBSTRINGS: &[&str] = &[
-    "KEY",
-    "SECRET",
-    "TOKEN",
-    "PASSWORD",
-    "CREDENTIAL",
-    "PRIVATE",
-];
-
-/// Specific full names (upper-cased) that are always blocked regardless of
-/// whether they contain a blocked substring. This catches names that are
-/// conventional secrets but do not contain any of the substrings above.
-const BLOCKED_ENV_EXACT: &[&str] = &[
-    "LIBREFANG_VAULT_KEY",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "GROQ_API_KEY",
-    "GEMINI_API_KEY",
-    "GITHUB_TOKEN",
-    "NPM_TOKEN",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_SESSION_TOKEN",
-];
-
-/// Returns `true` if the env var name matches the blocklist and must not be
-/// returned to a WASM guest.
-fn is_blocked_env_var(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    // Exact-name check (belt-and-suspenders — all of these also match the
-    // boundary check below, but an explicit list is easier to audit).
-    if BLOCKED_ENV_EXACT.contains(&upper.as_str()) {
-        return true;
-    }
-    // Word-boundary substring check.  Plain `contains` flagged
-    // `MONKEYHOUSE`, `KEYBOARD_LAYOUT`, `TOKENIZER_OPTS`,
-    // `PRIVATELABEL_NAME` and similar non-secret config vars, leaving
-    // `EnvRead("*")` plugins unable to read benign settings.  Require a
-    // non-alphanumeric boundary on at least one side of the match
-    // (start/end of string counts), so e.g. `AWS_API_KEY` and
-    // `MY_PASSWORD_HASH` still match while `MONKEYHOUSE` does not.
-    //
-    // Plus a suffix rule: a separator-less secret name like `APIKEY`,
-    // `MYTOKEN`, `DBPASSWORD` or `ALGOLIA_APIKEY` glues the credential word
-    // to the end with no boundary, so the both-sides check above misses it
-    // and the real value would leak to a wildcard-`EnvRead` guest.  Treat
-    // any name *ending* in a blocked word as a secret.  This errs toward
-    // over-blocking (a benign `TURKEY` / `MONKEY` ending in `KEY` is also
-    // suppressed), which is the safe direction here — the guest receives
-    // `null`, never a credential.  A `starts_with` rule is deliberately NOT
-    // added: it would re-break `TOKENIZER_OPTS` / `PRIVATELABEL_NAME` /
-    // `PASSWORDLIST_FILE`, which legitimately begin with a blocked word.
-    BLOCKED_ENV_SUBSTRINGS
-        .iter()
-        .any(|sub| upper.ends_with(sub) || has_word_boundary_substring(&upper, sub))
-}
-
-/// `true` iff `needle` appears in `haystack` as its own word —
-/// i.e. with a non-alphanumeric boundary (string edge or any char that
-/// is not an ASCII letter / digit) on **both** sides.  Env-var
-/// convention separates words with `_`; `-` / `.` are also covered for
-/// odd names like `MY-API-KEY` or `KEY.PRIVATE`.
-///
-/// Both-sides matters: a single-side rule would still flag
-/// `KEYBOARD_LAYOUT` (left edge = start-of-string is a boundary, but
-/// right edge = `'B'` is alphanumeric, so it isn't actually a `KEY`
-/// word).  Real secret names always have a boundary on the side
-/// closest to the credential token: `OPENAI_API_KEY`, `MY_PASSWORD`,
-/// `FOO_TOKEN`, `KEY_FOO` all satisfy both-sides.
-fn has_word_boundary_substring(haystack: &str, needle: &str) -> bool {
-    let bytes = haystack.as_bytes();
-    let n = needle.len();
-    let mut start = 0;
-    while let Some(rel) = haystack[start..].find(needle) {
-        let idx = start + rel;
-        let before_ok = idx == 0 || !bytes[idx - 1].is_ascii_alphanumeric();
-        let end = idx + n;
-        let after_ok = end == bytes.len() || !bytes[end].is_ascii_alphanumeric();
-        if before_ok && after_ok {
-            return true;
-        }
-        // Advance past this occurrence to find any later one with a
-        // boundary.  Stop if we'd loop on a zero-length needle.
-        start = idx + n.max(1);
-        if start >= bytes.len() {
-            break;
-        }
-    }
-    false
-}
+// Env-var secret blocklist. Hoisted to `subprocess_sandbox` so the WASM
+// `env_read` path, the subprocess sandbox, and the kernel hand-activation
+// path all share one definition — see `is_blocked_env_var` there.
+use crate::subprocess_sandbox::is_blocked_env_var;
 
 fn host_env_read(state: &GuestState, params: &serde_json::Value) -> serde_json::Value {
     let name = match params.get("name").and_then(|n| n.as_str()) {
@@ -1094,6 +1056,33 @@ mod tests {
             "test-agent".to_string(),
             tokio::runtime::Handle::current(),
         )
+    }
+
+    /// `append_capped` bounds the accumulated body size: chunks that stay
+    /// under the cap append, and the first chunk that would cross it aborts
+    /// with a limit error instead of buffering unboundedly. This is the
+    /// size-cap logic `read_body_capped` (and hence `host_net_fetch`) relies
+    /// on to keep a `NetConnect`-capable guest from buffering an arbitrarily
+    /// large response into host memory.
+    #[test]
+    fn test_append_capped_enforces_limit() {
+        let max = 8usize;
+        let mut buf: Vec<u8> = Vec::new();
+
+        // Chunks within the cap accumulate.
+        assert!(append_capped(&mut buf, b"1234", max).is_ok());
+        assert!(append_capped(&mut buf, b"5678", max).is_ok());
+        assert_eq!(buf.len(), 8);
+
+        // The next byte would exceed the cap: abort, and buf is left unchanged.
+        let err = append_capped(&mut buf, b"9", max).unwrap_err();
+        assert!(err.contains("Response too large"), "got: {err}");
+        assert_eq!(buf.len(), 8, "rejected chunk must not be appended");
+
+        // A single oversized chunk is rejected even against an empty buffer.
+        let mut fresh: Vec<u8> = Vec::new();
+        assert!(append_capped(&mut fresh, &vec![0u8; max + 1], max).is_err());
+        assert!(fresh.is_empty());
     }
 
     /// Word-boundary blocklist: real secret-shaped names match, benign
@@ -1674,18 +1663,23 @@ mod tests {
         async fn knowledge_add_entity(
             &self,
             _: &librefang_types::memory::Entity,
+            _agent_id: &str,
+            _: Option<&str>,
         ) -> Result<String, librefang_kernel_handle::KernelOpError> {
             Err("not implemented".into())
         }
         async fn knowledge_add_relation(
             &self,
             _: &librefang_types::memory::Relation,
+            _agent_id: &str,
+            _: Option<&str>,
         ) -> Result<String, librefang_kernel_handle::KernelOpError> {
             Err("not implemented".into())
         }
         async fn knowledge_query(
             &self,
             _: librefang_types::memory::GraphPattern,
+            _: Option<&str>,
         ) -> Result<Vec<librefang_types::memory::GraphMatch>, librefang_kernel_handle::KernelOpError>
         {
             Ok(vec![])

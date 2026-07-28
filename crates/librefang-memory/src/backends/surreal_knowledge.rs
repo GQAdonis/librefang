@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use surrealdb::{engine::any::Any, Surreal};
 use uuid::Uuid;
 
@@ -56,37 +57,64 @@ fn relation_type_to_str(rt: &RelationType) -> String {
         .to_string()
 }
 
+/// Build a SurrealDB record key that lets two peers own the same logical
+/// entity ID. Shared/unscoped rows retain the historical record key so
+/// existing data continues to upsert in place.
+fn scoped_entity_record_key(entity_id: &str, peer_id: Option<&str>) -> String {
+    let Some(peer_id) = peer_id.filter(|peer| !peer.is_empty()) else {
+        return entity_id.to_string();
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(peer_id.as_bytes());
+    hasher.update([0]);
+    hasher.update(entity_id.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 // ── KnowledgeBackend impl ─────────────────────────────────────────────────────
 
 #[async_trait]
 impl KnowledgeBackend for SurrealKnowledgeBackend {
-    async fn add_entity(&self, entity: Entity) -> LibreFangResult<String> {
+    async fn add_entity(
+        &self,
+        entity: Entity,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String> {
         let id = if entity.id.is_empty() {
             Uuid::new_v4().to_string()
         } else {
             entity.id.clone()
         };
+        let record_key = scoped_entity_record_key(&id, peer_id);
         let entity_type_str = entity_type_to_str(&entity.entity_type);
         let props = serde_json::to_value(&entity.properties)
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
         let now = Utc::now().to_rfc3339();
         let row = serde_json::json!({
+            "entity_id": id,
             "entity_type": entity_type_str,
             "name": entity.name,
             "properties": props,
             "created_at": entity.created_at.to_rfc3339(),
             "updated_at": now,
-            "agent_id": "",
+            "agent_id": agent_id,
+            "peer_id": peer_id.unwrap_or(""),
         });
         self.db
-            .upsert::<Option<serde_json::Value>>(("kg_entities", id.clone()))
+            .upsert::<Option<serde_json::Value>>(("kg_entities", record_key))
             .content(row)
             .await
             .map_err(|e| LibreFangError::memory_msg(format!("SurrealDB kg add_entity: {e}")))?;
         Ok(id)
     }
 
-    async fn add_relation(&self, relation: Relation) -> LibreFangResult<String> {
+    async fn add_relation(
+        &self,
+        relation: Relation,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String> {
         let id = Uuid::new_v4().to_string();
         let relation_type_str = relation_type_to_str(&relation.relation);
         let props = serde_json::to_value(&relation.properties)
@@ -99,7 +127,8 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
             "properties": props,
             "confidence": relation.confidence as f64,
             "created_at": now,
-            "agent_id": "",
+            "agent_id": agent_id,
+            "peer_id": peer_id.unwrap_or(""),
         });
         self.db
             .create::<Option<serde_json::Value>>(("kg_relations", id.clone()))
@@ -109,23 +138,28 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
         Ok(id)
     }
 
-    async fn query_graph(&self, pattern: GraphPattern) -> LibreFangResult<Vec<GraphMatch>> {
+    async fn query_graph(
+        &self,
+        pattern: GraphPattern,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<Vec<GraphMatch>> {
         // Build the query with optional source/relation/target filters using bindings.
         // We execute up to three separate bound parameters depending on what is set.
         // The JOIN-equivalent in SurrealDB: fetch relations then resolve entity rows.
         let mut q = self.db.query(
             "SELECT r.source_entity, r.relation_type, r.target_entity, \
                     r.properties AS r_props, r.confidence, r.created_at AS r_created, \
-                    s.id AS s_id, s.entity_type AS s_type, s.name AS s_name, \
+                    s.id AS s_id, s.entity_id AS s_entity_id, s.entity_type AS s_type, s.name AS s_name, \
                     s.properties AS s_props, s.created_at AS s_created, s.updated_at AS s_updated, \
-                    t.id AS t_id, t.entity_type AS t_type, t.name AS t_name, \
+                    t.id AS t_id, t.entity_id AS t_entity_id, t.entity_type AS t_type, t.name AS t_name, \
                     t.properties AS t_props, t.created_at AS t_created, t.updated_at AS t_updated \
              FROM kg_relations AS r \
-             LEFT JOIN kg_entities AS s ON (r.source_entity = s.id OR r.source_entity = s.name) \
-             LEFT JOIN kg_entities AS t ON (r.target_entity = t.id OR r.target_entity = t.name) \
+             LEFT JOIN kg_entities AS s ON ((r.source_entity = s.id OR r.source_entity = s.entity_id OR (r.source_entity = s.name AND s.agent_id = r.agent_id)) AND s.peer_id = r.peer_id) \
+             LEFT JOIN kg_entities AS t ON ((r.target_entity = t.id OR r.target_entity = t.entity_id OR (r.target_entity = t.name AND t.agent_id = r.agent_id)) AND t.peer_id = r.peer_id) \
              WHERE ($source = NONE OR r.source_entity = $source OR s.name = $source) \
                AND ($rel_type = NONE OR r.relation_type = $rel_type) \
                AND ($target = NONE OR r.target_entity = $target OR t.name = $target) \
+               AND ($peer_id = NONE OR r.peer_id = $peer_id) \
              LIMIT 100",
         );
 
@@ -145,6 +179,11 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
         } else {
             q = q.bind(("target", Option::<String>::None));
         }
+        if let Some(peer_id) = peer_id {
+            q = q.bind(("peer_id", peer_id.to_string()));
+        } else {
+            q = q.bind(("peer_id", Option::<String>::None));
+        }
 
         let mut res = q
             .await
@@ -159,8 +198,10 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
                 // Build synthetic entity and relation objects from the flat row.
                 let src_entity = Entity {
                     id: row
-                        .get("s_id")
+                        .get("s_entity_id")
                         .and_then(|v| v.as_str())
+                        .filter(|id| !id.is_empty())
+                        .or_else(|| row.get("s_id").and_then(|v| v.as_str()))
                         .unwrap_or("")
                         .split(':')
                         .next_back()
@@ -196,8 +237,10 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
                 };
                 let tgt_entity = Entity {
                     id: row
-                        .get("t_id")
+                        .get("t_entity_id")
                         .and_then(|v| v.as_str())
+                        .filter(|id| !id.is_empty())
+                        .or_else(|| row.get("t_id").and_then(|v| v.as_str()))
                         .unwrap_or("")
                         .split(':')
                         .next_back()
@@ -287,10 +330,42 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
             LibreFangError::memory_msg(format!("SurrealDB kg delete_relations: {e}"))
         })?;
 
+        // Preserve entities that another agent's surviving relation still
+        // references, matching KnowledgeStore's SQLite cleanup semantics.
+        // Endpoints may use a logical entity ID, the legacy record ID, or a
+        // name, so the delete predicate checks all three representations.
+        let mut refs_res = self
+            .db
+            .query("SELECT source_entity, target_entity FROM kg_relations")
+            .await
+            .map_err(|e| {
+                LibreFangError::memory_msg(format!("SurrealDB kg referenced_entities: {e}"))
+            })?;
+        let relation_rows: Vec<serde_json::Value> = refs_res.take(0).map_err(|e| {
+            LibreFangError::memory_msg(format!("SurrealDB kg referenced_entities: {e}"))
+        })?;
+        let referenced: Vec<String> = relation_rows
+            .iter()
+            .flat_map(|row| {
+                ["source_entity", "target_entity"]
+                    .into_iter()
+                    .filter_map(|field| row.get(field).and_then(|value| value.as_str()))
+            })
+            .map(str::to_owned)
+            .collect();
+
         let mut res_e = self
             .db
-            .query("DELETE kg_entities WHERE agent_id = $agent_id RETURN BEFORE")
+            .query(
+                "DELETE kg_entities \
+                 WHERE agent_id = $agent_id \
+                   AND record::id(id) NOT IN $referenced \
+                   AND entity_id NOT IN $referenced \
+                   AND name NOT IN $referenced \
+                 RETURN BEFORE",
+            )
             .bind(("agent_id", agent))
+            .bind(("referenced", referenced))
             .await
             .map_err(|e| {
                 LibreFangError::memory_msg(format!("SurrealDB kg delete_entities: {e}"))
@@ -300,5 +375,20 @@ impl KnowledgeBackend for SurrealKnowledgeBackend {
         })?;
 
         Ok((rel_deleted.len() + ent_deleted.len()) as u64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::scoped_entity_record_key;
+
+    #[test]
+    fn scoped_entity_keys_preserve_shared_rows_and_separate_peers() {
+        assert_eq!(scoped_entity_record_key("alice", None), "alice");
+        assert_eq!(scoped_entity_record_key("alice", Some("")), "alice");
+        assert_ne!(
+            scoped_entity_record_key("alice", Some("peer-a")),
+            scoped_entity_record_key("alice", Some("peer-b"))
+        );
     }
 }

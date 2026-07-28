@@ -34,7 +34,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2026.7.11"
+version = "2026.7.27"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/librefang/librefang"
@@ -144,7 +144,7 @@ rustls-native-certs = "0.8"
 async-trait = "0.1"
 
 # Base64
-base64 = "0.22"
+base64 = "0.23"
 
 # Bitflags
 bitflags = "2"
@@ -166,12 +166,11 @@ rmcp = { version = "2.0", default-features = false, features = ["client", "trans
 # marked breaking by upstream, so a caret bump (0.11.x) could change
 # wire-format expectations between minor releases without warning.
 # Bumping this pin is an explicit, reviewed change.
-agent-client-protocol = { version = "=0.11.1", features = ["unstable"] }
-agent-client-protocol-tokio = "=0.11.1"
+agent-client-protocol = { version = "=2.0.0", features = ["unstable"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 
 # WebSocket client (for Discord/Slack gateway)
-tokio-tungstenite = { version = "0.29.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
 url = "2"
 urlencoding = "2"
 
@@ -203,10 +202,10 @@ tera = { version = "2", default-features = false }
 # parallel-compilation: Multi-threaded AOT compilation
 # async:                Async host-function support (needed for non-blocking plugin calls)
 # WASI support is part of the wasmtime runtime by default; no separate feature flag needed.
-# Upstream bumped wasmtime to 46 (#6277, source-compatible dependabot bump); the
+# Upstream bumped wasmtime to 47; the
 # BossFang-only wasmtime-wasi / wasmtime-wasi-http deps below move in lockstep so
 # the workspace links a single wasmtime major version.
-wasmtime = { version = "46", features = [
+wasmtime = { version = "47", features = [
     "cranelift",
     "component-model",
     "cache",
@@ -222,13 +221,13 @@ wasmtime = { version = "46", features = [
 # find their `wasi:*` init imports satisfied. The WasiCtx is deny-by-default
 # (no preopens / no env / no stdio inherit / no network) per phase-7
 # assessment.md D2. These two are BossFang-exclusive — upstream does not pull
-# wasmtime-wasi*, so the version must be carried here, matched to wasmtime 46.
-wasmtime-wasi = "=46.0.0"
+# wasmtime-wasi*, so the version must be carried here, matched to wasmtime 47.
+wasmtime-wasi = "=47.0.0"
 # WASI HTTP bindings — required by the component linker so StarlingMonkey
 # (jco componentize) components that import `wasi:http/types@0.2.10` find
 # the interface bound at instantiation time. Without this, js-kv-counter
 # fails to instantiate even though the JS source never uses HTTP.
-wasmtime-wasi-http = "=46.0.0"
+wasmtime-wasi-http = "=47.0.0"
 
 # HTTP server (for API daemon)
 axum = { version = "0.8", features = ["ws"] }
@@ -279,7 +278,7 @@ totp-rs = { version = "5", features = ["gen_secret", "otpauth", "qr"] }
 # any real OIDC token validation (`/api/auth/introspect`, the OAuth
 # callback's ID-token path, and the `oidc_auth_middleware`) panics in
 # production. Discovered while landing the #5128 `sub`-required tests.
-jsonwebtoken = { version = "10", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 
 # Rate limiting
 governor = "0.10.4"
@@ -358,4 +357,3 @@ codegen-units = 4
 # lint regressions.
 [workspace.lints.rust]
 warnings = "deny"
-

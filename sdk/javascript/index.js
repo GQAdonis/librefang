@@ -744,6 +744,10 @@ class HandsResource {
     return this._c._request("GET", `/api/hands/${hand_id}/manifest`);
   }
 
+  async updateHandManifest(hand_id, data) {
+    return this._c._request("PUT", `/api/hands/${hand_id}/manifest`, data, undefined);
+  }
+
   async setHandSecret(hand_id, data) {
     return this._c._request("POST", `/api/hands/${hand_id}/secret`, data, undefined);
   }
@@ -1592,6 +1596,18 @@ class UsersResource {
 
   async updateUserPolicy(name, data) {
     return this._c._request("PUT", `/api/users/${name}/policy`, data, undefined);
+  }
+
+  async listUserProviderKeys(name) {
+    return this._c._request("GET", `/api/users/${name}/provider-keys`);
+  }
+
+  async setUserProviderKey(name, provider, data) {
+    return this._c._request("PUT", `/api/users/${name}/provider-keys/${provider}`, data, undefined);
+  }
+
+  async deleteUserProviderKey(name, provider) {
+    return this._c._request("DELETE", `/api/users/${name}/provider-keys/${provider}`);
   }
 
   async rotateUserKey(name) {

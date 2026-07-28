@@ -864,6 +864,10 @@ func (r *HandsResource) GetHandManifest(hand_id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/hands/%s/manifest", hand_id), nil, nil)
 }
 
+func (r *HandsResource) UpdateHandManifest(hand_id string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/hands/%s/manifest", hand_id), data, nil)
+}
+
 func (r *HandsResource) SetHandSecret(hand_id string, data map[string]interface{}) (interface{}, error) {
 	return r.client.request("POST", fmt.Sprintf("/api/hands/%s/secret", hand_id), data, nil)
 }
@@ -1686,6 +1690,18 @@ func (r *UsersResource) GetUserPolicy(name string) (interface{}, error) {
 
 func (r *UsersResource) UpdateUserPolicy(name string, data map[string]interface{}) (interface{}, error) {
 	return r.client.request("PUT", fmt.Sprintf("/api/users/%s/policy", name), data, nil)
+}
+
+func (r *UsersResource) ListUserProviderKeys(name string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/users/%s/provider-keys", name), nil, nil)
+}
+
+func (r *UsersResource) SetUserProviderKey(name string, provider string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/users/%s/provider-keys/%s", name, provider), data, nil)
+}
+
+func (r *UsersResource) DeleteUserProviderKey(name string, provider string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/users/%s/provider-keys/%s", name, provider), nil, nil)
 }
 
 func (r *UsersResource) RotateUserKey(name string) (interface{}, error) {

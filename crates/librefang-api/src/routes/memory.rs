@@ -1467,7 +1467,10 @@ pub async fn memory_store_relations(
     }
 
     let count = triples.len();
-    store.store_relations(&triples, &agent_id);
+    // This admin/dashboard endpoint is authenticated by API user, not a
+    // channel peer, so relations it writes are shared/unscoped (#6494); a
+    // per-user write arrives through the agent's knowledge tools instead.
+    store.store_relations(&triples, &agent_id, None);
 
     (
         StatusCode::OK,
@@ -1487,6 +1490,9 @@ pub struct RelationQueryParams {
     pub source: Option<String>,
     pub relation: Option<String>,
     pub target: Option<String>,
+    /// Optional per-user scope (#6494): when set, only that user's triples are
+    /// returned; omitted means the whole agent graph (every user's rows).
+    pub peer_id: Option<String>,
 }
 
 /// Query the knowledge graph for relations matching a pattern.
@@ -1507,13 +1513,30 @@ pub struct RelationQueryParams {
 )]
 pub async fn memory_query_relations(
     State(state): State<Arc<AppState>>,
-    Path(_agent_id): Path<String>,
+    Path(agent_id): Path<String>,
     Query(params): Query<RelationQueryParams>,
+    request: axum::extract::Request,
 ) -> impl IntoResponse {
     let store = match get_pm_store(&state) {
         Ok(s) => s,
         Err(e) => return e,
     };
+
+    // Reject empty / whitespace-only agent ids so the scoped query never
+    // degrades into an unscoped scan across every agent's graph.
+    if agent_id.trim().is_empty() {
+        return ApiErrorResponse::bad_request("Agent ID must not be empty").into_json_tuple();
+    }
+
+    // Relations live in the `proactive` namespace — gate the read exactly
+    // like the sibling search/list endpoints so a caller without proactive
+    // read access is denied (and the denial is audited).
+    let guard = guard_for_request(&state, request.extensions());
+    if let librefang_memory::namespace_acl::NamespaceGate::Deny(reason) =
+        guard.check_read("proactive")
+    {
+        return auth_denied(&state, request.extensions(), reason);
+    }
 
     // Parse optional relation type
     let relation_type = params.relation.as_deref().and_then(|r| {
@@ -1527,7 +1550,10 @@ pub async fn memory_query_relations(
         max_depth: 1,
     };
 
-    match store.query_relations(pattern) {
+    // Scope to the path agent id so one agent's endpoint never returns
+    // another agent's triples (the write path is already per-agent). An
+    // optional `?peer_id=` further narrows the read to one user (#6494).
+    match store.query_relations_for_agent(pattern, &agent_id, params.peer_id.as_deref()) {
         Ok(matches) => {
             let results: Vec<serde_json::Value> = matches
                 .iter()

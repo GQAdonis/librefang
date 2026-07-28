@@ -131,18 +131,23 @@ impl KnowledgeGraph for StubKernel {
     async fn knowledge_add_entity(
         &self,
         _entity: &librefang_types::memory::Entity,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, super::KernelOpError> {
         Err("stub".into())
     }
     async fn knowledge_add_relation(
         &self,
         _relation: &librefang_types::memory::Relation,
+        _agent_id: &str,
+        _: Option<&str>,
     ) -> Result<String, super::KernelOpError> {
         Err("stub".into())
     }
     async fn knowledge_query(
         &self,
         _pattern: librefang_types::memory::GraphPattern,
+        _: Option<&str>,
     ) -> Result<Vec<librefang_types::memory::GraphMatch>, super::KernelOpError> {
         Ok(vec![])
     }

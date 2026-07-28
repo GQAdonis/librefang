@@ -343,6 +343,13 @@ impl LibreFangKernel {
         session_id_override: Option<SessionId>,
         upstream_interrupt: Option<librefang_runtime::interrupt::SessionInterrupt>,
         incognito: bool,
+        // The authenticated human owner of this turn, if any (#6460). Used to
+        // select that user's own provider credential. `None` on every path
+        // without a single authenticated initiator — channel messages, cron
+        // fires, agent-to-agent sends, and forks — which fall back to the
+        // daemon-global credential. A fork must never inherit its parent's
+        // owner or the sub-agent's spend would be mis-attributed.
+        owner: Option<librefang_types::agent::UserId>,
     ) -> KernelResult<AgentLoopResult> {
         let cfg = self.config.load_full();
         // Check metering quota before starting
@@ -370,7 +377,16 @@ impl LibreFangKernel {
         // 3. Session-mode fallback: per-trigger override > agent manifest default.
         //    `use_canonical_session` forces Persistent so the dashboard WS always
         //    persists to `entry.session_id`.
-        let effective_session_id = if let Some(sid) = session_id_override {
+        // Alongside the resolved id, track whether it was freshly minted THIS
+        // call (an ephemeral `SessionId::new()` from the mode-branch `New`).
+        // Only such a session has nothing to reset. The channel branch and an
+        // explicit override both resolve to sessions that persist across
+        // invocations, so keying the reset skip on the requested `session_mode`
+        // was wrong: a channel message to a `session_mode = "new"` agent uses a
+        // persistent `for_sender_scope` session (the channel branch ignores
+        // session_mode) yet was silently excluded from the reset policy.
+        let (effective_session_id, session_freshly_minted) = if let Some(sid) = session_id_override
+        {
             if let Some(existing) = self
                 .memory
                 .substrate
@@ -383,12 +399,25 @@ impl LibreFangKernel {
                     )));
                 }
             }
-            sid
+            (sid, false)
         } else {
             match sender_context {
                 Some(ctx) if !ctx.channel.is_empty() && !ctx.use_canonical_session => {
-                    let derived =
-                        SessionId::for_sender_scope(agent_id, &ctx.channel, ctx.chat_id.as_deref());
+                    // Audit: cron-channel-name-not-reserved. Defense-in-depth,
+                    // mirroring the dispatch (`resolve_dispatch_session_id`) and
+                    // streaming resolvers so a raw external `ctx.channel`
+                    // matching a reserved system channel (cron / autonomous /
+                    // webui) cannot collide with the internal system session.
+                    // See `resolve_scope_channel`.
+                    let scope_channel = LibreFangKernel::resolve_scope_channel(
+                        &ctx.channel,
+                        ctx.is_internal_system,
+                    );
+                    let derived = SessionId::for_sender_scope(
+                        agent_id,
+                        &scope_channel,
+                        ctx.chat_id.as_deref(),
+                    );
                     // #3692: surface when the channel branch silently
                     // overrides a non-default manifest `session_mode`.
                     // The `execute_llm_agent` path is reached by
@@ -421,13 +450,18 @@ impl LibreFangKernel {
                             "session resolved via channel branch"
                         );
                     }
-                    derived
+                    // Channel-derived ids are deterministic and persist across
+                    // messages — subject to the reset policy.
+                    (derived, false)
                 }
                 _ => {
                     let mode = session_mode_override.unwrap_or(entry.manifest.session_mode);
                     match mode {
-                        librefang_types::agent::SessionMode::Persistent => entry.session_id,
-                        librefang_types::agent::SessionMode::New => SessionId::new(),
+                        librefang_types::agent::SessionMode::Persistent => {
+                            (entry.session_id, false)
+                        }
+                        // The only genuinely-ephemeral, freshly-minted case.
+                        librefang_types::agent::SessionMode::New => (SessionId::new(), true),
                     }
                 }
             }
@@ -493,18 +527,19 @@ impl LibreFangKernel {
         //
         // `mode = "off"` (the default) is a no-op — fully backward compatible.
         //
-        // Skip entirely for `session_mode = "new"`: every invocation already
-        // gets a fresh ephemeral session_id, so there is nothing to reset and
-        // we must not touch the `force_session_wipe` / `resume_pending` flags
-        // that belong to the persistent session path.
+        // Skip entirely only when the session was freshly minted THIS call (a
+        // genuinely ephemeral `SessionId::new()`): there is nothing to reset,
+        // and mutating the `force_session_wipe` / `resume_pending` flags would
+        // corrupt state for the persistent session path. A persistent session
+        // — whether channel-derived, an explicit override, or `Persistent`
+        // mode — is always evaluated by the policy (it correctly no-ops on a
+        // just-created session and resets a stale one). Keying this on the
+        // requested `session_mode` was wrong: a channel message to a
+        // `session_mode = "new"` agent runs on a persistent `for_sender_scope`
+        // session yet was silently excluded from the reset policy.
         {
             use crate::session_policy::SessionResetPolicyExt;
-            let effective_mode = session_mode_override.unwrap_or(entry.manifest.session_mode);
-            // `New` mode creates a fresh ephemeral session_id on every call;
-            // there is nothing persistent to reset, and mutating
-            // `force_session_wipe`/`resume_pending` flags would corrupt state
-            // for future persistent-mode invocations.
-            let skip_reset = matches!(effective_mode, librefang_types::agent::SessionMode::New);
+            let skip_reset = session_freshly_minted;
             if !skip_reset {
                 let policy = cfg.session.reset.clone();
                 let last_active: std::time::SystemTime = entry.last_active.into();
@@ -569,22 +604,14 @@ impl LibreFangKernel {
         // Apply model routing if configured (disabled in Stable mode)
         let mut manifest = entry.manifest.clone();
 
-        // Resolve "default" provider/model to the current effective default.
-        // This covers three cases:
-        // 1. New agents stored as "default"/"default" (post-fix spawn behavior)
-        // 2. The auto-spawned "assistant" agent that may have a stale concrete
-        //    provider/model in DB from before a provider switch
-        // 3. TOML agents with provider="default" that got a concrete value baked in
+        // Resolve `default/default` only in this per-execution copy.
+        // The registry and persisted manifest retain the sentinel so later global model changes take effect without rewriting the agent.
         {
             let is_default_provider =
                 manifest.model.provider.is_empty() || manifest.model.provider == "default";
             let is_default_model =
                 manifest.model.model.is_empty() || manifest.model.model == "default";
-            let is_auto_spawned = entry.name == "assistant"
-                && manifest
-                    .description
-                    .starts_with("General-purpose assistant");
-            if (is_default_provider && is_default_model) || is_auto_spawned {
+            if is_default_provider && is_default_model {
                 let override_guard = self
                     .llm
                     .default_model_override
@@ -602,6 +629,13 @@ impl LibreFangKernel {
                 }
                 if dm.base_url.is_some() && manifest.model.base_url.is_none() {
                     manifest.model.base_url.clone_from(&dm.base_url);
+                }
+                for (key, value) in &dm.extra_params {
+                    manifest
+                        .model
+                        .extra_params
+                        .entry(key.clone())
+                        .or_insert(value.clone());
                 }
             }
         }
@@ -624,6 +658,7 @@ impl LibreFangKernel {
         if manifest.thinking.is_none()
             && super::manifest_helpers::global_thinking_backfill_allowed(
                 &self.llm.model_catalog.load(),
+                &manifest.model.provider,
                 &manifest.model.model,
             )
         {
@@ -998,21 +1033,21 @@ impl LibreFangKernel {
             )));
         }
 
-        let driver = self.resolve_driver(&manifest)?;
+        let driver = self.resolve_driver_for_owner(&manifest, owner)?;
 
-        // Look up model's actual context window from the catalog. Filter out
-        // 0 so image/audio entries (no context window) fall through to the
-        // caller's default rather than poisoning compaction math.
-        let ctx_window = Some(self.llm.model_catalog.load()).and_then(|cat| {
-            cat.find_model(&manifest.model.model)
-                .map(|m| m.context_window as usize)
-                .filter(|w| *w > 0)
-        });
+        // Resolve the context window: agent.toml override > catalog > session
+        // (#6568). See `manifest_helpers::resolve_context_window` for why the
+        // manifest override has to come first.
+        let ctx_window = super::manifest_helpers::resolve_context_window(
+            &self.llm.model_catalog.load(),
+            &manifest.model,
+            Some(session.context_window_tokens),
+        );
 
         // Inject model_supports_tools for auto web search augmentation.
         // Refs #4745: honour user capability overrides via effective_capabilities.
         if let Some(supports) = Some(self.llm.model_catalog.load()).and_then(|cat| {
-            cat.find_model(&manifest.model.model)
+            cat.find_model_for_manifest(&manifest.model.provider, &manifest.model.model)
                 .map(|m| cat.effective_capabilities(m).supports_tools)
         }) {
             manifest.metadata.insert(
@@ -1094,6 +1129,17 @@ impl LibreFangKernel {
                     );
                 }
             }
+            // #6443: stamp the bot account / tenant the turn arrived on —
+            // mirror `kernel::messaging::send_message_full_inner`. Enables the
+            // runtime's cross-account (cross-tenant) `channel_send` guard.
+            if let Some(ref acct) = ctx.account_id {
+                if !acct.is_empty() {
+                    manifest.metadata.insert(
+                        librefang_types::agent::SENDER_ACCOUNT_ID_METADATA_KEY.to_string(),
+                        serde_json::Value::String(acct.clone()),
+                    );
+                }
+            }
             // #5227: stamp the chat-qualified scope (same formula as
             // `SessionId::for_sender_scope`). See `kernel::messaging::
             // send_message_full_inner` for the rationale and the list of
@@ -1163,6 +1209,10 @@ impl LibreFangKernel {
             compaction_config: Some(compaction_snapshot),
             gateway_compression: Some(cfg.gateway_compression.clone()),
             parallel_tools_config: Some(cfg.parallel_tools.clone()),
+            canvas_config: Some(cfg.canvas.clone()),
+            // `execute_llm_agent` never runs a fork (see the peer_id
+            // invariant test) — always a user-facing / trigger turn.
+            system_call: false,
         };
 
         // Build a per-execution MCP pool that includes the agent workspace as
@@ -1227,6 +1277,10 @@ impl LibreFangKernel {
             &loop_opts,
         )
         .await;
+
+        if let Err(error) = &result {
+            self.refresh_openrouter_catalog_after_model_not_found(&manifest, error);
+        }
 
         // Tear down injection channel after loop finishes.
         self.teardown_injection_channel(agent_id, effective_session_id);
@@ -1379,6 +1433,11 @@ impl LibreFangKernel {
         let attribution_user_id: Option<UserId> =
             sender_context.and_then(|sc| self.security.auth.identify(&sc.channel, &sc.user_id));
         let attribution_channel: Option<String> = sender_context.map(|sc| sc.channel.clone());
+        // #6460: when an authenticated API caller owns this turn, their vault key is what gets billed upstream (see `resolve_driver_for_owner` above), so usage attribution and per-user budget enforcement must key on that owner.
+        // A plain authenticated POST carries no `sender_id`, so `attribution_user_id` is `None` and the owner's spend would otherwise be recorded unattributed and never gated against their budget.
+        // The owner wins when present; sender-derived attribution stays the fallback for owner-less paths (channel / cron / agent_send).
+        // Forks never reach `execute_llm_agent` (see the fork short-circuit at the top of this method), so the raw owner needs no fork-nulling here.
+        let billed_user_id: Option<UserId> = owner.or(attribution_user_id);
         // #4807 review nit 10: when the LLM fallback chain redirected
         // the request to an alternative slot, bill the *actual* serving
         // provider rather than the manifest-nominated one. The agent
@@ -1401,7 +1460,7 @@ impl LibreFangKernel {
             cost_usd: cost,
             tool_calls: result.decision_traces.len() as u32,
             latency_ms,
-            user_id: attribution_user_id,
+            user_id: billed_user_id,
             channel: attribution_channel.clone(),
             session_id: Some(effective_session_id),
         };
@@ -1424,12 +1483,12 @@ impl LibreFangKernel {
                 librefang_runtime::audit::AuditAction::BudgetExceeded,
                 format!("{e}"),
                 "denied",
-                attribution_user_id,
+                billed_user_id,
                 attribution_channel.clone(),
             );
             // Fall back to plain record so the cost is not lost from tracking
             let _ = self.metering.engine.record(&usage_record);
-        } else if let Some(uid) = attribution_user_id {
+        } else if let Some(uid) = billed_user_id {
             // RBAC M5: per-user budget enforcement, post-call (matches the
             // global / per-agent / per-provider semantics — the row was
             // already persisted above so `query_user_*` includes this

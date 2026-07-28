@@ -896,6 +896,18 @@ pub struct McpConnection {
     inner: McpInner,
     /// Current OAuth authentication state for this connection.
     auth_state: crate::mcp_oauth::McpAuthState,
+    /// Raw names of the synthetic resource tools this connection registered
+    /// (`list_resources` / `read_resource`), so `call_tool_with_caller` can
+    /// intercept them and route to the `resources/*` methods instead of a
+    /// `tools/call` — without shadowing a real server tool of the same name
+    /// (#6501).
+    resource_ops: std::collections::HashSet<String>,
+    /// Whether the server advertised the `resources` capability at handshake.
+    /// For the Rmcp path this is read live from `peer_info()`; for the
+    /// hand-rolled SSE path it is captured from the `initialize` response
+    /// (there is no stored capability object otherwise). Gates resource-tool
+    /// registration (#6501).
+    server_advertises_resources: bool,
 }
 
 /// Transport-specific connection handle.
@@ -907,6 +919,10 @@ enum McpInner {
         client: reqwest::Client,
         url: String,
         next_id: u64,
+        /// Auth / custom headers applied to every SSE request: config-declared
+        /// static headers plus a cached OAuth bearer token, mirroring the
+        /// Streamable-HTTP path so SSE-transport servers are authenticated too.
+        headers: reqwest::header::HeaderMap,
     },
     /// Built-in HTTP compatibility adapter.
     HttpCompat { client: reqwest::Client },
@@ -1072,6 +1088,226 @@ const SAFE_ENV_VARS: &[&str] = &[
 ];
 
 // ---------------------------------------------------------------------------
+// MCP resources primitive (#6501)
+// ---------------------------------------------------------------------------
+
+/// A resource advertised by an MCP server via `resources/list`, flattened to
+/// the fields LibreFang surfaces.
+///
+/// Owned so callers and tests never depend on rmcp's `#[non_exhaustive]`
+/// `Resource` type (which cannot be constructed with a struct literal outside
+/// the rmcp crate).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ResourceInfo {
+    /// The resource URI (the handle passed back to `resources/read`).
+    pub uri: String,
+    /// Human-readable resource name.
+    pub name: String,
+    /// Optional description of what the resource contains.
+    pub description: Option<String>,
+    /// Optional MIME type (`text/markdown`, `application/json`, …).
+    pub mime_type: Option<String>,
+}
+
+/// A resource template advertised via `resources/templates/list` — a URI
+/// pattern (RFC 6570) the server can expand, rather than a concrete resource.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct ResourceTemplateInfo {
+    /// The URI template (e.g. `file:///logs/{date}.log`).
+    pub uri_template: String,
+    /// Human-readable template name.
+    pub name: String,
+    /// Optional description of the templated resource family.
+    pub description: Option<String>,
+    /// Optional MIME type shared by resources the template expands to.
+    pub mime_type: Option<String>,
+}
+
+/// Transport tag computed without holding a borrow into `self.inner`, so a
+/// resource method can decide its dispatch arm and then reborrow `&mut self`
+/// (for the SSE path, which takes `&mut self`) without tripping E0502.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum McpTransportKind {
+    Rmcp,
+    Sse,
+    HttpCompat,
+}
+
+/// Format a `resource_link` tool-result block as a single first-class line,
+/// instead of letting it collapse into opaque JSON (#6501).
+fn format_resource_link(name: &str, uri: &str, mime: Option<&str>) -> String {
+    match mime {
+        Some(m) if !m.is_empty() => format!("[resource_link] {name} — {uri} ({m})"),
+        _ => format!("[resource_link] {name} — {uri}"),
+    }
+}
+
+/// Render one `ResourceContents` value to a string: text inline, binary blobs
+/// elided (their base64 payload must never be inlined into an LLM prompt).
+fn render_resource_contents(contents: &rmcp::model::ResourceContents) -> String {
+    use rmcp::model::ResourceContents;
+    match contents {
+        ResourceContents::TextResourceContents { text, .. } => text.clone(),
+        ResourceContents::BlobResourceContents {
+            blob, mime_type, ..
+        } => {
+            let mime = mime_type.as_deref().unwrap_or("application/octet-stream");
+            format!(
+                "[binary resource {mime}: {} base64 bytes elided]",
+                blob.len()
+            )
+        }
+        // `ResourceContents` is `#[non_exhaustive]`; an unknown future variant
+        // contributes no text rather than failing the whole read.
+        _ => String::new(),
+    }
+}
+
+/// Render one rmcp tool-result content block to an output line, or `None` for a
+/// block LibreFang does not surface as text.
+///
+/// Before #6501 the tool-call path only kept `as_text()` and JSON-stringified
+/// everything else, so a `resource_link` (the 2025-06-18 escape hatch for
+/// large/binary payloads) was flattened into an opaque JSON string. Now a
+/// `resource_link` becomes a first-class line and an embedded resource
+/// contributes its text (or a binary-elided note).
+fn render_rmcp_content_block(item: &rmcp::model::ContentBlock) -> Option<String> {
+    if let Some(text) = item.as_text() {
+        return Some(text.text.clone());
+    }
+    if let Some(link) = item.as_resource_link() {
+        return Some(format_resource_link(
+            &link.name,
+            &link.uri,
+            link.mime_type.as_deref(),
+        ));
+    }
+    if let Some(embedded) = item.as_resource() {
+        return Some(render_resource_contents(&embedded.resource));
+    }
+    None
+}
+
+/// SSE-transport analogue of [`render_rmcp_content_block`], operating on the
+/// raw JSON content item from a hand-rolled `tools/call` response.
+fn render_json_content_block(item: &serde_json::Value) -> Option<String> {
+    match item.get("type").and_then(|t| t.as_str()) {
+        Some("text") => item
+            .get("text")
+            .and_then(|t| t.as_str())
+            .map(|s| s.to_string()),
+        Some("resource_link") => {
+            let name = item.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let uri = item.get("uri").and_then(|u| u.as_str()).unwrap_or("");
+            let mime = item.get("mimeType").and_then(|m| m.as_str());
+            Some(format_resource_link(name, uri, mime))
+        }
+        Some("resource") => item.get("resource").map(render_json_resource_contents),
+        _ => None,
+    }
+}
+
+/// SSE-transport analogue of [`render_resource_contents`], operating on the raw
+/// JSON `contents[]` / embedded-resource object.
+fn render_json_resource_contents(res: &serde_json::Value) -> String {
+    if let Some(text) = res.get("text").and_then(|t| t.as_str()) {
+        text.to_string()
+    } else if let Some(blob) = res.get("blob").and_then(|b| b.as_str()) {
+        let mime = res
+            .get("mimeType")
+            .and_then(|m| m.as_str())
+            .unwrap_or("application/octet-stream");
+        format!(
+            "[binary resource {mime}: {} base64 bytes elided]",
+            blob.len()
+        )
+    } else {
+        String::new()
+    }
+}
+
+/// Parse an SSE `resources/list` result into sorted [`ResourceInfo`]s.
+fn parse_sse_resource_list(resp: Option<serde_json::Value>) -> Vec<ResourceInfo> {
+    let mut out = Vec::new();
+    if let Some(arr) = resp
+        .as_ref()
+        .and_then(|v| v.get("resources"))
+        .and_then(|r| r.as_array())
+    {
+        for r in arr {
+            out.push(ResourceInfo {
+                uri: r
+                    .get("uri")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                name: r
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                description: r
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from),
+                mime_type: r.get("mimeType").and_then(|m| m.as_str()).map(String::from),
+            });
+        }
+    }
+    // Deterministic order for prompt-cache stability (#3298).
+    out.sort_by(|a, b| a.uri.cmp(&b.uri));
+    out
+}
+
+/// Parse an SSE `resources/templates/list` result into sorted
+/// [`ResourceTemplateInfo`]s.
+fn parse_sse_resource_templates(resp: Option<serde_json::Value>) -> Vec<ResourceTemplateInfo> {
+    let mut out = Vec::new();
+    if let Some(arr) = resp
+        .as_ref()
+        .and_then(|v| v.get("resourceTemplates"))
+        .and_then(|r| r.as_array())
+    {
+        for r in arr {
+            out.push(ResourceTemplateInfo {
+                uri_template: r
+                    .get("uriTemplate")
+                    .and_then(|u| u.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                name: r
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or_default()
+                    .to_string(),
+                description: r
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .map(String::from),
+                mime_type: r.get("mimeType").and_then(|m| m.as_str()).map(String::from),
+            });
+        }
+    }
+    out.sort_by(|a, b| a.uri_template.cmp(&b.uri_template));
+    out
+}
+
+/// Parse an SSE `resources/read` result's `contents[]` array into a joined
+/// string (text inline, blobs elided).
+fn parse_sse_read_resource(resp: Option<serde_json::Value>) -> String {
+    resp.as_ref()
+        .and_then(|v| v.get("contents"))
+        .and_then(|c| c.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(render_json_resource_contents)
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
+}
+
+// ---------------------------------------------------------------------------
 // McpConnection implementation
 // ---------------------------------------------------------------------------
 
@@ -1085,7 +1321,9 @@ impl McpConnection {
             McpTransport::Stdio { command, args } => {
                 Self::connect_stdio(command, args, &config.env, roots).await?
             }
-            McpTransport::Sse { url } => Self::connect_sse(url).await?,
+            McpTransport::Sse { url } => {
+                Self::connect_sse(url, &config.headers, config.oauth_provider.as_ref()).await?
+            }
             McpTransport::Http { url } => {
                 // Only advertise local filesystem roots to local servers.
                 // Remote MCP servers (GitHub, Slack, …) don't operate on
@@ -1124,6 +1362,8 @@ impl McpConnection {
             original_names: HashMap::new(),
             inner,
             auth_state: initial_auth_state.unwrap_or(crate::mcp_oauth::McpAuthState::NotRequired),
+            resource_ops: std::collections::HashSet::new(),
+            server_advertises_resources: false,
         };
 
         match discovered_tools {
@@ -1158,6 +1398,10 @@ impl McpConnection {
                 }
             }
         }
+
+        // Surface the server's resources primitive (if any) as synthetic
+        // read tools alongside the discovered tools (#6501).
+        conn.discover_and_register_resources().await;
 
         info!(
             server = %conn.config.name,
@@ -1394,7 +1638,11 @@ impl McpConnection {
 
     // --- SSE transport (JSON-RPC over HTTP POST) ---
 
-    async fn connect_sse(url: &str) -> Result<(McpInner, Option<Vec<rmcp::model::Tool>>), String> {
+    async fn connect_sse(
+        url: &str,
+        headers: &[String],
+        oauth_provider: Option<&std::sync::Arc<dyn crate::mcp_oauth::McpOAuthProvider>>,
+    ) -> Result<(McpInner, Option<Vec<rmcp::model::Tool>>), String> {
         Self::check_ssrf(url, "SSE")?;
 
         let client = librefang_http::proxied_client_builder()
@@ -1402,14 +1650,83 @@ impl McpConnection {
             .build()
             .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
+        // Build the header map applied to every SSE request. Without this, the
+        // SSE transport dropped both config-declared auth headers and a cached
+        // OAuth bearer token, so OAuth for SSE servers was silently
+        // non-functional and static credentials never reached the wire.
+        let auth_headers = Self::build_sse_headers(url, headers, oauth_provider).await;
+
         Ok((
             McpInner::Sse {
                 client,
                 url: url.to_string(),
                 next_id: 1,
+                headers: auth_headers,
             },
             None, // Tools discovered later via sse_initialize + sse_discover_tools
         ))
+    }
+
+    /// Build the [`reqwest::header::HeaderMap`] applied to every SSE request:
+    /// operator-declared static headers from `config.headers` plus, when an
+    /// OAuth provider has a cached token for `url`, an
+    /// `Authorization: Bearer <token>` header. This mirrors the header
+    /// injection in [`Self::connect_streamable_http`] so SSE-transport MCP
+    /// servers receive the same authentication as the Streamable-HTTP path.
+    async fn build_sse_headers(
+        url: &str,
+        headers: &[String],
+        oauth_provider: Option<&std::sync::Arc<dyn crate::mcp_oauth::McpOAuthProvider>>,
+    ) -> reqwest::header::HeaderMap {
+        use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
+
+        let mut map = HeaderMap::new();
+
+        // Parse config-declared headers (e.g. "Authorization: Bearer <token>",
+        // "X-Api-Key: ..."). Malformed entries are skipped, matching the
+        // Streamable-HTTP header-parse loop.
+        for header_str in headers {
+            if let Some((name, value)) = header_str.split_once(':') {
+                let name = name.trim();
+                let value = value.trim();
+                if let (Ok(hn), Ok(hv)) = (
+                    HeaderName::from_bytes(name.as_bytes()),
+                    HeaderValue::from_str(value),
+                ) {
+                    map.insert(hn, hv);
+                }
+            }
+        }
+
+        // Load a cached OAuth token and inject it as an Authorization header.
+        // A cached token wins over a config-declared Authorization header —
+        // the same precedence the Streamable-HTTP path applies by inserting
+        // the OAuth header after the config headers.
+        if let Some(provider) = oauth_provider {
+            // #3750: distinguish "no token stored" (Ok(None)) from a vault /
+            // I/O / crypto failure (Err). On Err, log the cause and proceed
+            // without a bearer token so the server can surface a 401.
+            match provider.load_token(url).await {
+                Ok(Some(token)) => {
+                    debug!(url = %url, "Injecting cached OAuth token for MCP SSE connection");
+                    if let Ok(hv) = HeaderValue::from_str(&format!("Bearer {token}")) {
+                        map.insert(AUTHORIZATION, hv);
+                    }
+                }
+                Ok(None) => {
+                    debug!(url = %url, "No cached OAuth token for MCP SSE server");
+                }
+                Err(e) => {
+                    warn!(
+                        url = %url,
+                        error = %e,
+                        "OAuth provider load_token failed for SSE; proceeding without bearer token"
+                    );
+                }
+            }
+        }
+
+        map
     }
 
     // --- Streamable HTTP transport (rmcp SDK) ---
@@ -1649,6 +1966,15 @@ impl McpConnection {
                 "MCP SSE initialize response"
             );
 
+            // Capture whether the server advertised the `resources` capability
+            // so `discover_and_register_resources` can gate on it without an
+            // extra probe request (#6501). The Rmcp path reads this live from
+            // `peer_info()` instead.
+            self.server_advertises_resources = result
+                .get("capabilities")
+                .and_then(|c| c.get("resources"))
+                .is_some();
+
             // Validate the protocol version the server selected. (#3803)
             if let Some(server_version) = result.get("protocolVersion").and_then(|v| v.as_str()) {
                 if !Self::SUPPORTED_MCP_VERSIONS.contains(&server_version) {
@@ -1713,15 +2039,16 @@ impl McpConnection {
         // Extract owned copies of the values we need before any async work,
         // so we don't hold a borrow of `self.inner` across an await point
         // (which would conflict with the concurrent borrow of `self.config`).
-        let (client, url, id) = match &mut self.inner {
+        let (client, url, id, headers) = match &mut self.inner {
             McpInner::Sse {
                 client,
                 url,
                 next_id,
+                headers,
             } => {
                 let id = *next_id;
                 *next_id += 1;
-                (client.clone(), url.clone(), id)
+                (client.clone(), url.clone(), id, headers.clone())
             }
             _ => return Err("sse_send_request called on non-SSE transport".to_string()),
         };
@@ -1738,6 +2065,7 @@ impl McpConnection {
 
         let response = client
             .post(url.as_str())
+            .headers(headers)
             .json(&request)
             .timeout(std::time::Duration::from_secs(timeout_secs))
             .send()
@@ -1800,7 +2128,13 @@ impl McpConnection {
         method: &str,
         params: Option<serde_json::Value>,
     ) -> Result<(), String> {
-        let McpInner::Sse { client, url, .. } = &self.inner else {
+        let McpInner::Sse {
+            client,
+            url,
+            headers,
+            ..
+        } = &self.inner
+        else {
             return Ok(());
         };
 
@@ -1810,7 +2144,12 @@ impl McpConnection {
             "params": params.unwrap_or(serde_json::json!({})),
         });
 
-        let _ = client.post(url.as_str()).json(&notification).send().await;
+        let _ = client
+            .post(url.as_str())
+            .headers(headers.clone())
+            .json(&notification)
+            .send()
+            .await;
         Ok(())
     }
 
@@ -2222,6 +2561,238 @@ fn json_type_name(v: &serde_json::Value) -> &'static str {
 }
 
 impl McpConnection {
+    /// Transport tag for `self`, computed without holding a borrow into
+    /// `self.inner` (so the SSE arms can reborrow `&mut self`).
+    fn transport_kind(&self) -> McpTransportKind {
+        match &self.inner {
+            McpInner::Rmcp(_) => McpTransportKind::Rmcp,
+            McpInner::Sse { .. } => McpTransportKind::Sse,
+            McpInner::HttpCompat { .. } => McpTransportKind::HttpCompat,
+        }
+    }
+
+    /// List the resources this MCP server exposes (`resources/list`).
+    ///
+    /// Returns owned [`ResourceInfo`]s sorted by URI (deterministic order for
+    /// prompt-cache stability, #3298). HttpCompat has no resources concept and
+    /// returns an error (#6501).
+    pub async fn list_resources(&mut self) -> Result<Vec<ResourceInfo>, String> {
+        let timeout = std::time::Duration::from_secs(self.config.timeout_secs);
+        match self.transport_kind() {
+            McpTransportKind::Rmcp => {
+                let McpInner::Rmcp(client) = &mut self.inner else {
+                    unreachable!()
+                };
+                let resources = tokio::time::timeout(timeout, client.list_all_resources())
+                    .await
+                    .map_err(|_| {
+                        format!(
+                            "MCP resources/list timed out after {}s",
+                            self.config.timeout_secs
+                        )
+                    })?
+                    .map_err(|e| format!("MCP resources/list failed: {e}"))?;
+                let mut out: Vec<ResourceInfo> = resources
+                    .into_iter()
+                    .map(|r| ResourceInfo {
+                        uri: r.uri,
+                        name: r.name,
+                        description: r.description,
+                        mime_type: r.mime_type,
+                    })
+                    .collect();
+                out.sort_by(|a, b| a.uri.cmp(&b.uri));
+                Ok(out)
+            }
+            McpTransportKind::Sse => {
+                let resp = self.sse_send_request("resources/list", None).await?;
+                Ok(parse_sse_resource_list(resp))
+            }
+            McpTransportKind::HttpCompat => {
+                Err("resources are not supported over the HttpCompat transport".to_string())
+            }
+        }
+    }
+
+    /// List the URI templates this MCP server exposes
+    /// (`resources/templates/list`).
+    pub async fn list_resource_templates(&mut self) -> Result<Vec<ResourceTemplateInfo>, String> {
+        let timeout = std::time::Duration::from_secs(self.config.timeout_secs);
+        match self.transport_kind() {
+            McpTransportKind::Rmcp => {
+                let McpInner::Rmcp(client) = &mut self.inner else {
+                    unreachable!()
+                };
+                let templates = tokio::time::timeout(timeout, client.list_all_resource_templates())
+                    .await
+                    .map_err(|_| {
+                        format!(
+                            "MCP resources/templates/list timed out after {}s",
+                            self.config.timeout_secs
+                        )
+                    })?
+                    .map_err(|e| format!("MCP resources/templates/list failed: {e}"))?;
+                let mut out: Vec<ResourceTemplateInfo> = templates
+                    .into_iter()
+                    .map(|t| ResourceTemplateInfo {
+                        uri_template: t.uri_template,
+                        name: t.name,
+                        description: t.description,
+                        mime_type: t.mime_type,
+                    })
+                    .collect();
+                out.sort_by(|a, b| a.uri_template.cmp(&b.uri_template));
+                Ok(out)
+            }
+            McpTransportKind::Sse => {
+                let resp = self
+                    .sse_send_request("resources/templates/list", None)
+                    .await?;
+                Ok(parse_sse_resource_templates(resp))
+            }
+            McpTransportKind::HttpCompat => {
+                Err("resources are not supported over the HttpCompat transport".to_string())
+            }
+        }
+    }
+
+    /// Read a single resource by URI (`resources/read`), returning its text
+    /// content joined; binary blobs are elided rather than inlined (#6501).
+    pub async fn read_resource(&mut self, uri: &str) -> Result<String, String> {
+        let timeout = std::time::Duration::from_secs(self.config.timeout_secs);
+        match self.transport_kind() {
+            McpTransportKind::Rmcp => {
+                let McpInner::Rmcp(client) = &mut self.inner else {
+                    unreachable!()
+                };
+                let params = rmcp::model::ReadResourceRequestParams::new(uri.to_string());
+                let result = tokio::time::timeout(timeout, client.read_resource(params))
+                    .await
+                    .map_err(|_| {
+                        format!(
+                            "MCP resources/read timed out after {}s",
+                            self.config.timeout_secs
+                        )
+                    })?
+                    .map_err(|e| format!("MCP resources/read failed: {e}"))?;
+                Ok(result
+                    .contents
+                    .iter()
+                    .map(render_resource_contents)
+                    .collect::<Vec<_>>()
+                    .join("\n"))
+            }
+            McpTransportKind::Sse => {
+                let resp = self
+                    .sse_send_request("resources/read", Some(serde_json::json!({ "uri": uri })))
+                    .await?;
+                Ok(parse_sse_read_resource(resp))
+            }
+            McpTransportKind::HttpCompat => {
+                Err("resources are not supported over the HttpCompat transport".to_string())
+            }
+        }
+    }
+
+    /// If the server advertises the `resources` capability, register the
+    /// synthetic `list_resources` / `read_resource` tools so an agent can reach
+    /// resources through the normal tool-call loop (#6501).
+    async fn discover_and_register_resources(&mut self) {
+        let has_resources = match self.transport_kind() {
+            McpTransportKind::Rmcp => {
+                let McpInner::Rmcp(client) = &self.inner else {
+                    unreachable!()
+                };
+                client
+                    .peer_info()
+                    .map(|info| info.capabilities.resources.is_some())
+                    .unwrap_or(false)
+            }
+            // SSE stores the handshake-advertised flag (no live capability
+            // object to query); HttpCompat has no resources concept.
+            McpTransportKind::Sse => self.server_advertises_resources,
+            McpTransportKind::HttpCompat => false,
+        };
+        if has_resources {
+            self.register_resource_tools();
+        }
+    }
+
+    /// Register the two synthetic resource tools and record their raw names in
+    /// `resource_ops` so dispatch intercepts them.
+    fn register_resource_tools(&mut self) {
+        self.register_resource_op(
+            "list_resources",
+            "List the readable resources (and URI templates) this MCP server exposes. Returns their URIs, names, and MIME types as JSON.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            }),
+        );
+        self.register_resource_op(
+            "read_resource",
+            "Read an MCP resource by URI. Call list_resources first to discover available URIs.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "uri": {
+                        "type": "string",
+                        "description": "The resource URI to read (from list_resources)."
+                    }
+                },
+                "required": ["uri"],
+                "additionalProperties": false
+            }),
+        );
+    }
+
+    /// Register one synthetic resource tool and mark its raw name for dispatch
+    /// interception.
+    fn register_resource_op(
+        &mut self,
+        raw_name: &str,
+        description: &str,
+        input_schema: serde_json::Value,
+    ) {
+        self.register_tool(raw_name, description, input_schema);
+        self.resource_ops.insert(raw_name.to_string());
+    }
+
+    /// Route an intercepted synthetic resource tool to the matching
+    /// `resources/*` method (#6501).
+    async fn dispatch_resource_op(
+        &mut self,
+        raw_name: &str,
+        arguments: &serde_json::Value,
+    ) -> Result<String, String> {
+        match raw_name {
+            "list_resources" => {
+                let resources = self.list_resources().await?;
+                // Templates are optional; a server without them answers
+                // method-not-found, which we treat as "none".
+                let templates = self.list_resource_templates().await.unwrap_or_default();
+                let payload = serde_json::json!({
+                    "resources": resources,
+                    "resourceTemplates": templates,
+                });
+                serde_json::to_string_pretty(&payload)
+                    .map_err(|e| format!("failed to serialize resource list: {e}"))
+            }
+            "read_resource" => {
+                let uri = arguments
+                    .get("uri")
+                    .and_then(|u| u.as_str())
+                    .ok_or_else(|| "read_resource requires a string 'uri' argument".to_string())?;
+                if uri.is_empty() {
+                    return Err("read_resource 'uri' must not be empty".to_string());
+                }
+                self.read_resource(uri).await
+            }
+            other => Err(format!("unknown resource operation '{other}'")),
+        }
+    }
+
     /// Call a tool on the MCP server with no kernel-attested caller context.
     ///
     /// Thin wrapper over [`call_tool_with_caller`] that passes `None`. Retained
@@ -2335,6 +2906,17 @@ impl McpConnection {
             }
         }
 
+        // #6501: intercept the synthetic resource tools we registered
+        // (`list_resources` / `read_resource`) and route them to the
+        // `resources/*` methods instead of a `tools/call`. Guarded by
+        // membership in `resource_ops` so a real server tool literally named
+        // `read_resource` is dispatched normally. Runs AFTER the schema and
+        // taint guards above so the synthetic tools get the same argument
+        // validation as any other tool.
+        if self.resource_ops.contains(&raw_name) {
+            return self.dispatch_resource_op(&raw_name, arguments).await;
+        }
+
         // Determine the transport kind without holding any reference into self.inner
         // across an await or across a mutable reborrow of self.  Using a simple
         // tag enum avoids E0502 / E0521 caused by overlapping borrows.
@@ -2408,18 +2990,21 @@ impl McpConnection {
                         })?
                         .map_err(|e| format!("MCP tool call failed: {e}"))?;
 
-                // Extract text content from response
-                let texts: Vec<String> = result
+                // Extract renderable content from the response: text passes
+                // through, a `resource_link` becomes a first-class line, and an
+                // embedded resource contributes its text (#6501). Unknown block
+                // types still fall back to the JSON representation below.
+                let lines: Vec<String> = result
                     .content
                     .iter()
-                    .filter_map(|item| item.as_text().map(|t| t.text.clone()))
+                    .filter_map(render_rmcp_content_block)
                     .collect();
 
-                let output = if texts.is_empty() {
+                let output = if lines.is_empty() {
                     serde_json::to_string(&result.content)
                         .unwrap_or_else(|_| "No content".to_string())
                 } else {
-                    texts.join("\n")
+                    lines.join("\n")
                 };
 
                 // Check if the server reported an error via is_error flag
@@ -2483,17 +3068,14 @@ impl McpConnection {
                 match response {
                     Some(result) => {
                         if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
-                            let texts: Vec<&str> = content
+                            // Same content handling as the Rmcp arm: text plus
+                            // first-class `resource_link` / embedded resource
+                            // lines (#6501).
+                            let lines: Vec<String> = content
                                 .iter()
-                                .filter_map(|item| {
-                                    if item["type"].as_str() == Some("text") {
-                                        item["text"].as_str()
-                                    } else {
-                                        None
-                                    }
-                                })
+                                .filter_map(render_json_content_block)
                                 .collect();
-                            Ok(texts.join("\n"))
+                            Ok(lines.join("\n"))
                         } else {
                             Ok(result.to_string())
                         }
@@ -3283,6 +3865,8 @@ mod tests {
                 client: librefang_http::proxied_client(),
             },
             auth_state: crate::mcp_oauth::McpAuthState::NotRequired,
+            resource_ops: std::collections::HashSet::new(),
+            server_advertises_resources: false,
         };
 
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -4365,6 +4949,8 @@ mod tests {
                 client: librefang_http::proxied_client(),
             },
             auth_state: crate::mcp_oauth::McpAuthState::NotRequired,
+            resource_ops: std::collections::HashSet::new(),
+            server_advertises_resources: false,
         };
 
         conn.register_http_compat_tools(&[
@@ -4547,6 +5133,501 @@ mod tests {
         assert!(result.contains("\"source\": \"http_compat\""));
 
         server.await.unwrap();
+    }
+
+    // ── SSE transport auth-header propagation (finding #9) ────────────────
+    //
+    // The SSE transport used to drop both config-declared auth headers and a
+    // cached OAuth bearer token, so OAuth for SSE servers was silently
+    // non-functional and statically-configured credentials never reached the
+    // wire. These tests pin the parity fix with the Streamable-HTTP path.
+
+    /// Mock OAuth provider that returns a fixed token from `load_token`.
+    struct StaticTokenOAuthProvider {
+        token: Option<String>,
+    }
+
+    #[async_trait::async_trait]
+    impl crate::mcp_oauth::McpOAuthProvider for StaticTokenOAuthProvider {
+        async fn load_token(
+            &self,
+            _server_url: &str,
+        ) -> Result<Option<String>, crate::mcp_oauth::McpOAuthError> {
+            Ok(self.token.clone())
+        }
+
+        async fn store_tokens(
+            &self,
+            _server_url: &str,
+            _tokens: crate::mcp_oauth::OAuthTokens,
+        ) -> Result<(), crate::mcp_oauth::McpOAuthError> {
+            Ok(())
+        }
+
+        async fn store_oauth_metadata(
+            &self,
+            _server_url: &str,
+            _token_endpoint: &str,
+            _client_id: Option<&str>,
+        ) -> Result<(), crate::mcp_oauth::McpOAuthError> {
+            Ok(())
+        }
+
+        async fn clear_tokens(
+            &self,
+            _server_url: &str,
+        ) -> Result<(), crate::mcp_oauth::McpOAuthError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn build_sse_headers_injects_cached_oauth_bearer_token() {
+        let provider: std::sync::Arc<dyn crate::mcp_oauth::McpOAuthProvider> =
+            std::sync::Arc::new(StaticTokenOAuthProvider {
+                token: Some("sse-oauth-token".to_string()),
+            });
+        let map =
+            McpConnection::build_sse_headers("https://mcp.example.com/sse", &[], Some(&provider))
+                .await;
+        let auth = map
+            .get(reqwest::header::AUTHORIZATION)
+            .expect("SSE transport must carry the cached OAuth bearer token");
+        assert_eq!(auth.to_str().unwrap(), "Bearer sse-oauth-token");
+    }
+
+    #[tokio::test]
+    async fn build_sse_headers_forwards_config_headers() {
+        let map = McpConnection::build_sse_headers(
+            "https://mcp.example.com/sse",
+            &["X-Api-Key: static-secret".to_string()],
+            None,
+        )
+        .await;
+        let key = map
+            .get(reqwest::header::HeaderName::from_static("x-api-key"))
+            .expect("statically-configured header must be forwarded on SSE");
+        assert_eq!(key.to_str().unwrap(), "static-secret");
+    }
+
+    #[tokio::test]
+    async fn sse_transport_sends_configured_auth_header_on_the_wire() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // connect() drives three POSTs over SSE (initialize,
+        // notifications/initialized, tools/list); we answer each with
+        // `Connection: close`, so every request lands on its own connection.
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        let server = tokio::spawn(async move {
+            for _ in 0..3 {
+                let (mut stream, _) = match listener.accept().await {
+                    Ok(v) => v,
+                    Err(_) => break,
+                };
+                let mut buffer = vec![0u8; 8192];
+                let bytes = match stream.read(&mut buffer).await {
+                    Ok(b) => b,
+                    Err(_) => break,
+                };
+                let request = String::from_utf8_lossy(&buffer[..bytes]).to_string();
+                let _ = tx.send(request);
+
+                // A valid JSON-RPC envelope keeps connect() from erroring; an
+                // id mismatch on tools/list just yields Ok(None), which is fine.
+                let body = r#"{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}"#;
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let conn = McpConnection::connect(McpServerConfig {
+            name: "sse-auth".to_string(),
+            transport: McpTransport::Sse {
+                url: format!("http://{addr}/sse"),
+            },
+            timeout_secs: 5,
+            env: vec![],
+            headers: vec!["Authorization: Bearer static-sse-token".to_string()],
+            oauth_provider: None,
+            oauth_config: None,
+            taint_scanning: true,
+            taint_policy: None,
+            taint_rule_sets: empty_taint_rule_sets_handle(),
+            roots: vec![],
+        })
+        .await;
+
+        // The initialize POST is the first request the server observed; it must
+        // carry the configured Authorization header.
+        let initialize = rx
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("server must have received the SSE initialize POST");
+        assert!(
+            initialize
+                .to_ascii_lowercase()
+                .contains("authorization: bearer static-sse-token"),
+            "SSE initialize POST must carry the configured Authorization header; got:\n{initialize}"
+        );
+
+        conn.expect("SSE connect should succeed against the stub server");
+        server.abort();
+    }
+
+    // -----------------------------------------------------------------------
+    // MCP resources primitive (#6501)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn format_resource_link_includes_mime_when_present() {
+        assert_eq!(
+            format_resource_link("Report", "file:///r.md", Some("text/markdown")),
+            "[resource_link] Report — file:///r.md (text/markdown)"
+        );
+        assert_eq!(
+            format_resource_link("Report", "file:///r.md", None),
+            "[resource_link] Report — file:///r.md"
+        );
+        // An empty mime string is treated as absent.
+        assert_eq!(
+            format_resource_link("Report", "file:///r.md", Some("")),
+            "[resource_link] Report — file:///r.md"
+        );
+    }
+
+    #[test]
+    fn render_resource_contents_inlines_text_and_elides_blobs() {
+        let text = rmcp::model::ResourceContents::text("hello resource", "file:///a.txt");
+        assert_eq!(render_resource_contents(&text), "hello resource");
+
+        let blob = rmcp::model::ResourceContents::blob("QUJDRA==", "file:///b.bin")
+            .with_mime_type("image/png");
+        let rendered = render_resource_contents(&blob);
+        assert!(
+            rendered.starts_with("[binary resource image/png:"),
+            "got: {rendered}"
+        );
+        assert!(rendered.contains("base64 bytes elided"), "got: {rendered}");
+    }
+
+    #[test]
+    fn render_rmcp_content_block_handles_text_and_resource_link() {
+        // Text passes through.
+        let text = rmcp::model::ContentBlock::text("plain output");
+        assert_eq!(
+            render_rmcp_content_block(&text),
+            Some("plain output".to_string())
+        );
+
+        // A resource_link becomes a first-class line instead of opaque JSON.
+        let mut resource = rmcp::model::Resource::new("file:///doc.md", "Doc");
+        resource.mime_type = Some("text/markdown".to_string());
+        let link = rmcp::model::ContentBlock::resource_link(resource);
+        assert_eq!(
+            render_rmcp_content_block(&link),
+            Some("[resource_link] Doc — file:///doc.md (text/markdown)".to_string())
+        );
+    }
+
+    #[test]
+    fn render_json_content_block_mirrors_rmcp_rendering() {
+        assert_eq!(
+            render_json_content_block(&serde_json::json!({"type": "text", "text": "x"})),
+            Some("x".to_string())
+        );
+        assert_eq!(
+            render_json_content_block(&serde_json::json!({
+                "type": "resource_link",
+                "name": "A",
+                "uri": "file:///a",
+                "mimeType": "text/plain"
+            })),
+            Some("[resource_link] A — file:///a (text/plain)".to_string())
+        );
+        // Embedded resource contributes its text.
+        assert_eq!(
+            render_json_content_block(&serde_json::json!({
+                "type": "resource",
+                "resource": {"uri": "file:///a", "text": "embedded body"}
+            })),
+            Some("embedded body".to_string())
+        );
+        // Unknown block types are dropped (fall through to the JSON fallback).
+        assert_eq!(
+            render_json_content_block(&serde_json::json!({"type": "image", "data": "…"})),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_sse_resource_list_sorts_by_uri() {
+        let resp = serde_json::json!({
+            "resources": [
+                {"uri": "file:///b.txt", "name": "B"},
+                {"uri": "file:///a.txt", "name": "A", "description": "first", "mimeType": "text/plain"}
+            ]
+        });
+        let parsed = parse_sse_resource_list(Some(resp));
+        assert_eq!(parsed.len(), 2);
+        // Sorted by URI for deterministic prompt ordering (#3298).
+        assert_eq!(parsed[0].uri, "file:///a.txt");
+        assert_eq!(parsed[0].name, "A");
+        assert_eq!(parsed[0].description.as_deref(), Some("first"));
+        assert_eq!(parsed[0].mime_type.as_deref(), Some("text/plain"));
+        assert_eq!(parsed[1].uri, "file:///b.txt");
+        assert_eq!(parsed[1].description, None);
+
+        // A missing/!object result yields an empty list, not a panic.
+        assert!(parse_sse_resource_list(None).is_empty());
+    }
+
+    #[test]
+    fn parse_sse_read_resource_joins_contents() {
+        let resp = serde_json::json!({
+            "contents": [
+                {"uri": "file:///a", "mimeType": "text/plain", "text": "line one"},
+                {"uri": "file:///a", "text": "line two"}
+            ]
+        });
+        assert_eq!(parse_sse_read_resource(Some(resp)), "line one\nline two");
+
+        // A blob content is elided, not inlined.
+        let blob = serde_json::json!({
+            "contents": [{"uri": "file:///b.bin", "mimeType": "image/png", "blob": "QUJD"}]
+        });
+        let out = parse_sse_read_resource(Some(blob));
+        assert!(out.starts_with("[binary resource image/png:"), "got: {out}");
+    }
+
+    #[test]
+    fn resources_list_read_deserialize_from_jsonrpc() {
+        // Mirrors `test_mcp_jsonrpc_tools_list`: the wire shapes the SSE parse
+        // helpers consume must round-trip cleanly.
+        let list: serde_json::Value = serde_json::from_str(
+            r#"{"resources":[{"uri":"file:///a.txt","name":"A","mimeType":"text/plain"}]}"#,
+        )
+        .expect("resources/list result parses");
+        let parsed = parse_sse_resource_list(Some(list));
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].uri, "file:///a.txt");
+
+        let read: serde_json::Value = serde_json::from_str(
+            r#"{"contents":[{"uri":"file:///a.txt","mimeType":"text/plain","text":"body"}]}"#,
+        )
+        .expect("resources/read result parses");
+        assert_eq!(parse_sse_read_resource(Some(read)), "body");
+
+        let templates: serde_json::Value = serde_json::from_str(
+            r#"{"resourceTemplates":[{"uriTemplate":"file:///{d}.log","name":"Logs"}]}"#,
+        )
+        .expect("resources/templates/list result parses");
+        let t = parse_sse_resource_templates(Some(templates));
+        assert_eq!(t.len(), 1);
+        assert_eq!(t[0].uri_template, "file:///{d}.log");
+    }
+
+    /// Extract the JSON-RPC `method` and `id` from a raw HTTP request the SSE
+    /// stub received, so it can answer with an id-matched envelope.
+    fn stub_extract_method_and_id(request: &str) -> (String, Option<u64>) {
+        let body = request.split("\r\n\r\n").nth(1).unwrap_or("");
+        let v: serde_json::Value = serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
+        let method = v
+            .get("method")
+            .and_then(|m| m.as_str())
+            .unwrap_or("")
+            .to_string();
+        let id = v.get("id").and_then(|i| i.as_u64());
+        (method, id)
+    }
+
+    /// End-to-end SSE resources: a stub advertises the `resources` capability,
+    /// so connect registers the synthetic `list_resources` / `read_resource`
+    /// tools, and the three `resources/*` methods round-trip (#6501).
+    #[tokio::test]
+    async fn sse_resources_discovered_and_readable() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            // connect drives initialize + notifications/initialized + tools/list;
+            // then the test drives resources/list, resources/read,
+            // resources/templates/list — each on its own `Connection: close`
+            // socket.
+            for _ in 0..10 {
+                let (mut stream, _) = match listener.accept().await {
+                    Ok(v) => v,
+                    Err(_) => break,
+                };
+                let mut buffer = vec![0u8; 8192];
+                let bytes = match stream.read(&mut buffer).await {
+                    Ok(b) => b,
+                    Err(_) => break,
+                };
+                let request = String::from_utf8_lossy(&buffer[..bytes]).to_string();
+                let (method, id) = stub_extract_method_and_id(&request);
+                let id = id.unwrap_or(0);
+
+                let result = match method.as_str() {
+                    "initialize" => serde_json::json!({
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {"resources": {}},
+                        "serverInfo": {"name": "stub", "version": "1"}
+                    }),
+                    "tools/list" => serde_json::json!({"tools": []}),
+                    "resources/list" => serde_json::json!({
+                        "resources": [
+                            {"uri": "file:///b.txt", "name": "B"},
+                            {"uri": "file:///a.txt", "name": "A", "mimeType": "text/plain"}
+                        ]
+                    }),
+                    "resources/read" => serde_json::json!({
+                        "contents": [
+                            {"uri": "file:///a.txt", "mimeType": "text/plain", "text": "hello resource"}
+                        ]
+                    }),
+                    "resources/templates/list" => serde_json::json!({
+                        "resourceTemplates": [
+                            {"uriTemplate": "file:///logs/{date}.log", "name": "Logs"}
+                        ]
+                    }),
+                    // notifications/initialized (or anything else): empty result.
+                    _ => serde_json::json!({}),
+                };
+                let body =
+                    serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let mut conn = McpConnection::connect(McpServerConfig {
+            name: "sse-res".to_string(),
+            transport: McpTransport::Sse {
+                url: format!("http://{addr}/sse"),
+            },
+            timeout_secs: 5,
+            env: vec![],
+            headers: vec![],
+            oauth_provider: None,
+            oauth_config: None,
+            taint_scanning: true,
+            taint_policy: None,
+            taint_rule_sets: empty_taint_rule_sets_handle(),
+            roots: vec![],
+        })
+        .await
+        .expect("SSE connect should succeed against the resources stub");
+
+        // The synthetic resource tools are surfaced as namespaced tools.
+        let tool_names: Vec<&str> = conn.tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(
+            tool_names.contains(&"mcp_sse_res_list_resources"),
+            "expected list_resources tool; got: {tool_names:?}"
+        );
+        assert!(
+            tool_names.contains(&"mcp_sse_res_read_resource"),
+            "expected read_resource tool; got: {tool_names:?}"
+        );
+
+        // resources/list round-trips and is sorted by URI.
+        let resources = conn.list_resources().await.expect("list_resources");
+        assert_eq!(resources.len(), 2);
+        assert_eq!(resources[0].uri, "file:///a.txt");
+        assert_eq!(resources[1].uri, "file:///b.txt");
+
+        // resources/read returns the text content.
+        let body = conn
+            .read_resource("file:///a.txt")
+            .await
+            .expect("read_resource");
+        assert_eq!(body, "hello resource");
+
+        // resources/templates/list round-trips.
+        let templates = conn
+            .list_resource_templates()
+            .await
+            .expect("list_resource_templates");
+        assert_eq!(templates.len(), 1);
+        assert_eq!(templates[0].uri_template, "file:///logs/{date}.log");
+
+        server.abort();
+    }
+
+    /// A synthetic `read_resource` call with no `uri` argument errors clearly
+    /// rather than reaching the transport (#6501).
+    #[tokio::test]
+    async fn read_resource_without_uri_errors() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            for _ in 0..6 {
+                let (mut stream, _) = match listener.accept().await {
+                    Ok(v) => v,
+                    Err(_) => break,
+                };
+                let mut buffer = vec![0u8; 8192];
+                let bytes = match stream.read(&mut buffer).await {
+                    Ok(b) => b,
+                    Err(_) => break,
+                };
+                let request = String::from_utf8_lossy(&buffer[..bytes]).to_string();
+                let (method, id) = stub_extract_method_and_id(&request);
+                let id = id.unwrap_or(0);
+                let result = match method.as_str() {
+                    "initialize" => serde_json::json!({
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {"resources": {}}
+                    }),
+                    _ => serde_json::json!({"tools": []}),
+                };
+                let body =
+                    serde_json::json!({"jsonrpc": "2.0", "id": id, "result": result}).to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let mut conn = McpConnection::connect(McpServerConfig {
+            name: "sse-res2".to_string(),
+            transport: McpTransport::Sse {
+                url: format!("http://{addr}/sse"),
+            },
+            timeout_secs: 5,
+            env: vec![],
+            headers: vec![],
+            oauth_provider: None,
+            oauth_config: None,
+            taint_scanning: true,
+            taint_policy: None,
+            taint_rule_sets: empty_taint_rule_sets_handle(),
+            roots: vec![],
+        })
+        .await
+        .expect("connect");
+
+        // Missing required `uri` — must be rejected before any transport call.
+        let err = conn
+            .call_tool("mcp_sse_res2_read_resource", &serde_json::json!({}))
+            .await
+            .expect_err("read_resource without uri must error");
+        assert!(
+            err.to_lowercase().contains("uri"),
+            "error should mention the missing uri; got: {err}"
+        );
+
+        server.abort();
     }
 
     #[test]

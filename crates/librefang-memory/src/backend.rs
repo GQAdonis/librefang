@@ -628,13 +628,27 @@ pub trait PromptBackend: Send + Sync {
 #[async_trait]
 pub trait KnowledgeBackend: Send + Sync {
     /// Add (or upsert) an entity.  Returns the entity's ID.
-    async fn add_entity(&self, entity: Entity) -> LibreFangResult<String>;
+    async fn add_entity(
+        &self,
+        entity: Entity,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String>;
 
     /// Add a relation between two entities.  Returns the relation's ID.
-    async fn add_relation(&self, relation: Relation) -> LibreFangResult<String>;
+    async fn add_relation(
+        &self,
+        relation: Relation,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String>;
 
     /// Query the graph with a pattern filter.
-    async fn query_graph(&self, pattern: GraphPattern) -> LibreFangResult<Vec<GraphMatch>>;
+    async fn query_graph(
+        &self,
+        pattern: GraphPattern,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<Vec<GraphMatch>>;
 
     /// Delete all entities and relations belonging to an agent.
     async fn delete_by_agent(&self, agent_id: &str) -> LibreFangResult<u64>;
@@ -642,17 +656,31 @@ pub trait KnowledgeBackend: Send + Sync {
 
 #[async_trait]
 impl KnowledgeBackend for MemorySubstrate {
-    async fn add_entity(&self, entity: Entity) -> LibreFangResult<String> {
+    async fn add_entity(
+        &self,
+        entity: Entity,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String> {
         // Delegate to the Memory trait impl which calls KnowledgeStore::add_entity
-        librefang_types::memory::Memory::add_entity(self, entity).await
+        librefang_types::memory::Memory::add_entity(self, entity, agent_id, peer_id).await
     }
 
-    async fn add_relation(&self, relation: Relation) -> LibreFangResult<String> {
-        librefang_types::memory::Memory::add_relation(self, relation).await
+    async fn add_relation(
+        &self,
+        relation: Relation,
+        agent_id: &str,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<String> {
+        librefang_types::memory::Memory::add_relation(self, relation, agent_id, peer_id).await
     }
 
-    async fn query_graph(&self, pattern: GraphPattern) -> LibreFangResult<Vec<GraphMatch>> {
-        librefang_types::memory::Memory::query_graph(self, pattern).await
+    async fn query_graph(
+        &self,
+        pattern: GraphPattern,
+        peer_id: Option<&str>,
+    ) -> LibreFangResult<Vec<GraphMatch>> {
+        librefang_types::memory::Memory::query_graph(self, pattern, peer_id).await
     }
 
     async fn delete_by_agent(&self, agent_id: &str) -> LibreFangResult<u64> {

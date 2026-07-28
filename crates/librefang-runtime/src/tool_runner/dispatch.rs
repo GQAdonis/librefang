@@ -73,6 +73,15 @@ pub struct ToolExecContext<'a> {
     /// call sites; the deferred payload falls back to `sender_id` in
     /// that case.
     pub chat_id: Option<&'a str>,
+    /// The bot account / tenant instance the originating turn arrived on
+    /// (`metadata["account_id"]`, stamped kernel-side from the inbound
+    /// message). Threaded so `channel_send` can reject a cross-account
+    /// (cross-tenant) dispatch — an explicit `account_id` targeting a
+    /// *different* registered bot instance than the turn came in on (#6443).
+    /// `None` for out-of-band callers (cron, triggers, API-driven tool runs)
+    /// and single-tenant deployments that never stamp an account — the guard
+    /// no-ops in that case, preserving the existing unrestricted behaviour.
+    pub sender_account_id: Option<&'a str>,
     /// LibreFang `SessionId` the tool call belongs to. When `Some`, the
     /// `file_read` / `file_write` builtins consult
     /// `kernel.acp_fs_client(session_id)` and route through the editor's
@@ -201,6 +210,7 @@ pub async fn execute_tool_raw(
         // by the MCP dispatch arm to populate `CallerContext.chat_id`
         // (#5699), so it's a real binding.
         chat_id,
+        sender_account_id,
         session_id,
         spill_threshold_bytes,
         max_artifact_bytes,
@@ -931,18 +941,15 @@ pub async fn execute_tool_raw(
                 }
             }
 
-            let effective_allowed_env_vars = allowed_env_vars.or_else(|| {
-                exec_policy.and_then(|policy| {
-                    if policy.allowed_env_vars.is_empty() {
-                        None
-                    } else {
-                        Some(policy.allowed_env_vars.as_slice())
-                    }
-                })
-            });
+            // #6458: the two env-allowlist sources carry different trust and
+            // are no longer merged (previously the hand list shadowed the
+            // operator's). `allowed_env_vars` (a hand's assembled passthrough
+            // list) is passed as the untrusted list; the operator's trusted
+            // `exec_policy.allowed_env_vars` is derived from `exec_policy`
+            // inside `tool_shell_exec`.
             tool_shell_exec(
                 input,
-                effective_allowed_env_vars.unwrap_or(&[]),
+                allowed_env_vars.unwrap_or(&[]),
                 *workspace_root,
                 *exec_policy,
                 interrupt.clone(),
@@ -981,10 +988,15 @@ pub async fn execute_tool_raw(
         "schedule_delete" => tool_schedule_delete(input, *kernel, *caller_agent_id).await,
         "schedule_resume" => tool_schedule_resume(input, *kernel, *caller_agent_id).await,
 
-        // Knowledge graph tools.
-        "knowledge_add_entity" => tool_knowledge_add_entity(input, *kernel).await,
-        "knowledge_add_relation" => tool_knowledge_add_relation(input, *kernel).await,
-        "knowledge_query" => tool_knowledge_query(input, *kernel).await,
+        // Knowledge graph tools. `sender_id` is the per-user peer identity (same as the memory tools use), so a multi-user agent's KG writes and reads are scoped to the calling user (#6494).
+        // `caller_agent_id` additionally scopes `add_entity` / `add_relation` writes to the calling agent (#6519).
+        "knowledge_add_entity" => {
+            tool_knowledge_add_entity(input, *kernel, *caller_agent_id, *sender_id).await
+        }
+        "knowledge_add_relation" => {
+            tool_knowledge_add_relation(input, *kernel, *caller_agent_id, *sender_id).await
+        }
+        "knowledge_query" => tool_knowledge_query(input, *kernel, *sender_id).await,
 
         // Image analysis tool
         "image_analyze" => {
@@ -1111,6 +1123,9 @@ pub async fn execute_tool_raw(
                 // cross-chat dispatch guard can scope its recipient check.
                 *channel,
                 *chat_id,
+                // #6443: thread the turn's originating account so the
+                // cross-account (cross-tenant) dispatch guard can fire.
+                *sender_account_id,
                 *caller_agent_id,
                 &extra_refs,
             )
@@ -1119,10 +1134,23 @@ pub async fn execute_tool_raw(
         }
 
         // Persistent process tools.
-        "process_start" => tool_process_start(input, *process_manager, *caller_agent_id).await,
-        "process_poll" => tool_process_poll(input, *process_manager).await,
-        "process_write" => tool_process_write(input, *process_manager).await,
-        "process_kill" => tool_process_kill(input, *process_manager).await,
+        "process_start" => {
+            tool_process_start(
+                input,
+                *process_manager,
+                *caller_agent_id,
+                *exec_policy,
+                *dangerous_command_checker,
+                *allowed_env_vars,
+                *kernel,
+                *session_id,
+                *chat_id,
+            )
+            .await
+        }
+        "process_poll" => tool_process_poll(input, *process_manager, *caller_agent_id).await,
+        "process_write" => tool_process_write(input, *process_manager, *caller_agent_id).await,
+        "process_kill" => tool_process_kill(input, *process_manager, *caller_agent_id).await,
         "process_list" => tool_process_list(*process_manager, *caller_agent_id).await,
 
         // Hand tools (curated autonomous capability packages).
@@ -1323,7 +1351,7 @@ pub async fn execute_tool_raw(
             }
             // Fallback 2: Skill registry tool providers
             else if let Some(registry) = skill_registry {
-                if let Some(skill) = registry.find_tool_provider(other) {
+                if let Some(skill) = registry.find_tool_provider(other, *allowed_skills) {
                     if let Some(allowed) = allowed_skills {
                         if !allowed.is_empty() && !allowed.contains(&skill.manifest.skill.name) {
                             warn!(tool = other, "Skill not in agent's allowed_skills list");
@@ -1419,6 +1447,12 @@ pub async fn execute_tool_raw(
 /// `allowed_tools` enforces capability-based security: if provided, only
 /// tools in the list may execute. This prevents an LLM from hallucinating
 /// tool names outside the agent's capability grants.
+// `execute_tool` keeps its historical positional signature so external callers
+// (librefang-api tool-run routes) and the ~57 unit tests stay untouched; it
+// forwards to `execute_tool_with_sender_account` with `sender_account_id =
+// None` (out-of-band callers are unrestricted, matching the cron/trigger no-op
+// in the cross-chat guard). Only the in-process agent loop threads the stamped
+// account through, the same way #6117 threaded `chat_id`.
 #[allow(clippy::too_many_arguments)]
 pub async fn execute_tool(
     tool_use_id: &str,
@@ -1453,6 +1487,92 @@ pub async fn execute_tool(
     available_tools: Option<&[ToolDefinition]>,
     spill_threshold_bytes: u64,
     max_artifact_bytes: u64,
+) -> ToolResult {
+    execute_tool_with_sender_account(
+        tool_use_id,
+        tool_name,
+        input,
+        kernel,
+        allowed_tools,
+        caller_agent_id,
+        skill_registry,
+        allowed_skills,
+        mcp_connections,
+        web_ctx,
+        browser_ctx,
+        allowed_env_vars,
+        workspace_root,
+        media_engine,
+        media_drivers,
+        exec_policy,
+        tts_engine,
+        docker_config,
+        process_manager,
+        process_registry,
+        sender_id,
+        channel,
+        chat_id,
+        checkpoint_manager,
+        interrupt,
+        session_id,
+        dangerous_command_checker,
+        available_tools,
+        spill_threshold_bytes,
+        max_artifact_bytes,
+        None,
+        // Out-of-band callers of the positional shim are user-facing / MCP
+        // bridge calls, never system-internal forks (#6463).
+        false,
+    )
+    .await
+}
+
+/// Account-aware variant of [`execute_tool`]. Identical except it also carries
+/// `sender_account_id` — the bot account / tenant the originating turn arrived
+/// on — so the `channel_send` cross-account dispatch guard (#6443) can fire.
+/// The in-process agent loop calls this directly with the stamped account;
+/// every other caller uses the [`execute_tool`] shim with `None`.
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_tool_with_sender_account(
+    tool_use_id: &str,
+    tool_name: &str,
+    input: &serde_json::Value,
+    kernel: Option<&Arc<dyn KernelHandle>>,
+    allowed_tools: Option<&[String]>,
+    caller_agent_id: Option<&str>,
+    skill_registry: Option<&SkillRegistry>,
+    allowed_skills: Option<&[String]>,
+    mcp_connections: Option<&tokio::sync::Mutex<Vec<mcp::McpConnection>>>,
+    web_ctx: Option<&WebToolsContext>,
+    browser_ctx: Option<&crate::browser::BrowserManager>,
+    allowed_env_vars: Option<&[String]>,
+    workspace_root: Option<&Path>,
+    media_engine: Option<&crate::media_understanding::MediaEngine>,
+    media_drivers: Option<&crate::media::MediaDriverCache>,
+    exec_policy: Option<&librefang_types::config::ExecPolicy>,
+    tts_engine: Option<&crate::tts::TtsEngine>,
+    docker_config: Option<&librefang_types::config::DockerSandboxConfig>,
+    process_manager: Option<&crate::process_manager::ProcessManager>,
+    process_registry: Option<&crate::process_registry::ProcessRegistry>,
+    sender_id: Option<&str>,
+    channel: Option<&str>,
+    chat_id: Option<&str>,
+    checkpoint_manager: Option<&Arc<crate::checkpoint_manager::CheckpointManager>>,
+    interrupt: Option<crate::interrupt::SessionInterrupt>,
+    session_id: Option<&str>,
+    dangerous_command_checker: Option<
+        &Arc<tokio::sync::RwLock<crate::dangerous_command::DangerousCommandChecker>>,
+    >,
+    available_tools: Option<&[ToolDefinition]>,
+    spill_threshold_bytes: u64,
+    max_artifact_bytes: u64,
+    sender_account_id: Option<&str>,
+    // When true, this is a system-internal fork (currently auto_dream) with
+    // no attributable end user — forwarded to the RBAC gate as
+    // `system_call = true` so its `memory_*` calls are not routed through the
+    // guest gate once `[[users]]` is configured (#6463). Every user-facing
+    // caller passes `false`.
+    system_call: bool,
 ) -> ToolResult {
     // Normalize the tool name through compat mappings so LLM-hallucinated aliases
     // (e.g. "fs-write" → "file_write") resolve to the canonical LibreFang name.
@@ -1561,7 +1681,7 @@ pub async fn execute_tool(
         // hard-blocks the call; `NeedsApproval` flips the call into
         // approval-required mode regardless of the global require list;
         // `Allow` defers to the existing approval logic.
-        let user_gate = kh.resolve_user_tool_decision(tool_name, sender_id, channel);
+        let user_gate = kh.resolve_user_tool_decision(tool_name, sender_id, channel, system_call);
         let force_approval = match &user_gate {
             librefang_types::user_policy::UserToolGate::Allow => false,
             librefang_types::user_policy::UserToolGate::Deny { reason } => {
@@ -1619,6 +1739,9 @@ pub async fn execute_tool(
                 sender_id: sender_id.map(|s| s.to_string()),
                 channel: channel.map(|c| c.to_string()),
                 chat_id: chat_id.map(|c| c.to_string()),
+                // #6443: persist the originating account so an approved,
+                // deferred channel_send still enforces the cross-account guard.
+                account_id: sender_account_id.map(|s| s.to_string()),
                 workspace_root: workspace_root.map(|p| p.to_path_buf()),
                 // When the user gate demanded approval, hand-tagged agents
                 // must NOT auto-approve — see kernel `submit_tool_approval`.
@@ -1686,6 +1809,7 @@ pub async fn execute_tool(
         sender_id,
         channel,
         chat_id,
+        sender_account_id,
         session_id: parsed_session_id,
         spill_threshold_bytes,
         max_artifact_bytes,

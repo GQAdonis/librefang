@@ -860,6 +860,62 @@ fn test_record_soft_cap_default_falls_back_to_hard_cap() {
 }
 
 #[test]
+fn soft_cap_eviction_keeps_anchor_seq_synced_across_restart() {
+    // Regression: the soft cap in `record_with_context` drains the
+    // oldest in-memory entries WITHOUT deleting the persisted DB rows.
+    // The anchor `seq` used to be written from the shrunken
+    // `entries.len()`, so it desynced from the DB population — on the
+    // next boot `with_db` reloads every row, `entries.len()` exceeds the
+    // anchor `seq`, and `verify_integrity` raised a spurious "audit
+    // anchor mismatch" even though the chain was intact.
+    let (log, pool, anchor_path) = setup_anchored_log();
+
+    // Soft cap = 4 × 3 / 2 = 6, so appending 12 entries forces the
+    // append path to evict the oldest in-memory prefix several times
+    // while every row stays in SQLite.
+    log.set_max_in_memory_entries(4);
+    for i in 0..12 {
+        log.record(
+            "agent-1",
+            AuditAction::RoleChange,
+            format!("event #{i}"),
+            "ok",
+        );
+    }
+
+    // The in-memory window is bounded by the soft cap, but the DB holds
+    // every row.
+    assert!(
+        log.len() <= 6,
+        "soft cap should bound the in-memory window, got {}",
+        log.len()
+    );
+    let db_rows: i64 = pool
+        .get()
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM audit_entries", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(db_rows, 12, "all rows must remain persisted after eviction");
+
+    // Even on the live log the anchor must already track the persisted
+    // population, not the shrunken in-memory window.
+    assert!(
+        log.verify_integrity().is_ok(),
+        "live verify must pass after soft-cap eviction"
+    );
+
+    // Simulate a daemon restart: reopen against the same DB + anchor.
+    // `with_db` reloads all 12 rows; the anchor `seq` must match.
+    drop(log);
+    let reopened = AuditLog::with_db_anchored(pool.clone(), anchor_path.clone());
+    assert_eq!(reopened.len(), 12, "restart reloads every persisted row");
+    assert!(
+        reopened.verify_integrity().is_ok(),
+        "restart after soft-cap eviction must not raise a spurious anchor mismatch"
+    );
+}
+
+#[test]
 fn test_default_config_is_no_op() {
     let log = AuditLog::new();
     log.record("agent-1", AuditAction::ToolInvoke, "x", "ok");
@@ -1708,6 +1764,117 @@ fn delimited_hash_distinguishes_field_boundary_shifts() {
     assert_ne!(
         v2_ab_c, v1_ab_c,
         "v2 layout must differ from v1 for identical fields"
+    );
+}
+
+#[test]
+fn audit_action_round_trips_display_and_from_str() {
+    // Every variant's `Display` output must parse back to the same variant
+    // via `FromStr`. This is the invariant `with_db()` relies on when it
+    // decodes the persisted `action` column after a restart: a variant that
+    // stringifies one way but fails to parse back (as A2aDiscovered /
+    // A2aTrusted did before the fix, falling through to ToolInvoke) silently
+    // rewrites the hash input and breaks Merkle verification.
+    let all = [
+        AuditAction::ToolInvoke,
+        AuditAction::CapabilityCheck,
+        AuditAction::AgentSpawn,
+        AuditAction::AgentKill,
+        AuditAction::AgentMessage,
+        AuditAction::MemoryAccess,
+        AuditAction::FileAccess,
+        AuditAction::NetworkAccess,
+        AuditAction::ShellExec,
+        AuditAction::AuthAttempt,
+        AuditAction::WireConnect,
+        AuditAction::ConfigChange,
+        AuditAction::DreamConsolidation,
+        AuditAction::UserLogin,
+        AuditAction::RoleChange,
+        AuditAction::PermissionDenied,
+        AuditAction::BudgetExceeded,
+        AuditAction::RetentionTrim,
+        AuditAction::A2aDiscovered,
+        AuditAction::A2aTrusted,
+    ];
+    for action in &all {
+        let s = action.to_string();
+        let parsed: AuditAction = s.parse().expect("every variant must parse back");
+        assert_eq!(
+            parsed.to_string(),
+            s,
+            "Display <-> FromStr round-trip must be stable for {s}"
+        );
+    }
+
+    // The two variants that regressed must map to their exact names.
+    assert_eq!(AuditAction::A2aDiscovered.to_string(), "A2aDiscovered");
+    assert_eq!(AuditAction::A2aTrusted.to_string(), "A2aTrusted");
+    assert!(matches!(
+        "A2aDiscovered".parse::<AuditAction>(),
+        Ok(AuditAction::A2aDiscovered)
+    ));
+    assert!(matches!(
+        "A2aTrusted".parse::<AuditAction>(),
+        Ok(AuditAction::A2aTrusted)
+    ));
+
+    // A genuinely unknown string is reported by name, not coerced.
+    assert!("NotARealAction".parse::<AuditAction>().is_err());
+}
+
+#[test]
+fn a2a_actions_survive_reload_with_intact_chain() {
+    // Regression: `with_db()` reload used to decode A2aDiscovered /
+    // A2aTrusted as ToolInvoke, so `verify_integrity()` recomputed the
+    // hash with "ToolInvoke" and reported a false mismatch after restart.
+    let pool = Pool::builder()
+        .max_size(1)
+        .build(SqliteConnectionManager::memory())
+        .unwrap();
+    {
+        let conn = pool.get().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE audit_entries (
+                seq INTEGER PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                user_id TEXT,
+                channel TEXT,
+                prev_hash TEXT NOT NULL,
+                hash TEXT NOT NULL
+            )",
+        )
+        .unwrap();
+    }
+
+    let log = AuditLog::with_db(pool.clone());
+    log.record(
+        "system",
+        AuditAction::A2aDiscovered,
+        "https://peer.example/agent.json name=peer",
+        "ok",
+    );
+    log.record(
+        "system",
+        AuditAction::A2aTrusted,
+        "https://peer.example/agent.json name=peer",
+        "ok",
+    );
+    assert!(log.verify_integrity().is_ok());
+
+    // Simulate a daemon restart: reload from the same DB and re-verify.
+    let reloaded = AuditLog::with_db(pool.clone());
+    assert_eq!(reloaded.len(), 2);
+    let entries = reloaded.recent(2);
+    assert!(matches!(entries[0].action, AuditAction::A2aDiscovered));
+    assert!(matches!(entries[1].action, AuditAction::A2aTrusted));
+    assert!(
+        reloaded.verify_integrity().is_ok(),
+        "A2A actions must decode to their own variants so the chain verifies after reload"
     );
 }
 

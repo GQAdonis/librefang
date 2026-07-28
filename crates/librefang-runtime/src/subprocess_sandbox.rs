@@ -27,17 +27,161 @@ pub const SAFE_ENV_VARS_WINDOWS: &[&str] = &[
     "PATHEXT",
 ];
 
+/// Hard-coded blocklist of env var name substrings that untrusted code
+/// (WASM plugins, sandboxed subprocesses, hand-injected passthrough) can
+/// NEVER receive, regardless of any declared capability or `[[requires]]`
+/// entry.
+///
+/// The check is case-insensitive. Any variable whose upper-cased name
+/// matches is treated as a secret and stripped.
+const BLOCKED_ENV_SUBSTRINGS: &[&str] = &[
+    "KEY",
+    "SECRET",
+    "TOKEN",
+    "PASSWORD",
+    "CREDENTIAL",
+    "PRIVATE",
+];
+
+/// Specific full names (upper-cased) that are always blocked regardless of
+/// whether they contain a blocked substring. This catches names that are
+/// conventional secrets but do not contain any of the substrings above.
+const BLOCKED_ENV_EXACT: &[&str] = &[
+    "LIBREFANG_VAULT_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "GEMINI_API_KEY",
+    "GITHUB_TOKEN",
+    "NPM_TOKEN",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+];
+
+/// Returns `true` if the env var name is one of the daemon's own reserved
+/// secrets ([`BLOCKED_ENV_EXACT`]) — the vault key and the provider API keys
+/// the daemon itself runs on. These can never be injected into a child
+/// process, no matter who asks: not a hand's passthrough list, and not the
+/// operator's own `exec_policy.allowed_env_vars` (#6458).
+pub fn is_reserved_env_var(name: &str) -> bool {
+    BLOCKED_ENV_EXACT.contains(&name.to_uppercase().as_str())
+}
+
+/// Returns `true` if the env var name is a reserved secret / internal-daemon
+/// variable that must never be exposed to untrusted code — a WASM guest, a
+/// sandboxed subprocess, or a hand-declared env passthrough.
+///
+/// This is the single source of truth for env filtering of **untrusted**
+/// passthrough sources across the runtime: the WASM host `env_read` function,
+/// the untrusted list in `sandbox_command` below, the kernel hand-activation
+/// path (`hands_lifecycle`), and the plugin hook baseline env all funnel
+/// through it, so a name blocked in one place is blocked everywhere.
+/// Operator-declared names (`exec_policy.allowed_env_vars` in the operator's
+/// own `agent.toml`) are deliberately NOT filtered through this heuristic —
+/// essentially every credential env var contains one of the blocked words, so
+/// applying it there would make the allowlist unable to carry any credential
+/// at all (#6458). They are checked against [`is_reserved_env_var`] only.
+pub fn is_blocked_env_var(name: &str) -> bool {
+    let upper = name.to_uppercase();
+    // Exact-name check (belt-and-suspenders — all of these also match the
+    // boundary check below, but an explicit list is easier to audit).
+    if BLOCKED_ENV_EXACT.contains(&upper.as_str()) {
+        return true;
+    }
+    // Word-boundary substring check.  Plain `contains` flagged
+    // `MONKEYHOUSE`, `KEYBOARD_LAYOUT`, `TOKENIZER_OPTS`,
+    // `PRIVATELABEL_NAME` and similar non-secret config vars, leaving
+    // wildcard-access callers unable to read benign settings.  Require a
+    // non-alphanumeric boundary on at least one side of the match
+    // (start/end of string counts), so e.g. `AWS_API_KEY` and
+    // `MY_PASSWORD_HASH` still match while `MONKEYHOUSE` does not.
+    //
+    // Plus a suffix rule: a separator-less secret name like `APIKEY`,
+    // `MYTOKEN`, `DBPASSWORD` or `ALGOLIA_APIKEY` glues the credential word
+    // to the end with no boundary, so the both-sides check above misses it
+    // and the real value would leak.  Treat any name *ending* in a blocked
+    // word as a secret.  This errs toward over-blocking (a benign `TURKEY` /
+    // `MONKEY` ending in `KEY` is also suppressed), which is the safe
+    // direction here.  A `starts_with` rule is deliberately NOT added: it
+    // would re-break `TOKENIZER_OPTS` / `PRIVATELABEL_NAME` /
+    // `PASSWORDLIST_FILE`, which legitimately begin with a blocked word.
+    BLOCKED_ENV_SUBSTRINGS
+        .iter()
+        .any(|sub| upper.ends_with(sub) || has_word_boundary_substring(&upper, sub))
+}
+
+/// `true` iff `needle` appears in `haystack` as its own word —
+/// i.e. with a non-alphanumeric boundary (string edge or any char that
+/// is not an ASCII letter / digit) on **both** sides.  Env-var
+/// convention separates words with `_`; `-` / `.` are also covered for
+/// odd names like `MY-API-KEY` or `KEY.PRIVATE`.
+///
+/// Both-sides matters: a single-side rule would still flag
+/// `KEYBOARD_LAYOUT` (left edge = start-of-string is a boundary, but
+/// right edge = `'B'` is alphanumeric, so it isn't actually a `KEY`
+/// word).  Real secret names always have a boundary on the side
+/// closest to the credential token: `OPENAI_API_KEY`, `MY_PASSWORD`,
+/// `FOO_TOKEN`, `KEY_FOO` all satisfy both-sides.
+fn has_word_boundary_substring(haystack: &str, needle: &str) -> bool {
+    let bytes = haystack.as_bytes();
+    let n = needle.len();
+    let mut start = 0;
+    while let Some(rel) = haystack[start..].find(needle) {
+        let idx = start + rel;
+        let before_ok = idx == 0 || !bytes[idx - 1].is_ascii_alphanumeric();
+        let end = idx + n;
+        let after_ok = end == bytes.len() || !bytes[end].is_ascii_alphanumeric();
+        if before_ok && after_ok {
+            return true;
+        }
+        // Advance past this occurrence to find any later one with a
+        // boundary.  Stop if we'd loop on a zero-length needle.
+        start = idx + n.max(1);
+        if start >= bytes.len() {
+            break;
+        }
+    }
+    false
+}
+
 /// Sandboxes a `tokio::process::Command` by clearing its environment and
 /// selectively re-adding only safe variables.
 ///
 /// After calling this function the child process will only see:
 /// - The platform-independent safe variables (`SAFE_ENV_VARS`)
 /// - On Windows, the Windows-specific safe variables (`SAFE_ENV_VARS_WINDOWS`)
-/// - Any additional variables the caller explicitly allows via `allowed_env_vars`
+/// - Operator-declared variables from `operator_env_vars`, minus the daemon's
+///   reserved secrets ([`is_reserved_env_var`])
+/// - Untrusted passthrough variables from `untrusted_env_vars`, minus
+///   everything the secret heuristic flags ([`is_blocked_env_var`])
 ///
 /// Variables that are not set in the current process environment are silently
 /// skipped (rather than being set to empty strings).
-pub fn sandbox_command(cmd: &mut tokio::process::Command, allowed_env_vars: &[String]) {
+///
+/// Returns the names that were requested but refused, so callers can surface
+/// the drop to the agent/operator instead of leaving only a daemon-log WARN
+/// (#6458).
+///
+/// SECURITY — two trust levels (#6458):
+/// - `operator_env_vars` is the operator's own `exec_policy.allowed_env_vars`
+///   from their `agent.toml`. The operator explicitly granted these names, so
+///   the broad credential-word heuristic does not apply — it would otherwise
+///   make the allowlist unable to carry any credential (essentially every
+///   credential name contains KEY/TOKEN/PASSWORD/…), defeating the feature's
+///   purpose. Only the daemon's own reserved secrets
+///   ([`is_reserved_env_var`]: `LIBREFANG_VAULT_KEY`, provider API keys, …)
+///   are refused unconditionally.
+/// - `untrusted_env_vars` is an attacker-controllable passthrough list — a
+///   marketplace hand's `HAND.toml` `[[requires]]` / settings names. The
+///   kernel filters that list at assembly time (`hands_lifecycle`), and we
+///   re-check the full [`is_blocked_env_var`] heuristic here as a last line
+///   of defence so no caller can smuggle a secret-shaped var from the
+///   daemon's live environment into an untrusted child.
+pub fn sandbox_command(
+    cmd: &mut tokio::process::Command,
+    operator_env_vars: &[String],
+    untrusted_env_vars: &[String],
+) -> Vec<String> {
     cmd.env_clear();
 
     // Re-add platform-independent safe vars.
@@ -55,12 +199,42 @@ pub fn sandbox_command(cmd: &mut tokio::process::Command, allowed_env_vars: &[St
         }
     }
 
-    // Re-add caller-specified allowed vars.
-    for var in allowed_env_vars {
+    let mut refused: Vec<String> = Vec::new();
+
+    // Operator-declared allowlist: refuse only the daemon's own reserved
+    // secrets; secret-shaped names the operator deliberately granted pass
+    // through (that is the allowlist's whole purpose — see #6458).
+    for var in operator_env_vars {
+        if is_reserved_env_var(var) {
+            tracing::warn!(
+                var = %var,
+                "refusing to inject reserved daemon secret into sandboxed child (operator allowlist)"
+            );
+            refused.push(var.clone());
+            continue;
+        }
         if let Ok(val) = std::env::var(var) {
             cmd.env(var, val);
         }
     }
+
+    // Untrusted passthrough list: full heuristic, defence in depth behind the
+    // assembly-time filter in `hands_lifecycle`.
+    for var in untrusted_env_vars {
+        if is_blocked_env_var(var) {
+            tracing::warn!(
+                var = %var,
+                "refusing to inject reserved/secret env var into sandboxed child (untrusted passthrough)"
+            );
+            refused.push(var.clone());
+            continue;
+        }
+        if let Ok(val) = std::env::var(var) {
+            cmd.env(var, val);
+        }
+    }
+
+    refused
 }
 
 /// Validates that an executable path does not contain directory traversal
@@ -1726,6 +1900,258 @@ mod tests {
         assert!(
             result.is_err(),
             "nested powershell -Command inside bash -c must be blocked"
+        );
+    }
+
+    // ── Env-var secret blocklist (shared across WASM / subprocess / hand) ──
+
+    #[test]
+    fn test_is_blocked_env_var_reserved_and_internal() {
+        // Reserved daemon / provider secrets are blocked by exact name
+        // (case-insensitive), which is what actually decrypts the vault or
+        // bills a provider — the real exfiltration targets of the finding.
+        assert!(is_blocked_env_var("LIBREFANG_VAULT_KEY"));
+        assert!(is_blocked_env_var("librefang_vault_key"));
+        assert!(is_blocked_env_var("ANTHROPIC_API_KEY"));
+        assert!(is_blocked_env_var("AWS_SECRET_ACCESS_KEY"));
+        // Credential-word substrings are blocked too (existing WASM posture).
+        assert!(is_blocked_env_var("SOME_CUSTOM_API_KEY"));
+        assert!(is_blocked_env_var("MY_DB_PASSWORD"));
+        // Benign passthrough names — including a non-secret LIBREFANG_* var —
+        // must still be allowed: the block is scoped to actual secrets, not the
+        // whole internal namespace, so operator-configured env passthrough (and
+        // the exec-policy allowlist) keeps working.
+        assert!(!is_blocked_env_var("PATH"));
+        assert!(!is_blocked_env_var("MYAPP_REGION"));
+        assert!(!is_blocked_env_var("LIBREFANG_TEST_ALLOWED_ENV"));
+    }
+
+    #[test]
+    fn test_sandbox_command_strips_reserved_and_secret_env_vars() {
+        // Regression (env-var-passthrough exfiltration): a marketplace hand's
+        // HAND.toml can name arbitrary vars in its passthrough list, and they
+        // are materialized from the daemon's LIVE environment. sandbox_command
+        // must never inject a reserved daemon secret into the untrusted child,
+        // even when the caller explicitly asks for it — while still passing
+        // benign vars through.
+        //
+        // Names are unique to this test so concurrent test threads cannot race
+        // on the same key (except the reserved vault key, which is a fixed
+        // name — it is set and removed within this test and never read here).
+        let benign = "SANDBOXTEST_PASSTHRU_REGION";
+        let secret = "SANDBOXTEST_PASSTHRU_ACCESS_TOKEN"; // TOKEN suffix → blocked
+        let vault = "LIBREFANG_VAULT_KEY"; // reserved daemon secret → blocked
+
+        // SAFETY: the two SANDBOXTEST_* names are unique to this test; the
+        // vault key is set and removed here and not read elsewhere in-test.
+        unsafe {
+            std::env::set_var(benign, "us-west-2");
+            std::env::set_var(secret, "super-secret-token");
+            std::env::set_var(vault, "daemon-private");
+        }
+
+        let allowed = vec![benign.to_string(), secret.to_string(), vault.to_string()];
+        let mut cmd = tokio::process::Command::new("true");
+        let refused = sandbox_command(&mut cmd, &[], &allowed);
+
+        let injected: std::collections::HashSet<String> = cmd
+            .as_std()
+            .get_envs()
+            .filter_map(|(k, _)| k.to_str().map(|s| s.to_string()))
+            .collect();
+
+        // SAFETY: see set_var above.
+        unsafe {
+            std::env::remove_var(benign);
+            std::env::remove_var(secret);
+            std::env::remove_var(vault);
+        }
+
+        assert!(
+            injected.contains(benign),
+            "benign passthrough var must be injected"
+        );
+        assert!(
+            !injected.contains(secret),
+            "secret-shaped passthrough var must be stripped from the child env"
+        );
+        assert!(
+            !injected.contains(vault),
+            "reserved daemon secret must be stripped from the child env"
+        );
+        assert_eq!(
+            refused,
+            vec![secret.to_string(), vault.to_string()],
+            "refused names must be reported back to the caller"
+        );
+    }
+
+    #[test]
+    fn test_sandbox_command_operator_allowlist_carries_secret_shaped_names() {
+        // Regression #6458: the operator's explicit `exec_policy.allowed_env_vars`
+        // must be able to carry a secret-shaped name (essentially every
+        // credential env var contains KEY/TOKEN/PASSWORD/…) — the broad
+        // heuristic applies only to untrusted passthrough lists. Before the
+        // fix, `MYTOOL_KEYRING_PASSWORD` was silently dropped even when the
+        // operator allowlisted it in their own agent.toml, breaking every
+        // credentialed CLI driven through shell_exec.
+        let secret_shaped = "SANDBOXTEST_OPERATOR_KEYRING_PASSWORD";
+        // SAFETY: name is unique to this test.
+        unsafe {
+            std::env::set_var(secret_shaped, "hunter2");
+        }
+
+        let operator = vec![secret_shaped.to_string()];
+        let mut cmd = tokio::process::Command::new("true");
+        let refused = sandbox_command(&mut cmd, &operator, &[]);
+
+        let injected: std::collections::HashSet<String> = cmd
+            .as_std()
+            .get_envs()
+            .filter_map(|(k, _)| k.to_str().map(|s| s.to_string()))
+            .collect();
+
+        // SAFETY: see set_var above.
+        unsafe {
+            std::env::remove_var(secret_shaped);
+        }
+
+        assert!(
+            injected.contains(secret_shaped),
+            "operator-allowlisted secret-shaped var must be injected"
+        );
+        assert!(refused.is_empty(), "nothing should have been refused");
+    }
+
+    #[test]
+    fn test_sandbox_command_operator_allowlist_never_injects_reserved_daemon_secrets() {
+        // The daemon's own reserved secrets (vault key, provider API keys) are
+        // refused unconditionally — even from the operator's explicit
+        // allowlist. Refusal is by NAME before the env value is ever read, so
+        // the vars need not be set in the test environment (avoids racing
+        // other tests on the shared fixed names).
+        let operator = vec![
+            "LIBREFANG_VAULT_KEY".to_string(),
+            "ANTHROPIC_API_KEY".to_string(),
+        ];
+        let mut cmd = tokio::process::Command::new("true");
+        let refused = sandbox_command(&mut cmd, &operator, &[]);
+
+        let injected: std::collections::HashSet<String> = cmd
+            .as_std()
+            .get_envs()
+            .filter_map(|(k, _)| k.to_str().map(|s| s.to_string()))
+            .collect();
+
+        assert!(!injected.contains("LIBREFANG_VAULT_KEY"));
+        assert!(!injected.contains("ANTHROPIC_API_KEY"));
+        assert_eq!(
+            refused,
+            vec![
+                "LIBREFANG_VAULT_KEY".to_string(),
+                "ANTHROPIC_API_KEY".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_is_reserved_env_var_exact_list_only() {
+        // Reserved = the daemon's own secrets, case-insensitive, exact names.
+        assert!(is_reserved_env_var("LIBREFANG_VAULT_KEY"));
+        assert!(is_reserved_env_var("librefang_vault_key"));
+        assert!(is_reserved_env_var("ANTHROPIC_API_KEY"));
+        // Secret-shaped but not the daemon's own — reserved check must NOT
+        // flag these (the heuristic in `is_blocked_env_var` still does).
+        assert!(!is_reserved_env_var("MYTOOL_KEYRING_PASSWORD"));
+        assert!(!is_reserved_env_var("SOME_CUSTOM_API_KEY"));
+        assert!(!is_reserved_env_var("PATH"));
+    }
+
+    #[test]
+    fn test_deferred_approval_resume_preserves_env_trust_split() {
+        // #6458 resume-path lock-in.
+        // This design carries env-allowlist trust in *which field* holds the name, not a separate provenance tag: the operator's list lives in `exec_policy.allowed_env_vars`, the untrusted passthrough list in `allowed_env_vars`.
+        // Both are already persisted on `DeferredToolExecution`, and the resume path (`build_deferred_tool_exec_context`) feeds `deferred.exec_policy` and `deferred.allowed_env_vars` straight back into the same `tool_shell_exec` / `tool_process_start` code the live path uses — so no extra persisted field is needed for a resumed `Allow once` to filter the child env identically.
+        // This test pins that end to end: build a deferred payload, round-trip it through serde (the restart boundary), then drive `sandbox_command` exactly as the resume path would and assert the trust split survived.
+        let operator_secret = "SANDBOXTEST_RESUME_OPERATOR_KEYRING_PASSWORD"; // secret-shaped, operator-granted → must pass
+        let untrusted_secret = "SANDBOXTEST_RESUME_HAND_API_TOKEN"; // secret-shaped, hand passthrough → must be refused
+        let vault = "LIBREFANG_VAULT_KEY"; // reserved daemon secret → refused from either list
+
+        // SAFETY: all three names are unique to this test (the vault key is never read from the real environment here — refusal is by name).
+        unsafe {
+            std::env::set_var(operator_secret, "operator-granted");
+            std::env::set_var(untrusted_secret, "hand-smuggled");
+            std::env::set_var(vault, "daemon-private");
+        }
+
+        // `DeferredToolExecution` derives no `Default`, so every field is set explicitly (the trust-carrying ones — `allowed_env_vars`, `exec_policy` — plus inert context fields).
+        let deferred = librefang_types::tool::DeferredToolExecution {
+            agent_id: "11111111-1111-4111-8111-111111111111".to_string(),
+            tool_use_id: "toolu_resume".to_string(),
+            tool_name: "shell_exec".to_string(),
+            input: serde_json::json!({"command": "printenv"}),
+            allowed_tools: Some(vec!["shell_exec".to_string()]),
+            // Untrusted passthrough list (a hand's assembled `hand_allowed_env`).
+            allowed_env_vars: Some(vec![untrusted_secret.to_string()]),
+            // Operator's own trusted allowlist rides inside `exec_policy`.
+            exec_policy: Some(librefang_types::config::ExecPolicy {
+                mode: librefang_types::config::ExecSecurityMode::Full,
+                allowed_env_vars: vec![operator_secret.to_string(), vault.to_string()],
+                ..Default::default()
+            }),
+            sender_id: None,
+            channel: None,
+            chat_id: None,
+            account_id: None,
+            workspace_root: None,
+            force_human: false,
+            session_id: None,
+        };
+
+        // Cross the restart boundary: persist and reload.
+        let json = serde_json::to_string(&deferred).expect("deferred serializes");
+        let restored: librefang_types::tool::DeferredToolExecution =
+            serde_json::from_str(&json).expect("deferred deserializes");
+
+        // Reconstruct the two lists exactly as the resume path does (`tool_shell_exec`: operator ← exec_policy.allowed_env_vars, untrusted ← allowed_env_vars).
+        let operator_env: Vec<String> = restored
+            .exec_policy
+            .as_ref()
+            .map(|p| p.allowed_env_vars.clone())
+            .unwrap_or_default();
+        let untrusted_env: Vec<String> = restored.allowed_env_vars.clone().unwrap_or_default();
+
+        let mut cmd = tokio::process::Command::new("true");
+        let refused = sandbox_command(&mut cmd, &operator_env, &untrusted_env);
+
+        let injected: std::collections::HashSet<String> = cmd
+            .as_std()
+            .get_envs()
+            .filter_map(|(k, _)| k.to_str().map(|s| s.to_string()))
+            .collect();
+
+        // SAFETY: see set_var above.
+        unsafe {
+            std::env::remove_var(operator_secret);
+            std::env::remove_var(untrusted_secret);
+            std::env::remove_var(vault);
+        }
+
+        assert!(
+            injected.contains(operator_secret),
+            "operator-granted secret-shaped var must survive defer→resume and reach the child"
+        );
+        assert!(
+            !injected.contains(untrusted_secret),
+            "hand passthrough secret-shaped var must stay blocked on the resume path"
+        );
+        assert!(
+            !injected.contains(vault),
+            "reserved daemon secret must never be injected, even from a resumed operator allowlist"
+        );
+        assert!(
+            refused.contains(&vault.to_string()),
+            "the reserved daemon secret should be surfaced as refused"
         );
     }
 }

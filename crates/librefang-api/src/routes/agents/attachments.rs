@@ -7,6 +7,21 @@ const MAX_TEXT_ATTACHMENT_CHARS: usize = 200_000;
 const TEXT_TRUNCATION_MARKER: &str =
     "\n\n[…file truncated at 200K chars; content continues beyond this point…]";
 
+/// Hard cap on a fetched URL attachment's body (bytes). Bounds peak memory
+/// for the streaming download in `resolve_url_attachments`.
+const MAX_ATTACHMENT_BYTES: usize = 20 * 1024 * 1024;
+
+/// Append `chunk` to `buf` unless doing so would push it past `cap`. Returns
+/// `false` (leaving `buf` unchanged) when the cap would be exceeded, so a
+/// streaming caller can abort before buffering an over-cap body.
+fn push_within_cap(buf: &mut Vec<u8>, chunk: &[u8], cap: usize) -> bool {
+    if buf.len().saturating_add(chunk.len()) > cap {
+        return false;
+    }
+    buf.extend_from_slice(chunk);
+    true
+}
+
 /// Decide whether an attachment looks like a UTF-8 text/code/data file
 /// the LLM can read directly. Browsers don't set `content_type` reliably
 /// for code files (`.rs`, `.py` typically come through as empty or
@@ -63,6 +78,23 @@ fn is_text_like_attachment(content_type: &str, filename: &str) -> bool {
     )
 }
 
+/// Build the `[File: <name>] saved to <path>` marker block that tells the agent where the raw upload bytes live on disk.
+///
+/// Emitted for EVERY resolved attachment type (image / PDF / text / other), so the on-disk path is available to the agent regardless of whether the content was also inlined.
+/// This mirrors the channel bridge's path block (`librefang-channels` `bridge.rs`, `FILE_SAVED_BLOCK_PREFIX`, #4448) so web/dashboard uploads reach the LLM with the same path affordance channel (Telegram/Matrix) uploads already have — previously the dashboard path omitted it, forcing agents to guess the file by listing the upload dir and size-matching.
+///
+/// Kept as its OWN `Text` block — never folded into the `Image` block — so it survives the two image-redaction passes (`redact_images_for_text_only` for no-vision models and `strip_images` for history trimming), both of which replace only `Image`/`ImageFile` blocks and leave `Text` untouched.
+/// That is what lets a non-vision model still learn where an uploaded image lives.
+fn file_saved_block(
+    filename: &str,
+    path: &std::path::Path,
+) -> librefang_types::message::ContentBlock {
+    librefang_types::message::ContentBlock::Text {
+        text: format!("[File: {}] saved to {}", filename, path.display()),
+        provider_metadata: None,
+    }
+}
+
 /// Resolve uploaded file attachments into content blocks.
 ///
 /// Reads each file from the upload directory and produces blocks the
@@ -76,7 +108,10 @@ fn is_text_like_attachment(content_type: &str, filename: &str) -> bool {
 ///     plus common code/data extensions) → `ContentBlock::Text` with a
 ///     `[Attached file: <filename>]` header. Read as UTF-8 lossy and
 ///     truncated at 200K chars.
-///   - everything else → skipped with a warn log.
+///   - everything else → a bare note that the file exists but its type is not
+///     inlined (the path block below still points the agent at the bytes).
+///
+/// In ALL cases a `[File: <name>] saved to <path>` block (see [`file_saved_block`]) is appended so the agent always knows the on-disk path of the raw upload — this is the parity fix that lets the agent attach the file to a vault / transcribe it / read it, for every file type.
 pub fn resolve_attachments(
     state: &AppState,
     attachments: &[AttachmentRef],
@@ -112,7 +147,15 @@ pub fn resolve_attachments(
             continue;
         }
 
-        let file_path = upload_dir.join(&att.file_id);
+        // Reconstruct the `<uuid>.<ext>` on-disk name written by the producer
+        // (#6530), tolerating legacy bare-`<uuid>` files and the `<uuid>.*`
+        // probe for generated images. Skip the attachment if nothing is on disk.
+        let Some(file_path) =
+            resolve_existing_upload_path(&upload_dir, &att.file_id, &raw_content_type, &filename)
+        else {
+            tracing::debug!(file_id = %att.file_id, "attachment not found on disk; skipping");
+            continue;
+        };
 
         if content_type.starts_with("image/") {
             match std::fs::read(&file_path) {
@@ -129,6 +172,8 @@ pub fn resolve_attachments(
                         media_type: content_type,
                         data: b64,
                     });
+                    // Sibling path block: survives no-vision redaction / history image-stripping so the agent can still locate and act on the raw image file.
+                    blocks.push(file_saved_block(&filename, &file_path));
                 }
                 Err(e) => {
                     tracing::warn!(file_id = %att.file_id, error = %e, "Failed to read image upload");
@@ -161,6 +206,7 @@ pub fn resolve_attachments(
                         text: format!("{header}\n\n{body}"),
                         provider_metadata: None,
                     });
+                    blocks.push(file_saved_block(&filename, &file_path));
                 }
                 Err(e) => {
                     tracing::warn!(file_id = %att.file_id, error = %e, "Failed to read PDF upload");
@@ -198,18 +244,38 @@ pub fn resolve_attachments(
                         text: format!("{header}\n\n{body}"),
                         provider_metadata: None,
                     });
+                    blocks.push(file_saved_block(&filename, &file_path));
                 }
                 Err(e) => {
                     tracing::warn!(file_id = %att.file_id, error = %e, "Failed to read text upload");
                 }
             }
         } else {
-            tracing::warn!(
-                file_id = %att.file_id,
-                content_type = %content_type,
-                filename = %filename,
-                "Attachment type not yet wired into the agent loop; skipping"
-            );
+            // Unsupported/binary type: we can't inline its content, but the file IS on disk and the agent may still want to act on it (attach to a vault, hand to a file-reader tool).
+            // Surface a note + the path block instead of silently dropping the attachment.
+            // Guarded on existence so we never advertise a path to a missing file.
+            if file_path.exists() {
+                tracing::info!(
+                    file_id = %att.file_id,
+                    content_type = %content_type,
+                    filename = %filename,
+                    "Attachment type not inlined; surfacing on-disk path only"
+                );
+                blocks.push(librefang_types::message::ContentBlock::Text {
+                    text: format!(
+                        "[Attached file: {filename} ({content_type})] — content not inlined for this type; the raw file is available on disk."
+                    ),
+                    provider_metadata: None,
+                });
+                blocks.push(file_saved_block(&filename, &file_path));
+            } else {
+                tracing::warn!(
+                    file_id = %att.file_id,
+                    content_type = %content_type,
+                    filename = %filename,
+                    "Attachment type not wired into the agent loop and file missing on disk; skipping"
+                );
+            }
         }
     }
 
@@ -335,23 +401,45 @@ pub async fn resolve_url_attachments(
 
         match client.get(&att.url).send().await {
             Ok(resp) if resp.status().is_success() => {
-                match resp.bytes().await {
-                    Ok(data) => {
-                        // Limit to 20MB to prevent OOM
-                        if data.len() > 20 * 1024 * 1024 {
-                            tracing::warn!(url = %att.url, size = data.len(), "Attachment too large, skipping");
-                            continue;
-                        }
-                        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
-                        blocks.push(librefang_types::message::ContentBlock::Image {
-                            media_type: content_type,
-                            data: b64,
-                        });
-                    }
-                    Err(e) => {
-                        tracing::warn!(url = %att.url, error = %e, "Failed to read attachment body");
+                // Pre-reject an advertised Content-Length over the cap so we
+                // never begin buffering a declared-huge body.
+                if let Some(len) = resp.content_length() {
+                    if len > MAX_ATTACHMENT_BYTES as u64 {
+                        tracing::warn!(url = %att.url, size = len, "Attachment too large (Content-Length), skipping");
+                        continue;
                     }
                 }
+                // Stream chunk-by-chunk with a running cap. `resp.bytes()`
+                // fully buffers the body into memory *before* any size check,
+                // so a lying/absent Content-Length streaming an unbounded body
+                // could OOM the daemon (bounded only by the 30s timeout, i.e.
+                // multiple GB at high bandwidth). Accumulating with an in-loop
+                // cap bounds peak memory to MAX_ATTACHMENT_BYTES regardless of
+                // the server's send rate (mirrors the channels
+                // `fetch_url_bytes_unchecked` defence).
+                let mut resp = resp;
+                let mut data: Vec<u8> = Vec::new();
+                let collected = loop {
+                    match resp.chunk().await {
+                        Ok(Some(chunk)) => {
+                            if !push_within_cap(&mut data, &chunk, MAX_ATTACHMENT_BYTES) {
+                                tracing::warn!(url = %att.url, "Attachment exceeds size cap while streaming, skipping");
+                                break None;
+                            }
+                        }
+                        Ok(None) => break Some(data),
+                        Err(e) => {
+                            tracing::warn!(url = %att.url, error = %e, "Failed to read attachment body");
+                            break None;
+                        }
+                    }
+                };
+                let Some(data) = collected else { continue };
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+                blocks.push(librefang_types::message::ContentBlock::Image {
+                    media_type: content_type,
+                    data: b64,
+                });
             }
             Ok(resp) => {
                 tracing::warn!(url = %att.url, status = %resp.status(), "Attachment download failed");
@@ -376,5 +464,49 @@ fn mime_from_url(url: &str) -> Option<String> {
         "webp" => Some("image/webp".into()),
         "svg" => Some("image/svg+xml".into()),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `[File: <name>] saved to <path>` marker is the contract downstream agents parse to locate an uploaded file on disk.
+    /// It must match the channel bridge's `FILE_SAVED_BLOCK_PREFIX` format, so pin the exact shape.
+    #[test]
+    fn file_saved_block_has_expected_format() {
+        let block = file_saved_block(
+            "H1 report.pdf",
+            std::path::Path::new("/tmp/librefang_uploads/9ff3f16a"),
+        );
+        match block {
+            librefang_types::message::ContentBlock::Text { text, .. } => {
+                assert_eq!(
+                    text,
+                    "[File: H1 report.pdf] saved to /tmp/librefang_uploads/9ff3f16a"
+                );
+                // Prefix parity with librefang-channels bridge.rs.
+                assert!(text.starts_with("[File: "));
+                assert!(text.contains("] saved to "));
+            }
+            other => panic!("expected Text block, got {other:?}"),
+        }
+    }
+
+    /// Regression: the streaming attachment fetch must bound peak memory by refusing a chunk that would exceed the cap.
+    /// Previously `resp.bytes()` buffered the whole body first, enabling remote OOM.
+    #[test]
+    fn push_within_cap_rejects_over_cap_chunk() {
+        let mut buf = Vec::new();
+        assert!(push_within_cap(&mut buf, &[0u8; 8], 10));
+        assert_eq!(buf.len(), 8);
+        // A chunk that would push past the cap is refused and buf is unchanged.
+        assert!(!push_within_cap(&mut buf, &[0u8; 8], 10));
+        assert_eq!(buf.len(), 8, "over-cap chunk must not be appended");
+        // Exactly filling the cap is allowed.
+        assert!(push_within_cap(&mut buf, &[0u8; 2], 10));
+        assert_eq!(buf.len(), 10);
+        // Zero-length chunk at the cap is fine.
+        assert!(push_within_cap(&mut buf, &[], 10));
     }
 }

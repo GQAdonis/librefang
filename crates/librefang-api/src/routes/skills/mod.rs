@@ -155,7 +155,7 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
         .route("/hands/{hand_id}", axum::routing::get(get_hand))
         .route(
             "/hands/{hand_id}/manifest",
-            axum::routing::get(get_hand_manifest),
+            axum::routing::get(get_hand_manifest).put(update_hand_manifest),
         )
         .route(
             "/hands/{hand_id}/activate",
@@ -952,14 +952,25 @@ fn evolution_ok_response(
 /// Record a successful skill evolution in the audit trail. All
 /// dashboard-initiated mutations go through this so the audit log has a
 /// tamper-evident record of every `/api/skills/.../evolve/*` action.
-fn audit_evolve(state: &Arc<AppState>, action: &str, skill_name: &str, detail: &str) {
-    state.kernel.audit().record(
+fn audit_evolve(
+    state: &Arc<AppState>,
+    caller: Option<librefang_types::agent::UserId>,
+    action: &str,
+    skill_name: &str,
+    detail: &str,
+) {
+    state.kernel.audit().record_with_context(
         // Dashboard calls don't have an agent_id — use a distinctive
         // actor so audit readers can tell user actions from agent ones.
         "dashboard".to_string(),
         librefang_kernel::audit::AuditAction::AgentMessage,
         format!("skill_evolve:{action}:{skill_name}"),
         detail.to_string(),
+        // Attribute the evolution to the authenticated caller when the
+        // request carried a resolved identity (RBAC #3054). `None` for
+        // loopback / no-auth deployments.
+        caller,
+        Some("api".to_string()),
     );
 }
 
@@ -1236,6 +1247,15 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
     for entry in std::fs::read_dir(src)? {
         let entry = entry?;
         let ty = entry.file_type()?;
+        // `std::fs::copy` dereferences links, so a symlink planted in the registry checkout would write the target's real contents into the installed skill.
+        // Mirrors `librefang_skills::marketplace::copy_dir_recursive`.
+        if ty.is_symlink() {
+            tracing::warn!(
+                path = %entry.path().display(),
+                "skipping symlink while installing skill"
+            );
+            continue;
+        }
         let dest_path = dst.join(entry.file_name());
         if ty.is_dir() {
             copy_dir_recursive(&entry.path(), &dest_path)?;
@@ -1253,6 +1273,40 @@ mod tests {
     // surreal-backend those tests (and this import) are gated out (C-005).
     #[cfg(not(feature = "surreal-backend"))]
     use librefang_types::config::{McpServerConfigEntry, McpTransportEntry};
+
+    /// #6581 hardened `librefang_skills::marketplace::copy_dir_recursive` against symlinks but left this installer — which copies out of the same registry checkout — dereferencing them, so a link planted in a skill directory still exfiltrated the target's contents into the install.
+    #[test]
+    #[cfg(unix)]
+    fn copy_dir_recursive_skips_symlinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        std::fs::create_dir_all(src.join("nested")).unwrap();
+        std::fs::write(src.join("SKILL.md"), "---\nname: x\n---\n").unwrap();
+        std::fs::write(src.join("nested/file.txt"), "data").unwrap();
+
+        let outside = tmp.path().join("outside.txt");
+        std::fs::write(&outside, "secret").unwrap();
+        std::os::unix::fs::symlink(&outside, src.join("link.txt")).unwrap();
+
+        let outside_dir = tmp.path().join("outside_dir");
+        std::fs::create_dir_all(&outside_dir).unwrap();
+        std::fs::write(outside_dir.join("more.txt"), "also secret").unwrap();
+        std::os::unix::fs::symlink(&outside_dir, src.join("link_dir")).unwrap();
+
+        let dest = tmp.path().join("dest");
+        copy_dir_recursive(&src, &dest).unwrap();
+
+        assert!(dest.join("SKILL.md").exists());
+        assert!(dest.join("nested/file.txt").exists());
+        assert!(
+            !dest.join("link.txt").exists(),
+            "a symlinked file must not be dereferenced into the install"
+        );
+        assert!(
+            !dest.join("link_dir").exists(),
+            "a symlinked directory must not be walked into the install"
+        );
+    }
 
     /// Regression for #2319: adding an MCP server through the UI wrote each
     /// entry as a JSON-stringified blob inside `mcp_servers = ['{"name":...}']`

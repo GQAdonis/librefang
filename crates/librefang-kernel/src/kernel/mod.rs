@@ -112,6 +112,7 @@ mod subsystem_forwards;
 pub mod subsystems;
 mod task_registry;
 mod tools_and_skills;
+pub use tools_and_skills::SkillReloadOutcome;
 mod triggers_and_workflow;
 
 // `cron_deliver_response`, `cron_fan_out_targets`, and `cron_script_wake_gate`
@@ -618,7 +619,14 @@ fn resolve_dispatch_session_id(
     }
     Some(match sender_context {
         Some(ctx) if !ctx.channel.is_empty() && !ctx.use_canonical_session => {
-            SessionId::for_sender_scope(agent_id, &ctx.channel, ctx.chat_id.as_deref())
+            // Audit: cron-channel-name-not-reserved. Defense-in-depth at the
+            // kernel boundary — mirror the streaming resolver so a raw external
+            // `ctx.channel` matching a reserved system channel (cron /
+            // autonomous / webui) cannot collide with the internal system
+            // session. See `resolve_scope_channel`.
+            let scope_channel =
+                LibreFangKernel::resolve_scope_channel(&ctx.channel, ctx.is_internal_system);
+            SessionId::for_sender_scope(agent_id, &scope_channel, ctx.chat_id.as_deref())
         }
         _ => {
             let mode = session_mode_override.unwrap_or(manifest_session_mode);
@@ -628,6 +636,69 @@ fn resolve_dispatch_session_id(
             }
         }
     })
+}
+
+#[cfg(test)]
+mod resolve_dispatch_session_id_scope_tests {
+    use super::*;
+
+    fn ctx_with(channel: &str, is_internal_system: bool) -> SenderContext {
+        SenderContext {
+            channel: channel.to_string(),
+            is_internal_system,
+            ..Default::default()
+        }
+    }
+
+    /// Finding #21: the non-streaming dispatch resolver must apply the same
+    /// reserved-system-channel guard (`resolve_scope_channel`) as the streaming
+    /// path, so an external caller supplying `channel = "cron"` cannot land on
+    /// the internal cron session `SessionId::for_channel(agent, "cron")`.
+    #[test]
+    fn external_reserved_channel_does_not_collide_with_internal_cron_session() {
+        let agent = AgentId::new();
+        let entry = SessionId::new();
+        let internal_cron_sid = SessionId::for_channel(agent, "cron");
+
+        // External caller (is_internal_system = false) with a reserved name is
+        // rewritten to `ext-cron` and must NOT collide with the internal id.
+        let external = resolve_dispatch_session_id(
+            "claude-code",
+            agent,
+            entry,
+            librefang_types::agent::SessionMode::Persistent,
+            Some(&ctx_with("cron", false)),
+            None,
+            None,
+        )
+        .expect("non-wasm/python module must resolve a session id");
+        assert_ne!(
+            external, internal_cron_sid,
+            "external channel=\"cron\" must not share the internal cron session"
+        );
+        assert_eq!(
+            external,
+            SessionId::for_channel(agent, "ext-cron"),
+            "external reserved name must derive the sanitized `ext-cron` session"
+        );
+
+        // Trusted internal system caller keeps deriving the legacy cron id so
+        // existing persistent history stays continuous.
+        let internal = resolve_dispatch_session_id(
+            "claude-code",
+            agent,
+            entry,
+            librefang_types::agent::SessionMode::Persistent,
+            Some(&ctx_with("cron", true)),
+            None,
+            None,
+        )
+        .expect("non-wasm/python module must resolve a session id");
+        assert_eq!(
+            internal, internal_cron_sid,
+            "internal system caller must keep the legacy for_channel(agent, \"cron\") id"
+        );
+    }
 }
 
 /// One in-flight `(agent, session)` loop. Stored in
@@ -1016,14 +1087,16 @@ struct KernelCronBridge {
 impl LibreFangKernel {
     /// Mark all active Hands' cron jobs as due-now so the next scheduler tick fires them.
     /// Called after a provider is first configured so Hands resume immediately.
-    /// Update registry entries for agents that should track the kernel default model.
-    /// Called after a provider switch so agents pick up the new provider without restart.
+    /// Update legacy concrete registry entries that should track the kernel default model.
+    /// Agents carrying the `default/default` sentinel resolve the new value at execution time and require no rewrite.
     ///
     /// Agents eligible for update:
-    /// - Any agent with provider="default" or "" (new spawn-time behavior)
-    /// - The auto-spawned "assistant" agent (may have stale concrete provider in DB)
     /// - Dashboard-created agents (no source_toml_path, no custom api_key_env) whose
     ///   stored provider matches `old_provider` — these were using the old default
+    ///
+    /// `old_model` narrows the match to agents also pinned to that specific model.
+    /// Pass `None` for a full provider switch, where every dashboard-created agent on the old provider should move regardless of which model it was on.
+    /// Pass `Some(old_model)` for an intra-provider free-model migration (the old and new provider are the same), so only agents actually pinned to the delisted model move — an agent deliberately pinned to a different model on the same provider must not be silently overwritten.
     ///
     /// Returns a per-agent partial-failure list `(agent_name, error)`. An
     /// empty vec means every eligible agent was migrated cleanly. Callers
@@ -1034,6 +1107,7 @@ impl LibreFangKernel {
     pub fn sync_default_model_agents(
         &self,
         old_provider: &str,
+        old_model: Option<&str>,
         dm: &librefang_types::config::DefaultModelConfig,
     ) -> Vec<(String, String)> {
         let mut failures: Vec<(String, String)> = Vec::new();
@@ -1042,19 +1116,25 @@ impl LibreFangKernel {
                 || entry.manifest.model.provider == "default";
             let is_default_model =
                 entry.manifest.model.model.is_empty() || entry.manifest.model.model == "default";
-            let is_auto_spawned = entry.name == "assistant"
-                && entry.manifest.description == "General-purpose assistant";
+            if is_default_provider && is_default_model {
+                continue;
+            }
             // Dashboard-created agents that were using the old default provider:
             // no source TOML, no custom API key, and saved provider == old default
-            let is_stale_dashboard_default = entry.source_toml_path.is_none()
+            // The built-in assistant is excluded because users can explicitly select its model in the dashboard.
+            // Provider equality alone cannot distinguish that choice from a legacy resolved default.
+            // When `old_model` is set (intra-provider free-model migration) the stored model must also match.
+            // Under this condition, an agent deliberately pinned to a different model on the same provider is left alone.
+            let is_stale_dashboard_default = entry.name != "assistant"
+                && entry.source_toml_path.is_none()
                 && entry.manifest.model.api_key_env.is_none()
                 && entry.manifest.model.base_url.is_none()
-                && entry.manifest.model.provider == old_provider;
+                && entry.manifest.model.provider == old_provider
+                && old_model
+                    .map(|m| entry.manifest.model.model == m)
+                    .unwrap_or(true);
 
-            if (is_default_provider && is_default_model)
-                || is_auto_spawned
-                || is_stale_dashboard_default
-            {
+            if is_stale_dashboard_default {
                 if let Err(e) = self.agents.registry.update_model_and_provider(
                     entry.id,
                     dm.model.clone(),
@@ -1264,9 +1344,11 @@ impl LibreFangKernel {
             // Fallback to global channels based on event type
             match event_type {
                 "approval_requested" => cfg.notification.approval_channels.clone(),
-                "task_completed" | "task_failed" | "tool_failure" | "health_check_failed" => {
-                    cfg.notification.alert_channels.clone()
-                }
+                "task_completed"
+                | "task_failed"
+                | "tool_failure"
+                | "health_check_failed"
+                | "model_migrated" => cfg.notification.alert_channels.clone(),
                 _ => Vec::new(),
             }
         };
@@ -1279,6 +1361,29 @@ impl LibreFangKernel {
         for target in &targets {
             self.push_to_target(target, &delivered).await;
         }
+    }
+
+    /// Record and notify operators that LibreFang changed a configured model automatically.
+    pub async fn notify_model_migrated(
+        &self,
+        agent_id: &str,
+        provider: &str,
+        old_model: &str,
+        new_model: &str,
+        reason: &str,
+    ) {
+        let detail =
+            format!("{provider} model migrated from `{old_model}` to `{new_model}`: {reason}");
+        self.metering.audit_log.record_with_context(
+            agent_id,
+            librefang_runtime::audit::AuditAction::ConfigChange,
+            detail.clone(),
+            "success",
+            None,
+            None,
+        );
+        self.push_notification(agent_id, "model_migrated", &detail, None)
+            .await;
     }
 
     /// Resolve an agent identifier string (either a UUID or a human-readable
@@ -1637,8 +1742,8 @@ impl LibreFangKernel {
         // Skipping this step is what made "tap [Approve] → silence"
         // surface in production: the agent loop ran and produced a
         // perfect natural-language follow-up that nobody ever showed
-        // the user. Route it now via the channel registry, looking up
-        // the adapter the original tool call's `channel` field names.
+        // the user. Route it now through the canonical outbound path,
+        // keyed by the original tool call's `channel` and `account_id`.
         if loop_result.silent || loop_result.response.is_empty() {
             debug!(
                 agent_id = %agent_id,
@@ -1647,25 +1752,29 @@ impl LibreFangKernel {
             );
             return;
         }
-        let Some(adapter) = self.mesh.channel_adapters.get(channel) else {
-            warn!(
-                agent_id = %agent_id,
-                tool_use_id = %deferred.tool_use_id,
-                channel = channel,
-                "No active adapter for the originating channel — agent reply produced but cannot be delivered; session has the reply persisted so the next user turn surfaces it"
-            );
-            return;
-        };
-        let recipient = librefang_channels::types::ChannelUser {
-            platform_id: routing_chat_id.to_string(),
-            display_name: String::new(),
-            librefang_user: None,
-        };
-        if let Err(e) = adapter
-            .value()
-            .send(
-                &recipient,
-                librefang_channels::types::ChannelContent::Text(loop_result.response.clone()),
+        // Route the reply through the canonical account-qualified outbound
+        // path (#6492 Bug 2). `send_channel_message` builds the adapter
+        // lookup key as `"<channel>:<account_id>"` when an account is present
+        // and falls back to the bare `<channel>` otherwise — matching how the
+        // channel bridge registers adapters under BOTH keys for multi-account
+        // installs. The previous bare `channel_adapters.get(channel)` ignored
+        // `deferred.account_id`, so on a multi-account daemon a post-approval
+        // reply for a non-first account was delivered to the wrong account's
+        // adapter (wrong bot/chat) or missed entirely. Reusing the canonical
+        // path also picks up the adapter's `output_format` override for free,
+        // exactly as a normal inbound reply would. `thread_id: None` — the wake
+        // path carries no thread context (mirrors the pre-fix `adapter.send()`,
+        // which never threaded). On an adapter-miss OR a send failure the call
+        // returns `Err`; we log WARN (it does not log itself) with the same
+        // information as before — the reply is still persisted in session
+        // history, so the next user turn surfaces it.
+        if let Err(e) = self
+            .send_channel_message(
+                channel,
+                routing_chat_id,
+                &loop_result.response,
+                None,
+                deferred.account_id.as_deref(),
             )
             .await
         {
@@ -1673,9 +1782,10 @@ impl LibreFangKernel {
                 agent_id = %agent_id,
                 tool_use_id = %deferred.tool_use_id,
                 channel = channel,
-                recipient = %recipient.platform_id,
+                account_id = ?deferred.account_id,
+                recipient = routing_chat_id,
                 error = %e,
-                "Failed to deliver post-approval agent reply to channel — reply is still persisted in session history"
+                "No active adapter for the originating channel/account, or delivery failed — post-approval agent reply produced but not delivered; reply is still persisted in session history so the next user turn surfaces it"
             );
         }
     }
@@ -1718,6 +1828,9 @@ impl LibreFangKernel {
             sender_id: deferred.sender_id.as_deref(),
             channel: deferred.channel.as_deref(),
             chat_id: deferred.chat_id.as_deref(),
+            // #6443: restore the originating account so an approved, deferred
+            // channel_send still enforces the cross-account (cross-tenant) guard.
+            sender_account_id: deferred.account_id.as_deref(),
             // Restore the originating SessionId from v36's persisted
             // `deferred_payload` so a post-restart `Allow once` resumes
             // through the *original* editor's `acp_fs_client` /

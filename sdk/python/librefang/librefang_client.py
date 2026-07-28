@@ -605,6 +605,9 @@ class _HandsResource(_Resource):
     def get_hand_manifest(self, hand_id: str):
         return self._c._request("GET", f"/api/hands/{hand_id}/manifest")
 
+    def update_hand_manifest(self, hand_id: str, **data):
+        return self._c._request("PUT", f"/api/hands/{hand_id}/manifest", data)
+
     def set_hand_secret(self, hand_id: str, **data):
         return self._c._request("POST", f"/api/hands/{hand_id}/secret", data)
 
@@ -1248,6 +1251,15 @@ class _UsersResource(_Resource):
 
     def update_user_policy(self, name: str, **data):
         return self._c._request("PUT", f"/api/users/{name}/policy", data)
+
+    def list_user_provider_keys(self, name: str):
+        return self._c._request("GET", f"/api/users/{name}/provider-keys")
+
+    def set_user_provider_key(self, name: str, provider: str, **data):
+        return self._c._request("PUT", f"/api/users/{name}/provider-keys/{provider}", data)
+
+    def delete_user_provider_key(self, name: str, provider: str):
+        return self._c._request("DELETE", f"/api/users/{name}/provider-keys/{provider}")
 
     def rotate_user_key(self, name: str):
         return self._c._request("POST", f"/api/users/{name}/rotate-key")

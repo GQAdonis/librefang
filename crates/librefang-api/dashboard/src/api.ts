@@ -1280,6 +1280,22 @@ export interface AgentDetail {
    *  - 'allowlist' — manifest pinned the list in `skills`.
    *  - 'none' — skills_disabled = true. */
   skills_mode?: "all" | "allowlist" | "none";
+  /** MCP servers granted to this agent (`agent.toml: mcp_servers`).
+   *  Emitted by `GET /api/agents/{id}` — see `lifecycle.rs: get_agent`. */
+  mcp_servers?: string[];
+  /** MCP grant mode derived by the backend, mirroring the kernel semantics in `available_tools` (#5855):
+   *  - 'none' — empty list, no MCP server is granted.
+   *  - 'all' — the list contains `"*"`, every connected server is granted.
+   *  - 'allowlist' — only the named servers are granted.
+   *  Load-bearing for the Tools tab: MCP tools are granted through this field, NOT through `capabilities_tools` (#6565). */
+  mcp_servers_mode?: "all" | "allowlist" | "none";
+  /** `agent.toml: mcp_disabled` — hard off switch for every MCP server.
+   *  The kernel gates MCP on `!mcp_disabled && !mcp_servers.is_empty()`, so this is load-bearing alongside `mcp_servers` when deciding reachability (#6565). */
+  mcp_disabled?: boolean;
+  /** `agent.toml: tools_disabled` — hard off switch for every tool. */
+  tools_disabled?: boolean;
+  /** `agent.toml: skills_disabled` — hard off switch for every skill. */
+  skills_disabled?: boolean;
   /** Human-readable schedule summary derived from manifest.schedule:
    *  'manual' for reactive, the cron expression, 'proactive', or
    *  'continuous · Ns'. Matches what `enrich_agent_json` puts on the
@@ -1560,8 +1576,21 @@ export async function deleteAgent(agentId: string): Promise<ApiActionResponse> {
   );
 }
 
-export async function cloneAgent(agentId: string): Promise<ApiActionResponse> {
-  return post<ApiActionResponse>(`/api/agents/${encodeURIComponent(agentId)}/clone`, {});
+/** Body of `POST /api/agents/{id}/clone`.
+ *
+ *  `new_name` is required by the backend (`CloneAgentRequest` has no serde default), and the struct is `#[serde(deny_unknown_fields)]` — so this shape must stay exactly these three keys or the request 422s (#6566).
+ */
+export interface CloneAgentPayload {
+  new_name: string;
+  include_skills?: boolean;
+  include_tools?: boolean;
+}
+
+export async function cloneAgent(
+  agentId: string,
+  payload: CloneAgentPayload
+): Promise<ApiActionResponse> {
+  return post<ApiActionResponse>(`/api/agents/${encodeURIComponent(agentId)}/clone`, payload);
 }
 
 export async function stopAgent(agentId: string): Promise<ApiActionResponse> {
@@ -1672,6 +1701,7 @@ export interface ModelItem {
   max_output_tokens?: number;
   input_cost_per_m?: number;
   output_cost_per_m?: number;
+  pricing_known?: boolean;
   // Effective (catalog ∘ override) — use for "what the model actually does". Refs #4745.
   supports_tools?: boolean;
   supports_vision?: boolean;
@@ -1709,6 +1739,7 @@ export async function addCustomModel(model: {
   max_output_tokens?: number;
   input_cost_per_m?: number;
   output_cost_per_m?: number;
+  pricing_known?: boolean;
   supports_tools?: boolean;
   supports_vision?: boolean;
   supports_streaming?: boolean;
@@ -3616,6 +3647,20 @@ export async function listHands(): Promise<HandDefinitionItem[]> {
 
 export async function getHandManifestToml(handId: string): Promise<string> {
   return getText(`/api/hands/${encodeURIComponent(handId)}/manifest`);
+}
+
+/** PUT /api/hands/{id}/manifest — overwrite the hand's HAND.toml. The server
+ *  validates the content by parsing it into a HandDefinition and rejects
+ *  invalid TOML (or a changed `id`) with a 400 whose message is surfaced via
+ *  ApiError, leaving the on-disk file untouched. Returns the reloaded
+ *  HandDefinition. */
+export async function updateHandManifestToml(
+  handId: string,
+  tomlContent: string
+): Promise<HandDefinitionItem> {
+  return put<HandDefinitionItem>(`/api/hands/${encodeURIComponent(handId)}/manifest`, {
+    toml_content: tomlContent
+  });
 }
 
 export async function getRawConfigToml(): Promise<string> {
