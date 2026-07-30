@@ -2,9 +2,6 @@ name: Publish SSR candidate
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/deploy-uar-bossfang-runtime
 
 permissions:
   contents: read

@@ -57,6 +57,25 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
+        - name: prepare-data
+          image: busybox:1.37@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /data
+              chown -R 1001:1001 /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsUser: 0
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+          volumeMounts:
+            - name: data
+              mountPath: /data
         - name: verify-uar-contract
           image: busybox:1.37@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
           command:
@@ -80,7 +99,7 @@ spec:
             runAsUser: 65534
       containers:
         - name: bossfang
-          image: ghcr.io/gqadonis/bossfang@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: ghcr.io/gqadonis/bossfang@sha256:f691ce37eb4a59710130fbcbe42d8027bc1ae8f5debb3181bc073b23ec4861cf
           imagePullPolicy: IfNotPresent
           args:
             - librefang
@@ -90,7 +109,7 @@ spec:
             - name: http
               containerPort: 4545
           env:
-            - name: BOSSFANG_HOME
+            - name: LIBREFANG_HOME
               value: /data
             - name: LIBREFANG_ALLOW_NO_AUTH
               value: "1"
