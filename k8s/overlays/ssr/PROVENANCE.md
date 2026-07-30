@@ -4,7 +4,7 @@
 - Baseline source SHA:
   `0493da782a5b6a716d3acbdbfa3112524a0a25bf`
 - License: MIT.
-- Build input: repository `Dockerfile`, `linux/amd64`, daemon features
+- Build input: repository `Dockerfile.ssr`, `linux/amd64`, daemon features
   `telemetry,surreal-backend,uar-driver`.
 - Candidate image: `ghcr.io/gqadonis/bossfang`.
 - Candidate source SHA and digest: populated after the candidate workflow.
