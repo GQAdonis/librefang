@@ -73,6 +73,13 @@ spec:
                 - ALL
               add:
                 - CHOWN
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
           volumeMounts:
             - name: data
               mountPath: /data
@@ -97,6 +104,13 @@ spec:
                 - ALL
             runAsNonRoot: true
             runAsUser: 65534
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 32Mi
       containers:
         - name: bossfang
           image: ghcr.io/gqadonis/bossfang@sha256:f691ce37eb4a59710130fbcbe42d8027bc1ae8f5debb3181bc073b23ec4861cf
