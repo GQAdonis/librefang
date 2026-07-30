@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     perl \
     pkg-config \
+    protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=python-provider /usr/local/bin/python3.13 /usr/local/bin/python3.13
