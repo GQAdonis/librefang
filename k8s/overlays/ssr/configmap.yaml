@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bossfang-runtime
+data:
+  config.toml: |
+    config_version = 1
+    api_listen = "0.0.0.0:4545"
+
+    # The Service is reachable only from the Sansaba BFF. The BFF resolves the
+    # Kratos session and verified admin/user role before proxying an allowlisted
+    # path. BossFang has no separate Basic Auth boundary.
+    external_auth_proxy = true
+    require_auth_for_reads = false
+    trusted_proxies = ["0.0.0.0/0"]
+    trust_forwarded_for = true
+    trusted_hosts = ["bossfang.prometheusags.ai"]
+    cors_origin = ["https://bossfang.prometheusags.ai"]
+
+    # Route BossFang's real completion traffic through the independent UAR
+    # Service. UAR exposes an OpenAI-compatible endpoint at this base URL.
+    [default_model]
+    provider = "uar-remote"
+    model = "azure/gpt-5.2-chat"
+    base_url = "http://uar.uar.svc.cluster.local:1906/v1"
+    api_key_env = "BOSSFANG_UAR_CLIENT_TOKEN"
+    message_timeout_secs = 300
+
+    # Declare the runtime relationship using BossFang's typed UAR contract.
+    # `endpoint` wins over child-process spawning; UAR remains independently
+    # versioned and deployed.
+    [uar]
+    model = "azure/gpt-5.2-chat"
+
+    [uar.sidecar]
+    enabled = false
+    endpoint = "http://uar.uar.svc.cluster.local:1906"
+
+    # The POC needs one durable orchestration store, not a second database pod.
+    [storage]
+    namespace = "bossfang"
+    database = "main"
+
+    [storage.backend]
+    kind = "embedded"
+    path = "/data/librefang.surreal"
+
+    [telemetry]
+    log_level = "info"
+
+    [terminal]
+    allow_remote = false
+    allow_unauthenticated_remote = false
+    allowed_origins = []
