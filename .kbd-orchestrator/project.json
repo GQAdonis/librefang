@@ -1,26 +1,231 @@
 {
-  "name": "librefang",
-  "display_name": "LibreFang (BossFang fork)",
+  "name": "BossFang",
+  "description": "Open-source Agent Operating System built in Rust.",
+  "active_phase": "phase-10-uar-sidecar-availability",
+  "worktreeRoot": "/tmp",
+  "maxChildDepth": 4,
+  "ux_profile": "advanced",
+  "__ux_profile_note": "advanced \u2192 kbd-status is dense by default; beginner \u2192 kbd-status --explain is on by default (expands decision-log entries + next-and-why narrative). Verbosity only \u2014 never gates information.",
+  "spec_paths": [
+    "openspec/specs/*.md",
+    "docs/**/*.md"
+  ],
+  "openspec_available": true,
+  "constraint_file": ".kbd-orchestrator/constraints.md",
+  "build_health_command": "cargo check --workspace --lib",
+  "test_command": "cargo test --workspace",
+  "lint_command": "cargo clippy --workspace --all-targets -- -D warnings",
+  "dev_command": "just dev",
+  "preferred_planning_agent": "antigravity",
+  "preferred_execution_agents": [],
+  "model_policy": {
+    "registry": {
+      "small": {
+        "local": "Qwen3.5-9B-Q8_0",
+        "t4": "Qwen3.5-9B-Q8_0",
+        "l4": "Qwen3.5-9B-Q8_0"
+      },
+      "medium": {
+        "local": null,
+        "t4": "Qwen3.5-27B-Q4",
+        "l4": "Qwen3.5-35B-A3B-Q4"
+      },
+      "frontier": {
+        "local": "claude-sonnet-4-6",
+        "t4": "claude-sonnet-4-6",
+        "l4": "claude-sonnet-4-6"
+      }
+    },
+    "phases": {
+      "kbd-assess": "frontier",
+      "kbd-plan": "frontier",
+      "kbd-status": "small",
+      "kbd-reflect": "frontier",
+      "opsx-new": "small",
+      "opsx-apply-low": "small",
+      "opsx-apply-medium": "medium",
+      "opsx-apply-high": "frontier",
+      "opsx-verify": "medium",
+      "opsx-archive": "small",
+      "refiner-iterate": "small",
+      "refiner-evaluate": "medium",
+      "evolver-assess": "frontier",
+      "evolver-analyze": "frontier",
+      "evolver-plan": "frontier",
+      "evolver-execute-low": "small",
+      "evolver-execute-medium": "medium",
+      "evolver-execute-high": "frontier",
+      "evolver-reflect": "frontier",
+      "evolver-status": "small"
+    },
+    "active_environment": "local"
+  },
+  "agents_config": {
+    "antigravity": {
+      "entry": "SKILL.md slash commands",
+      "strengths": [
+        "multi-file features",
+        "browser verification",
+        "planning"
+      ]
+    },
+    "roo-code": {
+      "entry": "Roo Code mode in VSCode",
+      "strengths": [
+        "focused implementation",
+        "architect decisions"
+      ]
+    },
+    "cursor-agent": {
+      "entry": "Cursor Agent mode",
+      "strengths": [
+        "parallel subagent tasks",
+        "refactoring"
+      ]
+    },
+    "codex": {
+      "entry": "OpenAI Codex CLI / app",
+      "strengths": [
+        "parallel isolated tasks via git worktrees"
+      ]
+    },
+    "cline": {
+      "entry": "Cline VSCode extension",
+      "strengths": [
+        "terminal-first workflows",
+        "Plan/Act mode"
+      ]
+    },
+    "opencode": {
+      "entry": "OpenCode CLI",
+      "strengths": [
+        "quick targeted edits",
+        "file patches"
+      ]
+    }
+  },
+  "focus_project_path": "/Users/gqadonis/Projects/references/librefang",
+  "workspace": {
+    "workspace_file": "/Users/gqadonis/Projects/cherry-studio-cursor.code-workspace",
+    "folders": [
+      {
+        "path": "/Users/gqadonis/Projects/references/librefang",
+        "role": "focus",
+        "purpose": "Active BossFang project \u2014 all KBD implementation operations target linked worktrees of this repository.",
+        "write_access": true
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+        "role": "reference",
+        "purpose": "Read-only Universal Agent Runtime source used by the active UAR sidecar phase.",
+        "read_paths": [
+          "Cargo.toml",
+          "Dockerfile*",
+          ".github/workflows/*.yml",
+          "src/**"
+        ],
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/travisjames/skills/artifact-refiner",
+        "role": "reference",
+        "purpose": "Read-only artifact-refiner workflow and quality guidance.",
+        "read_paths": [
+          "SKILL.md",
+          "skills/**",
+          "shared/**"
+        ],
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/baseline/cherry-studio",
+        "role": "reference",
+        "purpose": "Read-only baseline implementation reference.",
+        "read_paths": [
+          "README.md",
+          "docs/**",
+          "src/**"
+        ],
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/openfang",
+        "role": "reference",
+        "purpose": "Read-only upstream architecture and behavior reference.",
+        "read_paths": [
+          "README.md",
+          "docs/**",
+          "crates/**"
+        ],
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/baseline/surreal-memory-server",
+        "role": "ignore",
+        "purpose": "Workspace entry is absent on disk; excluded until the reference is restored.",
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/baseline/mistral.rs",
+        "role": "ignore",
+        "purpose": "Workspace entry is absent on disk; excluded until the reference is restored.",
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/baseline/mempalace-rs",
+        "role": "ignore",
+        "purpose": "Workspace entry is absent on disk; excluded until the reference is restored.",
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/references/baseline/prometheus-knowledge-rs",
+        "role": "reference",
+        "purpose": "Read-only knowledge subsystem reference.",
+        "read_paths": [
+          "README.md",
+          "docs/**",
+          "src/**"
+        ],
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/know-me/charcoal-agent",
+        "role": "ignore",
+        "purpose": "Unrelated workspace project; excluded from BossFang KBD context.",
+        "write_access": false
+      },
+      {
+        "path": "/Users/gqadonis/Projects/travisjames/ember-grid-essence",
+        "role": "ignore",
+        "purpose": "Unrelated workspace project; excluded from BossFang KBD context.",
+        "write_access": false
+      }
+    ]
+  },
+  "display_name": "BossFang",
   "repository": "https://github.com/GQAdonis/librefang",
   "upstream": "https://github.com/librefang/librefang",
   "stack": {
     "primary_language": "rust",
     "rust_edition": "2021",
-    "build_system": "cargo",
+    "rust_version": "1.94.1",
+    "build_system": "cargo+just",
+    "async_runtime": "tokio",
+    "http_framework": "axum-0.8",
     "frontend": "react-19+vite-8+typescript",
     "desktop": "tauri-2",
-    "storage": "surrealdb-3.0.5",
+    "storage": "surrealdb-3.2.1",
     "memory_substrate": "surreal-memory"
   },
   "constraints": {
     "three_layer_rebrand": {
       "internal": "never rename \u2014 Cargo crate names, Rust modules, function names, Python SDK module names, workspace member paths, test fixture filenames",
       "boundary": "additive aliases only \u2014 BOSSFANG_* primary + LIBREFANG_* fallback, default values stay LibreFang-flavoured",
-      "surface": "full rename OK \u2014 CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
+      "surface": "full BossFang identity \u2014 CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
     },
     "edits_blocked_in_main_worktree": true,
     "cargo_build_blocked_in_main_worktree": true,
-    "use_worktree_pattern": "git worktree add /tmp/librefang-<feature> -b <branch> origin/main",
+    "use_worktree_pattern": "git worktree add /tmp/librefang-<feature> -b codex/<branch> origin/main",
     "no_ai_attribution_in_commits": true,
     "ci_wait_budget_minutes": 5
   },
@@ -44,7 +249,8 @@
     "brand_audit": "python3 scripts/enforce-branding.py --check"
   },
   "initialized": "2026-05-14",
-  "initialized_via": "kbd-execute bootstrap (informal init triggered from /kbd-execute when .kbd-orchestrator/ was absent)",
+  "reinitialized": "2026-07-30",
+  "initialized_via": "kbd-init schema migration preserving the 2026-05-14 bootstrap state",
   "specBackend": "native-kbd",
   "specBackendNote": "OpenSpec is initialized (openspec/config.yaml, schema: spec-driven) but the spec backend is deliberately pinned to native-kbd for phase-10, whose 8 change specs (C-001..C-008) were already written and reviewed as native change files. Migrating them mid-phase would rewrite eight specs purely to change file format without improving their content. Adopt OpenSpec from phase-11: drop this key (or set it to \"openspec\") and /kbd-spec + /kbd-plan will emit openspec/changes/<id>/{proposal.md,tasks.md} via /opsx:new."
 }
