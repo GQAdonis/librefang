@@ -139,6 +139,7 @@ impl TestAppState {
             // -- Models & Providers --
             .route("/models", get(routes::list_models))
             .route("/providers", get(routes::list_providers))
+            .merge(routes::uar_supervisor::router())
             // -- Sessions --
             .route("/sessions", get(routes::list_sessions))
             // -- Audit --
@@ -235,6 +236,18 @@ impl TestAppState {
         };
 
         Arc::new(AppState {
+            uar_supervisor: Arc::new(
+                librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+                    kernel
+                        .config_ref()
+                        .uar
+                        .as_ref()
+                        .map(librefang_types::config::UarConfig::effective_sidecar)
+                        .unwrap_or_default(),
+                    tmp.path().to_path_buf(),
+                )
+                .with_runtime_config(kernel.config_ref().uar.as_ref()),
+            ),
             kernel,
             started_at: Instant::now(),
             bridge_manager: arc_swap::ArcSwap::new(std::sync::Arc::new(None)),

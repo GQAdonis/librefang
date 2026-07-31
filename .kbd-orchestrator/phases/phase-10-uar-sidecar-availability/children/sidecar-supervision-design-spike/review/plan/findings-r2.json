@@ -1,0 +1,36 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "claim": "The verification plan violates the required scoped test gate by only requiring filtered sidecar tests instead of the changed crate's scoped test suite.",
+      "evidence": "Constraint requires every behavioral change to pass \"Scoped `cargo test -p <changed-crate>`\"; plan acceptance only requires \"`cargo test -p librefang-channels sidecar` and the UAR-sidecar scoped tests pass repeatedly,\" which filters tests rather than running `cargo test -p librefang-channels`.",
+      "suggested_fix": "Add `cargo test -p librefang-channels` as a required acceptance criterion, and keep filtered sidecar/UAR tests only as additional focused checks."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "An acceptance criterion is stronger than the proposed data model can enforce, making downstream implementation ambiguous.",
+      "evidence": "The task says \"Change `SupervisionOutcome::Retryable` to carry `ready_uptime: Option<Duration>`,\" but the acceptance criterion says \"`Retryable` cannot represent a positive ready uptime when readiness was never reached.\" A bare `Option<Duration>` can still be constructed as `Some(duration)` without encoding whether readiness was reached.",
+      "suggested_fix": "Either rephrase the criterion to adapter behavior, e.g. \"all adapters return `None` for pre-ready failures and tests cover this,\" or introduce a type that encodes readiness state so invalid states are unrepresentable."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "The UAR test acceptance criterion is not directly executable because it lacks the exact scoped command or test names and uses an undefined repetition requirement.",
+      "evidence": "Acceptance criterion states \"the UAR-sidecar scoped tests pass repeatedly\" without specifying the command, test filter, or how many repetitions constitute \"repeatedly.\"",
+      "suggested_fix": "Replace with concrete commands and repetition count, such as `for i in {1..5}; do cargo test -p librefang-channels uar_sidecar -- --nocapture; done` or the exact relevant test names."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

@@ -403,7 +403,7 @@ export function WizardPage() {
                         <p className="text-[11px] text-text-dim mt-0.5">
                           {t("wizard.storage_link_uar_desc", {
                             defaultValue:
-                              "Provisions a separate `uar` namespace on the same instance. librefang and UAR stay isolated — each gets its own least-privilege user.",
+                              "Provisions a separate `uar` namespace on the same instance. BossFang and UAR stay isolated — each gets its own least-privilege user.",
                           })}
                         </p>
                       </div>

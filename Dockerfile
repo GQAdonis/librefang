@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # UAR sidecar source image (phase-10 UAR-as-sidecar migration). Pinned to the
-# commit that matches crates/librefang-llm-drivers/Cargo.toml's `rev` for the
-# in-process `uar-driver` dependency, so the sidecar binary and the (optional)
-# in-process library always agree on which UAR revision is running. Bump both
-# together. Published by GQAdonis/universal-agent-runtime's publish-ghcr.yml —
-# GHCR because it is pullable with no credentials, unlike the operator's private
-# GCP Artifact Registry image.
+# release that provides the HTTP/SSE contract consumed by the opt-in
+# `uar-driver`. BossFang no longer links UAR in-process; bump this image only
+# after the driver's compatibility checks and contract tests pass against the
+# new release. Published by GQAdonis/universal-agent-runtime's
+# publish-ghcr.yml — GHCR because it is pullable with no credentials, unlike
+# the operator's private GCP Artifact Registry image.
 ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:fb2e0a8ce07c904755dc06aa4ce7aa8df605002e
 FROM ${UAR_IMAGE} AS uar-sidecar-src
 # ─────────────────────────────────────────────────────────────────────────────
@@ -360,6 +360,12 @@ ENV LIBREFANG_HOME=/data
 # vars sit unused until an operator opts in; no different from LIBREFANG_HOME
 # above. C-006's supervisor passes this into the spawned child's environment.
 ENV UAR_MODELS_DIR=/opt/uar/models
+# The pinned UAR sidecar release requires persistence to be selected explicitly.
+# Keep its embedded store on BossFang's writable data volume so an opt-in local
+# sidecar boots without requiring another database service or extra operator
+# environment variables.
+ENV UAR_PERSISTENCE__PROVIDER=surreal
+ENV UAR_PERSISTENCE__DATABASE_URL=surrealkv:///data/uar-surreal
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD curl -fsS http://127.0.0.1:${PORT:-4545}/api/health || exit 1
 # docker-entrypoint.sh runs as root for bind-mount chown/init, then gosu drops

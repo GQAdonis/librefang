@@ -69,6 +69,7 @@ fn api_v1_routes(webhook_body_limit: usize) -> Router<Arc<AppState>> {
         .merge(routes::prompts::router())
         .merge(routes::terminal::router())
         .merge(routes::uar::router())
+        .merge(routes::uar_supervisor::router())
         .merge(routes::storage::router())
         .merge(routes::users::router())
         .merge(routes::webhooks::router(webhook_body_limit))
@@ -1450,8 +1451,40 @@ pub async fn build_router(
         }
     };
 
+    let uar_config = kernel.config_ref().uar.clone();
+    let uar_sidecar_config = uar_config
+        .as_ref()
+        .map(librefang_types::config::UarConfig::effective_sidecar)
+        .unwrap_or_default();
+    let should_start_uar = uar_sidecar_config.enabled || uar_sidecar_config.endpoint.is_some();
+    let uar_supervisor = librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+        uar_sidecar_config,
+        kernel.home_dir().to_path_buf(),
+    )
+    .with_runtime_config(uar_config.as_ref());
+    #[cfg(feature = "uar-driver")]
+    let uar_supervisor = uar_supervisor
+        .with_endpoint_callback(librefang_llm_drivers::drivers::uar::set_supervised_endpoint);
+    let uar_supervisor = Arc::new(uar_supervisor);
+    if should_start_uar {
+        match uar_supervisor.start().await {
+            Ok(status) => {
+                #[cfg(feature = "uar-driver")]
+                librefang_llm_drivers::drivers::uar::set_supervised_endpoint(
+                    status.endpoint.clone(),
+                );
+                #[cfg(not(feature = "uar-driver"))]
+                drop(status);
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "UAR sidecar failed to start");
+            }
+        }
+    }
+
     let state = Arc::new(AppState {
         kernel: kernel.clone(),
+        uar_supervisor,
         started_at: Instant::now(),
         bridge_manager: arc_swap::ArcSwap::new(std::sync::Arc::new(bridge)),
         channels_config: tokio::sync::RwLock::new(channels_config),
@@ -2459,6 +2492,12 @@ pub async fn run_daemon(
             }
         }
     }
+
+    if let Err(error) = state.uar_supervisor.stop().await {
+        tracing::warn!(error = %error, "UAR sidecar did not stop cleanly");
+    }
+    #[cfg(feature = "uar-driver")]
+    librefang_llm_drivers::drivers::uar::set_supervised_endpoint(None);
 
     // Stop observability stack — graceful path. `.take()` consumes the guard
     // so its Drop becomes a no-op; if we never reach this line (panic, OOM,

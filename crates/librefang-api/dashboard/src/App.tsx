@@ -1263,7 +1263,7 @@ export function App() {
         <header className="relative flex h-12 shrink-0 items-center justify-between border-b border-border-subtle bg-surface px-3 sm:px-4">
           <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-12 items-center justify-center lg:flex">
             <span className="font-mono text-[11px] text-text-dim">
-              BossFang · {currentPageLabel}
+              {t("common.product_name", "BossFang")} · {currentPageLabel}
             </span>
           </div>
           <div className="flex items-center gap-2 min-w-0">

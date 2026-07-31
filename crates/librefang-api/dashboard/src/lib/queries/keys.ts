@@ -100,6 +100,14 @@ export const providerKeys = {
   lists: () => [...providerKeys.all, "list"] as const,
 };
 
+export const uarKeys = {
+  all: ["uar"] as const,
+  lists: () => [...uarKeys.all, "list"] as const,
+  details: () => [...uarKeys.all, "detail"] as const,
+  detail: () => [...uarKeys.details(), "status"] as const,
+  models: () => [...uarKeys.lists(), "models"] as const,
+};
+
 // Credential pools (#4965) — per-provider multi-key rotation status. Kept
 // hierarchical so an invalidate on `credentialPoolKeys.all` clears every
 // pool query after a mutation (future `auth pool add` / `strategy` HTTP

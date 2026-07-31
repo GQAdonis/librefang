@@ -129,7 +129,7 @@ surrealdb-core = { version = "=3.2.1", default-features = false }
 surreal-memory = { git = "https://github.com/Prometheus-AGS/surreal-memory-server.git", rev = "f9ab1c29944b86d44c23ea0e6192fa3d39acbde8", default-features = false, features = ["embedded"] }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 
 # HTTP client (for LLM drivers)

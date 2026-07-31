@@ -1,0 +1,11 @@
+{
+  "stage": "assess",
+  "completedAt": "2026-07-31T16:35:12Z",
+  "outputs": [
+    "assessment.md"
+  ],
+  "nextStage": "analyze",
+  "summaryForNext": "Retain the HTTP/process boundary with environment-specific lifecycle ownership. Correct the UAR retained-listener/READY contract upstream; in BossFang, test retry policy through an in-memory contract and report attempt uptime as data. Adversarial review PASS carried three warnings, all resolved in assessment.md; canonical stage transition was attempted but the control plane returned unknown KBD project after local migration.",
+  "skipped": false,
+  "skipReason": null
+}

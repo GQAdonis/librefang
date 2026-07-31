@@ -91,6 +91,11 @@ merge, run `python3 scripts/enforce-branding.py` before committing.
 - The CLI daemon command is `start`, not `daemon`.
 - Do not suppress lints, ignore failing tests, or replace a root-cause fix with
   a test-only workaround.
+- Treat recurring timing-sensitive test failures as a design/seam signal. Do
+  not increase timeouts as the fix: identify the contract under test, inject
+  time/scheduler/process boundaries for policy tests, and reserve real-time
+  watchdogs for integration-test deadlock protection rather than performance
+  assertions.
 
 ## Verification gates (blocking)
 

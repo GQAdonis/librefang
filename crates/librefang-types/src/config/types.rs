@@ -2543,6 +2543,10 @@ fn default_sidecar_ready_timeout_secs() -> u64 {
     30
 }
 
+fn default_uar_ready_timeout_ms() -> u64 {
+    default_sidecar_ready_timeout_secs() * 1_000
+}
+
 fn default_sidecar_shutdown_grace_secs() -> u64 {
     5
 }
@@ -3168,6 +3172,45 @@ pub struct UarConfig {
     #[serde(default)]
     pub share_librefang_storage: bool,
 
+    /// Direct sidecar enable flag (`[uar] enabled = true`).
+    ///
+    /// `None` preserves the nested `[uar.sidecar]` value for compatibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+
+    /// Direct sidecar command override (`[uar] command = "uar-sidecar"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+
+    /// Direct endpoint for an already-running UAR. This takes precedence over
+    /// spawning and over the retained nested sidecar endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+
+    /// Direct sidecar restart toggle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart: Option<bool>,
+
+    /// Direct initial restart backoff in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_initial_backoff_ms: Option<u64>,
+
+    /// Direct restart backoff ceiling in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_max_backoff_ms: Option<u64>,
+
+    /// Direct cap on consecutive restart attempts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_max_retries: Option<u32>,
+
+    /// Direct stable-uptime interval that resets the retry counter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restart_reset_after_secs: Option<u64>,
+
+    /// Direct READY-handshake budget in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_timeout_ms: Option<u64>,
+
     /// Supervision of UAR as an out-of-process sidecar (`[uar.sidecar]`).
     ///
     /// Deliberately a nested block rather than more fields on `UarConfig`: the
@@ -3177,6 +3220,44 @@ pub struct UarConfig {
     /// [`Self::base_url`].
     #[serde(default)]
     pub sidecar: UarSidecarConfig,
+}
+
+impl UarConfig {
+    /// Merge the native top-level sidecar surface over the retained nested
+    /// configuration. Direct `[uar]` values win whenever they are present.
+    #[must_use]
+    pub fn effective_sidecar(&self) -> UarSidecarConfig {
+        let mut sidecar = self.sidecar.clone();
+        if let Some(enabled) = self.enabled {
+            sidecar.enabled = enabled;
+        }
+        if let Some(command) = self.command.as_ref() {
+            sidecar.command.clone_from(command);
+        }
+        if let Some(endpoint) = self.endpoint.as_ref() {
+            sidecar.endpoint = Some(endpoint.clone());
+        }
+        if let Some(restart) = self.restart {
+            sidecar.restart = restart;
+        }
+        if let Some(value) = self.restart_initial_backoff_ms {
+            sidecar.restart_initial_backoff_ms = value;
+        }
+        if let Some(value) = self.restart_max_backoff_ms {
+            sidecar.restart_max_backoff_ms = value;
+        }
+        if let Some(value) = self.restart_max_retries {
+            sidecar.restart_max_retries = value;
+        }
+        if let Some(value) = self.restart_reset_after_secs {
+            sidecar.restart_reset_after_secs = value;
+        }
+        if let Some(value) = self.ready_timeout_ms {
+            sidecar.ready_timeout_ms = value;
+            sidecar.legacy_ready_timeout_secs = None;
+        }
+        sidecar
+    }
 }
 
 /// Supervision settings for UAR running as an out-of-process sidecar.
@@ -3236,7 +3317,21 @@ pub struct UarSidecarConfig {
 
     /// How long to wait for the child's `READY:{port}` line before declaring the
     /// spawn failed. A child that never announces itself must not hang boot.
-    pub ready_timeout_secs: u64,
+    #[serde(default = "default_uar_ready_timeout_ms")]
+    pub ready_timeout_ms: u64,
+
+    /// Backward-compatible read path for the original seconds-based key.
+    ///
+    /// New configuration is always serialized as `ready_timeout_ms`. When this
+    /// legacy key is present, its seconds value is converted at the consumer
+    /// boundary so an existing operator config keeps the same timeout.
+    #[serde(
+        default,
+        rename = "ready_timeout_secs",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[schemars(rename = "ready_timeout_secs")]
+    pub legacy_ready_timeout_secs: Option<u64>,
 
     /// Grace period after closing the child's stdin — UAR's documented shutdown
     /// signal, chosen because SIGTERM is unreliable on Windows — before escalating
@@ -3255,13 +3350,22 @@ impl Default for UarSidecarConfig {
             restart_max_backoff_ms: default_sidecar_restart_max_backoff_ms(),
             restart_max_retries: default_sidecar_restart_max_retries(),
             restart_reset_after_secs: default_sidecar_restart_reset_after_secs(),
-            ready_timeout_secs: default_sidecar_ready_timeout_secs(),
+            ready_timeout_ms: default_uar_ready_timeout_ms(),
+            legacy_ready_timeout_secs: None,
             shutdown_grace_secs: default_sidecar_shutdown_grace_secs(),
         }
     }
 }
 
 impl UarSidecarConfig {
+    /// Effective readiness budget after converting the legacy seconds key.
+    #[must_use]
+    pub fn effective_ready_timeout_ms(&self) -> u64 {
+        self.legacy_ready_timeout_secs
+            .map(|seconds| seconds.saturating_mul(1_000))
+            .unwrap_or(self.ready_timeout_ms)
+    }
+
     /// Whether the daemon should spawn a child process.
     ///
     /// `endpoint` wins over spawning: pointing at a running UAR and also launching
@@ -7855,7 +7959,7 @@ mod tests {
         assert!(cfg.sidecar.restart);
         assert_eq!(cfg.sidecar.restart_initial_backoff_ms, 500);
         assert_eq!(cfg.sidecar.restart_max_backoff_ms, 30_000);
-        assert_eq!(cfg.sidecar.ready_timeout_secs, 30);
+        assert_eq!(cfg.sidecar.ready_timeout_ms, 30_000);
     }
 
     #[test]
@@ -7894,12 +7998,40 @@ mod tests {
     }
 
     #[test]
+    fn uar_direct_sidecar_keys_override_nested_compatibility_block() {
+        let cfg: UarConfig = toml::from_str(
+            r#"
+            enabled = true
+            endpoint = "http://127.0.0.1:2906"
+            restart = false
+            ready_timeout_ms = 125
+
+            [sidecar]
+            enabled = false
+            endpoint = "http://127.0.0.1:1906"
+            restart = true
+            ready_timeout_ms = 30000
+        "#,
+        )
+        .unwrap();
+        let effective = cfg.effective_sidecar();
+        assert!(effective.enabled);
+        assert_eq!(effective.endpoint.as_deref(), Some("http://127.0.0.1:2906"));
+        assert!(!effective.restart);
+        assert_eq!(effective.effective_ready_timeout_ms(), 125);
+        assert!(
+            !effective.should_spawn(),
+            "the direct endpoint must suppress spawning"
+        );
+    }
+
+    #[test]
     fn uar_sidecar_round_trips_without_field_loss() {
         let mut original = UarConfig::default();
         original.sidecar.enabled = true;
         original.sidecar.command = "/opt/custom/uar-sidecar".to_string();
         original.sidecar.restart_max_retries = 3;
-        original.sidecar.ready_timeout_secs = 90;
+        original.sidecar.ready_timeout_ms = 90_000;
 
         let encoded = toml::to_string(&original).expect("serialize");
         let decoded: UarConfig = toml::from_str(&encoded).expect("deserialize");
@@ -7907,8 +8039,24 @@ mod tests {
         assert!(decoded.sidecar.enabled);
         assert_eq!(decoded.sidecar.command, "/opt/custom/uar-sidecar");
         assert_eq!(decoded.sidecar.restart_max_retries, 3);
-        assert_eq!(decoded.sidecar.ready_timeout_secs, 90);
+        assert_eq!(decoded.sidecar.ready_timeout_ms, 90_000);
         assert!(decoded.sidecar.should_spawn());
+    }
+
+    #[test]
+    fn uar_sidecar_accepts_and_round_trips_legacy_seconds() {
+        let cfg: UarConfig = toml::from_str(
+            r#"
+            [sidecar]
+            ready_timeout_secs = 2
+        "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.sidecar.effective_ready_timeout_ms(), 2_000);
+
+        let encoded = toml::to_string(&cfg).unwrap();
+        assert!(encoded.contains("ready_timeout_secs = 2"));
+        assert!(encoded.contains("ready_timeout_ms = 30000"));
     }
 
     #[test]

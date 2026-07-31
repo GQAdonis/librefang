@@ -1,0 +1,23 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "claim": "The plan's verification acceptance criteria violate the repository's blocking verification gates by replacing required workspace checks and branding audit with narrower scoped checks.",
+      "evidence": "Constraints require every behavioral change to pass `cargo check --workspace --lib`, `cargo clippy --workspace --all-targets -- -D warnings`, and `python3 scripts/enforce-branding.py --check`; the plan acceptance criteria only list `cargo fmt --check`, `cargo test -p librefang-channels sidecar`, UAR-sidecar scoped tests, and `cargo clippy -p librefang-channels --all-targets -- -D warnings`.",
+      "suggested_fix": "Add the full blocking gates to acceptance criteria: `cargo check --workspace --lib`, scoped tests for changed crates, `cargo clippy --workspace --all-targets -- -D warnings`, and `python3 scripts/enforce-branding.py --check`."
+    }
+  ],
+  "checked_classes": [],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

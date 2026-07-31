@@ -82,6 +82,34 @@ export interface ProviderItem {
   max_output_tokens?: number;
 }
 
+export type UarLifecycleState =
+  | "stopped"
+  | "starting"
+  | "healthy"
+  | "degraded"
+  | "crash_looping";
+
+export interface UarStatus {
+  state: UarLifecycleState;
+  resolved_path?: string | null;
+  endpoint?: string | null;
+  port?: number | null;
+  restart_count: number;
+  last_error?: string | null;
+}
+
+export interface UarTestResult {
+  ok: boolean;
+  reply: string;
+  latency_ms: number;
+}
+
+export type UarModels = Record<string, {
+  display_name?: string;
+  configured?: boolean;
+  models?: Record<string, unknown>;
+}>;
+
 export interface MediaProvider {
   name: string;
   configured: boolean;
@@ -1690,6 +1718,33 @@ export async function listCredentialPools(): Promise<CredentialPoolStatus[]> {
 
 export async function testProvider(providerId: string): Promise<ApiActionResponse> {
   return post<ApiActionResponse>(`/api/providers/${encodeURIComponent(providerId)}/test`, {});
+}
+
+export async function getUarStatus(): Promise<UarStatus> {
+  return get<UarStatus>("/api/uar/status");
+}
+
+export async function getUarModels(): Promise<UarModels> {
+  return get<UarModels>("/api/uar/models");
+}
+
+export async function startUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/start", {});
+}
+
+export async function stopUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/stop", {});
+}
+
+export async function restartUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/restart", {});
+}
+
+export async function testUar(input: {
+  model?: string;
+  prompt?: string;
+} = {}): Promise<UarTestResult> {
+  return post<UarTestResult>("/api/uar/test", input, 120_000);
 }
 
 export interface ModelItem {

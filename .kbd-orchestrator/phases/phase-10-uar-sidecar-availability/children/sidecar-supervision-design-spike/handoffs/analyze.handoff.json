@@ -1,0 +1,14 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-07-31T16:41:12Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json",
+    "decision-log.md",
+    "deep-research.md"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Seven candidates evaluated; adopt outcome-carried ready uptime and no external dependency. Generic clock, timer, retry, and process-supervision libraries do not replace the UAR domain contract. Adversarial review PASS warnings were resolved by recording the upstream evidence boundary and adding retry/process candidate categories.",
+  "skipped": false,
+  "skipReason": null
+}

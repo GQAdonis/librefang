@@ -68,3 +68,17 @@ published there is nothing to copy, resolve, or spawn.
 Their *implementation* is unblocked once C-003 and C-005 land, because C-006 specs a **fake,
 contract-honouring `uar-sidecar`** for tests. Only real end-to-end verification waits on
 C-002.
+
+## Continuation — 2026-07-31
+
+C-001 through C-005 are merged on `origin/main`. C-004 landed in PR #118 and was
+reconciled from stale `IN PROGRESS` state after validating the merged image changes and
+running the BossFang branding audit. The remaining dependency chain is executed in one
+isolated completion worktree so C-006 → C-007 → C-008 can be verified end to end before
+the phase is closed.
+
+| Change | Execution assignment | Model tier | Status |
+|---|---|---|---|
+| **C-006** UAR sidecar supervisor | Codex native tool | frontier | in progress |
+| **C-007** HTTP + SSE driver | Codex native tool | frontier | queued after C-006 |
+| **C-008** operator API + dashboard | Codex native tool | frontier | queued after C-007 |

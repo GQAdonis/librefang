@@ -30,6 +30,7 @@ pub mod sanitizer;
 pub mod sidecar;
 pub mod thread_ownership;
 pub mod types;
+pub mod uar_sidecar;
 
 pub use message_truncator::{
     split_to_utf16_chunks, truncate_to_utf16_limit, utf16_len, DISCORD_MESSAGE_LIMIT,

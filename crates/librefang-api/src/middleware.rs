@@ -1052,6 +1052,7 @@ impl PublicRoute {
 pub const PUBLIC_ROUTES_ALWAYS: &[PublicRoute] = &[
     // Static assets / shell
     PublicRoute::exact_any("/"),
+    PublicRoute::exact_any("/boss-libre.png"),
     PublicRoute::exact_any("/favicon.ico"),
     PublicRoute::exact_any("/logo.png"),
     // Auth flow entry points (method-free so POST also works)
@@ -3782,5 +3783,55 @@ mod tests {
                 .is_some_and(|directive| directive.contains("'unsafe-inline'")),
             "script-src must not allow arbitrary inline JavaScript"
         );
+    }
+
+    #[test]
+    fn uar_supervisor_controls_are_never_public() {
+        let routes = PUBLIC_ROUTES_ALWAYS
+            .iter()
+            .chain(PUBLIC_ROUTES_GET_ONLY)
+            .chain(PUBLIC_ROUTES_DASHBOARD_READS);
+        for path in [
+            "/api/uar/status",
+            "/api/uar/start",
+            "/api/uar/stop",
+            "/api/uar/restart",
+            "/api/uar/test",
+            "/api/uar/models",
+        ] {
+            assert!(
+                routes
+                    .clone()
+                    .all(|route| !matches_route(route, path, true)),
+                "{path} must remain operator-authenticated"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn bossfang_logo_stays_public_when_dashboard_reads_require_auth() {
+        let auth_state = AuthState {
+            api_key_lock: Arc::new(tokio::sync::RwLock::new("secret".to_string())),
+            active_sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            dashboard_auth_enabled: false,
+            user_api_keys: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            require_auth_for_reads: true,
+            allow_no_auth: false,
+            audit_log: None,
+        };
+        let app = Router::new()
+            .route("/boss-libre.png", get(|| async { "logo" }))
+            .layer(axum::middleware::from_fn_with_state(auth_state, auth));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/boss-libre.png")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

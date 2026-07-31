@@ -1,0 +1,12 @@
+crates/librefang-channels/src/lib.rs
+crates/librefang-channels/src/sidecar.rs
+crates/librefang-channels/src/uar_sidecar.rs
+crates/librefang-api/src/server.rs
+crates/librefang-api/src/routes/mod.rs
+crates/librefang-api/src/routes/uar_supervisor.rs
+crates/librefang-api/tests/uar_supervisor_integration.rs
+crates/librefang-api/tests/fixtures/kernel_config_schema.golden.json
+crates/librefang-testing/src/test_app.rs
+crates/librefang-types/src/config/types.rs
+crates/librefang-kernel/src/config_reload.rs
+docs/operations/config-reload.md

@@ -1,0 +1,13 @@
+{
+  "stage": "execute",
+  "completedAt": "2026-07-31T17:02:42Z",
+  "outputs": [
+    "execution.md",
+    "verification.md",
+    "changes/C-SPK-001/change.md"
+  ],
+  "nextStage": "reflect",
+  "summaryForNext": "C-SPK-001 implemented with native-tool/Codex. Retry policy is now deterministic from supplied ready uptime; scoped tests, five repeated UAR runs, formatting, crate clippy, workspace check, and branding passed. Full workspace clippy is blocked only by the unchanged origin/main kernel-handle test-stub mismatch.",
+  "skipped": false,
+  "skipReason": null
+}

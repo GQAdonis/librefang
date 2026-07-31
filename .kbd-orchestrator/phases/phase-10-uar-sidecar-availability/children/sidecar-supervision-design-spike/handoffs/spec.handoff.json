@@ -1,0 +1,9 @@
+{
+  "stage": "spec",
+  "completedAt": "2026-07-31T16:41:57Z",
+  "outputs": [],
+  "nextStage": "plan",
+  "summaryForNext": "skipped: Spike has one internal design correction; assessment and analysis already define the behavior and acceptance evidence.",
+  "skipped": true,
+  "skipReason": "Spike has one internal design correction; assessment and analysis already define the behavior and acceptance evidence."
+}
