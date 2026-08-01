@@ -1,0 +1,103 @@
+# syntax=docker/dockerfile:1
+
+# POC runtime image for the Sansaba SSR cluster. It intentionally omits the
+# generic plugin-compilation toolchains (Go, TinyGo, Rust nightly, WASI SDK,
+# WASM CLIs, bun, and pnpm) that the full development image carries. The
+# deployed conformance workload uses the compiled BossFang daemon, embedded
+# storage, its bundled dashboard, and the remote UAR driver only.
+
+FROM node:24-alpine AS dashboard-builder
+ENV CI=true
+WORKDIR /build/dashboard
+COPY crates/librefang-api/dashboard ./
+RUN npm install --global corepack@latest \
+    && corepack enable \
+    && corepack prepare pnpm@10.33.0 --activate \
+    && pnpm install --frozen-lockfile --ignore-scripts \
+    && pnpm run build
+
+FROM python:3.13-bookworm AS python-provider
+
+FROM rust:1.94-slim-bookworm AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    ca-certificates \
+    clang \
+    cmake \
+    curl \
+    libclang-dev \
+    libdbus-1-dev \
+    libssl-dev \
+    openssh-client \
+    perl \
+    pkg-config \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=python-provider /usr/local/bin/python3.13 /usr/local/bin/python3.13
+COPY --from=python-provider /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=python-provider /usr/local/lib/python3.13 /usr/local/lib/python3.13
+COPY --from=python-provider /usr/local/include/python3.13 /usr/local/include/python3.13
+COPY --from=python-provider /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/libpython3.13.so.1.0
+RUN ln -sf /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/libpython3.13.so \
+    && ldconfig
+ENV PYO3_PYTHON=/usr/local/bin/python3.13
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY xtask ./xtask
+COPY packages ./packages
+COPY sdk/python/librefang ./sdk/python/librefang
+COPY sdk/python/setup.py sdk/python/pyproject.toml ./sdk/python/
+COPY deploy ./deploy
+COPY --from=dashboard-builder /build/static/react ./crates/librefang-api/static/react
+
+RUN install -d -m 0700 /root/.ssh \
+    && ssh-keyscan github.com >> /root/.ssh/known_hosts
+RUN --mount=type=ssh \
+    --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/target \
+    SKIP_FRONTEND_BUILD=1 \
+    SKIP_DASHBOARD_BUILD=1 \
+    cargo build --release --bin librefang \
+        --features telemetry,surreal-backend,uar-driver \
+    && cp target/release/librefang /usr/local/bin/librefang
+
+FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gosu \
+    libdbus-1-3 \
+    libexpat1 \
+    libffi8 \
+    libicu72 \
+    libssl3 \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=python-provider /usr/local/bin/python3.13 /usr/local/bin/python3.13
+COPY --from=python-provider /usr/local/lib/python3.13 /usr/local/lib/python3.13
+COPY --from=python-provider /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/libpython3.13.so.1.0
+RUN ln -sf /usr/local/bin/python3.13 /usr/local/bin/python3 \
+    && ln -sf /usr/local/bin/python3.13 /usr/local/bin/python \
+    && ln -sf /usr/local/lib/libpython3.13.so.1.0 /usr/local/lib/libpython3.13.so \
+    && ldconfig \
+    && addgroup --system --gid 1001 librefang \
+    && adduser --system --uid 1001 --ingroup librefang librefang
+
+COPY --from=builder /usr/local/bin/librefang /usr/local/bin/librefang
+COPY --from=builder /build/packages /opt/librefang/packages
+COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+    && usermod -s /sbin/nologin librefang \
+    && chown -R librefang:librefang /opt/librefang/packages
+
+EXPOSE 4545
+ENV LIBREFANG_HOME=/data
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD curl -fsS http://127.0.0.1:${PORT:-4545}/api/health || exit 1
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["librefang", "start", "--foreground"]
