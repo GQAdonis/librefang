@@ -1,7 +1,7 @@
 # Change C-008 — Web console: run, stop, restart, and test the UAR
 
 **Phase:** phase-10-uar-sidecar-availability
-**Status:** SPECCED
+**Status:** DONE (2026-07-31)
 **Depends on:** C-006 (supervisor), C-007 (driver)
 **Files to touch:** `crates/librefang-api/src/routes/uar.rs` (or a new module), `crates/librefang-api/dashboard/src/`
 **Closes:** G-7
@@ -75,3 +75,12 @@ Add `#[tokio::test]` integration tests against the shared `TestAppState` product
 harness (repo rule: every new route gets one) covering status, start/stop/restart, and
 test-completion. Use C-006's fake
 `uar-sidecar` so CI needs no real UAR.
+
+## Completion evidence
+
+- Authenticated production-router tests cover status, start, stop, restart, model proxy,
+  feature-enabled completion, feature-disabled 503 behavior, and missing-binary diagnostics.
+- Dashboard queries and mutations use the shared key factory and invalidate the UAR status
+  contract. The full dashboard suite passes: 88 files and 902 tests.
+- A live authenticated BossFang daemon connected to the immutable published image, reported
+  `healthy`, and returned exactly `BossFang UAR is ready.` from `POST /api/uar/test`.

@@ -6,7 +6,7 @@
   "currentTask": null,
   "exactNextCommand": "/kbd-status",
   "generatedBy": "kbd-runtime",
-  "implementationCompleted": 53,
+  "implementationCompleted": 56,
   "implementationTotal": 66,
   "path": [
     "phase-10-uar-sidecar-availability"
@@ -17,10 +17,10 @@
   ],
   "planRevision": 1,
   "projectId": "eca657d1-b62b-4085-b712-d398b35c1903",
-  "revision": 37,
+  "revision": 72,
   "runId": "phase-10-uar-sidecar-availability-20260731T190715Z",
   "schemaVersion": "5",
-  "sourceRevision": 37,
+  "sourceRevision": 72,
   "status": "ready",
-  "updatedAt": "2026-07-31T20:43:39.399601Z"
+  "updatedAt": "2026-08-01T03:16:51.357501Z"
 }

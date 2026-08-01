@@ -1,6 +1,7 @@
 {
   "cursor": [
-    "phase-10-uar-sidecar-availability"
+    "phase-10-uar-sidecar-availability",
+    "reflect"
   ],
   "generatedBy": "kbd-runtime",
   "root": {
@@ -178,37 +179,37 @@
           {
             "id": "C-006",
             "progress": {
-              "done": 0,
-              "total": 0
+              "done": 3,
+              "total": 3
             },
-            "status": "PENDING",
+            "status": "COMPLETE",
             "type": "change"
           },
           {
             "id": "C-007",
             "progress": {
-              "done": 0,
-              "total": 0
+              "done": 3,
+              "total": 3
             },
-            "status": "PENDING",
+            "status": "COMPLETE",
             "type": "change"
           },
           {
             "id": "C-008",
             "progress": {
-              "done": 0,
-              "total": 0
+              "done": 3,
+              "total": 3
             },
-            "status": "PENDING",
+            "status": "COMPLETE",
             "type": "change"
           }
         ],
         "id": "phase-10-uar-sidecar-availability",
         "progress": {
-          "done": 5,
+          "done": 8,
           "total": 8
         },
-        "status": "IN_PROGRESS",
+        "status": "COMPLETE",
         "type": "phase"
       },
       {
@@ -759,13 +760,13 @@
     ],
     "id": "eca657d1-b62b-4085-b712-d398b35c1903",
     "progress": {
-      "done": 53,
+      "done": 56,
       "total": 66
     },
     "status": "ready",
     "type": "phase"
   },
   "schemaVersion": "1",
-  "sourceRevision": 37,
-  "updatedAt": "2026-07-31T20:43:39.399601Z"
+  "sourceRevision": 72,
+  "updatedAt": "2026-08-01T03:16:51.357501Z"
 }

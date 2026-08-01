@@ -82,3 +82,28 @@ the phase is closed.
 | **C-006** UAR sidecar supervisor | Codex native tool | frontier | in progress |
 | **C-007** HTTP + SSE driver | Codex native tool | frontier | queued after C-006 |
 | **C-008** operator API + dashboard | Codex native tool | frontier | queued after C-007 |
+
+## Completion — 2026-07-31
+
+| Change | Result | Evidence |
+|---|---|---|
+| **C-006** UAR sidecar supervisor | done | Hermetic lifecycle tests, deterministic restart-policy tests, retained-listener UAR startup, exact-image publication probe |
+| **C-007** HTTP + SSE driver | done | 21 driver tests, feature-enabled API integration, real published-image Groq completion |
+| **C-008** operator API + dashboard | done | Authenticated production-router tests, 902 dashboard tests, live shipped-path BossFang completion |
+
+The immutable runtime contract is
+`ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9c28f27532a03e68d5035b248a0cef5b8`
+with linux/amd64 digest
+`sha256:8ce03effd1c774b3122adc7563e4fc92683738d2834e5054cba32e567c934748`.
+UAR publication workflow `30679093670` passed, including executable-presence and supervised
+readiness probes. An independent container probe verified `READY`, `/healthz`, `/readyz`,
+OpenAPI, models, and a real completion. Finally, an authenticated BossFang daemon used that
+endpoint through `/api/uar/status`, `/api/uar/start`, and `/api/uar/test`; the test route
+returned exactly `BossFang UAR is ready.`.
+
+Final BossFang gates passed: workspace library check, workspace all-target clippy with warnings
+denied, scoped API suites with and without `uar-driver`, all 902 dashboard tests, dashboard
+typecheck and lint, formatting, and branding enforcement. Two unrelated baseline failures were
+recorded rather than folded into this phase: Ukrainian i18n parity has eight extra plural keys,
+and three non-UAR `codex_cli` tests expose a pre-existing duplicate
+`--skip-git-repo-check` argument. All 21 UAR driver tests in that same run passed.

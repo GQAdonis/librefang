@@ -63,12 +63,12 @@
   "generatedBy": "kbd-runtime",
   "implementation_completed": 3,
   "implementation_total": 3,
-  "last_updated": "2026-07-31T20:43:39.399601Z",
+  "last_updated": "2026-08-01T03:16:51.357501Z",
   "last_updated_by": "kbd-runtime",
   "migrationStatus": null,
   "parentPhase": "phase-10-uar-sidecar-availability",
   "phase": "uar-readiness-and-tooling-repair",
   "phaseId": "phase-10-uar-sidecar-availability::uar-readiness-and-tooling-repair",
   "schemaVersion": "2",
-  "sourceRevision": 37
+  "sourceRevision": 72
 }

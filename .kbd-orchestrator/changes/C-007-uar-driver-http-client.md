@@ -1,7 +1,7 @@
 # Change C-007 — `UarDriver` becomes an HTTP + SSE client
 
 **Phase:** phase-10-uar-sidecar-availability
-**Status:** SPECCED
+**Status:** DONE (2026-07-31)
 **Depends on:** C-006 (a running, health-checked UAR to talk to)
 **Files to touch:** `crates/librefang-llm-drivers/src/drivers/uar.rs`
 **Closes:** G-5
@@ -87,3 +87,12 @@ cargo clippy -p librefang-llm-drivers --all-targets --features uar-driver -- -D 
 
 Test against the **fake `uar-sidecar`** from C-006 (contract-honouring stub), so CI needs no
 real UAR. Cover: happy-path completion, streaming, sidecar down, version mismatch.
+
+## Completion evidence
+
+- The feature-gated HTTP driver maps completions, SSE deltas, tool calls, finish reasons,
+  usage, capability failures, and supervisor endpoint republication in deterministic tests.
+- The 21 UAR driver module tests pass. The feature-enabled API integration suite passes and
+  exercises the production route through `UarDriver`.
+- The exact published UAR image returned a real Groq completion, and the BossFang operator
+  route returned `BossFang UAR is ready.` through the same endpoint.
