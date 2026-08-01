@@ -39,6 +39,10 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install system deps for keyring/secret-service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libsecret-1-dev pkg-config
       - name: Check OpenAPI matrix gate
         run: cargo test -p librefang-api --test openapi_spec_test openapi_paths_are_mapped_to_integration_coverage
 
