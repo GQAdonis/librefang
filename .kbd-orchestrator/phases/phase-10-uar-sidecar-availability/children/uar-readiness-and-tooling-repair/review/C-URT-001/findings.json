@@ -1,0 +1,30 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "src/bin/uar-sidecar.rs",
+      "line": 34,
+      "claim": "The new code will not compile because it calls `error.context(...)` without importing the `anyhow::Context` trait.",
+      "evidence": "The hunk adds `Err(error) => Err(error.context(\"UAR sidecar failed during startup\")),` but the imports only add `use std::{net::SocketAddr, pin::Pin};` and do not bring `anyhow::Context` into scope.",
+      "suggested_fix": "Add `use anyhow::Context as _;` or replace the call with an explicit `anyhow!(...)` wrapping that does not require the trait."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "src/bin/uar-sidecar.rs",
+      "claim": "Acceptance criterion 1.1 is not satisfied because the diff does not add any sidecar startup protocol delta or design artifact.",
+      "evidence": "Acceptance criterion 1.1 says `Add the sidecar startup protocol delta and design`; the diff only changes `.claude/settings.local.json`, `src/bin/uar-sidecar.rs`, and `src/server.rs`, with no OpenSpec/design/protocol document changes despite the packet's `New Capabilities` naming `sidecar-startup-protocol`.",
+      "suggested_fix": "Add the required protocol/design delta in the repository's OpenSpec/docs location and include it in the change."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

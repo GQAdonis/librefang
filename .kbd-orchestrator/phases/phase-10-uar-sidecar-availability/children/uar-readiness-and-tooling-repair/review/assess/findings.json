@@ -1,0 +1,39 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The UAR readiness assessment relies on external source and workflow files that are not present in the packet and are explicitly marked missing.",
+      "evidence": "assessment.md claims: \"Prometheus-AGS UAR `main` contains the correct retained-listener and post-initialization readiness design in `src/bin/uar-sidecar.rs` and `src/server.rs`\" and \"The sync branch's `publish-ghcr.yml` publishes a commit-addressed image automatically on push.\" The packet's cited paths say: \"MISSING  publish-ghcr.yml\" and \"MISSING  src/bin/uar-sidecar.rs\"; the file tree only contains local BossFang paths, not the referenced UAR repository.",
+      "suggested_fix": "Either include the external UAR repository/file evidence in the packet or rewrite the assessment to distinguish verified local findings from unverified external assumptions."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment asserts a specific Docker image pin and runtime behavior without packet evidence for the Dockerfile contents or image inspection.",
+      "evidence": "assessment.md states: \"BossFang's `Dockerfile` pins `ghcr.io/gqadonis/universal-agent-runtime:fb2e0a8...`. That image exists and contains `uar-sidecar`, but it embodies the racing startup contract.\" The packet file tree only proves `./Dockerfile` exists; no Dockerfile contents, image digest, or inspection output are included.",
+      "suggested_fix": "Add the exact Dockerfile line and image inspection/source evidence, or downgrade the finding to an unverified hypothesis requiring confirmation."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The KBD daemon diagnosis depends on launchd configuration and authenticated probe results that are not evidenced in the packet.",
+      "evidence": "assessment.md states: \"launchd runs Sovereign Sync with working directory `/Users/gqadonis/Projects/prometheus/prometheus-skill-pack` and no `KBD_FOCUS_PROJECT_PATH`. Authenticated probes for both the worktree ID and the failed migration ID return `404 unknown KBD project`.\" The packet contains no launchd plist, environment dump, command output, or probe transcript supporting those claims.",
+      "suggested_fix": "Include the launchd configuration excerpt and authenticated probe output, or mark the daemon-focus finding as needing verification before planning."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

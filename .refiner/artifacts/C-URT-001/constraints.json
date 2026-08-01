@@ -1,0 +1,54 @@
+{
+  "artifact_type": "content",
+  "constraints": [
+    {
+      "id": "retained-listener",
+      "description": "The OS-assigned primary listener remains owned continuously from port allocation through Axum serving.",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "deterministic listener-retention test"
+      }
+    },
+    {
+      "id": "truthful-readiness",
+      "description": "READY is emitted exactly once only after fallible application initialization succeeds; startup failure emits no READY record.",
+      "severity": "blocking",
+      "type": "semantic",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "startup-failure test and protocol adversarial review"
+      }
+    },
+    {
+      "id": "immutable-publication",
+      "description": "BossFang consumes an executable uar-sidecar from a GHCR tag equal to the merged UAR commit SHA.",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "GHCR workflow, manifest inspection, and container executable probe"
+      }
+    },
+    {
+      "id": "downstream-certification",
+      "description": "The exact image pin passes BossFang sidecar unit/integration tests, workspace library check, formatting, branding, and diff integrity.",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "BossFang verification commands"
+      }
+    }
+  ],
+  "global_rules": [
+    "Keep UAR as a process/HTTP boundary; do not collapse it into the BossFang address space.",
+    "Do not pin an unpublished or mutable image tag.",
+    "Do not broaden the patch to unrelated UAR clippy debt."
+  ],
+  "termination_conditions": [
+    "All blocking constraints pass.",
+    "The merged UAR SHA is published, probed, pinned, and certified downstream."
+  ]
+}

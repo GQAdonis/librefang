@@ -1,0 +1,22 @@
+{
+  "mode": "diff",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [],
+  "checked_classes": [
+    "Spec violations \u2014 the diff retains the listener through startup, delays stdout readiness until after AppConfig loading and server readiness notification, adds the OpenSpec delta/design, and includes the requested focused tests and verification notes.",
+    "Correctness \u2014 the readiness select handles receiver closure, early server completion, and early server error without emitting READY; the retained listener is passed into the server path and its actual local port is reported.",
+    "Regressions \u2014 no concrete dependent caller in the packet contradicts the changed sidecar startup API, and normal start_server behavior still binds from config when no listener is supplied.",
+    "Security \u2014 no new external input boundary, deserialization, authz path, path handling, or secret exposure is introduced in the shown hunks.",
+    "Constraint breaches \u2014 constraints is null, so there are no project-level blocking rules to apply.",
+    "Silent failure \u2014 readiness send failures are propagated, config load failures exit before READY, and server startup failures before readiness are surfaced as errors."
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

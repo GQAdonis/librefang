@@ -1,0 +1,13 @@
+{
+  "stage": "spec",
+  "completedAt": "2026-07-31T17:51:09Z",
+  "outputs": [
+    "changes/C-URT-001/spec.md",
+    "changes/C-URT-002/spec.md",
+    "changes/C-URT-003/spec.md"
+  ],
+  "nextStage": "plan",
+  "summaryForNext": "Three native child changes: C-URT-001 UAR port/publish/pin, C-URT-002 KBD migration/focus/live proof, C-URT-003 kernel stub certification; ZeeSpec n/a.",
+  "skipped": false,
+  "skipReason": null
+}

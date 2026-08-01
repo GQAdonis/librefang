@@ -1,0 +1,771 @@
+{
+  "cursor": [
+    "phase-10-uar-sidecar-availability"
+  ],
+  "generatedBy": "kbd-runtime",
+  "root": {
+    "annotations": [],
+    "children": [
+      {
+        "annotations": [],
+        "canonicalId": "phase-1-rebrand-completion",
+        "children": [
+          {
+            "id": "m1-m2-cli-banner-install-paths-config-templates",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m3-install-script",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m4-docs-mdx-sweep",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m5-m7-ua-strings-env-aliases",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m6-dashboard-localstorage-shim",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-1-rebrand-completion",
+        "progress": {
+          "done": 5,
+          "total": 5
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-10-uar-sidecar-availability",
+        "children": [
+          {
+            "annotations": [],
+            "canonicalId": "phase-10-uar-sidecar-availability::sidecar-supervision-design-spike",
+            "children": [
+              {
+                "id": "C-SPK-001",
+                "progress": {
+                  "done": 0,
+                  "total": 0
+                },
+                "status": "COMPLETE",
+                "type": "change"
+              }
+            ],
+            "id": "sidecar-supervision-design-spike",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "status": "COMPLETE",
+            "type": "phase"
+          },
+          {
+            "annotations": [],
+            "canonicalId": "phase-10-uar-sidecar-availability::uar-readiness-and-tooling-repair",
+            "children": [
+              {
+                "id": "C-URT-001",
+                "progress": {
+                  "done": 5,
+                  "total": 5
+                },
+                "status": "COMPLETE",
+                "type": "change"
+              },
+              {
+                "id": "C-URT-002",
+                "progress": {
+                  "done": 3,
+                  "total": 3
+                },
+                "status": "COMPLETE",
+                "type": "change"
+              },
+              {
+                "id": "C-URT-003",
+                "progress": {
+                  "done": 0,
+                  "total": 0
+                },
+                "status": "COMPLETE",
+                "type": "change"
+              }
+            ],
+            "id": "uar-readiness-and-tooling-repair",
+            "progress": {
+              "done": 3,
+              "total": 3
+            },
+            "status": "COMPLETE",
+            "type": "phase"
+          },
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-006",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-007",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-008",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          }
+        ],
+        "id": "phase-10-uar-sidecar-availability",
+        "progress": {
+          "done": 5,
+          "total": 8
+        },
+        "status": "IN_PROGRESS",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-2-rebrand-cleanup",
+        "children": [
+          {
+            "id": "m8-m11-dashboard-prose-cleanup",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m9b-config-defaults-doc-sweep",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m10-legacy-key-removal-planning",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-2-rebrand-cleanup",
+        "progress": {
+          "done": 3,
+          "total": 3
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-3-upstream-sync-and-ci-hardening",
+        "children": [
+          {
+            "id": "m1-m3-ci-fix-and-gitattributes",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "m2-upstream-merge-224-commits",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-3-upstream-sync-and-ci-hardening",
+        "progress": {
+          "done": 2,
+          "total": 2
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-4-multilang-wasm-toolchain",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-006",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-007",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-008",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-009",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-4-multilang-wasm-toolchain",
+        "progress": {
+          "done": 9,
+          "total": 9
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-5-plugin-host-crate",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-006",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-007",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-008",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-5-plugin-host-crate",
+        "progress": {
+          "done": 8,
+          "total": 8
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-6-plugin-examples",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-006",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-007",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-008",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-6-plugin-examples",
+        "progress": {
+          "done": 8,
+          "total": 8
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-7-wasi-plugin-host",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          }
+        ],
+        "id": "phase-7-wasi-plugin-host",
+        "progress": {
+          "done": 1,
+          "total": 1
+        },
+        "status": "COMPLETE",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-8-fixture-rebuilds",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          }
+        ],
+        "id": "phase-8-fixture-rebuilds",
+        "progress": {
+          "done": 0,
+          "total": 5
+        },
+        "status": "PENDING",
+        "type": "phase"
+      },
+      {
+        "annotations": [],
+        "canonicalId": "phase-9-config-store-migration",
+        "children": [
+          {
+            "id": "C-001",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-002",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-003",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-004",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005b",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-005c",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-006",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-007",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "COMPLETE",
+            "type": "change"
+          },
+          {
+            "id": "C-008",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-009",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-009b",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          },
+          {
+            "id": "C-005d",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "status": "PENDING",
+            "type": "change"
+          }
+        ],
+        "id": "phase-9-config-store-migration",
+        "progress": {
+          "done": 8,
+          "total": 13
+        },
+        "status": "PENDING",
+        "type": "phase"
+      }
+    ],
+    "id": "eca657d1-b62b-4085-b712-d398b35c1903",
+    "progress": {
+      "done": 53,
+      "total": 66
+    },
+    "status": "ready",
+    "type": "phase"
+  },
+  "schemaVersion": "1",
+  "sourceRevision": 37,
+  "updatedAt": "2026-07-31T20:43:39.399601Z"
+}

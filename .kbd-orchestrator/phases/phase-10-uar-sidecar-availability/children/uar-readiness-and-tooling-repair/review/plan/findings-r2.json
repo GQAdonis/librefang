@@ -1,0 +1,31 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "C-URT-001 requires proving the BossFang Docker pin but the verification matrix has no concrete assertion that the repository now references the exact repaired UAR SHA tag.",
+      "evidence": "The plan states the completion evidence includes a \"BossFang pin\" and the hard gate says \"the public image and BossFang pin must both be proven,\" but the BossFang verification list contains only Rust checks, sidecar/API tests, branding, and `git diff --check`; it does not include a `grep`, Dockerfile assertion, or diff check tying `Dockerfile` to `ghcr.io/gqadonis/universal-agent-runtime:<integrated-sha>`.",
+      "suggested_fix": "Add an explicit BossFang verification step such as `grep -F \"ghcr.io/gqadonis/universal-agent-runtime:<integrated-sha>\" Dockerfile` or an equivalent assertion against the exact file that carries the UAR image pin."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "C-URT-002's acceptance criteria for canonical KBD project identity are too vague to prove the goal was met.",
+      "evidence": "The goal is to \"Repair canonical KBD project identity initialization and prove typed mutations work,\" but the live KBD verification only says \"immutable manifest tracked and identity unchanged\" without naming the manifest path, expected project identity fields, or exact JSON assertions; the later checks focus on migration counts, parent IDs, and typed decision replay.",
+      "suggested_fix": "Specify the manifest/projection files and exact assertions for canonical project identity, for example expected project UUID, root path, slug, parent/child canonical IDs, and a command that fails if generated canonical projections diverge from the tracked manifest."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

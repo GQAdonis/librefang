@@ -1,0 +1,12 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-07-31T17:44:59Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Three candidates: adapt UAR's first-party retained-listener design; adopt and narrowly repair the existing KBD control plane; track the immutable manifest. Build-only work is the KBD parser/hierarchy/installer boundary and the three named kernel stub signatures. Adversarial review PASS; both warnings were resolved.",
+  "skipped": false,
+  "skipReason": null
+}

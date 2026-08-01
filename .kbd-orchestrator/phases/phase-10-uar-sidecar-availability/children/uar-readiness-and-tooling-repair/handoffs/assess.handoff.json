@@ -1,0 +1,11 @@
+{
+  "stage": "assess",
+  "completedAt": "2026-07-31T17:40:56Z",
+  "outputs": [
+    "assessment.md"
+  ],
+  "nextStage": "analyze",
+  "summaryForNext": "UAR sync branch/image still violates retained-listener readiness; KBD daemon focus plus migration parsing/hierarchy defects block safe canonical initialization; kernel stub has three stale trait signatures. External Prometheus source evidence remains an explicit adversarial-review carry-forward because BossFang artifact packets cannot include that repository.",
+  "skipped": false,
+  "skipReason": null
+}

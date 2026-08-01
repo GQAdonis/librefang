@@ -1,0 +1,22 @@
+{
+  "mode": "diff",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [],
+  "checked_classes": [
+    "Spec violations \u2014 the plist lint was replaced with a Python standard-library XML parser, and legacy change selection now falls back from empty changes to ordered_changes.",
+    "Correctness \u2014 reviewed fallback ordering and empty collection handling in legacy_changes; no concrete defect is evident from the provided diff.",
+    "Regressions \u2014 no generated artifacts, docs surface, or unrelated behavior changes are present in the two-file diff.",
+    "Security \u2014 no new secret material, external input execution, path traversal, or unsafe deserialization is introduced.",
+    "Constraint breaches \u2014 the diff does not touch generated Codex plugin inputs/outputs, secrets, docs-required plugin surface, generator behavior, or launchd bash scripts.",
+    "Silent failure \u2014 the XML parser invocation and Rust fallback logic do not swallow errors in the shown hunks."
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

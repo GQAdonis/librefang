@@ -1,0 +1,26 @@
+{
+  "changeId": "C-URT-003",
+  "schemaVersion": "1",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Update all three KernelHandleStub KnowledgeGraph signatures",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["crates/librefang-kernel-handle/src/test_stub.rs"],
+      "verify": "cargo clippy -p librefang-kernel-handle --all-targets --features test-stub -- -D warnings",
+      "notes": null
+    },
+    {
+      "id": "2",
+      "title": "Run focused tests and full workspace all-target certification",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "cargo test -p librefang-kernel-handle --features test-stub && cargo clippy --workspace --all-targets -- -D warnings",
+      "notes": null
+    }
+  ]
+}

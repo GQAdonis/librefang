@@ -1,0 +1,21 @@
+{
+  "allowedWritePaths": [
+    ".kbd-orchestrator/phases/phase-10-uar-sidecar-availability/children/uar-readiness-and-tooling-repair/**",
+    ".prometheus/project.json",
+    "Dockerfile",
+    "crates/librefang-kernel-handle/src/test_stub.rs",
+    ".refiner/artifacts/C-URT-001/**",
+    ".refiner/artifacts/C-URT-002/**",
+    "/Users/gqadonis/.claude/worktrees/uar-ready-protocol-sync/**",
+    "/tmp/prometheus-skill-pack-kbd-migration-repair/**"
+  ],
+  "deniedPaths": [
+    "/Users/gqadonis/Projects/prometheus/universal-agent-runtime/src/**",
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/substrate/**",
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/tools/**",
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/scripts/**",
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/shared/**"
+  ],
+  "inheritsConstraints": true,
+  "__note": "Edit allowedWritePaths to widen the child loop's write surface. .kbd-orchestrator/** and SCRATCHPAD.md are always allowed. Enforced advisorily by check-child-scope.sh."
+}

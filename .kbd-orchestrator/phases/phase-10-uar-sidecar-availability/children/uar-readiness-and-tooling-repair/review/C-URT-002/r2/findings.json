@@ -1,0 +1,31 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "shared/scripts/tests/test-kbd-focus-service-install.sh",
+      "line": 24,
+      "claim": "The regression test unconditionally invokes macOS-only `plutil`, so it fails on Linux hosts even though the installer renders both launchd and systemd artifacts.",
+      "evidence": "New test line adds `plutil -lint \"$OUTPUT_ROOT/ai.prometheus.sovereign-sync.plist\" >/dev/null`; file tree includes Linux systemd artifacts under `shared/systemd`, and no constraint or acceptance criterion limits this test to macOS.",
+      "suggested_fix": "Guard the lint with `if command -v plutil >/dev/null; then ...; fi`, or use a portable XML parser available in the test environment."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "substrate/kbd-runtime/src/lib.rs",
+      "line": 3818,
+      "claim": "`ordered_changes` are ignored whenever a `changes` key exists, so historical ledgers with an empty or non-array `changes` field and populated `ordered_changes` are not imported as required.",
+      "evidence": "Acceptance criterion requires importing historical `ordered_changes` ledgers; `legacy_phase` now uses `progress.get(\"changes\").or_else(|| progress.get(\"ordered_changes\"))`, which never consults `ordered_changes` if `changes` is present, and `progress_uncertain_rows` uses the same pattern at line 3911.",
+      "suggested_fix": "Fallback to `ordered_changes` when `changes` is absent, non-array, or empty/otherwise unusable for the legacy schema being migrated, and add a regression test covering a ledger containing both keys."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

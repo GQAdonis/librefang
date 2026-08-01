@@ -1,0 +1,14 @@
+{
+  "stage": "plan",
+  "completedAt": "2026-07-31T20:38:34Z",
+  "outputs": [
+    "plan.md",
+    "changes/C-URT-001/spec.md",
+    "changes/C-URT-002/spec.md",
+    "changes/C-URT-003/spec.md"
+  ],
+  "nextStage": "execute",
+  "summaryForNext": "Three bounded repairs were planned: UAR publish-and-pin, KBD identity-safe migration/focus, and fixture-only kernel certification. Execution order preserves immutable publication and backed-up migration gates.",
+  "skipped": false,
+  "skipReason": null
+}

@@ -1,0 +1,23 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "scripts/install-mcp-services.sh",
+      "line": 227,
+      "claim": "The new explicit KBD focus project path is rendered by raw string replacement, so valid project paths containing XML/systemd-special characters produce invalid launchd plists or broken systemd environment values.",
+      "evidence": "Acceptance criterion requires service installation to accept an explicit KBD focus project and render both WorkingDirectory and KBD_FOCUS_PROJECT_PATH consistently for launchd and systemd; the renderer adds `\"__KBD_FOCUS_PROJECT_PATH__\": \"KBD_FOCUS_PROJECT_PATH\"` and then does `text = text.replace(k, os.environ[env])`, while the templates insert it directly into `<string>__KBD_FOCUS_PROJECT_PATH__</string>` and `Environment=KBD_FOCUS_PROJECT_PATH=__KBD_FOCUS_PROJECT_PATH__`.",
+      "suggested_fix": "Escape values according to the target format: XML-escape plist string values or generate the plist with a plist library, and quote/escape systemd Environment values with systemd-compatible escaping; add tests with spaces and characters such as `&` in the focus project path."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

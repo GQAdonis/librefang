@@ -1,0 +1,23 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "src/server.rs",
+      "line": 1128,
+      "claim": "Readiness is reported even when companion-listener initialization fails, violating the stated readiness contract.",
+      "evidence": "Acceptance criteria / What Changes requires: \"Emit the stdout readiness record only after the HTTP application and companion listener are initialized successfully.\" The diff calls `let companion = bind_companion_listener(&config.server.host, primary_addr.port()).await;` where `bind_companion_listener` returns `Option<TcpListener>` and explicitly treats failure as non-fatal, then unconditionally sends readiness with `ready.send(primary_addr)` regardless of whether `companion` is `None`.",
+      "suggested_fix": "For sidecar startup, make companion binding failure a startup error before sending readiness, or adjust the acceptance/spec language to define the companion listener as optional and not part of the readiness success condition."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

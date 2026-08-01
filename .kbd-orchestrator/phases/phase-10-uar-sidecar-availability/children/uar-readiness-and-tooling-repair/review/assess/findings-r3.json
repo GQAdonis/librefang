@@ -1,0 +1,31 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment contradicts itself about whether implementation changes exist in this child/current worktree.",
+      "evidence": "It states, \"No implementation changes exist in this child,\" but later states, \"C-006 through C-008: Implemented and committed in the current worktree.\"",
+      "suggested_fix": "Clarify whether C-006 through C-008 were implemented in this child, in a prior child, or in another worktree/branch, and align the implementation status accordingly."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The KBD typed-mutation path assessment depends on source claims that are not supported by the provided file tree or cited paths.",
+      "evidence": "The artifact claims `tools/prometheus-cli/.../commands/kbd.rs`, `substrate/sovereign-sync/src/rest_api.rs`, and `substrate/sovereign-sync/src/kbd_control.rs` implement the typed command path, but `cited_paths` marks `tools/prometheus-cli/.../commands/kbd.rs` and `substrate/sovereign-sync/src/rest_api.rs` as MISSING, and none of those paths appear in the provided `file_tree`. The assessment nevertheless concludes: \"The typed path exists; it is blocked before submission by project focus, not absent.\"",
+      "suggested_fix": "Add verifiable evidence for the Prometheus/KBD source claims in the packet, or downgrade the conclusion to an unverified hypothesis and require analysis to inspect those external paths before planning around the typed path."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}
