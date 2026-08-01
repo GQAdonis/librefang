@@ -1,15 +1,15 @@
 # Current Waypoint
 
-**Active path:** phase-10-uar-sidecar-availability > uar-readiness-and-tooling-repair
-**Change:** C-URT-001
-**Updated:** 2026-07-31 by kbd-plan
+**Active path:** phase-10-uar-sidecar-availability
+**Change:** none
+**Updated:** 2026-07-31 at canonical revision 37
 
 ## Where we are
 
-Assessment, analysis, spec, and plan are complete for three repairs: publish and pin truthful UAR readiness, repair and initialize canonical KBD control safely, and restore kernel-handle all-target certification. Execution starts with the UAR release lane so its remote image build can run while local repairs proceed.
+The `uar-readiness-and-tooling-repair` child is complete (3/3) and rolled up as `DONE`. The parent phase is active with 5/8 implementation changes complete; C006-C008 remain pending. The child removed the UAR publication, canonical KBD identity, and kernel-handle certification blockers.
 
 ## Next step
 
 ```text
-/kbd-execute uar-readiness-and-tooling-repair C-URT-001
+/kbd-status
 ```
