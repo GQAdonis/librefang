@@ -7,7 +7,7 @@
 # new release. Published by GQAdonis/universal-agent-runtime's
 # publish-ghcr.yml — GHCR because it is pullable with no credentials, unlike
 # the operator's private GCP Artifact Registry image.
-ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:67a9939a0cbbf6607291022fb36df5776f5294af
+ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9c28f27532a03e68d5035b248a0cef5b8
 FROM ${UAR_IMAGE} AS uar-sidecar-src
 # ─────────────────────────────────────────────────────────────────────────────
 

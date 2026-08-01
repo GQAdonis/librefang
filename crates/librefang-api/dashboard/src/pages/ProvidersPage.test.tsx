@@ -313,6 +313,28 @@ describe("ProvidersPage", () => {
     expect(screen.getByText(/18 ms/)).toBeInTheDocument();
   });
 
+  it("shows actionable sidecar resolution diagnostics", () => {
+    useProvidersMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useUarStatusMock.mockReturnValue({
+      data: {
+        state: "crash_looping",
+        restart_count: 0,
+        last_error: "Failed to spawn UAR sidecar. Searched: /data/bin/uar-sidecar, /usr/local/bin/uar-sidecar",
+      },
+      isLoading: false,
+    });
+
+    renderPage();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Searched:");
+    expect(screen.getByRole("alert")).toHaveTextContent("/data/bin/uar-sidecar");
+  });
+
   it("shows the configured/total count badge in the header", () => {
     useProvidersMock.mockReturnValue({
       data: PROVIDERS,

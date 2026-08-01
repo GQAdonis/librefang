@@ -208,6 +208,40 @@ async fn operator_routes_start_report_proxy_models_and_stop_endpoint_mode() {
     assert_eq!(stopped["state"], "stopped");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn operator_routes_surface_actionable_missing_binary_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().to_path_buf();
+    let test = TestAppState::with_builder(MockKernelBuilder::new().with_config(move |config| {
+        config.home_dir = home;
+        config.uar = Some(librefang_types::config::UarConfig {
+            sidecar: librefang_types::config::UarSidecarConfig {
+                enabled: true,
+                command: "uar-sidecar".to_string(),
+                restart: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+    }));
+    let app = test.router();
+
+    let (status, failure) = request(&app, "POST", "/api/uar/start", "{}").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{failure}");
+    let error = failure["error"].as_str().unwrap();
+    assert!(error.contains("Searched:"), "{error}");
+    assert!(error.contains("bin/uar-sidecar"), "{error}");
+    assert!(error.contains("$PATH"), "{error}");
+    assert!(error.contains("set the sidecar's `command`"), "{error}");
+
+    let (status, snapshot) = request(&app, "GET", "/api/uar/status", "").await;
+    assert_eq!(status, StatusCode::OK, "{snapshot}");
+    assert_eq!(snapshot["state"], "crash_looping");
+    assert!(snapshot["last_error"]
+        .as_str()
+        .is_some_and(|value| value.contains("Searched:")));
+}
+
 #[cfg(feature = "uar-driver")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_route_issues_completion_through_http_driver() {
@@ -232,4 +266,16 @@ async fn test_route_issues_completion_through_http_driver() {
     assert_eq!(result["ok"], true);
     assert_eq!(result["reply"], "BossFang UAR is ready.");
     assert!(result["latency_ms"].as_u64().is_some());
+}
+
+#[cfg(not(feature = "uar-driver"))]
+#[tokio::test(flavor = "multi_thread")]
+async fn test_route_reports_disabled_feature_in_minimal_builds() {
+    let app = TestAppState::new().router();
+    let (status, result) = request(&app, "POST", "/api/uar/test", "{}").await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{result}");
+    assert_eq!(result["ok"], false);
+    assert!(result["error"]
+        .as_str()
+        .is_some_and(|value| value.contains("without the uar-driver feature")));
 }
