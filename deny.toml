@@ -63,9 +63,6 @@ ignore = [
     { id = "RUSTSEC-2025-0100", reason = "unic-* unmaintained (kuchikiki/selectors chain). https://rustsec.org/advisories/RUSTSEC-2025-0100" },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via pdf-extract -> lopdf, no safe upgrade available. https://rustsec.org/advisories/RUSTSEC-2026-0192" },
     { id = "RUSTSEC-2025-0141", reason = "bincode 2.0.x unmaintained; transitive via the 2026-06-17 upstream dep bumps. https://rustsec.org/advisories/RUSTSEC-2025-0141" },
-    { id = "RUSTSEC-2024-0384", reason = "instant unmaintained; transitive via notify → universal-agent-runtime (UAR provider). https://rustsec.org/advisories/RUSTSEC-2024-0384" },
-    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained; transitive via biblatex/kreuzberg → universal-agent-runtime (UAR provider). https://rustsec.org/advisories/RUSTSEC-2024-0436" },
-    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained; transitive via indicatif → tokenizers → liter-llm → universal-agent-runtime (UAR provider). https://rustsec.org/advisories/RUSTSEC-2025-0119" },
 ]
 # Note: RUSTSEC-2025-0134 (rustls-pemfile unmaintained) was removed — the
 # crate was dropped from the dependency tree by an upstream dep bump and the
@@ -103,12 +100,18 @@ allow = [
 # Per-crate license clarifications go here. Add only when SPDX detection is
 # ambiguous AND the upstream LICENSE file has been read manually.
 exceptions = [
-    # surrealdb-protocol uses BUSL-1.1 (Business Source License 1.1 — converts to
-    # Apache-2.0 after 4 years). Required as a transitive dep of surrealdb 3.0.5
-    # which BossFang pins as the primary storage backend. The BUSL grants unlimited
-    # non-production use and production use below 100 nodes; BossFang's use fits
-    # both criteria. Review at next surrealdb major version bump.
+    # The SurrealDB packages use BUSL-1.1 (Business Source License 1.1 — converts
+    # to Apache-2.0 after 4 years). They implement BossFang's pinned primary storage
+    # backend. The BUSL grants unlimited non-production use and production use below
+    # 100 nodes; BossFang's use fits both criteria. Review at the next SurrealDB major
+    # version bump. Keep this scoped per crate rather than allowing BUSL globally.
+    { allow = ["BUSL-1.1"], name = "surrealdb" },
+    { allow = ["BUSL-1.1"], name = "surrealdb-collections" },
+    { allow = ["BUSL-1.1"], name = "surrealdb-core" },
     { allow = ["BUSL-1.1"], name = "surrealdb-protocol" },
+    { allow = ["BUSL-1.1"], name = "surrealdb-strand" },
+    { allow = ["BUSL-1.1"], name = "surrealdb-types" },
+    { allow = ["BUSL-1.1"], name = "surrealdb-types-derive" },
 ]
 
 # `ring` ships a hand-rolled license file rather than a single SPDX ID;
@@ -179,21 +182,6 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     # ── BossFang-exclusive git deps ────────────────────────────────────────────
-    # liter-llm: unified LLM router used by UAR driver; no stable crates.io
-    # release yet (rc versioning). GQAdonis/liter-llm is the BossFang fork.
-    "https://github.com/GQAdonis/liter-llm.git",
-
-    # universal-agent-runtime: UAR provider giving access to 142+ LLM providers.
-    # BossFang uses GQAdonis fork which pins surreal-backend for surrealdb 3.x
-    # compatibility. No published crates.io release.
-    "https://github.com/GQAdonis/universal-agent-runtime.git",
-
-    # kreuzberg: document parsing library pulled in transitively via
-    # universal-agent-runtime. Public repo; SSH URL is in Cargo.lock because it
-    # is fetched via SSH upstream — a .cargo/config.toml source-replacement
-    # redirects to HTTPS for CI runners without SSH key access.
-    "ssh://git@github.com/GQAdonis/kreuzberg.git",
-
     # surreal-memory: SurrealDB-native memory substrate (semantic search,
     # knowledge graphs, task tracking). No crates.io release; embedded feature
     # required (no external SurrealDB service dependency).
