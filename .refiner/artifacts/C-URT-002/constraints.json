@@ -1,0 +1,54 @@
+{
+  "artifact_type": "content",
+  "constraints": [
+    {
+      "id": "worktree-isolation",
+      "description": "All Prometheus source edits are confined to the linked repair worktree.",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "git status and diff against origin/main"
+      }
+    },
+    {
+      "id": "root-cause-migration",
+      "description": "Migration preserves annotated status semantics, nested identity, parent relationships, and scoped duplicate slugs without projection hand edits.",
+      "severity": "blocking",
+      "type": "semantic",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "kbd-runtime regression tests"
+      }
+    },
+    {
+      "id": "durable-focus",
+      "description": "Both service managers render an explicit validated focus root as environment and working directory.",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "test-kbd-focus-service-install.sh"
+      }
+    },
+    {
+      "id": "no-hidden-test-state",
+      "description": "Control-token tests do not depend on ambient process configuration.",
+      "severity": "high",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "full kbd-runtime suite with configured host environment"
+      }
+    }
+  ],
+  "global_rules": [
+    "Do not delete failed runtime state or hand-edit canonical projections.",
+    "Back up binaries, service definitions, and migration inputs before live mutation.",
+    "Do not bypass commit or verification hooks."
+  ],
+  "termination_conditions": [
+    "All blocking constraints pass.",
+    "Live typed mutation and restart replay are proven after source integration."
+  ]
+}

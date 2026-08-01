@@ -435,6 +435,14 @@ use crate::types;
         routes::a2a_get_task,
         routes::a2a_cancel_task,
 
+        // ── Universal Agent Runtime sidecar ──
+        routes::uar_status,
+        routes::uar_start,
+        routes::uar_stop,
+        routes::uar_restart,
+        routes::uar_test_completion,
+        routes::uar_models,
+
         // ── Plugins ──
         routes::list_plugins,
         routes::get_plugin,

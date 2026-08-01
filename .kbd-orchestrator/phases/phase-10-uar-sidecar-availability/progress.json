@@ -1,102 +1,150 @@
 {
-  "phase": "phase-10-uar-sidecar-availability",
-  "assessment_complete": true,
-  "plan_complete": true,
-  "execution_started": false,
-  "backend": "native-tool",
-  "assessment_date": "2026-07-11",
-  "verdict": "proceed-with-architecture-change",
+  "changes": [
+    {
+      "blockers": [],
+      "id": "C-001",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-001"
+    },
+    {
+      "blockers": [],
+      "id": "C-002",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-002"
+    },
+    {
+      "blockers": [],
+      "id": "C-003",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-003"
+    },
+    {
+      "blockers": [],
+      "id": "C-004",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-004"
+    },
+    {
+      "blockers": [],
+      "id": "C-005",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-005"
+    },
+    {
+      "blockers": [],
+      "id": "C-006",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": "Verify exact published sidecar image contract",
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 3,
+      "tasks_total": 3,
+      "title": "C-006"
+    },
+    {
+      "blockers": [],
+      "id": "C-007",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": "Verify driver against the published UAR API",
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 3,
+      "tasks_total": 3,
+      "title": "C-007"
+    },
+    {
+      "blockers": [],
+      "id": "C-008",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": "Record live shipped-build completion proof",
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 3,
+      "tasks_total": 3,
+      "title": "C-008"
+    }
+  ],
+  "changes_completed": 8,
   "changes_total": 8,
-  "changes_completed": 4,
-  "changes": {
-    "C-001": {
-      "status": "DONE (merged #108 + follow-ups #111 golden, #115 protoc). Repaired the whole uar-driver feature chain \u2014 it was not merely force-enabled, it was BROKEN: librefang-cli never declared the feature the Dockerfile passes it. Now cli -> api -> kernel -> runtime -> llm-drivers, opt-in. Also fixed the extra_params API drift that was breaking the image build.",
-      "spec": "changes/C-001-uar-driver-unforce.md"
+  "children": {
+    "sidecar-supervision-design-spike": {
+      "certification_status": "NOT_TRACKED",
+      "changes_completed": 1,
+      "changes_total": 1,
+      "completed_at": null,
+      "handoff": null,
+      "implementation_completed": 1,
+      "implementation_total": 1,
+      "status": "DONE"
     },
-    "C-002": {
-      "status": "DONE (merged GQAdonis/universal-agent-runtime#1). uar-sidecar is now built and shipped in both the container image and the release tarball. cargo build --release was ALREADY compiling it; packaging simply never copied it.",
-      "spec": "changes/C-002-uar-publish-sidecar-binary.md"
-    },
-    "C-003": {
-      "status": "DONE (merged #109). resolve_sidecar_command generalized beyond the Telegram stem; a missing bundled binary now names every path searched instead of surfacing a bare os error 2.",
-      "spec": "changes/C-003-generalize-bundled-binary-resolution.md"
-    },
-    "C-004": {
-      "status": "IN PROGRESS \u2014 packaging blocker resolved, asset question being settled empirically. See c004_notes.",
-      "spec": "changes/C-004-ship-uar-binary-in-image.md"
-    },
-    "C-005": {
-      "status": "DONE (merged #112). [uar.sidecar] config block; also classified `storage` and `uar` as restart-required, fixing a pre-existing red drift guard.",
-      "spec": "changes/C-005-uar-sidecar-config-surface.md"
-    },
-    "C-006": {
-      "status": "PENDING \u2014 supervisor. Implementable against the FAKE contract-honouring sidecar without waiting on C-004.",
-      "spec": "changes/C-006-uar-sidecar-supervisor.md"
-    },
-    "C-007": {
-      "status": "PENDING \u2014 UarDriver becomes an HTTP + SSE client.",
-      "spec": "changes/C-007-uar-driver-http-client.md"
-    },
-    "C-008": {
-      "status": "PENDING \u2014 web console run/stop/restart/test controls.",
-      "spec": "changes/C-008-web-console-uar-controls.md"
+    "uar-readiness-and-tooling-repair": {
+      "certification_status": "NOT_TRACKED",
+      "changes_completed": 3,
+      "changes_total": 3,
+      "completed_at": null,
+      "handoff": null,
+      "implementation_completed": 3,
+      "implementation_total": 3,
+      "status": "DONE"
     }
   },
-  "headline": "The reported 'UAR not found in PATH' bug is a MISSING CAPABILITY, not a misconfiguration. LibreFang never installs, spawns, or supervises a UAR process anywhere: no UAR binary in the image (Dockerfile:177-178 links UAR in-process via --features uar-driver and copies only /usr/local/bin/librefang), no sidecar container (k8s/base/bossfang-deployment.yaml:64-68 has one container), and no spawn code. The error originates from the GENERIC channel sidecar supervisor (sidecar.rs:783 Command::new -> sidecar.rs:822-827 wrapper) when UAR is hand-configured as a [[sidecar_channels]] entry; resolve_sidecar_command (sidecar.rs:728) only covers the Telegram stem, so UAR falls through to a bare PATH lookup for a binary that was never shipped.",
-  "recommendation": "SUPERSEDED BY D-1 (see decisions). Adopt UAR-as-sidecar and retire the in-process uar-driver link. The embedded model cannot express the goal (an in-process library has no process for a console to run/stop/test). Shape chosen at analyze: CHILD PROCESS IN-CONTAINER \u2014 librefang spawns UAR's `uar-sidecar` binary (READY:{port} stdout handshake, stdin-EOF shutdown), binary baked into the BossFang image via COPY --from=<uar-image>, resolved via current_exe() -> ~/.librefang/bin -> PATH so PATH is never load-bearing. The k8s native-sidecar-container shape was considered and REJECTED (a container cannot start/stop a sibling container from inside the pod, so it delivers use+test but not run).",
-  "correction_found": "CLAUDE.md documents uar-driver as 'off by default, opt-in'. This is FALSE. librefang-kernel/Cargo.toml:16 requests features = [\"uar-driver\"] unconditionally, and librefang-cli -> librefang-kernel is not feature-gated, so EVERY shipped binary compiles UAR in. This is why the surrealdb =3.2.0 vs =3.2.1 exact-pin mismatch found during the 2026-07-11 upstream merge would have broken every build, not just an opt-in one.",
-  "blockers": [
-    "G-1 no UAR binary shipped (blocked on upstream: UAR must build/publish `uar-sidecar`)",
-    "G-3 no spawn/supervision code (READY handshake + stdin-EOF shutdown on top of the existing supervisor)",
-    "G-4 no bundled-binary resolution for UAR (generalize resolve_sidecar_command, sidecar.rs:728)"
-  ],
-  "research_doc": "docs/architecture/uar-runtime-integration-research.md",
-  "next_action": "Finish C-004 (asset test -> Dockerfile COPY + rev-pin bump), or start C-006 against the fake sidecar.",
-  "analysis_complete": true,
-  "analysis_date": "2026-07-11",
-  "decisions": {
-    "D-1": "Integration shape = child process in-container (user-confirmed). librefang spawns UAR's `uar-sidecar` binary as a supervised child; binary baked into the BossFang image via COPY --from=<uar-image> and resolved via current_exe() -> ~/.librefang/bin -> PATH, so PATH is never load-bearing. Rejected: native k8s sidecar container (cannot start/stop a sibling container from inside the pod) and client-of-existing-Deployment (no lifecycle control).",
-    "D-2": "uar-driver = un-force now, delete later (user-confirmed). Drop the unconditional features = [\"uar-driver\"] edge at librefang-kernel/Cargo.toml:16."
+  "completion": {
+    "certification": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "evidence": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "implementation": {
+      "completed": 8,
+      "status": "COMPLETE",
+      "total": 8
+    },
+    "primaryCounter": "implementation",
+    "publication": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    }
   },
-  "build_vs_adopt": "ZERO new third-party dependencies. ADOPT UAR's published image (COPY --from). REUSE librefang's own sidecar supervisor (sidecar.rs:502-520 already has spawn + restart + backoff) and its reqwest 0.13 (stream) / futures / tokio-stream stack for the HTTP+SSE client. BUILD only small in-tree pieces: generalize resolve_sidecar_command (sidecar.rs:728) from Telegram-only to stem-parameterized; add READY:{port} handshake + stdin-EOF shutdown; extend UarConfig; console controls; loud startup failure.",
-  "blocking_upstream_change": "GQAdonis/universal-agent-runtime does NOT build/publish the `uar-sidecar` binary (grep -c uar-sidecar release.yml = 0; Dockerfile:225 builds only --bin universal-agent-runtime). Small additive change, same repo/branch family as sync-gqadonis-8c7377a1. BLOCKS G-1.",
-  "surrealdb_pin_finding": "cargo tree -i surrealdb: universal-agent-runtime pins =3.2.1 (EXACT, rigid); surreal-memory pins 3.2.0 (CARET, flexible). UAR is the SOLE source of the lockstep pin \u2014 retiring the in-process link DOES free librefang to bump surrealdb unilaterally. Settles assessment open-question 3.",
-  "blockers_resolved_at_analyze": "G-2 (no sidecar container in k8s) is N/A under D-1 \u2014 UAR runs as a child process inside the BossFang container, so no second container, Service, or NetworkPolicy change is needed.",
-  "spec_complete": true,
-  "spec_date": "2026-07-11",
-  "spec_backend": "native-kbd",
-  "zeespec_verdict": "n/a (no .zeespec/ \u2014 gate inactive)",
-  "critical_path": [
-    "C-002",
-    "C-004",
-    "C-006",
-    "C-007",
-    "C-008"
-  ],
-  "parallelizable_now": [
-    "C-001",
-    "C-002",
-    "C-003",
-    "C-005"
-  ],
-  "plan_date": "2026-07-11",
-  "waves": {
-    "wave_1_parallel_now": [
-      "C-002 (UPSTREAM, long pole)",
-      "C-001",
-      "C-003",
-      "C-005"
-    ],
-    "wave_2": [
-      "C-004 (needs C-002)",
-      "C-006 (needs C-002, C-003, C-005)"
-    ],
-    "wave_3": [
-      "C-007 (needs C-006)",
-      "C-008 (needs C-006, C-007)"
-    ]
-  },
-  "execution_note": "3 of 8 changes implemented and in review (C-001 #108, C-002 UAR#1, C-003 #109); none merged yet, so changes_completed stays 0. C-002 was the phase's long pole and is now unblocked: UAR builds and ships `uar-sidecar` in both the container image and the release tarball. IMPORTANT for C-004: the binary is NOT self-contained \u2014 it calls AppConfig::load() + start_server_sidecar, so it resolves assets via UAR_STATIC_DIR / UAR_MODELS_DIR / UAR_BUILTIN_SKILLS_DIR. librefang's image must COPY /opt/uar/{static,skills,models} AND set those env vars, not just the executable. Also: UAR's release-tarball job stays continue-on-error with a self-described stale bun/Node18 toolchain, so the CONTAINER IMAGE is the dependable source for C-004; desktop/local support must not be promised off that tarball until it is seen to build. C-004 must also bump librefang's UAR rev pin (currently 0cd664ce) to the merge commit of UAR#1.",
-  "c004_notes": "BLOCKER FOUND: C-004 assumed it could `COPY --from=<uar-image>`, but no pullable image contained the binary. build-image.yml pushes to us-docker.pkg.dev (GCP Artifact Registry) which is PRIVATE and needs Workload Identity Federation to pull \u2014 unusable as a COPY --from source, since BuildKit would need GCP credentials on every dev machine and CI runner. The public GHCR v1.0.0 image predates the uar-sidecar change. RESOLVED by GQAdonis/universal-agent-runtime#3, which adds a public GHCR publish (same Dockerfile, same contents; only the destination registry differs), triggered on push to sync-gqadonis-* so a pullable image stays in lockstep with the rev librefang pins. It also self-verifies that /usr/local/bin/uar-sidecar is executable in the image it just pushed. OPEN: the asset requirement. start_server_sidecar is a one-line passthrough to start_server (server.rs:1179-1181), so the sidecar mounts the same ServeDir and resolves UAR_MODELS_DIR / skills identically to the full server. Whether /opt/uar/{static,skills,models} are load-bearing is being determined EMPIRICALLY (build the binary, run it with the dirs absent, observe) rather than guessed \u2014 an image that boots and then fails on first request is worse than one that does not ship. REMAINING for C-004: bump the UAR rev pin 0cd664ce -> 87c95c8 in librefang-llm-drivers/Cargo.toml; COPY the binary (+ whichever assets the test proves necessary) into the Dockerfile and set the UAR_*_DIR env vars; ship it in the release tarball; add a CI guard asserting it is present in the image.",
-  "merge_fallout_fixed": "The 2026-07-11 upstream merge (#104) left THREE tests red on main, all traceable to it, all now fixed: #111 (golden fixture \u2014 removing UAR from the default graph dropped serde_json/preserve_order, flipping Value from IndexMap to BTreeMap and re-sorting every key; 6,759 lines, zero semantic change), #112 (every_config_field_is_reload_classified \u2014 `storage` and `uar` were never classified), and #116 (openapi coverage matrix \u2014 3 new upstream routes never mapped). Plus #115: the uar-driver CI lane added in #108 needed protoc, which dev machines have and GitHub runners do not."
+  "generatedBy": "kbd-runtime",
+  "implementation_completed": 8,
+  "implementation_total": 8,
+  "last_updated": "2026-08-01T03:16:51.357501Z",
+  "last_updated_by": "kbd-runtime",
+  "migrationStatus": null,
+  "parentPhase": null,
+  "phase": "phase-10-uar-sidecar-availability",
+  "phaseId": "phase-10-uar-sidecar-availability",
+  "schemaVersion": "2",
+  "sourceRevision": 72
 }

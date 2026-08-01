@@ -1,0 +1,18 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "openspec/changes/fix-sidecar-ready-contract/tasks.md",
+      "line": 10,
+      "claim": "The required verification step has not been completed.",
+      "evidence": "Acceptance criteria includes \"- [ ] 2.2 Run OpenSpec validation, formatting, focused tests, check, and clippy.\" and the diff leaves the same task unchecked in tasks.md.",
+      "suggested_fix": "Run OpenSpec validation, formatting, focused tests, cargo check, and clippy, then mark task 2.2 complete only if they pass."
+    }
+  ]
+}

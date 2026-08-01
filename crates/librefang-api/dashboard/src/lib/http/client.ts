@@ -78,6 +78,8 @@ export {
   getModelOverrides,
   // providers
   listProviders,
+  getUarStatus,
+  getUarModels,
   // credential pools (#4965)
   listCredentialPools,
   // network / peers / a2a
@@ -278,6 +280,10 @@ export {
   deleteModelOverrides,
   // providers
   testProvider,
+  startUar,
+  stopUar,
+  restartUar,
+  testUar,
   setProviderKey,
   deleteProviderKey,
   enableProvider,

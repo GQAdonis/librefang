@@ -40,6 +40,7 @@ contracts that users rely on at runtime.
 | `a2a_contract_http` | root A2A and `/api/a2a/*` | Verify well-known metadata, task send/status contract shapes, and invalid-peer error handling. | Covered by existing A2A tests with future workflow depth. |
 | `mcp_contract_http` | `/mcp`, `/api/mcp/*` | Verify JSON-RPC envelope handling, auth-needed state, reload, and server list contracts. | Covered by smoke and OAuth integration tests; deeper catalog coverage deferred. |
 | `openai_compat_contract_http` | `/v1/models`, `/v1/chat/completions` | Verify OpenAI-compatible response envelopes, auth behavior, and invalid model errors. | Contract matrix only; full execution deferred to provider fixture work. |
+| `uar_supervisor_http` | `/api/uar/status`, `/api/uar/start`, `/api/uar/stop`, `/api/uar/restart`, `/api/uar/test`, `/api/uar/models` | Exercise the supervised child-process lifecycle through the API, prove truthful readiness and restart/stop behavior, list models, and verify the driver test route without timing-based assertions. | Covered by `uar_supervisor_integration`. |
 
 ## Measurement Gates
 

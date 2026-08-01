@@ -8,60 +8,12 @@ readme = "README.md"
 
 [features]
 default = []
-## Enables the UAR (Universal Agent Runtime) driver which wraps liter-llm's
-## unified `provider/model` client for 142+ providers. Off-by-default to keep
-## the dependency tree small for builds that do not need it.
-uar-driver = ["dep:universal-agent-runtime"]
+## Enables the UAR (Universal Agent Runtime) HTTP + SSE driver. UAR itself is
+## shipped as a supervised sidecar, so this feature adds no in-process UAR
+## dependency.
+uar-driver = []
 
 [dependencies]
-# UAR — optional; only compiled when the `uar-driver` feature is enabled.
-#
-# Notes:
-# * `default-features = false` keeps Postgres (`postgres-backend` → `sqlx` →
-#   `libsqlite3-sys`) and the MemPalace knowledge graph (`memory-palace` →
-#   `mempalace-core` → bundled `rusqlite`) out of the build, both of which
-#   conflict with librefang's own `rusqlite`/`libsqlite3-sys` versions.
-# * `surreal-backend` is enabled explicitly so UAR uses embedded SurrealDB
-#   (RocksDB) for persistence — fully self-contained, no external services.
-# * Upstream UAR (Prometheus-AGS) declares its `prometheus-skill-system` and
-#   `prometheus-entity-management` submodules with `git@github.com:` SSH URLs.
-#   Cargo resolves UAR as a git dependency on CI runners that carry no SSH deploy
-#   key, so pointing straight at Prometheus-AGS breaks dep-resolution on every
-#   lane (fmt/clippy/test/build), not just the daemon — this was tried on
-#   2026-06-17 and reverted. The `sync-gqadonis-<sha>` branches in
-#   GQAdonis/universal-agent-runtime exist precisely to rebase upstream UAR onto
-#   a .gitmodules→HTTPS rewrite (all three submodule repos are public, so plain
-#   HTTPS resolves without credentials).
-#   **To bump the in-process UAR, cut a fresh `sync-gqadonis-<sha>` branch that
-#   rebases the new UAR onto that .gitmodules fix, then point `rev` here at it.**
-#   Pin by `rev`, not `branch`: UAR runs a `build.rs`, and a moving branch makes
-#   the build non-reproducible and lets an unrelated UAR push break our CI.
-# * 2026-07-11: bumped 745b4c1 → 8c7377a1 (rebased as 0cd664ce). Carries
-#   surrealdb =3.2.1 — which must match the workspace pin verbatim, since cargo
-#   cannot unify two exact `=` pins on the same crate — plus the newer liter-llm
-#   rev d8223de.
-#   This SSH-submodule fragility is itself another reason to migrate UAR to a
-#   supervised SIDECAR (a prebuilt binary sidesteps the whole submodule fetch).
-#   See docs/architecture/uar-sidecar-assessment.md.
-# * 2026-07-12: bumped 0cd664ce → fb2e0a8c, same branch, three commits ahead: the
-#   `uar-sidecar` binary target is now built and shipped in UAR's image + release
-#   tarball, and a public GHCR publish workflow was added so that image is
-#   pullable without GCP credentials (the operator-managed image lives in a
-#   private GCP Artifact Registry). The first attempt at this bump (127e0632)
-#   pinned a commit whose GHCR publish had never actually succeeded — its
-#   `.gitmodules` inherited `update = none` on the frontend and skill-system
-#   submodules from the older `sync-gqadonis-745b4c1` pattern, which is fine for
-#   Cargo (never touches submodules) but makes `actions/checkout`'s
-#   `submodules: recursive` skip them, so the image build's own frontend `pnpm
-#   install` failed on a missing workspace package. fb2e0a8c fixes that; its
-#   GHCR publish run completed successfully and its self-check confirmed
-#   `uar-sidecar` present and executable in the pushed image. This bump does not
-#   change this dependency's own build — `uar-driver` still links UAR as an
-#   in-process library — but it moves the pin onto the commit whose GHCR image
-#   `Dockerfile` (this repo's, not UAR's) `COPY --from=` targets for the
-#   phase-10 sidecar migration.
-universal-agent-runtime = { git = "https://github.com/GQAdonis/universal-agent-runtime.git", rev = "fb2e0a8ce07c904755dc06aa4ce7aa8df605002e", optional = true, default-features = false, features = ["surreal-backend"] }
-
 librefang-types = { path = "../librefang-types" }
 librefang-llm-driver = { path = "../librefang-llm-driver" }
 librefang-http = { path = "../librefang-http" }

@@ -1743,6 +1743,10 @@ mod monitoring_tests {
                 kernel.substrate_ref().pool(),
             ));
         let state = Arc::new(AppState {
+            uar_supervisor: Arc::new(librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+                Default::default(),
+                home_dir.clone(),
+            )),
             kernel,
             started_at: std::time::Instant::now(),
             bridge_manager: arc_swap::ArcSwap::new(std::sync::Arc::new(None)),

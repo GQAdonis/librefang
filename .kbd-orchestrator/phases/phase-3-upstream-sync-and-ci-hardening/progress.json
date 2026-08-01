@@ -1,60 +1,63 @@
 {
-  "phase": "phase-3-upstream-sync-and-ci-hardening",
-  "backend": "native-tool",
-  "tool": "claude-code",
-  "started": "2026-05-23T00:00:00Z",
-  "assessment_complete": true,
-  "assessment_completed_at": "2026-05-23T00:00:00Z",
-  "plan_complete": true,
-  "plan_completed_at": "2026-05-23T00:00:00Z",
-  "execution_complete": true,
-  "execution_completed_at": "2026-05-23T12:00:00Z",
-  "changes_total": 2,
-  "changes_completed": 2,
-  "changes_in_progress": 0,
-  "changes_blocked": 0,
-  "changes_pending": 0,
   "changes": [
     {
+      "blockers": [],
       "id": "m1-m3-ci-fix-and-gitattributes",
-      "milestones": ["M1", "M3"],
-      "status": "COMPLETED",
-      "branch": "feat/m1-m3-ci-fix-and-gitattributes",
-      "pr": "https://github.com/GQAdonis/librefang/pull/25",
-      "commit": "65eaf8943",
-      "scope": [
-        ".cargo/config.toml — Cargo source replacement kreuzberg SSH→HTTPS",
-        ".gitattributes — merge=ours for .kbd-orchestrator/**",
-        "CLAUDE.md — git config merge.ours.driver true setup note"
-      ]
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "m1-m3-ci-fix-and-gitattributes"
     },
     {
+      "blockers": [],
       "id": "m2-upstream-merge-224-commits",
-      "milestones": ["M2"],
-      "status": "COMPLETED",
-      "branch": "chore/m2-upstream-merge",
-      "pr": "https://github.com/GQAdonis/librefang/pull/26",
-      "commit": "51c47f1b2",
-      "scope": [
-        "git merge upstream/main --no-edit (224 commits, debb315, proper merge commit)",
-        "crates/librefang-storage/src/migrations/sql/030_composite_indexes.surql — new (v30)",
-        "crates/librefang-storage/src/migrations/mod.rs — registered v30",
-        "crates/librefang-api/tests/fixtures/kernel_config_schema.golden.json — regenerated (296176 bytes)",
-        "crates/librefang-uar-spec/src/translator.rs — fallback_models Option fix",
-        "crates/librefang-runtime/src/context_engine/scriptable/mod.rs — with_trace_backend() + cfg gate + UFCS",
-        "crates/librefang-kernel/src/approval.rs — session_approvals in new_with_surreal()",
-        "enforce-branding.py fix-pass — 12 MDX files; --check exits 0"
-      ],
-      "type_drift_fixes": [
-        "librefang-uar-spec: fallback_models Vec→Option<Vec>",
-        "librefang-runtime: with_trace_backend builder; open_trace_store cfg gate; Memory::remember UFCS",
-        "librefang-kernel: session_approvals in new_with_surreal()",
-        "librefang-api: librefang-uar-spec dep missing from Cargo.toml"
-      ]
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "DONE",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "m2-upstream-merge-224-commits"
     }
   ],
-  "decisions_recorded": {
-    "upstream-merge-strategy": "proper-merge — git merge upstream/main creates real merge commit",
-    "gitattributes-orchestrator": "YES — implement merge=ours in .gitattributes"
-  }
+  "changes_completed": 2,
+  "changes_total": 2,
+  "children": {},
+  "completion": {
+    "certification": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "evidence": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "implementation": {
+      "completed": 2,
+      "status": "COMPLETE",
+      "total": 2
+    },
+    "primaryCounter": "implementation",
+    "publication": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    }
+  },
+  "generatedBy": "kbd-runtime",
+  "implementation_completed": 2,
+  "implementation_total": 2,
+  "last_updated": "2026-08-01T03:16:51.357501Z",
+  "last_updated_by": "kbd-runtime",
+  "migrationStatus": null,
+  "parentPhase": null,
+  "phase": "phase-3-upstream-sync-and-ci-hardening",
+  "phaseId": "phase-3-upstream-sync-and-ci-hardening",
+  "schemaVersion": "2",
+  "sourceRevision": 72
 }

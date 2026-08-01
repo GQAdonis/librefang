@@ -1,13 +1,26 @@
 {
-  "active_phase": "phase-10-uar-sidecar-availability",
-  "previous_phase": "phase-9-config-store-migration",
-  "active_change": "none applied yet \u2014 wave 1 ready (C-001, C-002, C-003, C-005)",
-  "last_updated": "2026-07-11T00:00:00Z",
-  "last_updated_by": "kbd-plan",
-  "backend": "native-tool",
-  "phase_progress": "ASSESS + ANALYZE + SPEC + PLAN COMPLETE (0 of 8 changes applied). Root cause of the reported 'UAR cannot be found in PATH' cloud bug: a MISSING CAPABILITY, not a misconfiguration \u2014 librefang never builds, ships, spawns, or supervises a UAR process. The error surfaces from the generic channel sidecar supervisor (sidecar.rs:783 Command::new, wrapper :822-827) because resolve_sidecar_command (sidecar.rs:728) resolves only the Telegram stem, so a UAR-named command falls through to a bare PATH lookup for a binary that was never shipped. DECISIONS (user-confirmed): D-1 shape = child process in-container (UAR's purpose-built `uar-sidecar` binary: READY:{port} stdout handshake, stdin-EOF shutdown), binary baked in via COPY --from=<uar-image> and resolved via current_exe() -> ~/.librefang/bin -> PATH so PATH is never load-bearing; D-2 uar-driver = un-force now, delete later. 8 changes specced (C-001..C-008), ZERO new third-party dependencies. PLAN orders by UNBLOCKED VALUE, not dependency order: wave 1 (parallel, start now) = C-002 [UPSTREAM long pole], C-001 (one line, kills the surrealdb lockstep pin + UAR's whole tree from the DEFAULT build), C-003 (the actual bug fix + actionable multi-path error), C-005 (config). C-006's FAKE contract-honouring uar-sidecar means librefang's tests do NOT wait on the upstream blocker. BLOCKER: GQAdonis/universal-agent-runtime does not build/publish `uar-sidecar` (0 refs in release.yml; Dockerfile:225 builds only --bin universal-agent-runtime). Open PRs: #105 (Cloudflare Pages), #106 (phase-10 specs), #107 (OpenSpec init). #104 (upstream merge) is merged to main.",
-  "next_action": {
-    "command": "/kbd-execute phase-10-uar-sidecar-availability",
-    "description": "Apply C-001 (smallest, unblocked, immediately valuable) or C-003 (the bug fix). Open C-002 upstream in parallel \u2014 it is the long pole and gates C-004/006/007/008."
-  }
+  "activePhaseId": "phase-10-uar-sidecar-availability",
+  "change": null,
+  "childPointer": null,
+  "completionMetric": "implementation",
+  "currentTask": null,
+  "exactNextCommand": "/kbd-status",
+  "generatedBy": "kbd-runtime",
+  "implementationCompleted": 56,
+  "implementationTotal": 66,
+  "path": [
+    "phase-10-uar-sidecar-availability"
+  ],
+  "phase": "phase-10-uar-sidecar-availability",
+  "phaseIds": [
+    "phase-10-uar-sidecar-availability"
+  ],
+  "planRevision": 1,
+  "projectId": "eca657d1-b62b-4085-b712-d398b35c1903",
+  "revision": 72,
+  "runId": "phase-10-uar-sidecar-availability-20260731T190715Z",
+  "schemaVersion": "5",
+  "sourceRevision": 72,
+  "status": "ready",
+  "updatedAt": "2026-08-01T03:16:51.357501Z"
 }

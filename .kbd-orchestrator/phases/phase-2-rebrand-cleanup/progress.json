@@ -1,100 +1,74 @@
 {
-  "phase": "phase-2-rebrand-cleanup",
-  "backend": "native-tool",
-  "tool": "claude-code",
-  "started": "2026-05-15T00:00:00Z",
-  "assessment_complete": true,
-  "assessment_completed_at": "2026-05-15T00:00:00Z",
-  "plan_complete": true,
-  "plan_completed_at": "2026-05-15T00:00:00Z",
-  "changes_total": 3,
-  "changes_completed": 3,
-  "changes_in_progress": 0,
-  "changes_blocked": 0,
-  "changes_pending": 0,
   "changes": [
     {
+      "blockers": [],
       "id": "m8-m11-dashboard-prose-cleanup",
-      "milestones": ["M8", "M11"],
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "started": "2026-05-15T00:00:00Z",
-      "started_by": "kbd-execute",
-      "completed": "2026-05-15T00:00:00Z",
-      "tool": "claude-code",
-      "scope": [
-        "scripts/enforce-branding.py — added DASHBOARD_PROSE_SCAN_DIRS + Pass 3 (dashboard prose scope, .ts/.tsx in crates/librefang-api/dashboard/src/)",
-        "scripts/test_enforce_branding.py — 7 new DashboardProseTests; total 22/22 PASS",
-        "crates/librefang-api/dashboard/src/lib/skillHubs.ts:45 — LibreFang registry → BossFang registry",
-        "crates/librefang-api/dashboard/src/pages/UsersPage.tsx:187 — LibreFang role → BossFang role",
-        "crates/librefang-api/dashboard/src/pages/UsersPage.tsx:1183 — LibreFang does not yet ping → BossFang",
-        "crates/librefang-api/dashboard/src/pages/SkillsPage.tsx:1578 — comment LibreFang first-party → BossFang",
-        "crates/librefang-api/dashboard/src/pages/MobilePairingPage.test.tsx:39 — LibreFang mobile app → BossFang",
-        "crates/librefang-api/dashboard/src/App.tsx:57-58 — removed USER_AVATAR_STYLE + BRAND_MARK_STYLE (TS6133 M11)",
-        "docs/src/app/agent/auto-evolution/page.mdx — prose LibreFang → BossFang (also on upstream PR #16)",
-        "docs/src/app/zh/agent/auto-evolution/page.mdx — same (ZH locale)"
-      ],
-      "verification": {
-        "enforce_branding_tests": "PASS — 22/22 (7 new DashboardProseTests)",
-        "enforce_branding_check": "PASS — exit 0, all 3 passes (color + docs prose + dashboard prose)",
-        "pnpm_test": "PASS — 635/635 tests, 67 test files",
-        "pnpm_typecheck": "PASS — exit 0 (TS6133 cleared for USER_AVATAR_STYLE + BRAND_MARK_STYLE)"
-      },
-      "pr": "https://github.com/GQAdonis/librefang/pull/18"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "m8-m11-dashboard-prose-cleanup"
     },
     {
+      "blockers": [],
       "id": "m9b-config-defaults-doc-sweep",
-      "milestones": ["M9b"],
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "started": "2026-05-15T00:00:00Z",
-      "started_by": "kbd-execute",
-      "completed": "2026-05-15T00:00:00Z",
-      "tool": "claude-code",
-      "scope": [
-        "crates/librefang-types/src/config/types.rs — default_a2a_name() → 'BossFang Agent OS'",
-        "crates/librefang-types/src/approval.rs — default_totp_issuer() → 'BossFang'",
-        "docs/src/app/configuration/features/page.mdx — 4 sites (TOML fence + table spans)",
-        "docs/src/app/configuration/page.mdx — 4 sites (heading + TOML fences + table span)",
-        "docs/src/app/security/approvals/page.mdx — 1 TOML fence",
-        "docs/src/app/integrations/desktop/page.mdx — 2 sites (tray tooltip + window title)",
-        "docs/src/app/integrations/cli/commands/page.mdx — 1 manual fix (Windows registry backtick span)",
-        "docs/src/app/integrations/acp/page.mdx — 1 JSON fence",
-        "docs/src/app/integrations/api/communication/page.mdx — 1 JSON fence",
-        "docs/src/app/agent/auto-evolution/page.mdx — prose pass (upstream added after M4)",
-        "ZH mirrors: all of the above zh/ equivalents"
-      ],
-      "verification": {
-        "cargo_check": "PASS — cargo check -p librefang-types exit 0",
-        "enforce_branding_check": "PASS — exit 0 (clean after auto-evolution prose fix)"
-      },
-      "pr": "https://github.com/GQAdonis/librefang/pull/19"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "m9b-config-defaults-doc-sweep"
     },
     {
+      "blockers": [],
       "id": "m10-legacy-key-removal-planning",
-      "milestones": ["M10"],
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "started": "2026-05-15T00:00:00Z",
-      "started_by": "kbd-execute",
-      "completed": "2026-05-15T00:00:00Z",
-      "tool": "claude-code",
-      "scope": [
-        "crates/librefang-api/dashboard/src/api.ts — 4x TODO(drop-legacy-key) comments at all API_KEY_LEGACY sites",
-        "CHANGELOG.md — added ### Upcoming Breaking Changes subsection with v2026.8.x removal notice"
-      ],
-      "verification": {
-        "diff_review": "PASS — 4 TODO comments added, CHANGELOG section inserted, no logic changed"
-      },
-      "pr": "https://github.com/GQAdonis/librefang/pull/20"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "m10-legacy-key-removal-planning"
     }
   ],
-  "decisions_recorded": {
-    "m9b-code-default-change": "YES — change code defaults to BossFang values",
-    "enforce-branding-dashboard-scope": "YES — extend prose scan to dashboard .ts/.tsx",
-    "shellcheck-pre-push-hook": "DEFERRED"
+  "changes_completed": 3,
+  "changes_total": 3,
+  "children": {},
+  "completion": {
+    "certification": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "evidence": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "implementation": {
+      "completed": 3,
+      "status": "COMPLETE",
+      "total": 3
+    },
+    "primaryCounter": "implementation",
+    "publication": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    }
   },
-  "goal_completion": {
-    "M8_dashboard_jsx_prose": "MET",
-    "M9b_config_defaults_doc_sweep": "MET",
-    "M10_legacy_key_removal_planning": "MET",
-    "M11_app_tsx_ts6133": "MET"
-  }
+  "generatedBy": "kbd-runtime",
+  "implementation_completed": 3,
+  "implementation_total": 3,
+  "last_updated": "2026-08-01T03:16:51.357501Z",
+  "last_updated_by": "kbd-runtime",
+  "migrationStatus": null,
+  "parentPhase": null,
+  "phase": "phase-2-rebrand-cleanup",
+  "phaseId": "phase-2-rebrand-cleanup",
+  "schemaVersion": "2",
+  "sourceRevision": 72
 }

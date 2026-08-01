@@ -1,0 +1,10 @@
+{
+  "allowedWritePaths": [
+    ".kbd-orchestrator/phases/phase-10-uar-sidecar-availability/children/sidecar-supervision-design-spike/**",
+    "crates/librefang-channels/src/sidecar.rs",
+    "crates/librefang-channels/src/uar_sidecar.rs"
+  ],
+  "deniedPaths": [],
+  "inheritsConstraints": true,
+  "__note": "Edit allowedWritePaths to widen the child loop's write surface. .kbd-orchestrator/** and SCRATCHPAD.md are always allowed. Enforced advisorily by check-child-scope.sh."
+}

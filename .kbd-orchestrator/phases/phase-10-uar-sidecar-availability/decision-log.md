@@ -43,3 +43,25 @@ Net: **zero new third-party dependencies** in this phase.
 ## 2026-07-11 — Blocking upstream change identified
 
 `GQAdonis/universal-agent-runtime` does not currently build or publish the `uar-sidecar` binary — `grep -c uar-sidecar .github/workflows/release.yml` → **0**, and `Dockerfile:225` builds only `--bin universal-agent-runtime`. Adding it is small and additive, in a repo we control, on the branch family already cut this session (`sync-gqadonis-8c7377a1`). **This blocks G-1 and must land before librefang's spawn path can be tested end-to-end.**
+
+## 2026-07-31 — Preserve the sidecar boundary; repair its startup protocol
+
+**Decision: keep UAR as a supervised sidecar, not an embedded library.** | **Provenance: design spike + adversarial review**
+
+Embedding would not remove nondeterminism; it would move process-global environment, provider
+runtime, and failure isolation into BossFang's address space. The actual defect was narrower:
+UAR released a reserved port and announced readiness before the server owned the listener.
+UAR now retains the listener through startup and announces `READY` only after successful bind
+and initialization. Process-global environment bootstrap runs synchronously before Tokio's
+multithread runtime is constructed.
+
+BossFang owns lifecycle, bounded restart policy, endpoint publication, authentication, and
+operator diagnostics. UAR owns its HTTP/runtime boundary and treats a loopback supervising
+parent as trusted by default. Timing-sensitive retry assertions were removed from subprocess
+tests and replaced with deterministic in-memory policy tests; subprocess tests now verify only
+observable process behavior.
+
+The repaired contract is pinned by immutable source SHA
+`2aaeadd9c28f27532a03e68d5035b248a0cef5b8`, independently probed from GHCR, and exercised
+through BossFang's authenticated `/api/uar/test` route. A final adversarial review passed with
+zero critical, warning, or suggestion findings.

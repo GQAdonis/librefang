@@ -1,166 +1,184 @@
 {
-  "phase": "phase-9-config-store-migration",
-  "assessment_complete": true,
-  "plan_complete": true,
-  "execution_started": true,
-  "backend": "native-tool",
-  "assessment_date": "2026-06-06",
-  "verdict": "proceed-with-corrected-mechanism",
-  "changes_total": 11,
-  "changes_completed": 10,
-  "architecture_revision": "C-004 discovery: kernel holds no operational SurrealDB session at boot. User decision (D9): config store is API-owned \u2014 kernel exposes get/replace for effective_mcp_servers; librefang-api reads/writes the store. D10: process-global shared_pool() added (embedded RocksDB single-lock per path, assessment R-2 confirmed). C-003/C-005/C-006 placements revised accordingly.",
-  "changes": {
-    "C-001": {
+  "changes": [
+    {
+      "blockers": [],
+      "id": "C-001",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-06",
-      "files": 2,
-      "qa": "skipped-under-3-files"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-001"
     },
-    "C-002": {
+    {
+      "blockers": [],
+      "id": "C-002",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-07",
-      "files": 2,
-      "qa": "skipped-under-3-files"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-002"
     },
-    "C-003": {
+    {
+      "blockers": [],
+      "id": "C-003",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-08",
-      "files": 3,
-      "qa": "integration-tests(7)+clippy+brand"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-003"
     },
-    "C-004": {
+    {
+      "blockers": [],
+      "id": "C-004",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-07",
-      "files": 8,
-      "qa": "compile+clippy+integration-test+brand (refine-validate skill unavailable)"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-004"
     },
-    "C-005": {
+    {
+      "blockers": [],
+      "id": "C-005",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-08",
-      "files": 6,
-      "scope": "MCP write path only (user decision); provider-default + config_set deferred to C-005b",
-      "qa": "compile+integration-test+clippy+brand"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-005"
     },
-    "C-005b": {
+    {
+      "blockers": [],
+      "id": "C-005b",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-08",
-      "files": 8,
-      "scope": "provider-default -> store + HTTP route tests + MockKernelBuilder temp-storage isolation; generic config_set deferred to C-005c",
-      "qa": "overlay(10)+http-crud(1)+providers(37)+clippy+brand"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-005b"
     },
-    "C-005c": {
+    {
+      "blockers": [],
+      "id": "C-005c",
+      "implementation_status": "PENDING",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "PENDING",
-      "note": "generic config_set store migration: needs a kernel config-override merge layer applied at load/reload + security review for section-wholesale writes"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-005c"
     },
-    "C-006": {
+    {
+      "blockers": [],
+      "id": "C-006",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-08",
-      "files": 3,
-      "qa": "integration-tests(8)+clippy+brand"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-006"
     },
-    "C-007": {
+    {
+      "blockers": [],
+      "id": "C-007",
+      "implementation_status": "COMPLETE",
+      "last_task_completed": null,
+      "next_task_pending": null,
       "status": "DONE",
-      "completed": "2026-06-08",
-      "files": 1,
-      "qa": "skipped-under-3-files",
-      "note": "single-row array + render_mcp_summary sort already guarantee prompt determinism; added config_store list() ORDER BY guard test"
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-007"
     },
-    "C-008": {
-      "status": "CODE_DONE",
-      "completed": "2026-06-08",
-      "files": 4,
-      "qa": "cli-unit-test+clippy+brand",
-      "note": "import CLI (merged in PR #74). NOTE: C-009 found+fixed a data-loss bug here \u2014 the import wrote source=bootstrap; now source=runtime so prod values survive the ConfigMap revert. Deploy the fixed image BEFORE running the prod import."
+    {
+      "blockers": [],
+      "id": "C-008",
+      "implementation_status": "PENDING",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "PENDING",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-008"
     },
-    "C-009": {
-      "status": "CODE_DONE",
-      "completed": "2026-06-08",
-      "files": 6,
-      "qa": "cli-cutover-survival-test+api-overlay-tests+kustomize-render+clippy+brand",
-      "note": "manifest revert (read-only ConfigMap subPath mount, init-config removed) + a first C-008 source=runtime fix. Import logic superseded by C-009b. PR #75 merged."
+    {
+      "blockers": [],
+      "id": "C-009",
+      "implementation_status": "PENDING",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "PENDING",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-009"
     },
-    "C-009b": {
-      "status": "CODE_DONE",
-      "completed": "2026-06-08",
-      "files": 3,
-      "qa": "cli-promote-tests(3)+api-overlay(10)+clippy+brand",
-      "note": "Found during live deploy: merged C-009 import used seed semantics (Unchanged no-op) so it would NOT convert the daemon's boot-seeded BOOTSTRAP rows to runtime -> the revert would still wipe prod. Fixed: import now promote_or_seed (preserves store value, forces runtime, promotes bootstrap rows). Deploy this image BEFORE running the import."
+    {
+      "blockers": [],
+      "id": "C-009b",
+      "implementation_status": "PENDING",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "PENDING",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-009b"
     },
-    "C-005d": {
-      "status": "PLANNED",
-      "assessed": "2026-06-14",
-      "planned": "2026-06-14",
-      "status": "CODE_DONE",
-      "note": "Migrate memory + channels settings to the DB store. Reuse C-005c config_overrides + a trusted-section apply path; secret VALUES stay out of the DB. PR #88 (feat/memory-channels-to-store) carries C-005d.1 + C-005d.2 + C-005d.3; rebased onto post-upstream-merge main (after #87). Sub-changes: C-005d.1 (DONE), C-005d.2 (DONE), C-005d.3 (DONE). CLUSTER COMPLETE.",
-      "sub_changes": {
-        "C-005d.1": {
-          "status": "CODE_DONE",
-          "completed": "2026-06-14",
-          "files": 3,
-          "branch": "feat/memory-channels-to-store",
-          "pr": 88,
-          "qa": "overlay-tests(15)+config-unit(18)+clippy+brand",
-          "note": "Trusted-section apply path: TRUSTED_SECTION_KEYS + OR-gate in resolve_config_with_overrides; removed budget from is_writable_config_path EXACT (only the typed budget handler writes budget now). PR #85 (runtime clippy fix) merged; rebased onto main after upstream merge #87."
-        },
-        "C-005d.2": {
-          "status": "CODE_DONE",
-          "completed": "2026-06-15",
-          "files": 3,
-          "branch": "feat/memory-channels-to-store",
-          "pr": 88,
-          "qa": "overlay-tests(16)+config-unit(18)+clippy+brand",
-          "note": "memory_config_patch_surreal: builds memory + proactive_memory from LIVE config (PATCHes accumulate), stores both as trusted-section overrides, resolve+validate+replace_config; config.toml untouched under surreal. ALSO fixed json_to_toml_edit_value to omit JSON-null object keys (Option::None round-trip) — was breaking embedding_dimensions=\"\". No secret VALUE in store (embedding_api_key_env is an env-var pointer)."
-        },
-        "C-005d.3": {
-          "status": "CODE_DONE",
-          "completed": "2026-06-16",
-          "files": 3,
-          "branch": "feat/memory-channels-to-store",
-          "pr": 88,
-          "qa": "overlay-tests(17)+sidecar-unit(1)+clippy+brand",
-          "note": "configure_sidecar_channel surreal branch: in-memory upsert_sidecar_in_vec (mirrors upsert_sidecar_block) -> store sidecar_channels override -> resolve+validate+write_config_overrides -> replace_config after the lock. secrets.env write + include-shadow guard unchanged. config.toml never written under surreal. Security: secrets go to secrets.env only; non-managed (secret) keys cannot enter the override (unit-tested)."
-        }
-      }
+    {
+      "blockers": [],
+      "id": "C-005d",
+      "implementation_status": "PENDING",
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "status": "PENDING",
+      "tasks_done": 0,
+      "tasks_total": 0,
+      "title": "C-005d"
+    }
+  ],
+  "changes_completed": 8,
+  "changes_total": 13,
+  "children": {},
+  "completion": {
+    "certification": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "evidence": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
+    },
+    "implementation": {
+      "completed": 8,
+      "status": "IN_PROGRESS",
+      "total": 13
+    },
+    "primaryCounter": "implementation",
+    "publication": {
+      "blockers": [],
+      "status": "PENDING",
+      "summary": null
     }
   },
-  "merged_pr": [
-    {
-      "repo": "GQAdonis/librefang",
-      "number": 74,
-      "base": "main",
-      "merged_at": "2026-06-08",
-      "scope": "C-001..C-008 code"
-    },
-    {
-      "repo": "GQAdonis/librefang",
-      "number": 75,
-      "base": "main",
-      "merged_at": "2026-06-08",
-      "scope": "C-009 revert + C-008 fix"
-    },
-    {
-      "repo": "GQAdonis/librefang",
-      "number": 76,
-      "base": "main",
-      "merged_at": "2026-06-08",
-      "scope": "reflection"
-    }
-  ],
-  "suggested_order": [
-    "C-001",
-    "C-002",
-    "C-004",
-    "C-005",
-    "C-003",
-    "C-006",
-    "C-007",
-    "C-005b",
-    "C-008",
-    "C-009",
-    "C-009b",
-    "C-005c"
-  ],
-  "deploy_state": "image bdf5fc802 (pre-C-009b) running on GKE; C-009 manifest NOT applied (init-config still present). Cutover blocked until the C-009b image is deployed.",
-  "k8s_revert_gated_on": "C-009b image deployed + C-008 import run/verified on prod PVC",
-  "next_command": "/kbd-plan or /kbd-execute C-005d (memory+channels settings migration)"
+  "generatedBy": "kbd-runtime",
+  "implementation_completed": 8,
+  "implementation_total": 13,
+  "last_updated": "2026-08-01T03:16:51.357501Z",
+  "last_updated_by": "kbd-runtime",
+  "migrationStatus": null,
+  "parentPhase": null,
+  "phase": "phase-9-config-store-migration",
+  "phaseId": "phase-9-config-store-migration",
+  "schemaVersion": "2",
+  "sourceRevision": 72
 }

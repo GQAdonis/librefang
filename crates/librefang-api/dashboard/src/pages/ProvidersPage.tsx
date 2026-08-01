@@ -7,10 +7,12 @@ import type { TFunction } from "i18next";
 import type { ApiActionResponse, ProviderItem } from "../api";
 import { isProviderAvailable } from "../lib/status";
 import { useCredentialPools, useProviders, useProviderStatus } from "../lib/queries/providers";
+import { useUarModels, useUarStatus } from "../lib/queries/uar";
 import type { CredentialPoolStatus, CredentialPoolKeySnapshot } from "../api";
 import { useModels, useModelOverrides } from "../lib/queries/models";
 import { useUpdateModelOverrides } from "../lib/mutations/models";
 import { useTestProvider, useSetProviderKey, useDeleteProviderKey, useEnableProvider, useSetProviderUrl, useSetDefaultProvider, useCreateRegistryContent, useConnectEveryApi, EVERYAPI_PROVIDER } from "../lib/mutations/providers";
+import { useRestartUar, useStartUar, useStopUar, useTestUar } from "../lib/mutations/uar";
 import { PageHeader } from "../components/ui/PageHeader";
 import { CardSkeleton } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -1486,6 +1488,190 @@ function CredentialPoolsSection() {
   );
 }
 
+function UarControlPanel() {
+  const { t } = useTranslation();
+  const statusQuery = useUarStatus();
+  const status = statusQuery.data;
+  const healthy = status?.state === "healthy";
+  const modelsQuery = useUarModels(healthy);
+  const startMutation = useStartUar();
+  const stopMutation = useStopUar();
+  const restartMutation = useRestartUar();
+  const testMutation = useTestUar();
+  const [model, setModel] = useState("");
+  const [testResult, setTestResult] = useState<{ reply: string; latencyMs: number } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const modelOptions = useMemo(
+    () => Object.entries(modelsQuery.data ?? {}).flatMap(([provider, detail]) =>
+      Object.keys(detail.models ?? {}).map(modelId =>
+        modelId.includes("/") ? modelId : `${provider}/${modelId}`)),
+    [modelsQuery.data],
+  );
+
+  const runLifecycle = async (action: "start" | "stop" | "restart") => {
+    setActionError(null);
+    const mutation = action === "start"
+      ? startMutation
+      : action === "stop"
+        ? stopMutation
+        : restartMutation;
+    try {
+      await mutation.mutateAsync();
+    } catch (error) {
+      setActionError(getErrorMessage(error) || t("providers.uar_lifecycle_failed", "UAR lifecycle command failed"));
+    }
+  };
+
+  const runTest = async () => {
+    setActionError(null);
+    setTestResult(null);
+    try {
+      const result = await testMutation.mutateAsync(model.trim() ? { model: model.trim() } : {});
+      setTestResult({ reply: result.reply, latencyMs: result.latency_ms });
+    } catch (error) {
+      setActionError(getErrorMessage(error) || t("providers.uar_test_failed", "UAR test failed"));
+    }
+  };
+
+  const busy = startMutation.isPending || stopMutation.isPending || restartMutation.isPending;
+  const initialStatusLoading = statusQuery.isLoading && !status;
+  const statusError = statusQuery.error ? getErrorMessage(statusQuery.error) : null;
+  const badgeVariant: BadgeVariant = healthy
+    ? "success"
+    : status?.state === "starting"
+      ? "warning"
+      : status?.state === "stopped"
+        ? "default"
+        : "error";
+
+  return (
+    <Card className="p-5 space-y-4" data-testid="uar-control-panel">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-brand" />
+            <h2 className="text-sm font-black">{t("providers.uar_title", "Universal Agent Runtime")}</h2>
+            <Badge variant={badgeVariant}>{status?.state?.replace("_", " ") || t("common.loading")}</Badge>
+          </div>
+          <p className="text-xs text-text-dim">
+            {t("providers.uar_description", "Supervised provider gateway for UAR-backed agents.")}
+          </p>
+          {status?.endpoint && <p className="font-mono text-[10px] text-text-dim">{status.endpoint}</p>}
+          {status?.resolved_path && <p className="font-mono text-[10px] text-text-dim break-all">{status.resolved_path}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={busy || initialStatusLoading || healthy}
+            onClick={() => void runLifecycle("start")}
+            leftIcon={startMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+          >
+            {t("providers.uar_start", "Start")}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy || initialStatusLoading || !status || status.state === "stopped"}
+            onClick={() => void runLifecycle("stop")}
+            leftIcon={<Square className="h-3.5 w-3.5" />}
+          >
+            {t("providers.uar_stop", "Stop")}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy || initialStatusLoading}
+            onClick={() => void runLifecycle("restart")}
+            leftIcon={restartMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+          >
+            {t("providers.uar_restart", "Restart")}
+          </Button>
+        </div>
+      </div>
+
+      {(actionError || statusError || status?.last_error) && (
+        <div className="rounded-lg border border-error/30 bg-error/5 p-3 text-xs text-error" role="alert">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="break-all">{actionError || statusError || status?.last_error}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div>
+          <label htmlFor="uar-test-model" className="mb-1 block text-[10px] font-bold uppercase text-text-dim">
+            {t("providers.uar_test_model", "Test model")}
+          </label>
+          <Input
+            id="uar-test-model"
+            list="uar-model-options"
+            value={model}
+            onChange={event => setModel(event.target.value)}
+            placeholder={t("providers.uar_test_model_placeholder", "Uses [uar] model when blank")}
+          />
+          <datalist id="uar-model-options">
+            {modelOptions.map(option => <option key={option} value={option} />)}
+          </datalist>
+        </div>
+        <Button
+          className="self-end"
+          variant="primary"
+          disabled={!healthy || testMutation.isPending}
+          onClick={() => void runTest()}
+          leftIcon={testMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+        >
+          {t("providers.uar_test", "Test the UAR")}
+        </Button>
+      </div>
+
+      {testResult && (
+        <div
+          className="rounded-lg border border-success/30 bg-success/5 p-3"
+          data-testid="uar-test-result"
+        >
+          <div className="mb-1 text-[10px] font-bold uppercase text-success">
+            {t("providers.uar_reply", "Reply")} · {testResult.latencyMs} ms
+          </div>
+          <p className="text-sm text-text-main">{testResult.reply}</p>
+        </div>
+      )}
+
+      {healthy && (
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase text-text-dim">
+            <Cpu className="h-3.5 w-3.5" />
+            {t("providers.uar_models", "Models")} ({modelOptions.length})
+          </div>
+          {modelsQuery.isLoading ? (
+            <div className="h-8 animate-pulse rounded-lg bg-bg-subtle" />
+          ) : (
+            <div className="flex max-h-24 flex-wrap gap-1.5 overflow-auto">
+              {modelOptions.slice(0, 40).map(option => (
+                <button
+                  type="button"
+                  key={option}
+                  onClick={() => setModel(option)}
+                  className="rounded-md border border-border-subtle bg-main px-2 py-1 font-mono text-[9px] text-text-dim hover:border-brand hover:text-text-main"
+                >
+                  {option}
+                </button>
+              ))}
+              {modelOptions.length === 0 && (
+                <span className="text-xs text-text-dim">
+                  {t("providers.uar_no_models", "No models reported.")}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Main Page ────────────────────────────────────────────────────
 
 export function ProvidersPage() {
@@ -1762,6 +1948,8 @@ export function ProvidersPage() {
           </div>
         }
       />
+
+      <UarControlPanel />
 
       {/* Credential pools (#4965) — visible only when at least one pool is
           configured in config.toml. Read-only here; mutations live in the

@@ -223,18 +223,23 @@ impl KnowledgeGraph for KernelHandleStub {
     async fn knowledge_add_entity(
         &self,
         _entity: &librefang_types::memory::Entity,
+        _agent_id: &str,
+        _peer_id: Option<&str>,
     ) -> Result<String, KernelOpError> {
         Err(KernelOpError::unavailable("stub"))
     }
     async fn knowledge_add_relation(
         &self,
         _relation: &librefang_types::memory::Relation,
+        _agent_id: &str,
+        _peer_id: Option<&str>,
     ) -> Result<String, KernelOpError> {
         Err(KernelOpError::unavailable("stub"))
     }
     async fn knowledge_query(
         &self,
         _pattern: librefang_types::memory::GraphPattern,
+        _peer_id: Option<&str>,
     ) -> Result<Vec<librefang_types::memory::GraphMatch>, KernelOpError> {
         Ok(vec![])
     }

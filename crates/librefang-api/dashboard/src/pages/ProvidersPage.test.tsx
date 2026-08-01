@@ -14,6 +14,7 @@ import { ProvidersPage } from "./ProvidersPage";
 import { useDrawerStore } from "../lib/drawerStore";
 import { useProviders, useProviderStatus } from "../lib/queries/providers";
 import { useModels } from "../lib/queries/models";
+import { useUarModels, useUarStatus } from "../lib/queries/uar";
 import {
   useTestProvider,
   useSetProviderKey,
@@ -24,6 +25,12 @@ import {
   useCreateRegistryContent,
   useConnectEveryApi,
 } from "../lib/mutations/providers";
+import {
+  useRestartUar,
+  useStartUar,
+  useStopUar,
+  useTestUar,
+} from "../lib/mutations/uar";
 
 vi.mock("../lib/queries/providers", () => ({
   useProviders: vi.fn(),
@@ -46,6 +53,11 @@ vi.mock("../lib/queries/models", () => ({
   useModelOverrides: vi.fn(() => ({ data: undefined, isLoading: false })),
 }));
 
+vi.mock("../lib/queries/uar", () => ({
+  useUarStatus: vi.fn(),
+  useUarModels: vi.fn(),
+}));
+
 vi.mock("../lib/mutations/providers", () => ({
   useTestProvider: vi.fn(),
   useSetProviderKey: vi.fn(),
@@ -63,6 +75,13 @@ vi.mock("../lib/mutations/providers", () => ({
     apiKeyEnv: "EVERYAPI_API_KEY",
     defaultBaseUrl: "https://api.everyapi.ai/v1",
   },
+}));
+
+vi.mock("../lib/mutations/uar", () => ({
+  useStartUar: vi.fn(),
+  useStopUar: vi.fn(),
+  useRestartUar: vi.fn(),
+  useTestUar: vi.fn(),
 }));
 
 // Toast store — only `addToast` is consumed by ProvidersPage.
@@ -89,6 +108,8 @@ const useProviderStatusMock = useProviderStatus as unknown as ReturnType<
   typeof vi.fn
 >;
 const useModelsMock = useModels as unknown as ReturnType<typeof vi.fn>;
+const useUarStatusMock = useUarStatus as unknown as ReturnType<typeof vi.fn>;
+const useUarModelsMock = useUarModels as unknown as ReturnType<typeof vi.fn>;
 const useTestProviderMock = useTestProvider as unknown as ReturnType<
   typeof vi.fn
 >;
@@ -111,6 +132,10 @@ const useCreateRegistryContentMock =
   useCreateRegistryContent as unknown as ReturnType<typeof vi.fn>;
 const useConnectEveryApiMock =
   useConnectEveryApi as unknown as ReturnType<typeof vi.fn>;
+const useStartUarMock = useStartUar as unknown as ReturnType<typeof vi.fn>;
+const useStopUarMock = useStopUar as unknown as ReturnType<typeof vi.fn>;
+const useRestartUarMock = useRestartUar as unknown as ReturnType<typeof vi.fn>;
+const useTestUarMock = useTestUar as unknown as ReturnType<typeof vi.fn>;
 
 const PROVIDERS: ProviderItem[] = [
   {
@@ -183,6 +208,11 @@ describe("ProvidersPage", () => {
       isFetching: false,
     });
     useModelsMock.mockReturnValue({ data: { models: [] }, isLoading: false });
+    useUarStatusMock.mockReturnValue({
+      data: { state: "stopped", restart_count: 0 },
+      isLoading: false,
+    });
+    useUarModelsMock.mockReturnValue({ data: {}, isLoading: false });
 
     const stubMutation = (mutateAsync: ReturnType<typeof vi.fn>) => ({
       mutateAsync,
@@ -216,6 +246,20 @@ describe("ProvidersPage", () => {
       error: null,
       reset: vi.fn(),
     });
+    useStartUarMock.mockReturnValue(
+      stubMutation(vi.fn().mockResolvedValue(undefined)),
+    );
+    useStopUarMock.mockReturnValue(
+      stubMutation(vi.fn().mockResolvedValue(undefined)),
+    );
+    useRestartUarMock.mockReturnValue(
+      stubMutation(vi.fn().mockResolvedValue(undefined)),
+    );
+    useTestUarMock.mockReturnValue(
+      stubMutation(
+        vi.fn().mockResolvedValue({ reply: "UAR is ready", latency_ms: 18 }),
+      ),
+    );
   });
 
   it("shows skeleton placeholders while providers load", () => {
@@ -244,6 +288,51 @@ describe("ProvidersPage", () => {
     renderPage();
 
     expect(screen.getByText("common.no_data")).toBeInTheDocument();
+  });
+
+  it("tests a healthy UAR sidecar and renders its reply and latency", async () => {
+    useProvidersMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useUarStatusMock.mockReturnValue({
+      data: {
+        state: "healthy",
+        endpoint: "http://127.0.0.1:8742",
+        restart_count: 0,
+      },
+      isLoading: false,
+    });
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Test the UAR" }));
+
+    expect(await screen.findByText("UAR is ready")).toBeInTheDocument();
+    expect(screen.getByText(/18 ms/)).toBeInTheDocument();
+  });
+
+  it("shows actionable sidecar resolution diagnostics", () => {
+    useProvidersMock.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    useUarStatusMock.mockReturnValue({
+      data: {
+        state: "crash_looping",
+        restart_count: 0,
+        last_error: "Failed to spawn UAR sidecar. Searched: /data/bin/uar-sidecar, /usr/local/bin/uar-sidecar",
+      },
+      isLoading: false,
+    });
+
+    renderPage();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Searched:");
+    expect(screen.getByRole("alert")).toHaveTextContent("/data/bin/uar-sidecar");
   });
 
   it("shows the configured/total count badge in the header", () => {

@@ -350,7 +350,8 @@ pub fn build_reload_plan_with_caps(
     // BossFang: UAR. Two reasons this cannot hot-reload, and both matter:
     //   * the LLM-driver half (api_key / model / base_url / surreal_data_dir) is
     //     baked into the driver at construction time; and
-    //   * the `[uar.sidecar]` half supervises a CHILD PROCESS. Toggling `enabled`,
+    //   * the direct `[uar]` sidecar keys (and compatible `[uar.sidecar]` form)
+    //     supervise a CHILD PROCESS. Toggling `enabled`,
     //     repointing `command`, or switching to an `endpoint` means spawning or
     //     killing a process, which the reload path does not do.
     // Mark restart-required so the operator gets a loud signal instead of the

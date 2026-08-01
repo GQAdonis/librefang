@@ -1,0 +1,126 @@
+{
+  "phase": "uar-readiness-and-tooling-repair",
+  "generated_at": "2026-07-31T17:44:00Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier_1": 3,
+      "tier_2": 0,
+      "tier_3": 0,
+      "tier_4": 0
+    }
+  },
+  "gaps_addressed": [
+    "UAR retained-listener and truthful READY publication",
+    "KBD identity-safe nested legacy migration and durable daemon focus",
+    "KernelHandleStub trait conformance"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Prometheus-AGS UAR retained listener plus oneshot readiness",
+      "kind": "pattern",
+      "repo_url": "https://github.com/Prometheus-AGS/universal-agent-runtime",
+      "registry": "none",
+      "fit_for_gap": "Closes the port-release race and makes READY depend on completed runtime/application initialization.",
+      "verdict": "adapt",
+      "coverage_estimate": 0.9,
+      "license": "Apache-2.0",
+      "maintenance": {
+        "last_release": "current main inspected 2026-07-31"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/blob/main/src/bin/uar-sidecar.rs",
+          "claim": "Current first-party source retains TcpListener and waits on a readiness oneshot before stdout READY."
+        },
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/universal-agent-runtime/blob/main/src/server.rs",
+          "claim": "The server accepts the retained listener and notifies readiness only after application construction."
+        }
+      ],
+      "risks": [
+        "The GQAdonis sync branch diverges, so a broad cherry-pick may import unrelated production changes.",
+        "The repair is incomplete until GHCR publishes the exact merged SHA."
+      ],
+      "decision_rationale": "This is the existing first-party 90% solution and uses only Tokio/Axum facilities already present."
+    },
+    {
+      "id": "cand-002",
+      "name": "Existing Prometheus signed KBD command and OpenRaft control plane",
+      "kind": "framework",
+      "repo_url": "https://github.com/Prometheus-AGS/prometheus-skill-system",
+      "registry": "none",
+      "fit_for_gap": "Already provides immutable identity, signed journal replay, authenticated typed REST commands, OpenRaft/redb commit, idempotency, and compatibility projections.",
+      "verdict": "adopt",
+      "coverage_estimate": 0.8,
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "source commit 9b170d141 inspected 2026-07-31"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/tree/main/substrate/kbd-runtime",
+          "claim": "Runtime owns immutable manifests, signed replay, legacy migration, and deterministic compatibility projections."
+        },
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/tree/main/substrate/sovereign-sync",
+          "claim": "Control plane authenticates and commits typed envelopes through OpenRaft/redb."
+        }
+      ],
+      "risks": [
+        "Legacy status parsing loses annotated completion.",
+        "Nested phase migration currently flattens parent relationships.",
+        "Service templates omit explicit project focus."
+      ],
+      "decision_rationale": "Repair the three narrow integration defects; replacing the control plane would discard the already-correct safety machinery."
+    },
+    {
+      "id": "cand-003",
+      "name": "Immutable .prometheus/project.json manifest",
+      "kind": "pattern",
+      "repo_url": "https://github.com/Prometheus-AGS/prometheus-skill-system",
+      "registry": "none",
+      "fit_for_gap": "Provides one stable routing UUID and repository fingerprint for BossFang worktrees once tracked with the repository.",
+      "verdict": "adopt",
+      "coverage_estimate": 1.0,
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "schemaVersion 1"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/blob/main/site/docs/kbd/control-plane.md",
+          "claim": "The manifest is the documented immutable project-identity boundary."
+        }
+      ],
+      "risks": [
+        "The daemon still needs an explicit focus worktree for compatibility projections."
+      ],
+      "decision_rationale": "Tracking the existing non-secret UUID manifest is simpler and safer than deriving or copying identities ad hoc per worktree."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "Port retained listener/readiness channel to the GQAdonis sync branch and publish it",
+      "why_no_candidate": "The candidate implementation exists first-party but must be adapted to the divergent release branch and its pipeline.",
+      "capability_gap_id": "C-URT-001"
+    },
+    {
+      "need": "Correct annotated status and nested hierarchy migration plus durable service focus configuration",
+      "why_no_candidate": "These are project-specific compatibility and installer defects inside the adopted KBD framework.",
+      "capability_gap_id": "C-URT-002"
+    },
+    {
+      "need": "Restore KernelHandleStub trait signatures",
+      "why_no_candidate": "This is a local fixture drift correction, not a reusable library problem.",
+      "capability_gap_id": "C-URT-003"
+    }
+  ]
+}

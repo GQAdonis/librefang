@@ -48,6 +48,7 @@ pub mod task_queue;
 pub mod terminal;
 pub mod tools_sessions;
 pub mod uar;
+pub mod uar_supervisor;
 pub mod users;
 pub mod webhooks;
 pub mod workflows;
@@ -94,6 +95,7 @@ pub use system::*;
 pub use task_queue::*;
 pub use terminal::*;
 pub use tools_sessions::*;
+pub use uar_supervisor::*;
 pub use users::*;
 pub use webhooks::*;
 pub use workflows::*;
@@ -144,6 +146,9 @@ pub(crate) fn resolve_lang(lang: Option<&axum::Extension<RequestLanguage>>) -> &
 /// kernel surface.
 pub struct AppState {
     pub kernel: Arc<dyn KernelApi>,
+    /// UAR child-process lifecycle owner. The API and LLM driver share the
+    /// ephemeral endpoint selected here.
+    pub uar_supervisor: Arc<librefang_channels::uar_sidecar::UarSidecarSupervisor>,
     pub started_at: Instant,
     /// Channel bridge manager — held in an `ArcSwap` for lock-free reads and atomic
     /// swap on hot-reload. Write sites use `store(Arc::new(new_value))`; the stop

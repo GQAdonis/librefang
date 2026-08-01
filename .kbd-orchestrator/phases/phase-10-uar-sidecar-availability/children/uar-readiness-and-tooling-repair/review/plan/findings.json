@@ -1,0 +1,29 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "claim": "The plan schedules C-URT-002 and C-URT-003 even though the prior spec handoff only lists a spec artifact for C-URT-001, leaving two executable changes without evidenced specs.",
+      "evidence": "Prior handoff says spec outputs are only `[\"changes/C-URT-001/spec.md\"]`, while plan says `**Changes to implement:** 3` and lists `C-URT-002 \u2014 Repair KBD migration and establish durable focused control` and `C-URT-003 \u2014 Restore kernel-handle all-target certification`.",
+      "suggested_fix": "Add or cite `changes/C-URT-002/spec.md` and `changes/C-URT-003/spec.md`, or reduce the plan to only the spec-backed change and defer the other two."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "Several acceptance checks are too ambiguous to be reliably executed or audited.",
+      "evidence": "The verification matrix includes non-specific checks such as `focused retained-listener/readiness tests`, `scoped clippy appropriate to the changed targets`, `public manifest and executable binary inspection`, `scoped CLI/Sovereign Sync checks and tests implicated by installer/live path`, and `relevant UAR sidecar/channel/API suites` without naming commands, packages, test filters, or expected inspection assertions.",
+      "suggested_fix": "Replace each vague check with exact commands and expected pass/fail evidence, including package names, feature flags, test filters, artifact tag/digest checks, and the exact manifest/binary assertions."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

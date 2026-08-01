@@ -1,0 +1,18 @@
+{
+  "artifact_type": "code",
+  "variants": [
+    {
+      "name": "implementation-summary",
+      "file": "implementation-summary.md",
+      "format": "markdown",
+      "description": "Bounded KBD migration and focused-service repair"
+    },
+    {
+      "name": "verification",
+      "file": "verification.md",
+      "format": "markdown",
+      "description": "Deterministic source verification evidence"
+    }
+  ],
+  "generated_at": "2026-07-31T19:45:00Z"
+}

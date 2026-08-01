@@ -62,6 +62,7 @@ class LibreFang:
         self.skills = _SkillsResource(self)
         self.system = _SystemResource(self)
         self.tools = _ToolsResource(self)
+        self.uar = _UarResource(self)
         self.users = _UsersResource(self)
         self.webhooks = _WebhooksResource(self)
         self.workflows = _WorkflowsResource(self)
@@ -1222,6 +1223,29 @@ class _ToolsResource(_Resource):
 
     def invoke_tool(self, name: str, agent_id: Any = None, **data):
         return self._c._request("POST", f"/api/tools/{name}/invoke", data, query={"agent_id": agent_id})
+
+
+# ── Uar Resource ───────────────────────────────────────────────
+
+class _UarResource(_Resource):
+
+    def uar_models(self):
+        return self._c._request("GET", "/api/uar/models")
+
+    def uar_restart(self):
+        return self._c._request("POST", "/api/uar/restart")
+
+    def uar_start(self):
+        return self._c._request("POST", "/api/uar/start")
+
+    def uar_status(self):
+        return self._c._request("GET", "/api/uar/status")
+
+    def uar_stop(self):
+        return self._c._request("POST", "/api/uar/stop")
+
+    def uar_test_completion(self, **data):
+        return self._c._request("POST", "/api/uar/test", data)
 
 
 # ── Users Resource ─────────────────────────────────────────────

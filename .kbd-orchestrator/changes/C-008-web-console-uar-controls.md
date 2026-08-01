@@ -1,7 +1,7 @@
 # Change C-008 — Web console: run, stop, restart, and test the UAR
 
 **Phase:** phase-10-uar-sidecar-availability
-**Status:** SPECCED
+**Status:** DONE (2026-07-31)
 **Depends on:** C-006 (supervisor), C-007 (driver)
 **Files to touch:** `crates/librefang-api/src/routes/uar.rs` (or a new module), `crates/librefang-api/dashboard/src/`
 **Closes:** G-7
@@ -32,7 +32,8 @@ Every backing capability already exists — this is wiring, not new runtime beha
    see *what we looked for and where* without reading logs. That is the whole point.
 2. `POST /api/uar/start` · `/stop` · `/restart` — supervisor commands.
 3. `POST /api/uar/test` — issue a canned completion through `UarDriver`; return the reply and
-   the latency.
+   the latency. This route is functional in `uar-driver` builds (including the shipped Docker
+   image); deliberately minimal builds without that opt-in feature return an explicit 503.
 4. `GET /api/uar/models` — proxy UAR's `/api/models`.
 5. Register the new router in `server.rs::api_v1_routes()` — a handler that is never merged
    is invisible, and the reflection tests
@@ -55,7 +56,8 @@ Every backing capability already exists — this is wiring, not new runtime beha
 ## Acceptance criteria
 
 - The console shows live UAR status and transitions correctly on start/stop/restart.
-- "Test the UAR" returns a real completion from the sidecar.
+- "Test the UAR" returns a real completion from the sidecar in the shipped `uar-driver` build;
+  an intentionally feature-minimal build reports that the feature is disabled.
 - When the binary cannot be resolved, the console shows the **actionable multi-path error**
   from C-003 — not `os error 2`, and not a blank failure.
 - No inline `fetch()` in pages/components; all query keys come from the factory.
@@ -64,11 +66,21 @@ Every backing capability already exists — this is wiring, not new runtime beha
 ## Verification
 
 ```bash
-cargo test -p librefang-api
-cargo clippy -p librefang-api --all-targets -- -D warnings
+cargo test -p librefang-api --features uar-driver
+cargo clippy -p librefang-api --all-targets --features uar-driver -- -D warnings
 python3 scripts/enforce-branding.py --check
 ```
 
-Add `#[tokio::test]` integration tests against `TestServer` (repo rule: every new route gets
-one) covering status, start/stop/restart, and test-completion. Use C-006's fake
+Add `#[tokio::test]` integration tests against the shared `TestAppState` production-router
+harness (repo rule: every new route gets one) covering status, start/stop/restart, and
+test-completion. Use C-006's fake
 `uar-sidecar` so CI needs no real UAR.
+
+## Completion evidence
+
+- Authenticated production-router tests cover status, start, stop, restart, model proxy,
+  feature-enabled completion, feature-disabled 503 behavior, and missing-binary diagnostics.
+- Dashboard queries and mutations use the shared key factory and invalidate the UAR status
+  contract. The full dashboard suite passes: 88 files and 902 tests.
+- A live authenticated BossFang daemon connected to the immutable published image, reported
+  `healthy`, and returned exactly `BossFang UAR is ready.` from `POST /api/uar/test`.

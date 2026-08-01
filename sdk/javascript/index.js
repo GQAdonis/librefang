@@ -51,6 +51,7 @@ class LibreFang {
     this.skills = new SkillsResource(this);
     this.system = new SystemResource(this);
     this.tools = new ToolsResource(this);
+    this.uar = new UarResource(this);
     this.users = new UsersResource(this);
     this.webhooks = new WebhooksResource(this);
     this.workflows = new WorkflowsResource(this);
@@ -1558,6 +1559,36 @@ class ToolsResource {
 
   async invokeTool(name, data, query) {
     return this._c._request("POST", `/api/tools/${name}/invoke`, data, query);
+  }
+}
+
+// ── Uar Resource
+
+class UarResource {
+  constructor(client) { this._c = client; }
+
+  async uarModels() {
+    return this._c._request("GET", "/api/uar/models");
+  }
+
+  async uarRestart() {
+    return this._c._request("POST", "/api/uar/restart");
+  }
+
+  async uarStart() {
+    return this._c._request("POST", "/api/uar/start");
+  }
+
+  async uarStatus() {
+    return this._c._request("GET", "/api/uar/status");
+  }
+
+  async uarStop() {
+    return this._c._request("POST", "/api/uar/stop");
+  }
+
+  async uarTestCompletion(data) {
+    return this._c._request("POST", "/api/uar/test", data, undefined);
   }
 }
 

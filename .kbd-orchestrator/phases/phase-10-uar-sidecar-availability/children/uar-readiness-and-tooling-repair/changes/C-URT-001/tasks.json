@@ -1,0 +1,56 @@
+{
+  "changeId": "C-URT-001",
+  "schemaVersion": "1",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Create isolated UAR sync-branch worktree and OpenSpec change",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["openspec/changes/fix-sidecar-ready-contract/**"],
+      "verify": "openspec validate fix-sidecar-ready-contract",
+      "notes": null
+    },
+    {
+      "id": "2",
+      "title": "Port retained listener and truthful READY contract with focused tests",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["src/bin/uar-sidecar.rs", "src/server.rs"],
+      "verify": "cargo test --locked --no-default-features --features server-full --bin uar-sidecar",
+      "notes": null
+    },
+    {
+      "id": "3",
+      "title": "Verify, commit, push, and integrate the UAR change into the sync branch",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "cargo fmt --all -- --check && cargo check --locked --no-default-features --features server-full --bin uar-sidecar",
+      "notes": null
+    },
+    {
+      "id": "4",
+      "title": "Wait for and verify the commit-addressed public GHCR image",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "docker manifest inspect ghcr.io/gqadonis/universal-agent-runtime:<merged-sha>",
+      "notes": null
+    },
+    {
+      "id": "5",
+      "title": "Pin BossFang Dockerfile to the repaired image and verify extraction contract",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["Dockerfile"],
+      "verify": "docker run --rm --entrypoint sh ghcr.io/gqadonis/universal-agent-runtime:<merged-sha> -c 'test -x /usr/local/bin/uar-sidecar'",
+      "notes": null
+    }
+  ]
+}

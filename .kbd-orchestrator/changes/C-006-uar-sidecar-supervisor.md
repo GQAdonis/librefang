@@ -1,7 +1,7 @@
 # Change C-006 — UAR sidecar supervisor (spawn, READY handshake, health, restart, shutdown)
 
 **Phase:** phase-10-uar-sidecar-availability
-**Status:** SPECCED
+**Status:** DONE (2026-07-31)
 **Depends on:** C-002 (binary published), C-003 (resolution), C-005 (config)
 **Files to touch:** `crates/librefang-channels/src/sidecar.rs` (or a new sibling module), kernel boot wiring
 **Closes:** G-3
@@ -79,3 +79,14 @@ lets you test the failure modes that matter:
 - crashes → restarts with backoff
 - stdin closed → exits 0
 - binary missing → actionable error naming searched paths
+
+## Completion evidence
+
+- Hermetic supervisor integration tests cover truthful readiness, bounded startup,
+  endpoint mode, graceful stdin-EOF shutdown, restart policy, and actionable resolution
+  diagnostics. Retry policy is tested against the in-memory state machine rather than
+  wall-clock scheduling.
+- UAR retains its loopback listener through bootstrap and emits `READY` only after bind
+  and initialization. Environment bootstrap now runs before the multithread Tokio runtime.
+- Published image `2aaeadd9c28f27532a03e68d5035b248a0cef5b8` passed an independent executable,
+  `READY`, `/readyz`, and completion probe.

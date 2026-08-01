@@ -1,0 +1,31 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "The fallback instruction for the known clippy baseline blocker cites a non-existent repository path.",
+      "evidence": "Plan says: \"If the already-observed unchanged `librefang-kernel-handle/src/test_stub.rs` baseline mismatch recurs...\" but the file tree contains `./crates/librefang-kernel-handle/src/test_stub.rs`, not `./librefang-kernel-handle/src/test_stub.rs`; cited_paths also maps `librefang-kernel-handle/src/test_stub.rs -> crates/librefang-kernel-handle/src/test_stub.rs`.",
+      "suggested_fix": "Change the acceptance criterion to cite `crates/librefang-kernel-handle/src/test_stub.rs`."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "One acceptance criterion is ambiguous because it relies on subjective wording rather than a mechanically checkable condition.",
+      "evidence": "Acceptance criterion says: \"The scoped source contains no functional `started.elapsed() < ...` scheduler-performance assertion.\" The terms \"scoped source\" and \"functional\" are not defined, so implementers may disagree on which files and assertions are prohibited.",
+      "suggested_fix": "Replace with explicit file and pattern checks, e.g. \"In `crates/librefang-channels/src/uar_sidecar.rs`, remove assertions comparing `started.elapsed()` or equivalent elapsed wall-clock duration against millisecond upper bounds, except watchdog timeouts that only abort hung tests.\""
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

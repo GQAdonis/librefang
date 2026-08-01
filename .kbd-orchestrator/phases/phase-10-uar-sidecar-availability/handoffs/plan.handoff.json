@@ -1,0 +1,11 @@
+{
+  "stage": "plan",
+  "completedAt": "2026-07-31T17:53:03Z",
+  "outputs": [
+    "plan.md"
+  ],
+  "nextStage": "execute",
+  "summaryForNext": "Three changes. Begin C-URT-001 so remote UAR publication overlaps local C-URT-003/C-URT-002 work; never migrate before KBD source tests, and never pin BossFang before the SHA-tagged GHCR image resolves. Plan review PASS; both warnings resolved with exact pin and identity assertions.",
+  "skipped": false,
+  "skipReason": null
+}

@@ -514,12 +514,116 @@ use librefang_types::config::SidecarOverflowPolicy;
 /// `SidecarChannelConfig` at construction. All scalar/Copy so the
 /// supervisor can carry it cheaply across (re)spawns.
 #[derive(Debug, Clone, Copy)]
-struct SupCfg {
-    restart: bool,
+pub(crate) struct RestartPolicy {
+    pub(crate) enabled: bool,
+    pub(crate) max_retries: u32,
+    pub(crate) reset_after_secs: u64,
     initial_backoff_ms: u64,
     max_backoff_ms: u64,
-    max_retries: u32,
-    reset_after_secs: u64,
+}
+
+impl RestartPolicy {
+    fn from_channel_config(c: &librefang_types::config::SidecarChannelConfig) -> Self {
+        Self {
+            enabled: c.restart,
+            initial_backoff_ms: c.restart_initial_backoff_ms,
+            max_backoff_ms: c.restart_max_backoff_ms,
+            max_retries: c.restart_max_retries,
+            reset_after_secs: c.restart_reset_after_secs,
+        }
+    }
+
+    pub(crate) fn from_uar_config(c: &librefang_types::config::UarSidecarConfig) -> Self {
+        Self {
+            enabled: c.restart,
+            initial_backoff_ms: c.restart_initial_backoff_ms,
+            max_backoff_ms: c.restart_max_backoff_ms,
+            max_retries: c.restart_max_retries,
+            reset_after_secs: c.restart_reset_after_secs,
+        }
+    }
+
+    pub(crate) fn delay(self, attempt: u32) -> std::time::Duration {
+        backoff_with_jitter(attempt, self.initial_backoff_ms, self.max_backoff_ms)
+    }
+}
+
+/// One iteration result consumed by the shared sidecar lifecycle engine.
+pub(crate) enum SupervisionOutcome {
+    /// Operator shutdown or the downstream receiver disappeared.
+    Clean,
+    /// The same configuration may recover after bounded backoff.
+    Retryable {
+        error: Option<String>,
+        /// Time spent in the protocol-specific ready state. `None` means the
+        /// attempt failed before readiness was established.
+        ready_uptime: Option<std::time::Duration>,
+    },
+    /// Restarting with unchanged configuration cannot recover.
+    Terminal(String),
+}
+
+/// Protocol hook surface for the shared spawn/restart/circuit-break engine.
+///
+/// Channel adapters and UAR use different wire contracts (JSON-RPC ready
+/// notification versus `READY:{port}` plus HTTP), but lifecycle policy must
+/// remain identical. Implementations own one protocol-specific attempt; this
+/// engine owns retry counts, stable-uptime reset, backoff, and exhaustion.
+#[async_trait]
+pub(crate) trait SupervisionContract: Send {
+    fn restart_policy(&self) -> RestartPolicy;
+
+    async fn run_once(&mut self, attempt: u32) -> SupervisionOutcome;
+
+    /// Wait for the retry delay. Return `false` when shutdown wins the race.
+    async fn wait_to_retry(&mut self, delay: std::time::Duration) -> bool;
+
+    async fn retry_exhausted(&mut self, attempt: u32, error: Option<&str>);
+}
+
+pub(crate) async fn supervise_contract(contract: &mut impl SupervisionContract) {
+    let policy = contract.restart_policy();
+    let mut attempt = 0_u32;
+    loop {
+        let (error, ready_uptime) = match contract.run_once(attempt).await {
+            SupervisionOutcome::Clean => return,
+            SupervisionOutcome::Terminal(error) => {
+                contract.retry_exhausted(attempt, Some(&error)).await;
+                return;
+            }
+            SupervisionOutcome::Retryable {
+                error,
+                ready_uptime,
+            } => (error, ready_uptime),
+        };
+
+        if policy.reset_after_secs > 0
+            && ready_uptime.is_some_and(|uptime| {
+                uptime >= std::time::Duration::from_secs(policy.reset_after_secs)
+            })
+        {
+            attempt = 0;
+        }
+        if !policy.enabled {
+            contract.retry_exhausted(attempt, error.as_deref()).await;
+            return;
+        }
+        if attempt >= policy.max_retries {
+            contract.retry_exhausted(attempt, error.as_deref()).await;
+            return;
+        }
+
+        let delay = policy.delay(attempt);
+        attempt = attempt.saturating_add(1);
+        if !contract.wait_to_retry(delay).await {
+            return;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SupCfg {
+    restart_policy: RestartPolicy,
     ready_timeout_secs: u64,
     shutdown_grace_secs: u64,
     message_buffer: usize,
@@ -529,11 +633,7 @@ struct SupCfg {
 impl SupCfg {
     fn from_config(c: &librefang_types::config::SidecarChannelConfig) -> Self {
         Self {
-            restart: c.restart,
-            initial_backoff_ms: c.restart_initial_backoff_ms,
-            max_backoff_ms: c.restart_max_backoff_ms,
-            max_retries: c.restart_max_retries,
-            reset_after_secs: c.restart_reset_after_secs,
+            restart_policy: RestartPolicy::from_channel_config(c),
             ready_timeout_secs: c.ready_timeout_secs,
             shutdown_grace_secs: c.shutdown_grace_secs,
             message_buffer: c.message_buffer.max(1),
@@ -578,6 +678,122 @@ struct SpawnCtx {
     tx: mpsc::Sender<ChannelMessage>,
     shutdown_rx: watch::Receiver<bool>,
     sup: SupCfg,
+}
+
+struct ChannelSupervisionContract {
+    ctx: SpawnCtx,
+    shutdown_rx: watch::Receiver<bool>,
+}
+
+impl ChannelSupervisionContract {
+    async fn kill_child(&self) {
+        let mut child = self.ctx.child.lock().await;
+        if let Some(mut child) = child.take() {
+            let _ = child.kill().await;
+        }
+    }
+}
+
+#[async_trait]
+impl SupervisionContract for ChannelSupervisionContract {
+    fn restart_policy(&self) -> RestartPolicy {
+        self.ctx.sup.restart_policy
+    }
+
+    async fn run_once(&mut self, _attempt: u32) -> SupervisionOutcome {
+        if *self.shutdown_rx.borrow() {
+            return SupervisionOutcome::Clean;
+        }
+
+        let (handle, ready_rx) = match spawn_once(&self.ctx).await {
+            Ok(value) => value,
+            Err(error) => {
+                let mut status = self
+                    .ctx
+                    .status
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                status.connected = false;
+                status.last_error = Some(error.to_string());
+                return if self.ctx.sup.restart_policy.enabled {
+                    SupervisionOutcome::Retryable {
+                        error: Some(error.to_string()),
+                        ready_uptime: None,
+                    }
+                } else {
+                    SupervisionOutcome::Clean
+                };
+            }
+        };
+
+        let readied = tokio::select! {
+            _ = self.shutdown_rx.changed() => {
+                let _ = handle.await;
+                return SupervisionOutcome::Clean;
+            }
+            ready = ready_rx => ready.is_ok(),
+            _ = tokio::time::sleep(std::time::Duration::from_secs(
+                self.ctx.sup.ready_timeout_secs,
+            )) => false,
+        };
+        if !readied {
+            warn!(
+                adapter = %self.ctx.name,
+                timeout_secs = self.ctx.sup.ready_timeout_secs,
+                "Sidecar not ready in time; restarting"
+            );
+            self.kill_child().await;
+            let _ = handle.await;
+            return if self.ctx.sup.restart_policy.enabled {
+                SupervisionOutcome::Retryable {
+                    error: Some(format!(
+                        "sidecar did not become ready within {}s",
+                        self.ctx.sup.ready_timeout_secs
+                    )),
+                    ready_uptime: None,
+                }
+            } else {
+                SupervisionOutcome::Clean
+            };
+        }
+
+        let ready_at = std::time::Instant::now();
+        match handle.await.unwrap_or(ReaderExit::ChildClosed) {
+            ReaderExit::Shutdown | ReaderExit::ReceiverGone => {
+                self.kill_child().await;
+                SupervisionOutcome::Clean
+            }
+            ReaderExit::ChildClosed => {
+                if *self.shutdown_rx.borrow() || self.ctx.tx.is_closed() {
+                    self.kill_child().await;
+                    SupervisionOutcome::Clean
+                } else if !self.ctx.sup.restart_policy.enabled {
+                    SupervisionOutcome::Clean
+                } else {
+                    SupervisionOutcome::Retryable {
+                        error: Some("sidecar stdout closed unexpectedly".to_string()),
+                        ready_uptime: Some(ready_at.elapsed()),
+                    }
+                }
+            }
+        }
+    }
+
+    async fn wait_to_retry(&mut self, delay: std::time::Duration) -> bool {
+        warn!(
+            adapter = %self.ctx.name,
+            delay_ms = delay.as_millis(),
+            "Sidecar exited; restarting after backoff"
+        );
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => true,
+            _ = self.shutdown_rx.changed() => false,
+        }
+    }
+
+    async fn retry_exhausted(&mut self, attempt: u32, _error: Option<&str>) {
+        trip_circuit(&self.ctx, attempt);
+    }
 }
 
 /// Parse `secrets.env` at `path` into key/value pairs (best-effort).
@@ -849,7 +1065,7 @@ fn implicit_bundled_stem(command: &str) -> Option<&'static str> {
 /// bundled location, and `Command::new` will fail with a bare `No such file or
 /// directory (os error 2)`. `bundled_binary_hint` turns that into an actionable
 /// message; see its call site in `spawn_once`.
-fn resolve_sidecar_command(command: &str, home_dir: &Path) -> String {
+pub(crate) fn resolve_sidecar_command(command: &str, home_dir: &Path) -> String {
     let Some(stem) = implicit_bundled_stem(command) else {
         return command.to_string();
     };
@@ -875,7 +1091,7 @@ fn resolve_sidecar_command(command: &str, home_dir: &Path) -> String {
 /// and starts editing it, when in fact the binary was never installed and `PATH`
 /// is not consulted first at all. Naming the locations we searched points them at
 /// the real problem.
-fn bundled_binary_hint(command: &str, home_dir: &Path) -> Option<String> {
+pub(crate) fn bundled_binary_hint(command: &str, home_dir: &Path) -> Option<String> {
     let stem = implicit_bundled_stem(command)?;
     let searched = bundled_search_paths(stem, home_dir)
         .iter()
@@ -891,7 +1107,11 @@ fn bundled_binary_hint(command: &str, home_dir: &Path) -> Option<String> {
 
 /// Cheap, dependency-free jitter: 0..=20% of `base`, seeded off the
 /// wall clock. Backoff jitter does not need a CSPRNG.
-fn backoff_with_jitter(attempt: u32, initial_ms: u64, max_ms: u64) -> std::time::Duration {
+pub(crate) fn backoff_with_jitter(
+    attempt: u32,
+    initial_ms: u64,
+    max_ms: u64,
+) -> std::time::Duration {
     let exp = initial_ms.saturating_mul(1u64 << attempt.min(20));
     let base = exp.min(max_ms);
     let span = base / 5 + 1;
@@ -1468,7 +1688,7 @@ fn trip_circuit(ctx: &SpawnCtx, attempt: u32) {
     error!(
         adapter = %ctx.name,
         attempt,
-        max_retries = ctx.sup.max_retries,
+        max_retries = ctx.sup.restart_policy.max_retries,
         last_cause = prior.as_deref().unwrap_or("(none recorded)"),
         "Sidecar exceeded restart attempts; giving up (circuit-break)"
     );
@@ -1710,152 +1930,16 @@ impl ChannelAdapter for SidecarAdapter {
             shutdown_rx: self.shutdown_rx.clone(),
             sup: self.sup,
         };
-        let mut shutdown_rx = self.shutdown_rx.clone();
-
-        // Supervisor: owns the (re)spawn loop. The returned stream
-        // outlives every child — restarts feed the same `tx`. Restart
-        // on crash with exponential backoff + jitter; circuit-break
-        // after the configured max retries; never restart on a clean
-        // shutdown, once the bridge dropped the stream, or when
-        // `restart = false`.
+        // The shared lifecycle engine owns the restart/circuit-break loop.
+        // This contract supplies only the channel JSON-RPC wire behavior.
         tokio::spawn(async move {
-            let mut attempt: u32 = 0;
-            loop {
-                if *shutdown_rx.borrow() {
-                    break;
-                }
-                let started = std::time::Instant::now();
-                match spawn_once(&ctx).await {
-                    Ok((handle, ready_rx)) => {
-                        // Bound time-to-ready: a child that spawns but
-                        // never announces still counts as a failed try.
-                        let readied = tokio::select! {
-                            _ = shutdown_rx.changed() => {
-                                let _ = handle.await;
-                                break;
-                            }
-                            r = ready_rx => r.is_ok(),
-                            _ = tokio::time::sleep(
-                                std::time::Duration::from_secs(
-                                    ctx.sup.ready_timeout_secs,
-                                ),
-                            ) => false,
-                        };
-                        if !readied {
-                            warn!(
-                                adapter = %ctx.name,
-                                timeout_secs = ctx.sup.ready_timeout_secs,
-                                "Sidecar not ready in time; restarting"
-                            );
-                            {
-                                let mut g = ctx.child.lock().await;
-                                if let Some(mut c) = g.take() {
-                                    let _ = c.kill().await;
-                                }
-                            }
-                            let _ = handle.await;
-                            if !ctx.sup.restart {
-                                break;
-                            }
-                            if attempt >= ctx.sup.max_retries {
-                                trip_circuit(&ctx, attempt);
-                                break;
-                            }
-                            let delay = backoff_with_jitter(
-                                attempt,
-                                ctx.sup.initial_backoff_ms,
-                                ctx.sup.max_backoff_ms,
-                            );
-                            attempt += 1;
-                            tokio::select! {
-                                _ = tokio::time::sleep(delay) => {}
-                                _ = shutdown_rx.changed() => break,
-                            }
-                            continue;
-                        }
-                        let exit = handle.await.unwrap_or(ReaderExit::ChildClosed);
-                        match exit {
-                            ReaderExit::Shutdown | ReaderExit::ReceiverGone => {
-                                // ponytail: kill orphaned child on shutdown, else it survives daemon restart
-                                let mut g = ctx.child.lock().await;
-                                if let Some(mut c) = g.take() {
-                                    let _ = c.kill().await;
-                                }
-                                break;
-                            }
-                            ReaderExit::ChildClosed => {
-                                if *shutdown_rx.borrow() || ctx.tx.is_closed() || !ctx.sup.restart {
-                                    // ponytail: same kill on child-closed + shutdown
-                                    let mut g = ctx.child.lock().await;
-                                    if let Some(mut c) = g.take() {
-                                        let _ = c.kill().await;
-                                    }
-                                    break;
-                                }
-                                // Stable uptime resets backoff so a
-                                // long-lived adapter that crashes once
-                                // doesn't inherit an old penalty.
-                                if started.elapsed()
-                                    >= std::time::Duration::from_secs(ctx.sup.reset_after_secs)
-                                {
-                                    attempt = 0;
-                                }
-                                if attempt >= ctx.sup.max_retries {
-                                    trip_circuit(&ctx, attempt);
-                                    break;
-                                }
-                                let delay = backoff_with_jitter(
-                                    attempt,
-                                    ctx.sup.initial_backoff_ms,
-                                    ctx.sup.max_backoff_ms,
-                                );
-                                attempt += 1;
-                                warn!(
-                                    adapter = %ctx.name,
-                                    attempt,
-                                    delay_ms = delay.as_millis(),
-                                    "Sidecar exited; restarting after backoff"
-                                );
-                                tokio::select! {
-                                    _ = tokio::time::sleep(delay) => {}
-                                    _ = shutdown_rx.changed() => break,
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        {
-                            let mut s = ctx.status.lock().unwrap_or_else(|e| e.into_inner());
-                            s.connected = false;
-                            s.last_error = Some(e.to_string());
-                        }
-                        if !ctx.sup.restart {
-                            break;
-                        }
-                        if attempt >= ctx.sup.max_retries {
-                            trip_circuit(&ctx, attempt);
-                            break;
-                        }
-                        let delay = backoff_with_jitter(
-                            attempt,
-                            ctx.sup.initial_backoff_ms,
-                            ctx.sup.max_backoff_ms,
-                        );
-                        attempt += 1;
-                        warn!(
-                            adapter = %ctx.name,
-                            attempt,
-                            delay_ms = delay.as_millis(),
-                            "Sidecar spawn failed: {e}; retrying after backoff"
-                        );
-                        tokio::select! {
-                            _ = tokio::time::sleep(delay) => {}
-                            _ = shutdown_rx.changed() => break,
-                        }
-                    }
-                }
-            }
-            debug!(adapter = %ctx.name, "Sidecar supervisor exiting");
+            let name = ctx.name.clone();
+            let mut contract = ChannelSupervisionContract {
+                shutdown_rx: ctx.shutdown_rx.clone(),
+                ctx,
+            };
+            supervise_contract(&mut contract).await;
+            debug!(adapter = %name, "Sidecar supervisor exiting");
         });
 
         let stream = tokio_stream::wrappers::ReceiverStream::new(rx);
@@ -2197,6 +2281,145 @@ fn derive_sidecar_sender_identity(
 mod tests {
     use super::*;
     use crate::types::{InteractiveButton, MediaGroupItem};
+    use std::collections::VecDeque;
+
+    struct ScriptedContract {
+        policy: RestartPolicy,
+        outcomes: VecDeque<SupervisionOutcome>,
+        attempts: Vec<u32>,
+        waits: Vec<std::time::Duration>,
+        continue_waiting: bool,
+        exhausted: Vec<(u32, Option<String>)>,
+    }
+
+    impl ScriptedContract {
+        fn new(
+            policy: RestartPolicy,
+            outcomes: impl IntoIterator<Item = SupervisionOutcome>,
+        ) -> Self {
+            Self {
+                policy,
+                outcomes: outcomes.into_iter().collect(),
+                attempts: Vec::new(),
+                waits: Vec::new(),
+                continue_waiting: true,
+                exhausted: Vec::new(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl SupervisionContract for ScriptedContract {
+        fn restart_policy(&self) -> RestartPolicy {
+            self.policy
+        }
+
+        async fn run_once(&mut self, attempt: u32) -> SupervisionOutcome {
+            self.attempts.push(attempt);
+            self.outcomes
+                .pop_front()
+                .unwrap_or(SupervisionOutcome::Clean)
+        }
+
+        async fn wait_to_retry(&mut self, delay: std::time::Duration) -> bool {
+            self.waits.push(delay);
+            self.continue_waiting
+        }
+
+        async fn retry_exhausted(&mut self, attempt: u32, error: Option<&str>) {
+            self.exhausted.push((attempt, error.map(str::to_string)));
+        }
+    }
+
+    fn restart_policy(max_retries: u32, reset_after_secs: u64) -> RestartPolicy {
+        RestartPolicy {
+            enabled: true,
+            max_retries,
+            reset_after_secs,
+            initial_backoff_ms: 0,
+            max_backoff_ms: 0,
+        }
+    }
+
+    fn retryable(ready_uptime: Option<std::time::Duration>) -> SupervisionOutcome {
+        SupervisionOutcome::Retryable {
+            error: None,
+            ready_uptime,
+        }
+    }
+
+    #[tokio::test]
+    async fn restart_budget_is_exact_when_reset_is_disabled() {
+        let mut contract = ScriptedContract::new(
+            restart_policy(2, 0),
+            [retryable(None), retryable(None), retryable(None)],
+        );
+
+        supervise_contract(&mut contract).await;
+
+        assert_eq!(contract.attempts, [0, 1, 2]);
+        assert_eq!(contract.waits.len(), 2);
+        assert_eq!(contract.exhausted, [(2, None)]);
+    }
+
+    #[tokio::test]
+    async fn stable_ready_uptime_resets_the_retry_budget() {
+        let mut contract = ScriptedContract::new(
+            restart_policy(1, 10),
+            [
+                retryable(None),
+                retryable(Some(std::time::Duration::from_secs(10))),
+                retryable(None),
+            ],
+        );
+
+        supervise_contract(&mut contract).await;
+
+        assert_eq!(contract.attempts, [0, 1, 1]);
+        assert_eq!(contract.waits.len(), 2);
+        assert_eq!(contract.exhausted, [(1, None)]);
+    }
+
+    #[tokio::test]
+    async fn pre_ready_failure_does_not_reset_the_retry_budget() {
+        let mut contract =
+            ScriptedContract::new(restart_policy(1, 10), [retryable(None), retryable(None)]);
+
+        supervise_contract(&mut contract).await;
+
+        assert_eq!(contract.attempts, [0, 1]);
+        assert_eq!(contract.waits.len(), 1);
+        assert_eq!(contract.exhausted, [(1, None)]);
+    }
+
+    #[tokio::test]
+    async fn terminal_failure_does_not_wait_or_retry() {
+        let mut contract = ScriptedContract::new(
+            restart_policy(3, 10),
+            [SupervisionOutcome::Terminal("invalid config".to_string())],
+        );
+
+        supervise_contract(&mut contract).await;
+
+        assert_eq!(contract.attempts, [0]);
+        assert!(contract.waits.is_empty());
+        assert_eq!(
+            contract.exhausted,
+            [(0, Some("invalid config".to_string()))]
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_during_backoff_stops_without_another_attempt() {
+        let mut contract = ScriptedContract::new(restart_policy(3, 10), [retryable(None)]);
+        contract.continue_waiting = false;
+
+        supervise_contract(&mut contract).await;
+
+        assert_eq!(contract.attempts, [0]);
+        assert_eq!(contract.waits.len(), 1);
+        assert!(contract.exhausted.is_empty());
+    }
 
     #[test]
     fn resolve_sidecar_command_prefers_home_bin_when_bundled_binary_present() {
@@ -3457,11 +3680,11 @@ mod tests {
         // Minimal config -> every supervision field at its serde default.
         let c = cfg("x", "true", vec![]);
         let s = SupCfg::from_config(&c);
-        assert!(s.restart);
-        assert_eq!(s.initial_backoff_ms, 500);
-        assert_eq!(s.max_backoff_ms, 30_000);
-        assert_eq!(s.max_retries, 10);
-        assert_eq!(s.reset_after_secs, 60);
+        assert!(s.restart_policy.enabled);
+        assert_eq!(s.restart_policy.initial_backoff_ms, 500);
+        assert_eq!(s.restart_policy.max_backoff_ms, 30_000);
+        assert_eq!(s.restart_policy.max_retries, 10);
+        assert_eq!(s.restart_policy.reset_after_secs, 60);
         assert_eq!(s.ready_timeout_secs, 30);
         assert_eq!(s.shutdown_grace_secs, 5);
         assert_eq!(s.message_buffer, 256);
@@ -3479,8 +3702,8 @@ mod tests {
             }))
             .unwrap();
         let s2 = SupCfg::from_config(&c2);
-        assert!(!s2.restart);
-        assert_eq!(s2.max_retries, 3);
+        assert!(!s2.restart_policy.enabled);
+        assert_eq!(s2.restart_policy.max_retries, 3);
         assert_eq!(s2.message_buffer, 8);
         assert_eq!(s2.overflow, SidecarOverflowPolicy::DropNewest);
 
@@ -3649,6 +3872,35 @@ mod tests {
         }
         adapter.stop().await.unwrap();
         assert!(!adapter.status().connected);
+    }
+
+    #[tokio::test]
+    async fn restart_disabled_child_exit_does_not_trip_circuit() {
+        let python = match which_python() {
+            Some(p) => p,
+            None => return,
+        };
+        let script = concat!(
+            "import sys,json;",
+            "print(json.dumps({'method':'ready'}),flush=True);",
+            "sys.exit(0)"
+        );
+        let mut config = cfg(
+            "test-no-restart",
+            &python,
+            vec!["-u".to_string(), "-c".to_string(), script.to_string()],
+        );
+        config.restart = false;
+        let adapter = SidecarAdapter::new(&config, std::env::temp_dir());
+        let _stream = adapter.start().await.unwrap();
+
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert!(!adapter
+            .status()
+            .last_error
+            .as_deref()
+            .is_some_and(|error| error.contains("circuit-breaker tripped")));
+        adapter.stop().await.unwrap();
     }
 
     /// Regression: `trip_circuit` must preserve the specific per-attempt

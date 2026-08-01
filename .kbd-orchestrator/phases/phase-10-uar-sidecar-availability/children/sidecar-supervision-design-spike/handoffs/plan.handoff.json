@@ -1,0 +1,12 @@
+{
+  "stage": "plan",
+  "completedAt": "2026-07-31T16:46:24Z",
+  "outputs": [
+    "plan.md",
+    "changes/C-SPK-001/change.md"
+  ],
+  "nextStage": "execute",
+  "summaryForNext": "One medium change, C-SPK-001, corrects stable-ready-uptime semantics and moves retry invariants to an in-memory scripted contract. Adversarial plan review passed after adding full repository gates, exact crate tests/repetition, and mechanical wall-clock criteria. First and only change: C-SPK-001.",
+  "skipped": false,
+  "skipReason": null
+}

@@ -1,0 +1,76 @@
+{
+  "changeId": "C-URT-002",
+  "schemaVersion": "1",
+  "tasks": [
+    {
+      "id": "1",
+      "title": "Create isolated Prometheus worktree and add failing migration regressions",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["substrate/kbd-runtime/src/lib.rs"],
+      "verify": "cargo test -p kbd-runtime",
+      "notes": null
+    },
+    {
+      "id": "2",
+      "title": "Implement annotated-status and nested-hierarchy migration repair",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["substrate/kbd-runtime/src/lib.rs"],
+      "verify": "cargo test -p kbd-runtime",
+      "notes": null
+    },
+    {
+      "id": "3",
+      "title": "Add durable cross-platform KBD focus installer option and tests",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": ["scripts/install-mcp-services.sh", "shared/launchagents/ai.prometheus.sovereign-sync.plist", "shared/systemd/ai.prometheus.sovereign-sync.service"],
+      "verify": "bash shared/scripts/tests/test-kbd-focus-service-install.sh",
+      "notes": null
+    },
+    {
+      "id": "4",
+      "title": "Verify and commit the Prometheus source repair",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "cargo fmt --all -- --check && cargo clippy -p kbd-runtime --all-targets -- -D warnings && cargo test -p kbd-runtime",
+      "notes": null
+    },
+    {
+      "id": "5",
+      "title": "Track BossFang immutable project manifest and install focused patched tooling with rollback backups",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [".prometheus/project.json"],
+      "verify": "prometheus doctor --json",
+      "notes": null
+    },
+    {
+      "id": "6",
+      "title": "Dry-run and apply canonical migration with semantic projection assertions",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "prometheus kbd --path . status --json",
+      "notes": null
+    },
+    {
+      "id": "7",
+      "title": "Prove typed mutation idempotency and full daemon restart replay",
+      "done": false,
+      "doneAt": null,
+      "doneBy": null,
+      "files": [],
+      "verify": "prometheus kbd --path . audit --json",
+      "notes": null
+    }
+  ]
+}

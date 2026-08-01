@@ -1,0 +1,39 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment leaves the phase's smallest-design-correction recommendation unresolved instead of assessing it to a concrete recommendation.",
+      "evidence": "Goal requires: \"Recommend and implement the smallest design correction required for reliable tests\". The artifact instead ends with: \"Open implementation question for analysis \u2014 Choose the smallest deterministic uptime seam: attach `uptime: Duration` to `SupervisionOutcome::Retryable`, or inject a clock into `supervise_contract`.\"",
+      "suggested_fix": "Assess both options enough to state which correction is recommended for the next stage, or explicitly mark why the assessment phase cannot determine it and what evidence analysis must gather."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment makes detailed claims about upstream UAR implementation behavior that are not verifiable from the packet.",
+      "evidence": "The artifact claims: \"The UAR sidecar binds `127.0.0.1:0`, reads the selected port, drops the listener...\" and cites an external URL, but the packet's file tree contains no `universal-agent-runtime` source and no quoted source excerpt beyond the assessment's own assertion.",
+      "suggested_fix": "Include the relevant upstream source excerpt or treat the UAR READY race as an externally reported hypothesis requiring verification before downstream planning depends on it."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment ambiguously references `sidecar.rs` even though the packet shows two matching files, which can misdirect downstream changes.",
+      "evidence": "The artifact says \"`sidecar.rs` owns the generic lifecycle policy\". The packet's cited paths show: \"EXISTS   sidecar.rs  -> 2 matches (crates/librefang-channels/src/sidecar.rs, crates/librefang-runtime/src/context_engine/sidecar.rs)\".",
+      "suggested_fix": "Name the exact path, e.g. `crates/librefang-channels/src/sidecar.rs`, wherever the supervision engine is discussed."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

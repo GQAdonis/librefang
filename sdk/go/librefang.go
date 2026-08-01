@@ -54,6 +54,7 @@ type Client struct {
 	Skills *SkillsResource
 	System *SystemResource
 	Tools *ToolsResource
+	Uar *UarResource
 	Users *UsersResource
 	Webhooks *WebhooksResource
 	Workflows *WorkflowsResource
@@ -89,6 +90,7 @@ func New(baseURL string) *Client {
 		c.Skills = &SkillsResource{client: c}
 		c.System = &SystemResource{client: c}
 		c.Tools = &ToolsResource{client: c}
+		c.Uar = &UarResource{client: c}
 		c.Users = &UsersResource{client: c}
 		c.Webhooks = &WebhooksResource{client: c}
 		c.Workflows = &WorkflowsResource{client: c}
@@ -1654,6 +1656,34 @@ type ToolsResource struct{ client *Client }
 
 func (r *ToolsResource) InvokeTool(name string, data map[string]interface{}, query map[string]string) (interface{}, error) {
 	return r.client.request("POST", fmt.Sprintf("/api/tools/%s/invoke", name), data, query)
+}
+
+// ── Uar Resource
+
+type UarResource struct{ client *Client }
+
+func (r *UarResource) UarModels() (interface{}, error) {
+	return r.client.request("GET", "/api/uar/models", nil, nil)
+}
+
+func (r *UarResource) UarRestart() (interface{}, error) {
+	return r.client.request("POST", "/api/uar/restart", nil, nil)
+}
+
+func (r *UarResource) UarStart() (interface{}, error) {
+	return r.client.request("POST", "/api/uar/start", nil, nil)
+}
+
+func (r *UarResource) UarStatus() (interface{}, error) {
+	return r.client.request("GET", "/api/uar/status", nil, nil)
+}
+
+func (r *UarResource) UarStop() (interface{}, error) {
+	return r.client.request("POST", "/api/uar/stop", nil, nil)
+}
+
+func (r *UarResource) UarTestCompletion(data map[string]interface{}) (interface{}, error) {
+	return r.client.request("POST", "/api/uar/test", data, nil)
 }
 
 // ── Users Resource

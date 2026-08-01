@@ -38,6 +38,7 @@ import {
   userBudgetKeys,
   permissionPolicyKeys,
   promptsKeys,
+  uarKeys,
 } from "./keys";
 
 describe("query key factories", () => {
@@ -437,6 +438,7 @@ describe("query key factories", () => {
       userKeys,
       userBudgetKeys,
       permissionPolicyKeys,
+      uarKeys,
     ];
 
     it("all factories have an 'all' key", () => {
@@ -566,6 +568,16 @@ describe("query key factories", () => {
       // lists(), so a broad `invalidateQueries({ queryKey: lists() })` matches it
       // while a targeted `list()` invalidation does not collapse into `lists()`.
       expect(promptsKeys.list()).not.toEqual(promptsKeys.lists());
+    });
+  });
+
+  describe("uarKeys", () => {
+    it("anchors status and models below the UAR domain", () => {
+      expect(uarKeys.all).toEqual(["uar"]);
+      expect(uarKeys.detail()).toEqual(["uar", "detail", "status"]);
+      expect(uarKeys.models()).toEqual(["uar", "list", "models"]);
+      expect(uarKeys.detail().slice(0, uarKeys.all.length)).toEqual(uarKeys.all);
+      expect(uarKeys.models().slice(0, uarKeys.all.length)).toEqual(uarKeys.all);
     });
   });
 });

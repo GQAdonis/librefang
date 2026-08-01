@@ -1,0 +1,29 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "The analysis relies on an upstream UAR source path and UAR implementation details that are not supported by the packet's file tree.",
+      "evidence": "analysis.md lists `Upstream universal-agent-runtime/src/bin/uar-sidecar.rs` as relevant code and later claims `UAR currently uses std::process::exit in its sidecar lifecycle`; the packet's cited paths state `MISSING  universal-agent-runtime/src/bin/uar-sidecar.rs`, and the file tree contains no `universal-agent-runtime` path.",
+      "suggested_fix": "Either remove the unsupported upstream-code claims from this analysis, or explicitly mark them as prior-assessment assumptions and avoid using them as evidence for the current build-vs-adopt decision unless the upstream source is provided."
+    },
+    {
+      "severity": "WARNING",
+      "file": "library-candidates.json",
+      "claim": "The candidate landscape omits any process-supervision or retry/backoff-policy solution category despite the phase being about a shared sidecar supervision engine.",
+      "evidence": "The goals require `Assess the architecture of the shared sidecar supervision engine`; `library-candidates.json` evaluates only `Outcome-carried ready uptime`, `Injected Clock trait`, `mock_instant`, `Tokio paused time`, and `Tokio CancellationToken and TaskTracker`, with no candidate category for existing Rust process supervision, restart policy, or retry/backoff libraries before deciding to build the supervision contract correction.",
+      "suggested_fix": "Add an explicit candidate category for process supervision/retry-policy/backoff libraries or patterns, evaluate why they do not fit this specific contract correction, and then retain or revise the build recommendation."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

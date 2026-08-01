@@ -1,0 +1,222 @@
+{
+  "phase": "sidecar-supervision-design-spike",
+  "generated_at": "2026-07-31T16:39:00Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier_1": 2,
+      "tier_2": 4,
+      "tier_3": 4,
+      "tier_4": 1
+    }
+  },
+  "gaps_addressed": [
+    "deterministic retry-policy tests",
+    "correct stable-ready-uptime semantics",
+    "UAR process versus embedded execution boundary"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Outcome-carried ready uptime",
+      "kind": "pattern",
+      "repo_url": "https://github.com/GQAdonis/librefang",
+      "registry": "none",
+      "fit_for_gap": "Make retry reset semantics deterministic and measure only post-readiness uptime.",
+      "verdict": "adopt",
+      "coverage_estimate": 1.0,
+      "license": "MIT OR Apache-2.0",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/GQAdonis/librefang",
+          "claim": "The existing SupervisionContract already makes attempt outcomes and retry waits injectable; carrying ready uptime completes that seam without a new abstraction."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://doc.rust-lang.org/std/time/struct.Instant.html",
+          "claim": "Each protocol adapter can use a monotonic Instant around only its ready-to-exit interval while tests provide Duration values directly."
+        }
+      ],
+      "risks": [
+        "Every Retryable construction site must be migrated consistently."
+      ],
+      "decision_rationale": "Smallest implementation, correct semantic owner, no new dependency, and invalid readiness/uptime combinations are excluded with Option<Duration>."
+    },
+    {
+      "id": "cand-002",
+      "name": "Injected Clock trait",
+      "kind": "pattern",
+      "repo_url": "https://github.com/restatedev/restate/tree/main/crates/clock",
+      "registry": "none",
+      "fit_for_gap": "Substitute monotonic time in policy tests.",
+      "verdict": "reject",
+      "coverage_estimate": 0.6,
+      "license": "MIT",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/restatedev/restate/tree/main/crates/clock",
+          "claim": "Large Rust systems use clock abstractions where many components independently acquire time."
+        }
+      ],
+      "risks": [
+        "Adds a trait and production plumbing for one comparison.",
+        "Does not by itself move the measurement start from spawn to readiness."
+      ],
+      "decision_rationale": "More abstraction than the current policy requires and does not solve the semantic boundary alone."
+    },
+    {
+      "id": "cand-003",
+      "name": "mock_instant 0.6.1",
+      "kind": "library",
+      "repo_url": "https://github.com/museun/mock_instant",
+      "registry": "crates",
+      "fit_for_gap": "Mock std::time::Instant in tests.",
+      "verdict": "reject",
+      "coverage_estimate": 0.4,
+      "license": "0BSD",
+      "maintenance": {
+        "last_release": "0.6.1"
+      },
+      "evidence": [
+        {
+          "tier": 3,
+          "source_url": "https://crates.io/crates/mock_instant",
+          "claim": "The crate provides a mock replacement for std::time::Instant."
+        }
+      ],
+      "risks": [
+        "Adds global/mock clock machinery for one local invariant.",
+        "Cannot control subprocess, filesystem, or socket scheduling."
+      ],
+      "decision_rationale": "The contract can represent elapsed ready time directly with less code and stronger semantics."
+    },
+    {
+      "id": "cand-004",
+      "name": "Tokio paused time",
+      "kind": "framework",
+      "repo_url": "https://github.com/tokio-rs/tokio",
+      "registry": "crates",
+      "fit_for_gap": "Control Tokio timers in asynchronous tests.",
+      "verdict": "reject",
+      "coverage_estimate": 0.3,
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "1.53.1"
+      },
+      "evidence": [
+        {
+          "tier": 2,
+          "source_url": "https://docs.rs/tokio/latest/tokio/time/fn.pause.html",
+          "claim": "Tokio pause controls Tokio's time driver; it does not control std::time::Instant or operating-system process scheduling."
+        }
+      ],
+      "risks": [
+        "Would preserve the incorrect pre-spawn measurement boundary if used alone."
+      ],
+      "decision_rationale": "Useful for timer-driven unit tests but not the right seam for this policy or subprocess tests."
+    },
+    {
+      "id": "cand-005",
+      "name": "Tokio CancellationToken and TaskTracker",
+      "kind": "library",
+      "repo_url": "https://github.com/tokio-rs/tokio",
+      "registry": "crates",
+      "fit_for_gap": "Structured in-process lifecycle if UAR later exposes a library service.",
+      "verdict": "reference",
+      "coverage_estimate": 0.2,
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "tokio-util 0.7.19"
+      },
+      "evidence": [
+        {
+          "tier": 2,
+          "source_url": "https://tokio.rs/tokio/topics/shutdown",
+          "claim": "CancellationToken and TaskTracker support cooperative notification and joining of async tasks."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://docs.rs/tokio/latest/tokio/task/index.html",
+          "claim": "Task abort is cooperative at yield points and cannot abort an already-running spawn_blocking task."
+        }
+      ],
+      "risks": [
+        "Shared process failure and resource domain remains.",
+        "Does not address retry-accounting test design."
+      ],
+      "decision_rationale": "Relevant to a future supported embedded service API, not to the current defect."
+    },
+    {
+      "id": "cand-006",
+      "name": "backoff 0.4 / tokio-retry 0.3",
+      "kind": "library",
+      "repo_url": "https://github.com/ihrwein/backoff",
+      "registry": "crates",
+      "fit_for_gap": "Repeat asynchronous operations with exponential backoff.",
+      "verdict": "reject",
+      "coverage_estimate": 0.25,
+      "license": "MIT OR Apache-2.0",
+      "maintenance": {
+        "last_release": "backoff 0.4.0; tokio-retry 0.3.2"
+      },
+      "evidence": [
+        {
+          "tier": 3,
+          "source_url": "https://crates.io/crates/backoff",
+          "claim": "backoff supplies exponential retry scheduling for sync and Tokio operations."
+        },
+        {
+          "tier": 3,
+          "source_url": "https://crates.io/crates/tokio-retry",
+          "claim": "tokio-retry wraps futures with extensible retry strategies."
+        }
+      ],
+      "risks": [
+        "Does not model readiness, terminal errors, endpoint publication, shutdown races, or stable-ready-uptime reset.",
+        "Would duplicate rather than replace the domain-specific supervision contract."
+      ],
+      "decision_rationale": "The generic retry schedule is a small fraction of the existing lifecycle policy; adopting a crate does not remove the domain code under test."
+    },
+    {
+      "id": "cand-007",
+      "name": "process-wrap 9.1 / generic Rust process supervisors",
+      "kind": "library",
+      "repo_url": "https://github.com/watchexec/process-wrap",
+      "registry": "crates",
+      "fit_for_gap": "Wrap child processes with process-group/session/job-object and kill-on-drop controls.",
+      "verdict": "reject",
+      "coverage_estimate": 0.2,
+      "license": "MIT OR Apache-2.0",
+      "maintenance": {
+        "last_release": "process-wrap 9.1.0"
+      },
+      "evidence": [
+        {
+          "tier": 3,
+          "source_url": "https://crates.io/crates/process-wrap",
+          "claim": "process-wrap provides platform process groups, sessions, job objects, and kill-on-drop around Command."
+        },
+        {
+          "tier": 3,
+          "source_url": "https://crates.io/search?q=process%20supervisor",
+          "claim": "The registry contains generic supervisor actors and development-process managers, but none encode UAR's READY/HTTP/EOF protocol."
+        }
+      ],
+      "risks": [
+        "Adds platform abstraction while leaving the UAR wire and readiness contract untouched.",
+        "Could change process-tree semantics outside the requested retry-policy correction."
+      ],
+      "decision_rationale": "Tokio Command already supplies the process primitives used here; the missing seam is domain outcome data, not process creation."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "UAR retained-listener startup and truthful READY/BOUND handshake",
+      "why_no_candidate": "The defect is in UAR's own sidecar entry point and server construction; it requires a focused upstream source change, not a third-party library.",
+      "capability_gap_id": null
+    }
+  ]
+}

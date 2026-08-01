@@ -1,0 +1,29 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "kbd-judge",
+  "producer_model": "gpt-5.6-sol",
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "library-candidates.json",
+      "claim": "The rejected external socket-activation/process-wrapper option is not evaluated as concrete libraries and has no maintenance data, so the build-vs-adopt rejection is not independently actionable.",
+      "evidence": "Candidate cand-004 is a generic category named \"External socket-activation/process-wrapper crates\" with \"repo_url\": \"https://crates.io/search?q=socket%20activation\", \"license\": \"various\", and \"maintenance\": {}, rather than named crates with maintenance/version checks.",
+      "suggested_fix": "Evaluate specific plausible crates or remove the generic candidate and state that no concrete third-party candidate was considered because Tokio/Axum already satisfies the required retained-listener capability."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "claim": "The kernel-handle clippy analysis collapses the prior finding of three stale trait signatures into an unspecified fixture update, risking an incomplete downstream plan.",
+      "evidence": "prior_handoffs says \"kernel stub has three stale trait signatures,\" but analysis.md only states: \"KernelHandleStub deliberately returns unavailable/empty defaults; it should accept and ignore the new `agent_id`/`peer_id` parameters\" without naming the three affected trait methods or confirming that all three mismatches are covered.",
+      "suggested_fix": "List the exact three stale `KernelHandleStub` methods/signatures and the required parameter changes for each, then tie the focused clippy reproducer to those fixes."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

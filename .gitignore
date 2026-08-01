@@ -60,6 +60,13 @@ prediction_report_*.md
 BUILD_LOG.md
 message_journal.jsonl
 
+# KBD runtime-only state (canonical phase artifacts remain tracked)
+.kbd-orchestrator/memory-outbox.jsonl
+.kbd-orchestrator/model-preflight.json
+.kbd-orchestrator/phases/**/hooks-status.json
+.kbd-orchestrator/phases/**/hooks.log.jsonl
+.kbd-orchestrator/phases/**/hooks.log.jsonl.lock
+
 # Local working notes / design plans (ultrareview, brainstorm scratch)
 .plans/
 
