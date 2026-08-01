@@ -187,6 +187,7 @@ pub struct LibreFang {
     pub skills: Arc<SkillsResource>,
     pub system: Arc<SystemResource>,
     pub tools: Arc<ToolsResource>,
+    pub uar: Arc<UarResource>,
     pub users: Arc<UsersResource>,
     pub webhooks: Arc<WebhooksResource>,
     pub workflows: Arc<WorkflowsResource>,
@@ -224,6 +225,7 @@ impl LibreFang {
             skills: Arc::new(SkillsResource::new(base_url.clone(), client.clone())),
             system: Arc::new(SystemResource::new(base_url.clone(), client.clone())),
             tools: Arc::new(ToolsResource::new(base_url.clone(), client.clone())),
+            uar: Arc::new(UarResource::new(base_url.clone(), client.clone())),
             users: Arc::new(UsersResource::new(base_url.clone(), client.clone())),
             webhooks: Arc::new(WebhooksResource::new(base_url.clone(), client.clone())),
             workflows: Arc::new(WorkflowsResource::new(base_url.clone(), client.clone())),
@@ -4624,6 +4626,92 @@ impl ToolsResource {
             &format!("/api/tools/{}/invoke", name),
             Some(data),
             &[("agent_id", agent_id)],
+        )
+        .await
+    }
+}
+
+// ── Uar ──
+
+#[derive(Debug, Clone)]
+pub struct UarResource {
+    base_url: String,
+    client: Client,
+}
+
+impl UarResource {
+    fn new(base_url: String, client: Client) -> Self {
+        Self { base_url, client }
+    }
+
+    pub async fn uar_models(&self) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::GET,
+            &"/api/uar/models".to_string(),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn uar_restart(&self) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::POST,
+            &"/api/uar/restart".to_string(),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn uar_start(&self) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::POST,
+            &"/api/uar/start".to_string(),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn uar_status(&self) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::GET,
+            &"/api/uar/status".to_string(),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn uar_stop(&self) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::POST,
+            &"/api/uar/stop".to_string(),
+            None,
+            &[],
+        )
+        .await
+    }
+
+    pub async fn uar_test_completion(&self, data: Value) -> Result<Value> {
+        do_req(
+            &self.client,
+            &self.base_url,
+            reqwest::Method::POST,
+            &"/api/uar/test".to_string(),
+            Some(data),
+            &[],
         )
         .await
     }

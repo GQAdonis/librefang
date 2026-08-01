@@ -394,8 +394,8 @@ jobs:
   # then failed on main with E0063. This lane makes that a PR-time failure.
   #
   # Scoped to `-p librefang-llm-drivers` — the only crate whose source is cfg-gated on
-  # the feature. The SKIP_* vars stop UAR's build.rs fetching models.dev over the
-  # network and building its pnpm frontend; the Dockerfile sets the same ones.
+  # the feature. UAR runs out of process, so this lane needs no provider-runtime build
+  # dependencies or network bootstrap.
   uar-driver:
     name: UAR Driver (opt-in feature)
     needs: changes
@@ -412,35 +412,22 @@ jobs:
         # `cargo build --bin librefang --features …,uar-driver` resolves `uar-driver`
         # against `librefang-cli`. If any crate in the chain stops declaring it, this
         # fails here instead of in the post-merge image build.
-        run: cargo tree -p librefang-cli --features uar-driver -i universal-agent-runtime --depth 0
-      - name: UAR is absent from the DEFAULT build
-        # Guards the opt-in property itself. If UAR ever gets force-enabled again, it
-        # drags its whole tree into every build and re-imposes its exact
-        # `surrealdb = "=3.2.x"` pin on the entire workspace.
         run: |
-          if cargo tree -i universal-agent-runtime >/dev/null 2>&1; then
-            echo "::error::universal-agent-runtime is in the DEFAULT dependency graph. \
-          The uar-driver feature must stay opt-in — check for a hardcoded \
-          features = [\"uar-driver\"] on a path dependency."
+          cargo tree -p librefang-cli --features uar-driver -e features \
+            -i librefang-llm-drivers \
+            | grep -F 'librefang-llm-drivers feature "uar-driver"'
+      - name: uar-driver is absent from the DEFAULT build
+        # Guards the opt-in property itself. The HTTP driver is intentionally
+        # excluded from minimal builds even though it no longer links UAR.
+        run: |
+          if cargo tree -p librefang-cli -e features -i librefang-llm-drivers \
+            | grep -F 'librefang-llm-drivers feature "uar-driver"'; then
+            echo "::error::uar-driver is enabled in the DEFAULT feature graph. \
+          Check for a hardcoded features = [\"uar-driver\"] on a path dependency."
             exit 1
           fi
-          echo "ok: UAR absent from the default graph"
-      - name: Install protoc
-        # UAR's build.rs unconditionally runs `tonic_prost_build::compile_protos`
-        # on proto/a2a.proto (build.rs:24) — there is no SKIP_* escape hatch for it,
-        # unlike the catalog / frontend / model steps. prost-build shells out to
-        # `protoc`, which is NOT preinstalled on ubuntu-latest, so the lane died with
-        # "Could not find `protoc`". It compiles locally only because dev machines
-        # tend to have it.
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          echo "ok: uar-driver absent from the default feature graph"
       - name: Compile-check the uar-driver path
-        env:
-          # These three are honoured by UAR's build.rs and keep the network fetch
-          # (models.dev), the pnpm frontend build, and the model download out of CI.
-          # `protoc` above covers the one step they cannot skip.
-          SKIP_FRONTEND_BUILD: "1"
-          SKIP_MODEL_BUILD: "1"
-          SKIP_CATALOG_BUILD: "1"
         run: |
           cargo check -p librefang-llm-drivers --features uar-driver
           cargo clippy -p librefang-llm-drivers --features uar-driver -- -D warnings
@@ -725,7 +712,10 @@ jobs:
       - name: Ensure dashboard build dir exists
         run: mkdir -p crates/librefang-api/static/react
       - name: Build daemon (debug)
-        run: cargo build -p librefang-cli --bin librefang
+        # Exercise the BossFang production backend topology. The CLI disables
+        # API default features, so the top-level package must forward SurrealDB
+        # explicitly to keep API and kernel cfgs aligned.
+        run: cargo build -p librefang-cli --bin librefang --features surreal-backend
       - name: Run live-integration smoke (skip LLM)
         run: |
           cargo run -p xtask -- integration-test \

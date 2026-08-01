@@ -11928,6 +11928,102 @@
         }
       }
     },
+    "/api/uar/models": {
+      "get": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_models",
+        "responses": {
+          "200": {
+            "description": "UAR model catalog"
+          },
+          "503": {
+            "description": "UAR is not running"
+          }
+        }
+      }
+    },
+    "/api/uar/restart": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_restart",
+        "responses": {
+          "200": {
+            "description": "UAR restarted and ready"
+          },
+          "503": {
+            "description": "UAR failed to restart"
+          }
+        }
+      }
+    },
+    "/api/uar/start": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_start",
+        "responses": {
+          "200": {
+            "description": "UAR started and ready"
+          },
+          "503": {
+            "description": "UAR failed to start"
+          }
+        }
+      }
+    },
+    "/api/uar/status": {
+      "get": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_status",
+        "responses": {
+          "200": {
+            "description": "Current supervised UAR lifecycle state"
+          }
+        }
+      }
+    },
+    "/api/uar/stop": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_stop",
+        "responses": {
+          "200": {
+            "description": "UAR stopped"
+          }
+        }
+      }
+    },
+    "/api/uar/test": {
+      "post": {
+        "tags": [
+          "uar"
+        ],
+        "operationId": "uar_test_completion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCompletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "503": {
+            "description": "uar-driver feature is disabled"
+          }
+        }
+      }
+    },
     "/api/uploads/{file_id}": {
       "get": {
         "tags": [
@@ -14678,6 +14774,23 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "TestCompletionRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

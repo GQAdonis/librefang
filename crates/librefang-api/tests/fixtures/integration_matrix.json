@@ -1873,6 +1873,18 @@
       "owner": "integration-coverage-matrix"
     },
     {
+      "path": "/api/users/{name}/provider-keys",
+      "status": "exempt",
+      "reason": "new upstream endpoint, integration test pending",
+      "owner": "integration-coverage-matrix"
+    },
+    {
+      "path": "/api/users/{name}/provider-keys/{provider}",
+      "status": "exempt",
+      "reason": "new upstream endpoint, integration test pending",
+      "owner": "integration-coverage-matrix"
+    },
+    {
       "path": "/api/users/{name}/rotate-key",
       "status": "exempt",
       "reason": "new upstream endpoint, integration test pending",
@@ -1888,6 +1900,42 @@
       "path": "/api/versions",
       "status": "covered",
       "scenario": "root_contract_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/models",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/restart",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/start",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/status",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/stop",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
+      "proof": "docs/integration-test-matrix.md"
+    },
+    {
+      "path": "/api/uar/test",
+      "status": "covered",
+      "scenario": "uar_supervisor_http",
       "proof": "docs/integration-test-matrix.md"
     },
     {

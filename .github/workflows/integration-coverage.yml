@@ -51,6 +51,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
+      - name: Install system deps for keyring/secret-service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libsecret-1-dev pkg-config
       - name: Run fixture-backed runtime tests
         run: cargo nextest run -p librefang-testing --no-fail-fast
       - name: Run Surreal storage/vector invariants
@@ -66,8 +70,14 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install system deps for keyring/secret-service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libsecret-1-dev pkg-config
       - name: Build CLI
-        run: cargo build --release -p librefang-cli
+        # Match the BossFang production backend topology; the CLI intentionally
+        # disables API defaults and forwards the selected backend explicitly.
+        run: cargo build --release -p librefang-cli --features surreal-backend
       - name: Run live integration smoke without LLM
         run: cargo xtask integration-test --skip-llm --binary target/release/librefang
 
@@ -106,6 +116,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install system deps for keyring/secret-service
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev libsecret-1-dev pkg-config
       - name: Collect critical crate coverage
         run: |
           cargo llvm-cov nextest \
