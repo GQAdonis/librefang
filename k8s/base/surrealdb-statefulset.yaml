@@ -1,8 +1,9 @@
-# SurrealDB 3.0.5 — single-instance StatefulSet backing BossFang.
+# SurrealDB 3.2.3 — single-instance StatefulSet backing BossFang.
 #
-# Image tag pinned to v3.0.5 to match the workspace `Cargo.toml` pin
-# (`surrealdb = "=3.0.5"`). Floating to :v3 risks server/client minor
-# drift. When you bump the workspace pin, bump this image too.
+# Image tag kept on the same minor as the workspace `Cargo.toml` pin
+# (`surrealdb = "=3.2.1"`). Floating to :v3 risks server/client minor
+# drift. When you bump the workspace pin's minor, bump this image to
+# match; patch-level bumps of the image are safe within the minor.
 #
 # RocksDB on a PVC. Single replica because RocksDB takes an exclusive
 # OS lock on its data directory.
@@ -38,7 +39,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: surrealdb
-          image: surrealdb/surrealdb:v3.0.5
+          image: surrealdb/surrealdb:v3.2.3
           args:
             - start
             - --log
