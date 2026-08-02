@@ -73,8 +73,10 @@ default = ["surreal-backend"]
 ## BossFang: opt-in Universal Agent Runtime LLM driver.
 ##
 ## This forwards down the chain
-## `librefang-kernel` -> `librefang-runtime` -> `librefang-llm-drivers` ->
-## `dep:universal-agent-runtime`, and is deliberately NOT in `default`.
+## `librefang-kernel` -> `librefang-runtime` -> `librefang-llm-drivers`, where it
+## gates the `uar` driver module, and is deliberately NOT in `default`. UAR runs
+## out-of-process as a supervised sidecar, so the feature adds no in-process
+## `universal-agent-runtime` dependency.
 ##
 ## Until 2026-07-11 the `librefang-runtime` dependency below carried a hardcoded
 ## `features = ["uar-driver"]`. Cargo unions features across the graph and

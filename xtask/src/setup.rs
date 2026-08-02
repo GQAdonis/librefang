@@ -75,6 +75,46 @@ fn install_git_hooks(root: &Path) {
     }
 }
 
+/// Configure the git-side settings that keep upstream merges cheap.
+///
+/// Both are per-clone (git does not version `.git/config`), so they have to be
+/// set by setup rather than committed:
+///
+/// - `rerere.enabled` — records how a conflict was resolved and replays that
+///   resolution the next time the same conflict appears. BossFang hits the same
+///   branding hunks on every upstream merge; recording once turns a recurring
+///   manual resolution into an automatic one.
+/// - `merge.ours.driver` — activates the `merge=ours` attribute that
+///   `.gitattributes` already declares for `.kbd-orchestrator/**`. Without the
+///   driver registered, git ignores the attribute and falls back to manual
+///   conflict resolution on orchestrator state files.
+fn configure_merge_settings(root: &Path) {
+    let settings: [(&str, &str, &str); 2] = [
+        (
+            "rerere.enabled",
+            "true",
+            "replay recorded conflict resolutions",
+        ),
+        (
+            "merge.ours.driver",
+            "true",
+            "honour .gitattributes merge=ours",
+        ),
+    ];
+
+    for (key, value, why) in settings {
+        let status = Command::new("git")
+            .current_dir(root)
+            .args(["config", key, value])
+            .status();
+
+        match status {
+            Ok(s) if s.success() => println!("  Set {} = {} ({})", key, value, why),
+            _ => println!("  Warning: failed to set {}; {} is not active", key, why),
+        }
+    }
+}
+
 fn pnpm_install(dir: &Path, label: &str) {
     if !dir.join("package.json").exists() {
         println!("  Skipping {} (no package.json)", label);
@@ -125,6 +165,11 @@ pub fn run(args: SetupArgs) -> Result<(), Box<dyn std::error::Error>> {
     // Step 3: Install git hooks
     println!("=== Git hooks ===");
     install_git_hooks(&root);
+    println!();
+
+    // Step 3b: Merge settings that keep upstream merges cheap
+    println!("=== Merge settings ===");
+    configure_merge_settings(&root);
     println!();
 
     // Step 4: Fetch Rust dependencies

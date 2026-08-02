@@ -40,7 +40,9 @@ surreal-backend = ["dep:librefang-storage", "librefang-storage/surreal-backend",
 sqlite-backend = ["dep:librefang-storage", "librefang-storage/sqlite-backend"]
 # BossFang: opt-in Universal Agent Runtime LLM driver. Forwards to
 # `librefang-api/uar-driver` -> `librefang-kernel` -> `librefang-runtime` ->
-# `librefang-llm-drivers` -> `dep:universal-agent-runtime`.
+# `librefang-llm-drivers`, where it gates the `uar` driver module. UAR runs as a
+# supervised sidecar reached over HTTP, so nothing in this chain pulls an
+# in-process `universal-agent-runtime` dependency.
 #
 # This feature MUST be declared here even though no `librefang-cli` source file
 # gates on it: the production image builds the daemon with

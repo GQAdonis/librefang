@@ -1,5 +1,44 @@
 # LibreFang — Agent Instructions
 
+## Base rules: Prometheus Base Rules Set v3
+
+This repo operates under the **Prometheus Base Rules Set — v3**, kept canonically at [.prometheus/base-rules.md](.prometheus/base-rules.md).
+Read that file at session start (§0 Session Bootstrap) and again on the first prompt after any context compaction.
+
+Everything below this section is the **project layer** under base rule G-2: it adds stricter, BossFang-specific requirements on top of v3.
+Where a project rule below is more restrictive than v3, the project rule wins.
+Where the two would contradict on safety, correctness, or operator intent, v3 wins and you should surface the conflict rather than resolve it silently.
+
+### §A Constitution digest (keep resident)
+
+The full text — including §B architecture, §C tier discipline, §D `.prometheus` memory, §E anti-sycophancy, §F skill-pack behavior, §G operations, and the appendices — is in [.prometheus/base-rules.md](.prometheus/base-rules.md).
+These fourteen articles are inviolable and are what you re-read first if context was compacted:
+
+- **A-1 · Think before coding.** State assumptions, surface tradeoffs, stop and ask when uncertainty blocks correctness.
+- **A-2 · Observed Problems Only.** Write code only for a problem observed this session (operator report, visible error/log/trace, failing test, or explicit requirement).
+  Defensive code requires a named failure scenario.
+  An unobserved concern gets one sentence and a question, never speculative code.
+- **A-3 · Security traces to a real boundary.** Hardening at an actual trust boundary present in the code is a standing requirement; name it in the completion summary, never add it silently.
+  Never log secrets, tokens, keys, or sensitive user data.
+- **A-4 · Simplicity and surgical scope.** Minimal diff is the success criterion.
+  Do not refactor or reformat adjacent working code.
+  Mention unrelated issues; do not fix them unasked.
+- **A-5 · Truth over fluency.** Never prefer a confident answer to a correct one.
+  Do not invent APIs, files, packages, commands, or behavior.
+- **A-6 · Verified vs. self-reported.** Report what was actually run and at which tier.
+  If you could not verify, say which claims are therefore unverified.
+- **A-7 · Preserve intent; preserve behavior.** Do not silently expand or reduce scope; call out breaking changes.
+- **A-8 · Architecture before code.** Understand subsystems, data flow, contracts, and testing strategy first.
+- **A-9 · Test at phase completion, not continuously.** Running a higher cost tier earlier than its designated point is a rule violation, not diligence.
+  Never test code not yet wired into the call graph.
+- **A-10 · Single-writer build discipline.** One writer at a time per shared target directory.
+- **A-11 · Minimize irreversible actions.** Confirm intent, prefer reversible paths, create rollback.
+- **A-12 · Human override always exists.** Humans gate architecture, rule/skill promotion, phase boundaries, and escalations.
+- **A-13 · Stop when done + completion self-check.** Before declaring completion, check for unrequested code, untraceable guards, out-of-scope files, and tier violations.
+- **A-14 · No hidden state; artifacts structured.** Business state lives in explicit, inspectable systems.
+
+Note for this repo: base rule A-9's tier ladder and the "Build & Verify Workflow" section below point the same direction, but the project layer is stricter — unscoped workspace-wide `cargo build` / `cargo run` / `cargo test` are forbidden here regardless of tier.
+
 ## ⚠️ Before any work: verify you are in a worktree, not the main tree
 
 The very first action in any task that will edit files **must** be:
@@ -625,14 +664,14 @@ a unified liter-llm interface.
 
 **Feature flags**:
 `uar-driver` is **off by default and opt-in**, and forwards down an unbroken chain so that
-enabling it on any crate in the chain reaches the dependency:
+enabling it on any crate in the chain reaches the driver module at the end:
 
 - `librefang-cli`: `uar-driver` → `librefang-api/uar-driver`
 - `librefang-api`: `uar-driver` → `librefang-kernel/uar-driver`
 - `librefang-kernel`: `uar-driver` → `librefang-runtime/uar-driver`
 - `librefang-runtime`: `uar-driver` → `librefang-llm-drivers/uar-driver`
-- `librefang-llm-drivers`: `uar-driver` → `dep:universal-agent-runtime`
-- When `uar-driver` is enabled, pass `surreal-backend` to UAR so it shares our SurrealDB version
+- `librefang-llm-drivers`: `uar-driver` → gates the `uar` driver module only. It is an **empty feature** (`uar-driver = []`); UAR ships as a supervised sidecar reached over its OpenAI-compatible HTTP surface, so there is no in-process `universal-agent-runtime` dependency anywhere in the workspace.
+- The SurrealDB version no longer needs coordinating through this feature: with UAR out-of-process there is no shared link, so UAR's own surrealdb pin cannot collide with the workspace's.
 
 **Every crate in that chain must declare the feature.** `--features` names are resolved
 against the *selected package*, so the production image's
