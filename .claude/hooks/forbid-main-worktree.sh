@@ -120,6 +120,30 @@ case "$tool" in
       */librefang) ;;
       *) exit 0 ;;
     esac
+    # Exception: KBD orchestrator state.
+    #
+    # `.kbd-orchestrator/` is per-clone bookkeeping (project.json, phase and
+    # change files) that the KBD skills read and rewrite in place. It is
+    # DESIGNED to live in the main tree: .gitattributes pins
+    # `.kbd-orchestrator/**/*.{json,md}` to `merge=ours` precisely so each
+    # clone keeps its own copy across merges and rebases. The blanket refusal
+    # below exists because *source* edits in the main tree collide with the
+    # user's other sessions on the shared target/ dir — that rationale does
+    # not apply to orchestrator state, which no build ever reads.
+    #
+    # Scoped to "$repo_root"/.kbd-orchestrator/ (not a bare */ glob) so a path
+    # that merely contains the segment somewhere else cannot slip through.
+    # `${target:-}` because `target` is only assigned when the tool call
+    # carried a file_path; unset falls through to the refusal below.
+    #
+    # NOTE: this exception covers Edit/Write only. `git commit` in the main
+    # worktree is still refused by the `git-mutation-main` rule in
+    # lib/check-bash-rules.py, which matches on subcommand rather than path.
+    # Committing KBD state therefore still requires a worktree, or the user
+    # running git themselves. That guard is deliberately left intact.
+    case "${target:-}" in
+      "$repo_root"/.kbd-orchestrator/*) exit 0 ;;
+    esac
     cat >&2 <<EOF
 [forbid-main-worktree] Refusing $tool — target lives in the main worktree:
   ${target:-$target_dir}

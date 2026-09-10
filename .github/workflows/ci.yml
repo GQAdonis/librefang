@@ -56,6 +56,7 @@ jobs:
       crates: ${{ steps.diff.outputs.crates }}
       skill_sdk: ${{ steps.diff.outputs.skill_sdk }}
       sidecar_rust: ${{ steps.diff.outputs.sidecar_rust }}
+      hooks: ${{ steps.diff.outputs.hooks }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -78,7 +79,7 @@ jobs:
             {
               echo "rust=true"; echo "docs=true"; echo "ci=true"; echo "install=true"
               echo "full_run=true"; echo "full_test=true"
-              echo "skill_sdk=true"; echo "sidecar_rust=true"
+              echo "skill_sdk=true"; echo "sidecar_rust=true"; echo "hooks=true"
               echo "crates="
             } >> "$GITHUB_OUTPUT"
             echo "merge_group: forcing full run on all platforms"
@@ -109,6 +110,11 @@ jobs:
           DOCS=false;    has '^(docs/|.*\.md$)'                                       && DOCS=true
           CI=false;      has '^\.github/workflows/'                                   && CI=true
           INSTALL=false; has '^web/public/install\.(sh|ps1)$|^scripts/tests/install_sh_test\.sh$' && INSTALL=true
+          # The Claude Code PreToolUse guards are the safety net that stops
+          # agent sessions editing / mutating the main worktree. They are plain
+          # shell + python with no compile step, so no other CI lane would
+          # notice a regression — gate them on their own job.
+          HOOKS=false;   has '^(\.claude/hooks/|scripts/tests/forbid-main-worktree-kbd\.sh$)' && HOOKS=true
           # The WASM-skill guest SDK and its example are independent
           # workspaces (own `[workspace]` roots), so the main RUST lane —
           # which only builds the kernel workspace — never compiles them.
@@ -185,6 +191,7 @@ jobs:
             echo "full_test=$FULL_TEST"
             echo "skill_sdk=$SKILL_SDK"
             echo "sidecar_rust=$SIDECAR_RUST"
+            echo "hooks=$HOOKS"
           } >> "$GITHUB_OUTPUT"
           echo "Route: full_run=$FULL ($REASON), full_test=$FULL_TEST ($TREASON)"
 
@@ -672,6 +679,26 @@ jobs:
         run: sh scripts/tests/install_sh_test.sh
       - name: Parse PowerShell installer
         run: pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [void][System.Management.Automation.Language.Parser]::ParseFile("web/public/install.ps1",[ref]$tokens,[ref]$errors); if ($errors) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }'
+
+  # ── Claude Code hook guards (fast, independent) ───────────────────────────────
+  # The PreToolUse hooks keep agent sessions out of the main worktree. They are
+  # plain shell + python with no compile step, so nothing else in CI would catch
+  # a regression — in particular the `.kbd-orchestrator/` write exception, which
+  # has to stay narrow enough not to become a general main-tree bypass.
+  hooks-guard:
+    name: Hook Guards
+    needs: changes
+    if: needs.changes.outputs.hooks == 'true' || needs.changes.outputs.ci == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Syntax-check hook scripts
+        run: |
+          bash -n .claude/hooks/forbid-main-worktree.sh
+          bash -n .claude/hooks/guard-bash-safety.sh
+          python3 -m py_compile .claude/hooks/lib/check-bash-rules.py
+      - name: Run forbid-main-worktree regression tests
+        run: bash scripts/tests/forbid-main-worktree-kbd.sh
 
   # ── Live-integration smoke (#3405) ────────────────────────────────────────────
   # Spawn a real `target/debug/librefang start` daemon on port 4545, hit
