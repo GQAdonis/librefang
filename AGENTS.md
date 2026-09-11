@@ -218,8 +218,9 @@ migration files in `crates/librefang-storage/src/migrations/sql/`. Feature: `sur
 (default). After upstream merge, map any new upstream SQLite schema changes to new `.surql`
 migration files and register them in `src/migrations/mod.rs`.
 
-**Version pin**: `surrealdb = "=3.0.5"` in workspace `Cargo.toml`. Do NOT upgrade without
-coordinating surreal-memory and UAR git refs — version drift breaks the build.
+**Version pin**: `surrealdb = "=3.2.4"` **and** `surrealdb-core = "=3.2.4"` in workspace
+`Cargo.toml` — both move together, since `=` on the client does not constrain core. Do NOT
+upgrade without coordinating surreal-memory and UAR git refs — version drift breaks the build.
 
 ### surreal-memory Integration (`librefang-memory` surreal backends)
 

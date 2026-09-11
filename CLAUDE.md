@@ -577,8 +577,10 @@ as the default persistent storage, with SQLite retained only as a legacy opt-in 
 **Crate**: `librefang-storage` (`crates/librefang-storage/`)
 **Migration files**: `crates/librefang-storage/src/migrations/sql/*.surql` (24+ migrations)
 **Feature flags**: `surreal-backend` (default), `sqlite-backend` (opt-in legacy)
-**Version pin**: `surrealdb = { version = "=3.0.5" }` in workspace `Cargo.toml` — NEVER change
-  this without coordinating with surreal-memory and UAR versions.
+**Version pin**: `surrealdb = { version = "=3.2.4" }` **and** `surrealdb-core = { version = "=3.2.4" }`
+  in workspace `Cargo.toml` — both lines move together. `=` on `surrealdb` does NOT transitively
+  constrain `surrealdb-core`, so pinning only the former lets `cargo update` drift core onto a
+  newer minor that breaks the client. Coordinate with surreal-memory and UAR before changing.
 
 **After every upstream merge:**
 1. Check if upstream added new SQLite `CREATE TABLE` or `ALTER TABLE` statements
@@ -670,10 +672,20 @@ paper over a missing feature declaration — declare the feature and forward it.
 All three systems (librefang-storage, surreal-memory, UAR) must link the same surrealdb
 client. The workspace `Cargo.toml` pins:
 ```toml
-surrealdb = { version = "=3.0.5", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb = { version = "=3.2.4", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb-core = { version = "=3.2.4", default-features = false }
 ```
-**NEVER** upgrade this without simultaneously updating surreal-memory and UAR git refs.
+Upgrade both lines together, and check the other two systems first.
 Version drift causes duplicate dep link errors that break the entire build.
+
+What each system demands, as of the 3.2.4 bump:
+
+- `surreal-memory` pins a **caret** `^3.2.0`, which any 3.2.x satisfies — flexible.
+- `universal-agent-runtime` pins an **exact** `=3.2.4` (`Cargo.toml` in that repo) — rigid, and
+  historically the sole source of the lockstep constraint. Since phase-8 C-001 un-forced
+  `uar-driver` out of the default build, a default `cargo check` no longer links UAR at all, so
+  the exact pin only binds builds that opt into `--features uar-driver` (the `Dockerfile` image
+  does). Keep the two in step anyway: cargo cannot unify two different exact `=` pins.
 
 ### 4. Env-var aliases (BOSSFANG_* preferred, LIBREFANG_* fallback)
 

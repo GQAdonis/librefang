@@ -118,8 +118,8 @@ r2d2_sqlite = "0.34"
 # Without this pin, `cargo generate-lockfile` / `cargo update` can drift
 # surrealdb-core onto a newer minor whose internal API surface breaks the
 # surrealdb client we pin. This pin makes the alignment structural.
-surrealdb = { version = "=3.2.1", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
-surrealdb-core = { version = "=3.2.1", default-features = false }
+surrealdb = { version = "=3.2.4", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb-core = { version = "=3.2.4", default-features = false }
 # surreal-memory — pinned by `rev`, and the URL/rev form is kept BYTE-IDENTICAL to
 # the one UAR declares. Cargo keys a git source on the literal URL + ref, so
 # `…/surreal-memory-server?branch=main` and `…/surreal-memory-server.git?rev=<sha>`
@@ -215,7 +215,7 @@ wasmtime = { version = "47", features = [
 
 # WASI Preview 2 host implementation — paired in lockstep with wasmtime.
 # Pinned `=` so a `cargo update` can't drift the WasiView trait signature
-# under us between minor releases (same reasoning as the surrealdb = "=3.0.5"
+# under us between minor releases (same reasoning as the surrealdb = "=3.2.4"
 # workspace pin). Phase-7 C-001 wires this into the Component plugin host so
 # language runtimes (CPython, StarlingMonkey, Go, cargo-component's wasi-rt)
 # find their `wasi:*` init imports satisfied. The WasiCtx is deny-by-default
