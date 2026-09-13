@@ -7,7 +7,2388 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 
 ## [Unreleased]
 
+- Agents spawned from a template now carry the template name forward as `source_template` on the manifest, and the dashboard agent list shows it next to the schedule so operators can trace provenance (#8018) (@DaBlitzStein)
+
+## [2026.8.30] - 2026-08-30
+
+_554 PRs from 2 contributors since v2026.8.19._
+
+### Highlights
+
+- **Ephemeral workers** — agents can now spawn short-lived worker agents on demand via HTTP or Quick Run, with spend rolled up to the parent
+- **Workflow canvas** — create and edit workflows with named step agent bindings, per-step required skills, reversible agent binding, and contained transient mission workspaces
+- **Semantic memory for agents** — agents can read and write their own memory store directly; session-scoped recall and per-capability access controls are now configurable per agent
+- **Backups and selective restore** — a new Backups tab in settings lets you create, list, restore, and delete backups, with component-level selection on restore
+- **Identity and access** — OIDC role claims can now grant authorization, user groups are a first-class entity, and identity-provider groups map onto local groups for IAM
+
 ### Added
+
+- Ship the Kubernetes half of managed configuration as a kustomize overlay at `deploy/kubernetes/overlays/managed-config/`, so the deployment shape the mode was built for exists as a manifest rather than as prose.
+  `config.toml` is rendered into a ConfigMap and mounted read-only outside the PVC, credentials stay in Secrets and reach the daemon as environment variables, and a `checksum/config` annotation on the pod template makes a config edit roll the StatefulSet.
+  The annotation carries sha256 over the file's own bytes rather than kustomize's name-suffix hash, which makes the value that triggers the rollout the same value `GET /api/config/status` reports back — so confirming a change landed is one string comparison instead of an inference from a restart count (#7902) (@houko)
+- Agents can now spawn an ephemeral worker with `agent_spawn`'s new `ephemeral: true` mode — one turn that runs a task with a real tool set and then vanishes, leaving no agent record, no persisted session and no workspace, with the answer handed straight back in the tool result.
+  The point of it is that most delegation is task-shaped rather than colleague-shaped: until now the only way to hand work to a fresh context was to create a permanent agent with seven directories and a database row, and then remember to clean it up.
+  A worker's tool set is bounded by what the spawning agent may itself call, its spend and resource quota are billed to that agent rather than to nobody, and its nesting is capped by the same `max_agent_call_depth` counter `agent_send` and `workflow_run` already share, so a worker that spawns workers cannot recurse without bound.
+  Every tool the worker is shown is one it can actually execute — it runs against the same kernel, skill, MCP, web, browser and workspace handles a permanent agent's turn does — and a tool name the spawning agent cannot call is refused by name instead of quietly dropped.
+  Each run gets a scratch mission folder that is deleted when the run ends, on the success path and the failure path alike (#7875) (@houko)
+- Ephemeral workers can now be launched from outside a running agent turn.
+  `POST /api/agents/spawn-ephemeral` is the HTTP entry point to the spawn engine that #7875 shipped, and the Agent Types page gains a Quick Run control that calls it — pick the agent to run on behalf of, type the task, read the answer.
+  Everything the engine guarantees still holds because the route adds no policy of its own: the advertised tool set is the executable one, the spend and the `[resources]` quota land on the parent you chose, and the recursion bound is the shared `max_agent_call_depth`.
+  Resolving an agent type by name now also searches the writable `agent-types/` store, which is where `POST /api/templates` and the `agent_type_create` tool have been writing all along.
+  Without that, every type the dashboard can create was invisible to the one engine whose job is to run it, and Quick Run would have failed on the entire catalog the page renders.
+  (#7903) (@houko)
+- Agents can now define a workflow during a conversation with the new `workflow_create` tool, instead of workflow authoring being reachable only from the dashboard canvas, the CLI, or the HTTP API.
+  A workflow an agent writes is registered immediately and outlives the turn, so the next `workflow_run` — from that agent or any other — can reach it.
+  Names stay unique: the check and the registration are one atomic operation inside the engine, so two agents proposing the same name concurrently cannot both succeed and leave a workflow that name-based lookup resolves to at random (#7857) (@houko)
+- Ship a `workflow-creator` skill so an agent reaching for `workflow_create` knows the shape of a good workflow rather than guessing at one.
+  The tool has been available since #7857, but its JSON schema can only describe fields — not when a workflow beats a one-off `agent_send`, why `{"type": "researcher"}` binding makes a workflow portable to an instance where nothing is pre-registered, or which of the creation-time validations an author is most likely to trip.
+  Installing it from the registry puts that in the system prompt.
+  Two step fields the tool had always accepted are now advertised as well: `required_skills`, which fails a step before it bills an LLM call, and the per-step `session_mode` (#7873) (#6934) (@houko)
+- `channel_members` can now report everyone a platform lists in a channel, not only the people who have spoken there — the Slack adapter walks `conversations.members` when `SLACK_ENUMERATE_MEMBERS` is enabled, and the daemon persists what it finds.
+  An agent sitting in a shared channel could previously answer "who has talked here?" but not "who is in here?", which is the question people actually ask it.
+  The two sets are stored apart, with a `source` column on each roster row, because `channel_dm` authorizes a private message against that roster: bulk-filling it would have quietly turned "people this agent has interacted with" into "everyone the workspace lists", letting an agent DM a channel member who has never addressed it.
+  Enumeration therefore widens what can be reported and never what can be messaged, and speaking is still what earns someone a private reply.
+  Off by default and behind its own switch, because unlike `SLACK_RESOLVE_DISPLAY_NAMES` — which changes how well the daemon names the handful of people who have spoken to it — this changes how many people it stores at all. (#7919) (@houko)
+- The Slack sidecar can now resolve a sender's real display name and `@handle` through `users.info` instead of surfacing the raw `U09…` id, behind the new opt-in `SLACK_RESOLVE_DISPLAY_NAMES` knob.
+  Lookups are cached per user id for `SLACK_DISPLAY_NAME_TTL` (six hours by default) because `users.info` sits in a per-method rate limit that a per-message lookup would exhaust on a busy channel; absences and transient failures are cached too, so an unresolvable user costs one request rather than one per message.
+  It is off by default deliberately: the group roster persists whatever name the adapter reports, so turning it on changes what LibreFang stores about real people and not just what it displays (#7874) (@houko)
+- An agent in a shared Slack or Telegram group can now answer one person privately with the new `channel_dm` tool, instead of having to broadcast a notice meant for a single member or drop it silently.
+  The recipient must already appear in that conversation's roster — someone the daemon has seen speak there — so the cross-chat dispatch guard that closed the #6117 leak stays closed: an agent still cannot address a platform id it has never met, or use one conversation to reach into another.
+  Slack lets a bot open a DM with any workspace member; Telegram and Discord bots cannot message someone who never started a chat with them, and that send now fails visibly rather than quietly reappearing in the group (#7874) (@houko)
+- Files and images uploaded into Slack now reach the agent instead of being dropped, so a member can hand over a campaign image or a clip in the channel where the work is happening and ask for something to be done with it.
+  The bot token is pinned to Slack's own file hosts, and downloads are gated by a size cap, an extension allow-list and per-channel switches so a busy channel can opt out without disabling uploads everywhere (#7812, #7087) (@houko)
+- `GET /api/memory/config` now reports `proactive_memory.session_scoped_recall` and `PATCH` can change it, with a matching switch in the dashboard's memory settings drawer.
+  The setting decides whether a memory an agent auto-memorized is recallable only from the conversation that produced it, so on a shared or public agent it is what stands between one visitor's turn and the next visitor's context — and until now the only way to read or move it was to open `config.toml` on the daemon host, which is precisely what an operator driving LibreFang through its API cannot do.
+  The per-agent override stays in `agent.toml`, where every other per-agent key lives.
+  (#7870) (@houko)
+- Let a workflow step name an agent *type* — `agent = { type = "researcher" }` — instead of an instance somebody had to register first, so a workflow you hand to a colleague runs on their machine without a setup step.
+  The step reuses the running agent of that name when there is one and otherwise spawns it from the template of that name under the canonical name-derived UUID, so the type keeps one identity and one conversation history across daemon restarts rather than accumulating a fresh agent per run.
+  Three keys can now address a step's agent and exactly one of them is accepted: a step setting both `agent_id` and `agent_name` used to be taken as valid and resolved by whichever the parser happened to read first, which is how a step ends up bound to an agent nobody wrote down and nothing in the run output says so.
+  Template loading also tells its failures apart — missing, unreadable, unparseable, and a manifest naming a different agent each report their own reason and path — so a typo in a workflow is never mistaken for a corrupt manifest on disk, and a dry run previews a type without spawning it (#7858, #7712) (@houko)
+- A template that names a skill nobody installed, or an MCP server that never connected, used to behave exactly like a template that named nothing: the tools were simply absent and the operator had nothing to read.
+  Spawned agents now surface those declarations — a WARN at spawn, `pending_skills` / `pending_mcp_servers` on the agents API, a `pending` field on the per-agent skills and MCP routes, and badges on the dashboard.
+  The MCP half is derived from the live connection pool rather than the configured server list, so a server that is configured here and unreachable is reported rather than hidden behind its own config entry.
+  Nothing is dropped and nothing needs a re-spawn: installing the skill and reloading the registry, or connecting the server, clears the entry on the next read.
+  Analysis and the original approach are @DaBlitzStein's in #7716. (#7853) (@houko)
+- The workflow canvas step editor can now set a step's `required_skills`, and the dry-run panel shows the mismatch when an agent cannot satisfy them.
+  The gate itself shipped one release earlier with no editor surface at all, so the only way to require a skill was to hand-edit the workflow TOML or post the JSON yourself — and because a skill mismatch leaves `agent_found` true, the dry-run panel marked every step green while reporting the workflow as invalid, which is the least useful pair of signals it could have given.
+  Installed skills autocomplete the box without restricting it: requiring a skill that is declared but not yet installed is a real workflow, and naming that gap is the dry run's job rather than the editor's.
+  (#7871) (@houko)
+- Workflow steps can now declare `required_skills`, and a step whose agent cannot actually use one of them fails before dispatch with an error that names the step, the agent, the skill, and the fix.
+  The check resolves every required name against the loaded skill registry independently of the agent's allowlist mode, which matters because the default `skills = []` means "every skill that is loaded", not "every name you can type" — a requirement for a skill nobody installed would otherwise sail through validation and surface deep in the agent loop as a generic tool error.
+  Three failure classes are reported separately because each has a different fix: not declared by the agent (widen its `skills` list), declared but not loaded (install the skill and reload the registry), and no such skill on this instance (a typo).
+  A dry run reports the same text, so the mismatch is visible before a run burns its earlier steps.
+  (#7863) (@houko)
+- Agents can now author an agent type mid-conversation with the new `agent_type_create` tool, instead of an operator having to leave the conversation and hand-write a manifest for a role the agent just worked out it needs.
+  The tool writes through the same `AgentTypeSpec` validation and the same store as `POST /api/templates`, so a type an agent creates is byte-for-byte the kind of document the dashboard editor opens, and the name rule, the refusal to shadow a live agent and the race-free claim against a concurrent create cannot hold on one writing path while quietly missing from the other.
+  The agent-facing surface now settles the naming question that had been open since the store landed: "agent type" is the word the tool, the dashboard and the TUI screen all use, and `/api/templates` stays the single API path rather than gaining a permanent second name for one resource.
+  (#7877) (@houko)
+- Short-lived runs can now be handed a transient mission workspace — a scratch directory under `~/.librefang/transient/` created before the run and removed when it ends, so a tool that needs to write intermediate files has somewhere to put them that is guaranteed not to accumulate.
+  The directory name is built from untrusted text (an agent type, or a `name` field parsed out of a template TOML) and is later passed to a recursive delete, so containment is enforced rather than assumed: the label is reduced to a single sanitized path component, the directory is created without clobbering whatever already sits at that path, and the result is resolved and re-checked to be inside the transient root before anything is written to it or deleted from it.
+  A uid suffix keeps concurrent missions of the same agent type on separate directories, and a boot-time sweep collects the residue of any run whose process died before its cleanup could run.
+  Designed by @DaBlitzStein in #7727 (#7860) (@DaBlitzStein) (@houko)
+- The TUI can assign channels to a running agent, from the agent detail screen with `n`.
+  `PUT /api/agents/{id}/channels` had shipped with no client anywhere — not in the dashboard, not in the CLI — so restricting which channels an existing agent answers on meant hand-editing `agent.toml` over SSH.
+  The same screen's skills and MCP rows now show the agent's real allowlists instead of struct defaults, which they had been rendering since the detail pane was added.
+  (#7879) (@houko)
+- OIDC role claims can now authorize API access, through a new `[external_auth.role_map]` that maps an identity provider's group names to LibreFang roles.
+  The `roles` claim was already parsed off every ID token and injected into request extensions, and no handler ever read it — the daemon fetched the provider's keys, verified the signature, and threw the answer away, so an SSO login could prove who it was and still not call anything.
+  The mapping is what grants privilege, and it is empty by default: until an operator writes an entry, a validated OIDC bearer authorizes exactly as much as it did before, which is nothing.
+  A caller holding several mapped groups gets the highest-privilege match, so claim ordering — the provider's business, not yours — cannot decide the effective role, and an unmapped group, a typo'd role string, an unverified email address or a provider with no audience to bind tokens to all grant nothing rather than falling back to a default.
+  Claims feed the same `viewer` < `user` < `admin` < `owner` ladder that `[[users]]` and `[channel_role_mapping]` already use, so an SSO caller is gated by the identical route/role checks as every other credential.
+  (#7906) (@houko)
+- Workflows and cron jobs now record the principal they were created for, so an artifact an agent produced is attributable to a person or a team rather than only to a log line that will rotate before the artifact does.
+  A principal is a user or a group — the third `Role` arm from the original design was dropped because a role is an ordinal privilege level, so "owned by admin" is a permission predicate with no defined answer when the owner is deleted; a duty that rotates is a group with rotating membership, which `[[groups]]` already provides.
+  What a turn acts for is the authenticated caller when a human started it, and deliberately not overridable by configuration: an agent configured to act for the support team must not silently relabel the workflow one person asked it to build.
+  Turns with nobody behind them — cron fires, event triggers, workflow steps, autonomous ticks — fall back to `owner` in the agent's `agent.toml`, then to `default_owner` in `config.toml`, and that fallback chain is how group ownership is reached in practice.
+  The HTTP create routes read the caller from the authenticated session rather than the request body, and editing a workflow carries its owner over unchanged, so neither creating nor editing lets someone name an owner other than themselves.
+  Ownership is recorded and not yet enforced: nothing consults it to decide who may read, run, edit or delete, and an artifact with no owner stays visible to everyone exactly as it was before, which is what lets every workflow and job already on disk keep working with no migration and no backfill. (#7928) (@houko)
+- Groups are now a first-class entity, so a permission or an ownership decision can name a team rather than an individual.
+  Every such decision previously had to enumerate people, which does not survive a support rota, an on-call shift or a department where the members change and the obligation does not.
+  A group has a name, a description, many-to-many membership and a list of roles conferred on every member, stored as `[[groups]]` in `config.toml` and managed through `/api/groups`, the `librefang group` commands, a dashboard page and a TUI tab.
+  Membership is deliberately flat — groups do not nest, because the two things waiting on this (`Principal::Group` ownership and external identity-provider group mapping) both want flattened effective membership, and an IdP already hands us exactly that on every login.
+  Roles conferred by a group reuse the role strings channel binding resolution already carries, so this adds a second reading of the identity the system has rather than a third parallel one.
+  Deleting or renaming a user now updates every group that named them, in the same config write, so a removed person cannot keep the roles their membership granted. (#7913) (@houko)
+- Identity-provider group claims can now confer membership in a LibreFang `[[groups]]` entry, through a new `[external_auth.group_map]` an operator writes in `config.toml`.
+  An organisation running Keycloak, Okta, Entra, Authentik or Google Workspace already knows who is on which team, and LibreFang discarded all of it at the door — so group membership, and everything keyed off it, had to be re-entered by hand and drifted from the directory that is actually authoritative.
+  Mapping is deliberate rather than by name: matching an IdP group against a local one by name would let anyone who can create a group in the identity provider mint a LibreFang grant by choosing its name, which in a self-service tenant is every employee.
+  Membership is recomputed from the presented token on every request and never written into `config.toml`, so removing someone from a group in the identity provider takes effect here when their token expires, with no local cleanup — and no stale row left behind in a file the operator owns.
+  Group membership confers no RBAC privilege on its own; connecting an IdP claim to the `viewer < user < admin < owner` ladder still goes through `[external_auth.role_map]`, so an operator who wants one claim to do both writes it into both maps.
+  `[external_auth] claim_paths` says where the claims are read from, defaulting to `["roles", "groups"]` and accepting dotted paths so Keycloak's `realm_access.roles` and `resource_access.<client>.roles` are reachable; `scope` is an explicit opt-in because it describes what a client application was granted rather than who the user is.
+  `GET /api/authz/whoami` reports the calling credential's own resolved identity — role, principal, effective groups, and which of them came from the token — for working out why an SSO login resolved to less than expected.
+  (#7746) (@houko)
+- An ephemeral worker's run now leaves a record filed under the agent that spawned it, readable at `GET /api/agents/{id}/ephemeral-runs`.
+  Until now a worker vanished completely: its spend reached the parent's ledger, but the work behind the spend did not, so an operator watching an agent misbehave through disposable workers had nothing to inspect and no way to answer "what did this agent delegate, and what did each one cost".
+  Each record carries the mission label, the task that was delegated, the answer that came back, the model, the tokens, the cost and the outcome — including runs that failed, which are the ones most worth seeing.
+  Retention follows the parent: deleting an agent deletes its run records in the same transaction, and each agent keeps a bounded number of the most recent runs so a path designed to be called cheaply and often cannot grow the table without limit.
+  The record is written by the kernel rather than by persisting the worker's session, which is deliberate — a worker runs under its parent's identity, so persisting its session would also fold a delegated sub-run's text into the parent's own episodic memory and file the worker among the parent's real conversations.
+  The worker's mission workspace is still deleted when the run ends, exactly as before: keeping a record of what a worker did is a different thing from keeping the scratch files it did it with (#7904) (@houko)
+- `GET /api/agents/{id}/session/context` now reports where its `max_context_tokens` came from, as `max_context_tokens_source` plus a `max_context_tokens_assumed` flag, and the chat view labels an assumed window instead of presenting it as measured.
+  The number alone could not be read: a window an operator configured, one the registry declared and one the runtime invented when nothing knew are the same integer, and only the last is a reason to distrust the pressure percentage computed against it.
+  That last case is the one that started the report — a gateway-served model that publishes no limits, a conservative 8192 assumed in its place, and a conversation well inside the model's real window refused for an overflow that existed only in the assumption (#7881) (@houko)
+- A Models screen in the TUI, on F8, listing the catalogue with each model's context window and maximum output tokens editable in place.
+  The value in force sits next to the value the catalog declares, so a corrected model is distinguishable from an untouched one at a glance and a model nothing knows a window for is called out rather than shown as a plausible-looking number.
+  Editing writes the same `model_overrides.json` the dashboard and the API write, keyed by `provider:model_id`, so the correction survives a registry sync and applies to every agent on that model — an operator working over SSH no longer has to set the wrong per-agent field on each of them in turn (#7881) (@houko)
+- An agent can now inspect and repair its own semantic memory, not just read it.
+  `memory_semantic_duplicates` reports the near-duplicate groups reinforcing a belief, and `memory_semantic_consolidate` merges them — the remedy for the failure that prompted the report, where a stale memory kept being recalled into context and outvoting the tool results in front of it, and the only fix available was a full agent reset.
+  Consolidation deletes rows the caller never named, so it stays off until the agent's own `agent.toml` sets `[proactive_memory] allow_self_consolidation = true`; the read-only half needs no opt-in, and the REST route still performs the merge with a human deciding when.
+  Search gained `min_similarity`, a cosine floor with `[proactive_memory] min_similarity` behind it for automatic recall, so a caller can finally ask for nothing rather than noise — until now recall ranked candidates and truncated to the top few, which on a sparse store meant the least-bad rows reached the prompt as if they were answers.
+  Memory search with no embedding provider is now a real bm25 index (`memories_fts`) rather than a `content LIKE` scan that only matched when the caller's whole phrasing appeared verbatim, which also gives `[memory] fts_only` the memories index it always implied.
+  The auto-dream loop reaches all of it, so the Consolidate and Prune phases of its prompt finally have tools that consolidate and prune. (#7882) (@houko)
+- `librefang message` accepts `--session-id <UUID>` (also spelled `--session`), so a scripted caller can address one conversation among the many a single agent serves.
+  Without it every caller collapsed onto the agent's one canonical session: for a public agent serving unrelated visitors, each visitor's text sat in the model context of the next visitor's turn, and the shared transcript was re-sent and billed on every turn until it hit the context limit.
+  The HTTP surface has accepted `session_id` on `POST /api/agents/{id}/message` all along — the CLI simply never sent one, and `--incognito` was no substitute because it suppresses session writes entirely and so destroys continuity inside a conversation too.
+  An explicit id overrides the agent's `session_mode` in both directions: a `persistent` agent stops funnelling the turn into its canonical session, and a `new` agent stops minting a throwaway one (#7815) (@houko)
+- A model's context window is now an operator-editable property of the model, corrected at any time instead of only at registration.
+  A gateway that proxies a self-hosted runtime reports nothing useful about its own capacity, so the window was unknown, the agent loop fell back to a conservative 8192, and conversations hit an overflow that did not exist — at a prompt size the provider was answering happily.
+  The only reachable knob was the agent's `max_tokens`, which is the output cap rather than the window, and had to be repeated for every agent on the model.
+  `ModelOverrides` now carries `context_window` and `max_output_tokens`, persisted in `model_overrides.json` and therefore surviving a registry sync, editable through `PUT /api/models/overrides/{id}` and from the provider drawer in the dashboard, and inherited by every agent that uses the model.
+  Precedence is explicit: an `agent.toml` window still wins as the most specific layer, then the operator's per-model correction, then whatever the registry declared or a discovery probe assumed, then the conservative fallback.
+  The dashboard also says when no window is known for a model, so the assumption the runtime has been logging is visible next to the model it applies to (#7818) (@houko)
+- **Agents can finally ask their own semantic memory a question.**
+  Embeddings, cosine re-ranking, confidence decay and consolidation have been in LibreFang for a long time, but the entire tool surface an agent got for "memory" was three exact-key operations against `kv_store`.
+  Semantic memory was reachable only automatically — the recall the agent loop injects before each turn — or externally, over the REST API.
+  An agent could be *given* a memory it never asked for and could never ask for one, could not see what it had stored, and could not retract a memory that had gone stale.
+  That last one is the expensive failure: a memory saying "service X is unavailable" keeps being recalled into context long after the outage ends, and the agent has no way to look at it, correct it, or merge the near-duplicates reinforcing it.
+  Four new tools close the seam — `memory_semantic_search` (with a `min_confidence` floor, so a caller can ask for nothing rather than stale noise), `memory_semantic_add`, `memory_semantic_forget`, and `memory_semantic_stats`.
+  The `memory_semantic_` prefix is deliberate: `memory_store` (keyed) and a hypothetical `memory_remember` (keyless) read as synonyms and get picked at random.
+  Only `memory_semantic_search` ships its schema on every turn; the rest stay behind `tool_search` / `tool_load`.
+  Agents that reached this store through an MCP bridge wrapping the daemon's own REST API — a stdio child looping back over HTTP to the process it was spawned from — no longer need one, and no longer lose all addressable long-term memory when that child dies. (#7820) (@houko)
+- `MediaCapability` gains `SpeechToText` and `ImageUnderstanding`, so a provider can declare that it transcribes audio or describes images the same way it already declares that it generates them.
+  Understanding was the only half of media with no capability value, which is why its provider selection lives in two hand-written env-var ladders in `media_understanding.rs` instead of resolving through the driver registry like generation does — with no fallback when the first provider holding a key is the broken one.
+  This is the type-level prerequisite; drivers declaring the new capabilities, and routing a capability the agent's own model lacks to a provider that has it, follow separately (#7824) (@DaBlitzStein)
+- `POST /api/restore` accepts `keep_config` and `components`, so an archive can be restored onto a machine that is already running instead of only onto an empty one.
+  Restore was all-or-nothing and overwrote `config.toml`, which transplanted the source host's API key, bind port and paths onto the target — so cloning a working setup meant repairing the clone by hand, and recovering one deleted cron job meant rolling agents, workspaces and the database back to the moment of the backup.
+  `keep_config` skips `config.toml` (clone mode) and is evaluated before the component filter; `components` limits the restore to the classification `create_backup` already writes into `manifest.json`, with unrecognised entries always restored so archive metadata is never dropped.
+  The dashboard's restore control exposes both (#7830, #7831) (@DaBlitzStein)
+- The terminal UI grew a Backups sub-tab, so an operator on a headless box can take an archive before an upgrade, list what archives exist, restore one and delete an old one without hand-writing HTTP requests.
+  Restore is the full form the dashboard has: a keep-my-config toggle for cloning onto a machine that must keep its own key, port and paths, and a per-component selection built from the archive's own `manifest.json` — so the names the TUI sends are always names the daemon wrote, never a guess.
+  Deselecting every component is answered in the TUI rather than sent, because `components: []` is the one shape `POST /api/restore` refuses by design.
+  The analysis and the approach are @DaBlitzStein's, from #7833.
+  (#7897) (@houko)
+- Repair an audit hash chain that has already broken, without destroying the rows past the break.
+  Until now the only recovery LibreFang shipped was `librefang security audit-reset`, whose single mode is `DELETE FROM audit_entries` — it restores verification by discarding the evidence, which is the opposite of what an audit trail is for, so operators of a compliance deployment were left choosing between a log that never verifies again and no log at all.
+  `librefang security audit-reanchor` diagnoses the first break, distinguishes a wrong link between two rows from an edit to a row's own content, and repairs it by archiving every row at or after the break to `<data_dir>/audit-archive/` as JSON Lines before deleting them, then appending a `ChainReanchored` marker linked to the last row that still verified.
+  The archive's SHA-256 is committed into that marker, so the preserved rows are tamper-evident too: altering the archive afterwards no longer matches the hash the repaired chain vouches for.
+  The whole repair — re-diagnosis, delete, marker, row count — happens inside one `BEGIN IMMEDIATE` transaction and aborts without mutating anything if the break moved since the dry run reported it, and the command refuses to run at all while a daemon holds the database.
+  This is the recovery half of #7702; the prevention half landed in #7847, and a log broken before that fix needs this one (#7855) (@houko)
+- Agent types are now editable from the dashboard: a new **Agent Types** page creates, edits and deletes the reusable agent manifests you spawn from, backed by `POST`/`PUT`/`DELETE` on `/api/templates`.
+  Saving is a patch, not a rewrite — the editor renders seven of a manifest's fifty-eight fields, so the server merges what you sent over the document already on disk and leaves the rest alone.
+  An operator's `[[triggers]]`, `[compaction]`, `max_history_messages`, `mcp_servers`, `tool_allowlist`, `session_mode`, `[workspaces]`, `channels`, `[exec_policy]` and `fallback_models` all survive an edit made through the form, and a blank system prompt stays blank instead of being replaced with canned text.
+  Skills and tools are picked from the installed catalogs rather than typed into a comma-separated box, and rows that come from a live agent's own workspace are marked *managed via Agents* instead of offering an Edit button the API would refuse.
+  The design and defect analysis are @DaBlitzStein's, from #6931, #7740 and #7731.
+  (#7859) (@houko)
+- The Canvas step editor now chooses how a step finds its agent — a specific running instance, an agent name resolved when the step runs, or an agent type spawned from a template if nothing of that type is running — and can set the step's session independently of the agent's own default, including a fresh session for every run.
+  Binding by name is what survives a respawn: an agent's id changes when it is killed and started again, its name does not, so a workflow authored against a name keeps working where one pinned to an id quietly stops resolving.
+  The source is a stated choice rather than something inferred from whichever field happens to be filled in, which is what makes every one of the three switchable to any other: choosing one writes its field and clears the other two, so no step is stuck on a binding the panel has no control to clear (#7862) (@houko)
+- Workflow runs now record which agent asked for them, and a spawned worker's spend rolls up to the agent that spawned it.
+  Before this, a workflow started by an agent was indistinguishable from one an operator started by hand, and a step agent resolved from a `type` reference billed every owner's work to itself — so two teams sharing one `researcher` type had no way to tell their spend apart.
+  Ownership is recorded on the *run* rather than on the executing agent, because find-or-spawn deliberately resolves a type to one shared canonical instance; attaching ownership to that instance would have made the second owner's runs report the first owner's.
+  The owner is stamped once at creation and carried forward by resume and re-run, so re-running someone else's workflow does not silently transfer it to you.
+  Billing is a second column rather than a rewrite of the existing one, which keeps quota enforcement pointed at the agent that actually made the call — attribution and enforcement stay independent, and per-agent limits behave exactly as before.
+  The proposed `fresh = true` step flag is deliberately not part of this: per-step `session_mode = "new"` already isolates a step from a shared agent's history, and owner attribution already separates spend, so an extra agent instance per run would have bought only registry growth.
+  See `docs/architecture/workflow-run-attribution.md`.
+  (#7878) (@houko)
+- The Analytics endpoints can now answer "what did we spend last month, per model" without a client-side workaround.
+  Every `/api/usage*` endpoint takes optional `start_date` / `end_date` (`YYYY-MM-DD`, inclusive, UTC), `/api/usage/daily` takes a `days` window of up to 366 instead of a hard-coded 7, and a new `GET /api/usage/export?format=csv` streams raw events for archival.
+  Omitting the new parameters leaves every endpoint answering exactly what it answered before, and a malformed or inverted range now returns 400 rather than an empty result set that reads as "we spent nothing".
+  How far back any of this can reach is bounded by the retention sweep that has always hard-deleted `usage_events` older than 90 days; that horizon is now configurable as `[usage] retention_days`, so operators who need quarterly or annual reporting can raise it before the data is gone rather than after (#7895) (@houko)
+- `[memory.decay] episodic_ttl_days` (default 90) and `[memory] max_episodic_chars` (default 8000) give the episodic memory layer an exit.
+  The agent loop writes one episodic row per turn, but the decay sweep only ever named the SESSION and AGENT scopes, so the highest-volume scope in any real store was the one scope nothing expired — and the per-turn writer inlines whatever the turn produced, so an attachment a channel adapter rendered into the user message became one memory row and one embedding request of the same size.
+  The TTL is measured from last access, so a row that keeps being retrieved keeps living and the sweep retires the tail rather than the working set; the character budget is applied before the embedding call and split across the two halves of the exchange, so a large user message can never truncate the agent's reply away.
+  (#7915) (@houko)
+- A deployment can now declare its agents in a directory it owns, the way it already declares its configuration.
+  Point `LIBREFANG_PROVISIONING_PATH` at a tree of `agents/*.toml` and the daemon reconciles it at boot, then refuses every API route that would rewrite one of those manifests with `423 Locked` and `code: "resource_provisioned"` — while agents created at runtime stay fully editable, because ownership is per resource rather than a global switch.
+  Operating a provisioned agent is untouched: suspend, resume, messages and sessions all still work, since none of that is something the next reconcile would overwrite.
+  Removing a declaration releases the agent back to runtime ownership by default rather than deleting it, so a removal is reversible and only the explicit `LIBREFANG_PROVISIONING_PRUNE=delete` destroys anything.
+  `GET /api/provisioning/status` reports where each resource came from, whether the tree has drifted from what is running, and every file the last reconcile refused — a malformed manifest never fails the boot, so that endpoint is where an operator finds out why an agent is missing.
+  (#7921) (@houko)
+- `scripts/memory-retrieval-eval.py` compares memory retrieval strategies on your own corpus and tells you which of the differences are real.
+  Until now the only way to ask whether the compiled-in cosine ranking or the configured embedding model was costing a deployment anything was to copy the database out and reimplement the ranking path in a program that lived nowhere, which is why nobody had asked and why the answer changed twice when somebody finally did.
+  It pools every arm's results so an LLM judge cannot see which arm produced what, scores nDCG@10, and bootstraps its confidence intervals over paired per-query differences, because between-query variance dwarfs between-arm variance and an unpaired comparison cannot see the effect at all.
+  Judging needs a live model, so it never runs in CI; only the arithmetic is pinned, by `--self-test`.
+  (#7923) (@houko)
+
+### Fixed
+
+- The daemon now resolves `config.toml` exactly once, at boot, and every surface reads that one answer.
+  Previously the kernel loaded the file through `default_config_path()` — which honours `LIBREFANG_CONFIG_PATH` — while the API layer, the hot-reload watcher, and the CLI each re-derived it as `<home_dir>/config.toml`.
+  The two agreed only by coincidence, so relocating the file made the daemon read one path and write another: `GET /api/config/status` named the mounted file while `POST /api/config/set` silently wrote a second copy into `LIBREFANG_HOME`, which the next reload never read.
+  That made a mounted configuration — a Kubernetes ConfigMap, a Compose bind mount — a footgun rather than a deployment, which is why managed mode alone was not enough to support one.
+  The resolved path now lives on the kernel as `config_path_boot`, is exposed as `KernelApi::config_path()`, and is what the `423 Locked` body reports, what the change watcher stats, and what every config-writing route and `librefang config` subcommand opens.
+  A relocated file may now also carry a name other than `config.toml`; the three copies of a basename check that rejected one were meaningful when the path came from a request and were pure obstruction once it came from the operator's own environment.
+  The one-time MCP layout migration takes the same path, so a first boot against a mounted config no longer deposits the migrated `[[mcp_servers]]` entries in a file nothing reads. (#7886) (@houko)
+- Resolve `LIBREFANG_CONFIG_PATH` in `deploy/docker-entrypoint.sh`, which derived `$LIBREFANG_HOME/config.toml` on its own and so tested, initialised, and rewrote a file the daemon never reads whenever the config had been relocated.
+  Mounting `config.toml` from a Kubernetes ConfigMap crash-looped the container on first boot: `/data/config.toml` is absent on a fresh volume, so the entrypoint ran `librefang init`, which resolved the mounted file, took its upgrade branch because that file exists, and exited non-zero merging new default sections into a read-only mount — with nothing on the PVC to make the next attempt any different.
+  The in-place `api_listen` / `PORT` / `LIBREFANG_MODEL` rewrites are now skipped with a warning when the config is not writable, rather than failing the whole script under `set -e`, and a managed-mode boot with the file missing refuses with the path instead of generating configuration the deployment never declared (#7902) (@houko)
+- Managed configuration mode (`LIBREFANG_CONFIG_MODE=managed`) now reaches the dashboard and the last four route domains that were still rewriting `config.toml` behind its back.
+  Previously an operator in a managed deployment got a bare `423` on save from a UI that had offered an editable control, with nothing on screen saying which settings were locked or why; the config editor now reads `GET /api/config/status`, renders locked settings as locked, and names the file the deployment owns along with its checksum so a rollout can be confirmed.
+  Server-side, the dashboard password change, both sidecar-channel routes, the extension install/uninstall aliases, and the MCP server writes are now refused rather than silently drifting the running config away from the manifest.
+  The MCP refusal is scoped to `mcp_runtime_store = "file"` on purpose — under the `db` store those writes never touch `config.toml`, so locking them would take the install surface away from a deployment that had already moved that persistence off the managed file.
+  MCP OAuth, reconnect/reload, plugins, and the per-agent `agent.toml` surface stay writable for the same reason, and `docs/operations/managed-config.md` now states the classification for each so it can be argued with rather than rediscovered.
+  (#7868) (@houko)
+- An exhausted budget or resource quota now answers `429` with the refusal intact instead of a scrubbed `500`.
+  It reached the client as "Internal server error" — indistinguishable from a crash, and an invitation to retry the request that had just refused it on purpose.
+  (#7903) (@houko)
+- Make audio transcription and ffmpeg subprocess timeouts independently configurable through `[media] transcription_timeout_secs` and `ffmpeg_timeout_secs`, preserving the former 60-second and 30-second limits as defaults and reporting media config reloads as restart-required because the live `MediaEngine` captures its config at boot (#6748, #7803) (@houko)
+- Send URL-backed and inline file attachments through Slack's supported external upload flow, preserving thread placement and rejecting unsafe or oversized downloads instead of posting an unsupported-content placeholder (#6897) (@houko)
+- Treat macOS TCP resets as a valid closed-stream result in the Rust SDK backpressure test, whose strict FIN-only assertion intermittently failed even though dropping the receiver closed the connection (#7790) (@houko)
+- The usage and budget read endpoints (`/api/usage`, `/api/usage/summary`, `/api/usage/by-model`, `/api/usage/by-model/performance`, `/api/usage/daily`, `/api/budget/agents`, `/api/budget/agents/{id}`, `/api/budget/providers`, and `/api/budget/users/{user_id}`) swallowed usage-store query failures with `.unwrap_or_default()` / `.unwrap_or(0.0)`, so a broken SQLite read came back as a 200 with zero spend or an empty list instead of an error.
+  They now propagate the failure as a scrubbed `500` with a stable `usage_query_failed` code, so a storage problem reads as a failed request rather than a falsely-empty budget (#6971) (@houko)
+  Budget partial updates are now merged under the config write lock, agent quota persistence failures restore the prior live limits, unknown users return 404, and users without configured limits report enforcement as disabled (#6971) (@houko)
+- Preserve heading links, section-scoped headers and footers, list block structure, Unicode characters, and prose budget during browser extraction, while allowing click-by-text fallback for invalid CSS selectors, rejecting empty click selectors, and bounding displayed long URLs without changing their actionable destinations (#7026) (@houko)
+- Reclaim completed per-agent background watcher handles during periodic garbage collection while retaining running tasks for agent shutdown. (#7069) (@xiaomo)
+- Move Claude Code prompt image staging, MCP config writes, and temporary-file cleanup off Tokio runtime workers. (#7071) (@houko)
+- Keep `GET /api/media/video/{task_id}` working for media providers configured through `provider_urls`, and keep its unknown-provider rejection carrying the documented `invalid_request` code. (#7085) (@houko)
+- An agent sitting in a shared Slack or Telegram group can now answer "who is in this channel?".
+  The channel bridge has been persisting every group sender it observes into the `group_roster` table since that table landed, and `KernelHandle::roster_members` could always read it back — but nothing in the tree ever called it, so the roster was write-only in practice and the membership was invisible to agents and operators alike.
+  The new read-only `channel_members` tool exposes it: `user_id`, `display_name` and `username` for everyone the daemon has seen speak in a conversation, defaulting to the conversation the current message arrived on.
+  That `user_id` is what an agent needs to attribute a request to the person who made it when handing work to an external system.
+  Reading a conversation other than the one the turn arrived on is refused on the same terms `channel_send` refuses a cross-chat dispatch, so one group cannot enumerate another's membership.
+  Roster rows now also break a shared-display-name tie on the user id, because an unstable tail in a list that reaches the prompt invalidates provider prompt caches on unchanged content.
+  (#7865) (@houko)
+- The cross-chat dispatch guard on `channel_send` no longer tells the model to fall back to `notify_owner`, which delivered nothing on any sidecar channel — `owner_notice` is surfaced through the API reply envelope and consumed by no channel adapter, so on Slack an agent was refused and then sent down a path that silently dropped the message with no way to notice.
+  The refusal now names `channel_dm`, which actually delivers, and the prompt's Output Channels section says plainly that `notify_owner` reaches the operator out of band rather than answering a participant (#7874) (@houko)
+- Return structured provider exhaustion details from fallback wrappers when every configured slot is temporarily unavailable, instead of reporting that no drivers are configured, while preserving attempted exhaustion causes and prioritizing real non-exhaustion failures regardless of slot order (#7799) (@houko)
+- A sidecar adapter running an SDK older than the daemon is no longer invisible.
+  The protocol version rode on every `ready` frame, was documented as `1`, and was pinned at `1` in the shared conformance corpus — but no adapter ever set it, so every real frame carried `null`, and the daemon logged whatever arrived without comparing it to anything.
+  Both SDKs now declare the version by default, the daemon compares it against `SIDECAR_PROTOCOL_VERSION` and warns on skew or absence, `--describe` reports the adapter's `librefang-sdk` version through `GET /api/channels` and the configure drawer, and a stale pip install that shadows the daemon's bundled SDK says so at `WARN` instead of at `debug`.
+  A drift guard pins the protocol version across the daemon constant, both SDKs, the corpus fixture, and the architecture doc, and the corpus finally covers the `Command` content frame that a slash command travels in — the one frozen-core shape that had no fixture on either side.
+  (#7848) (@houko)
+- Channel `/think` now takes effect, and takes effect only where it was typed.
+  It previously stored a preference nothing ever read, so the next turn ran exactly as before while the reply said the setting had been applied; the toggle now rides the turn as a per-call thinking override on the streaming, non-streaming and image send paths.
+  The preference is keyed by the conversation — channel, bot account, chat, agent — rather than by the agent alone, so one Telegram group turning extended thinking on no longer changes the reasoning mode, and the token bill, of every other chat the same agent serves.
+  An unrecognised argument such as `/think of` is rejected instead of being read as "off" (#7854) (@houko)
+- Return a bodyless HTTP 204 from binding deletion instead of a serialized JSON `null`, declare that 204 in the OpenAPI document that previously advertised 200, and take the path index as the `u32` the same document already promised, so generated clients decoding a no-content response no longer trip over an unexpected body or a mismatched parameter type (#7157) (@houko)
+- Keep audit SSE backfills bounded after empty polls, stop quiet stream tasks when clients disconnect, surface serialization and task-termination failures, and avoid redundant per-entry filter allocations. (#7158) (@houko)
+- Reject invalid goal IDs, link fields, progress values, and iteration limits; preserve orphan children when a missing parent is deleted; and serialize autonomous run startup with goal deletion so a deleted goal cannot leave an orphaned loop (#7172) (@houko)
+- Close positional compile, sys.path mutation, multiline JavaScript, and path-exclusion bypasses in the skill supply-chain audit (#7180) (@houko)
+- Serialize Bluesky session refreshes across polling and sending, and prevent stale 401 responses from discarding a newly rotated JWT. (@xiaomo)
+- Track consumed WeCom passive-reply request IDs so restart-surviving reply hints cannot be reused after their one allowed send. (@xiaomo)
+- Preserve Zulip's exponential retry delay when an expired event queue cannot be re-registered. (@xiaomo)
+- Report interrupted WeChat multi-chunk sends, synchronize typing-ticket state, and isolate QR re-login retry delays from polling backoff. (@xiaomo)
+- Keep Telegram Markdown links, interactive formatting, media groups, and multi-message streaming output consistent across sends and edits. (@xiaomo)
+- Normalize ntfy sender titles and avoid stacking reconnect backoff after an SSE rate-limit delay has already been observed. (@xiaomo)
+- Install `cargo-audit`, `cargo-outdated`, `cargo-llvm-cov` and `cargo-watch` with `--locked` in `cargo xtask`, matching what every `cargo install` in the workflows already does.
+  Without it cargo re-resolves each tool's dependencies to the newest semver-compatible versions, so a tool that built yesterday can demand a rustc newer than the pinned toolchain and fail to install — which is what took the Security lane down once `rust-toolchain.toml` started pinning the MSRV. (#7255) (@houko)
+- Skip empty Webex messages, simplify outbound content routing, and use the shared Retry-After parser. (@xiaomo)
+- Serialize Reddit OAuth token refresh, validate every reply fullname, and mark inbound comments seen only after successful delivery. (@xiaomo)
+- Exercise the installer’s production PATH-refresh and restart-shell decisions directly, compare configurable install paths literally, and make its parent-process fixture deterministic by requested PID. (#7273) (@xiaomo)
+- Parse trusted NUL-delimited commit data, neutralize commit metadata in comments, reject negated or invalid references, validate lookback, serialize runs, and preserve idempotent live retries. (#7274) (@xiaomo)
+- Preserve `needs-info` during triage fallback, recognize breaking conventional titles and inflected bug words, keep meta-only prefixes as successful empty output, and make thin-report detection language-neutral. (#7275) (@xiaomo)
+- Remove the orphaned release-fallback action left behind when release workflows were consolidated, eliminating unreachable code that swallowed release-creation failures and could target the wrong commit if reused. (#7276) (@xiaomo)
+- Verify Dependabot authorship, trusted helpers, tested heads, and strictly increasing single-package versions before automatic merges, then reconcile aged green updates safely. (#7277) (@xiaomo)
+- Paginate branch reconciliation, classify stale and legacy failures, execute the PAT-backed helper only from the default branch, serialize updates, and test the helper in CI. (#7278) (@houko)
+- Pass dashboard release metadata through environment variables, upload main builds only to stable releases, isolate write permission in a trusted post-build job, and bound every workflow job. (#7279) (@xiaomo)
+- Preserve intentional blank lines across sidecar message chunks and synchronize every public SeenSet read. (@xiaomo)
+- Run Docker CI for every build and smoke-test input, reuse its main-branch cache, fail immediately on container exit, and require bounded liveness and readiness probes. (#7280) (@xiaomo)
+- Run the full Kubernetes boot contract for Docker runtime and workflow PRs, wait for a distinct replacement Pod, and fail closed without leaking the watcher when readiness, observation, or rollout fails. (#7281) (@xiaomo)
+- The Web E2E workflow could never upload a Playwright trace, so every failure had to be reproduced locally before it could be read.
+  `playwright.config.ts` asked for `trace: 'on-first-retry'` while `retries` is `0`, so no trace file was ever written and the "Upload trace on failure" step had nothing to find.
+  Traces are now retained on any failure, and the upload is keyed to the Playwright step's own outcome rather than the job's, so a failure in setup or install no longer fires an upload that has no diagnostics to carry (#7282) (@houko)
+- Pass privileged welcome metadata through environment variables, exclude current items from first-time checks, render bodies from temporary files, and recommend scoped tests. (#7283) (@xiaomo)
+- Restrict manual release tags to `main`, parse workspace versions as TOML, atomically reject tagging if `main` advances, and bound the privileged job to ten minutes. (#7284) (@xiaomo)
+- Configure TODO issue labels through the pinned action's supported `IDENTIFIERS` input and isolate every incremental main-push scan so intermediate commits cannot be discarded. (#7286) (@xiaomo)
+- Lock Lighthouse CI in the Web dependency graph, remove unused PR write permission, keep annotation credentials out of PR-controlled execution, and report explicitly when annotations are unavailable. (#7287) (@houko)
+- Remove checked-in iOS placeholders before Tauri initialization, pin, cache, and verify Tauri CLI 2.11.4 consistently in smoke/release jobs, and fail early when expected Android NDK tools are absent. (#7288) (@xiaomo)
+- Paginate and fully reconcile every open PR from each surviving scheduled or push-triggered run, prefer authoritative event data, propagate label-removal API failures, and serialize mutations. (#7289) (@xiaomo)
+- Add configurable Python sidecar log filtering and a raw stderr fallback when structured logging fails. (@xiaomo)
+- Alert on every actionable main-CI failure, reconcile out-of-order completions by their latest conclusive Rust state, exclude PRs from alert issues, render untrusted job metadata as inert single-line Markdown, and bound runtime. (#7290) (@xiaomo)
+- Reconcile issue `has-pr` labels from every open PR and currently labeled issue on merge, close, reopen, and body edits, refreshing the event PR before globally serialized writes and using one boundary-safe link parser. (#7291) (@houko)
+- Bound each cargo-deny supply-chain audit leg to ten minutes so registry or runner stalls cannot consume the six-hour default. (#7293) (@xiaomo)
+- Serialize weekly build-timing collection and keep comparator data failures fatal while reporting compile-time regressions as non-blocking workflow warnings. (#7294) (@xiaomo)
+- Make contributor announcements distinguish prior merges without relying on immediate search indexing, reject malformed searches, escape event-derived Markdown, preserve multiline Discord formatting, disable mentions, and fail visibly on API or webhook errors. (#7295) (@xiaomo)
+- Preflight Dev.to publication with real YAML parsing, complete article inventory, validated payloads, stable identifiers, and fail-closed API handling. (#7296) (@xiaomo)
+- Serialize label reconciliation, grant checkout only the required read access, and bound each run to five minutes so overlapping triggers cannot race or consume the six-hour default. (#7297) (@xiaomo)
+- Restrict PR-title validation to read-only PR access, cancel superseded checks, bound runtime, and accurately document its case-neutral subject rule. (#7298) (@xiaomo)
+- Stop scheduling no-op PR-label runs on closure, cancel superseded path-label updates, and bound each active run to five minutes. (#7299) (@xiaomo)
+- Restore consolidated release notifications against the unified Release workflow, with paginated per-channel idempotency, verified and redacted external failures, exact Discord bounds, and fail-closed job aggregation. (#7300) (@xiaomo)
+- Cache the daily contributor generator, serialize its mutating runs, bound runtime, and retry transient auto-merge failures under centrally documented repository-limited PAT scope. (#7301) (@xiaomo)
+- Validate canonical OpenRouter model identities and integer context windows before same-directory atomic snapshot replacement, while bounding and serializing the automated update PR flow. (#7302) (@xiaomo)
+- Trigger Nix evaluation and post-merge builds for every flake source root, and require the cheap eval gate before starting the expensive build matrix. (#7303) (@xiaomo)
+- Serialize scheduled stale reconciliation, bound runtime, and protect dependency, security, and draft PRs from automated stale closure. (#7304) (@xiaomo)
+- Coordinate manual CLI repairs with canonical releases, bound every job, verify the exact platform and debug-symbol checksum asset sets, and use an exact cosign workflow identity. (#7305) (@xiaomo)
+- Preserve every platform in the desktop updater manifest during release rebuilds instead of letting concurrent matrix jobs delete and overwrite one another.
+  Release cleanup and Homebrew synchronization now fail visibly, stop within bounded time, validate the artifacts they publish, and remove temporary signing credentials on every outcome (#7307) (@xiaomo)
+- Make the split npm binary release path explicitly request OIDC provenance for every package instead of relying on unverified environment inheritance.
+  The job now bounds network and build time, caches Rust dependencies, and keeps repository context out of shell source while the existing PAT release path remains unchanged (#7308) (@xiaomo)
+- Clean up the dashboard clipboard fallback after failures and allow mobile browsers to select its temporary text area. (@xiaomo)
+- Scope dashboard passkey registration and revocation cache invalidation to passkey lists. (@xiaomo)
+- Refresh all dashboard Hand-derived views after secret and message mutations, and preserve cached fields when partial lifecycle responses contain undefined values. (@xiaomo)
+- Make persisted dashboard hidden-model keys collision-safe when providers or model IDs contain colons. (@xiaomo)
+- Preserve hot dashboard chat sessions during cache updates and export the cache capacity and TTL defaults for tuning. (@xiaomo)
+- Notify replaced dashboard drawers without double-closing owner-scoped picker-to-config transitions, and retain no content after close. (@xiaomo)
+- Reject malformed numeric agent-model drafts, normalize persisted comparisons, and emit only API-required provider/model fields. (@xiaomo)
+- Classify unconfigured dashboard channels neutrally and fail visibly on unknown liveness states or malformed error payloads. (@xiaomo)
+- A usage-budget refusal now tells the operator which cap was hit and what it is set to.
+  The kernel already computed that detail — the agent, the window, the spend so far, this call's cost, and the limit — but the WebSocket surface matched on the error prefix and replaced the whole message with generic guidance, so an operator was told to "raise the matching limit" while the message withheld which limit that was.
+  Reported after three requests produced an unexplained refusal, with no way to tell from the message whether the cap was hourly, daily, monthly or token-based.
+  (#7907) (@houko)
+- A skill marketplace whose API host is retired while its CDN keeps serving answers `200 OK` with the site's single-page-app shell for every path, and the daemon used to pass that HTML to `serde_json` and surface the parser's `expected value at line 1 column 1` as the whole explanation.
+  Every ClawHub, ClawHub China mirror and Skillhub read now recognises a leading `<` — through a UTF-8 BOM, which CDN-fronted origins prepend often enough to matter — as "this hub is serving a webpage" and reports `503 Service Unavailable` with the operation and URL named.
+  The uniformity is the fix: skill detail previously answered `404`, asserting a skill does not exist when the hub never answered as a marketplace at all, and install answered `500`, whose body is scrubbed before it leaves the process, discarding the one message an operator could act on.
+  A truncated or corrupted body stays a network error, because that one is worth a retry and this one is not.
+  Each hub's endpoints are also overridable now, so a mirror can be adopted without recompiling; Skillhub takes three variables because it is three hosts, and setting only the API base would leave browse and install still aimed at the dead one.
+  (#7856) (@houko)
+- Fixed animated counters silently misparsing malformed and locale-formatted strings. (#7436) (@houko)
+- Fixed avatar initials for names separated by non-space whitespace. (#7437) (@houko)
+- Fixed command palette focus, listener, and shortcut toggle behavior. (#7438) (@houko)
+- Fixed duplicate and mistimed screen-reader announcements for dashboard toasts. (#7439) (@houko)
+- Fixed delivery target validation drift for webhook hosts, URL schemes, and local paths. (#7440) (@houko)
+- Fixed tool call panels crashing on non-serializable inputs and losing card state after list updates. (#7441) (@houko)
+- Fixed stacked modals restoring page scroll or all closing from one Escape press, and named titleless drawer landmarks. (#7442) (@houko)
+- Fixed push drawer bodies mounting simultaneously in hidden desktop and mobile presentations. (#7443) (@houko)
+- Fixed slider inputs accepting invalid values and rendering inverted ranges incorrectly. (#7444) (@houko)
+- Fixed the keyboard shortcuts dialog overflowing short viewports and updating callback refs during render. (#7445) (@houko)
+- Restricted Obsidian markdown deep links to valid URI characters before rendering them. (#7446) (@houko)
+- Made Badge class overrides deterministic when they conflict with default or variant utilities. (#7447) (@houko)
+- Prevented duplicate or conflicting notification approval actions while a request is in flight. (#7448) (@houko)
+- Fixed offline retries refetching the full runtime after failed liveness checks and keeping the retry spinner active during background recovery. (#7450) (@houko)
+- Expire dashboard runtime action feedback independently and disable duplicate task controls while their mutations are pending. (#7482) (@houko)
+- Report incomplete clone initialization through stable response warnings while preserving the created agent and HTTP 201 status. (#7547) (@houko)
+- Redact embedded Basic Auth credentials from `pairing.ntfy_url` in the config read API while preserving the endpoint host, path, topic, and non-credential `@` characters. (#7567) (@houko)
+- Return no shell-bleed warnings for empty or whitespace-only commands instead of panicking while extracting a script path. (#7571) (@houko)
+- Decode percent-encoded web-search result URLs as UTF-8 bytes so non-ASCII links are not corrupted. (#7572) (@houko)
+- Saturate model-routing complexity arithmetic so very large requests cannot panic or wrap into a cheaper model tier. (#7574) (@houko)
+- Keep truncated image previews as valid Base64 and report truncation plus encoded byte count in separate metadata fields. (#7575) (@houko)
+- Decode HTML entities in fetched web content exactly once so nested escapes remain literal instead of becoming markup. (#7576) (@houko)
+- Clean up closed provider cooldown entries without racing refreshed state, preserve half-open backoff history, and keep profile priority when every authentication profile is cooling down. (#7577) (@houko)
+- Report Chrome DevTools navigation failures returned through `Page.navigate.errorText` instead of reading stale page content as a successful navigation. (#7578) (@houko)
+- Validate trailing hunk context and publish added files atomically without overwriting an existing target or rejecting valid long target names. (#7579) (@houko)
+- Reject image-generation responses with missing or empty Base64 payloads instead of reporting success or writing zero-byte image files. (#7580) (@houko)
+- Return a bounded UTF-8 preview when artifact spill fails instead of passing the complete oversized tool result back into agent context. (#7581) (@houko)
+- Report zero-match code searches as incomplete when the file-scan ceiling is reached instead of claiming the pattern is absent. (#7582) (@houko)
+- Remove expired web-cache entries conditionally so cleanup cannot delete a fresh value inserted for the same key. (#7583) (@houko)
+- Match gateway-pruned tool results by tool-use ID, including non-adjacent results, without removing unrelated adjacent tool results. (#7584) (@houko)
+- Stop overflow recovery after a sufficient moderate trim, preserve pinned tool results during emergency truncation, and do not report no-op trims as successful recovery. (#7585) (@houko)
+- Use Anthropic message endpoints, request bodies, and authentication headers for model health probes, including case-insensitive provider names. (#7586) (@houko)
+- Reject oversized lengths and negative guest-memory ranges at the WASM sandbox ABI boundary. (#7587) (@houko)
+- Restrict PII pseudonym replacement to regex match spans instead of replacing equal substrings globally. (#7588) (@houko)
+- Persist hook trace annotations across SQLite queries, schema upgrades, and daemon restarts. (#7590) (@houko)
+- Release the A2A task-map lock before potentially blocking SQLite persistence writes. (#7591) (@houko)
+- Synthesize a valid user turn when trimming leaves persistent session history too sparse to reload. (#7592) (@houko)
+- Avoid repeating a streaming response body when an LLM timeout also reports accumulated partial text. (#7593) (@houko)
+- Persist context-engine compaction results in both streaming and non-streaming agent sessions without losing the current-turn boundary. (#7594) (@houko)
+- Return browser screenshot decoding and persistence failures instead of reporting empty success. (#7595) (@houko)
+- Prevent concurrent MCP reload paths from registering duplicate server connections, and preserve agent manifest comments and omitted defaults when updating MCP server allowlists. (#7606) (@houko)
+- Allow configuration include graphs to reuse a shared file after an earlier branch has unwound, while continuing to reject real recursive include cycles (#7627) (@houko)
+- Prevent Skill Workshop explicit-instruction detection from capturing narrative `always` phrases when their subject appears within the documented punctuation-aware two-word prefix window (#7628) (@houko)
+- Keep background-agent restart ownership consistent by stopping replaced loops and owned watcher tasks while preventing registration races or stale self-cleanup from losing the current task (#7629) (@houko)
+- Treat config reload serialization failures as detected changes instead of silently classifying two failed snapshots as unchanged (#7630) (@houko)
+- Coordinate EveryAPI credential refreshes, return generation-consistent credentials, recognize typed authentication errors, keep managed gate I/O off Tokio workers, and prevent stream retries after any event reaches the caller. (#7635) (@houko)
+- Fail fast on permanent token-truth capture errors instead of spending the full retry budget on requests that cannot succeed. (#7636) (@houko)
+- Require complete ASCII multi-domain markers so words such as `multimedia` and `altogether` do not force specialist requests through the orchestrator. (#7637) (@houko)
+- Harden release automation against stale tag ordering, invalid LTS increments, mutating dry runs, dirty worktrees, and incomplete cleanup, diff detection, or staging. (#7638) (@houko)
+- Harden OpenAI-compatible request handling by reading local images asynchronously, deduplicating concurrent Moonshot uploads, rejecting empty SSE successes, ordering out-of-order streamed tool metadata, and preserving completed Groq tool calls before truncated output. (#7639) (@houko)
+- Return concurrent ACP prompts as invalid parameters and keep kernel and internal diagnostics server-side instead of exposing them through JSON-RPC error data. (#7640) (@houko)
+- Harden ACP tool-event translation with conservative icon classification, ordered synthetic starts for orphan results, complete concurrency warnings, and bounded in-flight tracking. (#7641) (@houko)
+- Index ACP sessions by both protocol and kernel identifiers so approval routing is constant-time, state reads avoid full clones, cancellation avoids dead state, replacements and session cleanup cancel displaced prompts and registrations, and both indexes recover consistently after lock poison. (#7642) (@houko)
+- Validate ACP permission option identifiers exactly and install remembered decisions only after the pending approval resolves successfully. (#7644) (@houko)
+- Treat slash-prefixed command names identically to bare names at the channel policy boundary, preventing public callers from bypassing blacklist entries through input shape (#7660) (@houko)
+- Collect interrupted embedded SDK staging trees while retaining recent work from concurrently running older daemon versions (#7661) (@houko)
+- Keep channel group-history buckets collision-free for arbitrary platform identifiers and preserve periodic eviction after an individual sweep panics (#7662) (@houko)
+- Make channel-journal transition failures observable to callers instead of logging and swallowing failed writes.
+  Journal queries now filter stale entries without mutating recovery state, while the hourly maintenance path performs explicit cleanup before compaction.
+  Retry claims clear obsolete deadlines consistently, and malformed retry windows become hard failures instead of overflowing into immediate redispatch or panicking (#7664) (@houko)
+- Stop treating long runs of spaces, tabs, or newlines as prompt injection, so legitimate indented code, aligned tables, and blank layout are not rejected in Block mode (#7666) (@houko)
+- Load sidecar secrets asynchronously, report withheld namespaced keys at debug level, and decorrelate restart jitter across adapters (#7668) (@houko)
+- Periodically reclaim expired conversation ownership claims during continued channel traffic so dormant thread keys do not grow without bound (#7669) (@houko)
+- Initialize website locale fonts after segment-safe language detection and fall back safely when stored theme access or values are invalid. (@houko)
+- Improve the website 404 page's text contrast, keyboard focus styling, landmark semantics, and fallback font stacks. (@houko)
+- Return sanitized failures from website asset errors and keep published page routes on one canonical URL. (@houko)
+- Populate successful static cache misses and tie service worker activation to completed lifecycle work. (@houko)
+- Fail website registry generation on unexpected upstream errors, retry transient requests, and publish counts only for parsed entries. (@houko)
+- Keep generated Atom feeds well formed for arbitrary changelog text, honor configured metadata, and fail with contextual file diagnostics. (@houko)
+- Leave the website deploy form's busy state after successful requests.
+  Copy buttons now report success only after the browser accepts the clipboard write, and unavailable or rejected Clipboard API calls fail without stale success feedback (#7680) (@houko)
+- Stop registry detail pages from tracking clicks for missing entries or duplicating a valid view under Strict Mode.
+  Registry navigation now shares one popularity-ordering contract, renders localized adjacent-item names, and cleans up copy-feedback timers (#7681) (@houko)
+- Harden homepage release data, large asset-size labels, SDK copy feedback, and analytics typing.
+  Homepage download copy now lives in the shared translation catalog for every selectable locale, and conflicting theme classes and dead scroll state were removed (#7682) (@houko)
+- Consume Lucide compatibility properties in website brand icons instead of forwarding unknown attributes to SVG elements.
+  GitHub and Twitter icons now share one sizing and property-forwarding implementation (#7683) (@houko)
+- Website breadcrumbs now fall back safely when optional translation blocks are absent. (#7684) (@houko)
+
+  Breadcrumb separators are hidden from assistive technology, crumb identity remains stable across updates, and overflow uses one horizontal-scroll strategy. (#7684) (@houko)
+- Registry icons now resolve Lucide names without case sensitivity, warn during development when names are unknown, and apply shared classes to legacy emoji fallbacks. (#7685) (@houko)
+
+  The registry icon map now uses the SVG component contract shared by Lucide and local brand icons. (#7685) (@houko)
+- The website install banner remains usable and dismissible when browser storage is unavailable. (#7686) (@houko)
+
+  Install prompts are consumed once, close after either browser choice, and report genuine prompt failures for diagnosis. (#7686) (@houko)
+- Website search now ranks tightly clustered fuzzy matches correctly and avoids guessing when a pasted registry ID exists in multiple categories. (#7687) (@houko)
+
+  Keyboard navigation follows the active locale callback, and selection resets with the debounced result set. (#7687) (@houko)
+- The website mobile navigation drawer now closes on outside clicks while remaining open for interactions inside the drawer. (#7688) (@houko)
+
+  Desktop and mobile language menus use distinct interaction selectors. (#7688) (@houko)
+- Website global styles no longer create a hidden horizontal scroll container, and keyboard focus uses one consistent rule. (#7689) (@houko)
+
+  Reduced-motion users retain slow functional loading feedback instead of seeing frozen progress indicators. (#7689) (@houko)
+- The website error boundary no longer sends exception messages, stacks, paths, or browser metadata to an external reporting endpoint without consent. (#7690) (@houko)
+
+  Reload recovery no longer clears component state immediately before reloading the page. (#7690) (@houko)
+- Website startup now reports a clear template error when the required root element is missing. (#7691) (@houko)
+
+  Global query defaults refresh after 30 seconds and on window focus, while stable queries retain their explicit longer cache policies. (#7691) (@houko)
+- Website registry loading now requests local and remote sources concurrently and falls back independently when either source fails or returns malformed data. (#7692) (@houko)
+
+  Nullable counts, localized names, and category count lookups now use explicit typed contracts. (#7692) (@houko)
+- Website language switching now uses one boundary-aware locale list, safe path construction, and complete server-side guards. (#7693) (@houko)
+
+  Theme initialization validates persisted values, keeps state updates pure, and remains usable when browser storage is unavailable. (#7693) (@houko)
+- Website favorites now use React's tear-safe external-store contract and one shared cross-tab storage listener. (#7694) (@houko)
+
+  Favorite lists keep stable identities across unrelated renders, and failed persistence no longer commits an in-memory change. (#7694) (@houko)
+- Website TOML highlighting now keeps minus signs attached to numeric tokens and parses quoted section names containing closing brackets. (@houko)
+
+  The defensive tokenizer branch now accurately documents unmatched token starts.
+- Website marketplace metadata now uses a deployment-configurable endpoint and loads every result page instead of silently truncating large registries (#7696) (@houko)
+- `/new`, `/reboot` and `/compact` on a channel now clear the session the conversation is actually in.
+  The commands re-derived the `(channel, chat_id)` pair themselves instead of reusing what the inbound message path derived, and the two disagreed in two ways: the command arms read `sender.platform_id` and gave up on an empty one where the inbound path falls back to the sender id carried in message metadata, and they used the raw channel name where the inbound path sanitizes names that collide with the kernel's reserved system channels.
+  Telegram hits the first case — the adapter puts the sender id in metadata and may leave `platform_id` empty — so the reset addressed `for_channel(agent, "telegram")` while the conversation lived in `for_channel(agent, "telegram:<user_id>")`, and `/new` truthfully reported success on an empty session while every message the user could see stayed put.
+  Both producers now go through one `session_scope` helper, so the pair cannot drift again without failing a test (#7705) (@houko)
+- `cargo test -p librefang-api --lib` no longer fails roughly one run in two on a vault decryption error.
+  Two test modules each pinned the process-global `LIBREFANG_VAULT_KEY` to a different value, each under its own `std::sync::Once` and each documenting that it was the only writer.
+  `cargo test` runs a crate's tests as threads in one process, so whichever module wrote last won and the other's freshly written vault could no longer be decrypted — surfacing as `Crypto("Decryption failed: aead::Error")` in whichever test lost the race.
+  CI never saw it because nextest gives every test its own process, which is also why the contributor-facing command in CLAUDE.md was the one that broke.
+  The key and its `Once` now have a single owner, `crate::test_vault`, and both modules call it (#7707) (@houko)
+- The TUI's workflow creator now names the three agent bindings a step may carry.
+  It authors steps as one raw JSON blob, so nothing on the screen told an operator that `agent_type` — bind the step to a template and let the daemon spawn one when nothing of that type is running — is accepted at all; the placeholder can only show one binding at a time, and it shows `agent_name`.
+  A hint under the steps field now names all three as mutually exclusive and mentions the per-step `session_mode`, so the binding the Canvas editor exposes as a selector is at least discoverable where the TUI authors the same steps (#7869) (@houko)
+- Include each assigned goal's UUID in the Active Goals system-prompt section so agents can call `goal_update` with an actionable identifier (#7804) (@houko)
+- Keep unassigned goals in the management backlog without injecting them into every agent's active-goals prompt, and require prompt goal filtering to name the target agent explicitly (#7800) (@houko)
+- Preserve scheduler validation errors when creating cron jobs through `POST /api/cron/jobs`, so rejected names and other caller-correctable fields return `400 invalid_input` with an actionable message while capacity and other internal failures remain scrubbed 500 responses (#7734) (@houko)
+- Build authenticated CDP WebSocket requests through tungstenite's handshake generator before adding the bearer token, so token-protected browser endpoints receive the required upgrade headers (#7802) (@houko)
+- Fetch protected dashboard image assets with the configured API credential and render them through revocable object URLs, so uploads remain visible when API authentication is enabled (#7801) (@houko)
+- A `[[triggers]]` entry with no `pattern` no longer freezes an agent's entire `agent.toml`.
+  The missing key deserialized to a JSON null, TOML cannot represent null, and the kernel serializes the whole manifest in one call — so one malformed trigger made every other field unpersistable while the API still answered `200 OK`, and the next restart quietly restored the stale file over every edit made since.
+  `PUT /api/agents/{id}/channels` also stops treating a body it cannot parse as "clear the allowlist": the shape its own API docs advertised silently reopened the agent to every configured channel, and is now refused.
+  (#7879) (@houko)
+- Two agent-manifest fields that a running agent reported back but could never actually be changed.
+  `tags` was overwritten with the stored value on every write, so the dashboard, `PATCH /api/agents/{id}` with `manifest_toml` and the CLI all reported a successful save and changed nothing — the registry had no way to re-project a new tag list onto the runtime lookups, so pinning them was the only safe option available at the time.
+  It now has one, and the system-owned `hand:*` tags stay pinned on their own because they route an agent's workspace and decide whether its tool calls need an approval gate.
+  `tools_disabled` was returned by `GET /api/agents/{id}/tools` but forced back to `false` by every successful write to that route, which meant an operator editing a blocklist silently re-enabled every tool on an agent they had deliberately switched off.
+  It is now the fourth tri-state field of that request alongside the three lists: omit it and the stored value is left alone, send it and it is written.
+  (#7866) (@houko)
+- `cargo test` no longer makes real, billable LLM calls on a developer machine.
+  `KernelConfig::default()` sets `default_model.provider = "auto"`, which tells boot to interrogate the host — provider API-key env vars, a TCP probe for a local Ollama, a logged-in coding-agent CLI on `PATH` — and adopt the first thing it finds, so a test kernel had no way to say "no LLM driver" other than to leave one unconfigured and hope the machine had none either.
+  That premise held on a CI runner and failed on the laptop of anyone who develops LibreFang with Claude Code or an `OPENAI_API_KEY` exported, where the same tests instead spawned the real CLI against the checkout or hit the provider API for real.
+  Pinning a deliberately nonexistent provider name did not help: boot classifies an unknown provider as a misconfiguration to recover from and falls through to the very same host probe, rewriting the live config to whatever it detected.
+  `default_model.provider = "none"` now states the absence of a driver outright, and boot honours it by installing the stub driver directly — no provider construction, no credential-helper subprocess, no fallback slot, no auto-detection — with per-turn resolution short-circuiting to the same stub.
+  (#7813) (@houko)
+- Prompt-injection scanning no longer labels ordinary emoji variation selectors or zero-width joiners as attacks, while prompt sanitizers continue removing those format characters before matching and interpolation (#7750) (@houko)
+- Confidence decay now charges each interval of idle time exactly once, instead of re-applying a memory's entire idle span on every hourly tick.
+  The `UPDATE` wrote `confidence` and nothing else, so each run recomputed the exponent from an `accessed_at` that never moved and applied it to an already-decayed value: a row idle for `D` days accrued `24 x rate x D` of decay per day rather than `rate`, growing quadratically in idle time.
+  On the instance that reported this, configured for a roughly 70-day half-life, that drove the median raw-dialogue memory to 0.001 across a corpus whose oldest row is 102 days old — where the configured rate can produce no less than 0.36.
+  A new `memories.last_decayed_at` column (schema v48) records when a row was last charged, and the pass measures from the later of that stamp and `accessed_at` so an actively recalled memory is not handed one large retroactive decay the first hour it goes idle.
+  Rows written before the migration read back NULL and fall back to `accessed_at`, taking exactly the one-time decay the documented formula always intended rather than jumping at the migration boundary.
+  (#7864) (@houko)
+- Evict raw dialogue before extracted facts when an agent hits `max_memories_per_agent`, instead of evicting whichever row happened to score lowest on confidence.
+  The two classes have different exit paths: an extracted fact is the distilled artefact of many turns and arrives a few rows a day, while raw dialogue is written unconditionally once per turn, is never distilled into anything, and has no expiry — so the cap is the only exit it has, and spending that exit on a fact was not a decision anybody made.
+  Within a class the previous lowest-confidence-first ordering is unchanged, and facts remain evictable once raw dialogue is exhausted (#7872) (@houko)
+- Cut recalled memory bullets at a sentence or word boundary and mark the cut, instead of severing them at the 500th character.
+  On a production corpus 57% of raw-dialogue rows exceed that cap, so more than half of the memory section reached the model as an unmarked half-sentence — which invites the model to supply an ending that was never stored.
+  The section's total also has an owner now: the per-bullet cap, the ten-bullet limit and the section budget are named constants rather than literals buried in the formatter, and the budget is enforced across all three producers that feed the section, with any omitted memories reported in the prompt rather than dropped silently (#7872) (@houko)
+- A single unusable ID from an external vector-store backend no longer denies the entire recall.
+  `recall_via_vector_store` parsed every ANN-returned ID as a UUID with `?`, so one malformed row in a result set of fifty threw away the forty-nine memories that would have hydrated fine — a denial of service handed to whoever controls the backend's ID column, and inconsistent with the hydrate loop three lines below, which had always dropped an ID SQLite did not recognise.
+  A non-UUID ID is now dropped with a `WARN` naming the backend, and the rest of the result set is hydrated in ANN order.
+  (#7883) (@houko)
+- The TUI templates screen now shows the agent types an operator actually created: it rendered a compiled-in list of ten starter templates and never called `GET /api/templates` at all, so anything under `workspaces/agents/` was invisible and could not be spawned from there.
+  `GET /api/templates` now also returns each entry's declared provider and model so a row and its provider gate reflect the manifest rather than an assumed default, and a single unparseable manifest is skipped with a warning naming the file instead of failing the whole listing with a 500 (#7814) (@houko)
+- `cargo clippy --workspace --all-targets -- -D warnings` passes again under Rust 1.98, which flagged eleven locations in code nobody was changing and so failed every PR for reasons unrelated to its own diff.
+  Little-endian `f32` decoding in memory consolidation, semantic search and runtime embeddings now goes through `as_chunks::<4>()`, which hands `f32::from_le_bytes` the `&[u8; 4]` it wants instead of rebuilding the array element by element; the desktop tray's RGBA-to-ARGB rotation gets the same treatment, a `map_or(0, |s| s)` becomes `unwrap_or(0)`, and a `drain(..).collect()` into a fresh `Vec` becomes `std::mem::take`.
+  The two terminal auth helpers keep their large `Err` payload — it is an axum `Response`, and boxing it would ripple through every call site to save stack on a path that is already building an HTTP response — so `result_large_err` is allowed there with the reason written down.
+  On the dashboard side, jsdom implements no layout and therefore no `Element.prototype.scrollIntoView`, so a component that scrolls a focused element into view throws inside a React passive effect and vitest exits non-zero even when every assertion in the file passed; the no-op stub moves from three duplicated per-file guards into `setupTests.ts`, where it also covers suites written later that have no reason to know jsdom needs it (#7791) (@DaBlitzStein)
+- Provider-only `PATCH /api/agents/{id}/config` requests now preserve the current model while applying and persisting the new provider instead of returning 200 without changing the agent (#7796) (@houko)
+- Resolve empty and `default` fallback sentinels by inheriting the configured default provider/model pair while retaining provider inference for explicit fallback models, preventing failover from sending the literal model name `default` or bypassing an EveryAPI/OpenRouter aggregate through either the per-turn or boot-time driver chain (#7798) (@houko)
+- Recover from a gateway that refuses to forward `reasoning_effort` instead of failing every turn and then muting the agent.
+  Any agent whose manifest carries a `[thinking]` section — including one inherited from its agent type with no field set — sends the field on every request, and a litellm-style proxy fronting an OpenAI-shaped model group answers `400 UnsupportedParamsError` before the model ever sees it.
+  Whether a model can reason and whether the gateway in front of it will forward the field are different questions, so no static catalogue answers this; the OpenAI-compatible driver now discovers it, stripping the field and retrying on the first rejection and remembering the model so later turns never re-send it.
+  The 400 also no longer counts against the provider circuit breaker, which had been opening on a deterministic self-inflicted parameter mismatch and leaving the agent silent for the full cooldown even though the request issued afterwards would carry the same field and fail identically.
+  Every other 400 — bad credentials, malformed payload, nonexistent model, context overflow — still opens the circuit, and the exemption is keyed on the response status rather than on the error text, so a real outage whose body happens to quote the same phrase is still counted (#7769, #7852) (@houko)
+- Editing an agent that inherited an MCP server this instance never installed no longer loses the edit.
+  Saving the allowlist returned `[400] Internal error: Unknown MCP server: fetch`, naming a server the operator never asked for, because the check built its set of acceptable names from the MCP tools connected at that instant — a strict subset of what is configured, never mind what is installed — and the dashboard sends the whole array, so one inherited name took every unrelated change down with it.
+  A declaration this instance has not installed is a legitimate state rather than a mistake: agent types are shared artefacts that say what the agent wants, `spawn` accepts such a manifest without any equivalent check, and the read side already surfaces the gap as pending, so the edit path was stricter than the path that created the agent.
+  An MCP name is now accepted when it is configured in `config.toml`, connected or not, or present in the locally cached MCP catalog, and a skill when it is loaded or is the `[skill].name` of a directory sitting unloaded under the skills directory.
+  Accepting one persists the name and nothing else — installing and connecting stay the operator's explicit action.
+  Both rejections became `InvalidInput`, so a typo stops being reported as an internal fault; `mcp_servers = ["*"]` is storable again after the old check rejected the documented wildcard as an unknown server name; and a poisoned MCP tool lock no longer skips validation altogether.
+  Reported and diagnosed by @DaBlitzStein. (#7898) (@houko)
+- The TUI's Settings > Models list rendered empty against a healthy daemon, and its price column was pinned to `$0.00/$0.00`.
+  `GET /api/models` answers with a `{ "models": [...] }` object and the screen read the body as a bare array, so every fetch produced nothing; the cost fields it read were named after keys the response has never carried (#7881) (@houko)
+- `GET /api/models` now asks a self-hosted OpenAI-compatible gateway what it serves, so the models on a LiteLLM, vLLM, LM Studio or llama.cpp endpoint are selectable instead of absent.
+  The ids on such a gateway are the operator's own, so no shipped catalog can contain them, and the handler previously refreshed a live catalog for OpenRouter and EveryAPI alone — everything else was served from the snapshot and a gateway had nothing in it.
+  The listing is read through the same 60-second probe cache the provider grid uses and a failure falls back to the shipped catalog, so a gateway that proxies `/chat/completions` without exposing `/models` is unaffected.
+  Being in the catalog is also what stops the runtime assuming an 8k context window for a model that handles far more, which is where the missing entry stopped being cosmetic.
+  (#7816) (@houko)
+- Turning on live model discovery from the dashboard now survives a daemon restart.
+  `PUT /api/providers/{name}/discovery` creates `~/.librefang/providers/{name}.toml` when the provider previously lived only in memory, and that file carried `id` and the flag alone — a shape `ProviderCatalogToml` rejected, because `display_name`, `api_key_env` and `base_url` were all required.
+  The catalog loader therefore discarded the entire file with a `WARN` that did not even name it, and `discover_models` reverted to `false` on every boot while the provider's models stayed at zero.
+  The writer now emits the identity fields from the live provider record (leaving any value already in the file untouched, so a hand-maintained catalog still survives the toggle byte-for-byte), the loader tolerates a partial overlay and merges same-id records without letting an absent value overwrite a present one, and the parse-failure warning names the offending path (#7776) (@DaBlitzStein)
+- A daemon that is not on loopback now accepts the WebSocket from the dashboard it serves itself.
+  `validate_ws_origin` auto-allowed only `localhost` / `127.0.0.1` / `::1` on the listen port, so a daemon bound to `0.0.0.0:4545` and opened at `http://192.168.1.161:4545` answered every agent-chat upgrade with a 403 and silently dropped every agent reply — the product's primary flow, broken out of the box on any non-loopback deployment.
+  The implicit allow now also covers an origin naming the same **literal IP address and port** the request was itself addressed to.
+  It is restricted to IP literals deliberately: the `Host` header is derived from whatever URL the page dialled rather than from anything the daemon asserted, so matching `Host` and `Origin` on a *hostname* proves only that the page came from a name that currently resolves here, which is exactly what DNS rebinding arranges — and treating that as same-origin would hand any rebound attacker page a socket and defeat the cross-site hijacking guard from #3731.
+  An IP literal has no name in the middle to rebind, so for the two sides to match the page must have been served by whatever answers on that address and port.
+  Deployments reached through a hostname, including anything behind a TLS-terminating proxy, continue to list their public origin in the top-level `cors_origin` (#7850) (@houko)
+- A model discovered behind an OpenAI-compatible gateway no longer enters the catalog with a fabricated 131072-token context window.
+  The probe layer discarded the capacity fields such gateways do report — vLLM's `max_model_len`, LM Studio and llama.cpp's `context_length`, LiteLLM's `max_input_tokens` / `max_output_tokens`, OpenRouter's `top_provider.max_completion_tokens` — so the only writer for these entries had no capacity input and hardcoded one.
+  Those keys are now read, and a gateway that reports nothing produces an entry marked `limits_known: false` with both limits at the catalog's `unknown` encoding, which the compaction and budget math already treat conservatively.
+  The number mattered because nothing downstream could tell it from a measured one: `resolve_context_window` accepts any non-zero catalog value, the agent loop turns it into the turn's `ContextBudget`, and an 8k model reached through a gateway therefore had a prompt packed to 131k against it and billed before the provider rejected it — while a 1M model had prompt content compacted away that nobody asked to drop (#7817) (@houko)
+- Move the "inheriting the catalog default" dimming in the model parameter form off the row container and onto the label, the number input, the slider and the tick row, so the toggle that overrides the default is no longer faded along with the values it governs.
+  Every parameter starts out inheriting, so a model with no overrides opened with all seven rows — and all seven switches — at 40% opacity, which read as a screen that had failed to load rather than as an opt-in-per-field form.
+  The off state of the switch also moves from the divider hairline token to the muted-text token, clearing the 3:1 contrast floor WCAG 2.2 sets for interactive controls, and the switch now draws a focus ring when reached from the keyboard (#7444) (@houko)
+- API vault tests and `MockKernelBuilder` now share one process-wide vault-key initializer, preventing parallel `cargo test -p librefang-api --lib` runs from switching keys between vault initialization and unlock (#7783) (@houko)
+- **`memory_search` no longer silently resolves to exact-key key/value recall.**
+  It was aliased to `memory_recall`, so a model calling the single most natural name for "search my memory" got a hashmap lookup instead.
+  The call did not fail — it returned "not found" for a key that was never a key, and the model concluded the memory was gone.
+  The alias now points at the real semantic search tool, and `memory_add` / `memory_forget` resolve to their semantic counterparts too.
+  The descriptions of the three key/value tools now say what they do *not* do: `memory_recall` states that it matches the key character for character and names `memory_semantic_search` as the tool that searches by meaning.
+  A tool description is the only thing a model has to choose between two stores with confusingly similar names, and these three were describing themselves as "the agent's memory". (#7820) (@houko)
+- Stop reporting a workflow run's outcome from a field the response does not carry.
+  `librefang workflow run` posted without any wait, read the `output` that a 202 has no reason to carry yet, and so printed "Unknown error" and exited 1 on every successful launch — a failure on every run for any script or CI step gating on the exit code; the TUI's Workflows screen had the mirror-image bug and printed "Workflow completed" on runs that had failed.
+  Both surfaces now ask for a wait bounded well below their own client timeout, which keeps the run in its own task instead of tying it to the request, and both classify the response by its HTTP status before looking at any field: a run that finishes prints its output, a run still going prints the id to poll and exits 0, and a failed run prints the reason and exits 1.
+  `save-as-template` separately re-derived every parameter by scanning the step prompts for `{{var}}`, which cannot see a type or an optionality and so flattened an authored `input_schema` back to string / required / a generated description; the declared schema now wins and placeholders it does not mention are still appended.
+  Diagnosed and first fixed by @DaBlitzStein in #7826, which stalled on a conflict with #7862 (#7899) (@houko)
+- Name the model that actually performs memory extraction, instead of leaving it inherited and unreported.
+  `[proactive_memory] extraction_model` falls through to `[default_model]` when unset, and nothing named the result — so an agent answering in 2 s on its own fast model while extraction inherited a 30 s reasoning model against a 30 s ceiling failed extraction on every turn, retried four times, and held each finished reply for over two minutes, with nothing in the config file connecting that model to memory.
+  Boot now emits one `WARN` for the inherited case, `GET /api/memory/config` gains `effective_extraction_model` and `extraction_model_source` (`configured` / `inherited_default`), the dashboard's memory dialog spells out the inherited model under "Use kernel default", and the TUI gains a memory-configuration panel on `c` from the agent list (#7828, #7829) (@DaBlitzStein)
+- Re-entering the TUI Settings tab now returns it to the Providers sub-tab instead of reopening on whichever sub-tab was last used, and clears any modal left over from it.
+  `SettingsState::sub` was a plain field that outlived the tab while `on_tab_enter` reloaded providers regardless, so the screen could show one sub-tab's contents over another's freshly loaded data — and a sub-tab holding a modal that binds the `1`-`4` switch keys had no second way out for the rest of the session.
+  (#7897) (@houko)
+- Every GitHub Actions job now declares an explicit `timeout-minutes`, so a wedged job dies on its own instead of holding a runner slot until GitHub's 360-minute default expires.
+  Two `main` CI runs recently hung `in_progress` for over nine hours and, because the `main` concurrency group is keyed per-sha and deliberately never cancels an older run, they held the repository's only two concurrent execution slots while more than 80 runs queued behind them and every open PR stalled.
+  Caps are sized from each job's observed duration, generously enough that a cold cache or normal variance never trips one — most sit an order of magnitude above their slowest recorded run.
+  The desktop release build is the deliberate exception: its slowest successful run took 206 minutes, and since GitHub caps any job at 360 minutes there is no room for a wide margin, so it is capped at 345 to preserve the guarantee that no job can occupy a slot for a full six hours.
+  A new `Workflow Job Timeouts` gate keeps the coverage from regressing, because a job added without the key silently inherits the six-hour default again.
+  (#7836) (@houko)
+- Give the per-PR bookkeeping workflows cancelling concurrency groups, so a push no longer queues a full extra set of metadata runs that nothing supersedes.
+  A sample of 100 queued runs found 64 were metadata bots rather than real CI, against a repository executing only three to four runs at a time — the labelers were directly starving the Rust build and test lanes of runner slots.
+  Cancellation is decided per workflow rather than blanket-applied: the label and title reconcilers cancel because each run recomputes the full desired state, while the first-time-contributor greeting and the stale-PR sweep only serialise, because a half-posted comment or a half-finished sweep is worse than a redundant run (#7837) (@houko)
+- Make a selective restore mean what it says, and fix an archive that never carried the `data/` tree or a restorable `agents` component.
+  Every one of these failed as a `200` with nothing written, which on a restore path is worse than an error: the operator believes their data is back.
+  `components: []` and an unrecognised component name (`"agent"` for `"agents"`) now return `400` — the empty list because "restore nothing" and "restore everything" are too far apart to guess between, the typo because it could only ever match zero archive entries; a non-boolean `keep_config` and a `components` value that is not an array of strings are rejected for the same reason, rather than coerced into overwriting the config the caller asked to keep.
+  `components: ["data"]` now covers every entry under `data/`, including the `cron_jobs`, `hand_state` and `custom_models` files that also have components of their own.
+  The `agents` component had not round-tripped since it was introduced: backup reads the tree from the agent workspaces directory and stores it under the archive prefix `agents/`, but restore wrote it to `<home>/agents/`, the pre-unification layout nothing reads — it now goes back where it came from, for archives written under either layout.
+  And because `zip` refuses a duplicate entry name, re-archiving `data/cron_jobs.json` as part of the `data/` walk aborted that walk, so every archive this code produced was missing the rest of `data/` — the SQLite database included — while reporting success (#7833) (@houko)
+- Report the model that performs memory extraction from what the daemon actually resolved at boot, instead of deriving the answer a second time in the HTTP route.
+  Two derivations disagree exactly where it matters: the route named the configured model as effective even when the extraction driver had failed to build and extraction had silently fallen back to substring matching with no LLM at all, and it handed back a `provider/model` spec unsplit rather than the provider and the model the upstream API is actually called with.
+  `GET /api/memory/config` now reports boot's resolution — split provider and model, `extraction_status`, `extraction_llm_active`, and a degraded reason naming the provider and model that failed — so an operator whose memory quality quietly collapsed can see it.
+  Inheriting the default extraction model is also logged at `INFO` rather than `WARN`, after resolution rather than before it: it is the documented behaviour of an unset field, a warning that fires on every default install teaches operators to skip the log, and the pre-resolution line named the spec that was fed in rather than the provider and model that run (#7844) (@houko)
+- Stop the Skills page from presenting a dead skill marketplace as a healthy one.
+  A hub the page has never contacted now shows a neutral dot rather than the green "live" one: the old health mapping had no state for "not asked yet", so a disabled query — no error, not fetching — collapsed into success and SkillHub advertised itself as up before a single request had been made.
+  Selecting a hub that answers with a webpage instead of skill data now gets a dedicated unavailable state with a retry action, in place of a generic "Failed to load" with the daemon's parser complaint printed underneath, and that branch is checked ahead of the rate-limit one because the rate-limit predicate matches the bare substring "rate" and would otherwise claim a hub URL containing "accelerate" was throttling us.
+  Under "All hubs" the failing hub is now named in a banner and its pill carries a visible alert icon and screen-reader text, rather than dropping out of the merged grid with no signal beyond a 1.5px `aria-hidden` dot (#7846) (@houko)
+- Stop the audit hash chain from forking when more than one writer holds the same database.
+  Each append derived its `seq` and `prev_hash` from process-local memory before opening its `BEGIN IMMEDIATE` transaction and never re-checked them against the table, so a second writer survived only because both values came from the same stale snapshot and its INSERT collided on the `seq` primary key.
+  That interlock lapses as soon as the row occupying the stale `seq` is deleted while higher rows survive — which the default 90-day retention prune does on a daily schedule with no operator involvement — and the stale writer's next INSERT then succeeds carrying a `prev_hash` naming a row that is no longer its predecessor, leaving two chains merged into one table and a `chain break at seq N` on the next boot.
+  Both values now come from the durable tail read inside the same transaction as the INSERT, which also un-wedges the loser of a collision: it previously retried one dead `seq` forever and silently discarded every audit event for the rest of the process's life (#7847) (@houko)
+- A registry checkout that arrives without an `agents/` directory no longer disables agent templates in silence.
+  The three places that resolved that directory — the runtime's post-sync fan-out, the hands registry's `base = "<template>"` lookup, and the kernel router's hand scan — each open-coded its own existence check and skipped its entire block on a miss, so "the registry ships no templates" and "the sync produced a checkout this code cannot read" were indistinguishable from outside the process, and the 24h cache TTL kept the degraded state around.
+  All three now share one resolver that logs at error level the first time a registry root fails to resolve, naming the path it tried, and reports again if the directory comes back and disappears a second time.
+  (#7851) (@houko)
+- A live browser extraction fixture no longer fails the build when Chromium is installed but cannot start.
+  The helper already skipped the test when no Chromium binary was found, but panicked when a discovered binary failed to launch — which is the ordinary case on a CI runner with no sandbox, a missing shared library, or too little memory.
+  Because the test runs in the default lane, that turned an environment limitation into a red `main` that every open pull request then inherited on its next run.
+  A launch failure is now treated as the same class of unavailability as a missing binary, so the fixture skips with a message instead of aborting the lane.
+  (#7876) (@houko)
+- A workflow with no saved canvas layout no longer loads into the Canvas as an empty graph.
+  The editor read each step's agent from `step.agent.id` / `step.agent.name`, but the API names those fields `agent_id` / `agent_name`, so every hydrated node came back unbound, rendered as "click to assign", and was dropped again on the next save.
+  Steps bound by name are no longer stripped either: the config panel rebuilt the binding from the running-agent dropdown alone, so opening a name-bound step and pressing save silently unbound it.
+  The TUI's workflow creator could not create anything at all — it posted the steps field as a JSON string rather than the array the API parses, and then reported the resulting rejection as a success — so it now parses the field first, names the mistake when the text is not a JSON array, and surfaces a non-2xx response as the failure it is (#7862) (@houko)
+- Ephemeral worker turns record their usage again.
+  `UsageRecord` gained a `billed_agent_id` field and the ephemeral spawn path was the one constructor left without it, so `librefang-kernel` stopped compiling as soon as both changes were on `main` together.
+  Neither pull request was wrong on its own — each was green against a base that did not yet contain the other — which is the failure the repository's own merge guidance warns about when two independently green changes land in sequence.
+  The worker bills to its parent, matching what the attribution helper returns for a parented agent.
+  (#7887) (@houko)
+- A kernel test no longer fails on the Windows shard because it hard-coded a forward slash.
+  `a_missing_template_names_the_directories_searched` asserts that the "no such template" message names the directories it searched, but it looked for the literal `workspaces/agents` in a message that interpolates real paths — so on Windows the message said `workspaces\agents` and the assertion failed while the code under test was correct.
+  The expected fragment is now built with the platform separator, which is what the message itself uses.
+  (#7890) (@houko)
+- The Configure gear now appears for sidecar channels in the dashboard.
+  It was gated on `category !== "sidecar"`, written when sidecars were config.toml-only and a configure POST would have 404'd — but `POST /api/channels/sidecar/{name}/configure` shipped in #5252 and every channel has reported `category: "sidecar"` since the in-process registry was removed, so the condition was never true and the button never rendered.
+  The endpoint was therefore unreachable from the UI for any already-configured sidecar, and the only way in was the add-channel picker, which is for types that are not configured yet.
+  Slack's channel scope, reply threading, reaction feedback and file forwarding also move out from behind "Show advanced", since every non-secret field was flagged advanced and the drawer opened showing only the two tokens.
+  (#7894) (@houko)
+- `/new`, `/reboot` and `/compact` now clear the session a broadcast chat is actually talking in.
+  Broadcast fan-out was the one channel dispatch that reached the kernel without a `SenderContext`, and the kernel derives the per-chat `SessionId::for_sender_scope` only when a sender context is present — so those turns accumulated in the agent's canonical session, the one the dashboard chat writes to, while the reset commands addressed a per-chat session nothing had ever written to.
+  The command acked success and the bot went on answering out of the history the user had just asked it to forget.
+  Broadcast dispatch now carries the same sender context every other channel turn carries, so each target keeps its own session for the chat, and the three reset commands cover every agent in the fan-out rather than the single agent the router chain happens to resolve.
+  The canonical-versus-derived session framing is @DaBlitzStein's, from #7701. (#7896) (@houko)
+- The `librefang-memory` concurrency regression test now configures its SQLite pool the way a file-backed store is actually deployed, instead of a rollback-journal configuration production never uses.
+  Contending 24 threads on one key without `journal_mode=WAL` makes the commit path promote RESERVED to EXCLUSIVE, and SQLite deliberately skips the busy handler on that promotion to avoid deadlocking two waiters against each other — so the pool's busy timeout never applied and Windows CI failed with "database is locked".
+  A guard test pins the journal mode, because raising the busy timeout had already been tried as a fix and could not address that path.
+  (#7909) (@houko)
+- Stop the prompt's memory section from exceeding the character budget that exists to bound it.
+  The truncation marker was appended to a bullet window that had already filled the budget the caller was charged for, so every clipped bullet quietly cost thirteen characters more than were available, and the `[key] ` label was rendered raw and charged as nothing at all — memory keys are caller-controlled and bounded nowhere, so three of them could put 151 003 characters into a section budgeted for 5 000 with every documented cap respected.
+  Both quantities are now measured and charged the way the budget is expressed, the key label is sanitized and capped, and the section total is a hard cap rather than an approximation — which matters because this section shares a context window with everything else the agent needs to see, and an unbounded one silently evicts the rest (#7914) (@houko)
+- A stored memory vector now records which embedding model produced it, and the daemon warns at boot when the model it is configured with is not the one the store was built with.
+  `memories.embedding` was a bare BLOB, and the only guard on the vector path was the length check inside `cosine_similarity` — which catches a change in dimensionality and nothing else, so switching between two models of the same size turned every pre-existing row's similarity into a meaningless number with no error anywhere.
+  Vectors from a different model are now left unscored during recall and withheld from the deduplicator rather than being trusted, and rows written before the stamp existed keep working exactly as they did.
+  (#7916) (@houko)
+- Trajectory export no longer walks a JSON value recursively when redacting it, so a deeply nested tool input or output cannot abort the daemon.
+  The recursive walk overflowed the stack and killed the process outright rather than returning an error, and the recursive `Drop` glue for such a value would have overflowed even if only the walk had been bounded.
+  `librefang-rl-export` hardened its equivalent function against exactly this and this one was left behind, so the repository had two functions doing the same job with only one of them safe.
+  (#7917) (@houko)
+- The `release-tag` workflow parses again, and the workflow guard now rejects a duplicate key instead of letting one reach `main`.
+  Merging a branch that set `timeout-minutes: 10` on the tag job against a `main` that had just set `timeout-minutes: 15` on the same job kept both lines, which GitHub Actions refuses to start — it reported a red run with no jobs on every branch pushed thereafter, which reads like a failing test rather than a malformed file.
+  `yaml.safe_load` silently keeps the last of two identical keys, so every YAML check in the repository passed; the guard that already parses these files now refuses the duplicate outright.
+  (#7918) (@houko)
+- Divide the prompt memory section's character budget between extracted facts and raw dialogue instead of filling it first-come from one ranked list.
+  Recall never distinguished the two classes, and a raw-dialogue row inlines a whole exchange — 1167 characters against 133 for an extracted fact — so dialogue took 92 % of the section by characters while taking only its base-rate share of the slots, and in 29 % of turns not one extracted fact reached the prompt at all.
+  Facts now get 70 % of the budget by default (`memory_fact_budget_percent` in `config.toml` moves it), each class fills greedily from its own ranked list, and whatever one class leaves unspent goes to the other, so a turn that recalled only one class still uses the whole budget.
+  A raw-dialogue row retrieved through proactive memory is also filed as raw dialogue again: the conversion to `MemoryItem` folded every unrecognised storage scope into `session_memory`, which the split would have read as an extracted fact.
+  The section costs exactly as many characters as before; the same budget simply buys more, smaller records.
+  Measured by @nevgenov over 80 real queries with hidden provenance: usefulness 5.80 → 10.82, and turns carrying at least one directly-answering record 68 % → 85 % (#7922) (@houko)
+- The checksum on `GET /api/config/status` covered only the primary `config.toml`, so a deployment using `include = [...]` could edit an included file, change the effective configuration, and see the checksum stay identical.
+  An operator comparing it against a Kubernetes `checksum/config` annotation to confirm a rollout had landed was told nothing had happened.
+  It now covers every file that contributes, with a new `includes` field listing them; a deployment with no includes keeps the exact digest it had before, so existing rollout annotations continue to match.
+  The Kubernetes manifest checker consequently stops banning `include` outright and instead verifies that each included file is another key of the same ConfigMap.
+  (#7921) (@houko)
+- Migration v50 — the FTS5 index over `memories.content` — recorded its audit row under version 49, which version 49 already held, so `INSERT OR IGNORE` dropped it and the audit-consistency backfill supplied a placeholder in its place.
+  The DDL always applied correctly; what was lost was the record of it, and the side effect was that every brand-new database logged "Migration audit drift detected and self-healed" on its first boot — a warning meant to tell an operator that an old database was being repaired, fired for everyone, which is how a real drift warning stops being read.
+  The existing guard could not catch this because it asserted that every applied version has an audit row, and the backfill created the missing row before the assertion ran; the new one pins the invariant the backfill's own comment claims, that a clean database needs no backfill at all.
+  (#7925) (@houko)
+- Persist an agent's parent link, so the API stops reporting every agent as parentless after a daemon restart.
+  `AgentEntry.parent` recorded which agent spawned another but had no column in the `agents` table, so the reload path reconstructed it as `None` and `parent_agent_id` came back `null` for agents that demonstrably had a parent — a populated field asserting a lineage that was not theirs, rather than an absent one a client could ignore.
+  Spend attribution felt it first: the kernel bills a spawned worker's usage to `parent.unwrap_or(id)`, so a restarted worker silently began billing itself instead of its spawner.
+  Schema v54 adds `agents.parent_id` with an index over it, and derives `children` from those edges instead of storing a second copy of the same relationship that nothing kept in step.
+  A row written before the migration reports its lineage as unknown rather than quietly promoting itself to a root agent. (#7931) (@houko)
+- The iOS and Android builds compile again after `lock_server_handle` was left without the desktop-only `cfg` its only caller carries.
+  The attribute above it applied to the `ServerHandleHolder` struct, not to the function that follows it, so mobile targets compiled a helper nothing there calls and `-D warnings` turned the resulting dead-code lint into a build failure.
+  Every desktop CI lane stayed green because none of them cross-compiles to an iOS target, which is why this reached `main`.
+  (#7934) (@houko)
+- Restore the `/api/templates` integration tests, which had been failing on `main` across every OS since #7648 introduced the `TemplateFixture` RAII guard.
+  Eight call sites discarded the guard `write_template` returns, so its `Drop` deleted the template directory at the end of the very statement that wrote it and every later read of that template answered 404 — the assertion surfaced as `left: 404, right: 200` in tests that never mention cleanup.
+  `write_template` is now `#[must_use]`, so discarding the guard is a compile error under `-D warnings` rather than a failure that lands in an unrelated assertion.
+  Note that the compiler's suggested `let _ = ...` does not fix it: `_` drops immediately too, and only a named binding such as `let _fixture = ...` keeps the fixture alive for the test body. (#7938) (@e-hu)
+- Restore the Windows CI lane, which had been the only red lane on `main` once the template-fixture failures were fixed.
+  Two `xtask` release tests built a scratch directory out of `std::thread::current().name()`, which under the test harness is the test's full path — `release::tests::git_diff_change_detection_distinguishes_changes_from_errors`.
+  `:` is an ordinary character in a POSIX filename but is reserved on Windows, where it separates a drive letter or an NTFS alternate data stream, so the directory creation succeeded on Linux and macOS and failed on Windows with `InvalidFilename` (OS error 123) — two failures out of 5888 tests, on one lane, which is why the breakage read as a platform quirk rather than a path bug.
+  The thread name now goes through a slug that keeps only characters every filesystem accepts. (#7942) (@houko)
+- Stop `main` going red on a timeout no code change causes.
+  `Test / macOS` runs 43-57 minutes against a 60-minute cap, so a slow runner spends the whole 3-17 minute margin and the job is killed — three of the last ten pushes to `main` died that way, each within a minute of the cap (`f7130c1` at 60:28, `efa84ea` at 60:41, `2b871dd` at 60:23), every other lane in those runs green.
+  GitHub reports a timeout as `cancelled`, `CI Gate` fails on `cancelled` without re-evaluating, and re-running the merged commit cannot clear it, so each occurrence files a `[main red]` issue against a tree that is fine.
+  Raised to 90 minutes, the cap `Test / Windows` already carries — in one of those same runs Windows took 63 minutes and passed for no reason other than its more generous limit. (#7944) (@houko)
+- Cloning an agent whose `.identity` had been replaced by a file no longer reports a complete clone on Windows.
+  The check relied on `Path::try_exists()` returning an error for a non-directory path component, which is Unix behaviour; Windows reduces the same condition to "does not exist", so the clone silently fell back to the pre-migration workspace-root identity files instead of flagging the failure.
+  (#7961) (@houko)
+- Backup restore now reports restored entries with the archive's `/` separators on Windows rather than the host's, so a client matching the reported list against the component names it asked for no longer sees every entry as unrecognised.
+  (#7965) (@houko)
+- Backup no longer archives SQLite's `-shm` shared-memory index, and restore skips one carried by an older archive.
+  The file is the WAL index for whichever connections are currently mapping the database, so a snapshot of it means nothing to another process and writing one back over a live database was never right; on Windows it also failed outright, because truncating a file with an active mapped section returns `ERROR_USER_MAPPED_FILE` and left every restore reporting a partial failure.
+  (#7966) (@houko)
+- The Docker image builds again.
+  `librefang-channels` reads the Python SDK's version out of `sdk/python/pyproject.toml` with `include_str!`, but neither the `.dockerignore` allowlist nor the `Dockerfile` carried that file into the build context, so every image build failed at `couldn't read crates/librefang-channels/src/../../../sdk/python/pyproject.toml`.
+  (#7967) (@houko)
+- `nix build` works again.
+  The flake compiled with `rust-bin.stable.latest`, resolved out of a pinned rust-overlay input five months behind the workspace, so every build was handed rustc 1.94.0 and rejected with "rustc 1.94.0 is not supported by the following packages ... requires rustc 1.94.1".
+  The flake now reads its channel from `rust-toolchain.toml` like every other consumer of that pin, and `scripts/check-toolchain-versions.sh` — which had never covered the flake — keeps it that way.
+  (#7968) (@houko)
+- The coverage job stops failing at the finish line.
+  The instrumented workspace build filled the runner's disk, so `cargo llvm-cov` ran every test to completion and then died writing the report with "No space left on device"; the job now reclaims the preinstalled SDKs it never uses before building.
+  (#8001) (@houko)
+- Surface dashboard A2A discovery failures and route task sends through the shared mutation hook. (@xiaomo)
+- Clear the trusted A2A agent registry lock poison flag after recovering preserved entries. (@xiaomo)
+- Clear kernel accessor lock poison after recovering cached configuration, credential, and security state. (@xiaomo)
+- Preserve editor filesystem and terminal bridges while clearing recovered ACP client handle lock poison. (@xiaomo)
+- Clear agent-binding mutex poison after preserving runtime routing state across inbound and outbound access. (@xiaomo)
+- Route dashboard agent config mutations by explicit role and avoid redundant experiment refetches. (@xiaomo)
+- Use separate native buttons for agent skill row and remove actions, including busy-state and accessible-name handling. (@e-hu)
+- Handle spaces, nested generated directories, and equivalent symlink targets in the AGENTS/CLAUDE pair check. (@xiaomo)
+- Preserve trusted A2A agent listings while clearing recovered API registry lock poison. (@xiaomo)
+- Inspect Cargo's parsed dependency graph and enforce the production API/runtime boundary without rejecting integration-test dependencies. (@xiaomo)
+- Clear approval policy and state lock poison after recovering preserved authorization state. (@xiaomo)
+- Surface partial dashboard approval batch failures and share security mutation invalidation. (@xiaomo)
+- Validate Arch repository release inputs, isolate signing state, require exact signed package and database artifacts, and clean temporary publishing data on exit. (@xiaomo)
+- Align dashboard audit query keys with the filters sent to the API. (@xiaomo)
+- Require exactly one Debian data archive when building the AUR desktop package and publish its provided package capability with the matching version. (@xiaomo)
+- Validate AUR release-derived versions, publish only an explicit source allowlist, retry delayed checksums and concurrent pushes safely, and clean builder workspaces on every exit. (@xiaomo)
+- Attribute denied authorization checks to the correct API endpoint in audit records. (@xiaomo)
+- Preserve dashboard permission-query guards while retrying transient failures. (@xiaomo)
+- Return accurate, scrubbed status codes for auto-dream opt-in update failures. (@xiaomo)
+- Percent-encode Bedrock model IDs as one SigV4 path segment so ARN, reserved-character, and Unicode identifiers use the same canonical URI for signing and dispatch. (@houko)
+- Bound channel attachment enrichment reads so oversized text and PDF files cannot allocate their complete on-disk size before truncation. (@houko)
+- Share dashboard budget mutation cache invalidation policy across update paths. (@xiaomo)
+- Scope the permitted duplicate `zip` crate to its exact transitive version and correct cargo-deny advisory and wildcard policy documentation. (@xiaomo)
+- Preserve changelog diff line numbers and reject incomplete or mixed-source attribution diff ranges. (@xiaomo)
+- Share dashboard channel mutation invalidation and correct its query-scope documentation. (@xiaomo)
+- Clear channel router binding and broadcast lock poison after recovering routing state. (@xiaomo)
+- Preserve signal-derived exit codes in the npm CLI wrapper and surface unexpected binary-resolution failures. (@xiaomo)
+- Keep SDK generator contract assertions active under optimized Python and defer generator loading until test execution. (@xiaomo)
+- Pipe Codex CLI prompts through stdin so private request content is not exposed in process arguments. (@xiaomo)
+- Reject additional bot address, model-name, and trailer attribution variants in commit metadata. (@xiaomo)
+- Format staged Rust blobs atomically without staging or modifying unrelated working-tree edits. (@xiaomo)
+- Document dashboard batch config partial-success semantics and expose aggregate error detection. (@xiaomo)
+- Preserve hot-reloaded model and tool-policy state while clearing recovered configuration override lock poison. (@xiaomo)
+- Validate dashboard connection targets, normalize transport errors, and avoid caching API keys. (@xiaomo)
+- Clear shared credential vault lock poison after recovering resolver read or write access. (@xiaomo)
+- Distinguish absent cron jobs, malformed update fields, and internal scheduler failures so delete and update endpoints no longer hide failures behind successful or not-found responses. (@houko)
+- Clear cron scheduler serialization lock poison flags after recovery. (@xiaomo)
+- Pin the Android cross-compilation image by OCI digest and make Linux cross-sysroot setup fail atomically. (@xiaomo)
+- Make the custom agent example's web and memory tools usable by granting their matching network and memory capabilities, and add a conservative hourly cost ceiling. (@xiaomo)
+- Enforce string `maxLength` in skill input schemas and migrate the Python and WASM examples to strict, bounded provided-tool contracts with reproducible standalone WASM metadata. (@xiaomo)
+- Keep the dashboard create-shortcut listener stable across renders while invoking the latest page handler. (@xiaomo)
+- Keep dashboard modal focus contained when focus escapes, lands on a non-tabbable child, or has no visible target. (@xiaomo)
+- Restore `g n` Channels navigation and type-check dashboard shortcut destinations against registered routes. (@xiaomo)
+- Preserve native interactive controls and stabilize keyboard/listener behavior in dashboard list navigation. (@xiaomo)
+- Handle signed, non-finite, and unit-boundary values consistently in dashboard number formatters. (#7318) (@xiaomo)
+- Normalize provider availability statuses and verify the dashboard set against Rust `AuthStatus::is_available`. (#7315) (@xiaomo)
+- Use the browser locale for relative dashboard timestamps when callers do not specify one. (#7319) (@xiaomo)
+- Make unavailable dashboard preference writes observable and expose discriminated local-storage read failures. (#7313) (@xiaomo)
+- Clarify protocol-relative URL validation and remove its redundant synthetic-scheme check. (#7314) (@xiaomo)
+- Keep separator-only tool labels meaningful and define truncation behavior for non-positive limits. (#7316) (@xiaomo)
+- Keep browser connection credentials in memory, propagate keyring failures consistently, distinguish QR scan outcomes, and reject malformed pairing expiries without interrupting user edits or leaking navigation timers. (#7311) (@xiaomo)
+- Keep nested internal error causes out of production dashboard toasts while retaining development diagnostics. (#7312) (@xiaomo)
+- Match multi-wildcard dashboard tool grants with the kernel's recursive glob semantics. (@xiaomo)
+- Reject malformed multi-variant trigger patterns and retain primitive payload details in dashboard labels. (#7317) (@xiaomo)
+- Prevent stale or duplicate dashboard speech requests from taking over playback, and preserve spoken currency ranges. (@xiaomo)
+- Version and sanitize persisted dashboard UI state, synchronize language changes, and prune stale navigation keys. (@xiaomo)
+- Bound dashboard unified-diff LCS allocation and fall back to a flat replacement for oversized inputs. (@xiaomo)
+- Preserve the embedded desktop server handle while clearing recovered lifecycle lock poison. (@xiaomo)
+- Tighten the DevOps Hand automation contract with production approval gates, numeric file-limit handling, accurate draft-PR metrics, unique phase numbering, and complete Traditional Chinese fixture translations. (@xiaomo)
+- Bound DingTalk's pending session webhook cache and discard expired reply URLs. (@xiaomo)
+- Preserve real Nix flake errors in direnv output and add only existing user-local binary directories to `PATH`. (@xiaomo)
+- Keep the embedded Python SDK and example environment file in Docker build contexts while excluding additional common local credential files. (@xiaomo)
+- Reject unsafe Docker model replacements and out-of-range ports, and fail when requested config rewrites cannot find their target keys. (@xiaomo)
+- Pin the Docker dashboard's Corepack version and document intentional lifecycle-script and Node runtime requirements. (@xiaomo)
+- Clear auto-dream abort slot lock poison after recovering the pending abort sender. (@xiaomo)
+- Make API error-shape checks deterministic across search engines and exact across paths and wrapper contexts. (@xiaomo)
+- Clear the file-read tracker registry lock poison flag after preserving recovered state. (@xiaomo)
+- Pin recursive golden fixtures and embedded redaction patterns to LF line endings across platforms. (@xiaomo)
+- Pin the Fly.io template to a concrete LibreFang release and add an authenticated-deployment-safe readiness check for reliable routing and restarts. (@xiaomo)
+- Pin the GCP template's default LibreFang release, validate project IDs early, and ignore local Terraform overrides, variable files, and common GCP credential files without excluding the provider lock file. (@xiaomo)
+- Pipe Gemini CLI prompts through stdin so private request content is not exposed in process arguments. (@xiaomo)
+- Tighten secret-scanner allowlists so fixture markers, lockfile suffixes, SDK source paths, and environment-shaped values cannot suppress unrelated credentials. (@xiaomo)
+- (@xiaomo) Fix Go SDK examples to use current signatures, validate response IDs, and clean up created agents.
+- Remove deleted dashboard goals immediately and clear their cached run state. (@xiaomo)
+- Stop dashboard goal-run polling after completion and guard missing goal IDs. (@xiaomo)
+- Clear the goal runner start/stop serialization lock poison flag after recovery. (@xiaomo)
+- Keep operator-supplied Google Chat access tokens valid until configuration rotation. (@xiaomo)
+- Secure Google Chat webhooks with loopback-only defaults and required verification tokens on every listener. (@xiaomo)
+- Bound Gotify WebSocket reads, close active sockets on cancellation, and cap fragmented messages. (@xiaomo)
+- Route Jaeger dashboard links through Grafana's proxied datasource and label global cost panels so remote operators are not sent to browser-local services or misled by filter controls. (@xiaomo)
+- Clear per-instance Hand lifecycle lock poison after recovering mutation serialization. (@xiaomo)
+- Scrub filesystem details from Hand manifest update error responses. (@xiaomo)
+- Clear the Hand registry persistence lock's poison flag after recovering write serialization. (@xiaomo)
+- Bound dashboard hand-stat requests and surface complete batch failures. (@xiaomo)
+- Classify the dashboard goal-run GET endpoint with other HTTP client reads. (@xiaomo)
+- Normalize dashboard HTTP failures when response bodies cannot be read or use legacy envelopes. (@xiaomo)
+- Validate release API responses and return stable upstream errors from both installer redirect workers. (@xiaomo)
+- (@xiaomo) Update JavaScript SDK examples to current APIs and guarantee created-agent cleanup.
+- Replace the JavaScript SDK's live-server test command with hermetic Node tests that assert request construction and API error propagation. (@xiaomo)
+- Preserve `just dev` argument boundaries, validate Docker options, add Windows routing, stage dashboard installs safely, and fail clearly when Docker bootstrap cannot create configuration. (@xiaomo)
+- Report Kubernetes manifest validator usage, input, cardinality, malformed structure, and explicit probe-value errors accurately. (@xiaomo)
+- Surface corrupt knowledge graph types and timestamps instead of fabricating fallback values. (@xiaomo)
+- Pin the Kubernetes deployment base to a concrete LibreFang release so pod restarts cannot silently reuse or adopt a different `latest` image. (@xiaomo)
+- Preserve Mastodon notification watermarks, retry streaming, flush trailing SSE events, and restrict reply visibility. (@xiaomo)
+- Allow dashboard math plugins to recover from transient lazy-load failures. (@xiaomo)
+- Refresh complete dashboard MCP server state after mutations and reject empty taint updates. (@xiaomo)
+- Fail MCP OAuth flows promptly when required credential-vault reads or writes, including per-flow client IDs, fail. (@xiaomo)
+- Fail MCP reload requests when the prerequisite config reload fails, and scrub internal reload errors from API responses. (@xiaomo)
+- Use a tagged length-prefixed MCP allowlist cache key when server names contain the historical separator, preventing distinct allowlists from sharing a cached prompt summary. (@houko)
+- Clear the MCP unknown-rule warning cache poison flag after preserving recovered entries. (@xiaomo)
+- Clear media driver state lock poison after recovering cached driver and provider configuration. (@xiaomo)
+- Share dashboard media mutation settlement policy and exclude transport overrides from hook options. (@xiaomo)
+- Keep canonical dashboard memory configuration responses without redundant refetches. (@xiaomo)
+- Clear the metering reservation ledger poison flag after preserving pending budget state. (@xiaomo)
+- Clear dashboard model override caches when their model or override resource is deleted. (@xiaomo)
+- Pin local tool versions, synchronize Rust toolchain declarations, and compile workspace libraries at the declared MSRV in CI. (@xiaomo)
+- Recover Nextcloud Talk polling after transient or initially empty room discovery. (@xiaomo)
+- Clear ChatGPT and Copilot OAuth token cache poison flags after preserving recovered credentials. (@xiaomo)
+- Surface operator-review load failures, bound large backlogs, and harden pending rows and accessible names. (@e-hu)
+- Restrict pairing URLs derived from X-Forwarded-Proto to normalized HTTP or HTTPS schemes, validate device metadata, keep persisted and live bearer state synchronized, classify completion failures, and report actual push delivery outcomes. (#7164) (@xiaomo)
+- Keep the EveryAPI sidebar link's accessible name aligned with its visible label. (@e-hu)
+- Clear the peer registry lock poison flag after recovering preserved peer state. (@xiaomo)
+- Harden pending skill reviews against incomplete updates, unknown sources, and silent rejection failures. (@e-hu)
+- Align the dashboard plugin scaffold mutation's description field with the API contract. (@xiaomo)
+- Make pre-commit formatting, OpenAPI hashing, changelog validation, and channel policy checks consume exact staged inputs portably. (@xiaomo)
+- Support both Git object formats and configurable exact branch names in the protected-branch pre-push check. (@xiaomo)
+- Restore the previous live prompt when dashboard prompt-version activation fails. (@xiaomo)
+- Migrate the custom prompt skill example from ignored legacy input/template tables to the supported `prompt_context` contract with explicit numeric-duration and prompt-boundary guidance. (@xiaomo)
+- Assign prompt version numbers atomically under concurrent API requests. (@xiaomo)
+- Reconcile provider caches after failed probes and distinguish partial EveryAPI connection failures. (@xiaomo)
+- (@xiaomo) Isolate Discord adapter test credentials and remove stale test dependencies.
+- (@xiaomo) Isolate Feishu adapter tests and make dedupe expiry deterministic.
+- (@xiaomo) Isolate LINE adapter test credentials and remove stale test dependencies.
+- (@xiaomo) Isolate Mattermost adapter test configuration and clarify its self-message dedupe contract.
+- (@xiaomo) Isolate QQ adapter test credentials and remove stale test dependencies.
+- (@xiaomo) Update Python SDK examples to the current API and guarantee created-agent cleanup on failures.
+- (@xiaomo) Fix the generated Python SDK splitting multi-line SSE events into separate payloads.
+- (@xiaomo) Correct the Python SDK minimum version and include nested sidecar template files in packages.
+- (@xiaomo) Bound Python sidecar describe subprocess tests and surface child diagnostics on failures.
+- (@xiaomo) Remove timing and stdin races from Python sidecar runtime regression tests.
+- (@xiaomo) Make shared Python sidecar HTTP test fakes consume response bodies like real responses.
+- (@xiaomo) Isolate Signal adapter test environment and remove its timer-based dedupe exit.
+- (@xiaomo) Isolate Twitch adapter tests and replace timing assumptions with deterministic synchronization.
+- (@xiaomo) Isolate Webhook adapter tests and make replay and retry coverage deterministic.
+- Harden Python sidecar WebSocket fragmentation, message limits, socket timeouts, and TLS cleanup. (@xiaomo)
+- Clear the workflow quality regex cache poison flag after preserving compiled patterns. (@xiaomo)
+- Use LibreFang's readiness endpoint for Railway deployments, allow cold starts to finish, cap crash retries, and keep one canonical Railway configuration file. (@xiaomo)
+- Clear the registry sync lock poison flag after recovering write serialization. (@xiaomo)
+- Preserve text following reply directives whose message IDs contain multi-byte Unicode characters. (@houko)
+- Harden Docker xtask fallback diagnostics, optional home mounts, cache ownership markers, and container command arguments. (@xiaomo)
+- Clear stale runtime state after shutdown and make runtime mutation callbacks composable. (@xiaomo)
+- Fail Rust sidecar conformance tests when the shared corpus disappears inside the repository, while retaining the packaged-crate skip behavior. (@xiaomo)
+- Honor the Rust echo sidecar's configured greeting instead of always using the example default. (@xiaomo)
+- Remove unused scheduler mutation fields and keep trigger invalidation within its independent cache domain. (@xiaomo)
+- Log and clear poisoned scriptable context-engine locks after recovery so hook overrides, rate limiting, circuit breakers, metrics, and traces do not silently remain in a permanently poisoned state. (@xiaomo)
+- Serialize secrets.env read-modify-write transactions and exclusively create Unix staging files with mode 0600 from the first open. (@xiaomo)
+- Serialize `secrets.env` read-modify-write updates so concurrent credential saves cannot discard each other, and create Unix staging files with mode 0600 from the first open. (@xiaomo)
+- Align empty-string sentinel discovery across search engines and keep soft review signals out of strict failures. (@xiaomo)
+- Require explicit session ownership in dashboard metadata mutations and refresh cached labels in chat snapshots. (@xiaomo)
+- Scrub storage details from session route internal-error responses. (@xiaomo)
+- Clear shutdown coordinator state lock poison after recovering shutdown progress. (@xiaomo)
+- Classify sidecar describe failures, reject invalid output encoding, and prevent probe children from inheriting daemon secrets. (#7177) (@xiaomo)
+- Make every sidecar channel example reject malformed and unsupported commands, safely encode echoed data, and surface Go input and output failures. (@xiaomo)
+- Repair missing sidecar command or argument defaults independently when saving a partially hand-edited channel configuration. (@houko)
+- Clear dashboard skill-count cache lock poison after preserving the recovered cached value. (@xiaomo)
+- An agent-created skill's manifest now names the agent that produced it, instead of the literal `agent-evolved`.
+  `create_skill` was handed the author and passed it to the evolution history, then wrote a hardcoded string into `skill.toml` — so the provenance existed only in `.evolution.json`, which is not what the marketplace or the `librefang skill` surfaces read.
+  Every skill approved through the skill workshop was affected, because that path passes the candidate's real agent id.
+  (#7929) (@houko)
+- Refresh all affected skill hub and workshop file caches after dashboard skill mutations. (@xiaomo)
+- Enforce task transition and provenance contracts, prevent late completion from reviving cancelled work, and make dashboard queue actions consistent, accessible, and failure-visible. (#7163) (@xiaomo)
+- Serialize Teams OAuth refreshes and bound the per-conversation service URL cache. (@xiaomo)
+- Make dashboard terminal rename and delete updates optimistic with scoped cache reconciliation. (@xiaomo)
+- Keep terminal tab ordering, concurrent deletion, auto-selection, and disconnected switching consistent. (@e-hu)
+- Prevent stale TOML saves, lock tab context during edits, and reclaim every pending download URL. (@e-hu)
+- Clear trigger persistence lock poison after recovering write serialization. (@xiaomo)
+- Serialize umbrella auto-close workflow runs so simultaneous PR merges cannot post duplicate comments or race the same issue close. (@houko)
+- Share the dashboard user-budget cache reconciliation policy across update and delete. (@xiaomo)
+- Clear stale user-detail errors after creation and avoid refetching obsolete identities after rename. (@xiaomo)
+- Clear user provider credential vault lock poison after recovering encrypted credential state. (@xiaomo)
+- Guard dashboard voice recording callbacks and state updates after unmount. (@xiaomo)
+- Scrub internal event, agent, and HTTP client details from webhook error responses. (@xiaomo)
+- Reject invalid WhatsApp message-deduplication windows instead of silently disabling duplicate detection. (@xiaomo)
+- Scope WhatsApp echo detection by conversation and expire stale outbound fingerprints. (@xiaomo)
+- Validate outbound WhatsApp JID shapes and normalize cached device-scoped phone identities. (@xiaomo)
+- Restrict WhatsApp gateway npm publication to runtime files and ignore common local credentials and state. (@xiaomo)
+- Fail WhatsApp gateway installation when pinned Baileys or Termux patch shapes drift, verify every Baileys rejection handler, and load the intended local SQLite addon. (@xiaomo)
+- Serialize WhatsApp health checks, make their wake protocol explicit, harden HTTP/DNS/PM2 diagnostics, and give PM2 shutdown and deployment limits configurable supervision defaults. (@xiaomo)
+- Recognize Unicode relay commands and recipient names in the WhatsApp gateway while avoiding declarative-text false positives and warning on unknown language configuration. (@xiaomo)
+- Validate Fly IP allocation responses and remove partially created apps when one-click deployment cannot finish provisioning resources. (@xiaomo)
+- Avoid broken new-tab navigation for embedded workflow images and stabilize duplicate gallery entries. (@e-hu)
+- Reconcile rerun and update workflow caches in the dashboard. (@xiaomo)
+- Bound dashboard workflow image extraction and consistently validate data URIs. (@xiaomo)
+- Clear the workflow persistence lock poison flag after recovering write serialization. (@xiaomo)
+- Fix `xtask fmt` so a detected global Prettier executable is actually used and command launch failures fail the formatting check. (@houko)
+
+### Changed
+
+- Upgraded the `rmcp` MCP SDK from 2.2 to 3.1, and pinned the two live client calls — `tools/call` and `resources/read` — to rmcp's `call_tool_once` / `read_resource_once`.
+  rmcp 3.1 adds an inherent `impl RunningService<RoleClient, S>` whose same-named `call_tool` and `read_resource` drive up to ten SEP-2322 `input_required` follow-up rounds, which would have run inside a `tokio::time::timeout` budget sized for a single request, and whose captured `S` made every future holding an `McpConnection` non-`Send` — 36 compile errors across the kernel, from `cron_tick` to the workflow engine.
+  LibreFang advertises only the `roots` client capability, so a compliant server cannot send `input_required` at all; the `_once` calls preserve exactly the single-round behaviour rmcp 2.2 had (#7885) (@houko)
+- Move identity-file path resolution and reads for `GET /api/agents/{id}/files/{filename}` onto the blocking pool, while preserving current-layout preference, legacy fallback, and canonical containment checks. Concurrent production-router coverage now also verifies that same-file writes publish one complete payload. (#7173) (@houko)
+- Build Rust WASM skills with serde's allocation support instead of its unnecessary standard-library default feature (#7671) (@houko)
+- The `MemoryProvider` / `MemoryManager` plugin API is removed from `librefang-memory`.
+  It had no call site anywhere in the tree — the only reference outside its own module was the re-export in `lib.rs` — and it could not acquire one without regressing isolation guards that already ship: `prefetch(&self, query, session_id)` can carry one of the five parameters `auto_retrieve` takes, and it returns opaque text, on which `MemoryFilter.peer_id`, the cross-chat filter (#5227) and the cross-session filter (#7605) cannot run.
+  Wiring it would have traded three enforced guards for a seam nobody was using, so the 764 lines are gone and the retrieval seam that is wired and tenancy-aware — `VectorStore` — is the one being invested in instead.
+  (#7883) (@houko)
+- Recall now carries both memory classes into the prompt, taking the top candidates of each rather than the top candidates overall.
+  A class-blind cap decided the section's class mix before the budget above could have a say: on a store that is four parts raw dialogue to one part extracted fact, the top five rows are raw dialogue, and no per-class budget can render a fact that recall never handed it.
+  The supplemental substrate fetch that widens the context engine's own small, class-blind window now runs on every turn rather than only on turns carrying a chat or session scope — the engine is built unconditionally at boot, so a dashboard, REST or cron turn previously handed the section that window and nothing else.
+  This is the one part of #7920 that is not free: the candidate window grows from 5 to 30 and the fetch behind it from 5 (50 when scoped) to 120, and turns that skipped the supplemental recall now run it.
+  Both are local SQLite/vector queries, and on the two ranked paths the candidate scan is unchanged — it was already bounded by `MAX_FTS_CANDIDATES` and `MAX_BRUTEFORCE_CANDIDATES` rather than by the caller's limit (#7922) (@houko)
+- Reduce redundant dashboard requests for stable agent metadata. (@xiaomo)
+- Keep dashboard analytics queries on one shared foreground polling policy. (@xiaomo)
+- Clarify shared dashboard approval polling and pending-query enablement. (@xiaomo)
+- Align dashboard communications event overrides with sibling query hooks. (@xiaomo)
+- Align dashboard MCP query factories, overrides, and prerequisite guards. (@xiaomo)
+- Use a dedicated nextest CI profile that aggregates concurrent failure output at the end of each run while preserving immediate feedback for local developers. (@xiaomo)
+- Align raw dashboard configuration reads with the shared query override contract. (@xiaomo)
+- Remove the unused sentinel query key for disabled dashboard video tasks. (@xiaomo)
+
+### Security
+
+- Bound the audio track extracted from a video container, not only the container it came from.
+  `MAX_VIDEO_BYTES` was checked before extraction and nothing was checked after it, so the one limit in force measured a quantity one to two orders of magnitude larger than what actually left the process: re-encoding to 32 kbps mono Opus turns a 50 MB container into a few megabytes, which means a container that passes the 50 MB gate can hold well over 87 minutes of media and hand a provider more than the 20 MB audio budget allows.
+  The container guard still refuses to read a pathological input off disk, and the extracted track is now additionally checked against `MAX_AUDIO_BYTES` on both extraction paths — whole-file and windowed — with a rejection that names the measured size and the cap so the window can be scaled down from those numbers rather than guessed at (#7811) (@houko)
+- Bound backup restore entry counts, decompression ratios, and extracted sizes while rejecting symlink escapes, reporting partial restores as failures, and auditing backup deletion (#7174) (@houko)
+  The ratio bound applies only above 8 MiB, because SQLite's `-shm` and `-wal` sidecars are mostly zero pages and legitimately deflate several hundred to one; entries below that are still held to the absolute per-entry and whole-archive size caps.
+- Reuse the configured email TLS context for SMTP so custom CA and certificate-validation settings apply consistently to inbound and outbound mail. (@xiaomo)
+- Fail closed when WhatsApp Cloud webhook authentication is unconfigured, marshal inbound events onto the asyncio loop, and reject incomplete outbound locations. (@xiaomo)
+- Validate persisted mobile bundle daemon origins and consistently constrain fetch and WebSocket rewrites to supported API paths. (@xiaomo)
+- Automatic memory no longer crosses session boundaries, and it now honours the memory capabilities an agent declares.
+  A public agent serves every visitor from one per-agent memory store, so a fact auto-memorized while serving one visitor was auto-retrieved into the next visitor's turn even when the two turns were addressed to different `session_id`s and their message histories never touched — the reporter was calling `DELETE /api/memory/agents/{id}` before every turn to work around it.
+  `auto_memorize` now stamps each memory with the session that produced it and `auto_retrieve` refuses to surface a memory stamped for a different session, so the two conversations stay apart without giving up memory altogether.
+  Rows written before this shipped carry no stamp and stay recallable everywhere, so upgrading does not blank out an existing store.
+  Set `[proactive_memory] session_scoped_recall = false` in `config.toml`, or in one agent's `agent.toml`, to go back to a single agent-wide pool — worth doing for a single-user agent whose `session_mode = "new"` runs are meant to build on each other.
+  Separately, `capabilities.memory_read = []` and `memory_write = []` in `agent.toml` now actually stop automatic recall and automatic capture; previously the agent kept receiving a populated `memories_used` on every turn and kept growing its store.
+  An absent `memory_read` key still means "unrestricted", as every other capability list does — only a list the manifest actually wrote is enforced.
+  (#7849) (@houko)
+- Keep runtime `workspaces/` data out of the home-directory Git repository. Existing tracked workspace files are retained on disk but removed from the index, with a warning that sensitive data in prior history must be purged before sharing (#7626) (@houko)
+- Restrict channel HTTP fetch bypasses to tests and reject benchmarking or documentation-only IP ranges at the SSRF boundary (#7663) (@houko)
+- Require explicit external schemes in registry Markdown links and tighten portable inline and table parsing. (@houko)
+- Render changelog release notes as escaped React content instead of injecting generated HTML.
+  Validate release API responses before consuming them, and honor GitHub prerelease metadata when classifying releases (#7679) (@houko)
+- `POST /api/agents/{id}/message` no longer lets an authenticated caller act as somebody else.
+  The `sender_id` / `sender_name` / `channel_type` body fields were copied verbatim into the turn's `SenderContext`, and that struct is the `(channel, platform_id)` tuple RBAC resolves users by — it steers per-sender tool authorization, the memory ACL and `peer:{user_id}:KEY` scoping.
+  Since any `User`-role bearer is admitted to that route, a request body could name any user the operator had bound in `[[users]] channel_bindings` and inherit that user's role, tool policy and peer memory, reaching the same binding the channel path establishes through `authorize_channel_user` without ever passing through it.
+  A caller below `Admin` now gets their own authenticated identity unless the id they asserted resolves back to themselves, so the documented REST-operator recipe still works; `Admin` and above keep the field, because impersonating a user for support or relaying real platform users from a gateway is legitimate.
+  The substitution is silent and the request still succeeds — a body that states its own true identity is not an attack, and failing it would leak the role check back to the caller.
+  (#7884) (@houko)
+- The metadata component of a caller's `MemoryFilter` is now re-applied when recall runs through an external vector-store backend.
+  The hydrate path already re-checked agent, scope, source, confidence floor and created-at bounds against the rows it fetched — precisely so tenant isolation never depends on an untrusted backend honouring the filter it was handed — but `metadata` was the one field the SQLite path enforced (as `json_extract(metadata, '$.key') = ?`) and the external path did not.
+  A deployment scoping recall by a metadata key therefore got that scope on the default backend and silently lost it on an attached one.
+  No caller sets `MemoryFilter.metadata` on a recall path today, so this closes the divergence before it can be reached rather than fixing a live leak.
+  (#7883) (@houko)
+- The TUI templates screen no longer invents a capability declaration when it spawns an agent: it used to string-format a manifest from the row's name and description and pin `tools = ["shell", "file_read", "file_write", "web_fetch", "web_search"]` onto it, so every agent type spawned from that screen received shell execution plus filesystem write plus network access no matter what its own `agent.toml` declared.
+  Operator-created types now spawn from the manifest `GET /api/templates/{name}/toml` serves, verbatim, and the compiled-in builtins each declare a named tool profile instead of sharing one hardcoded superset (#7814) (@houko)
+- Add the privacy pass that has to run before an operator-authored agent type can be contributed to a shared registry.
+  An `AgentManifest` written on one machine carries that machine's details — an absolute workspace path, the environment variable holding the operator's provider credentials, a private or self-hosted base URL, a command and environment allowlist, an arbitrary metadata bag, and whatever free text was pasted into a system prompt or a context injection — and the registry validator requires only `name`, `description` and `module`, so nothing downstream would have caught any of it before it reached a public git history.
+  `librefang_types::manifest_privacy` now provides the two halves separately: a sanitiser returning a publishable copy with the instance-specific fields removed and the portable half intact, and a detector that reports what it found with a bounded preview per finding, including inside the fields the sanitiser keeps, because no structural rule separates portable configuration from an internal hostname sitting in free text.
+  The classification is exhaustive by construction rather than a field list that rots: the sanitiser destructures and rebuilds `AgentManifest` with no rest pattern and no struct-update syntax, so a new field fails to compile until someone decides what happens to it (#7819) (@houko)
+- Restrict AUR service environment files, keep Docker secrets out of command-line arguments, refuse to replace unrelated containers, and update the packaged Docker image to the current stable release. (@xiaomo)
+- Move dashboard credential verification, hashing, and config I/O off async workers; serialize and atomically persist config updates; and scrub internal persistence errors from HTTP responses. (@xiaomo)
+- Keep Fly provider keys out of terminal echo and process arguments, remove the unverified installer pipeline, clean up terminal/temp state, and make uninstall discovery and partial failures fail closed. (@xiaomo)
+- Block the full IPv4 0.0.0.0/8 "this" network across SSRF validators. (@xiaomo)
+- Scrub internal media driver details from HTTP 500 responses while preserving actionable client errors and retaining the full internal cause in server logs.
+  Generated uploads now derive PNG, JPEG, GIF, or WebP metadata from their byte signatures instead of labeling every image as PNG, and unknown signatures remain inline rather than being persisted under a false type.
+  Video polling rejects unknown providers, upstream non-client statuses map to Bad Gateway, and transcription temporary files are removed even when the handler future is cancelled (#7085) (@xiaomo)
+- Scrub OAuth authorization URL parser details from login HTTP 500 responses while retaining the provider ID and full parse error in server logs. (@xiaomo)
+- Scrub passkey persistence, serialization, and corrupt-credential details from HTTP 500 responses while retaining full diagnostic context in server logs, and prevent concurrent authentications from overwriting newer sign-count state with optimistic credential updates. (#7080) (@xiaomo)
+- Move recursive plugin removal off async workers and scrub filesystem and proxy-client details from plugin HTTP 500 responses while retaining diagnostic context in server logs. (@xiaomo)
+- Scrub provider OAuth, token persistence, and catalog sync details from HTTP 500 responses. (@xiaomo)
+- (@xiaomo) Prevent Python agent exceptions and malformed kernel input from leaking details in responses.
+- Scrub registry schema and content serialization failures from HTTP 500 bodies while retaining the full serde or TOML error in server logs. (@xiaomo)
+- Scrub workflow and agent execution details from manual schedule-run HTTP 500 responses while retaining schedule and action context in server logs. (@xiaomo)
+- Scrub internal trajectory export failures from API responses. (@xiaomo)
+- Scrub internal user-management failures before returning HTTP 500 responses, while retaining full configuration, credential-store, hashing, and persistence errors in server logs.
+  Publish a durably written user-auth snapshot before attempting the wider kernel reload, so key rotation revokes the old credential even when reload fails or the request is cancelled.
+  User mutation also rejects control characters in names, reports duplicate import rows against live batch state, and documents the actual 204 delete response (#7076) (@xiaomo)
+- Disable the deploy Worker's public `workers.dev` hostname so provisioning is reachable only through the configured `deploy.librefang.ai` route. (@xiaomo)
+- Redact secret-bearing values from `xtask validate-config --show` and reject wrong TOML types for fields the command validates. (@houko)
+
+### Documentation
+
+- Corrected three comments that described the group roster inaccurately, and locked the roster write path with tests.
+  `extract_group_members` in the channel bridge claimed to persist bulk membership metadata to the roster store; it never did, and the only roster writer is the per-sender `upsert_sender_into_roster`, which records one row per person actually observed speaking.
+  That distinction decides who `channel_dm` is allowed to reach, so a comment implying the wider set is worth more than a typo.
+  The memory crate still pointed readers at a `group_members` tool that was renamed `channel_members` before it shipped, and the Slack sidecar still said display names are never resolved, which stopped being true when `SLACK_RESOLVE_DISPLAY_NAMES` landed.
+  The new tests pin the junction the whole feature rests on: a resolved display name has to survive the bridge to reach the roster column `channel_members` reads back, and direct messages, senderless group messages and blank ids must not be recorded at all.
+  (#7901) (@houko)
+- Document the public channel `embedded_sdk` module and its role in bundling and extracting the Python SDK for zero-setup sidecar startup (#7665) (@houko)
+- The memory page's plugin section now documents the seam that exists.
+  It previously walked readers through `MemoryProvider`, a `set_external_provider` call that was never a method on anything, and a `prefetch_all` described as "called internally by the agent loop before each LLM request" when it had no caller at all — so anyone implementing against those pages got silence and no error.
+  That section is replaced, in English and Chinese, by the `VectorStore` seam: the `[memory] vector_backend` / `vector_store_url` settings, the four-endpoint HTTP contract with its size and timeout bounds, what the backend is not allowed to decide (IDs hydrate from SQLite, the caller's filter is re-applied afterwards, and the chat/session isolation guards run regardless), and how a malformed ID or a dead backend degrades.
+  (#7883) (@houko)
+- The builtin-tools reference described `memory_recall` as "semantic search over the agent's memories" and gave `memory_store` an argument list (`content`, `category`, `scope`) it has never accepted.
+  Both tools are an exact-key key/value store.
+  The Memory Tools section now separates the two stores explicitly, documents the real arguments, and states the capability scopes each family needs. (#7820) (@houko)
+- The agent instructions now state the one honest test for whether CI is executing, and why every cheaper proxy for it reports a live pool against a dead one.
+  A workflow file that fails to parse completes as a failure within seconds without ever taking a runner, so those runs flicker through the in-progress state and fill the completed list, and a poll on either signal reads a stalled queue as throughput.
+  The same section records that a `cargo check` finishing in under a second proves nothing in a shared target directory until a `compile_error!` sentinel confirms the compiler actually read the tree.
+  (#7933) (@houko)
+- The agent instructions now record why a large merge sweep stalls CI, and how to read the queue without being misled by the tooling.
+  A sweep saturates the runner pool through the housekeeping workflows each merge fires, not through the merges themselves, and the required-check surface is narrow enough that cancelling those is safe while cancelling the secret scan is not.
+  Separately, `gh run list --limit N` silently truncates and `--status in_progress` counts runs rather than jobs, which between them produced three wrong diagnoses of one incident.
+  (#7926) (@houko)
+- Clarify that TOML error catalogs are curated references and make the Chinese reference human-readable. (@xiaomo)
+- The OIDC role-map doc comments now follow the repository's prose convention, one sentence per line, instead of the column wrapping they landed with.
+  The rule exists because a hand-tuned column wrap makes a one-word edit re-flow a whole paragraph, which pollutes `git blame` and buries the real change in a review diff.
+  These comments were written in #7906 and so were new prose the convention applied to, not a pre-existing file exempt from it.
+  (#7927) (@houko)
+- Document workspace Tokio, SQLite, reqwest crypto-provider, and rmcp transport feature contracts. (@xiaomo)
+
+### Added
+
+- Add the workflow-creator skill (#7873) (@houko)
+- Map identity-provider groups onto local groups (#7932) (@houko)
+
+### Fixed
+
+- Fail closed on MCP reload errors (#7074) (@houko)
+- Clear scriptable lock poison after recovery (#7077) (@houko)
+- Scrub registry serialization errors (#7078) (@houko)
+- Scrub OAuth authorization URL errors (#7079) (@houko)
+- Harden credential config persistence (#7081) (@houko)
+- Scrub manual schedule run errors (#7082) (@houko)
+- Harden plugin internal errors (#7083) (@houko)
+- Block IPv4 zero network SSRF (#7088) (@houko)
+- Scrub provider internal errors (#7089) (@houko)
+- Clear file-read tracker lock poison (#7090) (@houko)
+- Clear warning cache lock poison (#7091) (@houko)
+- Pipe Codex prompts through stdin (#7092) (@houko)
+- Pipe Gemini prompts through stdin (#7093) (@houko)
+- Clear reservation ledger poison (#7094) (@houko)
+- Clear OAuth token cache poison (#7096) (@houko)
+- Clear quality regex cache poison (#7097) (@houko)
+- Clear registry sync lock poison (#7099) (@houko)
+- Clear workflow persistence poison (#7100) (@houko)
+- Clear cron serialization poison (#7102) (@houko)
+- Clear goal runner lock poison (#7103) (@houko)
+- Scrub hand manifest IO errors (#7104) (@houko)
+- Scrub session storage errors (#7105) (@houko)
+- Scrub webhook internal errors (#7106) (@houko)
+- Clear persistence lock poison (#7107) (@houko)
+- Clear Hand instance lock poison (#7108) (@houko)
+- Clear peer registry lock poison (#7109) (@houko)
+- Clear A2A registry lock poison (#7110) (@houko)
+- Clear user vault lock poison (#7111) (@houko)
+- Clear approval lock poison (#7112) (@houko)
+- Clear accessor lock poison (#7113) (@houko)
+- Clear config override lock poison (#7114) (@houko)
+- Clear client handle lock poison (#7115) (@houko)
+- Clear skill count cache poison (#7116) (@houko)
+- Clear A2A registry lock poison (#7117) (@houko)
+- Clear server handle lock poison (#7118) (@houko)
+- Clear agent binding lock poison (#7119) (@houko)
+- Clear driver state lock poison (#7120) (@houko)
+- Clear shutdown state lock poison (#7121) (@houko)
+- Clear trigger persistence lock poison (#7122) (@houko)
+- Clear dream abort slot lock poison (#7123) (@houko)
+- Clear router state lock poison (#7124) (@houko)
+- Clear shared vault lock poison (#7125) (@houko)
+- Scrub trajectory export errors (#7127) (@houko)
+- Tighten DevOps automation contract (#7156) (@houko)
+- Serialize secret upserts (#7160) (@houko)
+- Attribute authz denial endpoint (#7165) (@houko)
+- Classify auto-dream update errors (#7169) (@houko)
+- Bound backup restore extraction (#7174) (@houko)
+- Fail MCP OAuth on vault errors (#7175) (@houko)
+- Assign versions atomically (#7176) (@houko)
+- Reject corrupt knowledge metadata (#7178) (@houko)
+- Validate outbound JID shapes (#7181) (@houko)
+- Bound session webhook retention (#7182) (@houko)
+- Scope echo tracking by chat (#7183) (@houko)
+- Harden websocket framing (#7184) (@houko)
+- Preserve static token lifetime (#7185) (@houko)
+- Authenticate exposed webhooks (#7186) (@houko)
+- Retry room discovery (#7187) (@houko)
+- Bound shared adapter state (#7188) (@houko)
+- Preserve delivery state (#7189) (@houko)
+- Bound websocket lifecycle (#7190) (@houko)
+- Honor TLS settings for SMTP (#7191) (@houko)
+- Harden Cloud webhook handling (#7192) (@houko)
+- Serialize session refresh (#7193) (@houko)
+- Consume passive reply ids once (#7194) (@houko)
+- Preserve queue retry backoff (#7195) (@houko)
+- Make recovery failures observable (#7196) (@houko)
+- Preserve streamed message state (#7197) (@houko)
+- Avoid stacked reconnect delays (#7198) (@houko)
+- Reject empty outbound messages (#7199) (@houko)
+- Serialize token refresh (#7200) (@houko)
+- Preserve common helper contracts (#7201) (@houko)
+- Make logging failures visible (#7202) (@houko)
+- Parse multiline SSE events (#7203) (@houko)
+- Hide Python agent error details (#7204) (@houko)
+- Correct Python package metadata (#7205) (@houko)
+- Modernize Python examples (#7206) (@houko)
+- Align sidecar HTTP fakes with responses (#7207) (@houko)
+- Bound sidecar describe subprocesses (#7208) (@houko)
+- Remove sidecar runtime races (#7209) (@houko)
+- Isolate Signal adapter tests (#7210) (@houko)
+- Stabilize Twitch adapter tests (#7211) (@houko)
+- Isolate Discord adapter tests (#7212) (@houko)
+- Isolate Mattermost adapter tests (#7213) (@houko)
+- Isolate LINE adapter tests (#7214) (@houko)
+- Isolate QQ adapter tests (#7215) (@houko)
+- Stabilize Feishu adapter tests (#7216) (@houko)
+- Stabilize Webhook adapter tests (#7217) (@houko)
+- Repair Go client examples (#7218) (@houko)
+- Modernize JavaScript examples (#7219) (@houko)
+- Honor echo greeting config (#7221) (@houko)
+- Preserve CLI wrapper failures (#7223) (@houko)
+- Support Unicode relay intents (#7226) (@houko)
+- Validate postinstall patch shapes (#7227) (@houko)
+- Harden gateway supervision (#7228) (@houko)
+- Validate deduplication window (#7229) (@houko)
+- Harden Docker config rewrites (#7230) (@houko)
+- Harden Fly helper scripts (#7231) (@houko)
+- Roll back incomplete worker apps (#7232) (@houko)
+- Pin kubernetes image release (#7233) (@houko)
+- Correct grafana dashboard links (#7234) (@houko)
+- Harden railway health policy (#7235) (@houko)
+- Harden gcp config defaults (#7236) (@houko)
+- Pin and probe fly template (#7237) (@houko)
+- Disable worker dev route (#7238) (@houko)
+- Validate sidecar commands (#7239) (@houko)
+- Update prompt skill contract (#7240) (@houko)
+- Bound custom example inputs (#7241) (@houko)
+- Align custom agent capabilities (#7242) (@houko)
+- Harden AUR runtime secrets (#7244) (@houko)
+- Validate desktop data archive (#7245) (@houko)
+- Harden AUR publishing (#7246) (@houko)
+- Harden Arch repo publishing (#7247) (@houko)
+- Preserve required build context (#7248) (@houko)
+- Preserve direnv diagnostics (#7249) (@houko)
+- Pin fixture line endings (#7250) (@houko)
+- Tighten gitleaks allowlists (#7251) (@houko)
+- Pin Android cross image (#7252) (@houko)
+- Pin dashboard Corepack (#7253) (@houko)
+- Scope cargo-deny exceptions (#7254) (@houko)
+- Harden just Docker workflow (#7258) (@houko)
+- Harden agent instruction pair check (#7260) (@houko)
+- Parse API runtime dependency edges (#7261) (@houko)
+- Clarify manifest validator failures (#7262) (@houko)
+- Preserve changelog diff positions (#7263) (@houko)
+- Harden Docker xtask environment (#7264) (@houko)
+- Support Git object formats in pre-push (#7265) (@houko)
+- Consume exact staged inputs (#7266) (@houko)
+- Reject attribution variants (#7267) (@houko)
+- Format staged Rust blobs atomically (#7268) (@houko)
+- Make error-shape scan deterministic (#7269) (@houko)
+- Separate sentinel lint severity (#7270) (@houko)
+- Validate installer redirect releases (#7272) (@houko)
+- Serialize secret environment updates (#7310) (@houko)
+- Clean up clipboard fallback (#7320) (@houko)
+- Refresh hand-derived caches (#7325) (@houko)
+- Validate bundle daemon bases (#7326) (@houko)
+- Disambiguate hidden model keys (#7327) (@houko)
+- Preserve chat cache recency (#7328) (@houko)
+- Notify replaced drawer owners (#7329) (@houko)
+- Validate agent model drafts (#7330) (@houko)
+- Harden channel liveness fallback (#7331) (@houko)
+- Migrate persisted UI state (#7342) (@houko)
+- Align tool grant globs (#7343) (@houko)
+- Prevent stale TTS playback (#7344) (@houko)
+- Bound unified diff memory (#7345) (@houko)
+- Stabilize create shortcut (#7346) (@houko)
+- Contain modal focus (#7347) (@houko)
+- Restore keyboard nav chord (#7348) (@houko)
+- Stabilize list navigation (#7350) (@houko)
+- Guard voice input lifecycle (#7351) (@houko)
+- Bound workflow image parsing (#7353) (@houko)
+- Retry math plugin loading (#7354) (@houko)
+- Normalize HTTP errors (#7356) (@houko)
+- Unify agent config mutations (#7357) (@houko)
+- Surface batch approval failures (#7360) (@houko)
+- Harden connection mutations (#7363) (@houko)
+- Clear deleted goal caches (#7364) (@houko)
+- Reconcile MCP mutation caches (#7365) (@houko)
+- Clear deleted model caches (#7368) (@houko)
+- Surface A2A mutation failures (#7369) (@houko)
+- Roll back failed prompt binds (#7371) (@houko)
+- Reconcile provider mutation failures (#7372) (@houko)
+- Reconcile runtime mutations (#7373) (@houko)
+- Reconcile session metadata caches (#7375) (@houko)
+- Reconcile skill mutation caches (#7376) (@houko)
+- Reconcile terminal window caches (#7377) (@houko)
+- Reconcile user identity caches (#7379) (@houko)
+- Reconcile workflow mutation caches (#7380) (@houko)
+- Align audit query key filters (#7384) (@houko)
+- Harden permission queries (#7385) (@houko)
+- Stop completed goal polling (#7389) (@houko)
+- Bound hand stats batches (#7391) (@houko)
+- Handle embedded workflow images (#7451) (@houko)
+- Align partner link name (#7452) (@houko)
+- Separate agent skill actions (#7453) (@houko)
+- Guard TOML edit lifecycle (#7454) (@houko)
+- Harden operator review banner (#7455) (@houko)
+- Harden pending skill reviews (#7456) (@houko)
+- Stabilize terminal tab lifecycle (#7457) (@houko)
+- Batch typewriter markdown renders (#7458) (@houko)
+- Guard prompt experiment actions (#7459) (@houko)
+- Harden authentication failures (#7463) (@houko)
+- Harden root recovery (#7464) (@houko)
+- Harden telemetry metrics parsing (#7474) (@houko)
+- Preserve hands detail state (#7475) (@houko)
+- Stabilize skills marketplace state (#7476) (@houko)
+- Fail closed on approval decisions (#7477) (@houko)
+- Synchronize audit route state (#7478) (@houko)
+- Preserve config form drafts (#7479) (@houko)
+- Restrict audit log exports (#7480) (@houko)
+- Preserve collapsed goal trees (#7481) (@houko)
+- Preserve model form state (#7483) (@houko)
+- Bound MCP auth polling (#7484) (@houko)
+- Validate media render inputs (#7485) (@houko)
+- Harden security settings (#7486) (@houko)
+- Validate user budget inputs (#7487) (@houko)
+- Surface network query failures (#7488) (@houko)
+- Synchronize permission simulator (#7489) (@houko)
+- Make wizard finalization recoverable (#7490) (@houko)
+- Correct formatter boundaries (#7491) (@houko)
+- Clarify agent rail controls (#7492) (@houko)
+- Refresh scope status labels (#7493) (@houko)
+- Bound KV row output (#7494) (@houko)
+- Clarify dream row state (#7495) (@houko)
+- Bound service worker cache (#7496) (@houko)
+- Honor SOURCE_DATE_EPOCH (#7501) (@houko)
+- Inherit Argon2 workspace features (#7502) (@houko)
+- Continue Accept version scans (#7503) (@houko)
+- Preserve Unicode lowercase expansions (#7504) (@houko)
+- Reject rooted dashboard asset paths (#7505) (@houko)
+- Fail closed on rate limit responses (#7506) (@houko)
+- Reject incomplete EveryAPI pricing (#7507) (@houko)
+- Back off ACP accept failures (#7508) (@houko)
+- Release failed OpenRouter refreshes (#7509) (@houko)
+- Observe OpenAI stream forwarders (#7512) (@houko)
+- Equalize legacy auth work (#7513) (@houko)
+- Serialize dotenv updates (#7517) (@houko)
+- Fail failed credential stores (#7518) (@houko)
+- Propagate client build errors (#7519) (@houko)
+- Validate base template names (#7520) (@houko)
+- Degrade cron client failures (#7521) (@houko)
+- Drain cron script pipes concurrently (#7522) (@houko)
+- Validate registry proposal names (#7536) (@houko)
+- Bound total request time (#7537) (@houko)
+- Deduplicate Tinker session retries (#7538) (@houko)
+- Pin AUR publishing trust boundary (#7541) (@houko)
+- Surface inactive issue API failures (#7542) (@houko)
+- Harden PR status label reconciliation (#7543) (@houko)
+- Serialize worker deployments (#7544) (@houko)
+- Reconcile issue labels deterministically (#7545) (@houko)
+- Honor detected prettier executable (#7549) (@houko)
+- Redact validated config output (#7550) (@houko)
+- Serialize umbrella auto-close runs (#7551) (@houko)
+- Bound attachment enrichment reads (#7552) (@houko)
+- Backfill partial sidecar defaults (#7553) (@houko)
+- Classify cron mutation errors (#7554) (@houko)
+- Disambiguate MCP summary cache keys (#7568) (@houko)
+- Encode Bedrock model paths (#7569) (@houko)
+- Preserve text after Unicode directives (#7570) (@houko)
+- Harden index bootstrap (#7672) (@houko)
+- Improve 404 accessibility (#7673) (@houko)
+- Harden worker fallback contracts (#7674) (@houko)
+- Complete service worker caching (#7675) (@houko)
+- Harden registry markdown parsing (#7676) (@houko)
+- Enforce registry fetch integrity (#7677) (@houko)
+- Harden Atom feed generation (#7678) (@houko)
+- Harden TOML token highlighting (#7695) (@houko)
+- Write a provider overlay the catalog can read back (#7778) (@DaBlitzStein)
+- Unify API vault key initialization (#7793) (@houko)
+- Stop flagging ordinary emoji as injection (#7794) (@houko)
+- Preserve cron validation errors (#7797) (@houko)
+- Support outbound file attachments (#7805) (@houko)
+- Preserve extraction structure and click fallback (#7806) (@houko)
+- Serialize MCP reloads and preserve agent manifests (#7807) (@houko)
+- Make a selective restore mean what it says (#7843) (@houko)
+
+### Changed
+
+- Classify goal run read (#7355) (@houko)
+- Share budget mutation policy (#7359) (@houko)
+- Share channel mutation policy (#7361) (@houko)
+- Expose config batch outcome (#7362) (@houko)
+- Share media mutation policy (#7366) (@houko)
+- Align plugin scaffold payload (#7370) (@houko)
+- Clarify scheduler mutation domains (#7374) (@houko)
+- Share user budget cache policy (#7378) (@houko)
+- Share analytics query policy (#7382) (@houko)
+- Clarify approval query policy (#7383) (@houko)
+- Align comms query overrides (#7386) (@houko)
+- Align raw config queries (#7388) (@houko)
+- Remove unused video query key (#7392) (@houko)
+- Align MCP query contracts (#7393) (@houko)
+- Remove stale xterm type shim (#7460) (@houko)
+- Drive the chat slash menu from GET /api/commands (#7969) (@DaBlitzStein)
+
+### Performance
+
+- Scope passkey invalidation (#7324) (@houko)
+- Retain memory config response (#7367) (@houko)
+- Cache stable agent metadata (#7381) (@houko)
+- Reuse W&B retry body (#7540) (@houko)
+- Index per-agent audit observability (#7548) (@houko)
+- Preserve roundtrip benchmark work (#7659) (@houko)
+
+<details>
+<summary>Documentation, maintenance, and other internal changes</summary>
+
+### Documentation
+
+- Explain dependency feature contracts (#7256) (@houko)
+- Clarify TOML catalog scope (#7259) (@houko)
+
+### Maintenance
+
+- Make JavaScript SDK tests hermetic (#7220) (@houko)
+- Fail on missing in-repo corpus (#7222) (@houko)
+- Restrict gateway package contents (#7225) (@houko)
+- Defer nextest failure output (#7243) (@houko)
+- Keep assertions active under optimization (#7271) (@houko)
+- Isolate browser API mocks (#7461) (@houko)
+- Trim redundant Tokio test features (#7643) (@houko)
+- Cover agent KV authorization success paths (#7645) (@houko)
+- Pin audit route limit clamps (#7646) (@houko)
+- Strengthen media route boundaries (#7647) (@houko)
+- Harden profile template fixtures (#7648) (@houko)
+- Strengthen prompt route contracts (#7649) (@houko)
+- Isolate auth allowlist state (#7651) (@houko)
+- Enforce route smoke contracts (#7652) (@houko)
+- Harden network route contracts (#7653) (@houko)
+- Harden passkey route harness (#7654) (@houko)
+- Clarify plugin route contracts (#7655) (@houko)
+- Strengthen tool backend selection (#7656) (@houko)
+- Tighten webhook SSRF assertions (#7657) (@houko)
+- Clean up manifest metadata (#7658) (@houko)
+- Pin sidecar event conformance (#7670) (@houko)
+- Update model snapshot (#7730) (@houko)
+- Update model snapshot (#7764) (@houko)
+- Update model snapshot (#7810) (@houko)
+- Update model snapshot (#7840) (@houko)
+- Update model snapshot (#7936) (@houko)
+- Update model snapshot (#7951) (@houko)
+- Update model snapshot (#7960) (@houko)
+- Update model snapshot (#7977) (@houko)
+
+</details>
+
+
+## [2026.8.19] - 2026-08-19
+
+_474 PRs from 5 contributors since v2026.7.31._
+
+### Highlights
+
+- **Security hardening** — dozens of fixes closing SSRF vectors, path traversal in skill/channel IDs, XSS in canvas and OAuth callbacks, credential redaction gaps, and durable atomic writes throughout the daemon to prevent partial-state corruption.
+- **Managed configuration mode** — new `managed` mode locks provider config routes so self-hosted deployments can enforce a fixed LLM setup; pairs with opt-in model discovery and API key support for custom and local providers.
+- **Long-form audio/video transcription** — recordings are now processed in sliding windows and written directly to a file, removing the previous length cap on transcription.
+- **Non-blocking agent messaging and smarter task waking** — `agent_send` is now non-blocking by default when called from within an agent turn; posted tasks automatically wake their assignee without requiring a separate trigger declaration.
+- **Polish localization and i18n fixes** — Polish (`pl`) added as a supported language; Japanese, Spanish, and French error message translations restored and completed.
+
+### Added
+
+- Scan the runtime container image for vulnerabilities with Trivy, on `main` and on every native release digest, so OS packages and the bundled Node.js / Python dependencies stop sitting outside the source and dependency checks.
+  In the release pipeline the scan sits between the per-architecture `push-by-digest` build and the manifest publish, and `docker-manifest` now depends on it — no user-facing tag (`:VERSION`, `:latest`, `:lts`) can be created or moved onto a digest that failed the gate, and nothing downstream of the manifest (`publish_arch_repo`, `deploy_fly`, `deploy_render`, `sync_aur_docker`) consumes one either.
+  Each run publishes a job summary naming the platform digest, scanner and database versions, and every CRITICAL / HIGH finding with its package, installed version, fixed version, CVE, and severity; the raw JSON, the SARIF, and a machine-readable verdict are retained as artifacts and the SARIF is uploaded to code scanning under a per-image category.
+  The gate ships **report-only**: issue #6694 measured a 10-critical / 95-high backlog with Trivy 0.57.0, so arming it today would fail `main` on the first run.
+  The enforcement threshold is a single default — the `fail-on` input of `.github/actions/trivy-image-scan` — that a maintainer moves `off → critical → high` once the backlog is remediated, and neither workflow overrides it.
+  Nothing is suppressed to achieve that: no `--ignore-unfixed` and no severity filtering, so the report is complete either way and only the pass/fail decision is narrowed to fixable findings.
+  A vulnerability-database download failure is kept distinct from a clean scan — refreshed in its own retried step, with the scan then running `--skip-db-update` — so a scanner outage fails loudly instead of passing as a finding-free image (#6694, #6712) (@houko)
+- Add a managed configuration mode so a deployment can own `config.toml` instead of treating it as application state.
+  `LIBREFANG_CONFIG_PATH` relocates the file — useful on its own, for a Compose bind mount or a ConfigMap mounted outside `LIBREFANG_HOME` — and `LIBREFANG_CONFIG_MODE=managed` locks it.
+  The two are deliberately independent: relocating a file is not a statement about who owns it, and inferring the lock from the path would hand a read-only dashboard to an operator who only wanted the file somewhere else.
+  The mode is read from the process environment and never from the config file, so a write through the API cannot unlock the very file it is being refused access to.
+  When managed mode is active, every API surface that persists deployment configuration answers `423 Locked` with `{"code": "config_managed", "source": "<path>"}` and leaves the file untouched — enforcement lives in the handlers rather than relying on a read-only mount, because a filesystem `EACCES` surfaces as a 500 with an errno and tells an operator nothing about why.
+  `GET /api/config/status` reports the mode, the source path, writability, a SHA-256 over the file's bytes, and its last-modified time, so the dashboard can present managed settings as read-only from server-supplied metadata rather than by attempting a save and reading the refusal back.
+  Boot-time schema migration no longer tries to write the migrated config back when the file is managed; it logs a single targeted warning instead.
+  That write previously failed against a read-only mount with nothing but a `warn!`, so the migration re-ran silently on every boot forever.
+  Mutable mode remains the default and is unchanged (#6695, #6717) (@houko)
+- Polish (pl) is now a supported UI language across the dashboard SPA, the backend Fluent error catalogue, and the webchat widget.
+  The channel bridge also emits a Polish failure suffix for tool-failure progress lines.
+  (#6696) (@leszek3737)
+- Opt-in live model discovery for custom OpenAI-compatible providers, via a `discover_models` flag on the provider and a toggle in the dashboard's Add / Configure Provider dialogs.
+  Discovery was gated on a hard-coded id allowlist (`ollama | vllm | lmstudio | lemonade`), so a self-hosted endpoint registered under any other id was never probed: its model list stayed empty forever and the only recourse was to register every model by hand, or to squat the built-in `vllm` id and override its base URL.
+  A provider that opts in joins exactly the paths a built-in local one already walks — the 60-second probe loop, the `POST /api/providers/{name}/test` refresh, and the live-model filter on `/api/models`.
+  The predicate ORs the flag with the id check rather than replacing it, so the built-in ids keep discovering regardless of the flag and an existing install sees no change.
+  `PUT /api/providers/{name}/discovery` toggles it and persists the value into the provider's own TOML, so the opt-in survives a restart — for a provider you created, which is the case the feature exists for; on a registry-shipped file the boot-time sync still reverts any local edit (#6702, #6714) (@houko)
+- Run the Python SDK test suite in CI.
+  `sdk/python/tests/` held roughly 1900 pytest cases covering the HTTP client and every stdlib-only sidecar channel adapter — slack, discord, telegram, mastodon and the rest — and no workflow ran a single one of them, so the production code path for every sidecar channel shipped with CI fully green regardless of what broke.
+  The `sdk/` prefix was already routed to the Rust lane, but only as an openapi codegen drift guard, which runs cargo and never pytest.
+  The new lane installs the package with its `dev` extra and runs the suite on any `sdk/python/**` change, in under a minute (#6741) (@houko)
+- Teach a task-board trigger to fire on unowned work via `pattern = { task_posted = { assignee_match = "unassigned" } }`.
+  Previously the only options were "every posted task" or a specific agent, so an agent that should pick up whatever nobody has claimed had to match everything and filter in the prompt.
+  The keyword matches both spellings of unowned that reach the event — an absent assignee and the empty string — because neither the `task_post` tool nor `POST /api/tasks` normalises the field, while both do reject an empty title and description.
+  A client that sends an empty assignee means "nobody", and a filter that only understood the absent form would silently ignore it.
+  (#6742) (@houko)
+- `media_transcribe` can now transcribe a recording in bounded windows and write the transcript to a workspace file, which is what a recording longer than a few minutes needs to reach an agent at all.
+  Previously the tool transcribed whole files and returned the transcript inline, so two limits unrelated to file size decided how long a usable recording could be: a single transcription request is bounded by a wall-clock timeout that does not scale with the input, and the kernel spills any tool result over `[tool_results] spill_threshold_bytes` (16 KB by default) to the artifact store and hands the agent a stub instead.
+  Both are reached around ten minutes of speech, at roughly 2.5 MB of extracted audio — far below `MAX_AUDIO_BYTES`, and further still below `MAX_VIDEO_BYTES`, so no size limit is anywhere near being involved.
+  `start_sec` and `max_secs` bound the request to one window and the response carries `has_more` / `next_start_sec` to walk the rest; `out_path` writes the transcript as UTF-8 and returns only the path, byte count, sha256 and a 200-character preview, following the contract `web_fetch_to_file` already established.
+  Windows starting at `0` begin a new file and later windows append, so repeated calls assemble one transcript without any of it passing through the agent's context.
+  Both mechanisms are needed rather than either alone: window size varies with how much was said, so a fixed window straddles the spill threshold instead of staying under it, and `out_path` is what makes the outcome independent of that.
+  Callers advance by the produced window length rather than the requested one, read back from the Ogg granule position — a seek lands on a keyframe and a window overlapping the end of the recording is short, so an assumed edge drifts and eventually skips audio.
+  Consecutive windows are separated by a newline: a boundary lands mid-sentence by design and each window's transcript arrives trimmed, so concatenating them directly would fuse the last word of one window to the first of the next at every boundary.
+  A call that names neither window field keeps its previous behaviour exactly, including adding no ffmpeg pass. (#6748, #6773) (@nevgenov)
+
+### Fixed
+
+- Escape every TOML control character when the dashboard serializes agent manifest strings, preserving carriage returns, tabs, and other control bytes as valid round-trippable TOML instead of producing a manifest the daemon cannot parse. (@TechWizard9999)
+- `browser_read_page` no longer drops the destination of every link nested inside a list item, and no longer returns a single card from a feed or search-results page.
+  The extraction script's `li` branch flattened the item to `textContent` and returned before descending, so a nested anchor reached the model as bare text with no URL — 1,100 of 1,723 anchors on the Rust Wikipedia article and 11 of 11 on a DuckDuckGo results page.
+  Clicking the text was not a fallback for those: 408 of the 1,100 do not resolve to themselves under `browser_click`'s substring matcher, so there was neither a URL nor a working text handle.
+  The branch now recurses and folds its children back onto one line, so a bullet still renders as a bullet and the links inside it keep their identity.
+  Root selection used `querySelector('main, article, [role="main"], .content, #content')`, which returns the *first* match — on a page built from sibling `<article>` cards that is one card, measured at 13.7% of a DuckDuckGo results page.
+  Selection now climbs to the ancestor holding repeated sibling `article` elements, the way Readability resolves the same shape by walking to the common ancestor of its close-scoring candidates.
+  Selection tests a node's direct children rather than everything below it: at least three of them must each carry an article of their own, so an ordinary post page whose "related posts" widget is built out of `article` keeps selecting the post instead of widening to the document and taking the widget with it.
+  The tree is searched rather than climbed from the first article's ancestors, since the container is not always an ancestor of whichever article comes first — a featured card above a grid puts that article in a branch the grid does not sit under.
+  A candidate that contains another loses to it, so a feed flanked by single-article widgets selects the feed rather than the ancestor holding all three, and between candidates that do not contain one another the one with the most article-carrying children wins, so a small widget nested deeper than the feed does not beat it for being deeper.
+  A page with a `main` or `[role="main"]` landmark is unaffected, and a page with a single `article` still selects it (#6624, #6745) (@nevgenov)
+- Fix four ways the release pipeline mishandled a large changelog, all of which fired on v2026.7.31 and left the release stuck.
+  `cargo xtask release` passed the whole changelog section as the PR body, which GitHub rejects over 65,536 characters with `GraphQL: Body is too long` — the version bump committed and pushed, but no PR opened, so `tag_on_merge` never got the `<!-- release-tag: -->` marker it tags from and the release simply stopped.
+  The body is now capped with a prefix-preserving truncation (the marker sits at position 0 and the Highlights lead, so a tail cut drops only the least-important bullets), cut on a character boundary, closing a code fence the kept prefix left open, and handed to `gh` via `--body-file` rather than an argv entry.
+  `release.yml` fed the same section to `gh release create --notes-file`, where the API's own 125,000-character ceiling would have failed the job *after* the tag was already pushed; it now truncates the same way.
+  Separately, `tauri-action` was invoked with `tagName`, whose `getOrCreateRelease` path PATCHes an already-published release with whatever `releaseBody` holds — and the desktop matrix passes none, so every desktop build overwrote the release notes with an empty string.
+  That is why v2026.7.21 and v2026.7.27 both shipped with a blank body despite `create_release` writing one correctly.
+  Both `release.yml` and `release-desktop.yml` now address the release by `releaseId`, which only uploads assets and leaves the notes alone.
+  `release-notify.yml` bounded its Discord announcement by line count (`head -20`) but not by length, and a single bullet here runs past 1,800 characters, so the webhook would answer 400 `Must be 2000 or fewer in length`; it now truncates to a character budget that leaves room for the build-status block.
+  The release commit also stages `xtask/baselines/` now: the run regenerates the schema baselines just before committing, so staging `openapi.json` without them left a drifted `openapi.sha256` in the working tree that would fail `schema-check check` on every subsequent PR.
+  (#6689) (@houko)
+- Fix the two `xtask` changelog tests that run against the repo's own `CHANGELOG.md` failing on any release branch, which blocked the v2026.7.31 release PR (#6688) on a state the release flow itself creates.
+  `cargo xtask release` drains `## [Unreleased]` into the dated section it cuts, so on a `chore/bump-version-*` branch the section is empty — and `drains_the_repos_own_unreleased_section_without_tripping_the_guard` opens by asserting it is not, while `folds_into_the_repos_own_changelog` asserted a `### ` heading count that only holds when `### Changed` already exists.
+  Both now read through a helper that reconstitutes the pre-release shape by hoisting the newest dated section back into `[Unreleased]`, so the real-file coverage survives on release branches rather than being skipped there, and the subsection assertion is a delta that permits exactly the one heading the fold may legitimately create.
+  Doing that surfaced a second, older defect in the same two tests: they checked headings with `str::contains` / `str::matches`, which count substrings anywhere on a line, while the `awk` extractor they mirror anchors at column 0.
+  A curated bullet that quotes a heading in its prose — the #6628 entry says "appended its bullet to the single `## [Unreleased]` section" on an indented continuation line — therefore read as a boundary overrun and as 19 `[Unreleased]` headings.
+  Both checks are now line-anchored, matching the extractor.
+  This had never fired because the assertions had only ever run against an empty `[Unreleased]`.
+  (#6690) (@houko)
+- Fix `Sign Release Artifacts` failing every release since #6677, which shipped debug symbols as their own assets without updating the sibling-count guard that assumed one `.sha256` per platform target.
+  The guard exists to catch matrix drift in either direction and is deliberately an equality, so the four new `librefang-<target>-debug-symbols.tar.gz.sha256` files read as four extra platforms: v2026.7.31, the first release cut after #6677 landed, failed with `expected exactly 12 .sha256 siblings, got 16` after every artifact had already been built and published.
+  The two kinds of sibling are now counted separately, because only one of them is one-per-matrix-target.
+  Platform binaries keep the strict `= 12` equality that makes a dropped or added target stop the release loudly.
+  Debug symbols get a `2..4` range instead, matching how they are produced: `cli_mac` fails outright when its `.dSYM` is missing, so both macOS targets are guaranteed, while the cross-compiled `cli_linux` targets only warn when the `.dwp` is absent — a count below 2 means the macOS hard-failure path did not hold and is worth stopping for, and a count of 2 or 3 emits a warning rather than taking a release down over a diagnostic aid.
+  The manifest itself is unchanged: the download loop and `ls *.sha256` still read the full asset list, so every hash including the debug-symbols ones stays in `SHA256SUMS` and under the cosign signature.
+  (#6691) (@houko)
+- Always offer the API-key field for a provider that declares `key_required = false`, instead of hiding it.
+  The flag says whether a key is *mandatory*, not whether one is accepted: every built-in local provider (`ollama`, `vllm`, `lmstudio`, `lemonade`) declares it false, yet a self-hosted vLLM or an Ollama behind a reverse proxy answers 401 without one — and the runtime has always forwarded whatever key is stored as `Authorization: Bearer`.
+  Hiding the input made those servers impossible to configure from the dashboard even though the daemon would have used the key, and the onboarding wizard dropped a typed key on the same reasoning.
+  The provider list now also reports `key_present`, so a keyless provider that does have a key stored offers "replace" and "remove" rather than pretending none exists — `auth_status` cannot carry that, since it collapses to `not_required` either way.
+  The registry conflict error stops pointing at `?allow_overwrite=true`, a query parameter no UI surface sends, and names the endpoints that actually edit a provider (#6703, #6714) (@houko)
+- Open external links from the desktop app in the user's real browser instead of silently discarding them.
+  The Tauri window registered no new-window handler, and wry connects WebKitGTK's `create` signal — plus the WKWebView and WebView2 equivalents — only when one exists, so every `target="_blank"` anchor and `window.open()` call in the dashboard died on arrival inside the desktop app: the EveryAPI partner panel, marketplace and plugin links, the skill-workshop PR link, and the command palette's registry entries all did nothing on click, and right-clicking a link and choosing "open link" did nothing either.
+  New-window requests are now handed to the OS default handler and the in-app window is denied, with the scheme restricted to `http` / `https` / `mailto` so that a `file:` or `javascript:` target coming from agent output or a server-controlled catalogue is never forwarded to the shell (#6706, #6711) (@houko)
+- Manual schedule runs now deliver successful agent and workflow output through configured primary and fan-out targets, matching timed cron fires instead of returning output only to the API caller (#6708) (@Kvitral)
+- A task assigned to an agent now wakes that agent, instead of reaching it only when an operator had separately registered a matching `task_posted` trigger.
+  Nothing in the kernel ever created such a trigger, so delivery was entirely operator-supplied: with none declared — or with one deleted, lost, or never added for a newly onboarded worker — an addressed task sat `pending` indefinitely and no log line said so.
+  The kernel now synthesizes the wake itself as one more entry in the dispatch list, so it inherits the existing trigger lane, per-agent semaphore, per-fire timeout, ordering and cycle guard, and persists nothing: no record appears in `trigger_jobs.json` or `trigger list`, and the new `[task_board] assignee_wake` knob (default `true`, per-agent override on the manifest) fully reverts it.
+  A stored trigger that can currently fire for the assignee still owns delivery, so an operator's prompt, cooldown, session mode and workflow routing are untouched and no agent is woken twice; a trigger that is disabled or has exhausted `max_fires` is treated as a gap to fill rather than as a decision to stay silent, since a dead record is indistinguishable from a lost one and that ambiguity is what the outage was made of.
+  Only agents that `task_claim` actually reaches are woken, which leaves installations whose board is drained by an external claimer on the agent's behalf exactly as they were: withholding the tool through any of the three mechanisms the runtime honours — a `capabilities.tools` list without it, a narrowing `tool_allowlist`, or a `tool_blocklist` entry — also withholds the wake, while an agent that declares nothing at all is unrestricted and is woken.
+  Four diagnostics now cover the ways delivery can still break — an assignee that resolves to no registered agent, a wake switched off with no trigger to take over, an assignee that cannot claim, and a trigger that exists but can no longer fire.
+  `[task_board]` is also reclassified from restart-required to no-op in the config-reload plan and its documentation table: the sweeper has always re-read its three knobs on every tick, so the promised restart was never required.
+  Delivery no longer depends on the event surviving at all: the task-board sweeper — already a reconciler, since `task_reset_stuck` reacts to task state rather than to any event — gains a second rule of the same shape, waking the assignee of anything still `pending` past `[task_board] pending_grace_secs`.
+  That makes a dropped event a latency question instead of a lost task, which matters because a trigger cooldown discards events for distinct subjects rather than deferring them (#6756), and an event-driven wake can only ever be as reliable as the event.
+  The reconcile deliberately does not consult the trigger-coverage check the event path uses: a task still pending past the grace window is evidence that whatever was configured did not deliver it, whatever the configuration says.
+  It rate-limits per assignee rather than per task, since the wake prompt is drain-style, and backs off exponentially to `wake_backoff_max_secs` whenever a wake leaves the pending set unchanged, so an agent that cannot make progress is not woken on every tick. (#6744) (@nevgenov)
+- Restore the Windows test lane, which had aborted on every push to `main` since #6711 and taken `CI Gate` down with it, so for three days no PR merged with a Windows signal behind it.
+  `librefang-desktop`'s test binary links on Windows but cannot be loaded — the process dies at start with `0xc0000139` (`STATUS_ENTRYPOINT_NOT_FOUND`) — and nextest executes every test binary with `--list` to enumerate its tests, so the lane died before running a single one.
+  The crate is now excluded from that lane's nextest invocation and built there link-only instead, which keeps the Windows compile+link coverage that nothing else in CI provides while its 11 platform-independent URL/scheme tests continue to run on Ubuntu, macOS and the unit-fast lane.
+  The missing DLL export behind the abort is still unidentified, so this is a workaround carrying a note to remove it once the real cause is found.
+  A green `main` run also no longer closes an open `main-red` issue unless a Rust test lane actually ran on that commit.
+  The `changes` gate skips every Rust lane on a docs- or dependency-only push while the run still concludes `success`, which is how this one breakage came to be filed and auto-closed three times (#6716, #6721, #6729) before anyone noticed `main` had been red for days — nine of the last sixteen green `main` runs would have closed it.
+  The failure notice now names the head commit and the run URL without asserting that the commit caused the failure, because three consecutive filings told readers to revert an unrelated openrouter model-snapshot PR for a breakage introduced days earlier.
+  (#6735) (@houko)
+- Close the three provider routes that managed configuration mode left able to rewrite `config.toml`, so `LIBREFANG_CONFIG_MODE=managed` now enforces what #6717 documented rather than most of it.
+  Setting a provider key, pointing a provider at a different base URL, or switching the default provider each persisted into the deployment-owned file — `[default_model]`, `[provider_urls]`, `[provider_proxy_urls]` — and answered `200`, so an operator whose configuration comes from a ConfigMap could silently drift the running daemon away from the manifest and lose the change on the next rollout with nothing in the response to suggest anything had gone wrong.
+  Setting a provider key is refused in full rather than only at its config write, because that write is conditional on live daemon state the caller cannot see: guarding it alone would accept or refuse the same request depending on timing, having already rewritten `secrets.env` in the refusing case.
+  The operator-facing known-gaps list is corrected in the same pass — it named three files without their write sites and missed the sidecar-channel and init routes entirely, which meant anyone reading it to decide whether managed mode was a complete seal was reading a list assembled from the wrong evidence (#6737) (@houko)
+- Stop two Slack formatting defects that made long replies unreadable or invisible.
+  Runs of blank lines now collapse to the single blank line Slack uses as a paragraph separator; the Markdown converter mapped lines one-for-one, so a model that padded its answer turned a short reply into a wall of whitespace.
+  The collapse runs while fenced code is masked as a single token, so code interiors keep their own blank lines.
+  An interactive Block Kit reply longer than Slack's 3000-character per-section limit is now split across as many sections as it needs instead of being rejected wholesale and dropped with nothing but a log line, and the section count is budgeted against the 50-blocks-per-message cap so the buttons — the functional payload — are never the thing that gets dropped.
+  The plain-text path was never affected: its chunker already emitted pieces under the limit (#6741) (@houko)
+- Stop the Slack adapter leaving a permanent 👀 on messages the daemon never answers.
+  The reaction was added the moment the adapter received a message, but `dispatch_message` has roughly two dozen `return` paths above the first adapter-visible lifecycle signal — mention-only group gating, per-user and per-channel rate limits, RBAC, command policy, slash commands the bridge handles itself — and none of them was visible to the adapter, so the mark stayed on a message no agent ever read.
+  Both halves of the receipt now ride the turn lifecycle instead: 👀 on the `queued` phase, ✅ on `done`, ❌ on `error`.
+  That closes every one of those paths structurally rather than one at a time, gives a failed turn a terminal state it previously never got, and honours the daemon's `clear_done_reaction` knob on Slack for the first time.
+  Keying strictly on the triggering message's own id also deletes a "pick the first pending message in this channel" fallback that fired on every in-thread reply — the send hook looked up the thread root while the 👀 was tracked under the message's own timestamp, so the ✅ landed on an unrelated sibling, sometimes one of the leaked marks (#6741) (@houko)
+- Report a mis-declared `channel_overrides.group_trigger_patterns` entry when an agent's manifest is accepted, because the usual mistake is invisible by construction and cost a reporter hours.
+  Writing the natural `group_trigger_patterns = ["(?i)\bvivi\b"]` in a TOML basic string does not produce a word-boundary regex: `\b` is TOML's *backspace* escape, so the kernel receives `(?i)<U+0008>vivi<U+0008>`, and the regex crate accepts a bare control character as a verbatim literal.
+  The pattern therefore compiles — the bridge's existing "invalid regex" error never fires — and then matches nothing, so the agent simply never answers to its own alias in group chats and every message is dropped as `mention_only_no_mention`.
+  The new check names the offending codepoint and prescribes the fix (a TOML literal single-quoted string, or doubled backslashes), and runs at spawn, hand-role activation, on-disk hot-reload, `update_manifest` and boot-time restore from persistent storage, so an operator iterating on a broken alias sees it on the next reload rather than never.
+  The restore path is the load-bearing one: it registers a persisted agent without going through the spawn path, so on any daemon past its first run it is the only route the diagnostic could fire on at boot.
+  It warns and never rejects: an unreachable alias is a typo, and failing the spawn would turn a cosmetic mistake into a missing agent.
+  The bridge's own compile path could not serve this purpose — it is lazy, memoised per distinct pattern set, and does not consider the control-character case an error at all.
+  The channels and agent-overrides docs gain the escaping rule and the previously undocumented `group_trigger_patterns` field, and no longer claim `MentionOnly` is what an unset `group_policy` does, which #6445 made false.
+  (#6742) (@houko)
+- Make a superseded agent turn visible in the log instead of discarding it at `debug!` level, below the default filter.
+  When a newer message arrives for the same `(agent, session)` the in-flight turn is aborted and produces no reply at all, and in a group channel the error text is suppressed too, so the only symptom an operator ever saw was a bot that silently ignored them.
+  The abort key matters more than it looks: for a group the session spans the whole **channel**, not the thread, so a message from any user in any thread preempts whatever turn is running for that agent there.
+  The warning now names that mechanism and reports how long the discarded turn had been running, and the channel bridge separately records that the aborted turn emits nothing.
+  Logging only — the supersede policy itself is unchanged.
+  (#6742) (@houko)
+- Bound nested workflow runs by the inter-agent call-depth quota, which the `workflow_run` tool had been bypassing entirely.
+  Running a workflow executed it inline on the calling agent's task and each step nested a complete agent turn, but nothing counted that nesting — so an agent whose workflow step targets an agent that runs a workflow again recursed with no bound other than the wall-clock `triggers.max_workflow_secs`, long after the tokio worker's stack had run out.
+  Workflow nesting is now charged to the same `max_agent_call_depth` budget that `agent_send` hops already use, because `A --agent_send--> B --workflow--> C` stacks real agent turns exactly the way `A -> B -> C` does and one operator knob should cap both.
+  A run entered too deep is refused as a policy error before the run record is created, so a capped chain reports the quota instead of leaving an orphan `Pending` run behind.
+  Two hops between the kernel and the agent were flattening that refusal into a generic server error, so the agent was told its workflow had crashed rather than that it had hit a limit.
+  It now arrives as a permission denial, which also stops a capped agent from losing its whole turn to a repeated-failure abort.
+  The daemon and the desktop app's embedded server also raise their tokio worker stack from tokio's 2 MiB default to 8 MiB: an agent turn is a chain of very large futures and a nested turn restacks it, so overflowing it aborted the whole process — with only two workers that took the HTTP API and every cron job down together.
+  The CLI TUI's in-process kernel mode runs the same turn chain on its own long-lived runtime and on the dedicated thread that streams a turn's events, so both get the same 8 MiB stack.
+  The stack change is headroom rather than a bound, and neither change is proven to be the cause of the crash reported in #6659, whose original report is unrecoverable; the next occurrence on the larger stack is what will tell unbounded recursion apart from bounded depth with fat frames.
+  (#6743) (@houko)
+- A sub-list nested inside a list item keeps its own bullets, indented, rather than being folded into its parent's line.
+  Folding a list item's children onto one line is what lets a bullet still read as a bullet, but a nested `li` has already emitted its own `- ` by the time the outer one folds, so the whole sub-list collapsed into the parent as `- Fruits - Apple - Banana` — markers mid-sentence that read as list items, or as a numeric range on text like `- Price - 5 - 10`.
+  An `article` also now earns a blank line the way `section` and `div` already do, so entries on a feed page that carry no heading of their own stay distinct instead of running together into one block (#6624, #6745) (@nevgenov)
+- Image generation works again against OpenAI's `gpt-image-*` models.
+  The request always carried `response_format`, which that family rejects with `400 Unknown parameter`, so every generation against those models failed while DALL-E was unaffected.
+  The parameter is now sent only to models that accept it, and unrecognised model names keep the previous behaviour so third-party OpenAI-compatible endpoints are unchanged.
+  (#6750) (@houko)
+- The media integration tests no longer depend on the developer's shell lacking provider credentials.
+  With an API key exported, tests asserting the missing-key path stopped exercising it and instead made real, billable calls — one generated an mp3 through the live OpenAI TTS endpoint while asserting that no provider was configured.
+  The harness now clears every credential variable the media drivers read, and a dedicated test fails if that ever stops happening.
+  A unit test that resolved a provider before reading its input file had the same dependency and could have reached a live transcription request; its input path is now guaranteed absent.
+  (#6750) (@houko)
+- Transcription of `.mp4` and `.mov` recordings works again instead of silently returning nothing.
+  The audio track was extracted by piping the container to ffmpeg, but these formats keep their index at the end of the file and demuxing it requires seeking backwards, which a pipe cannot do — so the extraction produced a valid container carrying no audio at all, and whatever the transcription provider made of a soundless file was what the operator saw.
+  Because ffmpeg reports success in this case, neither existing check noticed.
+  The input is now staged to a scratch file so it can be seeked, and a stream that arrives without audio is rejected outright rather than uploaded.
+  `.mkv` and `.avi` were never affected, being streamable formats.
+  (#6751) (@houko)
+- A trigger's cooldown no longer discards an event because a *different* event happened a moment earlier.
+  The window was keyed on the trigger alone, so it could not tell "the same thing fired twice" from "two things happened a second apart", and the second was dropped rather than delayed — with nothing to re-announce it, since `evaluate_with_resolver` produced no match at all and `fire_count` never moved.
+  On a task board that meant a completed task's notification vanished, or worse, a posted task's wake did, which is how work went missing while the log said nothing above `debug`.
+  The window is now scoped to what the event is about — the task id for the three task-board patterns, the memory key for `MemoryUpdate` and `MemoryKeyPattern`, the agent for `AgentSpawned` and `AgentTerminated` — so two distinct subjects arriving inside one window are two windows, while a repeat of the same subject is suppressed exactly as before.
+  Patterns that name a category rather than a transition (`All`, `System`, `SystemKeyword`, `Lifecycle`, `ContentMatch`) keep the trigger-wide window they have today: they match streams whose subjects are nearly always distinct, so keying on the subject would turn "at most once per window" into "once per event" for a trigger whose bounded firehose is the point.
+  Per-subject windows live in memory and are pruned once they can no longer suppress anything, so `last_fired_at` on disk keeps meaning "when this trigger last fired"; a subject-scoped trigger therefore starts a restart with no window at all, including for a subject it fired on moments earlier, which trades an extra delivery against growing `trigger_jobs.json` by one entry per subject ever seen.
+  Worth knowing if you pair `cooldown_secs` with `max_fires` on a scoped pattern: the trigger now fires once per subject, so a burst of distinct subjects consumes the fire budget as fast as they arrive rather than at one per window, and a trigger that exhausts `max_fires` disables itself.
+  The CLI help and the trigger/config documentation described the window as per-trigger and have been corrected alongside. (#6918) (@nevgenov)
+- The public Rust channel message splitter now always consumes at least one complete character, including when an incomplete HTML entity begins a chunk or the byte limit falls inside a multi-byte UTF-8 character.
+  Custom Rust channel consumers can no longer enter a non-progressing split loop on those inputs (#6777) (@houko)
+- Proactive-memory extraction now moves its prompt-size cutoff to a valid UTF-8
+  boundary before searching for a newline or truncating. Long conversations that
+  place a CJK character, emoji, or other multi-byte character across the 8,000-byte
+  boundary no longer abort automatic memory extraction with a slicing panic
+  (#6778) (@houko)
+- Session stream garbage collection now retains broadcast channels while a turn forwarder is active, so reconnecting and late-attaching clients continue receiving in-flight events instead of joining an orphan replacement channel (#6785) (@houko)
+- Agent identity persistence now remains blocked after an existing registry file fails to load, preserving recoverable on-disk mappings instead of replacing them with an empty fallback snapshot on the next mutation (#6787) (@houko)
+- Sticky assistant routing now reads the same sender- and thread-scoped cache keys it writes, while `explicit_only` channels remain on their configured agent when no route has been explicitly cached instead of invoking classification (#6788) (@houko)
+- Generate release articles with working CHANGELOG anchors, safe validated tag URLs, fence-aware section extraction, and opt-in replacement of existing hand-edited output. (@houko)
+- Make the live channel-progress smoke fail when the kernel emits no tool event, supervise and clean up its foreground daemon reliably, and safely construct its dedicated test-agent manifest. (@houko)
+- Repair the Go SDK streaming example so it compiles, validates dynamic agent IDs instead of panicking, and reports stream error events instead of silently succeeding. (@houko)
+- Package the real `librefang` Python module tree in legacy setuptools builds, with distribution name and version metadata kept in sync with `pyproject.toml`. (@houko)
+- Keep the website GitHub statistics section stable when optional translations change, and cancel its in-flight statistics requests when the section unmounts. (@houko)
+- Restore registry responses after an empty or expired worker cache by routing inline refreshes through the repository synchronization path instead of calling a removed function. (@houko)
+- Restore `xtask` builds on the workspace Rust 1.94.1 MSRV by keeping its `sysinfo` dependency on the compatible 0.38 release line. (@houko)
+- Make the `xtask` license fallback inspect the full Rust dependency graph and evaluate SPDX AND/OR expressions correctly instead of silently skipping third-party crates or matching license-name substrings. (@houko)
+- Keep Dashboard string-map edits from replaying parent change callbacks under React Strict Mode. (#6799) (@houko)
+- Preserve Dashboard struct-list expansion and focus while editing valid JSON values. (#6800) (@houko)
+- Keep Dashboard confirmation dialogs open until asynchronous actions succeed, with retry support after failures. (#6801) (@houko)
+- Preserve large resource quotas when agent manifests pass through the Dashboard visual editor. (#6802) (@houko)
+- Prevent an unmounting Dashboard drawer from closing a newer drawer that has taken over the shared slot. (#6803) (@houko)
+- Keep empty and incomplete number-map edits as local drafts until they become valid numbers, and restore the last committed value when an invalid draft loses focus. (@TechWizard9999)
+- Keep an empty structured-list textarea as an uncommitted JSON draft and restore its last valid item on blur instead of silently replacing that item with an empty object. (@TechWizard9999)
+- Enforce `xtask license-check --deny` against Rust dependency metadata even when cargo-deny is installed, while retaining the repository's cargo-deny policy as the first gate (#6807) (@houko)
+- Make `xtask license-check --deny` match denied SPDX license ids case-insensitively.
+  The denied-list comparison used exact string equality against the canonical SPDX id, so a custom `--deny` entry with different casing than the canonical form (e.g. `gpl-3.0-only` vs `GPL-3.0-only`) silently failed to match and let the license through (#6807) (@houko)
+- Enforce denied SPDX licenses for web dependencies from pnpm's JSON report, including Commons Clause rejection and fail-closed command or report errors, instead of printing a truncated report and always succeeding (#6808) (@houko)
+- Stop RL exporter tests from mutating the process-wide environment while exercising secret indirection and the public SSRF dispatch. (@houko)
+  The tests previously called `set_var` and `remove_var` while Rust's test harness was free to run other cases on parallel threads, making outcomes dependent on shared process state and creating a future Rust 2024 safety blocker.
+  Production still resolves configured secret names through `std::env::var`; the crate-private dispatcher now accepts the lookup function so tests can supply deterministic values and missing-variable errors without touching the real environment.
+- Reject non-object `params` on known Python sidecar commands as a recoverable protocol error. (@houko)
+  Truthy arrays, strings, booleans, or numbers previously escaped `parse_command` as `AttributeError`, killed the reader task, and left the sidecar waiting forever instead of reporting the malformed frame and processing the next command.
+  Unknown future command methods retain their raw parameter shape for forward compatibility.
+- Stop and restart Python sidecars when their command reader encounters an unexpected fatal error. (@houko)
+  An exception from the stdin source, parser, or protocol-error emitter previously killed only the reader task while the main runtime waited forever, leaving a live process that could no longer receive commands or shutdown.
+  The runtime now logs the traceback, signals cleanup, raises a cause-preserving `ReaderCrashed`, and maps it to a nonzero stdio-process exit so the daemon supervisor can recover the adapter.
+- Tie Fly deployment progress to the real request lifecycle instead of a cosmetic timer. (@houko)
+  The deploy page previously marked one setup step complete every 1.5 seconds even while `/api/deploy` was still pending, and left that interval running when the form unmounted.
+  Pending deployments now show only the request as active, mark completion only after a successful response, and abort plus ignore late results when the form unmounts.
+- Always close generated Python SDK streaming responses when iteration ends. (@houko)
+  The SSE generator previously leaked its HTTP response when it returned on `[DONE]`, the caller stopped iteration early, or a read or decode operation raised before the loop reached the trailing `close()` call.
+  Response cleanup now lives in `finally`, covering normal EOF, protocol completion, generator close, and exceptional exits while preserving the original event and error semantics.
+- Apply a bounded timeout to every generated Python SDK HTTP request.
+  Both ordinary API calls and SSE stream setup previously called `urlopen` without a timeout, leaving connection establishment and stalled socket reads without an inactivity bound.
+  Clients now use a 30-second default for both paths and accept a constructor-level timeout override for deployments that need a different network budget.
+  A slow-to-respond server now raises the SDK's own `LibreFangError` instead of a bare `TimeoutError`, keeping the new failure mode inside the same error contract callers already rely on for connection and HTTP errors (#6823) (@houko)
+- Wrap generated Python SDK connection failures in `LibreFangError`. (@houko)
+  Both ordinary and streaming requests previously leaked `urllib.error.URLError` for failures such as DNS resolution errors, refused connections, and connection timeouts.
+  Callers can now handle HTTP and connection-level API failures through the SDK's documented error type, with connection failures represented by status `0` and an empty response body.
+- Preserve split UTF-8 characters in generated Python SDK streams. (@houko)
+  The SSE reader previously decoded each 4096-byte network chunk independently, so a multibyte character split across reads raised `UnicodeDecodeError` and aborted the stream.
+  Streaming now buffers raw bytes and decodes only complete SSE lines, making text decoding independent of transport chunk boundaries.
+- Report generated Go SDK stream body encoding failures. (@houko)
+  The streaming helper previously discarded `json.Marshal` errors and continued with an empty request body, hiding unsupported values from callers.
+  It now emits a status-`0` error event and closes the stream before constructing or sending an HTTP request.
+- Handle generated Go SDK stream request-construction failures. (@houko)
+  The streaming helper previously ignored `http.NewRequest` errors and dereferenced a nil request, allowing malformed methods or URLs to panic its goroutine and terminate the process.
+  It now emits a status-`0` error event and closes the stream before accessing the invalid request.
+- Decode email bodies with their declared MIME charset. (@houko)
+  The IMAP email helper previously forced UTF-8 for multipart plain text, HTML fallback, and non-multipart bodies, silently dropping bytes from common encodings such as ISO-8859-1 and GB2312.
+  Each body part now uses its `charset` parameter while retaining UTF-8 as the fallback for missing or unknown charset labels.
+- Decode complete RFC 2047 email subjects. (@houko)
+  The IMAP email helper previously decoded only the first subject segment, truncating mixed plain/encoded subjects and subjects composed of multiple encoded words.
+  It now joins every decoded segment in order and retains a UTF-8 fallback for unknown charset labels.
+- Guarantee IMAP session cleanup in the email reader. (@houko)
+  The helper previously logged out only on selected success and handled-error paths, leaking the connection when an unexpected exception occurred after login.
+  It now closes every constructed IMAP session through a non-masking cleanup path, including login failures and all post-login exits.
+- Validate IMAP FETCH responses before parsing email bytes. (@houko)
+  The email helper previously indexed the server response without checking its shape, producing opaque index/type errors or passing flag-only data into the MIME parser.
+  Empty, truncated, non-tuple, and non-byte responses now fail with a clear malformed-response diagnostic.
+- Escape sender values in IMAP email searches. (@houko)
+  The helper previously interpolated the sender directly into a quoted SEARCH criterion, allowing quotes, backslashes, or line controls to alter or break the command structure.
+  Quotes and backslashes are now escaped as IMAP quoted-string data, while CR, LF, and NUL are rejected before opening a connection.
+- Surface generated Rust SDK stream transport failures. (@houko)
+  The SSE reader previously stopped silently when a response body chunk returned an error, making truncated connections indistinguishable from clean stream completion.
+  It now emits a status-`0` `stream error` event before closing the channel, while preserving any valid events received before the failure.
+- Encode generated Rust SDK path parameters as URL segments. (@houko)
+  Generated endpoints previously interpolated path values directly, so slashes, query/fragment delimiters, whitespace, and Unicode could change the request target or address a different resource.
+  URLs are now assembled with `Url::path_segments_mut`, preserving base-path prefixes and percent-encoding each parameter as one segment; literal `.` and `..` segments fail closed instead of being normalized away.
+- Bound generated Rust SDK stream buffering to 256 events. (@houko)
+  Streaming previously used Tokio's unbounded channel, allowing a fast server and stalled consumer to grow memory without limit.
+  The producer now awaits a bounded channel, applying transport backpressure and stopping promptly when the receiver is dropped. Stream methods consequently return `tokio::sync::mpsc::Receiver<Value>`; callers with explicit `UnboundedReceiver` annotations must update the annotation, while normal inferred `.recv()` usage is unchanged.
+- Add default network timeouts to the generated Rust SDK.
+  The default reqwest client previously had no connect timeout, and ordinary API requests could wait indefinitely for a server that accepted a connection but never responded.
+  All requests now use a 10-second connect timeout, while non-streaming calls additionally use a 60-second total timeout; SSE bodies remain exempt from the total deadline so long-lived streams continue normally (#6836) (@houko)
+- Fixed the generated JavaScript SDK dropping a final server-sent event when a stream ended without a trailing newline, the same defect class fixed for the Rust and Python SDKs in this release.
+  `_stream` split incoming bytes on `\n` and only processed complete lines, so a clean EOF right after the last `data: ` line left it sitting unprocessed in the leftover buffer (#6837) (@houko)
+- Fixed the generated Python SDK dropping a final server-sent event when a stream ended without a trailing newline, the same defect class fixed for the Rust SDK in this release.
+  `_stream` split incoming bytes on `\n` and only processed complete lines, so a clean EOF right after the last `data: ` line left it sitting unprocessed in the leftover buffer.
+  The trailing-buffer flush now decodes as strictly as the per-line decode in the main loop above it, instead of silently replacing truncated multi-byte UTF-8 with a `�` placeholder and yielding a `{"raw": ...}` event that hid the corruption (#6837) (@houko)
+- Fixed the Rust SDK dropping a final server-sent event when a stream ended without a trailing newline. (#6837) (@houko)
+- Added a Rust SDK constructor that accepts a configured `reqwest::Client`, enabling authenticated requests and other custom HTTP settings across all generated resources. (@houko)
+- Updated the Rust SDK basic example to report unexpected API response shapes instead of silently displaying zero items. (@houko)
+- Made the Rust SDK basic example honor `LIBREFANG_URL`, while retaining the local daemon URL as its default. (@houko)
+- Reduced the Rust SDK's Tokio feature set to the runtime, synchronization, and macro capabilities it actually uses, avoiding unnecessary downstream feature unification. (@houko)
+- Made the Rust SDK's reqwest TLS backend explicit and selectable: existing users retain default TLS, while downstream crates can choose rustls or disable TLS features. (@houko)
+- Aligned the Rust SDK with the workspace's thiserror 2 dependency, avoiding duplicate major versions in monorepo builds. (@houko)
+- Removed Tokio's multi-thread scheduler from the Rust sidecar SDK's published dependency features and moved its echo example to the current-thread runtime. (@houko)
+- Added an explicit crates.io package allowlist for the Rust sidecar SDK so unrelated local files cannot enter published archives. (@houko)
+- Declared the Rust sidecar SDK's tested serde, serde_json, and Tokio version floors instead of accepting untested early 1.x releases. (@houko)
+- Simplified the Rust sidecar SDK quick-start imports so the minimal adapter example lists only the APIs it uses. (@houko)
+- **Breaking:** Aligned Rust sidecar poll builder option IDs with the kernel's `u8` wire contract, preventing adapters from constructing out-of-range poll payloads. The Telegram sidecar now rejects out-of-range upstream option IDs at its translation boundary. (@houko)
+- Documented the Rust sidecar SDK's deliberate fail-closed handling of missing required command fields and its compatibility difference from the legacy Python parser. (@houko)
+- Avoided cloning the full JSON parameter tree while parsing known Rust sidecar commands. (@houko)
+- Bounded Telegram streaming state with stale-entry eviction, concurrent-stream and per-stream buffer caps, and graceful-shutdown cleanup. (@houko)
+- Rejected malformed Telegram update payloads that omit required response, update, or message identity fields instead of silently defaulting their IDs. (@houko)
+- Warned in the Telegram dashboard schema that leaving `ALLOWED_USERS` empty permits all users. (@houko)
+- Prevented Telegram's degenerate HTML chunking path from emitting chunks above the configured UTF-16 limit. (@houko)
+- Escaped raw HTML metacharacters in Telegram sanitizer text nodes while preserving already-valid HTML entities. (@houko)
+- Fixed the Python sidecar's Telegram HTML sanitizer emitting invalid crossed tags (e.g. `<b><i>x</b>` → `<b><i>x</b></i>`) when a closing tag matched an entry below the top of the open-tag stack.
+  The sanitizer now closes every tag above (and including) the match, innermost first, matching the Rust sanitizer's stack-drain behavior. (#6856) (@houko)
+- Prevented self-closing Telegram HTML tags from being emitted as literal `<tag/>` markup in the Python sidecar's sanitizer, matching the Rust sanitizer's fix.
+  Telegram's HTML subset has no self-closing-tag syntax, so a literal `<tag/>` risked either an "Unclosed start tag" error from the Bot API or the tag staying open for the rest of the message; self-closing input is now rebuilt as a balanced `<tag></tag>` pair instead. (#6856) (@houko)
+- Prevented self-closing Telegram HTML tags from wrapping all following text during sanitization. (#6856) (@houko)
+- Rejected Telegram location payloads with missing or non-numeric coordinates instead of silently sending `(0, 0)`. (@houko)
+- Prevented self-closing and void HTML tags from leaking into Telegram chunk carry state. (@houko)
+- Enforced Telegram's UTF-16 chunk limit against the actual generated HTML close-tag suffix instead of relying only on a fixed reserve. (#6859) (@houko)
+- Rendered every adjacent single-star italic run in Telegram messages instead of leaving alternate runs as literal Markdown. (@houko)
+- Preserved Telegram HTML tags containing `>` inside quoted attribute values instead of truncating and corrupting them. (@houko)
+- Added a complete Markdown-to-sanitized-and-chunked Telegram formatting helper and routed text sends through it. (@houko)
+- Kept rendering content after an unclosed Telegram Markdown code fence instead of swallowing the remainder into one code block. (@houko)
+- Restored Telegram inline-code placeholders in one linear pass instead of repeatedly rescanning and reallocating the whole message. (@houko)
+- Honored delta-seconds from Telegram HTTP `Retry-After` headers in the Python sidecar's `sendMessage` / multipart-upload retry paths before falling back to the JSON body or default backoff, matching the Rust adapter's fix.
+  `_extract_retry_after` previously only read `parameters.retry_after` from the JSON body, so a server that only set the HTTP header (and omitted the JSON field) fell straight through to the 2s default instead of honoring the server's requested delay.
+  Also capped the retry sleep at `MAX_RETRY_AFTER_SECS` (300s): the Python retry paths had no cap at all, so a flood-wait response with an extreme `retry_after` would have slept for that entire duration instead of skipping the retry, unlike the Rust adapter. (#6866) (@houko)
+- Honored delta-seconds from Telegram HTTP `Retry-After` headers before falling back to the JSON body or default backoff. (#6866) (@houko)
+- Returned recoverable Telegram API errors if a retry loop ever exhausts instead of panicking and killing the sidecar. (#6867) (@houko)
+- Scaled Telegram multipart upload timeouts with payload size so valid large media can complete on slower links. (#6868) (@houko)
+- Accepted Telegram message IDs encoded as JSON integers as well as decimal strings for edit and delete commands. (#6869) (@houko)
+- Rejected malformed non-object Telegram media-group entries instead of silently dropping them from the outgoing group.
+  Also rejected a media-group item missing its required `url` field instead of sending Telegram an empty `media` value. (#6870) (@houko)
+- Dropped Telegram callback events without chat context instead of routing them into an empty synthetic channel. (#6871) (@houko)
+- Detected Telegram Ogg/Opus voice uploads from the Ogg page's actual first-packet offset instead of assuming a fixed header layout. (#6872) (@houko)
+- Logged Telegram `getFile` failures before falling back to media placeholders, making persistent media degradation visible to operators (#6873) (@houko)
+- Reported invalid Telegram channel and reaction message IDs consistently across typing, reaction, interactive, streaming, and ordinary send commands. (#6874) (@houko)
+- Normalized emoji variation selectors consistently before mapping Telegram progress reactions. (#6875) (@houko)
+- Preserved typed JSON decoding errors in the Telegram sidecar error source chain for diagnostics and downcasting. (#6876) (@houko)
+- Removed the unnecessary `T: Default` bound from Telegram API response envelopes while preserving their default field values. (#6877) (@houko)
+- Added the registry version required for publishing the Telegram sidecar's local SDK dependency once that SDK is available on crates.io. (#6878) (@houko)
+- Expanded Telegram schema regressions to cover the type and visibility of every dashboard configuration field. (#6879) (@houko)
+- Removed a per-link allocation from Telegram href scheme validation while preserving case-insensitive and UTF-8-safe checks. (#6881) (@houko)
+- Grouped consecutive Telegram Markdown quote lines into one multi-line blockquote, matching the Python adapter. (#6882) (@houko)
+- Logged Telegram typing-action and reaction-update API failures while preserving their best-effort command semantics. (#6883) (@houko)
+- Made Telegram chunk progress derive solely from the newly selected input, preventing formatting carry from skewing boundary consumption. (#6885) (@houko)
+- Logged dropped Telegram stream deltas and stream-end events whose stream ID has no active state, while preserving best-effort handling. (#6886) (@houko)
+- Rejected malformed Telegram poll options and missing or out-of-range quiz answers before issuing a Bot API request.
+  Also enforced the Bot API's question, option, and explanation length bounds locally so an oversize poll fails fast instead of a 400 from Telegram. (#6887) (@houko)
+- Logged best-effort Telegram callback acknowledgment failures with control-safe callback and error details (#6891) (@houko)
+- Fixed the `librefang-rl-export` test call sites that still passed `&Value` to `redact_metadata` after it became by-value, which broke `cargo check --all-targets` on the aarch64 lane and blocked every open PR behind a red CI Gate. (#6896) (@houko)
+- Harden the discussion-to-issue and weekly-report workflows against partial failures and unsafe assumptions.
+  The discussion backfill now serializes through a concurrency group, bounds every job with a timeout, and records per-discussion failures instead of continuing past them silently.
+  The manual `/to-issue` command now requires an exact token match instead of a substring match, so a comment that merely contains that text can no longer trigger a promotion.
+  The weekly report now fails closed on any command error, resolves the repository from `github.repository` instead of a hardcoded name, and surfaces Discord delivery failures instead of swallowing them (#6904) (@houko)
+- Warn about duplicate Dashboard map keys and preserve compact struct-list JSON drafts until blur. (#6906) (@houko)
+- Require approval before unrecognized channel senders can use network or tool-discovery capabilities. (#6908) (@houko)
+- Simplify canonical agent identity registration and remove silent mutex-poison recovery. (#6910) (@houko)
+- Proactive-memory extraction now keeps its kernel-handle slot usable when a thread panics while holding the lock, instead of silently ignoring all later handle reads and updates.
+  Conversation prompt assembly also uses a preallocated buffer and writes each message directly, avoiding a temporary allocation per turn.
+  (#6911) (@houko)
+- Link understanding now compiles its URL extraction pattern once and shares it across messages, avoiding repeated regex parsing and allocation on the message processing path. (#6912) (@houko)
+- Canvas sanitization now enforces its configured byte limit before appending each output fragment, preventing entity escaping from temporarily growing a rejected document several times beyond the limit. (#6913) (@houko)
+- The dashboard agent editor now blocks periodic schedules without a cron expression and JSON-schema response formats whose schemas are empty, malformed, or cannot be represented faithfully in TOML.
+  Validation errors automatically open their sections and are exposed to assistive technology.
+  It also removes a redundant schedule parsing branch, clears duplicate tag submissions, and gives the stream-thinking toggle an accessible name.
+  (#6914) (@houko)
+- Release changelog generation now fails closed when git or GitHub metadata is incomplete, bounds external commands, rejects model-generated section headings, preserves the Unreleased section on a first release, and reuses compiled title patterns. (#6915) (@houko)
+- Repository automation now preserves devcontainer build failures, cancels only superseded ignored-test PR runs, and pins first-party actions in the supply-chain audit. (#6916) (@houko)
+- Session repair now removes prompt-injection markers after international text without corrupting Unicode byte boundaries. (#6917) (@houko)
+- Harden trajectory export by using the existing audited SHA-256 dependency, preserving hexadecimal identifiers during blob redaction, respecting workspace path-component boundaries, and surfacing JSON serialization failures (#6920) (@houko)
+- Reuse stable session-scoped files when loading inline history images, move their filesystem work off Tokio worker threads, keep empty-session response fields consistent, localize malformed session IDs, and enforce the documented 100 KiB tool-result cap in UTF-8 bytes (#6921) (@houko)
+- Closed two holes in the AI-attribution guards that between them let the harness footer reach 285 PRs and issues unchallenged.
+  Both layers matched only the "with" spelling of the generated-by line while the footer uses "by", so every check in front of it reported clean; both now match either verb plus the footer's own link-and-host shape, which leaves a genuine claude.ai artifact link alone.
+  Nothing inspected a PR body at all — the existing rule reads only `git commit -m`, and the git-side hook cannot see a body that never enters a commit — so `gh pr`, `gh issue` and `gh release` bodies are now checked too, reading the file behind `--body-file` rather than only inline flags, since the convention mandates the file form.
+  A third defect surfaced while pinning the corpus: the Python predicate required a space inside the product name where the shell hook allowed none, so two variants the shell hook's own corpus lists as must-block were waved through one layer up.
+  `check-bash-rules.py` decides every PreToolUse verdict and had no test of any kind, which is how a one-word gap survived; it now has a mutation-checked corpus wired into the `githook-tests` CI job (#6936) (@houko)
+- Bound the rendered MCP summary cache, which grew one entry per distinct allowlist combination for the lifetime of the daemon.
+  Agent manifests control the allowlist, so a caller cycling through one-off combinations (or stale generations left behind by config reloads) could grow the cache without limit.
+  The cache now caps at 256 distinct entries and clears wholesale before admitting a new key past that cap, while preserving current-generation cache hits and rendered summary content (#6939) (@houko)
+- `atomic_write` fsynced the staged temp file before the rename but never synced the containing directory afterward, so the rename itself was not guaranteed durable.
+  A crash between the rename syscall and the next unrelated fsync of that directory could still lose the update on some filesystems, even though the write looked atomic from the caller's side.
+  On Unix, the parent directory is now fsynced after the rename so the new directory entry survives a crash (#6942) (@houko)
+- Secret writes to `secrets.env` could report success while a staging-file `fsync` failure went unnoticed, or leave a 0600 secret-bearing staging file behind after a failed write or rename.
+  The staging file now propagates `fsync` errors instead of discarding them, gets removed on any write or rename failure, and the parent directory is fsynced after the atomic rename on Unix so a completed write survives a crash immediately afterward (#6944) (@houko)
+- Sidecar config writes used `fs::write` for the staging file, which never fsyncs, so a crash between the write and the rename could leave the renamed file pointing at stale or truncated data, and a rename failure left the staging file behind instead of being cleaned up.
+  The staging file is now opened with `create_new`, fsynced before the rename, removed on any write or rename failure, and the parent directory is fsynced after a successful rename on Unix so a completed write survives a crash immediately afterward (#6945) (@houko)
+- Skill secret writes staged to a fixed `.tmp` sibling name, so concurrent writers to the same `secrets.env` could clobber each other's staging file, and a write or sync failure left that 0600 secret-bearing staging file behind on disk.
+  The staging file now gets a name unique per process and call, is removed on any write or sync failure, and the parent directory is fsynced after the atomic rename on Unix so a completed write survives a crash immediately afterward (#6947) (@houko)
+- Cron script TOML writes opened their staging file with `File::create`, which truncates and silently reuses an existing file of the same name instead of failing loudly on a staging-name collision.
+  The staging file is now opened with `create_new` so a collision surfaces as an error rather than being silently overwritten, and the parent directory is fsynced after the atomic rename on Unix so a completed write survives a crash immediately afterward (#6948) (@houko)
+- Memory consolidation and the per-user spend ranking used `.filter_map(|r| r.ok()).collect()` over their SQLite row iterators, which silently dropped any row that failed to decode instead of surfacing the failure.
+  A corrupted `agent_id` could make consolidation skip a tenant's memories with no error, and a corrupted usage row could make a user vanish from the spend ranking rather than showing up as a failed query.
+  Both call sites now collect into `rusqlite::Result<Vec<_>>` and propagate the decode error (#6951) (@houko)
+- Paginate the GitHub API queries in the issue-inactive and issue-pr-link workflows, which previously only read the first page of results.
+  A repository with more than 100 open assigned issues could skip inactive-issue reminders for issues past the first page, and a repository with more than 100 open pull requests could have `has-pr` incorrectly stripped from an issue that a later-page PR still linked (#6959) (@houko)
+- Restore Vite's default dev-server proxy error logging, which a custom logger and a set of no-op `error` handlers on the `/api` proxy, its outgoing request, and its incoming response were silently swallowing.
+  A backend that was down or unreachable during `npm run dev` produced no diagnostic output at all, making the failure look like a hang instead of a connection error.
+  The WebSocket (`ws: true`) and five-minute proxy timeout behavior are unchanged (#6965) (@houko)
+- The audit trail's boot-time integrity check verified as intact even when a row failed to decode from SQLite, because the loader silently skipped the malformed row instead of treating the load as incomplete.
+  `AuditLog::with_db` now records the first load error it hits — a bad connection, a failed query, or a row that fails to decode — and `verify_integrity` fails closed whenever one is present, so a partially loaded chain never reports as verified (#6968) (@houko)
+- Fixed a race in `CronScheduler::add_job` where concurrent creators could each pass the global and per-agent job-limit checks before any of them inserted, letting the total job count exceed the configured cap.
+  Capacity checks, validation, and insertion are now serialized on a dedicated lock so the whole add sequence is atomic (#6970) (@houko)
+- `max_content_chars` now bounds the link table's opening line along with its entries, so the extraction stays inside the ceiling an operator set rather than overshooting it by that line's length.
+  The budget summed the entries and stopped there, but the rendered block also opens with a line naming the marker form and the base origin, and that line reaches the model with the entries — 50,093 characters against a 50,000 cap on the Rust Wikipedia article, the 93 being that line for a 24-character origin.
+  The test could not have caught it: it re-derived the table's cost in its own port and asserted against that same derivation, so the budget and the assertion agreed by construction whatever the renderer did.
+  Every ported test in this module now asserts that the template still contains the rule it models, since a port is only evidence about the script while the two agree — and nothing else would have noticed the script and its port drifting apart.
+  It now asserts against what `render_page_body` actually produces, which is the string that reaches the model (#6624, #6973) (@nevgenov)
+- CLI commands that rewrite `config.toml`, channel configs, MCP server entries, and ChatGPT OAuth secrets used a plain truncating `fs::write`, so a crash or kill mid-write could leave a corrupt or empty file behind.
+  These call sites now go through a shared `durable_atomic_write` helper that stages content in a unique sibling file, fsyncs it, and atomically replaces the target via `rename` on Unix or `MoveFileExW` on Windows, fsyncing the parent directory afterward on Unix so the replacement survives a crash.
+  New secret files are created at 0600 and an existing file's permissions are now preserved exactly, including bits a restrictive process umask would otherwise silently strip from the creation mode (#6974) (@houko)
+- The MCP migrator wrote synthesized `[[mcp_servers]]` configuration with a truncating write, so a crash or kill could leave `config.toml` empty or partial.
+  The config is now staged, fsynced, and atomically published; existing Unix permissions are preserved, newly created config files use mode 0600, parent-directory sync failures after a successful publish are logged without misreporting the migration as skipped, and Windows publishes with write-through semantics. (#6975) (@houko)
+- Serialized local skill installs (`POST /api/skills/install`) behind the same per-skill file lock already used by evolve and uninstall.
+  Previously the handler checked destination existence, then copied the skill directory outside any lock, so two concurrent installs of the same skill could both pass the existence check and race to write into the same directory, and a failed loser's cleanup (`remove_dir_all`) could delete a winner's just-installed files.
+  The existence check now happens after the lock is acquired, and cleanup on a failed copy only ever removes the failed copier's own attempt (#6977) (@houko)
+- Add a global React Query `MutationCache` error fallback so a rejected mutation without its own `onError` handler now surfaces a localized toast instead of failing silently.
+  Mutations that already register a mutation-specific `onError` are left untouched to avoid duplicate feedback (#6978) (@houko)
+- The cron scheduler's final persistence attempt during kernel shutdown discarded its result with `let _ = …`, so a failed flush of execution state (a full disk, an unwritable data dir) left no trace anywhere.
+  `run_cron_scheduler_loop` now logs a structured `warn!` with the underlying I/O error when the shutdown-time persist fails, while still letting shutdown proceed (#6979) (@houko)
+- `PATCH /api/memory/config` read and wrote `config.toml` with untorn but non-atomic `std::fs::write`, so a crash mid-write could leave the file truncated, and two concurrent dashboard saves could interleave a read and a write and silently revert each other's change.
+  The managed-mode guard now runs before the file is touched, the full read-modify-write-reload transaction is serialized under the shared config write lock, the read moved off the blocking thread, and the write goes through the durable atomic writer (temp file, fsync, rename, directory fsync) on the blocking pool (#6982) (@houko)
+- Registry content creation raced on the no-overwrite check: two concurrent `POST /api/registry/content/{type}` calls for the same identifier could both observe an absent file and each write, silently discarding whichever write lost.
+  The existence check and the write are now serialized under the same `config_write_lock` used by the other config-mutating endpoints, and the write itself goes through the fsync-based atomic writer instead of a plain `fs::write`.
+  A rejected provider definition is now rolled back to its prior contents (rather than merely deleted), so a failed overwrite of an existing provider no longer leaves it missing (#6984) (@houko)
+- `GET /api/sessions` ran its `count_sessions` and `list_sessions_paginated` SQLite calls directly on the async handler, so a large or contended sessions table could stall the Tokio worker thread and delay every other request being served by it.
+  Both calls now execute together on `tokio::task::spawn_blocking`, and a query or blocking-task failure is now logged server-side instead of being silently discarded (#6986) (@houko)
+- `POST /api/init` checked and wrote `config.toml` with unsynchronized blocking `std::fs` calls directly on the async handler, so two concurrent requests could race past the existence check and one write could clobber the other, and every call blocked an async worker thread on disk I/O.
+  The existence check now uses async metadata, the write path serializes on the same `config_write_lock` used by the other config-mutating routes and rechecks existence after acquiring it, and directory creation plus the atomic config write both run on Tokio's blocking pool (#6988) (@houko)
+- Added the five error-message translations missing from the Japanese Fluent locale (an agent invalid-sort key and four webhook error keys), preserving every Fluent interpolation variable used by the English source.
+  Added a regression test asserting the Japanese locale covers every English error key so a newly introduced key can no longer ship without a translation (#6998) (@houko)
+- Restored missing diacritics and inverted punctuation across the Spanish error-message locale (`válido`, `sesión`, `configuración`, `¿agente no encontrado?`, and similar), and corrected a few literal, unnatural phrasings alongside unit formatting for size limits.
+  Added regression assertions for representative accented translations so a future edit cannot silently strip them again (#6999) (@houko)
+- Restored missing diacritics across the French error-message locale (`déjà`, `échec`, `création`, `déclencheur`, and similar), and corrected unit-abbreviation typography for size limits.
+  Added regression assertions for representative accented translations so a future edit cannot silently strip them again (#7000) (@houko)
+- Proactive-memory lock recovery from a poisoned state is now logged for the runtime config lock and the decay/cleanup/counter-prune maintenance locks, instead of recovering silently.
+  Config reads and writes, and background maintenance scheduling, remain usable after recovery (#7003) (@houko)
+- Channel agent-router lock recovery from a poisoned state is now logged for both the binding list and the broadcast configuration, instead of recovering silently.
+  Routing and broadcast resolution both remain usable after recovery (#7004) (@houko)
+- A2A task-store lock recovery from a poisoned state is now logged for both the in-memory task map and the backing SQLite connection, instead of recovering silently.
+  Task loading, persistence, lookup, and mutation all remain usable after recovery (#7006) (@houko)
+- Audit-log lock recovery from a poisoned state is now logged with the specific state involved — entries, tip, chain anchor, or load-error — instead of recovering silently across every accessor.
+  Recording, verification, and retention all continue to operate correctly after recovery, with the hash chain's integrity preserved (#7007) (@houko)
+- Command lane read/write lock recovery from a poisoned state is now logged with the affected lane, instead of recovering silently.
+  The lock's poison flag is cleared once the recovered state has been read out, so a single panic produces one diagnostic log line rather than a permanent per-access warning for the rest of the process (#7013) (@houko)
+- Hand activation now logs when the activation mutex recovers from a poisoned lock, instead of recovering silently.
+  The mutex only serializes the check-and-insert critical section and guards no data of its own, so recovering via `into_inner()` was already safe — the gap was visibility into a prior panic, not correctness.
+  The recovery path also clears the mutex's poison flag once the inner state has been read out, so a single panic produces one diagnostic log line rather than a permanent per-call warning for the rest of the process, matching the fix already applied to `CommandQueue`'s locks (#7013).
+  This brings `activate_with_id` in line with the existing `persist_lock` poison-recovery logging (#7028) (@houko)
+- Recover the agent context cache after a mutex poisoning event instead of permanently disabling it.
+  `get_cached` and `store_cached` used to give up silently once the lock was ever poisoned, which meant every future turn served no cached `context.md` and every write became a no-op for the remaining life of the process.
+  The cache now recovers the poisoned guard and logs a warning so the corrupted synchronization state stays observable (#7029) (@houko)
+- Recovered the checkpoint snapshot concurrency counter after mutex poisoning instead of panicking at snapshot entry or silently skipping the decrement in the cleanup guard.
+  A panic while the counter lock was held used to either abort the current snapshot attempt outright or leave the permit accounting off by one forever, since the old cleanup path only decremented on `Ok`.
+  The lock is now recovered via `into_inner()` and the poison flag cleared so the mutex stops re-poisoning every later lock attempt, and a regression test exercises the poison-then-recover-then-release sequence (#7030) (@houko)
+- The stuck-task reset sweep silently dropped any `task_queue` row it could not decode from SQLite, so a single corrupt row (e.g. a non-numeric `retry_count`) caused the rest of that sweep's stuck tasks to be skipped with no error surfaced to the caller.
+  `task_reset_stuck` now decodes the full candidate set before applying any reset update, so a row decode failure fails the sweep closed instead of silently reducing its coverage (#7031) (@houko)
+- Session search (`SessionStore::search_sessions` / `search_sessions_paginated`) now propagates a row-decode failure from `sessions_fts` as an error instead of silently dropping the corrupt row and returning a partial result set.
+  A single malformed row previously vanished from search results without a trace; the same failure is now surfaced to the caller so the underlying corruption gets noticed and investigated (#7032) (@houko)
+- Group roster storage (`RosterStore::upsert`, `members`, `remove_member`, `member_count`) swallowed every SQLite pool-exhaustion and row-decode error, returning empty results or fixed defaults instead of failing.
+  A corrupted `group_roster` row was silently dropped from `members()` rather than surfacing as a query failure, and a pool outage during `upsert` or `remove_member` looked identical to success to every caller.
+  All four methods now return `LibreFangResult`, and the channel bridge and kernel handle boundaries propagate the error instead of discarding it (#7033) (@houko)
+- `TraceStore::query`, `query_by_trace_id`, and `count` swallowed SQLite failures and poisoned-mutex errors, returning an empty list, `None`, or `0` indistinguishably from a genuine empty result.
+  A corrupt row or a failing query on the hook-trace store was therefore reported to callers as "no traces found" rather than as a failure.
+  These methods now return `rusqlite::Result`, and `GET /api/context-engine/traces/:trace_id` surfaces a scrubbed HTTP 500 instead of a false 404 when the store itself fails (#7034) (@houko)
+- Approval audit queries used to swallow SQLite failures and return an empty list or a zero count, which looked identical to "no audit history exists" on the dashboard and in the duplicate-resolution helper used by channel bridges.
+  `query_audit` and `audit_count` on `ApprovalManager` now return a typed result, the `/api/approvals/audit` route surfaces a scrubbed HTTP 500 on failure instead of a fabricated empty page, and the channel-bridge duplicate check logs a warning and falls back to its prior no-match behaviour rather than pretending the query succeeded (#7035) (@houko)
+- `Path::parent()` yields `Some("")` rather than `None` for a bare relative filename, and three recently added atomic writers treated that empty-but-present case as an error.
+  In the cron script writer the parent is opened for the post-rename directory fsync, so an empty parent would fail with ENOENT after the rename had already succeeded — reporting failure for a write that landed on disk.
+  In the Skillhub and skill-evolution writers it only anchors the staging file beside the target, where an empty parent happened to work because the join and the rename both resolved against the process directory, making the same-directory invariant that keeps the rename atomic hold by accident.
+  All three now resolve an empty parent to `.`, matching the API crate's atomic writer, which already handled it (#7036) (@houko)
+- The shared metering budget snapshot (`MeteringEngine::budget_status`) silently converted a usage-store query failure into zero spend via `.unwrap_or(0.0)`, so a broken SQLite read looked identical to "no spend yet" everywhere the snapshot was consulted.
+  `budget_status` now returns a `LibreFangResult<BudgetStatus>`; the `/api/budget`, `/api/budget` update, and `/api/system/health/detail` routes return a scrubbed HTTP 500 on failure instead of a fabricated zero-spend response, and the WebSocket `budget` command and channel-bridge budget reply now report an explicit "temporarily unavailable" message instead of misleading zero values (#7037) (@houko)
+- Stop channel message dispatch when the recovery journal fails to persist an entry, instead of logging the failure and continuing as if the write-ahead record existed.
+  `MessageJournal::record` now returns `true` only once the entry is durable and indexed, and both `dispatch_message` and `dispatch_with_blocks` abort with a user-facing retry notice on `false` rather than proceeding without crash-recovery coverage (#7040) (@houko)
+- `GET /api/sessions` swallowed a failed `count_sessions` call with `.unwrap_or(0)` and both it and `GET /api/sessions/search` fell back to an empty `200 OK` page on a database error, so a broken sessions table looked identical to "no sessions yet" from the client's side.
+  `search_sessions` also leaked the raw SQLite error string (e.g. table names) straight into the response body via `ApiErrorResponse::internal(error.to_string())`.
+  Both handlers now propagate the failure as a scrubbed `500` with a generic message, logging the real error server-side with `tracing::error!`, consistent with the rest of the file (#7041) (@houko)
+- Move dashboard archive extraction and installation off Tokio's async worker threads. (@xiaomo)
+- Load WASM agent modules asynchronously so filesystem latency cannot block Tokio worker threads. (@xiaomo)
+- Return an internal error when backup directory entries or metadata cannot be read instead of reporting a misleading empty or zero-sized backup list. (@xiaomo)
+- Propagate malformed prompt-version, experiment, variant, and metrics rows instead of replacing invalid UUID, JSON, or timestamp fields with default data. (@xiaomo)
+- Abort sidecar config and secrets.env read-modify-write operations when an existing file cannot be read instead of treating the failure as an empty file. (@xiaomo)
+- Abort auto-dream lock acquisition when an existing lock file cannot be read instead of treating it as an unowned stale lock. (@xiaomo)
+- Return a scrubbed server error when an extension install or uninstall cannot apply its on-disk MCP configuration, instead of reporting success against stale runtime state. (@xiaomo)
+- Move agent-template directory and manifest reads off synchronous filesystem APIs, and surface corrupt or unreadable listings instead of returning an empty or incomplete template list. (@xiaomo)
+- Make the sidecar configuration include check asynchronous and fail closed when the root or included configuration cannot be read or parsed, instead of continuing with a potentially shadowing write. (@xiaomo)
+- Move agent identity-file writes, renames, canonicalization, and deletes off Tokio worker threads while preserving containment checks and atomic replacement. (@xiaomo)
+- Read skill supporting files asynchronously with a real 256 KiB buffer limit, and surface canonicalization errors instead of disguising every filesystem failure as a missing file. (@xiaomo)
+- Fail closed when reading a hand manifest fails instead of silently returning a lower-priority or synthesized manifest, and move the file read off the async request worker. (@xiaomo)
+- Read exported configuration asynchronously so downloading `config.toml` cannot block API request workers. (@xiaomo)
+- Serialize session compaction with concurrent message writers so an LLM compaction cannot overwrite messages saved after its initial snapshot (#7070) (@houko)
+- Use effective dashboard i18n defaults, make channel save warnings coherent, stop unavailable QR polling, and keep channel selections synchronized. (#7072) (@houko)
+- Clear kernel router cache lock poison after recovering routing state (#7126) (@houko)
+- Recover poisoned background watcher state and close the stop-versus-registration race so stopping an agent aborts its in-flight tick and promptly releases the shared LLM concurrency permit. (#7129) (@houko)
+- Recover poisoned channel-bridge abort-handle state so tracked tasks still stop during shutdown and hot reload. (#7139) (@houko)
+- Recover poisoned terminal activity tracking so live PTY sessions retain accurate idle-timeout behavior. (#7141) (@houko)
+- Recover poisoned command-catalog skill registry reads so installed slash commands remain visible. (#7142) (@houko)
+- Recover poisoned agent skill-assignment registry reads so available skills remain visible without repeated recovery. (#7143) (@houko)
+- Recover poisoned agent-message default-model reads so provider preflight keeps the active override without repeated recovery. (#7144) (@houko)
+- Recover poisoned system-status model overrides and return provider/model from one consistent snapshot. (#7145) (@houko)
+- Recover poisoned per-agent watcher slots and close registration races so background tasks are aborted when agents stop. (#7146) (@houko)
+- Recover poisoned skill-catalog registry reads so installed skill lists and details remain available. (#7147) (@houko)
+- Reject malformed and non-base64 image data URIs in OpenAI-compatible chat requests instead of forwarding corrupt vision blocks. (#7148) (@houko)
+- Treat invalid session creation dates as undated so malformed timestamps cannot hide newer sessions in the dashboard. (#7149) (@houko)
+- Validate dashboard date and uptime inputs so epoch timestamps render correctly and malformed values use a stable placeholder. (#7150) (@houko)
+- Report malformed quoting, duplicate headers, and accurate source row numbers during dashboard user CSV imports. (#7151) (@houko)
+- Make memory decay sweeps atomic, surface malformed access timestamps, and document zero-TTL behavior. (#7152) (@houko)
+- Preserve goal run start times and validate deterministic persistence metadata. (#7153) (@houko)
+- Reject malformed rate-limit counts and timestamps without panicking on provider headers. (#7154) (@houko)
+- Preserve usage accounting errors and allow records that exactly reach configured quotas. (#7155) (@houko)
+- Disable durable audit appends after an incomplete database reload and reject unknown persisted actions without coercion (#7179) (@houko)
+- Restore the dashboard Hooks correctness gate and align lint overrides with test, config, and clipboard helper boundaries. (#7321) (@houko)
+- Let dashboard section-label callers reliably override layout classes, centralize compact-label typography, and harden Overview range, memoization, timestamp, and typed-navigation contracts. (#7322) (@houko)
+- Keep the dashboard Comms page resilient to partial snapshots and query failures, and align polling, refreshes, and counts with the active tab. (#7323) (@houko)
+- Reject malformed Hand metadata in the dashboard chat picker and preserve agents that hold multiple Hand roles, instances, or memberships. (#7332) (@houko)
+- Make generated agent-manifest Markdown resilient to table delimiters, embedded code fences, repeated blank lines, large backtick inputs, non-decimal costs, unsupported extras, and unknown schedule modes. (#7333) (@houko)
+- Avoid recording canvas undo history or reallocating graph state when a stale context-menu node or connection target is deleted. (#7334) (@houko)
+- Validate continuous agent schedule intervals, surface invalid values in the visual editor, and keep parsed manifest list identities stable across reloads. (#7335) (@houko)
+- Preserve existing chat metering and memory metadata when delayed terminal frames omit optional fields. (#7336) (@houko)
+- Wait for dashboard translation initialization before mounting and normalize detected regional locales to supported language codes. (#7337) (@houko)
+- Pin the dashboard Lucide version used by curated deep imports and enforce every icon mapping and the exact-version contract with smoke tests. (#7338) (@houko)
+- Honor the user's reduced-motion preference across the dashboard, reuse filter-free shared dialog variants, and remove paint-heavy blur keyframes. (#7339) (@houko)
+- Align the dashboard session-selector documentation and short-ID fallback with their actual guarded contracts. (#7340) (@houko)
+- Make dashboard skill-hub lookup null-safe, configure self-hosted registry URLs per deployment, and shell-quote copied install commands. (#7341) (@houko)
+- Normalize video task statuses and stop dashboard polling after terminal states. (#7394) (@houko)
+- Paginate dashboard memory records, apply agent and level filters before pagination and search caps, and return grouped per-agent counts without N+1 polling. (#7395) (@houko)
+- Refresh stale dashboard version data when a long-lived window regains focus. (#7397) (@houko)
+- Allow unfiltered dashboard cron queries while preserving explicit caller opt-outs. (#7400) (@houko)
+- Update dashboard session truncation reactively and stop reconnecting completed streams. (#7401) (@houko)
+- ClawHub CN skill details now share the same one-minute freshness window as the other dashboard marketplace detail views. (#7402) (@houko)
+- Dashboard user filters now share one cached full-list request, match roles case-insensitively, and tolerate malformed channel-binding values without breaking search. (#7404) (@houko)
+- Dashboard workflow detail, run, and operator-pause queries now preserve required-ID guards even when callers provide query enablement overrides. (#7405) (@houko)
+- Session stream attachments now support authenticated WebSockets and release connection slots immediately when clients disconnect. (#7406) (@houko)
+- Disclose when audit queries and exports can only inspect a truncated in-memory history window. (#7408) (@houko)
+- Label authorization denial audit records with the endpoint that rejected the request. (#7409) (@houko)
+- Restore both `config.toml` and `secrets.env` when a sidecar configuration write fails, reuse the runtime's canonical dotenv parser for shadow detection, and serialize registry metadata directly from its typed response. (#7412) (@houko)
+- Give builtin slash commands precedence over colliding skills and release the skill registry lock before formatting command responses. (#7413) (@houko)
+- Bound manual provider-test and pending A2A discovery caches with named, expiring entries, and remove stale route dead-code suppressions. (#7415) (@houko)
+- Recover poisoned OFP peer rate-limiter locks without discarding active message or token counters. (#7417) (@houko)
+- Recover a poisoned supervised-subprocess cooldown lock while preserving its respawn-storm guard. (#7418) (@houko)
+- Recover a poisoned MCP OAuth refresh-lock registry without losing active single-flight entries. (#7419) (@houko)
+- Recover poisoned plugin state-file and persistent-process registries without discarding active lock or process slots. (#7420) (@houko)
+- Recover the external memory-provider slot after a provider panic poisons its lock, preserving the registered provider and allowing later hot swaps. (#7421) (@houko)
+- Return an ACP internal error when an agent prompt stream closes before reporting its completion reason instead of presenting the aborted turn as successful. (#7422) (@houko)
+- Let editor-backed filesystem calls fall back to local files when the optional ACP reverse-RPC times out or loses its response channel. (#7424) (@houko)
+- Fixed ACP `session/resume` replaying persisted history to clients that already have the conversation. (#7425) (@houko)
+- Fixed dashboard sparklines failing to render large data sets that exceed the JavaScript function argument limit. (#7426) (@houko)
+- Fixed unknown workflow operator actions crashing the dashboard action bar. (#7427) (@houko)
+- Fixed the dashboard schedule editor accepting out-of-range cron field values. (#7428) (@houko)
+- Fixed shared dashboard buttons submitting surrounding forms unless explicitly configured as submit controls. (#7429) (@houko)
+- Fixed dashboard input error styling disappearing while the field is focused or hovered. (#7430) (@houko)
+- Fixed clickable dashboard cards and KPIs being inaccessible from the keyboard. (#7431) (@houko)
+- Fixed multi-select free-text duplicates and active option announcements. (#7432) (@houko)
+- Fixed status pills defaulting unknown states to running and labeling denied states as rejected. (#7433) (@houko)
+- Fixed unnamed shared select controls for assistive technology. (#7434) (@houko)
+- Fixed missing accessibility state and names in the skill output panel. (#7435) (@houko)
+- Harden dashboard route parsing and stale-asset recovery without risking unbounded reloads when browser storage is unavailable. (#7465) (@houko)
+- Respect reduced-motion preferences across CSS animations, transitions, scrolling, and their delays (#7467) (@houko)
+- Validate canvas imports before replacing React Flow state and detach imported canvases from previously selected workflows.
+  Dependency selections and imported legacy labels use stable step-node IDs; invalid restored references and stale runtime state are rejected or cleared. (#7468) (@houko)
+- Preserve unsaved user-policy edits across background refreshes without overwriting unrelated concurrent server changes.
+  Channel rule keys are normalized before duplicate checks, and successful saves immediately become the clean form baseline. (#7469) (@houko)
+- Reject invalid analytics budget values before submitting a partial update.
+  CSV exports now neutralize spreadsheet formulas and control-character prefixes in agent and model identifiers. (#7470) (@houko)
+- Keep mobile pairing countdowns, QR rendering, and concurrent device removals synchronized with their actual request state.
+  Invalid expiry timestamps now fail closed instead of displaying `NaN` (#7471) (@houko)
+- Keep the memory embedding provider and model controls synchronized when switching catalogs.
+  The custom-model input remains available while a new value is entered, and provider changes reset stale model and key settings. (#7472) (@houko)
+- Prevent an explicit terminal disconnect from suppressing reconnects on a replacement WebSocket. (#7473) (@houko)
+- Validate dashboard locale files and preserve array structure when checking translation-key parity. (#7497) (@houko)
+- Restore strict dashboard dependency build enforcement so installs fail when scripts are not explicitly approved. (#7498) (@houko)
+- Restore setup instructions in the pinned MCP registry fixtures by keeping them at the catalog root. (#7499) (@houko)
+- Align the pinned Bedrock provider fixture with the bearer-token credential used by the runtime driver. (#7500) (@houko)
+- Finish every failed MCP reconnect transition so health status no longer remains stuck in an in-progress state after connection or configuration errors. (#7514) (@houko)
+- Honor HandsHub retry guidance as the complete wait before the next request so rate-limit responses do not stack server-directed delays with client backoff. (#7515) (@houko)
+- Keep missing extension resources as distinct typed errors so API clients receive accurate 404 responses without losing the original failure text. (#7516) (@houko)
+- Bound cron token-cap trimming with a binary search and compare estimates in u64 space so large limits remain correct on 32-bit targets. (#7523) (@houko)
+- Keep deferred approvals pending when the kernel self-handle needed to resume them is unavailable so the decision remains retryable. (#7524) (@houko)
+- Neutralize every triple-backtick sequence in untrusted reviewer context, including longer backtick runs that previously rebuilt a valid code fence. (#7525) (@houko)
+- Preserve not-found and external-edit conflict status codes when wiki vault errors cross the kernel handle boundary. (#7526) (@houko)
+- Return a typed not-found error when goal updates target an absent store or missing goal while keeping malformed goal storage as an internal error. (#7527) (@houko)
+- Clamp persisted goal progress to the percentage range before rendering it in agent prompts so oversized values cannot wrap during integer narrowing. (#7528) (@houko)
+- Report provider catalog scan, read, and parse failures while counting only successfully parsed catalog files in sync results. (#7529) (@houko)
+- Reject rate-limit reset durations that overflow either `Duration` or the system clock so malformed headers fall through to a usable cooldown instead of panicking. (#7530) (@houko)
+- Invalidate cached Vertex AI access tokens after authentication failures while preserving newer tokens installed by concurrent refreshes. (#7531) (@houko)
+- Release the process registry guard before awaiting persistent-process stdin writes while serializing writes on a per-process pipe lock. (#7532) (@houko)
+- Resolve conversation overrides and channel instance defaults in one SQLite snapshot so concurrent resets or rebinds cannot produce a mixed dispatch decision. (#7533) (@houko)
+- Persist config migrations through durable atomic replacement while preserving symlinks and permissions. (#7535) (@houko)
+- Serialize review-label mutations on the exact PR number, reconcile queued jobs against the latest actionable review, preserve actionable collectors, and propagate unexpected label failures. (#7546) (@houko)
+- Serialize MCP server entries directly as TOML so absent options are omitted without deleting operator-authored JSON fields. (#7555) (@houko)
+- Report config reload outcomes truthfully in audit records and surface channel adapter restart failures to API and Dashboard users. (#7556) (@houko)
+- Fail workflow template list and detail requests explicitly when serialization fails instead of silently dropping templates or returning a null success body. (#7557) (@houko)
+- Classify trigger registration failures by cause so missing agents return 404, invalid input returns 400, backpressure returns 503, and unexpected kernel failures return a scrubbed 500. (#7558) (@houko)
+- Keep channel rate-limiter bucket admission within its hard cap under concurrency and avoid evicting buckets touched after an overflow snapshot. (#7559) (@houko)
+- Sync channel journal appends before dispatch, use unique compaction staging files, and abort compaction when any snapshotted entry changes before atomic replacement. (#7560) (@houko)
+- Join the sidecar supervisor during shutdown so an in-flight restart cannot leave a subprocess running after the adapter stops. (#7561) (@houko)
+- Bound in-memory group rosters by chat and member count, evict least-recently-seen chats, and add explicit member and chat removal APIs. (#7562) (@houko)
+- Require thread-ownership keys to pass through the validating constructor and normalizing scope builders while retaining read-only component accessors. (#7563) (@houko)
+- Keep operator PYTHONPATH entries ahead of the embedded sidecar SDK fallback and serialize torn-tree recovery across concurrent extractors. (#7564) (@houko)
+- Reject prompt-bearing skill files above 10 MiB and cap the actual supply-chain scan read so concurrent file growth cannot cause an unbounded allocation. (#7565) (@houko)
+- Reject PDF payloads above 20 MiB and stream extracted characters into a 200K-character sink so output truncation no longer requires first allocating the complete text. (#7566) (@houko)
+- Enforce per-result and total context character budgets even for tiny windows and retention floors. (#7596) (@houko)
+- Return a guest-visible error instead of panicking when the WASM HTTP client cannot be built. (#7597) (@houko)
+- Bound generated web-search queries and injected results so automatic augmentation cannot consume unbounded context (#7598) (@houko)
+- Return OAuth callback errors immediately and release the loopback listener after every terminal result (#7599) (@houko)
+- Escaped untrusted agent, provider, and model labels in Prometheus metrics to prevent malformed exposition and metric injection. (#7601) (@houko)
+- Scrubbed internal agent-injection and proactive channel-delivery failures from API responses while retaining actionable server-side diagnostics. (#7603) (@houko)
+- Rolled back webhook mutations that fail before durable replacement while retaining committed in-memory state when only the post-replacement directory sync fails. (#7607) (@houko)
+- Timed out stalled inbound and outbound pre-authentication handshake reads under a shared deadline so unauthenticated frame buffers are released promptly. (#7608) (@houko)
+- Retained last-known-good workspace context through transient path, metadata, and read failures while evicting confirmed missing or oversized files. (#7609) (@houko)
+- Preserved existing ClawHub skill installs through staged promotion failures, cleaned failed staging trees, and stopped checksum discovery errors from downgrading installs to unverified downloads. (#7610) (@houko)
+- Offloaded migration filesystem work, relocated only agents imported by the request, and kept relocation and response paths consistent on failures. (#7611) (@houko)
+- Serialized quick-init configuration fields safely so provider catalog values cannot inject TOML keys or tables. (#7612) (@houko)
+- Reported applied HTTP and WebSocket limits and only marked manifest signing available when every configured trust anchor is usable. (#7613) (@houko)
+- Bounded terminal child exit polling so a stuck process cannot retain its WebSocket task indefinitely. (#7614) (@houko)
+- Return a pollable workflow run ID when a synchronous API wait times out while execution continues in the background. (#7615) (@houko)
+- Fail loudly when a built-in channel sanitizer regex is invalid instead of silently disabling the security rule. (#7617) (@houko)
+- Age deferred channel journal entries from their retry deadline so stale recovery preserves the intended retry window. (#7618) (@houko)
+- Launch the published SQLite MCP server with its configured database path instead of the unavailable npm package. (#7620) (@houko)
+- Fail closed when OpenTelemetry tracing starts without its registered reload slot, and reject duplicate reload-layer installation. (#7621) (@houko)
+- Authenticate notification broadcasts with recipient-bound peer handshakes while preserving existing connection state during short-lived deliveries. (#7622) (@houko)
+- Let manual dream completion record time without retaining the current PID as a live lock holder.
+  This prevents the next manual dream from being suppressed for up to the one-hour stale window (#7623) (@houko)
+- Refresh the website's bounded offline HTML shell after successful navigation.
+  Deep links now receive the latest cached application instead of an install-time-only root page or no fallback at all (#7624) (@houko)
+- Fail startup when migration audit-row healing cannot complete instead of reporting a successful upgrade with an inconsistent audit trail.
+  The healing pass is now atomic and can be retried safely after the underlying SQLite failure is resolved (#7625) (@houko)
+- Allow external hooks to declare an exact executable path and lossless argument vector, preserving paths and individual arguments that contain whitespace (#7631) (@houko)
+- Finalize unprocessable and delivered inbox files without repeated scans or duplicate delivery, while preserving processed files across timestamp collisions and retrying transient archival failures (#7632) (@houko)
+- Bound EveryAPI credential-process pipe reads by the command deadline, report oversized output explicitly, and require safe HTTPS legacy custom endpoints (#7633) (@houko)
+- Release process-local auto-dream lock claims when acquisition is cancelled during asynchronous file I/O, so later consolidation attempts are not permanently blocked. (@houko)
+- Keep the xtask real-changelog regression green immediately after a release when the new Unreleased section contains only single-line prose. (@houko)
+- Recover poisoned channel sidecar schema and schema-error caches so discovery and configuration remain available with preserved adapter metadata. (@xiaomo)
+- Allow checkpoint restore to use valid abbreviated Git commit hashes shorter than eight characters without panicking while recording the pre-rollback snapshot. (@houko)
+- Parse Codex CLI JSONL completion events so responses report the CLI's actual input, cached-input, and output token usage to metering instead of recording every call as zero tokens. (@xiaomo)
+- Credential pools now warn when recovering from a poisoned state lock instead of silently continuing after a panic. (@xiaomo)
+- Serialize cron-session pruning with persistent agent message writes so a blind prune save cannot overwrite a concurrently appended cron turn. (@houko)
+- Drain the desktop dashboard sync task during embedded-server shutdown instead of dropping its JoinHandle and cancelling runtime work implicitly. (@xiaomo)
+- Recover poisoned kernel and plugin event-bus drop-warning locks so overload and consumer-lag diagnostics remain visible. (@xiaomo)
+- Parse Gemini CLI JSON output so responses report aggregated prompt, cached-prompt, candidate, and thinking token usage to metering instead of recording every call as zero tokens. (@xiaomo)
+- Identity-file writes staged through a fixed `.{filename}.tmp` path, so two concurrent `PUT /api/agents/{id}/files/{filename}` requests for the same file shared one staging path and each `fs::write` truncated whatever the other had staged, leaving the renamed file holding interleaved bytes rather than either payload intact.
+  The same write also never fsynced the staged file before the rename, nor the parent directory after it, so a crash could publish a directory entry pointing at unflushed content.
+  Routing this through the crate's existing `atomic_write` helper fixes all three: the staging name is derived from the process ID and a per-process counter, the staged file is `sync_all`-ed before the rename, and the parent directory is synced afterwards on Unix (#7084) (@houko)
+- Fail startup migrations when the migration audit or table schemas cannot be inspected instead of treating SQLite query and row-decoding failures as missing history or columns and continuing from an unverified schema. (@xiaomo)
+- Recover poisoned passkey registration and authentication ceremony locks so later login flows continue with preserved short-lived challenge state. (@xiaomo)
+- Recover poisoned background process registry state so one panicking holder cannot permanently disable output tracking, lifecycle updates, queries, or cleanup. (@xiaomo)
+- Provider URL updates now serialize config writes, persist URL and proxy changes in one atomic replacement, and keep blocking filesystem work off async request workers. (@xiaomo)
+- Serialize initial proxy publication and recover poisoned proxy state so concurrent initialization cannot repeat environment export and hot reloads are not silently discarded. (@xiaomo)
+- Pipe Qwen Code prompts through subprocess stdin so conversation content is no longer exposed in process argument listings or constrained by platform argv limits. (@xiaomo)
+- Recover and serialize the embedded SDK probe cache so concurrent sidecar starts issue at most one interpreter probe per command, including after a prior lock panic. (@xiaomo)
+- Sidecar state and capability locks now warn once and clear poisoned state when recovering after a panic, preventing repeated recovery warnings on every later access. (@xiaomo)
+- Recover poisoned trace-store SQLite connection state so telemetry insertion, trace queries, and circuit-breaker persistence continue after a panicking lock holder. (@xiaomo)
+- Recover poisoned memory-wiki write serialization so page, compile-state, index, and backlink updates continue without disabling hand-edit conflict protection. (@xiaomo)
+
+### Changed
+
+- `browser_read_page` and `browser_navigate` now emit each link as a `⟨n⟩` marker in the prose plus a deduplicated marker-to-URL table, instead of inlining `[text](url)` at every occurrence, and `browser_click` accepts a marker.
+  Measured across an aggregator, an article, a results page, and a docs site, separating the URLs from the prose is what pays: the link payload drops 70–84% on link-dense pages (13,739 → 4,028 on Hacker News, 50,285 → 8,274 on a Wikipedia article), where deduplication alone buys 1.5–7.6% and *costs* 4–5% on a page with no repeats.
+  Same-origin entries are stored as a path against the page URL, since nearly every link on a page points back into it.
+  The table lists only the links the surviving prose still refers to, so a marker cut off by the cap does not spend context on a URL the model cannot see.
+  The table is a separate field on the extraction result rather than a section appended to `content`, so a caller reading `content` today is unaffected and the marker-to-URL map reaches `browser_click` as data rather than as prose to parse back out.
+  `max_content_chars` now bounds prose *and* table together rather than prose alone: on a link-dense article the table by itself is larger than the default cap, so budgeting only the prose would have handed an operator who sized the cap to a context window a payload well past it.
+  Trimming prose is what shrinks the table, since the table lists only surviving markers, so the two are solved together by searching for the largest prose cut whose combined total still fits — rather than by dropping entries and leaving markers in the prose that resolve to nothing.
+  `browser_click` resolves a marker by re-running the extraction script rather than through a second copy of the traversal, so the number the model saw and the number that is resolved cannot drift apart.
+  An anchor used as a click hook rather than as navigation — a bare `#` href, or a `javascript:` one — is left as plain text instead of being marked, since every one of them on a page resolves to the same string and deduplicating on it would give two unrelated controls the same marker.
+  The dashboard's page preview (`GET /api/hands/instances/{id}/browser`) renders the link table beside the prose through the same shared renderer the tool result uses, rather than reading `content` alone, which would have shown an operator markers with nothing to resolve them against.
+  Its 2,000-character budget cuts the prose before the table is joined, since the table alone runs to thousands of characters on a link-dense page and a budget applied afterwards would have spent all of itself on URLs.
+  A bare number is treated as a marker only after the CSS and text paths have found nothing, so a page's own numeric link text — a pagination `5`, a numbered tab — stays clickable the way it always was rather than being claimed as a marker id.
+  Text taken off the page has anything shaped like a marker defused before it reaches the output, since a marker is actionable and a page printing a literal `⟨2⟩` in its own text would otherwise attach a link it never wrote to whatever words it liked — and pull that link back into the table even where the real marker had been cut, the table being built by scanning the surviving prose.
+  An anchor's scheme is compared with ASCII whitespace removed and case folded, so `JavaScript:`, a leading space and a tab inside the scheme are all recognised as the click hook they are rather than being marked as links.
+  A list item whose sub-list sits between two runs of its own text keeps that text where the page put it, rather than joining everything before the sub-list to everything after it.
+  That matters because the existing text fallback picks the first element whose `textContent` merely *contains* the selector, which resolves to the wrong element for 28% of the links on Hacker News and 16% on a Wikipedia article — on Hacker News the link text `new` resolves to `/news` where the intended link is `/newest` (#6624, #6746) (@nevgenov)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6701) (@houko)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6715) (@houko)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6720) (@houko)
+- `agent_send` now delegates non-blockingly by default when the calling agent is known, returning a `task_id` whose reply is delivered to the caller's session on completion.
+  The previous blocking default required the model to predict in advance that a delegation would be slow and opt in to `"async": true`; a wrong guess spent the entire turn waiting for `tool_timeout_secs`.
+  An unnecessary `task_id` costs one extra turn to collect, whereas an unnecessary block can lose the turn outright.
+  Pass `"async": false` for a quick sub-question whose answer is needed within the same turn.
+  Callerless system-initiated sends keep dispatching synchronously, because the async tracker requires a known caller agent to route a completion back to. (#6740) (@houko)
+- Split the Slack multi-step task-progress card from the processing-state reactions with a new `SLACK_PROGRESS_CARD` switch.
+  The card was gated on `SLACK_REACTIONS`, so the only way to stop the emoji noise was to also lose the step list — the more useful of the two indicators on a long tool-using turn.
+  The new switch defaults to whatever `SLACK_REACTIONS` resolves to, so an operator who set `SLACK_REACTIONS=false` for silence keeps exactly that, while `SLACK_REACTIONS=false` with `SLACK_PROGRESS_CARD=true` now gives the card without the reactions and the reverse gives the reactions without the card (#6741) (@houko)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6757) (@houko)
+- Shared Telegram multipart upload storage across retry attempts instead of copying the full attachment on the happy path. (#6868) (@houko)
+- Unified Telegram `getUpdates` and command responses behind the same generic API envelope while retaining strict required-status parsing. (#6884) (@houko)
+- Replaced the Telegram done-reaction boolean argument with an explicit emit-or-suppress policy type. (#6888) (@houko)
+- Made Telegram inline keyboard URL and callback actions mutually exclusive in the internal outbound type. (#6889) (@houko)
+- Made Telegram photo-reply upgrading explicitly text-only without an unreachable panic branch in the inbound path (#6890) (@houko)
+- Classified the publishable Telegram sidecar binary as a command-line utility instead of an API bindings library. (#6892) (@houko)
+- Removed the unused reqwest streaming feature from the Telegram sidecar dependency graph. (#6893) (@houko)
+- PDF text extraction for chat attachments now runs on Tokio's blocking pool instead of an async request worker, so a large or malformed PDF no longer stalls other in-flight requests on the same worker thread.
+  Concurrent extractions are capped at two, with the semaphore permit held inside the blocking closure so a cancelled request cannot free capacity while its parser keeps running (#6961) (@houko)
+- `GET /api/agents/{id}/files` now probes workspace identity-file existence and size on a `spawn_blocking` task instead of calling `std::fs::metadata` inline on the async handler.
+  The per-file `.identity/` vs workspace-root fallback check previously ran as two separate `exists()` stats followed by a third `metadata()` call directly on a Tokio worker thread, parking it on disk I/O for every probed file on every request.
+  The listing now runs as a single batched blocking task, and each probe collapses to one `metadata()` call instead of a redundant `exists()` + `metadata()` pair.
+  A failed blocking task returns a scrubbed 500 rather than propagating the raw `JoinError` (#6980) (@houko)
+- CLI passthrough model-config detection (Codex, Claude Code, Gemini CLI, Qwen Code) now runs on the blocking thread pool instead of the async request handler, since it reads files and environment variables from disk synchronously.
+  All four probes are grouped into a single blocking task per request, and the reads are skipped entirely when an explicit `?tier=` filter excludes the synthesized `custom` rows they would produce (#6983) (@houko)
+- User-management writes to `config.toml` (create/update/delete user, key rotation, provider-key changes) previously read, backed up, and wrote the file with blocking `std::fs` calls directly on the async request-handling task.
+  Under load this could stall the Tokio worker thread the request landed on for the duration of the disk I/O, delaying unrelated requests scheduled on the same worker.
+  The read and backup steps now go through `tokio::fs`, and the durable atomic write moves onto the blocking thread pool via `spawn_blocking`, with the existing config/API-key lock ordering and corrupt-config protection unchanged (#6985) (@houko)
+- Move the identity-file path resolution, directory creation, and copy work performed by `POST /api/agents/{id}/clone` onto Tokio's blocking pool instead of running it inline on the async worker thread handling the request.
+  The request's `ErrorTranslator` is dropped before awaiting the copy task, since it is `!Send` and would otherwise trip axum's `Handler` bound across the `spawn_blocking` await point; `agent_registry().get()` already hands back an owned clone rather than a lock guard, so no registry lock was ever held across the blocking work.
+  Migrated `.identity/` files are still preferred over legacy workspace-root files, with the same fallback behaviour as before (#6987) (@houko)
+- `/api/dashboard/snapshot` now runs its database health probe and session-count query together on Tokio's blocking pool instead of inline on the async worker.
+  Both calls go through the synchronous SQLite substrate, so a slow disk could previously stall the worker thread handling the dashboard's 5 s poll.
+  A blocking-task failure now logs at `error` level and falls back to the existing degraded-health / zero-count semantics instead of silently collapsing. (#6989) (@houko)
+- `POST /api/config/set` read the existing `config.toml`, created the backup directory, copied the backup, and wrote the new file synchronously on the async worker thread handling the request.
+  The existing-config read and the backup copy now go through Tokio's async filesystem APIs, and the durable atomic write of the new config runs on Tokio's blocking pool instead of inline.
+  The missing-file case (no config to read or back up yet) is now handled via `ErrorKind::NotFound` instead of a synchronous `exists()` pre-check, preserving the same allowlist, TOML round-trip, validation, reload, and scrubbed-error behavior (#6990) (@houko)
+- `DELETE /api/channels/sidecar/{name}` rewrote `config.toml` synchronously on the async worker thread handling the request, still holding the existing `config_write_lock` across the call.
+  The sidecar-block removal and durable atomic rewrite now run on Tokio's blocking pool instead, with the config write lock held across the whole operation exactly as before.
+  A join failure on that blocking task (for example a panic inside the removal closure) is now caught and returned as a scrubbed internal error instead of propagating as an unhandled panic in the request future (#6991) (@houko)
+- `POST /api/channels/sidecar/{name}/configure` ran the `include`-shadow check, the `secrets.env` membership read, secret/config writes, and the `config.toml` upsert synchronously on the async worker thread handling the request.
+  All of that now runs as a single `spawn_blocking` task on Tokio's blocking pool, still serialized under the same `config_write_lock` that gates `POST /api/config/set` and the legacy `configure_channel` handler.
+  Moving the `include`-shadow check inside that lock (previously it ran before the lock was taken) closes a check/write race where a concurrent writer could add a conflicting `include` between the check and the write.
+  Conflict and internal-error responses are unchanged; a join failure on the blocking task is now caught and returned as a scrubbed internal error instead of propagating as an unhandled panic (#6992) (@houko)
+- Session-summary persistence (the SQLite `kv_store` write and the workspace `memory/session-*.md` mirror written when a session resets) ran synchronously inside the fire-and-forget background task that generates the summary, still occupying a Tokio worker thread for the duration of the disk I/O.
+  That write now runs on Tokio's blocking pool via `tokio::task::spawn_blocking`, keeping the existing generate-then-persist ordering and the no-runtime synchronous fallback unchanged.
+  A join failure on the blocking task is now logged as a WARN instead of propagating as an unhandled panic (#7038) (@houko)
+- `POST /api/hands/{id}/pause|resume|deactivate` and `POST /api/hands/reload` ran hand-registry persistence, and for activation/deactivation the workspace and SQLite I/O behind it, synchronously on the async worker thread handling the request.
+  All five lifecycle operations now run their kernel call through `tokio::task::spawn_blocking` so the request handler never parks on disk I/O.
+  Successful responses and existing business-error status codes are unchanged; a join failure on the blocking task now returns a scrubbed 500 instead of propagating as an unhandled panic (#7039) (@houko)
+- Chromium binary discovery for browser sessions previously ran synchronously on the async task launching the session, probing configured/candidate paths with blocking `std::fs` checks and shelling out to `which` / `where.exe` for a PATH lookup.
+  A slow disk or a hung `which` invocation could stall the Tokio worker thread handling that request for the duration of the search.
+  Discovery now runs on Tokio's blocking thread pool via `spawn_blocking`, preserving the existing configured-path, environment, platform-candidate, and PATH lookup order, with a blocking-task failure surfaced explicitly instead of silently propagating a `JoinError` (#7042) (@houko)
+- Share one foreground polling policy across dashboard network reads. (#7396) (@houko)
+- Name shared dashboard plugin and registry foreground refresh cadences. (#7398) (@houko)
+- Correct dashboard credential-pool freshness and foreground refresh documentation. (#7399) (@houko)
+- Dashboard terminal health freshness and live-window polling now use separate named cadences, making their intentionally different cache policies explicit. (#7403) (@houko)
+- Return the already-serializable inbox status directly instead of allocating an intermediate JSON value. (#7414) (@houko)
+- Replace a vacuous staged-turn drop test with an explicit ownership-invariant comment while retaining behavioral coverage for staged padding and commits. (#7534) (@houko)
+- Released the shared router regex-cache lock before evaluating message matches, avoiding unnecessary serialization across routing requests. (#7604) (@houko)
+- Workspace metadata cache misses in async non-streaming message paths now scan project and identity files on a blocking worker instead of stalling the runtime worker. (@xiaomo)
+
+### Security
+
+- Stop `GET /api/hands` from returning plaintext values for satisfied environment-variable requirements, which exposed host credentials and other sensitive process configuration to any caller allowed to list Hands.
+  Requirement status now reports only whether each variable is present while preserving the existing Dashboard save contract (#6752) (@houko)
+- Enforce ownership checks across agent-scoped reads and require an authenticated Admin or Owner credential for audit-ledger access, preventing cross-owner disclosure of prompts, configuration, files, sessions, traces, logs, delivery history, cron jobs, and schedules.
+  Trusted credential-free deployments retain their existing compatibility for other routes but can no longer read the audit ledger without an explicit administrator credential (#6753) (@houko)
+- Close a gap in the agent-ownership scoping this release also adds: `GET /api/agents` only injected `?owner=<caller>` when the query parameter was absent, so a non-admin caller could still list another user's agents by supplying `?owner=<other-user>` explicitly.
+  Non-admin callers now always have `owner` pinned to their own username, regardless of any value supplied in the query string; Admin/Owner callers and the trusted no-auth compatibility mode are unaffected (#6753) (@houko)
+- Close the last cross-owner gap in this release's agent-ownership scoping: `POST /api/agents/{id}/message` and `/message/stream` checked only that the target agent existed, not that the caller owned it.
+  `agent_message` is one of the few RBAC carve-outs that let a plain `User`-role caller reach an arbitrary agent id, so without this check a non-owner could drive a full LLM turn — tool execution and budget spend included — on another user's agent by guessing or enumerating its UUID.
+  Both handlers now apply the same `can_access_agent` ownership check already used for the read-only routes and for `/clone` (#6753) (@houko)
+- Publish hot-reloaded users, channel bindings, tool groups, and role caches as one atomic authorization snapshot, preventing concurrent requests from briefly entering guest mode and bypassing RBAC while configuration is reloaded (#6754) (@houko)
+- Require context-free blocking Hand tool requests to enter the human approval queue, preventing curated Hand auto-approval from bypassing per-user RBAC when sender and `force_human` context are unavailable (#6758) (@houko)
+- Reject path-traversal values in Skillhub hand-scoped install requests before accessing the filesystem (#6759) (@houko)
+- Reject current- and parent-directory segments in scoped capability path globs, including recursive `**` grants (#6760) (@houko)
+- Pin legacy web-fetch connections to SSRF-validated DNS results and reject automatic redirects (#6761) (@houko)
+- Harden link-context URL filtering against userinfo confusion, private IP ranges, and alternate IP encodings (#6763) (@houko)
+- Require direct transport for DNS-pinned webhook test deliveries and URL attachment downloads (#6764) (@houko)
+- Block entity-encoded and control-character-smuggled script URLs plus active SVG data URLs in Canvas HTML (#6765) (@houko)
+- Escape untrusted ChatGPT OAuth callback errors before rendering the browser response. (#6766) (@houko)
+- Escape untrusted provider OAuth callback errors before rendering the browser response. (#6767) (@houko)
+- Apply the cron pre-processing script allowlist consistently to job updates. (#6768) (@houko)
+- Match pooled Docker containers on the full sandbox isolation configuration. (#6769) (@houko)
+- Keep credentials disabled after permanent authentication failures until pool reload. (#6770) (@houko)
+- Require authentication by default in the AUR Docker package (#6771) (@houko)
+- Agent context reads now bind path validation and file access to the same opened handles, preventing a workspace path swap from redirecting `context.md` outside the workspace.
+  Symlinked identity entries no longer shadow a regular legacy context, and replacing a previously trusted context with a symlink falls back to its cached good content (#6772) (@houko)
+- The hosted Fly deploy flow no longer copies a shared OpenRouter credential into user-owned machines, where every deployer could inspect and reuse it.
+  Deployers now provide their own key, and the Worker forwards only that caller-owned credential into the caller's Fly machine configuration (#6774) (@houko)
+- The Windows desktop uninstaller now parses the registered NSIS command line with native Windows argument semantics and launches the executable directly.
+  A tampered per-user `UninstallString` can no longer append commands through shell metacharacters because the desktop app no longer passes it to `cmd /C` (#6775) (@houko)
+- The Rust WASM skill SDK now rejects negative or otherwise invalid guest-memory ranges before constructing slices, returns a null sentinel for non-positive allocations, and validates host-call response ranges against current linear memory.
+  Malformed ABI values can no longer create oversized or out-of-bounds Rust slices inside a skill guest (#6776) (@houko)
+- Schema migration now fails closed when SQLite cannot read `PRAGMA user_version`, preventing a live database from being mistaken for a fresh version-zero schema and routed through destructive historical migrations (#6783) (@houko)
+- Make the API-to-kernel import CI guard succeed when its scan reaches zero matches, use private per-run temporary files instead of shared `/tmp` paths, and remove the unaudited `boot_with_config` filtering escape hatch. (@houko)
+- Restore registry signature verification after the Cloudflare account migration by synchronizing the daemon and Pages endpoint with the active signing-worker public key, and repair the CI lockstep guard so future key drift fails visibly. (@houko)
+- Keep the manual release-tag version input out of generated shell source by passing it through step environment variables, with a CI regression check covering every release-tag `run:` block. (@TechWizard9999)
+- Validate that the manual release-cli input names a canonical existing release before any build starts, pass it through workflow environment data for every upload, download, and signing shell step, and extend the release workflow CI scanner to cover both manual release workflows. (@TechWizard9999)
+- Fail closed when the RL trajectory exporters cannot construct their redirect-disabled HTTP client. (@houko)
+  W&B, Tinker, and Atropos previously fell back to the shared default client after a builder error; because that fallback follows redirects, a rare local client-configuration failure silently removed the SSRF guard and could replay export credentials to a redirected destination.
+  Client construction is now shared by all three exporters, preserves the configured proxy and TLS settings, disables redirects, and returns the construction error instead of weakening the transport policy.
+- Resolve and validate every RL exporter destination address immediately before upload, then pin the direct HTTP client to that complete validated set. (@houko)
+  Tinker and the fixed W&B endpoint previously checked only the URL text, so a public-looking hostname could rebind to loopback, RFC-1918, link-local, cloud metadata, unspecified IPv6, or an IPv6 form embedding a forbidden IPv4 address between validation and connection; local-only Atropos aliases likewise lacked a connection-bound address check.
+  Exporter traffic now bypasses explicit and environment proxies because ordinary HTTP, CONNECT, and socks5h proxies resolve the target outside LibreFang's validated resolver path. Redirects remain disabled, and DNS or secure-client construction failures stop the export without sending credentials or trajectory bytes.
+- Stop RL exporters from buffering an upstream's complete error response before truncating the diagnostic to 4 KiB. (@houko)
+  A malicious or broken W&B, Tinker, or Atropos endpoint could previously declare and stream an arbitrarily large 4xx/5xx body, forcing reqwest to accumulate it all in memory and potentially terminate the process before LibreFang applied its display cap.
+  Error bodies are now consumed incrementally into a buffer capped at 4096 bytes, and the reader returns as soon as that cap is reached instead of waiting for the remaining response.
+- Redact common AWS, GitHub, Slack, and Stripe credential formats from RL trajectory metadata before it leaves the process. (@houko)
+  These tokens carry distinctive prefixes but can be shorter than the existing 40-character opaque-blob threshold, so values such as `AKIA…`, `ghp_…`, `xoxb-…`, and `rk_live_…` previously passed through to W&B or Tinker unchanged unless surrounding text happened to match the generic key/value rule.
+  The exporter now applies a dedicated, prefix-constrained credential pattern before its existing generic API-key and blob rules, while retaining the kernel baseline parity check unchanged.
+- Bound RL trajectory metadata redaction to 128 nested JSON containers and replace any deeper branch with `<REDACTED:TOO_DEEP>`. (@houko)
+  `toolset_metadata` can contain values assembled directly by tools rather than parsed with serde_json's default recursion limit, and the previous recursive walker had no independent depth budget; a sufficiently nested value could overflow the exporter thread's stack before upload.
+  Values through the documented budget retain the existing recursive credential scrubbing behavior, while the first over-budget container is replaced wholesale so neither its contents nor further recursion reach W&B or Tinker.
+- Keep RL exporter retry logs free of upstream response bodies, transport messages, and credential-bearing URLs. (@houko)
+  Both the warning emitted before a retry and the debug event emitted when giving up previously formatted the complete `ExportError`; transient 429/5xx errors include up to 4 KiB of upstream-controlled body text, while network errors can include sensitive URL components, sending those values into centralized operational logs.
+  Retry events now record only a fixed error category and the HTTP status code when one exists. The original error is still returned unchanged to the caller, but is never passed to the tracing macros.
+- Resolve and validate every DNS address for Python webhook callback URLs, then connect directly to that validated address set while preserving HTTPS SNI. (@houko)
+  Callback delivery previously checked only IP literals and reserved hostname strings, so a public-looking hostname could resolve or rebind to loopback, RFC-1918, link-local, cloud metadata, or a private IPv4 endpoint embedded in IPv6.
+  The callback transport now bypasses environment proxies and never re-resolves the hostname after validation; DNS failure or any unsafe answer fails closed before the signed request is sent.
+- Default-denied Telegram updates without an identifiable sender whenever `ALLOWED_USERS` restricts access. (#6861) (@houko)
+- Reserve each `Idempotency-Key` atomically before its handler starts, so concurrent retries can no longer execute the same state-creating side effect twice.
+  An in-flight duplicate now receives `409 idempotency_key_in_use`; owner tokens prevent stale requests from modifying replacement reservations, cancelled and non-successful attempts release their reservation, and storage, clock, or corrupt-status failures fail closed instead of bypassing deduplication.
+  Expired-row pruning is limited to once per minute (#6919) (@houko)
+- Persist upload ownership metadata across restarts, enforce the same owner checks when attachments enter agent messages, explicitly mark daemon-generated images as shared, move upload serving off Tokio workers, and report the configured upload limit accurately (#6922) (@houko)
+- Make verified TOTP codes single-use through an atomic SQLite claim shared by dashboard login, HTTP approval, enrollment reset, confirmation, revocation, and channel approval paths, and fail closed before sensitive state changes when replay persistence is unavailable.
+  Move the claim onto Tokio's blocking pool instead of holding a process-wide mutex and synchronous SQLite work on an async worker.
+  Register manual approval requests before returning `201 Created`, return recent resolved approvals from the per-id endpoint, report mixed batch outcomes with HTTP 207, and describe session-wide resolution accurately as best-effort rather than transactional. (#6923) (@houko)
+- Replace the hand-rolled SHA-256 implementation in the plugin integrity path with the workspace's existing vetted `sha2` crate.
+  The hand-rolled version was never audited and carried a stale comment suggesting a future swap to `sha2` that never happened, leaving plugin checksum verification resting on unreviewed cryptographic code.
+  The public `sha256_hex` API and its lowercase 64-character hex digest format are unchanged, so no caller or stored checksum is affected (#6940) (@houko)
+- Replace the hand-rolled RSA-SHA256 signer used to sign Vertex AI service-account JWTs with the workspace-vetted `jsonwebtoken` RS256 implementation.
+  The removed code carried its own PEM/ASN.1 parser, PKCS#1 v1.5 padding, and a from-scratch big-integer modular-exponentiation routine — none of which had received the scrutiny a cryptographic primitive needs, and any subtle bug there (padding, timing, or big-integer arithmetic) could have corrupted or leaked the OAuth2 assertion used to authenticate to Google Cloud.
+  The service-account claim set and OAuth assertion exchange are unchanged; new coverage signs with a generated PKCS#8 RSA key and verifies with the corresponding public key, and separately asserts that an invalid private key is rejected (#6941) (@houko)
+- `spawn_agent_by_name` built the agent manifest path directly from the channel-supplied manifest name, so a name containing `..`, a nested path, or an absolute path could resolve outside `~/.librefang/workspaces/agents/` and load an arbitrary `agent.toml` from elsewhere on disk.
+  The manifest name is now validated to be exactly one normal path component before the lookup, rejecting empty names, `.`, `..`, embedded separators, and absolute paths on both Unix and Windows (#6950) (@houko)
+- The `build-timings` workflow still referenced `actions/upload-artifact` by the mutable `v4` tag, which is exactly the supply-chain gap this PR's sibling change to `cargo-deny.yml` was closing.
+  It now pins to the same immutable commit already used for `v4` elsewhere in the workflow set (`coverage.yml`), keeping the tag in a trailing comment for readability (#6958) (@houko)
+- The `cargo-deny` CI job pinned `EmbarkStudios/cargo-deny-action` to the mutable `v2` tag, so a compromised or repointed tag on that action would run inside CI with no additional review.
+  The workflow now pins to an immutable commit SHA, keeping the `v2` release tag in a trailing comment for readability (#6958) (@houko)
+- The Codex, Gemini, Qwen Code, and CodeWhale CLI drivers spawned their subprocess with an unbounded `.output()`/stdout-drain call, so a hung or malicious CLI process could block a request — and its stdout/stderr reader tasks — indefinitely.
+  Subprocess execution is now bounded by a configurable per-driver timeout (`with_message_timeout`, defaulting to 300s, overridable per request), enforced via a shared `output_with_timeout` helper that kills the child and aborts its pipe-reader tasks on deadline, and the qwen-code streaming path now applies the same deadline to its line-by-line reads and final wait/drain, and now also surfaces accumulated partial text on a mid-stream timeout the same way the other streaming drivers already do (#6960) (@houko)
+- `PeerRateLimiter`'s message and token counters keyed on the peer-supplied `peer_id`, and a peer authenticated with a shared secret can pick any node ID it likes, so a malicious or misbehaving peer could grow both `DashMap`s without bound simply by rotating identities.
+  Both counters now cap at 10,000 distinct identities per window, sweeping expired entries before admitting a new one and rejecting the new identity outright once the cap is still hit.
+  A count-only cap still let an attacker inflate memory through key size rather than entry count, since `peer_id` is attacker-controlled and was otherwise bounded only by the 16 MiB wire message limit, so oversized peer IDs are now rejected before either map is touched at all (#6962) (@houko)
+- Require authentication by default in the reusable Fly.io deploy template.
+  `deploy/fly/fly.toml` previously shipped `LIBREFANG_ALLOW_NO_AUTH=1` unconditionally, so every deployment derived from the template inherited the official demo's intentionally open auth posture, not just the demo itself.
+  The one-command deploy script now generates a 256-bit `LIBREFANG_API_KEY` and imports it as a Fly secret before the app's first boot, and the official public demo's unauthenticated exception moved into its own release CI job rather than the shared template (#6963) (@houko)
+- The GCP Terraform deploy opened SSH and the LibreFang dashboard/API firewall rules to `0.0.0.0/0`, and cloud-init still set the stale `LIBREFANG_BIND` variable instead of the supported `LIBREFANG_LISTEN`, leaving the public listener with no bearer key configured.
+  Both firewall rules now require an operator-supplied `allowed_source_cidr`, with `0.0.0.0/0` and `::/0` rejected at plan time, and a required 32-character-minimum `LIBREFANG_API_KEY` is generated and wired through cloud-init so the API enforces bearer authentication (#6964) (@houko)
+- `From<KernelOpError> for ApiErrorResponse` echoed the kernel's `Display` string straight into the HTTP body for every 500 and 503 response, so an `Internal` or `Unavailable` variant could surface database paths, file paths, or other internal state to the client.
+  Server-error responses now return a fixed generic message (`Internal server error` / `Service unavailable`) while the full error is still logged server-side via `tracing::error!`; 4xx responses keep their actionable, client-caused message unchanged (#6967) (@houko)
+- `PairingManager::complete_pairing` read the pending token, checked the device cap, and inserted the paired device as three separate `DashMap` operations, so concurrent redemptions of the same single-use token could each pass the checks before any of them removed the token — letting more devices redeem one pairing token than the configured `max_devices` cap allowed.
+  The token-consume, cap-check, and device-insert sequence is now serialized under a dedicated lock, held only across the security-sensitive state transition and released before any blocking persistence callback runs (#6969) (@houko)
+- The build-timings workflow's `upload-artifact` step and every Cloudflare Wrangler deployment invocation still referenced a mutable major-version tag (`actions/upload-artifact@v4`, `wrangler@4`), so a new release published under that same tag would run in CI without any additional review.
+  `upload-artifact` now pins to the same audited v4 commit already used by `coverage.yml`, and each `wrangler` invocation is pinned to the exact `4.121.0` release (#6972) (@houko)
+- Detect dangerous shell commands hidden behind `$IFS` whitespace expansion or base64 decode-to-shell pipelines, including when the agent uses Full exec policy. (#7068) (@houko)
+- Preserve migration validation status while scrubbing internal path failures. (#7128) (@houko)
+- Bind A2A and MCP caller context to authenticated principals, bound communication event streams, and make external-agent identity and host matching unambiguous. (#7416) (@houko)
+- Suppress owner-private notices on ACP sessions that do not provide an explicitly owner-authenticated update channel. (#7423) (@houko)
+- Bumped the transitive `h2` dependency from 0.4.13 to 0.4.16, closing RUSTSEC-2026-0258 ("h2 unbounded empty DATA frames").
+  The advisory was published 2026-08-17 and immediately turned the Security lane red on every PR whose CI ran after it, since `cargo audit` counts it as a vulnerability rather than a warning.
+  `h2` is purely transitive here — nothing in the workspace declares it — so the fix is a lockfile bump with no manifest change (#7708) (@houko)
+- Keep the current-turn message boundary valid when heartbeat history pruning removes older silent responses, preventing stale-index skips and panics during post-turn memory processing. (@houko)
+- Reject IPv4-compatible IPv6 literals such as `::127.0.0.1` across outbound URL guards, closing a private-network SSRF bypass. (@xiaomo)
+- Scrub TOTP setup, confirmation, approval, and revocation 500 responses so vault, replay-store, and QR-generation details remain server-side. (@xiaomo)
+
+### Documentation
+
+- Correct the two task-board trigger snippets in the trigger-dispatch-concurrency guide, which documented a field that does not exist.
+  Both wrote `event = "task_posted"`, but `ManifestTrigger` has no `event` field — the key is `pattern` and the value is the externally-tagged enum form `pattern = { task_posted = {} }`.
+  Because `ManifestTrigger` derives `#[serde(default)]` the unknown key was dropped in silence, `pattern` fell back to JSON `Null`, and reconcile skipped the entry with a warning, so an operator copying either snippet got a manifest that parsed cleanly and registered no trigger whatsoever.
+  The guide now also states that the key is `pattern`, explains why a typo there fails quietly, and shows the filtered `assignee_match` form so the narrower shape is discoverable.
+  (#6742) (@houko)
+- Documented that Telegram multi-chunk text sends can return an error after earlier chunks have already been delivered. (#6880) (@houko)
+- Cut `CLAUDE.md` from 45k to 23k characters so it fits under Claude Code's 40k context budget again, moving the long-form detail into three new pages under `docs/development/` (`ai-safety-hooks.md`, `build-and-verify.md`, `github-collaboration.md`) plus `docs/architecture/session-mode-resolution.md` rather than deleting it.
+  Every rule an agent has to obey stays inline; only the rationale and the incident write-ups behind each rule moved.
+  Fixed three stale claims found while auditing: `CLAUDE.md` pointed `core.hooksPath` at a `.githooks/` directory that does not exist (it is `scripts/hooks/`), located session resolution in `kernel/mod.rs` instead of `kernel/agent_execution.rs`, and both agent files undercounted the workspace (24 and 15 crates against an actual 29).
+  `docs/architecture/skill-workshop.md` documented `enabled` as defaulting to `true` in four places while `SkillWorkshopConfig::default()` has shipped `enabled: false` since #3328, which would have told an operator the workshop was already running for every agent.
+  (#7709) (@houko)
+
+### Added
+
+- Accept configured HTTP clients (#6838) (@houko)
+- Expose selectable TLS backends (#6842) (@houko)
+
+### Fixed
+
+- Adjust message boundary after heartbeat pruning (#6779) (@houko)
+- Accept short hashes in checkpoint restore (#6780) (@houko)
+- Release cancelled auto-dream claims (#6781) (@houko)
+- Serialize cron prune with message writes (#6782) (@houko)
+- Make API kernel import check zero-safe (#6789) (@houko)
+- Restore registry pubkey lockstep (#6790) (@houko)
+- Harden changelog article generation (#6791) (@houko)
+- Enforce channel progress smoke contract (#6792) (@houko)
+- Repair streaming example (#6793) (@houko)
+- Package modules in legacy builds (#6794) (@houko)
+- Stabilize GitHub stats hook lifecycle (#6795) (@houko)
+- Restore stale cache refresh path (#6796) (@houko)
+- Restore sysinfo MSRV compatibility (#6797) (@houko)
+- Scan transitive dependency licenses (#6798) (@houko)
+- Escape TOML control characters (#6804) (@houko)
+- Preserve numeric map edit drafts (#6805) (@houko)
+- Preserve empty struct list drafts (#6806) (@houko)
+- Prevent release tag input injection (#6809) (@houko)
+- Prevent release CLI input injection (#6810) (@houko)
+- Fail closed on HTTP client errors (#6811) (@houko)
+- Pin validated DNS addresses (#6812) (@houko)
+- Cap error body reads (#6813) (@houko)
+- Redact common credential formats (#6814) (@houko)
+- Bound metadata redaction depth (#6815) (@houko)
+- Keep retry logs payload-free (#6816) (@houko)
+- Pin validated callback DNS addresses (#6818) (@houko)
+- Reject malformed command params (#6819) (@houko)
+- Surface reader task crashes (#6820) (@houko)
+- Tie deploy progress to request lifecycle (#6821) (@houko)
+- Close streaming responses (#6822) (@houko)
+- Wrap connection errors (#6824) (@houko)
+- Preserve split stream UTF-8 (#6825) (@houko)
+- Report stream marshal errors (#6826) (@houko)
+- Handle stream request errors (#6827) (@houko)
+- Honor MIME body charsets (#6828) (@houko)
+- Decode complete subjects (#6829) (@houko)
+- Always close IMAP sessions (#6830) (@houko)
+- Validate IMAP fetch responses (#6831) (@houko)
+- Escape IMAP search senders (#6832) (@houko)
+- Surface stream transport errors (#6833) (@houko)
+- Encode URL path segments (#6834) (@houko)
+- Bound stream event buffering (#6835) (@houko)
+- Validate basic example responses (#6839) (@houko)
+- Align poll option ID types (#6848) (@houko)
+- Bound streaming state (#6851) (@houko)
+- Require update identity fields (#6852) (@houko)
+- Bound degenerate chunks (#6854) (@houko)
+- Escape sanitizer text nodes (#6855) (@houko)
+- Require location coordinates (#6857) (@houko)
+- Ignore self-closing carry tags (#6858) (@houko)
+- Render adjacent italic runs (#6860) (@houko)
+- Parse quoted tag attributes (#6862) (@houko)
+- Expose complete format pipeline (#6863) (@houko)
+- Preserve unclosed fence content (#6864) (@houko)
+- Pass owned values to redact_metadata in tests (#6898) (@houko)
+- Preserve real multiline changelog test (#6900) (@houko)
+- Unbreak main — dropped-translator session guard, the test premise it hid, and the clippy debt behind it (#6938) (@houko)
+- Preserve budget serialization errors (#6952) (@houko)
+- Prune empty tag index buckets (#6956) (@houko)
+- Report hand rollback persistence failures (#6993) (@houko)
+- Durably patch ClawHub provenance (#6994) (@houko)
+- Durably patch Skillhub provenance (#6995) (@houko)
+- Validate commands behind env and nohup wrappers (#6997) (@houko)
+- Align the generic error locale contract (#7001) (@houko)
+- Log peer registry poison recovery (#7002) (@houko)
+- Log sidecar state lock poison recovery (#7005) (@houko)
+- Log approval lock poison recovery (#7008) (@houko)
+- Recover poisoned cache locks observably (#7009) (@houko)
+- Log skills state lock recovery (#7010) (@houko)
+- Log accessor lock poison recovery (#7011) (@houko)
+- Recover poisoned shutdown locks (#7012) (@houko)
+- Log registry sync lock recovery (#7014) (@houko)
+- Log ChatGPT token cache recovery (#7015) (@houko)
+- Log reservation ledger recovery (#7016) (@houko)
+- Log bindings lock recovery (#7017) (@houko)
+- Log user credential vault recovery (#7018) (@houko)
+- Log shared vault recovery (#7019) (@houko)
+- Recover poisoned provider state (#7020) (@houko)
+- Log Copilot token cache recovery (#7021) (@houko)
+- Log A2A registry lock recovery (#7022) (@houko)
+- Log taint warning cache recovery (#7023) (@houko)
+- Log quality regex cache recovery (#7024) (@houko)
+- Log trigger persistence recovery (#7025) (@houko)
+- Log workflow persistence recovery (#7027) (@houko)
+- Serialize provider URL config writes (#7043) (@houko)
+- Log credential pool poison recovery (#7045) (@houko)
+- Clear recovered sidecar lock poison (#7046) (@houko)
+- Meter Codex CLI token usage (#7047) (@houko)
+- Meter Gemini CLI token usage (#7048) (@houko)
+- Pipe Qwen prompts over stdin (#7049) (@houko)
+- Fail closed on migration audit errors (#7050) (@houko)
+- Move dashboard install off async workers (#7051) (@houko)
+- Load WASM modules asynchronously (#7052) (@houko)
+- Surface backup listing errors (#7053) (@houko)
+- Propagate prompt store read errors (#7054) (@houko)
+- Fail closed on config read errors (#7055) (@houko)
+- Fail closed on dream lock read errors (#7056) (@houko)
+- Surface extension reload failures (#7057) (@houko)
+- Load agent templates asynchronously (#7058) (@houko)
+- Fail closed on sidecar include errors (#7059) (@houko)
+- Block IPv4-compatible IPv6 SSRF (#7073) (@houko)
+- Drain dashboard sync on shutdown (#7075) (@houko)
+- Serialize proxy initialization (#7130) (@houko)
+- Recover process registry lock poison (#7131) (@houko)
+- Serialize SDK probe cache (#7132) (@houko)
+- Recover trace store lock poison (#7133) (@houko)
+- Recover wiki vault write lock (#7134) (@houko)
+- Recover passkey ceremony locks (#7135) (@houko)
+- Recover channel schema caches (#7136) (@houko)
+- Scrub TOTP internal errors (#7137) (@houko)
+- Recover event bus warning locks (#7138) (@houko)
+- Close shell expansion command bypasses (#7166) (@houko)
+- Serialize session compaction writes (#7167) (@houko)
+- Atomically persist MCP migration (#7168) (@houko)
+- Restore Windows warning-free build (#7171) (@houko)
+
+### Performance
+
+- Trim Tokio features (#6841) (@houko)
+- Drop multithread Tokio runtime (#6844) (@houko)
+- Avoid cloning command payloads (#6850) (@houko)
+- Restore code placeholders once (#6865) (@houko)
+- Offload backup listing and deletion (#6954) (@houko)
+- Make status probes asynchronous (#6955) (@houko)
+- Offload ClawHub install finalization (#6996) (@houko)
+- Offload workspace metadata scans (#7044) (@houko)
+- Offload agent file mutations (#7060) (@houko)
+- Bound skill supporting file reads (#7061) (@houko)
+- Read hand manifests asynchronously (#7062) (@houko)
+- Read config exports asynchronously (#7063) (@houko)
+- Offload sidecar configuration writes (#7170) (@houko)
+
+<details>
+<summary>Documentation, maintenance, and other internal changes</summary>
+
+### Documentation
+
+- Make basic endpoint configurable (#6840) (@houko)
+- Trim quick-start imports (#6847) (@houko)
+- Clarify required field policy (#6849) (@houko)
+- Warn about open allowlist (#6853) (@houko)
+- Record two batch-merge failure modes learned from a 120-PR backlog (#6895) (@houko)
+- Warn that cancelling a live run leaves CI Gate permanently red (#6901) (@houko)
+- Clarify Bedrock context fallback (#7616) (@houko)
+
+### Maintenance
+
+- Update model snapshot (#6693) (@houko)
+- Bump the cargo-minor-patch group with 4 updates (#6709) (@app/dependabot)
+- Bump the actions-minor-patch group with 3 updates (#6718) (@app/dependabot)
+- Bump the web-minor-patch group in /web with 7 updates (#6724) (@app/dependabot)
+- Bump the dashboard-minor-patch group in /crates/librefang-api/dashboard with 7 updates (#6725) (@app/dependabot)
+- Update model snapshot (#6727) (@houko)
+- Bump the docs-minor-patch group in /docs with 9 updates (#6733) (@app/dependabot)
+- Update model snapshot (#6738) (@houko)
+- Update model snapshot (#6786) (@houko)
+- Isolate secret lookup (#6817) (@houko)
+- Align thiserror major version (#6843) (@houko)
+- Allowlist package contents (#6845) (@houko)
+- Declare dependency floors (#6846) (@houko)
+- Update model snapshot (#6907) (@houko)
+- Bump the cargo-minor-patch group with 5 updates (#6924) (@app/dependabot)
+- Bump totp-rs from 5.7.2 to 6.0.0 (#6927) (@app/dependabot)
+- Update model snapshot (#6929) (@houko)
+- Bump the actions-minor-patch group with 2 updates (#6932) (@app/dependabot)
+- Bump Swatinem/rust-cache from e18b497796c12c097a38f9edb9d0641fb99eee32 to a45951ff880207c249adf57334cf2e9bd81d6e1e (#6933) (@app/dependabot)
+- Bump the cargo-minor-patch group across 1 directory with 3 updates (#6937) (@app/dependabot)
+- Update model snapshot (#6953) (@houko)
+- Inherit workspace package metadata (#6957) (@houko)
+- Bump the web-minor-patch group across 1 directory with 4 updates (#7064) (@app/dependabot)
+- Bump framer-motion from 12.43.0 to 13.0.0 in /web (#7065) (@app/dependabot)
+- Bump the dashboard-minor-patch group in /crates/librefang-api/dashboard with 8 updates (#7066) (@app/dependabot)
+- Bump motion from 12.43.0 to 13.1.0 in /crates/librefang-api/dashboard (#7067) (@app/dependabot)
+- Update model snapshot (#7101) (@houko)
+- Bump the docs-minor-patch group in /docs with 5 updates (#7161) (@app/dependabot)
+- Bump motion from 12.43.0 to 13.1.0 in /docs (#7162) (@app/dependabot)
+- Update model snapshot (#7292) (@houko)
+- Update model snapshot (#7466) (@houko)
+- Update model snapshot (#7602) (@houko)
+- Update model snapshot (#7698) (@houko)
+- Update model snapshot (#7706) (@houko)
+
+</details>
+
+
+## [2026.7.31] - 2026-07-31
+
+_58 PRs from 4 contributors since v2026.7.27._
+
+### Highlights
+
+- **API key security** — Keys now support env/vault indirection and a hashed form, closing a hash-only WebSocket/terminal auth bypass; three additional authorization boundaries around plugin execution, MCP env values, and cross-user token refresh were also closed.
+- **Speech-to-text improvements** — Language and prompt parameters now thread through STT, and video containers are accepted as input for transcription.
+- **Browser CDP attachment** — Agents can now attach to browser-level Chrome DevTools Protocol endpoints via `Target.createTarget`, enabling richer browser automation.
+- **EveryAPI integration** — Auto-detection of EveryAPI CLI credentials and new partner surfaces make connecting to EveryAPI faster and require no manual setup.
+- **Kubernetes deployment** — A single-replica baseline with readiness contract and rootless restricted-PSS container support makes LibreFang deployable on Kubernetes out of the box.
+
+### Added
+
+- Add `exec_policy.full_mode_skips_approval`, which decouples the two properties `mode = "full"` has always fused, so an operator can run unrestricted shell commands that still prompt for approval.
+  `Full` waived the global `approval.require_approval` list for `shell_exec` as well as skipping allowlist validation, so an operator who deliberately set `Full` for one agent silently lost their `require_approval = ["shell_exec"]` for it, with nothing on any surface saying so.
+  That coupling was deliberate rather than accidental, so the flag makes a documented decision overridable instead of fixing a bug: with the flag off, `Full` waives only command validation and `[approval]` decides who must confirm, exactly as under `allowlist`.
+  The default is `true` and preserves today's behaviour on every existing install, and it is deliberately not flipped for two reasons that are load-bearing together: `ApprovalPolicy::default()` ships with `shell_exec` in `require_approval`, and `Kernel::spawn` promotes any standalone agent whose `capabilities.tools` contains `shell_exec` or `*` and which declares no `exec_policy` to `mode = "full"`.
+  On a stock install this waiver is therefore the only reason ordinary agents run shell commands unattended, and a flipped default would prompt on every command rather than expressing a new operator intent.
+  The `safe_bins_skip_approval` waiver from #6000 is intentionally left unconditional: it is by its own name an explicit approval opt-out, whereas `Full` is a command-validation mode that never claimed to speak for `[approval]`.
+  A per-user RBAC `NeedsApproval` still forces the approval queue in either position of the flag, and the field is readable on `GET /api/config` alongside its neighbour.
+  Like the rest of `exec_policy` it is baked into each agent's manifest at spawn / restore time, so `POST /api/config/reload` does not retrofit it onto already-running agents — kill the agent and let it respawn, or restart the daemon (#6594) (@houko)
 
 - Add an EveryAPI connect action to the dashboard's Providers page, so registering the gateway no longer requires dropping to `librefang models connect everyapi` in a terminal.
   EveryAPI is not a built-in provider: until a registry entry exists it is absent from `GET /api/providers` altogether rather than merely unconfigured, so the Add picker — which lists what that endpoint already returns — could never surface it, and the dashboard had no path to it at all.
@@ -66,9 +2447,77 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 - Expose per-channel `dm_policy`, `group_policy`, `threading`, and `output_format` on `[[sidecar_channels]]`, restoring the channel-level override slot that was lost in the sidecar migration (#6445): each is `Option<_>`, so `overrides_from_sidecar_config` projects only the fields an operator explicitly set and an unset knob never materializes a policy they did not write. Precedence is unchanged — agent-level `[channel_overrides]` still wins over the per-channel value (#6468) (@houko)
 - Per-user LLM provider credentials, end-to-end (#6460): a human user can store their own upstream provider API key encrypted in the existing credential vault (`CredentialVault`, AES-256-GCM, keyed by `LIBREFANG_VAULT_KEY` / OS keyring) under a per-user, per-provider namespace via `LibreFangKernel::{set,get,remove,list}_user_provider_key`, and their agent turns now bill that key. The authenticated `AuthenticatedApiUser.user_id` is read at the `/api/agents/{id}/message` and `/message/stream` handlers and threaded as `owner: Option<UserId>` through the kernel send/streaming/ephemeral entry points into `resolve_driver_for_owner`, whose precedence is (highest first) org allowlist (#6459) > agent-pinned `api_key_env` > user-scoped key > credential pool > operator `auth_profiles`/`provider_api_keys` rotation > catalog/convention env. The same owner-key preference is applied to every fallback-chain slot, so a provider failover cannot silently bill the operator's credential (a chargeback leak). Paths without a single authenticated initiator — channel messages, cron fires, agent-to-agent sends, and forks/sub-agents — pass `owner = None` and fall back to the daemon-global credential; the fork path additionally clears any inherited owner defensively so a sub-agent's spend is never mis-attributed to the parent turn's user. Global-only behaviour is byte-identical when no user key exists, the plaintext value is never returned through the API (listing surfaces provider names only), and per-owner spend is queryable via the existing `/api/budget/users` rollup. The HTTP/dashboard management surface for provider keys remains a follow-up (#6460) (@houko)
 - Owner-gated HTTP surface for the per-user provider credentials above (#6460 Follow-up B): `PUT /api/users/{name}/provider-keys/{provider}` stores a user's upstream key, `DELETE /api/users/{name}/provider-keys/{provider}` removes it, and `GET /api/users/{name}/provider-keys` lists the provider NAMES a user has configured — never any secret value, since the kernel's plaintext getter stays `pub(crate)` and is deliberately absent from the `KernelApi` trait the HTTP layer calls through; writes are Owner-only via the existing `is_owner_only_write` `/api/users/` prefix gate (the same gate that guards create / delete / rotate-key) and the list GET is Owner-gated in `min_role_for_privileged_get` (mirroring `/api/config/export`) so an Admin cannot enumerate another user's provider layout, the `provider` segment is validated against the canonical `known_providers()` registry (rejecting empty / `/`-containing / unknown names with 400), and an unknown user name yields 404 so a typo never orphans a vault entry (#6460) (@houko)
+- Let the master API credential live somewhere other than cleartext in `config.toml`, via a new `api_key_hash` and by routing `api_key` through the same env / `vault:` resolution the dashboard credentials already used.
+  `config.toml` sits inside the daemon's own writable data dir and gets rewritten by the daemon, so it can never be a read-only Kubernetes Secret mount — `LIBREFANG_API_KEY` and `api_key = "vault:name"` are the two ways to keep the working secret out of the file entirely, and both are now resolved per auth snapshot rather than once at boot, so `POST /api/config/reload` no longer clobbers the override by re-reading the file from disk.
+  `api_key_hash` holds `$sha256$…`, produced by the new `librefang hash-api-key` command, and `$argon2id$…` stays accepted for a hand-written value or a deliberately short human-memorable key.
+  SHA-256 is the recommended form here and Argon2id remains the one for `dashboard_pass_hash`, which reads like an inconsistency and is not: a dashboard password is human-chosen, so the memory-hard KDF is what makes an offline dictionary attack uneconomic, while a master API key is a machine-generated bearer where there is no dictionary to enumerate — the KDF buys nothing against an offline attacker and instead charges ~50–100 ms of CPU to every request, including every wrong token from an unauthenticated caller on paths that have no login-attempt limiter.
+  An `$argon2id$` master hash is therefore verified on a blocking thread rather than inline, so the format an operator chooses can never stall the async runtime.
+  Existing plaintext deployments keep working and get a `$sha256$` hash written to a 0600 `api-key-hash.upgrade-hint` file on first authentication, mirroring the `dashboard_pass` → `dashboard_pass_hash` path; clients keep sending the same key, only the daemon's stored copy changes.
+  The hash is never logged, because it is the verifier — anyone who could read it out of the log stream could paste it into their own config and authenticate.
+  Reloading `api_key` or `api_key_hash` now reaches the HTTP middleware without a daemon restart: `api_key_lock` was previously written only at boot and on a dashboard credential change, so an edited master key kept authenticating with the old value (#6613) (@houko)
+- Attach to browser-level CDP endpoints by creating a target and attaching to it, so a `cdp_endpoint` pointing at a browser-level WebSocket works instead of dying on the first command.
+  `attach()` sent `Page.enable` immediately, which holds only for a page-level endpoint; against a browser-level one no page exists yet, so the session died at startup — Lightpanda reports this as `BrowserContextNotLoaded`, Chrome as `'Runtime.enable' wasn't found`.
+  On a `ws://` endpoint librefang now asks `Target.getTargetInfo` which shape the endpoint is and, only when it answers `type: "browser"`, issues `Target.createTarget`, follows with `Target.attachToTarget` using `flatten: true`, and stamps the returned `sessionId` onto every later command so the browser routes it to that target.
+  Reading the kind off the protocol rather than inferring it from a failed command is deliberate: Chrome accepts `Target.createTarget` on a page-level connection too and opens a second tab, so anything short of a definite answer would risk moving a configuration that points at a specific page onto a blank one.
+  Anything other than `browser` — including an endpoint that does not implement `Target.getTargetInfo`, and any failure of the query itself — stays on the page-level path, reconnecting first so a server that drops the socket on an unknown method cannot leave the caller worse off than before the query was sent.
+  A dropped CDP socket now fails the commands still waiting on it instead of leaving them to time out: the reader loop answers them with `CDP connection closed` when it exits, so a dead connection is reported as itself rather than as a 30-second stall per in-flight command.
+  Both cleanup branches are pinned by tests that fail when the close call is neutered, since a leaked tab is invisible to an assertion on the returned error alone.
+  A tab is now closed on a failed attach whichever way it was created — `Target.closeTarget` for one created over CDP, `/json/close/{id}` for one discovered over HTTP — since both leave a tab that no session will ever track.
+  A target created this way is closed with `Target.closeTarget` rather than the `/json/close/{id}` route used for HTTP discovery, which does not exist on a `ws://` endpoint, and a handshake that fails partway closes the target it already created rather than abandoning a blank tab that nothing would reap (#6617) (@nevgenov)
+- Make the page-extraction cap operator-configurable as `[browser] max_content_chars`, defaulting to the 50,000 characters it was hard-coded at, and report the pre-truncation length in the marker so the model can tell how much it is missing rather than only that something was lost.
+  A mainstream Wikipedia article overruns the old cap, and the compile-time constant was the only extraction-adjacent limit `BrowserConfig` did not expose while carrying `timeout_secs`, `idle_timeout_secs`, `max_sessions` and the viewport dimensions as knobs — despite being the one most coupled to a deployment-specific fact the project cannot know, the context window of the model behind the agent.
+  The marker now counts against the cap: the script cuts far enough back that content plus `... (truncated, N chars total)` lands within the limit, so an operator sizing the value to a context window gets a real ceiling rather than one the marker silently overshoots.
+  `EXTRACT_CONTENT_JS` is no longer a `LazyLock` — a process-wide singleton over a config-dependent value would serve whichever cap the first extraction observed to every later one, so the script is built per call from a `str::replace` on a ~2 KB template, on a path that then makes a CDP WebSocket round trip.
+  Like every other `[browser]` field the value takes effect on daemon restart, because `BrowserManager` captures `BrowserConfig` by value at boot (#6687) (@houko)
+- Add per-PR changelog fragments under `changelog.d/`, so writing a changelog entry no longer means editing the one file every other open PR is also editing.
+  Every PR appended its bullet to the single `## [Unreleased]` section of `CHANGELOG.md`, which made a merge conflict certain between any two concurrent PRs and carried no information when it happened — both sides were correct and the resolution was always "keep both".
+  It bit hardest on fork PRs, where the maintainer cannot rebase the contributor's branch at all.
+  A fragment is one file holding one bullet body without the leading `- `, in the section directory matching its `### ` heading (`added/`, `fixed/`, `changed/`, `security/`, `documentation/`), so two PRs never touch the same file and the conflict is structurally impossible rather than merely rarer.
+  `cargo xtask collect-fragments` folds fragments into `## [Unreleased]` and deletes the files it consumed; `cargo xtask release` runs that step before cutting the dated release section, which is what keeps the `awk` extractors in `release.yml` and `release-notify.yml` slicing an unchanged file shape.
+  Assembly **appends** to a `### ` subsection that already exists rather than replacing it, and creates a missing one in the repo's existing order, so editing `## [Unreleased]` by hand keeps working and the PRs already doing that are unaffected — the existing 160 bullets are deliberately not migrated, since converting them would rewrite the exact lines those PRs are conflicting on.
+  Fragments are sorted by file name within each section rather than read in filesystem order, because an unsorted directory read would make the assembled file depend on the order the fragments happened to be created in.
+  A fragment that cannot be deleted after the fold fails the command by name rather than propagating a bare `Permission denied`, because `CHANGELOG.md` is already written by then and a silent partial delete would make the next run fold the same entry in twice.
+  `scripts/check-changelog-attribution.py` holds a fragment to the same standard as an `[Unreleased]` bullet in all four of its modes, reusing the one `bullet_block_has_attribution` predicate so there is a single copy of the `(@user)` rule, and additionally rejects a fragment in an unrecognised section directory — assembly has no heading to render such a fragment under, so it would be dropped without a word and the entry would vanish from the release notes.
+  The `pre-commit` hook's attribution check now also fires when a commit stages only a fragment, which is the normal case and would otherwise have gone entirely unchecked.
+  The release commit stages `changelog.d` as a directory so the deletions the fold performs land in the commit; a per-file stage is a no-op for a path that no longer exists, and leaving them unstaged would keep the consumed fragments on `main` and fold the same bullets in again at the next release (#6628) (@houko)
+- Add `GET /api/ready`, a public readiness probe that returns 503 when a dependency required to accept work is unavailable.
+  `GET /api/health` could not serve this purpose: it returns 200 even while its body reports `status: degraded`, so a Kubernetes probe — which sees only the status code — could never remove a degraded pod from Service endpoints.
+  Changing `/api/health` itself would have conflated liveness with readiness and restart-looped pods through recoverable storage incidents, so the two contracts are now separate endpoints (#6633) (#6638) (@houko)
+- Add an officially supported single-replica Kubernetes deployment under `deploy/kubernetes/`, as Kustomize manifests plus operator documentation.
+  The repository previously shipped Docker Compose only, leaving every operator to invent their own StatefulSet — and to rediscover on their own that SQLite WAL on shared storage and `replicas: 2` both corrupt state.
+  `scripts/check-k8s-manifests.py` asserts the properties that fail silently when they regress (`replicas: 1`, the liveness/readiness split, `ReadWriteOnce`, credentials from Secrets rather than literals), and a new CI workflow boots the manifests in kind under enforced `restricted` Pod Security and proves `/data` survives pod replacement (#6635) (#6638) (@houko)
+- Add `LIBREFANG_API_KEY` as an environment override for the API bearer token.
+  `config.toml` lives inside the daemon's own writable data dir and is rewritten at boot, so it cannot be mounted from a Kubernetes Secret — leaving no way to supply `api_key` without baking the literal into an image.
+  An empty value is ignored with a warning rather than treated as "clear the key", because a Secret key that exists but is unset would otherwise disarm bearer authentication on a non-loopback bind (#6635) (#6638) (@houko)
+- Auto-detect a locally installed and logged-in EveryAPI CLI and expose it as an LLM provider without ever copying its relay key into a LibreFang-owned file.
+  Credentials are resolved per request through EveryAPI's own credential-process command and refreshed once after an HTTP 401, so EveryAPI remains the authority for key selection, OAuth refresh, and region resolution.
+  Explicit provider keys, URLs, and user suppression still take precedence over auto-detection, and `librefang doctor` reports the detected wiring and any conflicting configuration (#6641) (@houko)
+- Add official EveryAPI partner links and documentation across the website footer/CTA, README, dashboard sidebar, and docs navigation, in English and Chinese.
+  Correct the EveryAPI provider guide to use `everyapi auth login` and the current credential-process discovery flow, and point EveryAPI CLI references at the public `everyapi-ai/everyapi-ai` repository (#6646) (@houko)
+- Thread the `language` and `prompt` parameters from `media_transcribe` / `speech_to_text` through to the multipart form Whisper-compatible providers actually receive, instead of reading and discarding them.
+  `language` was advertised in both tools' schema and silently dropped, so the provider always fell back to auto-detection regardless of what the caller asked for — a misdetected language does not error, it returns fluent, plausible, wrong text.
+  `prompt` is genuinely additive: it supplies domain vocabulary and proper nouns the model would otherwise transcribe as phonetic near-misses, and improves punctuation and casing on long recordings.
+  Both follow the precedent `tool_text_to_speech` already used for `language`: the per-call value wins, and `[media] audio_language` / `audio_prompt` are the new operator-configured fallback for calls that omit either field.
+  Only the whisper-protocol provider arms (Groq, OpenAI, MiniMax, Fireworks, Together, SiliconFlow, and any `[media.custom_stt]` self-hosted endpoint) receive these — Gemini and ElevenLabs are separate provider contracts with no equivalent parameter.
+  An install that sets neither field sees a byte-identical request to before either parameter existed (#6678, #6683) (@houko)
 
 ### Fixed
 
+- Drive the dashboard's per-channel status indicator from the sidecar supervisor's real liveness instead of from message traffic, and surface the fields it reads on `GET /api/channels`.
+  The indicator was `msgs_24h > 0 ? "running" : "idle"`, so a healthy-but-quiet channel rendered grey and a channel that died after handling messages rendered green; `ChannelStatus.connected` and `last_error` were maintained by the supervisor all along but were not present on the payload at all.
+  Configured rows now carry `connected`, `started_at`, `last_message_at`, `messages_received`, `messages_sent`, `last_error`, and a `supervised` flag that says whether an adapter is registered for that instance name at all, all read per sidecar instance.
+  The card maps those onto seven states — not started, starting, connected, active, degraded, stopped, failed — with the state spelled out as visible text and folded into the card's `aria-label`, since the card's own label otherwise overrides its contents for assistive tech and the colour would be the only carrier of meaning.
+  `connected` with a `last_error` reads as degraded rather than healthy or dead, because the supervisor sets `last_error` on failure and never clears it, not even on the successful respawn that follows.
+  A configured channel with no registered adapter reads as amber rather than grey: grey is what made a dead bot look benign in the first place, and the API layer genuinely cannot distinguish "start failed and the registration was rolled back" from "never started".
+  The mapping lives in a shared `src/lib/channelLiveness.ts` so the Comms page's channel cards render the same verdict from the same payload rather than repainting config presence as an online badge.
+  The `librefang channel list` table gains CONNECTED and IN/OUT columns plus a per-channel error footnote, fed the raw supervisor fields rather than a second copy of the state mapping (#6606) (@houko)
+- Stop presenting the channels page's 24h message count as per-bot traffic when it is a per-channel-type aggregate.
+  `usage_events.channel` stores the channel *type*, so the handler's `msgs_24h.get(channel_type).or_else(|| msgs_24h.get(name))` always hit on the first lookup and the per-instance fallback was unreachable: on a host running six Telegram sidecars every card reported the same number, the total across all six, and because the status dot was derived from it the whole page turned green whenever any one bot saw traffic.
+  Re-keying that column per instance is not available: it is written from `SenderContext.channel`, which the bridge derives from the `ChannelType` on the inbound message (the instance name never reaches it) and which also feeds `SessionId::for_channel(agent, channel)` and the auth `identify(&channel, …)` binding, so re-pointing it at the instance name would silently re-derive every existing channel session.
+  So the figure is now published as `msgs_24h_channel_type` alongside the `channel_type` it covers, the unreachable fallback is gone, and the dashboard shows it in the details drawer captioned with its actual scope instead of on the card where it read as this bot's traffic.
+  Per-instance traffic comes from the supervisor's own `messages_received` / `messages_sent` counters, labelled as since-adapter-start because they survive supervised restarts and are not a 24h figure.
+  `UsageStore::channels_msgs_24h_bulk` is renamed to `channel_type_msgs_24h_bulk` so the grouping is not misread again at the call site (#6606) (@houko)
+- Render a failed `GET /api/channels` as an error on the channels page instead of the "no channels configured" empty state, which made an unreachable daemon look like a clean install on the page whose whole purpose is now health signalling (#6606) (@houko)
 - Merge instead of replace in `PATCH /api/agents/{id}/identity`, so a partial body no longer nulls the identity fields it omits.
   The handler built a fresh `AgentIdentity` from the request alone with no read of the stored one, so `PATCH {"emoji": "X"}` silently discarded `avatar_url`, `color`, `archetype`, `vibe` and `greeting_style` and returned `200` — while the sibling `PATCH /api/agents/{id}/config`, which writes the same six fields, merged them correctly.
   Two PATCH endpoints on one resource with opposite semantics is the actual defect, so the six-field merge is now a single shared `merge_agent_identity` helper that both handlers call rather than a copy in each; an integration test asserts the two routes produce the same stored identity for the same partial body.
@@ -79,6 +2528,34 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
   A request that submits only `capabilities_tools` is checked too, because narrowing the grant surface is itself a way to silence a stored allowlist entry, and the operator who just issued that request is the one who needs to hear about it; a request that touches neither field (blocklist only) stays quiet about whatever was already stored.
   Only provably inert entries are reported, because a false warning on a working configuration would be worse than the silence: the check is skipped entirely when `capabilities.tools` is unbounded (empty or `*`), and it never flags a glob (a later skill install or MCP connect can make it match), an `mcp_`-namespaced entry (MCP tools bypass `capabilities.tools`), or a self-evolution tool (injected regardless of what the manifest declares).
   The declared side is glob-evaluated rather than string-compared, so `capabilities_tools = ["file_*"]` with `tool_allowlist = ["file_read"]` is correctly left alone (#6609) (@houko)
+- Render every `approval_audit.decision` value distinctly in the dashboard's Approvals History table instead of labelling four of the six values it can hold "Edited".
+  `ApprovalsPage.tsx` branched on `approved` / `approve` and `rejected` / `reject` and let everything else fall through to a yellow pencil "Edited" badge — the same rendering as a genuine modify-then-approve — so on the reporter's host 46 of 56 audit rows (28 `pending`, 18 `timed_out`) claimed an operator edit that never happened.
+  `timed_out` means nobody answered before the timeout expired and `pending` is the submission marker written before any decision exists; on an approval audit trail those are the opposite of the operator involvement the badge asserted.
+  A `pending` row is not evidence that the request is still open — resolution inserts a second row instead of updating the first one — so every one of the reporter's 28 `pending` rows belongs to a request that has since closed; that data-model quirk is untouched here and raised on the PR.
+  `denied` was mislabelled by the same fall-through, which the issue does not mention: `ApprovalDecision::as_str` writes `denied`, but the branch only matched the `rejected` / `reject` spellings that `routes/approvals.rs` uses on sibling shapes, so every genuinely-denied request rendered as an operator edit too — of the six values the daemon can write, only `approved` and (coincidentally) `modify_and_retry` were labelled correctly before this change.
+  Each of the six values the daemon writes now carries its own label, icon and theme colour — `timed_out` neutral with a clock, `pending` in-progress, `modify_and_retry` the actual "Edited" case, `skipped` distinct — and every state pairs that colour with label text and an `aria-label` naming the decision, so the trail is readable without colour perception.
+  An unrecognised value renders the raw string (or an explicit "unknown status" when the field is empty) rather than borrowing another decision's label, so a variant a newer daemon adds degrades visibly instead of becoming a false record.
+  The frontend type is narrowed from `string` to a `KnownApprovalDecision` union plus an explicit escape for unknown values, the presentation table is a total `Record` over that union so adding a member without giving it a label is a compile error, and the entry interface picks up the `second_factor_used` field the Rust struct already carries.
+  `ApprovalAuditEntry::decision` stays a `String` on the Rust side deliberately: the column is read back for rows written by any past version and `query_audit` drops rows it fails to deserialize, so a strict enum would silently shorten a security audit trail on one legacy value — the value set is documented on the field and pinned by a test instead (#6607) (@houko)
+- Expose `external_auth.require_email_verified` and the six missing `OidcProvider` fields (`auth_url`, `token_url`, `userinfo_url`, `jwks_uri`, `audience`, and the per-provider `require_email_verified` override) in `GET /api/config`, while keeping every one of them non-writable.
+  `require_email_verified` is the #3703 mitigation — it rejects a login whose ID token does not carry `email_verified = true`, which is what stops an unverified address in an `allowed_domains` domain from inheriting that domain's authorization — and it is deliberately absent from the `POST /api/config/set` allowlist so an Owner-role caller with a leaked API key cannot switch it off.
+  Omitting it from the read side too was the wrong asymmetry: an operator had no way to confirm the protection was active without shell access to read `config.toml`, and with the provider endpoint overrides hidden as well, a non-OIDC provider's explicit `auth_url` / `token_url` / `jwks_uri` were invisible from any surface.
+  Nothing newly exposed is secret-bearing: `client_secret_env` names the environment variable the secret is read from and `client_id` is the public half of the client registration, both of which were already emitted, and the secret itself never lives in config.
+  The read/write parity guard added in #6604 cannot catch this class, because it enforces `writable ⊆ readable` and a field that is intentionally non-writable sits outside that invariant by construction (#6605) (@houko)
+- Remove `ui.theme`, `ui.locale`, `ui.timezone`, and `ui.language` from the `POST /api/config/set` allowlist, where they had accepted writes that were silently thrown away since #4113.
+  `KernelConfig` has no `ui` field and never had one, so the write path validated the dotted path against the allowlist, edited `config.toml` through `toml_edit` keyed by it, and dropped a `[ui]` table on disk that the next load discarded — `KernelConfig` does not set `deny_unknown_fields`, so neither the post-edit parse nor the reload could reject it.
+  The caller received a success status for a change that was never applied and never read back, and `GET /api/config` reported `ui` as null.
+  Nothing ever posted them: the dashboard keeps theme, language, and sidebar state in browser `localStorage` through zustand's `persist` middleware (key `librefang-ui-storage`), which is why four dead paths went unnoticed for three months.
+  The unit test that pinned them as writable now pins them closed (#6605) (@houko)
+- Add `every_writable_allowlist_entry_has_a_backing_config_field`, the mirror of #6604's read/write parity guard: every entry in the `POST /api/config/set` allowlist must name a field that actually exists on `KernelConfig`.
+  The parity guard derives its candidate paths *from* a serialized config, so a path naming a field that does not exist is structurally invisible to it — which is why the four `ui.*` entries survived it.
+  The oracle is the schemars-derived JSON Schema rather than a serialized config value, because a value walk cannot see a field whose `#[serde(skip_serializing_if = …)]` predicate holds for its default and 63 of those attributes exist in `config/types.rs`, several on writable paths (`exec_policy.allowed_env_vars`, `budget.providers`, `tool_invoke.allowlist`), so a value-based oracle would report real fields as dangling.
+  The guard needs no exclusions — with the four `ui.*` entries gone, all 29 remaining exact paths and all 54 section prefixes resolve — and it carries the same sanity floor as its sibling plus negative controls asserting the resolver still rejects `ui.theme` and an invented section, since the failure mode of a path resolver is over-permissiveness rather than emptiness.
+  The two allowlists moved from `const` items inside `is_writable_config_path` to module scope so the guard reads the real lists instead of restating them (#6605) (@houko)
+- Share one tempfile sequence between the two `config.toml` writers in `routes/sidecar_toml.rs`, so a concurrent channel configure and remove can no longer clobber each other's write.
+  `upsert_sidecar_block` and `remove_sidecar_block` each declared a function-local `static SEQ: AtomicU64 = AtomicU64::new(0)` while both formatted into the same `.config.toml.tmp.{pid}.{seq}` namespace, so the first call to either in a process minted the identical path and the two could write and rename each other's tempfile — landing one request's document at the other's target or losing it outright.
+  The comment above the first counter already claimed it "guards against concurrent threads within this process (e.g. parallel tests, or two HTTP handlers racing on the same config file)", which is the guarantee two independent counters cannot provide.
+  Both writers now go through one `atomic_write` helper backed by a module-level counter, and a test draws names concurrently from eight threads and asserts they are all distinct (#6605) (@houko)
 - Store the EveryAPI gateway base URL with its `/v1` segment when connecting from the dashboard, matching what the CLI writes.
   `EVERYAPI_PROVIDER.defaultBaseUrl` was `https://api.everyapi.ai` on a doc comment claiming the drivers append the path themselves, which no driver does: the OpenAI-compatible driver builds `{base_url}/chat/completions` and the daemon's catalog refresh builds `{base_url}/models`.
   A dashboard connect with the gateway field left blank therefore registered a provider whose model fetch 404s, and because that failure is only `warn!`-logged and then throttled per base URL, the entry sat configured-with-zero-models indefinitely while the identical `librefang models connect everyapi` flow worked.
@@ -114,18 +2591,26 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
   Activation also logs the resolved mode and where it came from, so an escalation is visible at activation time instead of only through the per-call warning much later.
   Scope: this covers the hand-activation path only, which leaves a divergence worth knowing about.
   `spawn_agent_inner` and the boot-time restore loop still promote a *standalone* agent to `Full` on the identical trigger, so post-fix the same `shell_exec` tool is unrestricted on a standalone agent and allowlisted on a hand agent; that promotion is deliberate today (it has its own regression test) and changing it needs an `allowed_commands` migration story, so it is left for a separate decision (#6594) (@houko)
-- Read a hand's declared `[metadata] frequency` when resolving its agents' schedules, instead of inferring autonomous ticking from `max_iterations`.
-  `max_iterations` is the agent-loop iteration cap — `librefang-runtime` resolves it from `manifest.autonomous.max_iterations`, and the flat HAND.toml field exists only to carry it — but activation turned `autonomous.is_some()` into `ScheduleMode::Continuous` with `heartbeat_interval_secs` as the interval, so a hand asking for a loop-depth cap of 80 got a permanent 30-second wake-up cycle it never declared, including on hands whose own metadata said `frequency = "on-demand"`.
-  `HandFrequency` was the declaration hand authors actually wrote and it was consumed nowhere in the kernel, which is why the two disagreed.
-  Resolution order for a hand agent's schedule is now: the role's own `schedule` if it declares a non-reactive one (the only way to reach the `periodic` cron and `proactive` variants), else the hand's `frequency` for *whether and how often* the role ticks combined with the role's `[autonomous]` guardrails for *which* roles tick, else `reactive`.
-  Requiring both halves keeps a multi-role hand's delegated sub-agents asleep — the bundled `devops` hand has five roles and gives `max_iterations` to the two that run loops — so the set of agents that get a background loop only ever shrinks relative to the old behaviour.
-  `continuous` ticks at the role's `heartbeat_interval_secs` (unchanged 30s default), `hourly` at 3600s, `daily` at 86400s, and `periodic` at 300s to match the `ScheduleMode` `check_interval_secs` default; `on-demand` ticks never, and now accepts `reactive` as an alias, since that was the natural value to reach for when trying to switch ticking off and it used to be a parse error.
-  Across the bundled registry this stops ticking for the six agent roles belonging to the three hands that declared `on-demand` (`clip`, `creator`, and all four `wiki` roles), and slows the three roles that declared `hourly` or `daily` (`reddit`, `twitter`, `linkedin`) from 30 seconds to the cadence they asked for.
-  The eleven roles on `continuous` hands, including the `devops` auto-evolution pipeline, tick exactly as before, and no role starts ticking that was not already (#6595) (@houko)
+- Require an explicit declaration before a hand's agent gets a wake-up cycle, instead of inferring autonomous ticking from `max_iterations`.
+  `max_iterations` is the agent-loop iteration cap — `librefang-runtime` resolves it from `manifest.autonomous.max_iterations`, and the flat HAND.toml field exists only to carry it — but activation turned `autonomous.is_some()` into `ScheduleMode::Continuous` with `heartbeat_interval_secs` as the interval, so a hand asking for a loop-depth cap of 80 got a permanent 30-second wake-up cycle it never declared and could not find in any file.
+  A role now leaves `reactive` only if its own section says so: an explicit `schedule`, honoured verbatim and still the only route to the `periodic` cron and `proactive` variants, or an explicit `[autonomous]` block, which schedules the role continuously at that block's own `heartbeat_interval_secs`.
+  A role declaring nothing but `max_iterations` — at any `[metadata] frequency` — stays reactive and keeps its cap, and `[metadata] frequency` goes on being catalog-display metadata that the kernel does not read.
+  Distinguishing an author-written `[autonomous]` block from the one synthesized to carry `max_iterations` is impossible after deserialization, since both land in the same `Option<AutonomousConfig>`, so the decision moved into `librefang-hands` where the raw TOML table is still available and an `autonomous` key means somebody typed one; the schedule-rewriting block in `hands_lifecycle.rs` is deleted outright, leaving hand roles to honour `schedule` exactly the way `spawn_agent_inner` already honours it for a standalone agent.
+  **Hands that were implicitly ticking will stop, and that is a behaviour change, not only a bug fix.**
+  Every role that wants to keep its loop needs an explicit `[autonomous]` block (or an explicit `schedule`) added to its HAND.toml; across the bundled registry that is 20 of the 59 roles — every role that carries `max_iterations`, since not one declares an `[autonomous]` block or a `schedule` today — including all four `wiki` roles and both loop-running `devops` roles (`main` and `implementer`).
+  `devteam`'s `pm` / `engineer` / `qa` are the only roles that inherit through `base =`, from the `planner` / `coder` / `code-reviewer` templates in the registry repository; none of those three declares `max_iterations`, `[autonomous]`, or `schedule`, so those roles were already reactive and are unaffected either way.
+  The shipped registry lives in its own repository, so those manifests are a follow-up there rather than something this change can carry, and `devops`'s own system prompt asserts "The Hand is already `frequency = \"continuous\"`, so this Phase fires once per turn" — prose that needs revisiting alongside the manifest.
+  No role in the registry starts ticking: not one of the 59 declares an `[autonomous]` block or a `schedule` today, so the new condition is unsatisfied everywhere and the set of roles with a background loop only shrinks.
+  The rule is not a subset of the old one in the abstract — a flat-format role that did write an explicit `[autonomous]` block would newly tick, since that block used to be dropped by the flat-format parse entirely (the bullet below) — but no such role exists to be affected.
+  `frequency = "reactive"` also stops being a TOML parse error — #6595 reports an operator reaching for that spelling while hunting the ticks — though as catalog metadata it has no effect on scheduling either way (#6595) (@houko)
+- Key the heartbeat monitor off an agent's `schedule` rather than the presence of `[autonomous]`, so an agent that nothing wakes is no longer flagged `BecameUnresponsive` for sitting idle.
+  The comment above the check already said "skip passive agents"; `autonomous.is_some()` was only ever a proxy for that, and it held while activation derived `Continuous` from the mere presence of the field.
+  Once `autonomous` means "carries a loop cap, and possibly guardrails" — which says nothing about whether the agent wakes itself — the proxy inverts: a role declaring `max_iterations` with no `[autonomous]` block and no `schedule` becomes the common shape, 20 of the 59 roles in the registry, and every one of them would be reported unresponsive for behaving exactly as configured.
+  Four pre-existing heartbeat tests built their agents with a default reactive schedule; the two that expected the agent to be checked would have failed, and the two that expected it skipped would have started passing for the wrong reason, so all four now declare a continuous schedule and still exercise what their names claim (#6595) (@houko)
 - Carry `schedule`, `[autonomous]`, and `[exec_policy]` through the flat HAND.toml agent format instead of dropping them.
   `parse_single_agent_section` tries `LegacyHandAgentConfig` first for any agent section without a `[model]` sub-table — the shape every hand in the registry uses — and that struct has no `deny_unknown_fields`, so all three keys were deserialized into a struct that did not declare them and vanished with no diagnostic.
-  Each is a documented per-hand opt-in, so the opt-in was unreachable for exactly the hands that need it: such a hand could not pin a schedule of its own, and could neither tighten nor loosen its exec policy.
-  An explicitly declared `[autonomous]` block now wins over the one synthesized from `max_iterations`.
+  Each is a documented per-hand opt-in, so the opt-in was unreachable for exactly the hands that need it: such a hand could not pin a schedule of its own, could not declare the autonomy it wanted, and could neither tighten nor loosen its exec policy.
+  This is what makes the explicit declarations above reachable at all for a flat-format hand, and an explicitly declared `[autonomous]` block now wins over the one synthesized from `max_iterations`.
   One consequence worth knowing: a malformed value under any of the three keys now fails the parse and the hand is skipped by `reload_from_disk`, where it used to be ignored silently — no hand in the registry declares any of them today, so nothing regresses now (#6594, #6595) (@houko)
 - Expose every config field on `GET /api/config` that `POST /api/config/set` accepts, so a setting the dashboard just saved stops reading back as "not configured".
   The response body is hand-enumerated section by section, and a long tail of writable fields had never been added to it — among them `browser.enabled` / `browser.cdp_endpoint`, `media.image_model` / `media.custom_stt`, `tts.custom`, `approval.totp_grace_period_secs`, `web.timeout_secs`, `exec_policy.allowed_env_vars`, and the whole `[terminal]` section, which the dashboard declares a page for but could never populate.
@@ -288,6 +2773,166 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 - Clear `cargo-deny` advisory failures on `main` by bumping `anyhow` to 1.0.103 (RUSTSEC-2026-0190) and ignoring the unmaintained `ttf-parser` advisory (RUSTSEC-2026-0192 — transitive via `pdf-extract` → `lopdf`, no safe upgrade available) (#6366) (@houko)
 - Clear the `quick-xml` advisories RUSTSEC-2026-0194 / RUSTSEC-2026-0195 by bumping `plist` to 1.10.0 (pulls the patched `quick-xml` 0.41.0) and `tauri-winrt-notification` to 0.7.3 (drops its `quick-xml` dependency), removing both vulnerable versions from the lockfile (#6387) (@houko)
 - Raise the Nix Build job timeout to 120 minutes so the now-routine cold builds — the Rust CI lanes churn the repo's 10 GB Actions cache quota daily, evicting the `/nix/store` cache between runs — complete instead of being cancelled at 60 minutes, unbreaking the workflow that had been red on `main` since June 11 (#6389) (@houko)
+- Route every dashboard copy button through the clipboard helper, so copying works on a daemon reached over plain HTTP at a LAN or VPN address.
+  `navigator.clipboard` is only defined in a secure context, so on `http://<lan-ip>:4545` the property is `undefined` and a bare `navigator.clipboard.writeText(...)` throws before the promise exists — the button produced no clipboard content, no error, and no visual feedback.
+  `lib/clipboard.ts` has fixed this since it was written, falling back to `document.execCommand('copy')` through a detached textarea, but only the chat page imported it; the config page, audit detail, agents page, users page, skill install command, and TOML viewer had all reintroduced the raw API.
+  The helper reports failure by resolving to `false` rather than throwing, so each call site now branches on the result instead of on a `catch` that could never fire — the users page in particular gated the close button of a one-time-visible rotated API key on a copy it never verified, and two call sites showed a "Copied" toast unconditionally.
+  An eslint `no-restricted-properties` rule now rejects `navigator.clipboard` everywhere in the dashboard except the helper itself, because the helper's own comment shows this was already fixed once and regressed (#6668) (@houko)
+- Expose `peer_id`, `session_mode`, and `delivery` on `/api/schedules`, which `/api/cron/jobs` already reported for the identical job.
+  The two routes are deliberate alternate views over one `CronJob` store — the cron view serializes the struct whole, the schedules view renders a flattened presentation — and the flattened one had fallen behind on all three fields that decide how a fire behaves: which peer's memory it resolves against, whether every fire shares one session or gets an isolated one, and where its output goes.
+  The reporter could confirm only `peer_id` because `CronJob::session_mode` carries `skip_serializing_if = "Option::is_none"`, so an unset value is absent from the cron view rather than null and looked the same as a field that does not exist.
+  The schedules view therefore emits both as explicit nulls when unset, matching how it already renders `tz`, `last_run`, and `next_run`: a read surface with a stable key set lets a client tell "not configured" apart from "the server is too old to report it".
+  `POST /api/schedules` now sets all three as well, where it previously hardcoded `peer_id` to null, forced `delivery` to the fire-and-forget variant, and parsed `session_mode` through an `.ok()` that turned a misspelling into "use the agent's default" behind a `201`; a malformed value on any of them is now a 400 that names the field.
+  `PUT /api/schedules/{id}` patches `delivery`, which the kernel has always supported and this route simply never forwarded.
+  It cannot patch `peer_id` or `session_mode`, because `CronScheduler::update_job` has no branch for either and its omitted-or-null-means-untouched convention cannot express clearing an optional field, so a request that tries to change one is refused with a 400 explaining that a recreate is needed rather than answered with a 200 for a patch that never applied — echoing the stored value back stays a no-op so the natural read-modify-write round trip still works (#6668) (@houko)
+- Report `cost_usd`, `total_tokens`, `duration_ms`, and the derived `label` on `GET /api/sessions/{id}`, which the session list has always computed and the detail endpoint did not.
+  The list derives cost and tokens from a `usage_events` join, the duration from the first-to-last stamped message, and a label snippet from the first user message when the column is empty, while the detail handler hand-built a fixed object carrying none of that — so the same session answered differently depending on which route you asked, and an unnamed session that reads as "hello…" in the list read as `null` in the detail.
+  The same root cause as #6596, so both views now share one helper per value rather than a second copy of the derivation, since a copy is what let them diverge in the first place.
+  The shapes match the list exactly: cost and tokens are numeric zeros for an unmetered session rather than null, the duration is null below two stamped messages, and an explicit label still wins over the snippet.
+  A failed usage aggregate now returns 500 rather than a zero, matching the session load beside it — reporting no spend for a session that spent money is the same silent-wrong-value failure this issue is about (#6668) (@houko)
+- Render `approval.trusted_senders` as a read-only card on the Approvals page, so the approval-bypass roster is auditable from the dashboard and not just from the API.
+  A sender on that list skips the approval prompt for every tool the risk classifier does not rank high, and it reached no operator-facing surface at all — #6637 exposed it on `GET /api/config` along with the rest of the non-writable `ApprovalPolicy` fields, but nothing rendered it, so auditing who holds the waiver still meant shell access to read `config.toml`.
+  It stays out of the config write allowlist for the reason it needed exposing in the first place: adding yourself to an approval-bypass list over HTTP is precisely the escalation the approval gate exists to prevent, so holding an API key must not be enough to do it.
+  The card sits above the pending queue because it explains the requests that never arrive, and an empty list is presented as the reassuring state it is — every sender goes through the gate (#6668) (@houko)
+- Reject unknown keys inside `[mcp_servers.transport]` instead of silently discarding them, closing a gap between an MCP server entry and the transport table nested one level inside it.
+  `McpServerConfigEntry` has carried `deny_unknown_fields` since #5130, because the `detect_unknown_nested_fields` walker bails on array-of-table paths and serde is the only layer that can see a typo in a `[[mcp_servers]]` element at all — but `McpTransportEntry` and the two structs under its `http_compat` variant did not, so the guard stopped exactly one level above where operators hand-write the most config.
+  A reporter's `[mcp_servers.transport.env]` table was dropped whole at load: `env` is real, but it belongs to the parent entry as a `Vec<String>` of variable *names*, not to the transport as a key/value table, and nothing said so.
+  The subprocess ran with neither variable set and `GET /api/mcp/servers/{name}` reported `"env": []`, while the server's own script fell back to hardcoded defaults that happened to match — so the misconfiguration was invisible until a credential rotation, at which point the rotated secret would have been written to an inert table and the stale default kept working.
+  `HttpCompatHeaderConfig` and `HttpCompatToolConfig` had the same gap and are guarded too; both sit under `[[mcp_servers.transport.headers]]` / `[[mcp_servers.transport.tools]]`, arrays of tables nested inside an array of tables, and every field on them except `name` and `path` has a `serde(default)`, so a misspelled `responce_mode` left the tool wired to the default JSON response mode rather than the operator's choice.
+  On an internally-tagged enum serde applies the attribute per variant against the buffered content, which is not obvious from the attribute alone and is not true of adjacently- or untagged-tagged containers, so the behaviour is pinned by tests over the reporter's exact TOML rather than assumed from the fact that it compiles.
+  Read this before upgrading, because the failure is loud and total rather than local: a stray key under `[mcp_servers.transport]` now makes `librefang start` **exit non-zero without starting the daemon** — the deserialize error propagates out of `load_config`, and `cmd_start` short-circuits on it precisely so the diagnostic naming the offending key reaches stderr instead of being swallowed by a tolerant default.
+  It is not "that one server is skipped"; nothing boots until the key is removed.
+  Because the rejection happens inside serde it applies whether or not `strict_config` is set, the same way the parent entry has already behaved for a misspelled scalar such as `timout_secs`.
+  The hard stop is boot-only: `POST /api/config/reload` maps the same error to a `400` and leaves the running config in place, so a live daemon surfaces the typo without dropping its MCP connections — worth knowing if you edit `config.toml` on a running host, since reload tells you about the mistake at no cost while a restart on the same file will not come back up.
+  Two read-side keys the API synthesised into the `transport` object, a derived `source` discriminator on each `http_compat` header and a `tools_count` duplicating the length of the array beside it, are gone: neither is a field of the guarded types, so with the guard in place they turned any `GET` → `PUT` of an `http_compat` server into a `400`, and serde short-circuits at the first unknown key so both had to go.
+  The same read route also omitted `input_schema`, which has a `serde(default)`, so that round trip had been quietly overwriting a hand-authored JSON Schema with `{"type":"object"}` — it is now emitted, and a static `http_compat` header `value`, which stays redacted because it is a credential, is merged back from the stored entry on write exactly as an inline `env` value already was.
+  Writing an `http_compat` server through the default `config.toml`-backed store also corrupted its headers, which the tests for the round trip above found: that path goes `serde_json` → `json_to_toml_value` → TOML, TOML has no null, and the converter maps an absent `Option` to an *empty string* rather than dropping the key, so an env-sourced header came back from disk as `value = ""` instead of unset.
+  The runtime checks `value` before `value_env`, so it then sent an empty header and never resolved the variable — a silent credential failure with nothing logged.
+  `value` and `value_env` now carry `skip_serializing_if`, the same fix already documented as load-bearing on the entry's own `template_id` and `oauth` fields for the identical reason.
+  A header that carries *both* a static `value` and a `value_env` lost the static one on every read-modify-write, which the merge above initially reproduced rather than fixed: the read route redacts `value` and emits `value_env`, and the merge treated that returned `value_env` as "nothing to restore here".
+  Since the runtime resolves `value` first, the header silently stopped sending the operator's static credential and started resolving the variable instead — a `200` with nothing logged and a different request on the wire.
+  The merge now keys the decision on `value` alone, so the presence of a `value_env` beside it no longer suppresses the restore (#6666) (@houko)
+- Request `/json/new` with `PUT` when discovering a target over HTTP, so `cdp_endpoint` works against Chrome 111 and newer.
+  Chrome moved the endpoint to `PUT` as CSRF hardening; librefang still sent `GET` and got back a `405` page whose HTML then failed to parse, so the operator saw `Invalid JSON from /json/new: expected value at line 1 column 1` — a parser error that says nothing about the verb that caused it.
+  The request now tries `PUT` first and falls back to `GET` on `405`, which keeps older builds and proxies that only route `GET` working, and the response status is checked before the body is parsed so a non-2xx reply is reported as itself rather than as malformed JSON.
+  The two verb-negotiation tests pin the call counts rather than only the returned target, since a GET-first implementation reaches the same result and would otherwise pass both (#6619) (@nevgenov)
+- Substitute `MAX_CONTENT_CHARS` into the page-extraction script instead of leaving the cap hard-coded in the JavaScript, so the constant that documents the limit is the one that enforces it.
+  `MAX_CONTENT_CHARS` was declared, marked `#[allow(dead_code)]`, and read by nothing; the script truncated at a literal `50000` written twice inside the JS string.
+  Editing the constant to change how much page text reaches the model therefore did nothing at all, and the `#[allow]` suppressed the one warning that would have said so.
+  The script is now a template with a `__MAX_CONTENT_CHARS__` placeholder substituted once through a `LazyLock`, and a test asserts both that the placeholder is gone from the built script and that it is still present in the template — the second half is what keeps the two from silently drifting apart again (#6623) (@nevgenov)
+- Carry the curated `## [Unreleased]` section into the dated release section, which nothing had ever read.
+  `cargo xtask changelog` built the whole `## [VERSION]` section from PR metadata — `git log` for the numbers, `gh pr view` for the titles — and inserted it *below* `## [Unreleased]` without touching it, and the `awk` extractors in `release.yml` and `release-notify.yml` slice only that dated section for the release notes, the announcement article, and the social post.
+  So the section was write-only: 160 hand-written bullets, the part that explains why a change was made rather than restating its title, and the part a pre-commit hook and two CI jobs enforce `(@user)` attribution on, reached nothing at all.
+  The release cut now lifts that body out — subsections and their order verbatim, because a human chose them — composes the dated section as stats, breaking changes, highlights, the curated prose, then the generated entries, and leaves the `## [Unreleased]` heading behind and empty, since in-flight PRs append under it and the `changelog.d/` fold errors outright without it.
+  Generated entries fill only the gaps: a PR whose number appears in the trailing `(#N)` group of a curated bullet gets no title line, so every PR is described exactly once.
+  That group is read from the bullet's last non-empty line only, which is what keeps a mid-bullet cross-reference (`the latter via #6441`) from being mistaken for the PR the bullet documents and suppressing a real entry, and it accepts the `(#6594, #6595)` form one bullet already uses for two PRs.
+  A bullet carrying no reference at all cannot be matched to anything, so that PR keeps its generated line and the bullet is named in a warning — a duplicated entry is cosmetic, a silently dropped PR is not.
+  The fallback is per bullet, not global: one unreferenced bullet out of 160 leaves the other 159 suppressing their own entries, where discarding the whole set would have turned three such bullets into no deduplication at all.
+  Draining is destructive, and a lossy CHANGELOG surfaces only after the tag exists, so the composed section is checked against the section as it stood on disk before anything is written and a missing bullet aborts the release naming it.
+  The check compares whole bullets rather than `- ` marker lines, because the sentence-per-line prose rule makes multi-line bullets the norm — 67 of the 160 — and a marker-line comparison would call a bullet preserved while every sentence after its first had been dropped.
+  It parses the section to the next *dated* heading while the drain stops at the next `## [` of any kind, so the two disagree exactly where a drain would truncate — on a bullet continuation line that starts in column 0 with a release heading — rather than restating what the drain happened to take.
+  A second release run for one version aborts as well, and needs its own check: regenerating an existing `## [VERSION]` section rebuilds it from PR titles, and by then the first run has already emptied `## [Unreleased]`, so the prose is in no section of the file and the primary guard is comparing against nothing.
+  It fires on attribution found anywhere in the bullet, not just the marker line, and names the two ways out — move the prose back under `## [Unreleased]`, or delete the dated section and cut it again.
+  Nothing prunes `## [Unreleased]`, so the cut now also reports how many curated bullets reference a PR in the release's own commit range and how many reference only older ones, and warns on the latter: the section accumulates across releases, and carrying an already-shipped bullet into a dated section announces it as new alongside a `Full diff` link that contradicts it (#6628) (@houko)
+- Stop the daemon from aborting on macOS when a child process exits while the WASM sandbox is live.
+  Wasmtime defaults to Mach exception ports on macOS, which parks a handler thread in a blocking `mach_msg` receive flagged `MACH_RCV_INTERRUPT`; the kernel then returns `MACH_RCV_INTERRUPTED` instead of restarting the call when a signal lands on that thread, and wasmtime treats anything but "port closed" as fatal — it prints one `mach_msg failed with ...` line and calls `abort()`.
+  The daemon delivers such signals constantly (SIGCHLD from MCP stdio servers, sidecar channels, exec-tool subprocesses, and provider CLI probes), and a process-directed signal can be routed to any thread, so the whole process could die with no panic, no unwind, and no log beyond that line.
+  The sandbox now selects POSIX signal handling, which needs no thread parked in an interruptible syscall and is inherited across `fork()`; Mach ports only buy coexistence with Mach-port-based crash reporters, and nothing in the dependency tree uses one.
+  It surfaced as a hard SIGABRT partway through `cargo test -p librefang-kernel --lib`, and CI could not have caught it because nextest runs each test in its own process — a `cargo test` guard step on the macOS lane now covers that gap (#6635) (#6638) (@houko)
+- Keep an edit to a registry-shipped hand by writing it to a new operator override directory, `<home>/hands/`, instead of into the registry checkout that the next sync erases.
+  `update_manifest_persisted` wrote the edit back to `registry/hands/<id>/HAND.toml` because that was the only way to win the load-order race, but that path is inside a git checkout the registry sync fast-forwards with `git reset --hard origin/main` — so the supported way to customise a built-in hand erased itself on the next daemon start, which is what the #6636 reporter hit when even marking the file read-only did not help.
+  The override directory sits outside both `registry/` (upstream's copy, and only upstream's) and `workspaces/` (which already means "installed here" rather than "customised here"), and nothing writes into it but an explicit edit, so an override exists only if someone made one.
+  `scan_hands_dir` reads it first and the kernel router follows the same precedence, because routing that resolved against upstream's definition while the registry served the edited one would route a renamed hand by rules nobody could see in the UI.
+  An id now counts as claimed only once a manifest has actually been read, so a half-written override directory shadows nothing — before, it would have dropped the registry's hand from the scan entirely rather than overriding it.
+  Minting an override seeds the shadowed copy's `SKILL.md` and `SKILL-{role}.md` alongside the manifest, since the override replaces the whole directory the scan reads and a manifest-only override would silently strip the skill content that becomes the agents' system prompts; a skill file the operator has since edited is never overwritten.
+  Uninstall reaches an override-only hand as well, which is otherwise un-uninstallable once upstream drops an id someone had customised — the hand reports as built-in while the override resurrects it on every reload — and it still refuses, without touching the override, while a registry copy exists (#6669) (@houko)
+- Report every `[approval]` field on `GET /api/config`, not the seven of fourteen the response builder happened to enumerate.
+  The approval section declares no explicit field list, so the dashboard renders a control for whatever the derived schema says `ApprovalPolicy` has, and the missing seven rendered blank and read back as their JSON zero value.
+  `cache_approvals_per_session` is the one an operator noticed: it defaults to `true`, so the box showed unchecked even against a `config.toml` that said `true`, leaving no way to confirm whether per-session approval caching was on.
+  `trusted_senders`, `channel_rules`, `timeout_fallback`, `routing`, `totp_tools`, and `audit_retention_days` had the same gap.
+  All seven stay non-writable — approval policy is deliberately not adjustable over HTTP, so an Owner-role caller with a leaked API key cannot relax it — which is exactly why the existing `writable ⊆ readable` guard was blind to them, and the new check uses the serialized struct as its oracle so a field added later fails a test instead of quietly joining the gap (#6637) (@houko)
+- Make a hand's `[[settings]]` values reach the agent that is already running, not just the one that boots next.
+  Settings only reach an LLM as the rendered `## User Configuration` tail on each role's system prompt, and that tail is materialized when the hand is activated.
+  Saving from the dashboard wrote the instance config and persisted `hand_state.json` but never touched the live agents, so the change took effect on the next daemon restart — boot replays every persisted hand through the activation path, which does re-render — while the running agent kept answering from the HAND.toml defaults with no error to explain the discrepancy.
+  Reported against the Trading Hand, where the prompt branches on `trading_mode` and `approval_mode`: selecting Live Trading and disabling approval silently got neither.
+  The save path now persists the config and rewrites each role's prompt under the same per-instance lock the runtime-override path uses, rolling the config back if either step fails so the persisted file and the live registry cannot disagree.
+  Re-rendering a live prompt needed its own helper: the three rendered tails are appended in a fixed order and each one strips from its own marker, so re-applying them in sequence to a prompt that already carries all three drops the reference and team blocks on the way past.
+  The env-var passthrough allowlist is re-resolved on the same path, since changing a select changes which `provider_env` the subprocess sandbox should admit, and it now narrows as well as widens.
+  Two `librefang hand` subcommands that were broken in a way that made the CLI no help in diagnosing any of this are fixed too: `hand set` posted a wrapped `{"config": …}` body at a handler expecting a flat map and never touched the named setting, and `hand settings` read a response field that does not exist and reported "no configurable settings" for every hand.
+  A stored value that is not a JSON string — `false` for a toggle, `100` for a numeric field, both valid from any API client — also reverted the setting to its schema default, and scalars are now coerced (#6637) (@houko)
+- Stop an explicitly configured EveryAPI gateway from being repointed at whatever account the EveryAPI CLI happens to be logged into — including mid-way through the dashboard's own "Connect EveryAPI gateway" flow, which registers the provider entry before storing its relay key.
+  Credential provenance was inferred from `is_custom` and `auth_status`, neither of which carries that meaning — the catalog loader leaves `is_custom` false for every provider when the registry cache is unreadable, and an explicit configuration whose key env var is simply unset looks exactly like an unresolvable CLI login — so a provider file installed before its key was set had its `base_url` rewritten from the CLI account until the next daemon restart.
+  Provenance is now recorded explicitly and cleared by every explicit source, so an entry with no reachable credential stays inert instead of falling through to the CLI credential process (#6647) (@houko)
+- Show the official EveryAPI square logo in the dashboard sidebar instead of a plain "E" letter placeholder.
+  The asset is served from the dashboard's public path and a partner logo asset contract test pins the URL EveryAPI links resolve against (#6648) (@houko)
+- Stop reporting an untrackable `agent_send` as a delegation, which handed the model the answer in a field named `task_id` and told it to wait for a callback that would never fire.
+  `send_to_agent_async_tracked` has two legitimate outcomes and they meant opposite things: a task id on the tracked path, the callee's whole response body when no parseable caller session made tracking possible.
+  Both arrived through one undiscriminated `Result<String, _>`, so the tool that consumes it labelled the response body `task_id`, set `status: "delegated"`, and instructed the model to end its turn and wait — for a reply it was already holding, and which no registered task would ever deliver again.
+  The blocking fallback itself is correct and stays; with nowhere to route a completion event, an inline answer beats an orphaned delegation.
+  It now returns an `AsyncSendOutcome` the caller must branch on, so a tracked delegation still renders its task id and an inline one returns the reply exactly as the blocking path does.
+  The path is reached in production by the MCP HTTP bridge and the REST tool bridge, both of which pass no session by construction, and its log moves from `debug!` to `warn!` with the caller fields attached — an operator whose agents lose async delegation should not have to raise the log level to find out (#6662) (@houko)
+- Call `set_self_handle` in the CLI's in-process ACP and MCP backends, which boot a kernel of their own and previously aborted the process the moment they needed a kernel handle.
+  `LibreFangKernel::boot` returns a bare kernel and leaves the `self_handle` slot empty — filling it is the caller's job, discharged by seven other production sites but not by these two.
+  ACP failed at startup: `KernelAdapter::new` reads `kernel_handle()` as its first action, and that accessor is an `.expect`, so `librefang acp` aborted before serving a request.
+  MCP failed later and less visibly, on the first `librefang_agent_*` tool call, because `send_message` resolves the same handle to plumb kernel tools into the agent turn.
+  A comment on `KernelAdapter::new` asserting that `boot` wires the handle up before returning is corrected — that claim is what made both omissions look deliberate, and `boot.rs` contains no such call.
+  Three tests in `crates/librefang-kernel/tests/self_handle_bootstrap_test.rs` pin the kernel-side contract from both directions, including the idempotence that makes a defensive call safe for any future surface that boots its own kernel, and a source-scanning guard in `librefang-cli` asserts the call sites themselves so deleting either line fails rather than silently restoring the abort.
+  Found while triaging the unrelated concern reported in #6651, which does not reproduce on `main` (#6686) (@houko)
+- Salt the delegation dedupe hash with the caller and conversation, so two sessions delegating the same message to the same agent no longer share one async task and one reply.
+  `register_async_task` dedupes delegations on `(target agent, prompt_hash)` and deliberately ignores the caller — a #5033 decision its own docstring records, along with the instruction that callers needing per-session isolation must salt `prompt_hash` themselves.
+  The kernel's only production caller did not: it hashed the message text alone, making the hash a pure function of the prompt.
+  Two independent agents asking the same agent the same question therefore collided on one registry entry, the second received the first's handle, and the completion event was delivered only to the first caller's session — while the second, already told "delegation started asynchronously; do not wait", waited for a reply that would never arrive.
+  The hash now covers the caller agent, the caller session and the conversation key as well as the message, which is a superset of the registry's `(agent, session)` delivery key plus the field that selects a different callee session.
+  The fix is caller-side by design: the kind-only match key is the documented contract and stays, pinned by `register_dedupe_is_cross_session_for_delegation_kind`, and what still dedupes is exactly the intended idempotency case of one caller re-sending the same message on the same conversation while the first is in flight (#6662) (@houko)
+- Report a goals storage failure as a 500 instead of an empty page, a leaked error string, or a missing goal.
+  `GET /api/goals` folded a substrate read error into the same empty array it returns when nothing has been created yet, so a corrupt blob or an unreadable SQLite file reached the operator as `200 {"items": [], "total": 0}` — indistinguishable on the wire from a daemon with no goals, and the dashboard drew its template-picker empty state over live data it had simply failed to read.
+  `GET /api/goals/{id}/children` was worse in both directions at once: a 200 carrying an empty list *and* a raw `format!("{e}")`, so a client checking the status saw success while the body handed out the SQLite path and error chain.
+  `POST /api/goals/{id}/start` had the same swallow on a write path — its catch-all `_ => Vec::new()` turned an unreadable store into `404 Goal not found`, sending the operator to re-create a goal that exists.
+  All three now log the full error and return the scrubbed 500 envelope that `GET /api/goals/{id}` next to them already used; an absent or non-array key stays a 200 empty result, because that is the genuine not-yet-created shape (#6662) (@houko)
+- Add `[registry] auto_sync` so the daemon can be told to stop overwriting the registry checkout.
+  `~/.librefang/registry/` is a git clone the sync fast-forwards with `git reset --hard origin/main`, so every local modification under it is destroyed — including the ones `PUT /api/hands/{id}/manifest` writes, which land in `registry/hands/<id>/HAND.toml` whenever the hand shipped with the registry, making the supported way to customise a built-in hand self-erasing.
+  Reported as "local edits are overwritten on daemon start, even with the file set read-only, and no config option disables the registry sync".
+  The culprit was not boot: `boot_with_config` honours `cache_ttl_secs` (86400 by default) and normally skips, while the background catalog task passes a hard-coded TTL of `0` into `refresh_registry_checkout`, which makes `should_refresh` true for any marker older than a second and forces the reset on its first tick and every 24 h after — so gating boot alone would have changed nothing.
+  Setting `auto_sync = false` freezes the checkout on both automatic paths and leaves the explicit ones (`librefang init`, `POST /api/catalog/update`) fetching as before, so freezing does not strand an operator who wants an update.
+  `POST /api/hands/reload` never fetched from upstream to begin with — it only reloads hand definitions already on disk into memory — so it is unaffected either way.
+  The catalog rebuild is deliberately not gated with the fetch: an operator who froze the registry still gets the models already on disk rather than an empty catalog (#6661) (@houko)
+- Stop the config page offering edits the write endpoint refuses, and stop it captioning every `mode` field with the wrong description.
+  `GET /api/config/schema` now reports `x-non-writable`, the resolved list of paths `POST /api/config/set` rejects, and the dashboard renders those fields visible but not editable with a line pointing at `config.toml`.
+  Reported against `approval.require_approval`, which is deliberately excluded from the write allowlist so a leaked Owner-role API key cannot relax approval policy — the defect was that the UI offered the edit anyway and the save came back as a bare 403, which reads as "saved but not applied".
+  The server sends the verdict rather than the allowlists because writability is decided by an exact-path list, section prefixes, a depth-2-only rule and a secret-suffix scrub; re-deriving that in the SPA would make it a third place to keep in sync, and an integration test cross-checks the emitted set against the write endpoint itself.
+  Field descriptions are now looked up section-first (`desc_<section>_<field>`, falling back to the bare leaf name), so `exec_policy.mode`, `reload.mode`, `docker.mode`, `privacy.mode` and `sanitize.mode` stop showing the root-level "Kernel operating mode" text while genuinely section-neutral names like `enabled` and `timeout_secs` keep sharing one string.
+  Also fixes an edit-loss path in the hand Agent tab: the prompt and tool drafts were overwritten when `useAgentDetail` resolved, so anything typed between opening the tab and the query landing vanished — a new saved value is now adopted only while the draft is untouched (#6663) (@houko)
+- Re-enable the `KernelConfig` JSON Schema golden guard, which had been `#[ignore]`d long enough for real schema changes to land unreviewed.
+  The attribute was added as a temporary measure over a 490-byte drift, with a comment saying to drop it once the fixture was regenerated; the fixture was never regenerated, so the guard reported "ignored" rather than failing and three subsequent schema changes reached `GET /api/config/schema` without the reviewable diff the fixture exists to force.
+  Regenerating shows what slipped through: the `providers` property and its `ProvidersConfig` definition (the org-wide provider allowlist), `ExecPolicy.full_mode_skips_approval` (also reflected in `exec_policy`'s reshaped `default` value), and a reworded `ApprovalPolicy.auto_approve` description.
+  Everything else in the diff is key-ordering churn from the schemars output, which is why it is 13,716 lines for three semantic changes and why it is landing on its own rather than buried inside a feature PR (#6664) (@houko)
+- Fixed the `#6631` plugin route-classification guard panicking on a Windows checkout, where `include_str!` reflects `routes/plugins.rs` back with CRLF line endings and the guard's `\n}\n` terminator search matched nothing.
+  Route extraction now normalises CRLF to LF before parsing and is factored into a shared helper covered by its own regression test that builds the CRLF fixture directly, so the platform-divergent case is provable without a Windows runner (#6665) (@houko)
+- Make flipping `[registry] auto_sync` take effect on `POST /api/config/reload`, which #6661 documented but did not deliver.
+  `registry` was classified restart-required as a whole section, and `should_store_config` swaps the reloaded config only when a plan carries a hot action or a live-read change — so a registry-only reload was reported as needing a restart and then discarded, and the 24 h catalog task kept reading the old value out of the previous snapshot and clobbering the checkout the operator had just asked it to leave alone.
+  `auto_sync` is now classified on its own as a live-read field, matching how the task consumes it, while `cache_ttl_secs` / `registry_mirror` / `registry_host` stay restart-required because they are read when the checkout is set up.
+  Boot's `auto_sync` gate also gets its first test, and it asserts on the fan-out copy `sync_registry` performs with no network rather than only on the checkout's contents — an offline runner leaves the checkout alone by accident, which would have made the obvious version of the test pass whether or not the gate existed (#6671) (@houko)
+- Reject a commit whose *author identity* attributes it to Claude / Anthropic, not just one whose message does.
+  The `commit-msg` hook read only the message, so `GIT_AUTHOR_NAME=Claude git commit -m "fix: …"` passed a spotless message check and still put `Claude <noreply@anthropic.com>` into `git log`, `git blame`, and the GitHub commit list — the same attribution the message rule exists to keep out of the history, arriving through the one field nobody reads while reviewing a diff.
+  Nine such commits reached `main` across six PRs merged on the same day before this was noticed.
+  Separators are squashed before matching so `Claude Code`, `Claude-Code` and `ClaudeCode` are one case rather than three, whole names are matched rather than substrings so a contributor called Claudia or Claude Dubois is unaffected, and the address test is pinned to the bot mailbox so an Anthropic employee committing under their own address is not blocked either.
+  The three `scripts/tests/` corpora for the git-side hooks now run in CI, which they never did — a regression in either attribution predicate was previously catchable only by running them by hand, which is not what anyone does before pushing a hook edit.
+  That wiring also exposed `pre-commit-sha-fallback.sh` passing only where `gitleaks` was absent: it built its throwaway repo without a `.gitleaks.toml`, so wherever the tool was installed the hook aborted on a config-load error and the test reported failure (#6672) (@houko)
+- Warn instead of silently failing when `api_key_hash` is set with no transmittable key, which is the posture the hash-only documentation itself recommends.
+  `build_mcp_bridge_cfg` sends the master key to the daemon's own `/mcp` endpoint on behalf of CLI-based drivers, and a hash cannot stand in for it — a verifier does not yield the secret it verifies.
+  So a daemon configured the way the `api_key_hash` doc, the upgrade hint, and `librefang hash-api-key` all advise — hash set, plaintext removed — built the bridge with no bearer, and its own middleware answered 401 on every driver tool call, precisely because #6613 made a hash count as configured auth.
+  Nothing reported it: the driver surfaced a failed tool call, and the "nothing transmittable configured" case fell through to an empty string with no log line anywhere on the path.
+  The field doc and the CLI hint now name the exception and the two workarounds that keep the secret out of `config.toml` — `api_key = "vault:NAME"` or `LIBREFANG_API_KEY` — and the kernel logs a `WARN` naming the same at every driver rebuild (#6673) (@houko)
+- Regenerate the `KernelConfig` schema golden fixture, which #6664 landed one merge behind the source it is generated from.
+  #6664 re-enabled the guard and regenerated the fixture, but its branch was cut after #6667 added `api_key_hash` and before #6661 added `registry.auto_sync`, so the fixture it committed described a `KernelConfig` that no longer existed by the time it merged.
+  The two PRs never touched the same lines, so nothing flagged the staleness — a regeneration and a new config field conflict semantically without conflicting textually, and the fixture is only correct relative to the commit it was generated at.
+  `main` went red on the first push after that, which is the guard doing exactly the job #6664 restored it for: it was off long enough for four schema changes to reach `GET /api/config/schema` unreviewed, and the first thing it caught once re-enabled was real drift.
+  The regenerated fixture is reviewed rather than taken on trust, by the same order-insensitive comparison #6664 used, and every one of the sixteen semantic changes traces to a merged PR: `registry.auto_sync` and its default (#6661), `api_key_hash` and the rewritten `api_key` description (#6667), and `additionalProperties: false` on the four `McpTransportEntry` variants plus both `HttpCompat` structs (#6666), which also drops the rendered `default: null` from the two `Option` fields on `HttpCompatHeaderConfig` because schemars stops emitting it for a `deny_unknown_fields` container (#6676) (@houko)
+- Accept `mp4` / `mov` / `mkv` / `avi` video containers in `media_transcribe` and `speech_to_text`, extracting and transcribing the audio track server-side instead of rejecting the file on its extension alone.
+  The audio track behind these containers already transcribed fine — renaming a `.mp4` to `.m4a` was enough to get a correct transcript — because the only obstacle was an extension allowlist that happened to admit `.webm` (a dual-purpose audio/video container) through a side door while turning away containers that are exclusively video.
+  The video-only extensions are budgeted against the existing `MAX_VIDEO_BYTES` limit rather than the tighter `MAX_AUDIO_BYTES` audio uses, and the extraction reuses the ffmpeg piping infrastructure the `.oga` re-mux path already established, factored into a shared helper so both transcodes share one spawn / timeout / kill-on-timeout implementation.
+  Unlike the `.oga` re-mux, this always re-encodes to Ogg/Opus rather than copying the source codec: a video container's audio track can be AAC, PCM, Opus, AC3, or anything else ffmpeg can decode, and one deterministic target format is what lets the same Whisper-upload path handle all of them without per-codec branching.
+  `.webm` is unaffected — it already reaches the provider unchanged through the existing audio path, and does not need the extraction hop (#6679, #6683) (@houko)
 
 ### Changed
 
@@ -306,9 +2951,39 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 - Correct the `prompt_intelligence.hash_prompts` doc and warn at boot when set to `false`: the `content_hash` is load-bearing (it drives prompt-version dedup and is stored NOT NULL) so it is always computed, and the flag was silently ignored; setting it `false` now logs a WARN and the doc reflects that it is effectively always-on (#6446) (@houko)
 - Consolidate the four duplicated invisible/format code-point lists that #6141 added — the skills prompt-injection scanner, the runtime injection guard, the prompt-builder sanitizer, and the kernel prompt-context sanitizer — into a single source of truth `librefang_types::text::INVISIBLE_FORMAT_CHARS`, so the set can no longer silently drift between crates and reopen the scanner bypass in the un-updated copy: the three char-only copies now alias the shared const directly and the skills labeled `(char, &str)` table (it needs a per-code-point label for its warning) is guarded by an equality test that fails the build on divergence (#6426) (@houko)
 - Stop the release pipeline from generating a stable `librefang` formula in `librefang/homebrew-tap`: the stable CLI now ships from homebrew-core (Homebrew/homebrew-core#290413), so the tap keeping its own copy shadowed the core formula and duplicated maintenance on every release; a stable tag now cascades the newest build into the `beta` / `rc` tap channels only, the keg-only `librefang@<ver>` versioned formula and the desktop cask sync are unaffected, and the release-notes install block now installs the stable CLI directly from core (#6416) (@houko)
+- Migrate the Linux system tray implementation in `librefang-desktop` from Tauri's default `tray-icon` to a pure D-Bus implementation using `ksni` 0.3.6.
+  This removes `libappindicator` / `libappindicator-sys` from the Linux build graph, eliminating the runtime `dlopen` of `libayatana-appindicator3` and the corresponding CI/Docker package install.
+  It does not remove the GTK3 dependency tree (`gtk`, `gdk`, `atk`, …) or resolve the advisories tracked in `deny.toml`'s `ignore` list (RUSTSEC-2024-0411..0420) — those stay transitive via `tauri-runtime-wry` on Linux regardless of the tray implementation, and RUSTSEC-2024-0429 was never in that list to begin with.
+  The new implementation re-registers with the `StatusNotifierWatcher` via `ksni` on D-Bus reconnect, updates status properties every second, and supports toggling window visibility on left-click activation (#6572) (@pavver)
+- `deploy/docker-entrypoint.sh` now detects whether it started as root and adapts, so the published image satisfies Kubernetes `restricted` Pod Security without a second rootless tag to maintain.
+  Under Docker it still starts as root, chowns a bind-mounted `/data`, and drops to uid 1001 through `gosu` — unchanged, so existing Compose deployments keep working.
+  Under a pod that pins `runAsUser: 1001` it skips both the chown and `gosu` (neither is possible unprivileged) and verifies `/data` is writable up front, failing with a message that names the `fsGroup` requirement instead of letting SQLite die later on an opaque `EACCES`.
+  The image `HEALTHCHECK` now probes `/api/ready` rather than `/api/health`: its consumer is Compose's `depends_on: service_healthy` gate, which is readiness semantics, and `/api/health` can never fail that check (#6632) (#6638) (@houko)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6642) (@houko)
+- Move every CI and release workflow off Node 20 onto Node 24, which is what the dashboard's own test runner now requires.
+  Node 20 left active LTS support in April 2026, and the dependabot bump of jsdom 29 → 30 (#6658) surfaced the consequence: jsdom 30 pulls an undici that calls `webidl.util.markAsUncloneable`, an API that only exists from Node 21, so every one of the 91 dashboard test files failed to start its vitest worker with `TypeError: webidl.util.markAsUncloneable is not a function`.
+  That is a runtime incompatibility rather than a test failure — the same suite passes on a Node 24 host — so pinning jsdom back would have deferred the upgrade rather than fixed anything.
+  All eleven `node-version: 20` pins move together instead of only the one that runs the tests: `dashboard-build`, `mobile-smoke`, `release-cli`, `release-desktop` and four jobs in `release` all build the same dashboard, so leaving any of them on 20 would have turned one red check into a release-time failure discovered later.
+  Six pins in the repository were already on 24, so this makes the runtime uniform rather than introducing a new one (#6675) (@houko)
+- Ship debug symbols as a separate release asset, so a crash report from a released build can actually be symbolized.
+  `[profile.release]` carried `strip = "symbols"` and set no `debug` key at all, so nothing about a shipped binary was recoverable — which is where #6659 stalled: its crash report shows a six-function cycle repeating inside a 52-frame window, an unbounded recursion whose culprit is one `atos` invocation away, and that invocation could not be run.
+  Offsets from an existing crash report cannot be mapped onto a later rebuild, and `lto = "fat"` with `codegen-units = 1` makes a local symbolized rebuild expensive enough that the reproduction window closed first.
+  The profile now also sets `debug = "line-tables-only"` and `split-debuginfo = "packed"`, which puts function names and `file:line` for every frame into a `.dSYM` bundle on macOS and a `.dwp` file on Linux, beside the executable rather than inside it.
+  `strip = "symbols"` still applies to the executable, so the binary users download is unchanged; the release workflow uploads the split file as its own `librefang-<target>-debug-symbols.tar.gz` asset, which only someone symbolizing a crash needs to fetch.
+  `line-tables-only` matches what `[profile.dev]` has used since #1805 and is what keeps the cost small — it omits the variable-inspection DWARF that dominates debug-info size while keeping every frame nameable.
+  The macOS job fails if the bundle is missing, since its absence there means the profile change silently regressed; the Linux job warns instead, because those targets are cross-compiled and an absent split file must not take a release down over a diagnostic aid (#6677) (@houko)
+- Refresh the checked-in OpenRouter model snapshot used as the offline fallback catalog.
+  The runtime's live catalog remains authoritative whenever OpenRouter is configured, so this update only affects lookups made before the first live fetch completes (#6682) (@houko)
 
 ### Security
 
+- Add LibreFang daemon lifecycle commands and mutating writes against the daemon's own SQLite database to the dangerous-command denylist, which screens every `shell_exec` under all exec modes including `full`.
+  The list already blocked `python[23]? -c`, so a diagnostic one-liner scoped to the calling agent was refused while `librefang stop` — which bounces every other agent and channel adapter sharing the daemon — passed unimpeded; #6594 reports an agent taking exactly that route ten times in one morning, leaving some channel adapters with a broken outbound path afterwards.
+  The lifecycle entry matches `start` / `stop` / `restart` by bare name, by path (`target/release/librefang`, `/usr/local/bin/librefang`), with the Windows `.exe` suffix, through the `gateway` alias subcommand, and behind the CLI's one global option and its separate value token (`librefang --config <path> stop`); `librefang status` and every other read-only subcommand are deliberately not matched.
+  The database entry matches mutating SQL statement forms (`insert into`, `replace into`, `update <table> set`, `delete from`, `drop table|index|view|trigger`, `alter table`) against `librefang.db`, plus output redirection that would truncate the file.
+  It is written against statement forms rather than bare verbs, and scoped to the daemon's own database rather than any `.db`, so that read-only inspection stays allowed: a match is a hard block in `manual` mode, and blocking `sqlite3 librefang.db "select … from usage_events …"` would have blocked the investigation that produced #6606.
+  `select`, `.schema`, `.dump`, a redirect into a separate backup file, and a `select` that merely mentions `'delete'` as a value are all covered by regression tests as staying safe (#6594) (@houko)
 - Attribute an authenticated API caller's own-key spend to that caller and enforce their per-user budget, closing a bypass the per-user provider-credential feature (#6460 / #6483) opened: the owner threaded into `resolve_driver_for_owner` selects and bills the user's own vault key upstream, but usage attribution and the per-user budget gate keyed only on the request-body `sender_context`, which is absent on a plain authenticated POST (`identify("api","")` → `None`). So an authenticated user with a stored key and a configured `[budget]` could POST `/api/agents/{id}/message`, `/message/stream`, or an ephemeral `/btw` with no `sender_id`, spend on their own key past their cap indefinitely, and show zero on `/api/budget/users`; worse, because attribution was taken from the unauthenticated request body, a caller could pass a `channel_type` + `sender_id` mapping to another user's binding and have their own-key spend booked against that user. The three post-call write sites (`execute_llm_agent`, `send_message_ephemeral`, and the streaming task) now record `UsageRecord.user_id` and run the per-user budget check on `owner.or(attribution_user_id)` — the authenticated owner wins when present, sender-derived attribution stays the fallback for owner-less paths (channel / cron / agent_send). The streaming path keys on the fork-nulled `effective_owner` (not the raw owner) so a sub-agent's spend is never mis-attributed to the parent turn's user, and a plain authenticated POST that spoofs a `sender_id` can no longer book spend against someone else (#6514) (@houko)
 - Canonicalize the provider name before the per-user key lookup so an alias-configured agent bills the user's own key instead of silently falling back to the operator's global credential (a chargeback leak). `resolve_driver_for_owner` looked the owner's stored key up by the raw manifest provider string (`get_user_provider_key(uid, "google")`), but the Owner CRUD's `validate_provider` only accepts canonical `known_providers()` names, so a user can only store the key under the canonical `gemini` — the lookup for an agent with `provider = "google"` (an alias of `gemini`) missed, `user_scoped_key` was `None`, and the operator's global `GEMINI_API_KEY` was billed for the user's turn while per-user attribution/budget for that turn was wrong. A new `librefang_llm_drivers::drivers::canonical_provider_name` (aliases → canonical registry name, unknown names pass through) is applied to the manifest provider before the vault lookup, so the read shares the one namespace the write surface stores under. Reads and writes were already canonical for non-alias providers, so this is a no-op there; only alias-configured agents change behavior (#6517) (@houko)
 - Stop the outbound taint/DLP heuristic from false-positive-blocking legitimate MCP tool arguments that contain a long unformatted numeric id (#6499). Two rules over-blocked (fail-closed): (1) a bare export-attachment filename like `note-<id>-<id>.pdf` (no directory separator) tripped `OpaqueToken` because `looks_like_path` only recognized strings with a `/` as structured — `looks_like_path` now also excludes a bare basename with a letter-initial extension (`^[\w.\-]+\.[A-Za-z][A-Za-z0-9]{0,7}$`), so a numeric-suffixed token like `abc123.9876543` is still scanned; (2) the phone regex makes every separator optional, so any contiguous digit run matched its digit-group floor and was flagged `PiiPhone` — a match is now rejected only when the full contiguous digit run it sits in exceeds 16 digits (E.164 caps a real number at 15), leaving 10-15 digit numbers to the phone rule and 13-16 digit runs to the card rule. Genuine opaque tokens, real phone numbers, and card numbers still fire (counter-tests included); the card rule's own handling of >16-digit runs is out of scope here. The runtime `McpTaintPolicy` per-path skip-rules remain, but the default heuristic no longer requires operators to allowlist their own filenames and ids. (#6499) (@houko)
@@ -332,6 +3007,25 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 - Write migrated OpenClaw channel secrets `0600` from creation instead of via a post-hoc chmod, closing the world-readable umask window (#6441) (@houko)
 - Bound the marketplace skill download and zip decompression (compressed size, uncompressed size, ratio, entry count) before the audit / extract, and bound the desktop-app installer download while no longer stripping the macOS Gatekeeper quarantine (#6441) (@houko)
 - Apply the reserved-system-channel defense (`resolve_scope_channel`) on the non-streaming and `execute_llm_agent` session resolvers so an external caller cannot poison the internal cron / autonomous / webui sessions, warn on sidecar instance names that collapse to the same per-instance secret prefix, and collapse unmatched-route requests to a single Prometheus `path` label to remove an unauthenticated unbounded-cardinality memory-exhaustion DoS (#6441) (@houko)
+- Close the WebSocket and terminal auth bypass that a hash-only master credential would otherwise have opened.
+  Both upgrade paths derived "is auth configured?" as `!valid_api_tokens(..).is_empty()`, which was a sound proxy only while `api_key` was the single way to configure a master key: a daemon whose key exists solely as `api_key_hash` lists no plaintext token, so that test reported it as unauthenticated.
+  The terminal path then drove `decide_auth` past its reject branch into `LocalBypass` — unauthenticated shell access on a daemon the operator believes is bearer-gated — and the WebSocket path skipped its whole auth block, re-opening the openfang #1034 B2 branch for the new config shape, while a caller presenting the *correct* key was rejected because there was nothing to compare against.
+  Both sites now share one `master_auth_required` derivation and fall back to verifying the presented token against `api_key_hash`, so the next auth surface cannot re-derive it wrongly.
+  That shared derivation reads the live auth handles the HTTP middleware already reads, rather than re-resolving the credential from a config snapshot per connection, which also stops a `vault:NAME` master key from costing an OS keyring read plus a vault-file decrypt on every WebSocket and terminal upgrade — twice each, on paths reachable before any credential has been presented (#6613) (@houko)
+- Bind `POST /api/auth/refresh` to the session the caller can prove it owns.
+  The endpoint used to fall back to scanning the process-global token store for any entry matching a `provider` hint — or, with neither field supplied, for literally any entry that had a refresh token — and it is reachable by any Admin, so a caller could refresh a different local user's upstream session and be handed their access and rotated refresh tokens with every scope that user had granted.
+  Both fallbacks are removed: a request now presents either its own `refresh_token` — which `/api/auth/callback` returns to the client, deliberately, so this is the ordinary path — or, for a client that kept only the other half, the `access_token` that callback issued it, which the server matches in constant time against the stored entry it belongs to.
+  Neither is a caller-supplied assertion like `sub` or `provider`, and no ownership can be inferred from the store itself, which is keyed by upstream OIDC subject with no record of which local user owns an entry.
+  A blank string in either field counts as absent rather than selecting a branch, and the store lookup rejects an empty access token outright so that an identity provider returning one cannot leave an entry that matches a caller who presented nothing — a request that proves nothing gets a 400 instead of someone else's credentials (#6629) (#6639) (#6644) (@houko)
+- Stop `GET /api/mcp/servers` and its `{name}` detail sibling from serializing MCP environment values.
+  The `env` list is documented as variable names to pass through, but the supported representation also accepts an inline `KEY=VALUE`, so an operator could put a live credential there and any reader got it back verbatim.
+  The report describes a Viewer-role caller; it is worse than that — the list route sits in `PUBLIC_ROUTES_DASHBOARD_READS`, so with `require_auth_for_reads` left at its default an unauthenticated caller could read those values too.
+  Both routes now return variable names only, and the write path merges a submitted bare name against what is stored: redacting the read side alone would have been a data-loss bug worse than the disclosure, because the dashboard hydrates its edit form from the list response and submits every field back on save, which would have wiped the very credentials the caller was never shown (#6630) (#6639) (@houko)
+- Require Owner authorization for every plugin route that can put plugin-controlled code on an execution path.
+  Admin is "config write" by design, but it could previously install a Git-backed plugin and then invoke dependency installation, so npm / pip / Bundler / Composer ran attacker-supplied package lifecycle scripts under the daemon UID — crossing the Admin/Owner boundary into arbitrary code execution with access to daemon secrets.
+  Owner is now required for `install`, `install-with-deps`, `install-deps`, `test-hook`, `upgrade`, `enable`, `reload`, `prewarm`, and `sign`; `sign` is included because load-time integrity verification rejects a hook whose hash no longer matches, so re-signing is what makes a tampered script loadable again.
+  `install-with-deps` and the batch `prewarm` route are gated alongside their per-name/singular siblings: both call the identical underlying function (`install_plugin_with_deps`, `reload_plugin`) that the singular `install` and `reload` gates already cover, just through a top-level path with no `{name}` segment to match on.
+  `uninstall`, `disable`, and `scaffold` deliberately stay at Admin: the first two *remove* code from the execution path, and gating them would leave an Admin unable to shut a malicious plugin off during an incident (#6631) (#6639) (@houko)
 
 ### Documentation
 
@@ -355,6 +3049,50 @@ and this project uses [Calendar Versioning](https://calver.org/) (YYYY.M.DD).
 - Document how `[approval].trusted_senders` composes with `[[users]]` RBAC on the approvals security page (EN + zh mirror): the two are separate trust surfaces and the per-user RBAC gate is evaluated first, so an ID listed in `trusted_senders` that is not also a registered `[[users]]` on the `api` channel still has its low-risk tools (e.g. `memory_*`) gated by the `guest_gate`, because the forced-approval verdict short-circuits before the `trusted_senders` bypass is consulted; the new subsection gives the concrete fix (register the operator as a `[[users]]` bound to the `api` channel with a `tool_policy` covering the tools it drives) and notes that with no `[[users]]` configured `trusted_senders` works standalone (#6492) (@houko)
 - Document per-user provider-key precedence on the provider-management page (EN + zh mirror), ratifying #6460 OQ#5 that a user's own stored key wins over the operator's rotation: the new "Per-user keys and rotation precedence" subsection states the full resolution order (org allowlist > agent-pinned `api_key_env` > the user's stored key via `PUT /api/users/{name}/provider-keys/{provider}` > `credential_pools` > `provider_api_keys` / `auth_profiles` rotation > catalog / convention env), explains that a user key bypasses the pool and rotation for that provider so upstream spend and chargeback attach to the human who brought the key while an agent-pinned `api_key_env` still overrides it, and names the two operator-facing failure modes — a user key is a hard single point of failure on the primary provider with no same-provider fall-through to the operator's pool, and a configured fallback chain can fail a user's key over onto the operator's credential for a different fallback provider they have not supplied a key for; docs-only, the `resolve_driver_for_owner` resolver already implements this behavior (#6460) (@houko)
 - Document installation from the signed project-maintained Arch Linux pacman repository while AUR account registration is unavailable (#6386) (@pavver)
+- Add `docs/architecture/multi-replica-rfc.md`, which enumerates every singleton subsystem that blocks running more than one daemon replica and proposes a four-phase path through them.
+  Replacing SQLite is necessary and nowhere near sufficient: 24 named background workers, the in-process session locks, the audit hash chain, and the in-memory cost-reservation ledger each break in a different way under a second replica, and the document assigns a coordination mechanism to each rather than leaving "HA" as an open aspiration.
+  The storage and coordination decisions are explicitly marked as needing maintainer approval before any implementation starts (#6634) (#6638) (@houko)
+
+### Added
+
+- Give the master api_key env/vault indirection and a hashed form, and close the hash-only WS/terminal auth bypass (#6667) (@houko)
+
+### Fixed
+
+- Inherit global exec_policy on hand activation and stop inferring autonomy from max_iterations (#6603) (@houko)
+- Expose writable config fields in GET /api/config and guard against read/write drift (#6604) (@houko)
+- Require an explicit [autonomous] or schedule declaration to start a hand loop (#6610) (@houko)
+- Merge partial identity PATCHes and flag tool_allowlist entries that cannot grant (#6615) (@houko)
+- Expose non-writable security config on read and guard writable paths against missing fields (#6618) (@houko)
+- Base the status indicator on supervisor liveness instead of shared per-type traffic (#6620) (@houko)
+- Render every approval decision distinctly instead of labelling unknown states "Edited" (#6621) (@houko)
+- Let the global require_approval list survive exec_policy Full, and guard daemon lifecycle commands (#6622) (@houko)
+- Repair the kubernetes workflow YAML, which never parsed, and guard the whole class (#6643) (@houko)
+
+<details>
+<summary>Documentation, maintenance, and other internal changes</summary>
+
+### Documentation
+
+- Fix typo in prompts.rs comment (#6655) (@houko)
+
+### Maintenance
+
+- Update model snapshot (#6591) (@houko)
+- Bump the cargo-minor-patch group with 10 updates (#6597) (@app/dependabot)
+- Bump serial_test from 3.5.0 to 4.0.1 (#6598) (@app/dependabot)
+- Bump jsonwebtoken from 10.4.0 to 11.0.0 (#6599) (@app/dependabot)
+- Bump base64 from 0.22.1 to 0.23.0 (#6601) (@app/dependabot)
+- Update model snapshot (#6616) (@houko)
+- Bump docker/login-action from 4.4.0 to 4.5.2 in the actions-minor-patch group (#6626) (@app/dependabot)
+- Bump actions/stale from 10.4.0 to 11.0.0 (#6627) (@app/dependabot)
+- Bump the web-minor-patch group in /web with 4 updates (#6656) (@app/dependabot)
+- Bump the dashboard-minor-patch group in /crates/librefang-api/dashboard with 6 updates (#6657) (@app/dependabot)
+- Bump jsdom from 29.1.1 to 30.0.1 in /crates/librefang-api/dashboard (#6658) (@app/dependabot)
+- Bump the docs-minor-patch group in /docs with 5 updates (#6685) (@app/dependabot)
+
+</details>
+
 
 ## [2026.7.27] - 2026-07-27
 

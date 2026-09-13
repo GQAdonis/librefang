@@ -39,6 +39,7 @@ struct Harness {
 fn manifest(name: &str) -> AgentManifest {
     AgentManifest {
         name: name.to_string(),
+        source_template: None,
         description: "test agent".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -165,6 +166,38 @@ async fn budget_status_returns_configured_limits_with_zero_spend() {
     assert_eq!(body["monthly_spend"], 0.0);
 }
 
+/// A `budget_status` query failure (e.g. a corrupted/missing usage table)
+/// must surface as a scrubbed 500, not a panic or a silently-zeroed 200.
+/// Regression companion to
+/// `librefang_kernel_metering::tests::budget_status_surfaces_usage_query_errors`,
+/// exercised here at the HTTP boundary via `ApiErrorResponse::internal_scrub`.
+#[tokio::test(flavor = "multi_thread")]
+async fn budget_status_returns_500_when_usage_query_fails() {
+    let h = boot().await;
+    h.state
+        .kernel
+        .memory_substrate()
+        .pool()
+        .get()
+        .unwrap()
+        .execute("DROP TABLE usage_events", [])
+        .unwrap();
+
+    let (status, body) = request(&h, Method::GET, "/api/budget", None).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    // `ApiErrorResponse`'s custom `Serialize` impl emits both the flat
+    // compat field and the nested `error.message` envelope (#3639) —
+    // check both so this test does not silently pass or fail depending
+    // on which shape a future edit trims.
+    assert_eq!(body["message"], "Internal server error");
+    assert_eq!(body["error"]["message"], "Internal server error");
+    let rendered = body.to_string();
+    assert!(
+        !rendered.contains("usage_events") && !rendered.contains("no such table"),
+        "response body must not leak SQL identifiers: {body:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // PUT /api/budget — read-after-write + alias key acceptance
 // ---------------------------------------------------------------------------
@@ -193,6 +226,69 @@ async fn budget_put_then_get_reflects_update() {
     assert_eq!(body["hourly_limit"], 2.5);
     assert_eq!(body["daily_limit"], 25.0);
     assert_eq!(body["monthly_limit"], 250.0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_partial_budget_puts_preserve_both_updates() {
+    let h = boot().await;
+    let hourly = request(
+        &h,
+        Method::PUT,
+        "/api/budget",
+        Some(serde_json::json!({"max_hourly_usd": 7.0})),
+    );
+    let daily = request(
+        &h,
+        Method::PUT,
+        "/api/budget",
+        Some(serde_json::json!({"max_daily_usd": 70.0})),
+    );
+    let ((hourly_status, hourly_body), (daily_status, daily_body)) = tokio::join!(hourly, daily);
+    assert_eq!(hourly_status, StatusCode::OK, "{hourly_body:?}");
+    assert_eq!(daily_status, StatusCode::OK, "{daily_body:?}");
+
+    let live = h.state.kernel.budget_config();
+    assert_eq!(live.max_hourly_usd, 7.0);
+    assert_eq!(live.max_daily_usd, 70.0);
+}
+
+/// `PUT /api/budget` persists the new limits and then calls the same
+/// `budget_status` snapshot to build its response — a usage-store query
+/// failure there must surface as a scrubbed 500 too, not a silently-zeroed
+/// 200, even though the write itself (the config persist) succeeded.
+/// Regression companion to `budget_status_returns_500_when_usage_query_fails`
+/// above (#7037).
+#[tokio::test(flavor = "multi_thread")]
+async fn budget_put_returns_500_when_usage_query_fails() {
+    let h = boot().await;
+    h.state
+        .kernel
+        .memory_substrate()
+        .pool()
+        .get()
+        .unwrap()
+        .execute("DROP TABLE usage_events", [])
+        .unwrap();
+
+    let (status, body) = request(
+        &h,
+        Method::PUT,
+        "/api/budget",
+        Some(serde_json::json!({
+            "max_hourly_usd": 2.5,
+            "max_daily_usd": 25.0,
+            "max_monthly_usd": 250.0,
+            "alert_threshold": 0.5,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "put: {body:?}");
+    assert_eq!(body["message"], "Internal server error");
+    let rendered = body.to_string();
+    assert!(
+        !rendered.contains("usage_events") && !rendered.contains("no such table"),
+        "response body must not leak SQL identifiers: {body:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -814,6 +910,52 @@ async fn update_agent_budget_rejects_negative_cap_with_400_and_does_not_persist(
     assert_eq!(body["daily"]["limit"], 20.0);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn update_agent_budget_rolls_back_when_persistence_fails() {
+    let h = boot().await;
+    let quota = ResourceQuota {
+        max_cost_per_hour_usd: 2.0,
+        max_llm_tokens_per_hour: None,
+        ..Default::default()
+    };
+    let id = register_agent(&h.state, "rollback", quota.clone());
+    h.state
+        .kernel
+        .memory_substrate()
+        .pool()
+        .get()
+        .unwrap()
+        .execute("DROP TABLE agents", [])
+        .unwrap();
+
+    let (status, body) = request(
+        &h,
+        Method::PUT,
+        &format!("/api/budget/agents/{id}"),
+        Some(serde_json::json!({
+            "max_cost_per_hour_usd": 99.0,
+            "max_llm_tokens_per_hour": 1234
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body:?}");
+    let entry = h.state.kernel.agent_registry().get(id).unwrap();
+    assert_eq!(
+        entry.manifest.resources.max_cost_per_hour_usd,
+        quota.max_cost_per_hour_usd
+    );
+    assert_eq!(entry.manifest.resources.max_llm_tokens_per_hour, None);
+    let audit = h
+        .state
+        .kernel
+        .audit()
+        .recent(50)
+        .into_iter()
+        .find(|entry| entry.detail.contains("agent_budget update failed"))
+        .expect("failed persistence must be audited");
+    assert_eq!(audit.outcome, "error");
+}
+
 // ---------------------------------------------------------------------------
 // /api/usage and /api/usage/summary — aggregation sanity
 // ---------------------------------------------------------------------------
@@ -866,4 +1008,31 @@ async fn usage_summary_aggregates_across_agents() {
     // Each record contributes 100 input + 200 output tokens.
     assert_eq!(body["total_input_tokens"], 200);
     assert_eq!(body["total_output_tokens"], 400);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn usage_queries_fail_closed_when_storage_is_unavailable() {
+    let h = boot().await;
+    let id = register_agent(&h.state, "broken-store", ResourceQuota::default());
+    let conn = h.state.kernel.memory_substrate().pool().get().unwrap();
+    conn.execute("DROP TABLE usage_events", []).unwrap();
+    drop(conn);
+
+    let paths = vec![
+        "/api/usage".to_string(),
+        "/api/usage/summary".to_string(),
+        "/api/usage/by-model".to_string(),
+        "/api/usage/by-model/performance".to_string(),
+        "/api/usage/daily".to_string(),
+        "/api/budget/agents".to_string(),
+        format!("/api/budget/agents/{id}"),
+        "/api/budget/providers".to_string(),
+    ];
+    for path in paths {
+        let (status, body) = request(&h, Method::GET, &path, None).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{path}: {body}");
+        assert_eq!(body["code"], "usage_query_failed", "{path}: {body}");
+        assert_eq!(body["message"], "Internal server error", "{path}: {body}");
+        assert!(!body.to_string().contains("usage_events"), "{path}: {body}");
+    }
 }

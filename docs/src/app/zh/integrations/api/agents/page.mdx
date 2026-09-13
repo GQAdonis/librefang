@@ -173,7 +173,13 @@
 }
 ```
 
-**可选 `session_id`**：按请求覆盖此消息落到哪个 session。省略时用 agent 当前 session。给了就路由到那个特定 session（必须是该 agent 已存在的 session），让一个 agent 从单个客户端同时服务多条平行 chat，不需要先 `POST /sessions/{id}/switch`。fan-out 后端和多 tab dashboard 用得上。
+**可选 `session_id`**：按请求覆盖此消息落到哪个 session。
+省略时用 agent 当前 session。
+给了就路由到那个特定 session，让一个 agent 从单个客户端同时服务多条平行 chat，不需要先 `POST /sessions/{id}/switch`。
+该 session 不必事先存在——未知的 id 会就地创建一个使用该 id 的新 session，正是这一点让调用方自己生成的按对话 UUID 可用。
+但它不能属于*另一个* agent：那种情况会被拒绝而不会被读取，因此一个 agent 的 id 永远无法暴露另一个 agent 的历史。
+fan-out 后端、多 tab dashboard 以及面向公众的多用户前端都用得上。
+CLI 侧的同一字段是 `librefang message <agent> <text> --session-id <UUID>`。
 
 **响应** `200 OK`：
 
@@ -592,7 +598,14 @@ curl 'http://127.0.0.1:4545/api/agents/$AGENT/sessions/$SESSION/trajectory?forma
 `assignee_match` 接受：
 
 - `"self"` — 仅当 `task.assignee_id == agent.id` 触发。"我应该处理分配给我的任务" 类 agent 用这个。
-- `"any"`（默认） — 旧行为；任何 `task_posted` 事件都触发，不看 assignee。
+- `"unassigned"` — 仅对无人认领的工作触发。
+  事件里两种"无归属"的写法都能匹配：assignee 缺失，以及 assignee 为空字符串 —— `task_post` 工具和 `POST /api/tasks` 都不会规范化这个字段。
+- 不设置 `assignee_match`（或显式传 `null`） — 旧行为；任何 `task_posted` 事件都触发，不看 assignee。
+  字符串字面量 `"any"` 在这里**不是**关键字，与 `"self"`、`"unassigned"` 不同：传 `"assignee_match": "any"` 会落入精确字符串匹配分支，只对真正分配给名为 `"any"` 的 agent 的任务触发。
+  要拿到"任何事件都触发"的默认行为，请完全省略这个字段。
+
+注意 `"unassigned"` 响应的是任务**发布**时就没有归属，而不是之后变成无归属。
+卡住任务清扫器释放认领时不发布任何事件，所以不会唤醒这个触发器 —— 见 #6728。
 
 ### GET /api/triggers
 

@@ -316,7 +316,7 @@ function ToolPolicyRow({
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !knownRuleSetNames.has(s));
   }, [ruleSetsText, knownRuleSetNames]);
-  const paths = policy.paths ?? {};
+  const paths = useMemo(() => policy.paths ?? {}, [policy.paths]);
 
   const addPath = useCallback(() => {
     const newKey = uniquePathKey(paths, "$.field");
@@ -365,6 +365,7 @@ function ToolPolicyRow({
           className="font-mono text-xs"
         />
         <Select
+          aria-label={t("common.actions", "Actions")}
           value={policy.default ?? "scan"}
           onChange={(e) => onChangeDefault(e.target.value as McpTaintToolAction)}
           options={[

@@ -1,11 +1,18 @@
 # Required
 project_id = "my-gcp-project-id"
 
+# Restrict both SSH and the dashboard/API to your current public IPv4 address.
+# Find it with: curl -4 https://ifconfig.me
+allowed_source_cidr = "203.0.113.10/32"
+
+# Generate with: openssl rand -hex 32
+librefang_api_key = "replace-with-a-random-64-character-hex-key"
+
 # Optional (defaults shown)
 # region           = "us-central1"
 # zone             = "us-central1-a"
 # ssh_pub_key_path = "~/.ssh/id_rsa.pub"
-# librefang_version = "latest"
+# librefang_version = "v2026.7.31"
 
 # At least one LLM API key is required
 groq_api_key      = ""

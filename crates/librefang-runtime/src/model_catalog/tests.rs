@@ -6,20 +6,22 @@ fn test_catalog() -> ModelCatalog {
     ModelCatalog::new(&home)
 }
 
+/// Wrap raw catalog TOML as a [`CatalogSource`] for `from_sources`.
+fn source(content: &str, is_custom: bool) -> CatalogSource {
+    CatalogSource {
+        content: content.to_string(),
+        is_custom,
+        origin: "<test>".to_string(),
+    }
+}
+
 /// Convert plain name strings to minimal `DiscoveredModelInfo` for tests
 /// that don't need to exercise capability inference.
 fn names_to_info(names: &[&str]) -> Vec<DiscoveredModelInfo> {
     names
         .iter()
-        .map(|n| DiscoveredModelInfo {
-            name: n.to_string(),
-            parameter_size: None,
-            quantization_level: None,
-            family: None,
-            families: None,
-            size: None,
-            capabilities: vec![],
-        })
+        .copied()
+        .map(DiscoveredModelInfo::bare)
         .collect()
 }
 
@@ -559,6 +561,66 @@ fn local_provider_probe_targets_excludes_suppressed_providers() {
     assert!(
         restored.iter().any(|(id, _)| id == "ollama"),
         "un-suppressing must restore ollama as a probe target"
+    );
+}
+
+/// #6702: a custom OpenAI-compatible provider joins the periodic probe loop
+/// once it opts in, and drops back out when the operator turns it off. Before
+/// the flag existed, `local_provider_probe_targets` filtered on the hard-coded
+/// `ollama | vllm | lmstudio | lemonade` id list, so a self-hosted endpoint
+/// registered under any other id was never polled and its model list stayed
+/// empty forever.
+#[test]
+fn local_provider_probe_targets_includes_opted_in_custom_providers() {
+    let mut catalog = test_catalog();
+    // A custom entry created the ordinary way — via a base-URL override.
+    catalog.set_provider_url("acme-vllm", "http://gpu-box:4000/v1");
+    assert!(
+        !catalog
+            .local_provider_probe_targets()
+            .iter()
+            .any(|(id, _)| id == "acme-vllm"),
+        "a custom provider stays out of the probe loop until it opts in"
+    );
+
+    assert!(catalog.set_provider_discover_models("acme-vllm", true));
+    let targets = catalog.local_provider_probe_targets();
+    assert!(
+        targets
+            .iter()
+            .any(|(id, url)| id == "acme-vllm" && url == "http://gpu-box:4000/v1"),
+        "an opted-in custom provider must be probed with its own base URL: {targets:?}"
+    );
+    assert!(
+        targets.iter().any(|(id, _)| id == "ollama"),
+        "the built-in local ids keep their place in the list: {targets:?}"
+    );
+
+    // Suppression still wins over the opt-in — the #4803 invariant must hold
+    // for the new entry class too, or "remove key" would be undone by the
+    // next probe tick.
+    catalog.suppress_provider("acme-vllm");
+    assert!(
+        !catalog
+            .local_provider_probe_targets()
+            .iter()
+            .any(|(id, _)| id == "acme-vllm"),
+        "a suppressed provider is never probed, opted in or not"
+    );
+    catalog.unsuppress_provider("acme-vllm");
+
+    assert!(catalog.set_provider_discover_models("acme-vllm", false));
+    assert!(
+        !catalog
+            .local_provider_probe_targets()
+            .iter()
+            .any(|(id, _)| id == "acme-vllm"),
+        "opting back out removes the provider from the probe loop"
+    );
+
+    assert!(
+        !catalog.set_provider_discover_models("__no_such_provider__", true),
+        "an unknown id reports failure so the API can answer 404"
     );
 }
 
@@ -1110,43 +1172,51 @@ fn test_merge_infers_capabilities_from_ollama_metadata() {
     let models = vec![
         // Vision model: families includes "clip"
         DiscoveredModelInfo {
-            name: "llava:latest".to_string(),
             families: Some(vec!["llama".to_string(), "clip".to_string()]),
             family: Some("llama".to_string()),
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("llava:latest".to_string())
         },
         // Embedding model: name contains "embed"
         DiscoveredModelInfo {
-            name: "nomic-embed-text:latest".to_string(),
             families: None,
             family: None,
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("nomic-embed-text:latest".to_string())
         },
         // Thinking model: name contains "deepseek-r1"
         DiscoveredModelInfo {
-            name: "deepseek-r1:8b".to_string(),
             families: None,
             family: None,
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("deepseek-r1:8b".to_string())
         },
         // Plain chat model
         DiscoveredModelInfo {
-            name: "llama3.2:latest".to_string(),
             families: Some(vec!["llama".to_string()]),
             family: Some("llama".to_string()),
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("llama3.2:latest".to_string())
         },
     ];
     catalog.merge_discovered_models("ollama", &models);
@@ -1176,12 +1246,118 @@ fn test_merge_infers_capabilities_from_ollama_metadata() {
     assert!(!llama.supports_thinking);
 }
 
+/// Regression #7780: a gateway that reports capacity must have it recorded, not overwritten by the literal this method used to hardcode.
+#[test]
+fn test_merge_records_capacity_reported_by_the_gateway() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            context_window: Some(8_192),
+            max_output_tokens: Some(2_048),
+            ..DiscoveredModelInfo::bare("llamacpp-behind-litellm")
+        }],
+    );
+
+    let entry = catalog
+        .find_model("llamacpp-behind-litellm")
+        .expect("discovered model must be added");
+    assert_eq!(
+        entry.context_window, 8_192,
+        "the gateway said 8192; pre-fix this was the hardcoded 131072"
+    );
+    assert_eq!(entry.max_output_tokens, 2_048);
+    assert!(
+        entry.limits_known,
+        "an endpoint-reported limit has a source and may be used as a ceiling"
+    );
+}
+
+/// Regression #7780, the case the issue was actually filed about: LiteLLM answering with the bare OpenAI shape, so no capacity is reported at all.
+///
+/// The old code produced `context_window: 131_072` here — a number no source had produced, which `manifest_helpers::resolve_context_window` then accepted because its only test is `> 0`, and which the agent loop turned into a 131K `ContextBudget`.
+/// Zero plus `limits_known: false` is the honest encoding: the existing `> 0` guards fall through to `UNKNOWN_MODEL_CONTEXT_WINDOW` and log a warning naming the `agent.toml` field that fixes it.
+#[test]
+fn test_merge_does_not_invent_capacity_when_the_gateway_reports_none() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models("litellm", &names_to_info(&["sensor-model-generic"]));
+
+    let entry = catalog
+        .find_model("sensor-model-generic")
+        .expect("discovered model must still be added");
+    assert_ne!(
+        entry.context_window, 131_072,
+        "131072 was the fabricated literal — it must not reappear by any route"
+    );
+    assert_eq!(
+        entry.context_window, 0,
+        "0 is the catalog's documented `unknown` encoding, which every budget \
+         guard already filters"
+    );
+    assert_eq!(entry.max_output_tokens, 0);
+    assert!(
+        !entry.limits_known,
+        "nothing sourced these numbers, so no surface may present them as fact"
+    );
+}
+
+/// A gateway that reports only half the pair still counts as a source for the half it reported; the other half stays at the `unknown` encoding.
+#[test]
+fn test_merge_accepts_a_partially_reported_capacity() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            context_window: Some(200_000),
+            ..DiscoveredModelInfo::bare("context-only")
+        }],
+    );
+    let entry = catalog.find_model("context-only").unwrap();
+    assert_eq!(entry.context_window, 200_000);
+    assert_eq!(entry.max_output_tokens, 0);
+    assert!(entry.limits_known);
+}
+
+/// Capacity upgrades follow the same never-downgrade rule as the capability flags: a later probe may fill in an unknown limit, and a probe that stops reporting one must not erase what an earlier probe learned.
+#[test]
+fn test_merge_upgrades_unknown_capacity_but_never_erases_a_known_one() {
+    let mut catalog = test_catalog();
+
+    // First probe: bare OpenAI shape, nothing reported.
+    catalog.merge_discovered_models("litellm", &names_to_info(&["late-reporter"]));
+    assert_eq!(
+        catalog.find_model("late-reporter").unwrap().context_window,
+        0
+    );
+
+    // Second probe: the operator switched the gateway to a build that reports `/model/info`, so the real window arrives.
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            context_window: Some(16_384),
+            ..DiscoveredModelInfo::bare("late-reporter")
+        }],
+    );
+    let upgraded = catalog.find_model("late-reporter").unwrap();
+    assert_eq!(upgraded.context_window, 16_384);
+    assert!(upgraded.limits_known);
+
+    // Third probe: an older proxy in front of the same gateway drops the keys again.
+    // The known value must survive.
+    catalog.merge_discovered_models("litellm", &names_to_info(&["late-reporter"]));
+    let survived = catalog.find_model("late-reporter").unwrap();
+    assert_eq!(
+        survived.context_window, 16_384,
+        "a silent re-probe must not reset a measured window to unknown"
+    );
+    assert!(survived.limits_known);
+}
+
 /// Regression #4034: explicit `thinking`/`vision` capabilities from Ollama ≥0.7 must propagate for HF-imported models with opaque names.
 #[test]
 fn test_merge_honours_explicit_thinking_and_vision_capabilities() {
     let mut catalog = test_catalog();
     let models = vec![DiscoveredModelInfo {
-        name: "Gemma-4-26B-A4B-it-GGUF:latest".to_string(),
         families: Some(vec!["gemma".to_string()]),
         family: Some("gemma".to_string()),
         parameter_size: None,
@@ -1193,6 +1369,9 @@ fn test_merge_honours_explicit_thinking_and_vision_capabilities() {
             "thinking".to_string(),
             "tools".to_string(),
         ],
+        context_window: None,
+        max_output_tokens: None,
+        ..DiscoveredModelInfo::bare("Gemma-4-26B-A4B-it-GGUF:latest".to_string())
     }];
     catalog.merge_discovered_models("ollama", &models);
 
@@ -1219,13 +1398,15 @@ fn test_merge_upgrades_existing_local_entry_capabilities() {
     catalog.merge_discovered_models(
         "ollama",
         &[DiscoveredModelInfo {
-            name: "Gemma-4-26B-A4B-it-GGUF:latest".to_string(),
             families: None,
             family: None,
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("Gemma-4-26B-A4B-it-GGUF:latest".to_string())
         }],
     );
     let pre = catalog
@@ -1238,7 +1419,6 @@ fn test_merge_upgrades_existing_local_entry_capabilities() {
     catalog.merge_discovered_models(
         "ollama",
         &[DiscoveredModelInfo {
-            name: "Gemma-4-26B-A4B-it-GGUF:latest".to_string(),
             families: None,
             family: None,
             parameter_size: None,
@@ -1249,6 +1429,9 @@ fn test_merge_upgrades_existing_local_entry_capabilities() {
                 "thinking".to_string(),
                 "tools".to_string(),
             ],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("Gemma-4-26B-A4B-it-GGUF:latest".to_string())
         }],
     );
     let post = catalog
@@ -1272,13 +1455,15 @@ fn test_merge_never_downgrades_capabilities() {
     catalog.merge_discovered_models(
         "ollama",
         &[DiscoveredModelInfo {
-            name: "vlm-model:latest".to_string(),
             families: None,
             family: None,
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec!["vision".to_string(), "thinking".to_string()],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("vlm-model:latest".to_string())
         }],
     );
     // Re-probe with empty capabilities — must NOT clear the previously
@@ -1286,13 +1471,15 @@ fn test_merge_never_downgrades_capabilities() {
     catalog.merge_discovered_models(
         "ollama",
         &[DiscoveredModelInfo {
-            name: "vlm-model:latest".to_string(),
             families: None,
             family: None,
             parameter_size: None,
             quantization_level: None,
             size: None,
             capabilities: vec![],
+            context_window: None,
+            max_output_tokens: None,
+            ..DiscoveredModelInfo::bare("vlm-model:latest".to_string())
         }],
     );
     let entry = catalog.find_model("vlm-model:latest").unwrap();
@@ -1618,10 +1805,7 @@ supports_tools = false
 supports_vision = false
 supports_streaming = false
 "#;
-    let sources = vec![
-        (provider_a.to_string(), false),
-        (provider_b.to_string(), false),
-    ];
+    let sources = vec![source(provider_a, false), source(provider_b, false)];
     ModelCatalog::from_sources(&sources, None)
 }
 
@@ -2021,7 +2205,7 @@ supports_tools = true
 supports_vision = false
 supports_streaming = true
 "#;
-    let catalog = ModelCatalog::from_sources(&[(toml_content.to_string(), false)], None);
+    let catalog = ModelCatalog::from_sources(&[source(toml_content, false)], None);
     let providers = catalog.list_providers();
     assert_eq!(providers.len(), 1);
     assert_eq!(providers[0].id, "testprov");
@@ -2056,7 +2240,7 @@ supports_tools = false
 supports_vision = false
 supports_streaming = true
 "#;
-    let catalog = ModelCatalog::from_sources(&[(toml_content.to_string(), false)], None);
+    let catalog = ModelCatalog::from_sources(&[source(toml_content, false)], None);
     let providers = catalog.list_providers();
     assert_eq!(providers.len(), 1);
     assert!(providers[0].media_capabilities.is_empty());
@@ -2245,6 +2429,230 @@ fn effective_capabilities_for_resolves_by_alias() {
 }
 
 // ---------------------------------------------------------------------------
+// #7774: the operator's capacity-limit overrides — context window and max
+// output tokens — must beat whatever the catalog carries for the model, and
+// must apply even when the catalog carries nothing at all.
+// ---------------------------------------------------------------------------
+
+/// A locally discovered model, standing in for what `merge_discovered_models`
+/// produces: an entry whose window is whatever the discovery pass assumed
+/// rather than anything the model reported.
+fn discovered_entry(id: &str, context_window: u64, max_output_tokens: u64) -> ModelCatalogEntry {
+    ModelCatalogEntry {
+        id: id.to_string(),
+        display_name: format!("{id} (litellm)"),
+        provider: "litellm".to_string(),
+        tier: ModelTier::Local,
+        context_window,
+        max_output_tokens,
+        ..Default::default()
+    }
+}
+
+/// Refs #7774. With no override, effective limits equal the catalog entry's
+/// declared values — the backward-compatibility guarantee for every install
+/// that never touches the new fields.
+#[test]
+fn effective_limits_without_an_override_are_the_catalog_values() {
+    let catalog = test_catalog();
+    let entry = catalog.find_model("claude-sonnet-4-6").unwrap().clone();
+    assert!(entry.context_window > 0, "fixture sanity");
+    let lim = catalog.effective_limits(&entry);
+    assert_eq!(lim.context_window, Some(entry.context_window));
+    assert_eq!(lim.max_output_tokens, Some(entry.max_output_tokens));
+}
+
+/// Refs #7774 (and the precedence contract against #7780). The operator's
+/// override wins over the value discovery put on the entry — that is the whole
+/// point of the layer: a probe reporting a plausible-but-wrong window is
+/// exactly what the operator is correcting.
+#[test]
+fn an_operator_override_beats_the_discovered_context_window() {
+    let mut catalog = test_catalog();
+    catalog.add_custom_model(discovered_entry(
+        "sensor-model-generic-high",
+        131_072,
+        16_384,
+    ));
+    let entry = catalog
+        .find_model("sensor-model-generic-high")
+        .unwrap()
+        .clone();
+    catalog.set_overrides(
+        "litellm:sensor-model-generic-high".to_string(),
+        ModelOverrides {
+            context_window: Some(16_384),
+            max_output_tokens: Some(4_096),
+            ..Default::default()
+        },
+    );
+    let lim = catalog.effective_limits(&entry);
+    assert_eq!(lim.context_window, Some(16_384), "override must win");
+    assert_eq!(lim.max_output_tokens, Some(4_096), "override must win");
+}
+
+/// Refs #7774. Each limit is independent: overriding the window leaves the
+/// output cap on its catalog value rather than blanking it.
+#[test]
+fn overriding_one_limit_leaves_the_other_on_the_catalog_value() {
+    let mut catalog = test_catalog();
+    catalog.add_custom_model(discovered_entry("half-known", 131_072, 16_384));
+    let entry = catalog.find_model("half-known").unwrap().clone();
+    catalog.set_overrides(
+        "litellm:half-known".to_string(),
+        ModelOverrides {
+            context_window: Some(32_768),
+            ..Default::default()
+        },
+    );
+    let lim = catalog.effective_limits(&entry);
+    assert_eq!(lim.context_window, Some(32_768));
+    assert_eq!(lim.max_output_tokens, Some(16_384));
+}
+
+/// Refs #7774. A zero on either side is "unknown", never a limit. An override
+/// cleared to `0` must not pin a model's window to zero tokens and poison the
+/// budget math the way `ModelCatalogEntry::context_window` warns about.
+#[test]
+fn a_zero_override_is_ignored_and_a_zero_catalog_value_reports_unknown() {
+    let mut catalog = test_catalog();
+    catalog.add_custom_model(discovered_entry("zeroed", 65_536, 0));
+    let entry = catalog.find_model("zeroed").unwrap().clone();
+    catalog.set_overrides(
+        "litellm:zeroed".to_string(),
+        ModelOverrides {
+            context_window: Some(0),
+            ..Default::default()
+        },
+    );
+    let lim = catalog.effective_limits(&entry);
+    assert_eq!(lim.context_window, Some(65_536), "zero override ignored");
+    assert_eq!(lim.max_output_tokens, None, "zero catalog value is unknown");
+}
+
+/// Refs #7774. The reported case: a gateway-served model that no catalog knows.
+/// `find_model_for_manifest` misses, so an override reachable only through a
+/// catalog entry would be unreachable — the key-based lookup is what makes the
+/// field usable here at all.
+#[test]
+fn an_override_applies_to_a_model_the_catalog_does_not_know() {
+    let mut catalog = test_catalog();
+    assert!(
+        catalog
+            .find_model_for_manifest("litellm", "sensor-model-generic-high")
+            .is_none(),
+        "fixture sanity: the model must be absent from the catalog"
+    );
+    catalog.set_overrides(
+        "litellm:sensor-model-generic-high".to_string(),
+        ModelOverrides {
+            context_window: Some(16_384),
+            ..Default::default()
+        },
+    );
+    let lim = catalog.effective_limits_for_manifest("litellm", "sensor-model-generic-high");
+    assert_eq!(lim.context_window, Some(16_384));
+    assert_eq!(lim.max_output_tokens, None);
+}
+
+/// Refs #7774. No override and no catalog entry resolves to nothing, leaving
+/// the caller's own fallback (and its warning) in place. Pins the pre-change
+/// behaviour for the unknown-model path.
+#[test]
+fn an_unknown_model_with_no_override_resolves_to_nothing() {
+    let catalog = test_catalog();
+    let lim = catalog.effective_limits_for_manifest("litellm", "sensor-model-generic-high");
+    assert_eq!(lim.context_window, None);
+    assert_eq!(lim.max_output_tokens, None);
+}
+
+/// Refs #7774 / #6423. When the catalog reconciles a bare manifest model to a
+/// prefixed entry id, the key the operator typed — the manifest's own
+/// `provider:model` — is honoured, and the entry's key still works as the
+/// second candidate.
+#[test]
+fn both_the_manifest_key_and_the_reconciled_entry_key_are_honoured() {
+    let mut catalog = test_catalog();
+    catalog.add_custom_model(ModelCatalogEntry {
+        id: "openrouter/acme/mini".to_string(),
+        display_name: "Acme Mini".to_string(),
+        provider: "openrouter".to_string(),
+        tier: ModelTier::Custom,
+        context_window: 131_072,
+        max_output_tokens: 16_384,
+        ..Default::default()
+    });
+    // Reconciled entry key only.
+    catalog.set_overrides(
+        "openrouter:openrouter/acme/mini".to_string(),
+        ModelOverrides {
+            context_window: Some(64_000),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        catalog
+            .effective_limits_for_manifest("openrouter", "acme/mini")
+            .context_window,
+        Some(64_000),
+        "the reconciled entry key must be consulted"
+    );
+    // Manifest key present as well — it wins, because it is the id the
+    // operator sees and typed against.
+    catalog.set_overrides(
+        "openrouter:acme/mini".to_string(),
+        ModelOverrides {
+            context_window: Some(48_000),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        catalog
+            .effective_limits_for_manifest("openrouter", "acme/mini")
+            .context_window,
+        Some(48_000),
+        "the manifest key must win over the reconciled entry key"
+    );
+}
+
+/// Refs #7774. The override lives in `model_overrides.json`, not on the catalog
+/// entry, so a registry sync that rewrites the entry cannot erase it — the
+/// specific failure the dashboard used to document as "overwritten on registry
+/// sync".
+#[test]
+fn a_limit_override_survives_a_catalog_reload() {
+    let mut catalog = test_catalog();
+    catalog.add_custom_model(discovered_entry("resync-me", 131_072, 16_384));
+    catalog.set_overrides(
+        "litellm:resync-me".to_string(),
+        ModelOverrides {
+            context_window: Some(24_000),
+            ..Default::default()
+        },
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("model_overrides.json");
+    catalog.save_overrides(&path).expect("save");
+
+    // A fresh catalog stands in for the post-sync state: the entry is
+    // re-created from the registry with its declared window, and the override
+    // file is loaded back on top.
+    let mut resynced = test_catalog();
+    resynced.add_custom_model(discovered_entry("resync-me", 131_072, 16_384));
+    resynced.load_overrides(&path);
+    let entry = resynced.find_model("resync-me").unwrap().clone();
+    assert_eq!(
+        entry.context_window, 131_072,
+        "the entry itself is untouched"
+    );
+    assert_eq!(
+        resynced.effective_limits(&entry).context_window,
+        Some(24_000),
+        "the override survives the sync"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // #5137: malformed user config files must be skipped per-file (and logged),
 // not silently revert the whole catalog / clobber existing state.
 // ---------------------------------------------------------------------------
@@ -2329,5 +2737,560 @@ fn load_overrides_keeps_existing_on_parse_failure() {
     assert!(
         catalog.get_overrides(&key).is_some(),
         "a malformed overrides.json must not silently drop existing overrides (#5137)"
+    );
+}
+
+#[test]
+fn model_overrides_context_window_and_max_output_tokens_survive_a_registry_resync() {
+    let mut catalog = ModelCatalog::from_entries(
+        vec![ModelCatalogEntry {
+            id: "test/model-a".to_string(),
+            display_name: "Test Model A".to_string(),
+            provider: "openrouter".to_string(),
+            tier: ModelTier::Smart,
+            context_window: 100_000,
+            max_output_tokens: 4_096,
+            ..Default::default()
+        }],
+        vec![],
+    );
+    let key = "openrouter:test/model-a".to_string();
+    catalog.set_overrides(
+        key.clone(),
+        ModelOverrides {
+            context_window: Some(32_768),
+            max_output_tokens: Some(2_048),
+            ..Default::default()
+        },
+    );
+
+    catalog.reconcile_live_provider_models(
+        "openrouter",
+        vec!["test/model-a".to_string()],
+        vec![ModelCatalogEntry {
+            id: "test/model-a".to_string(),
+            display_name: "Test Model A".to_string(),
+            provider: "openrouter".to_string(),
+            tier: ModelTier::Smart,
+            context_window: 500_000,
+            max_output_tokens: 65_536,
+            ..Default::default()
+        }],
+    );
+
+    let entry = catalog
+        .find_model("test/model-a")
+        .expect("entry survives resync");
+    assert_eq!(
+        entry.context_window, 500_000,
+        "the raw catalog value IS replaced by the resync — proves a direct field edit would not survive"
+    );
+    let limits = catalog.effective_limits(entry);
+    assert_eq!(
+        limits.context_window,
+        Some(32_768),
+        "the override must still win after the resync replaced the catalog entry"
+    );
+    assert_eq!(
+        limits.max_output_tokens,
+        Some(2_048),
+        "same guarantee for max_output_tokens"
+    );
+    assert!(
+        catalog.get_overrides(&key).is_some(),
+        "the override entry itself must not be dropped by the resync"
+    );
+}
+
+#[test]
+fn managed_everyapi_registration_is_auto_detected_and_builtin() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api-cn.everyapi.ai/v1"));
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert_eq!(provider.base_url, "https://api-cn.everyapi.ai/v1");
+    assert_eq!(provider.auth_status, AuthStatus::AutoDetected);
+    assert!(!provider.is_custom);
+    assert!(provider.cli_managed);
+}
+
+#[test]
+fn managed_everyapi_registration_honors_suppression() {
+    let mut catalog = ModelCatalog::default();
+    catalog.suppress_provider("everyapi");
+    assert!(!catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+    assert!(catalog.get_provider("everyapi").is_none());
+}
+
+#[test]
+fn explicit_url_converts_managed_everyapi_to_custom() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+    assert!(catalog.set_provider_url("everyapi", "https://relay.example/v1"));
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert_eq!(provider.base_url, "https://relay.example/v1");
+    assert_eq!(provider.auth_status, AuthStatus::Configured);
+    assert!(provider.is_custom);
+    assert!(
+        !provider.cli_managed,
+        "a user-set URL takes the entry out of CLI management"
+    );
+}
+
+#[test]
+fn explicit_everyapi_registration_survives_without_a_registry_entry() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_explicit_everyapi("https://relay.example/v1/", "MY_EVERYAPI_KEY", true));
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert_eq!(provider.base_url, "https://relay.example/v1");
+    assert_eq!(provider.api_key_env, "MY_EVERYAPI_KEY");
+    assert_eq!(provider.auth_status, AuthStatus::Configured);
+    assert!(provider.is_custom);
+    assert!(!provider.cli_managed);
+}
+
+/// Provenance must survive a CLI login that predates the explicit config, and the explicit side must win.
+/// Reading `!is_custom` as "CLI-managed" instead let the credential process keep rewriting `base_url` afterwards.
+#[test]
+fn explicit_registration_takes_the_entry_back_from_cli_management() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+    assert!(catalog.get_provider("everyapi").unwrap().cli_managed);
+
+    assert!(catalog.ensure_explicit_everyapi("https://relay.example/v1", "MY_EVERYAPI_KEY", true));
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert!(!provider.cli_managed);
+    assert_eq!(provider.base_url, "https://relay.example/v1");
+
+    // And the credential process can no longer reclaim it.
+    assert!(!catalog.ensure_managed_everyapi("https://api-cn.everyapi.ai/v1"));
+    assert_eq!(
+        catalog.get_provider("everyapi").unwrap().base_url,
+        "https://relay.example/v1"
+    );
+}
+
+/// Installing a provider file at runtime — the registry install route behind the dashboard's "Connect EveryAPI gateway" action — is an explicit configuration, so it takes the entry back without waiting for the next boot to reclassify it.
+#[test]
+fn a_provider_file_merge_clears_cli_management() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+
+    catalog.merge_catalog_file(librefang_types::model_catalog::ModelCatalogFile {
+        provider: Some(librefang_types::model_catalog::ProviderCatalogToml {
+            id: "everyapi".to_string(),
+            display_name: "EveryAPI".to_string(),
+            api_key_env: "MY_EVERYAPI_KEY".to_string(),
+            base_url: "https://relay.self-hosted.example/v1".to_string(),
+            key_required: true,
+            signup_url: None,
+            regions: std::collections::HashMap::new(),
+            media_capabilities: Vec::new(),
+            discover_models: false,
+        }),
+        models: Vec::new(),
+    });
+
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert!(!provider.cli_managed);
+    assert_eq!(provider.api_key_env, "MY_EVERYAPI_KEY");
+    assert_eq!(provider.base_url, "https://relay.self-hosted.example/v1");
+}
+
+/// A payload that leaves `api_key_env` empty keeps the previous env var, but it still overwrites `base_url` — so it must take the entry back too.
+/// Tying the hand-off to the `api_key_env` branch instead would leave the endpoint the file just set exposed to the next credential refresh.
+#[test]
+fn a_provider_file_merge_without_a_key_env_still_clears_cli_management() {
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+
+    catalog.merge_catalog_file(librefang_types::model_catalog::ModelCatalogFile {
+        provider: Some(librefang_types::model_catalog::ProviderCatalogToml {
+            id: "everyapi".to_string(),
+            display_name: "EveryAPI".to_string(),
+            api_key_env: String::new(),
+            base_url: "https://relay.self-hosted.example/v1".to_string(),
+            key_required: true,
+            signup_url: None,
+            regions: std::collections::HashMap::new(),
+            media_capabilities: Vec::new(),
+            discover_models: false,
+        }),
+        models: Vec::new(),
+    });
+
+    let provider = catalog.get_provider("everyapi").unwrap();
+    assert!(!provider.cli_managed);
+    assert_eq!(
+        provider.api_key_env, "EVERYAPI_API_KEY",
+        "an empty payload field must not erase the previous env var"
+    );
+    assert_eq!(provider.base_url, "https://relay.self-hosted.example/v1");
+}
+
+/// `detect_auth` must leave a CLI-managed entry alone: no env var describes its credentials, so probing `api_key_env` could only promote it on the strength of an unrelated key and route its refresh down the explicit-key branch.
+///
+/// `EVERYAPI_API_KEY` is set here precisely because that is the env var `ensure_managed_everyapi` records — a stray value in the daemon's environment must not be mistaken for the CLI login's credentials.
+/// Nothing else in this crate reads the variable, so setting it cannot skew a concurrent test.
+#[test]
+fn detect_auth_does_not_promote_a_cli_managed_entry_from_a_stray_env_key() {
+    let previous = std::env::var("EVERYAPI_API_KEY").ok();
+    unsafe { std::env::set_var("EVERYAPI_API_KEY", "stray-key-not-the-cli-login") };
+
+    let mut catalog = ModelCatalog::default();
+    assert!(catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1"));
+    // The API refresh path demotes the entry when the credential process becomes unreachable; an unrelated re-detection pass must not undo that.
+    catalog.set_provider_auth_status("everyapi", AuthStatus::Missing);
+    catalog.detect_auth();
+    let provider = catalog.get_provider("everyapi").unwrap();
+
+    unsafe {
+        match previous {
+            Some(value) => std::env::set_var("EVERYAPI_API_KEY", value),
+            None => std::env::remove_var("EVERYAPI_API_KEY"),
+        }
+    }
+
+    assert_eq!(
+        provider.auth_status,
+        AuthStatus::Missing,
+        "the credential process owns this entry's status, not the environment"
+    );
+    assert!(provider.cli_managed);
+}
+
+// ── Partial provider overlays (#7776) ──────────────────────────────────
+//
+// The discovery toggle writes into `providers/<id>.toml`. When that file did
+// not exist it used to be created with `id` + `discover_models` and nothing
+// else, which failed `ProviderCatalogToml`'s required fields — so the loader
+// discarded the whole file and the setting reverted on every boot. The writer
+// now emits a complete record, but files written by older builds (and files an
+// operator hand-edits) still have the partial shape and must load.
+
+/// The exact file shape the old writer produced.
+const LEGACY_PARTIAL_OVERLAY: &str = "[provider]\nid = \"litellm\"\ndiscover_models = true\n";
+
+#[test]
+fn legacy_partial_overlay_still_yields_the_provider_and_its_flag() {
+    let catalog = ModelCatalog::from_sources(&[source(LEGACY_PARTIAL_OVERLAY, true)], None);
+    let provider = catalog
+        .get_provider("litellm")
+        .expect("a partial overlay must not take the whole file down with it");
+    assert!(
+        provider.discover_models,
+        "the flag the file exists to carry has to survive the round trip"
+    );
+    assert_eq!(provider.display_name, "litellm");
+    assert_eq!(provider.api_key_env, "LITELLM_API_KEY");
+    assert!(provider.is_custom, "the source's classification is kept");
+}
+
+#[test]
+fn a_partial_overlay_never_clobbers_a_full_record_for_the_same_id() {
+    let full = concat!(
+        "[provider]\n",
+        "id = \"litellm\"\n",
+        "display_name = \"LiteLLM Gateway\"\n",
+        "api_key_env = \"LITELLM_TOKEN\"\n",
+        "base_url = \"https://gateway.internal/v1\"\n",
+    );
+
+    // Both orders must give the same answer — `read_dir` order is arbitrary,
+    // so an order-dependent merge would be a heisenbug in production.
+    for sources in [
+        vec![source(full, false), source(LEGACY_PARTIAL_OVERLAY, true)],
+        vec![source(LEGACY_PARTIAL_OVERLAY, true), source(full, false)],
+    ] {
+        let catalog = ModelCatalog::from_sources(&sources, None);
+        assert_eq!(
+            catalog
+                .list_providers()
+                .iter()
+                .filter(|p| p.id == "litellm")
+                .count(),
+            1,
+            "duplicate ids collapse into a single entry"
+        );
+        let provider = catalog.get_provider("litellm").expect("merged entry");
+        assert_eq!(
+            provider.base_url, "https://gateway.internal/v1",
+            "an absent base_url must never overwrite a present one"
+        );
+        assert_eq!(provider.api_key_env, "LITELLM_TOKEN");
+        assert_eq!(provider.display_name, "LiteLLM Gateway");
+        assert!(
+            provider.discover_models,
+            "opting in from any contributing file is enough"
+        );
+        assert!(
+            !provider.is_custom,
+            "a registry-shipped contributor makes the entry non-deletable"
+        );
+    }
+}
+
+#[test]
+fn a_syntactically_invalid_catalog_file_is_skipped_without_taking_the_rest_down() {
+    let broken = "[provider\nid = \"oops\"\n";
+    let good = concat!(
+        "[provider]\n",
+        "id = \"acme\"\n",
+        "display_name = \"ACME\"\n",
+        "api_key_env = \"ACME_API_KEY\"\n",
+        "base_url = \"https://api.acme.test/v1\"\n",
+    );
+    let catalog = ModelCatalog::from_sources(&[source(broken, true), source(good, true)], None);
+    assert!(
+        catalog.get_provider("oops").is_none(),
+        "genuinely corrupt TOML is still dropped"
+    );
+    assert!(
+        catalog.get_provider("acme").is_some(),
+        "one corrupt file must not cost the operator the other providers"
+    );
+}
+
+/// End-to-end through the filesystem: what the API writes into
+/// `~/.librefang/providers/` is what the loader reads back on the next boot.
+#[test]
+fn provider_overlay_round_trips_through_the_directory_loader() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let providers = dir.path().join("providers");
+    std::fs::create_dir_all(&providers).expect("providers dir");
+    std::fs::write(providers.join("litellm.toml"), LEGACY_PARTIAL_OVERLAY).expect("write overlay");
+
+    let catalog = ModelCatalog::new_from_dir(&providers);
+    let provider = catalog
+        .get_provider("litellm")
+        .expect("the overlay on disk must produce a provider");
+    assert!(provider.discover_models);
+}
+
+// ---------------------------------------------------------------------------
+// #7957 — a gateway model's vision support must come from the gateway, and an
+// unknown capability must never be recorded as a known "no"
+// ---------------------------------------------------------------------------
+
+/// A helper for the #7957 tests: the alias an operator actually gives a LiteLLM deployment.
+/// It matches no vision heuristic (`llava`, `vision`, `-vl-`, a `clip` family, …), which is the
+/// premise of the whole issue.
+const OPERATOR_ALIAS: &str = "team-default";
+
+#[test]
+fn a_gateway_declared_vision_flag_survives_a_name_that_matches_no_heuristic() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_vision: Some(true),
+            ..DiscoveredModelInfo::bare(OPERATOR_ALIAS)
+        }],
+    );
+
+    let entry = catalog
+        .find_model(OPERATOR_ALIAS)
+        .expect("the discovered model must enter the catalog");
+    assert!(
+        entry.supports_vision,
+        "the gateway declared vision support; the model's name must not overrule it"
+    );
+    assert!(
+        entry.vision_known,
+        "a declared flag is knowledge, so the entry must be able to say so"
+    );
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Supported
+    );
+    assert!(catalog.vision_support_for(OPERATOR_ALIAS).allows_images());
+}
+
+#[test]
+fn a_gateway_model_with_no_declared_capability_fails_open_instead_of_stripping() {
+    let mut catalog = test_catalog();
+    // The reproduction case: the bare OpenAI `/v1/models` shape, so `supports_vision` is `None`.
+    catalog.merge_discovered_models("litellm", &[DiscoveredModelInfo::bare(OPERATOR_ALIAS)]);
+
+    let entry = catalog
+        .find_model(OPERATOR_ALIAS)
+        .expect("the discovered model must enter the catalog");
+    assert!(
+        !entry.vision_known,
+        "nothing declared this model's vision support, and the entry must not pretend otherwise"
+    );
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Unknown,
+        "a catalog hit built on a name heuristic must be no more confident than a catalog miss"
+    );
+    assert!(
+        catalog.vision_support_for(OPERATOR_ALIAS).allows_images(),
+        "this is the bug: an unproven capability used to strip the user's images silently"
+    );
+}
+
+#[test]
+fn a_catalog_miss_and_an_inferred_entry_give_the_same_answer() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models("litellm", &[DiscoveredModelInfo::bare(OPERATOR_ALIAS)]);
+
+    // The asymmetry #7957 reported: the miss path was already right, the hit path was not.
+    assert_eq!(
+        catalog.vision_support_for("a-model-nobody-has-ever-heard-of"),
+        VisionSupport::Unknown
+    );
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Unknown
+    );
+}
+
+#[test]
+fn a_gateway_declared_denial_is_believed_and_reads_as_unsupported() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_vision: Some(false),
+            ..DiscoveredModelInfo::bare("looks-like-a-vision-model")
+        }],
+    );
+
+    let entry = catalog.find_model("looks-like-a-vision-model").unwrap();
+    assert!(!entry.supports_vision);
+    assert!(entry.vision_known);
+    assert_eq!(
+        catalog.vision_support_for("looks-like-a-vision-model"),
+        VisionSupport::Unsupported,
+        "a declared text-only model is the one case that may have its images redacted"
+    );
+    assert!(!catalog
+        .vision_support_for("looks-like-a-vision-model")
+        .allows_images());
+}
+
+#[test]
+fn a_gateway_declaration_corrects_a_previously_inferred_flag() {
+    let mut catalog = test_catalog();
+    // First probe: the bare shape, so the name heuristic guesses (and guesses wrong).
+    catalog.merge_discovered_models("litellm", &[DiscoveredModelInfo::bare(OPERATOR_ALIAS)]);
+    assert!(!catalog.find_model(OPERATOR_ALIAS).unwrap().vision_known);
+
+    // Second probe, after the operator turns on LiteLLM's model-info block.
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_vision: Some(true),
+            ..DiscoveredModelInfo::bare(OPERATOR_ALIAS)
+        }],
+    );
+
+    let entry = catalog.find_model(OPERATOR_ALIAS).unwrap();
+    assert!(entry.supports_vision);
+    assert!(entry.vision_known);
+}
+
+#[test]
+fn an_inferred_probe_never_downgrades_a_declared_vision_model() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_vision: Some(true),
+            ..DiscoveredModelInfo::bare(OPERATOR_ALIAS)
+        }],
+    );
+    // A later probe through a proxy that strips the model-info block declares nothing.
+    // It must not turn a known-vision model back into a blind one — the never-downgrade rule that
+    // `merge_discovered_models` has always had, now expressed in terms of provenance.
+    catalog.merge_discovered_models("litellm", &[DiscoveredModelInfo::bare(OPERATOR_ALIAS)]);
+
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Supported
+    );
+}
+
+#[test]
+fn an_operator_override_outranks_the_catalog_in_both_directions() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_vision: Some(false),
+            ..DiscoveredModelInfo::bare(OPERATOR_ALIAS)
+        }],
+    );
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Unsupported
+    );
+
+    // The escape hatch the redaction WARN points the operator at (#4745).
+    catalog.set_overrides(
+        format!("litellm:{OPERATOR_ALIAS}"),
+        ModelOverrides {
+            supports_vision: Some(true),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        catalog.vision_support_for(OPERATOR_ALIAS),
+        VisionSupport::Supported,
+        "a human saying so is knowledge, and it must beat what the gateway reported"
+    );
+}
+
+#[test]
+fn a_gateway_declared_function_calling_denial_reaches_the_entry() {
+    let mut catalog = test_catalog();
+    catalog.merge_discovered_models(
+        "litellm",
+        &[DiscoveredModelInfo {
+            supports_function_calling: Some(false),
+            ..DiscoveredModelInfo::bare("no-tools-here")
+        }],
+    );
+
+    let entry = catalog.find_model("no-tools-here").unwrap();
+    assert!(
+        !entry.supports_tools,
+        "the gateway declared no function calling; the blanket non-embedding assumption must yield"
+    );
+    assert!(
+        entry.supports_streaming,
+        "streaming tracks `is a chat model`, which the tools flag never spoke to"
+    );
+}
+
+/// The registry side of the same field: a curated entry that omits `supports_vision` is a
+/// declaration of text-only, not a guess, so it keeps working exactly as before.
+#[test]
+fn a_registry_entry_that_omits_the_flag_is_still_a_declaration() {
+    let toml = concat!(
+        "[provider]\n",
+        "id = \"acme\"\n",
+        "display_name = \"ACME\"\n",
+        "api_key_env = \"ACME_API_KEY\"\n",
+        "base_url = \"https://api.acme.test/v1\"\n\n",
+        "[[models]]\n",
+        "id = \"acme-text\"\n",
+        "display_name = \"ACME Text\"\n",
+        "tier = \"balanced\"\n",
+        "context_window = 32768\n",
+        "max_output_tokens = 4096\n",
+        "input_cost_per_m = 1.0\n",
+        "output_cost_per_m = 2.0\n",
+    );
+    let catalog = ModelCatalog::from_sources(&[source(toml, true)], None);
+    let entry = catalog.find_model("acme-text").expect("entry must load");
+    assert!(!entry.supports_vision);
+    assert!(
+        entry.vision_known,
+        "a curated registry entry predates the field and is a declaration; `serde(default)` must be true"
+    );
+    assert_eq!(
+        catalog.vision_support_for("acme-text"),
+        VisionSupport::Unsupported
     );
 }

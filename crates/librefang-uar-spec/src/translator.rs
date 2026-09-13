@@ -70,12 +70,15 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
     let model = ModelConfig {
         provider,
         model: model_name,
-        max_tokens: artifact
-            .budgets
-            .max_tokens_per_turn
-            .map(|t| t as u32)
-            .unwrap_or(4096),
-        temperature: 0.7,
+        // Upstream widened these to `Option`, where `None` means "inherit".
+        // A UAR artifact that declares no per-turn budget should inherit
+        // rather than pin the old hardcoded 4096 ceiling.
+        max_tokens: artifact.budgets.max_tokens_per_turn.map(|t| t as u32),
+        temperature: Some(0.7),
+        // Not expressible in UAR-AGENT-MD; `None` inherits the kernel default.
+        top_p: None,
+        frequency_penalty: None,
+        presence_penalty: None,
         system_prompt,
         api_key_env: None,
         base_url: None,
@@ -114,8 +117,11 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
             Vec::new()
         },
         tools: Vec::new(),
-        memory_read: Vec::new(),
-        memory_write: Vec::new(),
+        // Tri-state (#7605): a UAR artifact never mentions these keys, so the
+        // faithful translation is `None` ("undeclared" -> historical open
+        // default), NOT `Some(vec![])` ("declared, grants nothing").
+        memory_read: None,
+        memory_write: None,
         agent_spawn: false,
         agent_message: Vec::new(),
         shell: if artifact.capabilities.code_execution {
@@ -193,6 +199,10 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         reconcile_orphans: librefang_types::agent::OrphanPolicy::default(),
         async_tasks: librefang_types::agent::AsyncTasksConfig::default(),
         rl_export: librefang_types::agent::RlExportOverride::default(),
+        // Not expressible in UAR-AGENT-MD; `None` inherits kernel/global defaults.
+        owner: None,
+        source_template: None,
+        assignee_wake: None,
     })
 }
 
@@ -272,7 +282,7 @@ pub fn manifest_to_artifact(manifest: &AgentManifest) -> AgentArtifact {
         },
         a2a: A2ASection::default(),
         budgets: BudgetsSection {
-            max_tokens_per_turn: Some(manifest.model.max_tokens as u64),
+            max_tokens_per_turn: manifest.model.max_tokens.map(|t| t as u64),
             max_tokens_per_session: None,
             max_tool_calls_per_turn: None,
             max_cost_per_session_usd: None,

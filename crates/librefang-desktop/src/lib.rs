@@ -13,13 +13,8 @@ mod connection;
 mod server;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod shortcuts;
-// Tray is desktop-only (not iOS/Android), and on Linux it additionally
-// requires the `linux-tray` Cargo feature — see #3667 and `tray.rs` for
-// the GTK3 unmaintained-crate advisories that motivate the gate.
-#[cfg(all(
-    not(any(target_os = "ios", target_os = "android")),
-    any(not(target_os = "linux"), feature = "linux-tray")
-))]
+// Tray is desktop-only (not iOS/Android).
+#[cfg(desktop)]
 mod tray;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod updater;
@@ -95,6 +90,47 @@ pub(crate) fn validate_server_url(url: &str) -> Result<(), String> {
     ))
 }
 
+/// URL schemes a webview-initiated new-window request may hand to the OS.
+///
+/// Matches the dashboard's `SAFE_SCHEMES` in `crates/librefang-api/dashboard/src/lib/safeUrl.ts` — the schemes with no in-context execution semantics.
+/// Not every URL that reaches the handler is first-party: the dashboard renders agent output and server-controlled catalogue entries as markdown links, so a `file:`, `javascript:` or custom-scheme target must never be forwarded to `xdg-open` / `open` / `ShellExecute`.
+///
+/// This list is deliberately narrower than the dashboard's markdown policy, which is a divergence rather than an oversight.
+/// `MarkdownContent.tsx`'s `EXTRA_URL_SCHEMES` additionally lets `obsidian:` and `obsidian-advanced-uri:` survive sanitisation so agent-emitted `[note](obsidian://…)` links render, and those anchors carry `target="_blank"`, so they reach this handler and are denied here.
+/// That is intended: `obsidian-advanced-uri:` can execute commands in Obsidian and the URL is agent-controlled, so it must not reach the OS handler.
+/// Do not "restore parity" by widening this array.
+#[cfg(desktop)]
+const EXTERNAL_OPEN_SCHEMES: [&str; 3] = ["http", "https", "mailto"];
+
+/// Whether a `window.open()` / `target="_blank"` request should be handed to the user's default browser.
+///
+/// `Url::scheme` is normalised to lowercase by the parser, so the comparison needs no case folding of its own.
+#[cfg(desktop)]
+pub(crate) fn should_open_externally(url: &tauri::Url) -> bool {
+    EXTERNAL_OPEN_SCHEMES.contains(&url.scheme())
+}
+
+/// Hand a webview-requested new window to the OS default handler instead of dropping it (#6706).
+///
+/// wry connects WebKitGTK's `create` signal — and the WKWebView / WebView2 equivalents — only when a new-window handler is registered.
+/// Without one, every `target="_blank"` anchor and `window.open()` call in the dashboard silently does nothing inside the desktop app.
+///
+/// The request is always denied: LibreFang never opens a second, chromeless webview onto a third-party page — the URL goes to the user's real browser instead.
+/// `that_detached` is used rather than `that` because this runs on the UI thread and must not block the window while the browser starts.
+#[cfg(desktop)]
+fn open_new_window_request_externally<R: tauri::Runtime>(
+    url: tauri::Url,
+) -> tauri::webview::NewWindowResponse<R> {
+    if should_open_externally(&url) {
+        if let Err(e) = open::that_detached(url.as_str()) {
+            warn!("Failed to open {url} in the system default handler: {e}");
+        }
+    } else {
+        warn!("Refusing to open new-window request with unsupported scheme: {url}");
+    }
+    tauri::webview::NewWindowResponse::Deny
+}
+
 /// Managed state: the port the embedded server listens on.
 /// Wrapped in `RwLock<Option<_>>` — `None` when running in remote mode or before local boot.
 pub struct PortState(pub std::sync::RwLock<Option<u16>>);
@@ -123,6 +159,17 @@ pub struct RemoteMode(pub std::sync::RwLock<bool>);
 /// Desktop-only: mobile is a thin client with no embedded server.
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub struct ServerHandleHolder(pub std::sync::Mutex<Option<server::ServerHandle>>);
+
+/// Desktop-only, for the same reason `ServerHandleHolder` is: its only caller sits behind the same `cfg`.
+/// Without this attribute the function is still compiled for iOS and Android, where nothing calls it, and `-D warnings` turns the resulting `dead_code` into a hard error — which is how it broke the iOS simulator build on `main` while every desktop lane stayed green.
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+fn lock_server_handle<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("desktop server handle lock poisoned; recovering server state");
+        mutex.clear_poison();
+        poisoned.into_inner()
+    })
+}
 
 /// Forward critical kernel events as native OS notifications.
 ///
@@ -342,7 +389,7 @@ pub fn run(server_url: Option<String>, force_local: bool) {
     let (init_port, init_kernel_inner, init_url, init_remote) = match &mode {
         StartupMode::Remote(_) => (None, None, initial_url.clone(), true),
         StartupMode::Local => {
-            let guard = holder.0.lock().expect("ServerHandleHolder lock poisoned");
+            let guard = lock_server_handle(&holder.0);
             let (p, k) = if let Some(ref handle) = *guard {
                 (
                     Some(handle.port),
@@ -443,6 +490,7 @@ pub fn run(server_url: Option<String>, force_local: bool) {
                     .min_inner_size(800.0, 600.0)
                     .center()
                     .visible(true)
+                    .on_new_window(|url, _features| open_new_window_request_externally(url))
                     .build()?;
                 } else {
                     // Direct mode — navigate to the resolved URL
@@ -456,6 +504,7 @@ pub fn run(server_url: Option<String>, force_local: bool) {
                     .min_inner_size(800.0, 600.0)
                     .center()
                     .visible(true)
+                    .on_new_window(|url, _features| open_new_window_request_externally(url))
                     .build()?;
                 }
             }
@@ -490,9 +539,8 @@ pub fn run(server_url: Option<String>, force_local: bool) {
                 }
             }
 
-            // Set up system tray (desktop only). On Linux, gated behind the
-            // `linux-tray` Cargo feature — see #3667 / `tray.rs`.
-            #[cfg(all(desktop, any(not(target_os = "linux"), feature = "linux-tray")))]
+            // Set up system tray (desktop only).
+            #[cfg(desktop)]
             tray::setup_tray(app)?;
 
             // For local direct-boot mode, start event forwarding for notifications
@@ -544,7 +592,32 @@ pub fn run(server_url: Option<String>, force_local: bool) {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    use super::lock_server_handle;
     use super::validate_server_url;
+
+    /// Gated with the helper it exercises: on iOS and Android `lock_server_handle` is not compiled, so an ungated test fails to resolve the symbol there.
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[test]
+    fn poisoned_server_handle_lock_recovers_state_and_remains_usable() {
+        let holder = std::sync::Mutex::new(Some("running"));
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut state = holder.lock().unwrap();
+                    *state = Some("replacement");
+                    panic!("poison desktop server handle lock");
+                })
+                .join()
+        });
+        assert!(poison.is_err());
+        assert!(holder.is_poisoned());
+        assert_eq!(*lock_server_handle(&holder), Some("replacement"));
+        assert!(!holder.is_poisoned());
+
+        *lock_server_handle(&holder) = None;
+        assert_eq!(*holder.lock().unwrap(), None);
+    }
 
     #[test]
     fn https_remote_host_accepted() {
@@ -603,5 +676,53 @@ mod tests {
         assert!(validate_server_url("http://localhost@evil.com/").is_err());
         assert!(validate_server_url("http://127.0.0.1@evil.com/").is_err());
         assert!(validate_server_url("http://user:pass@evil.com/").is_err());
+    }
+
+    #[cfg(desktop)]
+    mod new_window_requests {
+        use crate::should_open_externally;
+
+        fn parse(url: &str) -> tauri::Url {
+            url.parse().expect("test URL must parse")
+        }
+
+        #[test]
+        fn web_links_are_handed_to_the_system_browser() {
+            // The EveryAPI partner panel that #6706 reported as dead.
+            assert!(should_open_externally(&parse(
+                "https://everyapi.ai/integrations/librefang?utm_source=librefang_dashboard&utm_medium=partner&utm_campaign=librefang_everyapi"
+            )));
+            assert!(should_open_externally(&parse("http://example.com/docs")));
+            assert!(should_open_externally(&parse("mailto:hi@example.com")));
+        }
+
+        #[test]
+        fn scheme_matching_is_case_insensitive() {
+            // The URL parser lowercases the scheme, so an uppercase href still matches.
+            assert!(should_open_externally(&parse("HTTPS://example.com")));
+        }
+
+        #[test]
+        fn non_web_schemes_are_refused() {
+            // Agent output and catalogue entries are rendered as markdown links,
+            // so these can reach the handler without being first-party.
+            assert!(!should_open_externally(&parse("file:///etc/passwd")));
+            assert!(!should_open_externally(&parse("javascript:alert(1)")));
+            assert!(!should_open_externally(&parse("data:text/html,<h1>x</h1>")));
+            assert!(!should_open_externally(&parse("smb://fileserver/share")));
+            assert!(!should_open_externally(&parse("lfconnect://localhost/")));
+        }
+
+        #[test]
+        fn a_refused_scheme_still_denies_the_in_app_window() {
+            // The handler denies unconditionally — a refused scheme must not fall through to a second chromeless webview onto the same URL.
+            // Only the deny branch is exercised here: the accept branch calls `open::that_detached`, which would launch a real browser on the test machine.
+            assert!(matches!(
+                crate::open_new_window_request_externally::<tauri::Wry>(parse(
+                    "file:///etc/passwd"
+                )),
+                tauri::webview::NewWindowResponse::Deny
+            ));
+        }
     }
 }

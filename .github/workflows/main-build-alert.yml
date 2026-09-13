@@ -8,8 +8,18 @@ name: Main Build Alert
 # `PR + current main`, so two PRs that are individually green can produce
 # a red main when merged in sequence (incident: #4179). Without a signal
 # at merge time, the breakage stays invisible until the next PR opens.
+#
+# Green does not automatically mean recovered.
+# The CI workflow's `changes` gate skips every Rust lane on a docs- or dependency-only push, and the run still concludes `success`, so auto-closing on conclusion alone erases a real breakage as soon as an unrelated Dependabot PR lands.
+# That is not hypothetical: the Windows lane died on 2026-08-04 and the same failure was filed and falsely auto-closed three times (#6716, #6721, #6729) before anyone noticed main had been red for days.
+# The success branch below therefore requires that at least one Rust test lane actually ran and passed on the commit before it closes anything.
 
 on:
+  pull_request:
+    paths:
+      - '.github/scripts/main-build-alert.js'
+      - '.github/scripts/tests/main-build-alert.test.js'
+      - '.github/workflows/main-build-alert.yml'
   workflow_run:
     workflows: ["CI"]
     types: [completed]
@@ -17,27 +27,97 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Test main build alert rendering
+        run: node .github/scripts/tests/main-build-alert.test.js
+
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    concurrency:
+      group: main-build-alert
+      cancel-in-progress: false
     # Only act on main pushes; ignore PR check completions (those still
     # arrive via the same workflow_run event).
-    if: ${{ github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          RUN_URL: ${{ github.event.workflow_run.html_url }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         with:
           script: |
-            const conclusion = process.env.CONCLUSION;
-            const runUrl = process.env.RUN_URL;
-            const headSha = process.env.HEAD_SHA;
-            const shortSha = headSha.slice(0, 7);
+            const {
+              compareRunOrder,
+              escapeInlineCode,
+              escapeMarkdownText,
+              isRedConclusion,
+              selectLatestConclusiveRun,
+              selectOpenAlertIssues,
+            } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/main-build-alert.js`);
             const label = 'main-red';
+            const eventRun = context.payload.workflow_run;
+
+            // Notification jobs are serialized but are not guaranteed to run
+            // in completion order, and GitHub retains only one pending job in a
+            // concurrency group. Reconcile the newest conclusive run directly
+            // so a later docs-only event cannot discard a pending red alert.
+            const { data: recentRuns } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: eventRun.workflow_id,
+              branch: eventRun.head_branch,
+              event: 'push',
+              status: 'completed',
+              per_page: 100,
+            });
+            const candidateRuns = [
+              eventRun,
+              ...recentRuns.workflow_runs.filter(
+                run => compareRunOrder(run, eventRun) > 0,
+              ),
+            ];
+            const effective = await selectLatestConclusiveRun(
+              candidateRuns,
+              run => github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                  per_page: 100,
+                },
+              ),
+            );
+
+            if (!effective) {
+              core.info('No completed CI run established Rust build state.');
+              return;
+            }
+            const { run: effectiveRun, state: effectiveState } = effective;
+            if (effectiveRun.id !== eventRun.id) {
+              core.info(`Reconciling newer conclusive CI run ${effectiveRun.id} from event ${eventRun.id}.`);
+            }
+
+            const conclusion = effectiveRun.conclusion;
+            const runUrl = effectiveRun.html_url;
+            const headSha = effectiveRun.head_sha;
+            const shortSha = headSha.slice(0, 7);
+            const runId = effectiveRun.id;
 
             // Ensure the label exists; ignore "already_exists" 422.
             try {
@@ -52,15 +132,20 @@ jobs:
               if (e.status !== 422) throw e;
             }
 
-            const { data: open } = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: label,
-              per_page: 5,
-            });
+            const open = selectOpenAlertIssues(await github.paginate(
+              github.rest.issues.listForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                labels: label,
+                per_page: 100,
+              },
+            ));
 
-            if (conclusion === 'success') {
+            if (effectiveState === 'green') {
+              if (open.length === 0) return;
+
               // Auto-close any open red-main issue when CI goes green again.
               for (const issue of open) {
                 await github.rest.issues.createComment({
@@ -79,18 +164,15 @@ jobs:
               return;
             }
 
-            if (conclusion !== 'failure' && conclusion !== 'timed_out' && conclusion !== 'cancelled') {
+            if (!isRedConclusion(conclusion)) {
               return; // skipped/neutral/etc — nothing to do
             }
 
-            // ── Resolve the PR that introduced the breakage ──────────────
-            // The merge commit subject conventionally ends in `(#NNNN)`.
-            // Falling back to the listPullRequestsAssociatedWithCommit API
-            // covers squash-merges that ship without the PR suffix in the
-            // subject. Best-effort — title/body still readable if both fail.
-            let prNumber = null;
+            // ── Identify the head commit the run fired on ────────────────
+            // Identification only, deliberately NOT attribution: the run reports the state of `main` at this commit, which is not evidence that this commit caused the failure.
+            // A lane can be red from an earlier merge whose own run skipped it, from an infrastructure change, or from a flaky runner.
+            // Three consecutive filings (#6715, #6720, #6727) named unrelated openrouter snapshot PRs for a Windows breakage introduced days earlier by db81fe79, and the alert's "revert PR #N" line is what made that read as a verdict, so the PR number and commit author are no longer surfaced at all.
             let commitSubject = '';
-            let commitAuthor = '';
             try {
               const { data: commit } = await github.rest.repos.getCommit({
                 owner: context.repo.owner,
@@ -98,18 +180,6 @@ jobs:
                 ref: headSha,
               });
               commitSubject = (commit.commit.message || '').split('\n')[0];
-              commitAuthor = commit.author?.login || commit.commit.author?.name || '';
-              const m = commitSubject.match(/\(#(\d+)\)\s*$/);
-              if (m) {
-                prNumber = parseInt(m[1], 10);
-              } else {
-                const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  commit_sha: headSha,
-                });
-                if (prs.length > 0) prNumber = prs[0].number;
-              }
             } catch (e) {
               core.warning(`Could not resolve commit metadata for ${shortSha}: ${e.message}`);
             }
@@ -122,13 +192,13 @@ jobs:
                 {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  run_id: context.payload.workflow_run.id,
+                  run_id: runId,
                   per_page: 100,
                 }
               );
               for (const job of jobs) {
-                if (job.conclusion === 'failure' || job.conclusion === 'timed_out' || job.conclusion === 'cancelled') {
-                  const failedStep = (job.steps || []).find(s => s.conclusion === 'failure' || s.conclusion === 'timed_out');
+                if (isRedConclusion(job.conclusion)) {
+                  const failedStep = (job.steps || []).find(s => isRedConclusion(s.conclusion));
                   failedJobs.push({
                     name: job.name,
                     conclusion: job.conclusion,
@@ -142,17 +212,12 @@ jobs:
             }
 
             // ── Build the issue body ─────────────────────────────────────
+            // Strip the merge subject's trailing `(#NNNN)`: leaving it in renders as a cross-reference that back-links the issue onto that PR's timeline, which is the same false accusation in a quieter form.
+            // `shortSha` still auto-links to the commit, and the commit page names its PR, so nothing navigable is lost.
             const cleanSubject = commitSubject.replace(/\s*\(#\d+\)\s*$/, '');
+            const subj = cleanSubject ? ` — ${escapeMarkdownText(cleanSubject)}` : '';
             const lines = [];
-            if (prNumber) {
-              const subj = cleanSubject ? ` — ${cleanSubject}` : '';
-              const by = commitAuthor ? ` by @${commitAuthor}` : '';
-              lines.push(`Main CI **${conclusion}** on PR #${prNumber}${subj}${by} (commit ${shortSha}).`);
-            } else {
-              const subj = cleanSubject ? ` — ${cleanSubject}` : '';
-              const by = commitAuthor ? ` by @${commitAuthor}` : '';
-              lines.push(`Main CI **${conclusion}** on commit ${shortSha}${subj}${by}.`);
-            }
+            lines.push(`Main CI **${conclusion}** on \`main\` at commit ${shortSha}${subj}.`);
             lines.push('');
             lines.push(`Run: ${runUrl}`);
             lines.push('');
@@ -160,22 +225,17 @@ jobs:
             if (failedJobs.length > 0) {
               lines.push(`**Failed jobs** (${failedJobs.length}):`);
               for (const j of failedJobs) {
-                const stepSuffix = j.step ? ` — failed at step \`${j.step}\`` : '';
-                lines.push(`- [${j.name}](${j.url}) (${j.conclusion})${stepSuffix}`);
+                const stepSuffix = j.step ? ` — failed at step \`${escapeInlineCode(j.step)}\`` : '';
+                lines.push(`- [${escapeMarkdownText(j.name)}](${j.url}) (${j.conclusion})${stepSuffix}`);
               }
               lines.push('');
             }
 
-            lines.push(`Every open PR will inherit this failure on its next CI run.`);
-            if (prNumber) {
-              lines.push(`Either land a fix (preferred) or revert PR #${prNumber}.`);
-            } else {
-              lines.push(`Either land a fix (preferred) or revert the offending merge.`);
-            }
+            lines.push(`This is the state of \`main\` at that commit, not a claim that the commit introduced the failure — read the failing job's log before attributing it.`);
+            lines.push(`Every open PR will inherit this failure on its next CI run, so land a fix on \`main\` or revert the merge the log actually implicates.`);
 
             const body = lines.join('\n');
-            const titleSuffix = prNumber ? `PR #${prNumber}` : `${shortSha}`;
-            const title = `[main red] CI ${conclusion} on ${titleSuffix}`;
+            const title = `[main red] CI ${conclusion} on ${shortSha}`;
 
             if (open.length > 0) {
               await github.rest.issues.createComment({

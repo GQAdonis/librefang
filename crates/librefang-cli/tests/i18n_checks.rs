@@ -118,6 +118,7 @@ fn is_potential_untranslated_literal(lit: &str) -> bool {
         "pip install librefang-sdk",
         "models list",
         "models set",
+        "models overrides",
         "models aliases",
         "models providers",
         "models connect",
@@ -234,6 +235,9 @@ fn is_potential_untranslated_literal(lit: &str) -> bool {
         "unhandled CLI command `{other}`",
         "Failed to draw",
         "draw failed",
+        "failed to spawn librefang-tui-stream thread",
+        "daemon_client() times out at 120 s; a longer wait can never return 202",
+        "spawn_run_workflow builds a 60 s client; a longer wait can never return 202",
         // Technical format strings
         "%Y-%m-%d %H:%M",
         // Hand CLI command names for require_daemon
@@ -261,6 +265,18 @@ fn is_potential_untranslated_literal(lit: &str) -> bool {
         "memory set",
         "memory delete",
         "devices list",
+        // `require_daemon(...)` labels for the `librefang group` commands
+        // (#7745). These name a CLI invocation in an operator-facing error
+        // (`start the daemon first, then re-run: librefang group list`), so the
+        // literal is the command, not prose — translating it would print a
+        // command that does not exist.
+        "group list",
+        "group show",
+        "group create",
+        "group delete",
+        "group add-member",
+        "group remove-member",
+        "group of",
         "devices remove",
         "webhooks list",
         "webhooks create",
@@ -309,6 +325,7 @@ fn is_potential_untranslated_literal(lit: &str) -> bool {
         "api_key_env = \"{env_var}\"",
         "init wizard: failed to persist verified API key",
         "init wizard: retry of save_env_key failed",
+        "`{other}` is listed in CLI_DISPATCH but has no match arm",
     ];
     if exclusions.contains(&trimmed) {
         return false;
@@ -847,7 +864,9 @@ fn is_likely_i18n_key_literal(
     literal: &str,
     known_prefixes: &std::collections::BTreeSet<String>,
 ) -> bool {
-    const TECHNICAL_FALSE_POSITIVES: &[&str] = &["daemon-reload"];
+    // Not i18n keys: literals whose leading segment collides with a real key prefix.
+    // `agent-types` is the operator agent-type directory name (`~/.librefang/agent-types`), not a message id.
+    const TECHNICAL_FALSE_POSITIVES: &[&str] = &["daemon-reload", "agent-types"];
 
     let Some((prefix, _)) = literal.split_once('-') else {
         return false;
@@ -1074,4 +1093,7 @@ fn test_locales_cover_used_i18n_keys() {
     assert_locale_covers_required_i18n_keys(manifest_dir, "en", "English", &required_keys);
     assert_locale_covers_required_i18n_keys(manifest_dir, "uk", "Ukrainian", &required_keys);
     assert_locale_covers_required_i18n_keys(manifest_dir, "zh-CN", "Chinese", &required_keys);
+    // ko was the one shipped locale this assertion did not cover, which is why the
+    // eight Auxiliary-tab keys reached a branch without anything failing.
+    assert_locale_covers_required_i18n_keys(manifest_dir, "ko", "Korean", &required_keys);
 }

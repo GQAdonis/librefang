@@ -1,4 +1,4 @@
-import { defineConfig, createLogger } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
@@ -7,13 +7,6 @@ import { resolve, dirname } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const reactRoot = resolve(__dirname, "node_modules/react");
 const reactDomRoot = resolve(__dirname, "node_modules/react-dom");
-
-const logger = createLogger();
-const origError = logger.error.bind(logger);
-logger.error = (msg, opts) => {
-  if (typeof msg === "string" && msg.includes("proxy error")) return;
-  origError(msg, opts);
-};
 
 // Every React-consuming dep MUST be pre-bundled up-front so Vite doesn't
 // re-optimize mid-session when a lazy route first pulls one. Re-optimization
@@ -36,11 +29,6 @@ const SINGLETON_DEPS = [
   "recharts",
   "@xyflow/react",
   "zustand",
-  // `lucide-react` is listed here for pre-bundling (optimizeDeps.include) and
-  // separately in manualChunks.icons below for chunk splitting. The two roles
-  // are orthogonal: SINGLETON_DEPS controls Vite's dep pre-bundler; manualChunks
-  // controls the output chunk graph. Both entries are intentional (#3768).
-  "lucide-react",
   // NOTE: `lucide-react/dynamic` is intentionally NOT listed (issue #3768).
   // It looks up icons by name string at runtime, so bundlers cannot tree-shake
   // it and including it pulls the full ~1500-icon registry (~1.4 MB raw,
@@ -49,7 +37,6 @@ const SINGLETON_DEPS = [
 ];
 
 export default defineConfig({
-  customLogger: logger,
   plugins: [react(), tailwindcss()],
   base: "/dashboard/",
   resolve: {
@@ -61,6 +48,9 @@ export default defineConfig({
     // runtime and breaking hook calls with "Cannot read properties of null
     // (reading 'useContext')".
     alias: [
+      // The public Lucide barrel retains its complete `icons` namespace.
+      // Use direct icon modules so production builds include only used icons.
+      { find: /^lucide-react$/, replacement: resolve(__dirname, "src/lib/lucide.ts") },
       { find: /^react$/, replacement: reactRoot },
       { find: /^react\/(.*)$/, replacement: `${reactRoot}/$1` },
       { find: /^react-dom$/, replacement: reactDomRoot },
@@ -105,13 +95,6 @@ export default defineConfig({
         ws: true,
         timeout: 300_000,
         proxyTimeout: 300_000,
-        configure: (proxy) => {
-          type Emitter = { on(event: string, fn: (...args: never[]) => void): void };
-          const p = proxy as unknown as Emitter;
-          p.on("error", () => {});
-          p.on("proxyReq", (proxyReq: Emitter) => { proxyReq.on("error", () => {}); });
-          p.on("proxyRes", (proxyRes: Emitter) => { proxyRes.on("error", () => {}); });
-        }
       }
     }
   },
@@ -123,6 +106,8 @@ export default defineConfig({
         // Vite 8 uses Rolldown, which only accepts the function form of
         // manualChunks. Mirrors the previous Rollup object grouping.
         manualChunks: (id) => {
+          const localeMatch = id.match(/[\\/]src[\\/]locales[\\/]([^/\\]+)\.json$/);
+          if (localeMatch) return `locale-${localeMatch[1]}`;
           if (!id.includes("node_modules")) return;
           if (/[\\/]node_modules[\\/](react|react-dom)[\\/]/.test(id)) return "vendor";
           if (id.includes("@tanstack/react-router") || id.includes("@tanstack/react-query")) return "router";
@@ -150,10 +135,6 @@ export default defineConfig({
             id.includes("node_modules/i18next") ||
             id.includes("node_modules/react-i18next")
           ) return "i18n";
-          // Isolate lucide-react named imports into their own chunk so adding
-          // a single icon to a route doesn't bloat its first-load bundle.
-          // See issue #3768.
-          if (id.includes("lucide-react")) return "icons";
         },
       },
     },

@@ -249,6 +249,8 @@ image_description = true
 audio_transcription = true
 video_description = false
 max_concurrency = 2
+transcription_timeout_secs = 60
+ffmpeg_timeout_secs = 30
 # image_provider = "openai"
 # audio_provider = "openai"
 
@@ -782,6 +784,8 @@ image_description = true
 audio_transcription = true
 video_description = false
 max_concurrency = 2
+transcription_timeout_secs = 60
+ffmpeg_timeout_secs = 30
 # image_provider = "openai"   # auto-detect if omitted
 # audio_provider = "openai"   # auto-detect if omitted
 ```
@@ -792,8 +796,13 @@ max_concurrency = 2
 | `audio_transcription` | bool | `true` | Enable automatic audio transcription for incoming audio attachments. |
 | `video_description` | bool | `false` | Enable video description. Disabled by default (expensive and slow). |
 | `max_concurrency` | usize | `2` | Maximum number of concurrent media processing tasks. |
+| `transcription_timeout_secs` | u64 | `60` | Timeout for one audio transcription provider request in seconds. Requires a daemon restart. |
+| `ffmpeg_timeout_secs` | u64 | `30` | Timeout for one ffmpeg subprocess in seconds. Requires a daemon restart. |
 | `image_provider` | string or null | `null` | Preferred provider for image description. Auto-detected from available providers if `null`. |
 | `audio_provider` | string or null | `null` | Preferred provider for audio transcription. Auto-detected from available providers if `null`. |
+| `audio_model` | string or null | `null` | Preferred model for audio transcription. Provider default if `null`. |
+| `audio_language` | string or null | `null` | Fallback ISO-639-1 language hint for `media_transcribe` / `speech_to_text` calls that omit their own `language`. The per-call value always wins. |
+| `audio_prompt` | string or null | `null` | Fallback transcription prompt (domain vocabulary, proper nouns) for calls that omit their own `prompt`. The per-call value always wins. |
 
 ---
 
@@ -892,6 +901,7 @@ SLACK_BOT_TOKEN = "xoxb-..."
 # SLACK_UNFURL_LINKS = "false"
 # SLACK_FORCE_FLAT_REPLIES = "false"
 # SLACK_REACTIONS = "true"
+# SLACK_PROGRESS_CARD = "true"
 # SLACK_ACCOUNT_ID = "workspace-prod"
 ```
 
@@ -1508,6 +1518,7 @@ max_sessions = 5
 | `idle_timeout_secs` | u64 | `300` | Auto-close browser session after this many seconds of inactivity. |
 | `max_sessions` | usize | `5` | Maximum concurrent browser sessions. |
 | `chromium_path` | string or null | `null` | Path to the Chromium/Chrome binary. Auto-detected if null. |
+| `max_content_chars` | usize | `50000` | Maximum characters of extracted page content returned by `browser_navigate` / `browser_read_page`. A real ceiling: the truncation marker is counted against it, so content plus marker never exceeds this value. Roughly 4 characters per token, so the default is about 12–15k tokens — comfortable against a 200k-context model, hostile against a 32k local one. |
 
 ---
 
@@ -1554,6 +1565,8 @@ no_output_timeout_secs = 30
 |-------|------|---------|-------------|
 | `mode` | string | `"allowlist"` | Security mode. See below. |
 | `safe_bins` | list of strings | `["sleep","true","false","cat","sort","uniq","cut","tr","head","tail","wc","date","echo","printf","basename","dirname","pwd","env"]` | Commands that always bypass the allowlist check (stdin-only POSIX utilities). |
+| `safe_bins_skip_approval` | bool | `false` | Opt-in: in `allowlist` mode, a `shell_exec` whose every base command is a declared `safe_bin` also skips the human-approval prompt. A chained command with any non-safe base still routes through approval. |
+| `full_mode_skips_approval` | bool | `true` | Whether `mode = "full"` also waives the global `approval.require_approval` list for `shell_exec`. Set `false` for unrestricted commands that still prompt. |
 | `allowed_commands` | list of strings | `[]` | Additional commands permitted when `mode = "allowlist"`. |
 | `timeout_secs` | u64 | `30` | Maximum wall-clock execution time per command in seconds. |
 | `max_output_bytes` | usize | `102400` | Maximum combined stdout+stderr output size in bytes (100 KB default). |
@@ -1566,6 +1579,17 @@ no_output_timeout_secs = 30
 | `deny` | `none`, `disabled` | Block all shell execution. |
 | `allowlist` | `restricted` | Only allow commands in `safe_bins` or `allowed_commands` (default). |
 | `full` | `allow`, `all`, `unrestricted` | Allow all commands. Unsafe -- development use only. |
+
+`mode` and approval are separate decisions.
+Historically `full` implied both "skip allowlist validation" and "skip the approval prompt"; `full_mode_skips_approval = false` decouples them, so `require_approval` is honoured under `full` exactly as it is under `allowlist`.
+The default stays `true` because `approval.require_approval` ships with `shell_exec` in it and a standalone agent that declares `shell_exec` is promoted to `full` at spawn, so flipping the default would make a stock install prompt on every command.
+
+Like every other `exec_policy` field, this one is copied into each agent's manifest when the agent is spawned or restored, so `POST /api/config/reload` does not retrofit it onto agents that are already running -- kill the agent and let it respawn, or restart the daemon.
+Without that step, setting it to `false` looks like a silent no-op: no new prompts appear, and the natural reading is that nothing needed approval.
+
+The dangerous-command denylist is independent of `mode` and screens every command under `deny`, `allowlist`, and `full` alike -- `full` disables allowlist *validation*, not the denylist.
+It covers, among others, LibreFang daemon lifecycle commands (`librefang stop` / `start` / `restart`, including the `gateway` alias and path-qualified invocations), which bounce every agent and channel adapter sharing the daemon, and mutating SQL or output redirection against the daemon's own `librefang.db`.
+Read-only inspection of that database (`select`, `.schema`, `.dump`) and `librefang status` are deliberately not matched.
 
 ---
 
@@ -1621,12 +1645,41 @@ Configures extended thinking (chain-of-thought reasoning) for models that suppor
 [thinking]
 budget_tokens = 10000
 stream_thinking = false
+reasoning_mode = "high"        # optional: none | low | high | max
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `budget_tokens` | u32 | `10000` | Maximum tokens allocated for the thinking/reasoning phase. |
 | `stream_thinking` | bool | `false` | Whether to stream thinking tokens to the client (visible in the API response stream). |
+| `reasoning_mode` | string | unset | Explicit reasoning effort: `"none"`, `"low"`, `"high"`, or `"max"`. When unset, the effort is derived from `budget_tokens`. |
+
+#### `reasoning_mode` (#7946)
+
+`budget_tokens` cannot say *do not reason at all* — a sub-1024 budget merely omits the reasoning opt-in, and a model that reasons by default (every DeepSeek V4 id) keeps reasoning.
+It also cannot reach the top rung of providers that have one, because the derived bucket stops at `high`.
+`reasoning_mode` is the direct control, and each driver translates it into whatever its wire actually accepts.
+
+Set it in three places, resolved **per-call > per-agent > global > compiled default**:
+
+- per call — `reasoning_mode` on the body of `POST /api/agents/{id}/message` (and `/message/stream`). Wins over the older boolean `thinking` field when both are sent.
+- per agent — `[thinking] reasoning_mode` in that agent's `agent.toml`. Per-agent settings do not work from `config.toml`.
+- globally — `[thinking] reasoning_mode` here.
+
+Per-provider wire mapping:
+
+| Mode | DeepSeek V4 (direct) | OpenRouter-routed | Other OpenAI-compatible |
+|------|----------------------|-------------------|-------------------------|
+| `none` | `thinking: {"type":"disabled"}` | `reasoning: {"effort":"none"}` | field omitted |
+| `low` | `thinking: enabled` + `reasoning_effort: "low"` | `reasoning: {"effort":"low"}` | `reasoning_effort: "low"` |
+| `high` | `thinking: enabled` + `reasoning_effort: "high"` | `reasoning: {"effort":"high"}` | `reasoning_effort: "high"` |
+| `max` | `thinking: enabled` + `reasoning_effort: "max"` | `reasoning: {"effort":"xhigh"}` | `reasoning_effort: "high"` |
+
+A payload never carries both `reasoning_effort` and `reasoning.effort` — OpenRouter rejects that combination with HTTP 400.
+Kimi/Moonshot models always send `thinking: disabled` (a multi-turn tool-call requirement, not a preference), and DeepSeek R1 has no wire toggle.
+The Anthropic and Ollama drivers keep reading `budget_tokens` for the graded rungs — their wire control is a token budget, not an effort enum — but they do honour `none`, because the mode has to travel on a materialised thinking config and reading that config as a bare budget would enable reasoning on a turn that asked for the opposite.
+Gemini does not read the thinking config at all.
+Full detail, including why `medium` is not a settable mode: `docs/architecture/reasoning-mode-resolution.md`.
 
 ---
 
@@ -2326,6 +2379,7 @@ session_ttl_hours = 24
 duplicate_threshold = 0.5
 confidence_decay_rate = 0.01
 max_memories_per_agent = 1000
+session_scoped_recall = true
 ```
 
 | Field | Type | Default | Description |
@@ -2340,11 +2394,12 @@ max_memories_per_agent = 1000
 | `session_ttl_hours` | u32 | `24` | Session memory TTL in hours. Memories older than this are cleaned up before each agent execution. |
 | `duplicate_threshold` | f32 | `0.5` | Similarity threshold for duplicate detection (0.0–1.0). Uses vector cosine similarity when embeddings are available, otherwise falls back to Jaccard word overlap. |
 | `confidence_decay_rate` | f64 | `0.01` | Confidence decay rate per day. Follows exponential decay: `conf × e^(−rate × days)`. Default of `0.01` takes ~70 days to halve. |
-| `max_memories_per_agent` | usize | `1000` | Maximum memories per agent. When exceeded, oldest/lowest-confidence entries are evicted. `0` = no cap. |
+| `max_memories_per_agent` | usize | `1000` | Maximum memories per agent. When exceeded, raw dialogue rows are evicted before extracted facts, lowest-confidence first within each class. `0` = no cap. |
+| `session_scoped_recall` | bool | `true` | (#7605) Stamp each auto-memorized memory with the session that produced it, and refuse to auto-retrieve a memory stamped for a different session. Keeps one visitor's content out of another visitor's turn on an agent that serves several people. Memories written before this shipped carry no stamp and stay recallable everywhere. Set `false` for a single agent-wide pool — the pre-#7605 behaviour, and what an agent with `session_mode = "new"` wants if its runs are meant to build on each other. |
 
 #### Per-agent overrides
 
-Each agent's `agent.toml` may carry a `[proactive_memory]` block that overrides selected fields of the kernel-global config above for that agent only. Unset fields inherit the global. All four override fields are optional:
+Each agent's `agent.toml` may carry a `[proactive_memory]` block that overrides selected fields of the kernel-global config above for that agent only. Unset fields inherit the global. All five override fields are optional:
 
 ```toml
 # agent.toml
@@ -2353,6 +2408,7 @@ Each agent's `agent.toml` may carry a `[proactive_memory]` block that overrides 
 # auto_memorize = false                 # skip the after-turn extraction call
 # auto_retrieve = false                 # skip the before-turn retrieval injection
 # extraction_model = "openai/gpt-4o-mini"   # use a different extractor model for this agent
+# session_scoped_recall = false         # let this agent recall its memories across all of its sessions
 ```
 
 | Field | Notes |
@@ -2360,6 +2416,7 @@ Each agent's `agent.toml` may carry a `[proactive_memory]` block that overrides 
 | `enabled` | `Some(false)` disables proactive memory for this agent regardless of the global. `Some(true)` is documented but not load-bearing — the global `enabled = false` short-circuits store construction at boot. |
 | `auto_memorize` | `Some(false)` skips the after-turn extraction. Useful for cron sub-agents whose tool-only turns produce extraction noise. |
 | `auto_retrieve` | `Some(false)` skips the before-turn memory injection. Useful when an agent's prompt is already memory-heavy. |
+| `session_scoped_recall` | (#7605) `Some(false)` gives this agent one memory pool across all of its sessions; `Some(true)` isolates it when the deployment default is off. Unrelated to `enabled` — a disabled agent does no automatic recall at all, so there is nothing left to scope. |
 | `extraction_model` | (#5475) Per-agent extraction model. Same shape as the global `extraction_model` (`provider/model`, `provider:model`, or bare). Lets multi-provider deployments give each agent the extractor its provider supports natively. Driver is reused from the kernel-global extraction driver — full per-agent driver switching is a follow-up. |
 
 ---
@@ -2705,7 +2762,6 @@ Configured in agent manifests via `AutonomousConfig`:
 | `max_restarts` | `10` | Maximum automatic restarts before permanent stop. |
 | `heartbeat_interval_secs` | `30` | Seconds between heartbeat health checks. |
 | `heartbeat_channel` | `null` | Channel to send heartbeat status to (e.g., `"telegram"`). |
-
 
 
 

@@ -4,9 +4,6 @@ pub(crate) use super::agents;
 pub(crate) use super::resolve_lang;
 // `super::channels::FieldType` import removed alongside
 // the channel-config write helpers that consumed it.
-// Only the legacy config.toml MCP-write fallback (sqlite-only builds) uses this.
-#[cfg(not(feature = "surreal-backend"))]
-use super::config::json_to_toml_value;
 use super::AppState;
 use super::RequestLanguage;
 use crate::mcp_oauth::KernelOAuthProvider;
@@ -17,6 +14,7 @@ use axum::response::IntoResponse;
 use axum::Json;
 use librefang_types::i18n::ErrorTranslator;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -303,8 +301,7 @@ pub struct PendingListQuery {
 /// `workspaces/hands/`).
 ///
 /// Contract:
-/// - non-empty, ≤ 64 chars (caps log noise and matches the project
-///   pattern from `agent_templates.rs::validate_template_name`)
+/// - non-empty, ≤ 64 chars for skill names; ≤ 128 for hand ids to match `librefang_hands`' canonical `MAX_HAND_ID_LEN`
 /// - characters limited to `[A-Za-z0-9_-]` — the strictest project
 ///   convention; cannot contain `..`, `/`, `\`, or any platform
 ///   path separator
@@ -315,9 +312,10 @@ pub struct PendingListQuery {
 /// `field` is "name" or "hand" — used to scope the rejection
 /// message so the client knows which input was bad.
 fn validate_skill_identifier(value: &str, field: &str) -> Result<(), String> {
-    if value.is_empty() || value.len() > 64 {
+    let max_len = if field == "hand" { 128 } else { 64 };
+    if value.is_empty() || value.len() > max_len {
         return Err(format!(
-            "invalid skill {field}: must be 1-64 characters, got {} chars",
+            "invalid skill {field}: must be 1-{max_len} characters, got {} chars",
             value.len()
         ));
     }
@@ -432,9 +430,51 @@ fn parse_skill_md_frontmatter(content: &str) -> Option<SkillMdFrontmatter> {
 // ---------------------------------------------------------------------------
 const CLAWHUB_CN_BASE_URL: &str = "https://mirror-cn.clawhub.com/api/v1";
 
+/// Environment variable that repoints the ClawHub China mirror handlers.
+const ENV_CLAWHUB_CN_URL: &str = "LIBREFANG_CLAWHUB_CN_URL";
+
+/// The ClawHub China mirror base URL these handlers should use.
+///
+/// Read per request rather than cached in a `OnceLock` so a restart is enough to move off a dead mirror, matching how the ClawHub and Skillhub clients resolve their own overrides.
+fn clawhub_cn_base_url() -> String {
+    librefang_skills::clawhub::env_url_or(ENV_CLAWHUB_CN_URL, CLAWHUB_CN_BASE_URL)
+}
+
 /// Check whether a SkillError represents a ClawHub rate-limit (429).
 fn is_clawhub_rate_limit(err: &librefang_skills::SkillError) -> bool {
     matches!(err, librefang_skills::SkillError::RateLimited(_))
+}
+
+/// Check whether a SkillError means the marketplace answered but is not serving marketplace data.
+fn is_marketplace_unavailable(err: &librefang_skills::SkillError) -> bool {
+    matches!(err, librefang_skills::SkillError::MarketplaceUnavailable(_))
+}
+
+/// Map a marketplace error to an HTTP status, uniformly across every hub and every operation.
+///
+/// `fallback` is the status the handler used before this classification existed — `502` for the read endpoints, `404` for detail, `500` for install — and stays in force for every error that is not one the caller can act on.
+///
+/// `400 Bad Request` is the answer for [`SkillError::YamlParse`], which is the published skill's own `SKILL.md` frontmatter failing to parse.
+/// Nothing on this server is broken and retrying downloads the same broken file again, so `500` was wrong twice over: it told the operator the daemon had faulted, and the install handlers scrub the body on `500` (audit: rusqlite-errors-leak), which threw away the one message that named the offending file and the syntax error in it.
+/// This overrides the read endpoints' `502` and detail's `404` as well, deliberately and for the same reason `503` does: the condition means one thing wherever it surfaces — that published skill is malformed — and a caller who gets `404` from detail and `500` from install for the same broken file cannot tell it is the same fault.
+/// `404` in particular said the skill does not exist, when it does exist and is unusable.
+///
+/// `503 Service Unavailable` is the answer for [`SkillError::MarketplaceUnavailable`] because the condition is exactly what that status describes: the daemon is healthy, the request was well-formed, the upstream is temporarily not a marketplace.
+/// It also has to be the *same* answer everywhere. A `404` from detail told the reader the skill does not exist, and a scrubbed `500` from install told them the daemon broke; both are wrong in the same way, and both sent the dashboard down a different render path for one underlying fault.
+/// The dashboard's `isMarketplaceUnavailable` (#7846) already accepts `502` alongside `503` and renders one offline state for either, so a handler that still returns its old `502` degrades gracefully rather than regressing — but detail and install, which returned neither, needed this to reach that state at all.
+fn marketplace_error_status(
+    err: &librefang_skills::SkillError,
+    fallback: StatusCode,
+) -> StatusCode {
+    if is_marketplace_unavailable(err) {
+        StatusCode::SERVICE_UNAVAILABLE
+    } else if is_clawhub_rate_limit(err) {
+        StatusCode::TOO_MANY_REQUESTS
+    } else if matches!(err, librefang_skills::SkillError::YamlParse(_)) {
+        StatusCode::BAD_REQUEST
+    } else {
+        fallback
+    }
 }
 
 /// Convert a browse entry (nested stats/tags) to a flat JSON object for the frontend.
@@ -566,8 +606,14 @@ async fn activate_hand_inner(
         }
     };
 
-    match state.kernel.activate_hand(&hand_id, config) {
-        Ok(instance) => {
+    let kernel = Arc::clone(&state.kernel);
+    let activation_hand_id = hand_id.clone();
+    let activation =
+        hands::run_hand_lifecycle_job(move || kernel.activate_hand(&activation_hand_id, config))
+            .await;
+
+    match activation {
+        Ok(Ok(instance)) => {
             // If the hand agent has a non-reactive schedule (autonomous hands),
             // start its background loop so it begins running immediately.
             if let Some(agent_id) = instance.agent_id() {
@@ -594,10 +640,22 @@ async fn activate_hand_inner(
                 .unwrap_or_else(|_| b"{}".to_vec());
             (StatusCode::OK, body)
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             let payload = serde_json::json!({"error": format!("{e}"), "code": "activate_hand_failed", "type": "activate_hand_failed"});
             (
                 StatusCode::BAD_REQUEST,
+                serde_json::to_vec(&payload).unwrap_or_default(),
+            )
+        }
+        Err(e) => {
+            tracing::error!(hand = %hand_id, error = %e, "hand activation task failed");
+            let payload = serde_json::json!({
+                "error": "Hand activation task failed",
+                "code": "activate_hand_failed",
+                "type": "activate_hand_failed"
+            });
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
                 serde_json::to_vec(&payload).unwrap_or_default(),
             )
         }
@@ -636,22 +694,26 @@ fn resolve_hand_agent(
 // ---------------------------------------------------------------------------
 // MCP server endpoints
 // ---------------------------------------------------------------------------
+/// Read-side projection of one `[[mcp_servers.transport.headers]]` entry.
+///
+/// Every key here must be a real field of `HttpCompatHeaderConfig`, which carries `deny_unknown_fields` (#6612): the read routes' `transport` object is submitted back verbatim by any client doing read-modify-write, so a synthesised key is a 400 on the way in, and serde short-circuits at the first one it meets.
+/// A derived `source` discriminator (`"env"` / `"static"` / `"unset"`) used to live here and did exactly that — it is dropped rather than renamed, because there is no name outside the guarded field set that would survive.
+/// Nothing consumed it: the dashboard's `McpTransport` type has no `http_compat` variant at all.
+///
+/// `value` is omitted deliberately and is not a losslessness gap — a static header value is a credential, and `/api/mcp/servers` is in `PUBLIC_ROUTES_DASHBOARD_READS`, so in open mode an unauthenticated caller reads this (#6630).
+/// The write side restores it from the stored entry, exactly as `env` does — see `merge_http_compat_secrets`.
 fn http_compat_header_summary(
     header: &librefang_types::config::HttpCompatHeaderConfig,
 ) -> serde_json::Value {
     serde_json::json!({
         "name": header.name,
         "value_env": header.value_env,
-        "source": if header.value_env.is_some() {
-            "env"
-        } else if header.value.is_some() {
-            "static"
-        } else {
-            "unset"
-        },
     })
 }
 
+/// Read-side projection of one `[[mcp_servers.transport.tools]]` entry, under the same round-trip contract as [`http_compat_header_summary`].
+///
+/// `input_schema` is included because it has `#[serde(default = "default_http_compat_input_schema")]`: omitting it made a `GET` → `PUT` silently overwrite an operator's hand-authored JSON Schema with `{"type":"object"}`, which is a lossy round-trip that no status code reports.
 fn http_compat_tool_summary(
     tool: &librefang_types::config::HttpCompatToolConfig,
 ) -> serde_json::Value {
@@ -664,9 +726,16 @@ fn http_compat_tool_summary(
             .unwrap_or(serde_json::json!("json_body")),
         "response_mode": serde_json::to_value(&tool.response_mode)
             .unwrap_or(serde_json::json!("json")),
+        "input_schema": tool.input_schema,
     })
 }
 
+/// Project a stored transport into the JSON the read routes return.
+///
+/// This is a faithful representation of the variant, not a display summary, and the distinction is enforced rather than conventional: `McpTransportEntry` and the two structs under its `http_compat` variant carry `deny_unknown_fields` (#6612), so every key emitted here has to be a real field of the variant it is emitted for.
+/// A client that reads `transport`, edits it, and `PUT`s it back is the workflow that constraint protects; a derived key breaks it for every external client at once, and the dashboard would not notice because it rebuilds the transport from form state rather than echoing this object.
+///
+/// The one intentional omission is a static `http_compat` header `value`, which is a credential (#6630); the write path merges it back from the stored entry.
 fn serialize_mcp_transport(
     transport: &librefang_types::config::McpTransportEntry,
 ) -> serde_json::Value {
@@ -699,11 +768,13 @@ fn serialize_mcp_transport(
                 tools.iter().map(http_compat_tool_summary).collect();
             let header_summaries: Vec<serde_json::Value> =
                 headers.iter().map(http_compat_header_summary).collect();
+            // A `tools_count` key used to sit here.
+            // It is `tools.len()` — derivable by any caller from the array right next to it — and it is not a field of the variant, so it fails the round trip.
+            // The `tools_count` the dashboard reads is a different key on a different object: the live-connection entry (`connected[].tools_count`), which is a genuine count of discovered tools rather than of configured ones.
             serde_json::json!({
                 "type": "http_compat",
                 "base_url": base_url,
                 "headers": header_summaries,
-                "tools_count": tool_summaries.len(),
                 "tools": tool_summaries,
             })
         }
@@ -758,9 +829,14 @@ fn upsert_mcp_server_config(
         toml::value::Table::new()
     };
 
-    // Serialize the entry to a TOML value via JSON round-trip
-    let entry_json = serde_json::to_value(entry).map_err(|e| e.to_string())?;
-    let entry_toml = json_to_toml_value(&entry_json);
+    // Serialize directly through TOML's serde implementation. It omits
+    // `Option::None` map fields even without a per-field skip annotation.
+    // Going through `serde_json::Value` first would erase that distinction:
+    // both an absent Option and an operator-authored JSON null become `Null`.
+    // The generic JSON bridge then has to corrupt one of them by either
+    // dropping it or converting it to an empty string.
+    let entry_toml = toml::Value::try_from(entry)
+        .map_err(|e| format!("MCP server config is not representable as TOML: {e}"))?;
 
     let servers = table
         .entry("mcp_servers".to_string())
@@ -844,16 +920,17 @@ fn validate_static_file_path(
 /// env (`GITHUB_TOKEN`, set by the dashboard GitHub OAuth flow and by
 /// operators), then fall back to the vault. Returns `None` when neither
 /// holds a non-empty token.
-fn resolve_github_token(state: &Arc<AppState>) -> Option<String> {
-    if let Ok(tok) = std::env::var("GITHUB_TOKEN") {
-        if !tok.trim().is_empty() {
-            return Some(tok);
-        }
-    }
-    state
-        .kernel
-        .vault_get("GITHUB_TOKEN")
-        .filter(|t| !t.trim().is_empty())
+///
+/// The order lives in `routes::vault::resolve_key`, which
+/// `GET /api/vault/keys` also reports from. Keeping one definition is
+/// what stops the listing from describing the vault while the daemon
+/// reads the environment.
+///
+/// `pub(crate)` so the agent-type promotion handler in
+/// `routes::agent_templates` reuses it rather than duplicating the
+/// env-then-vault order.
+pub(crate) fn resolve_github_token(state: &Arc<AppState>) -> Option<String> {
+    crate::routes::vault::resolve_key(state, "GITHUB_TOKEN").map(|(token, _)| token)
 }
 
 // ── Skill evolution handlers ───────────────────────────────────────────
@@ -1072,13 +1149,17 @@ pub(crate) fn remove_secret_env(path: &std::path::Path, key: &str) -> Result<(),
 
 /// Atomically replace `path` with `content`, ensuring the resulting
 /// inode is mode `0600` (Unix) from creation — never observable at
-/// the process umask. Writes to a sibling `.tmp` file first to keep
+/// the process umask. Writes to a sibling temp file first to keep
 /// the rename within the same filesystem (so `rename(2)` is
-/// atomic). On non-Unix targets the helper still uses the temp +
-/// rename shape so partial writes can't tear the file; the
-/// per-permissions bit is a no-op (Windows ACLs are inherited from
-/// the parent directory, which lives under the daemon-UID user
-/// profile).
+/// atomic). The temp file name is suffixed with the process ID and
+/// a per-process atomic counter so concurrent callers never open
+/// the same staging file and truncate each other's write. On
+/// non-Unix targets the helper still uses the temp + rename shape
+/// so partial writes can't tear the file; the per-permissions bit
+/// is a no-op (Windows ACLs are inherited from the parent
+/// directory, which lives under the daemon-UID user profile). On
+/// Unix, the parent directory is fsynced after a successful rename
+/// so the replacement survives a crash immediately afterward.
 fn atomic_write_secret_file(path: &std::path::Path, content: String) -> Result<(), std::io::Error> {
     use std::io::Write as _;
     let parent = path.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -1087,29 +1168,38 @@ fn atomic_write_secret_file(path: &std::path::Path, content: String) -> Result<(
         .map(|n| n.to_owned())
         .unwrap_or_else(|| std::ffi::OsString::from("secrets.env"));
     let mut tmp_name = file_name;
-    tmp_name.push(".tmp");
+    static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    tmp_name.push(format!(".tmp.{}.{seq}", std::process::id()));
     let tmp_path = parent.join(tmp_name);
 
     // Open with mode 0600 from the start on Unix. The temp file is
     // discarded on any error path below so we don't leak a partial
     // write on disk.
     let mut opts = std::fs::OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
+    opts.write(true).create_new(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt as _;
         opts.mode(0o600);
     }
     let mut f = opts.open(&tmp_path)?;
-    f.write_all(content.as_bytes())?;
-    f.sync_all()?;
+    let write_result = f.write_all(content.as_bytes()).and_then(|()| f.sync_all());
     drop(f);
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(error);
+    }
 
     // `rename(2)` is atomic — the destination either contains the
     // old bytes (pre-rename) or the new bytes (post-rename); a
     // concurrent reader never observes a half-written file.
     match std::fs::rename(&tmp_path, path) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            #[cfg(unix)]
+            std::fs::File::open(parent)?.sync_all()?;
+            Ok(())
+        }
         Err(e) => {
             // Clean up the temp file so we don't accrete `*.tmp`
             // litter on partial-failure paths.
@@ -1241,31 +1331,6 @@ fn status_str_for_catalog(
     }
 }
 
-/// Recursively copy a directory tree.
-fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        // `std::fs::copy` dereferences links, so a symlink planted in the registry checkout would write the target's real contents into the installed skill.
-        // Mirrors `librefang_skills::marketplace::copy_dir_recursive`.
-        if ty.is_symlink() {
-            tracing::warn!(
-                path = %entry.path().display(),
-                "skipping symlink while installing skill"
-            );
-            continue;
-        }
-        let dest_path = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_recursive(&entry.path(), &dest_path)?;
-        } else {
-            std::fs::copy(entry.path(), &dest_path)?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1273,6 +1338,57 @@ mod tests {
     // surreal-backend those tests (and this import) are gated out (C-005).
     #[cfg(not(feature = "surreal-backend"))]
     use librefang_types::config::{McpServerConfigEntry, McpTransportEntry};
+
+    /// A published skill whose own `SKILL.md` frontmatter does not parse is something the caller can act on, not a daemon fault, so it is a `400` — and it is a `400` from every handler, whatever fallback that handler passes in.
+    ///
+    /// It used to reach the fallback arm, which is `500` for install, and the install handlers scrub the body on `500` (audit: rusqlite-errors-leak) — so the one error whose text says which file is broken and why was replaced with "Internal server error", and retrying re-downloads the same broken file.
+    /// Detail's `404` was wrong in the other direction: it said the skill does not exist, when it exists and is unusable.
+    #[test]
+    fn malformed_skill_frontmatter_is_a_bad_request_from_every_handler() {
+        let err = librefang_skills::SkillError::YamlParse(
+            "Invalid YAML frontmatter: mapping values are not allowed here".to_string(),
+        );
+        for fallback in [
+            StatusCode::INTERNAL_SERVER_ERROR, // install
+            StatusCode::BAD_GATEWAY,           // browse / search
+            StatusCode::NOT_FOUND,             // detail
+        ] {
+            assert_eq!(
+                marketplace_error_status(&err, fallback),
+                StatusCode::BAD_REQUEST,
+                "fallback {fallback}"
+            );
+        }
+    }
+
+    /// The `400` arm must not swallow the classifications that were already there, nor start overriding a caller's fallback for errors it has no opinion about.
+    #[test]
+    fn marketplace_error_status_keeps_its_other_arms() {
+        for (err, fallback, want) in [
+            (
+                librefang_skills::SkillError::MarketplaceUnavailable("html".to_string()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                librefang_skills::SkillError::RateLimited("slow down".to_string()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::TOO_MANY_REQUESTS,
+            ),
+            (
+                librefang_skills::SkillError::NotFound("no such skill".to_string()),
+                StatusCode::NOT_FOUND,
+                StatusCode::NOT_FOUND,
+            ),
+            (
+                librefang_skills::SkillError::Network("connection reset".to_string()),
+                StatusCode::BAD_GATEWAY,
+                StatusCode::BAD_GATEWAY,
+            ),
+        ] {
+            assert_eq!(marketplace_error_status(&err, fallback), want, "{err:?}");
+        }
+    }
 
     /// #6581 hardened `librefang_skills::marketplace::copy_dir_recursive` against symlinks but left this installer — which copies out of the same registry checkout — dereferencing them, so a link planted in a skill directory still exfiltrated the target's contents into the install.
     #[test]
@@ -1294,7 +1410,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside_dir, src.join("link_dir")).unwrap();
 
         let dest = tmp.path().join("dest");
-        copy_dir_recursive(&src, &dest).unwrap();
+        librefang_skills::evolution::install_local_skill(&src, &dest).unwrap();
 
         assert!(dest.join("SKILL.md").exists());
         assert!(dest.join("nested/file.txt").exists());
@@ -1310,10 +1426,12 @@ mod tests {
 
     /// Regression for #2319: adding an MCP server through the UI wrote each
     /// entry as a JSON-stringified blob inside `mcp_servers = ['{"name":...}']`
-    /// instead of a `[[mcp_servers]]` TOML table, because the top-level object
-    /// hit the catch-all in `json_to_toml_value` and got stringified. After
-    /// the fix, the on-disk file must round-trip back into a real
-    /// `McpServerConfigEntry` via `toml::from_str`.
+    /// instead of a `[[mcp_servers]]` TOML table. The on-disk file must
+    /// round-trip back into a real `McpServerConfigEntry` via `toml::from_str`.
+    ///
+    /// Only compiled for non-surreal (legacy SQLite) builds: `upsert_mcp_server_config`
+    /// itself is `#[cfg(not(feature = "surreal-backend"))]`, so this test cannot exist
+    /// under the default `surreal-backend` feature.
     #[cfg(not(feature = "surreal-backend"))]
     #[test]
     fn upsert_mcp_server_writes_inline_table_not_stringified_json() {
@@ -1372,6 +1490,43 @@ mod tests {
         }
     }
 
+    #[test]
+    fn upsert_mcp_server_omits_none_without_skip_annotation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        std::fs::write(&config_path, "").unwrap();
+
+        let entry = McpServerConfigEntry {
+            name: "disabled".to_string(),
+            template_id: None,
+            // Unlike the other optional fields, `transport` intentionally has
+            // no `skip_serializing_if` annotation. This pins the TOML
+            // serializer's structural omission of `Option::None`.
+            transport: None,
+            timeout_secs: 30,
+            env: vec![],
+            headers: vec![],
+            oauth: None,
+            taint_scanning: true,
+            taint_policy: None,
+        };
+
+        upsert_mcp_server_config(&config_path, &entry).expect("upsert should succeed");
+
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(
+            !raw.contains("transport"),
+            "an absent Option without a skip annotation must be omitted:\n{raw}"
+        );
+
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            mcp_servers: Vec<McpServerConfigEntry>,
+        }
+        let parsed: Wrapper = toml::from_str(&raw).expect("written config must reload");
+        assert!(parsed.mcp_servers[0].transport.is_none());
+    }
+
     /// A second upsert for the same name must replace the entry in-place,
     /// not produce a second row — this is how the user ended up with three
     /// stale duplicate blobs in the bug report.
@@ -1428,6 +1583,157 @@ mod tests {
             Some(McpTransportEntry::Http { url }) => assert_eq!(url, "http://new:9090/mcp"),
             other => panic!("expected http transport, got {other:?}"),
         }
+    }
+
+    /// #6612 — TOML has no null, but direct TOML serialization distinguishes
+    /// an absent `Option` from free-form data before crossing that boundary.
+    ///
+    /// `HttpCompatHeaderConfig` has two `Option<String>` fields under exactly
+    /// that path. The TOML serializer omits absent map fields structurally,
+    /// independent of every future field repeating a skip annotation.
+    /// That is not cosmetic: `apply_http_compat_headers` tests `value` *before* `value_env`, so an empty-string `value` wins and the transport sends an empty header instead of resolving the variable — a silent credential failure.
+    #[test]
+    fn upsert_mcp_server_preserves_an_env_sourced_http_compat_header_6612() {
+        use librefang_types::config::{HttpCompatHeaderConfig, HttpCompatToolConfig};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        std::fs::write(&config_path, "").unwrap();
+
+        let entry = McpServerConfigEntry {
+            name: "compat".to_string(),
+            template_id: None,
+            transport: Some(McpTransportEntry::HttpCompat {
+                base_url: "https://example.invalid".to_string(),
+                headers: vec![
+                    // `value` is None — the case that would be written as `value = ""`.
+                    HttpCompatHeaderConfig {
+                        name: "Authorization".to_string(),
+                        value: None,
+                        value_env: Some("COMPAT_TOKEN".to_string()),
+                    },
+                    // The mirror image: `value_env` is None.
+                    HttpCompatHeaderConfig {
+                        name: "X-Api-Key".to_string(),
+                        value: Some("static-secret".to_string()),
+                        value_env: None,
+                    },
+                ],
+                tools: vec![HttpCompatToolConfig {
+                    name: "ping".to_string(),
+                    path: "/ping".to_string(),
+                    // Spelled out rather than `..Default::default()`: the derived `Default` leaves `input_schema` as `Value::Null`, which deserialization can never produce because the field carries `#[serde(default = "default_http_compat_input_schema")]`.
+                    // Using the derived default here would make the test assert on a state production cannot reach.
+                    input_schema: serde_json::json!({"type": "object"}),
+                    ..Default::default()
+                }],
+            }),
+            timeout_secs: 30,
+            env: vec![],
+            headers: vec![],
+            oauth: None,
+            taint_scanning: true,
+            taint_policy: None,
+        };
+
+        upsert_mcp_server_config(&config_path, &entry).expect("upsert should succeed");
+
+        let raw = std::fs::read_to_string(&config_path).unwrap();
+        assert!(
+            !raw.contains(r#"value = """#),
+            "an absent Option must not be written as an empty string — it reloads as Some(\"\") \
+             and beats `value_env` in the runtime's header resolution:\n{raw}"
+        );
+
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            mcp_servers: Vec<McpServerConfigEntry>,
+        }
+        // `deny_unknown_fields` is on these types now, so this also asserts the writer emits no key the reader rejects.
+        let parsed: Wrapper = toml::from_str(&raw).unwrap_or_else(|e| {
+            panic!("config.toml must reload into the guarded types: {e}\n{raw}")
+        });
+
+        match &parsed.mcp_servers[0].transport {
+            Some(McpTransportEntry::HttpCompat { headers, tools, .. }) => {
+                let auth = headers
+                    .iter()
+                    .find(|h| h.name == "Authorization")
+                    .expect("env-sourced header survives");
+                assert_eq!(auth.value_env.as_deref(), Some("COMPAT_TOKEN"));
+                assert!(
+                    auth.value.is_none(),
+                    "an env-sourced header must reload with `value` still absent, or the runtime \
+                     sends an empty header and never reads the variable: {auth:?}"
+                );
+
+                let static_header = headers
+                    .iter()
+                    .find(|h| h.name == "X-Api-Key")
+                    .expect("static header survives");
+                assert_eq!(static_header.value.as_deref(), Some("static-secret"));
+                assert!(
+                    static_header.value_env.is_none(),
+                    "the mirror case must hold too: {static_header:?}"
+                );
+
+                assert_eq!(tools.len(), 1);
+                assert_eq!(
+                    tools[0].input_schema,
+                    serde_json::json!({"type": "object"}),
+                    "the defaulted input_schema must survive the TOML round-trip"
+                );
+            }
+            other => panic!("expected http_compat transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn upsert_mcp_server_rejects_json_null_without_mutating_config() {
+        use librefang_types::config::HttpCompatToolConfig;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        let original = "listen_addr = \"127.0.0.1:4545\"\n";
+        std::fs::write(&config_path, original).unwrap();
+
+        let entry = McpServerConfigEntry {
+            name: "compat".to_string(),
+            template_id: None,
+            transport: Some(McpTransportEntry::HttpCompat {
+                base_url: "https://example.invalid".to_string(),
+                headers: vec![],
+                tools: vec![HttpCompatToolConfig {
+                    name: "lookup".to_string(),
+                    path: "/lookup".to_string(),
+                    input_schema: serde_json::json!({
+                        "type": "object",
+                        "properties": {
+                            "city": {"type": "string", "default": null}
+                        }
+                    }),
+                    ..Default::default()
+                }],
+            }),
+            timeout_secs: 30,
+            env: vec![],
+            headers: vec![],
+            oauth: None,
+            taint_scanning: true,
+            taint_policy: None,
+        };
+
+        let error = upsert_mcp_server_config(&config_path, &entry)
+            .expect_err("JSON null cannot be represented faithfully in TOML");
+        assert!(
+            error.contains("not representable as TOML"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&config_path).unwrap(),
+            original,
+            "a rejected schema must not partially rewrite config.toml"
+        );
     }
 
     /// Regression for #5799: patching taint_scanning=false on one server must
@@ -1622,10 +1928,25 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("secrets.env");
         write_secret_env(&path, "OPENAI_API_KEY", "sk-1").unwrap();
-        let tmp_path = path.with_file_name("secrets.env.tmp");
-        assert!(
-            !tmp_path.exists(),
-            "tmp sibling must be gone after atomic rename completes",
+        assert_eq!(
+            std::fs::read_dir(tmp.path()).unwrap().count(),
+            1,
+            "successful writes must not leave secret-bearing staging files",
+        );
+    }
+
+    #[test]
+    fn atomic_secret_write_cleans_up_after_rename_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target_dir = tmp.path().join("secrets.env");
+        std::fs::create_dir(&target_dir).unwrap();
+
+        atomic_write_secret_file(&target_dir, "KEY=value\n".to_string()).unwrap_err();
+
+        assert_eq!(
+            std::fs::read_dir(tmp.path()).unwrap().count(),
+            1,
+            "failed renames must not leave secret-bearing staging files",
         );
     }
 
@@ -1784,6 +2105,22 @@ mod skill_identifier_validation {
         assert!(
             err.contains("1-64"),
             "expected 1-64 length message; got {err:?}"
+        );
+    }
+
+    #[test]
+    fn hand_length_matches_canonical_128_character_limit() {
+        let max_length = "a".repeat(128);
+        assert!(
+            validate_skill_identifier(&max_length, "hand").is_ok(),
+            "canonical 128-character hand ids must remain accepted"
+        );
+
+        let too_long = "a".repeat(129);
+        let err = validate_skill_identifier(&too_long, "hand").unwrap_err();
+        assert!(
+            err.contains("1-128"),
+            "expected canonical hand length in error; got {err:?}"
         );
     }
 

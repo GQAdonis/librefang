@@ -15,6 +15,8 @@ fails the build if a field is added to the planner but not to this doc
 (or vice-versa). **When you change a field's classification in
 `build_reload_plan`, update this table in the same PR.**
 
+If the file is owned by your deployment rather than by LibreFang, see [managed-config.md](./managed-config.md) — the reload semantics below are unchanged, but writes through the API are refused.
+
 ## How `POST /api/config/reload` works
 
 1. The new config is parsed and validated (`validate_config_for_reload`).
@@ -48,6 +50,15 @@ hot-reload. To pick up a new cap you must kill the agent and let it
 respawn (or restart the daemon) — an in-place activate/status flip
 silently keeps the old cap. See
 [`../architecture/trigger-dispatch-concurrency.md`](../architecture/trigger-dispatch-concurrency.md).
+
+### Gotcha: rotating a `vault:` credential needs a reload, because the vault file is not watched
+
+`api_key`, `dashboard_user`, and `dashboard_pass` accept a `vault:NAME` value, resolved out of `vault.enc`.
+The config-file watcher polls `config.toml`'s mtime, and `librefang vault set NAME` writes `vault.enc` — so rotating the secret behind a `vault:` reference changes nothing the watcher can see.
+Call `POST /api/config/reload` after the rotation; that is where the env / `vault:` indirection is re-run and the result pushed into the live auth handles (`server.rs::refresh_master_credential`).
+A daemon restart is not required.
+
+This is also true of `LIBREFANG_API_KEY` and the `LIBREFANG_DASHBOARD_*` variables, for the stronger reason that a process cannot observe an edit to its own environment at all: those need a restart of the daemon (or of the container / unit that sets them).
 
 ### Conditional: `log_level`
 
@@ -86,7 +97,8 @@ classified differently — the row note spells out which is which.
 
 | Field | Class | Meaning |
 |---|---|---|
-| `api_key` | N | API bearer key (effective immediately via config swap). |
+| `api_key` | N | API bearer key, resolved from `LIBREFANG_API_KEY` / `vault:KEY` / the literal value (effective immediately via config swap). |
+| `api_key_hash` | N | Hash of the API bearer key, `$sha256$…` (recommended, from `librefang hash-api-key`) or `$argon2id$…` (effective immediately via config swap). |
 | `dashboard_user` | H | Dashboard login username (config swap suffices). |
 | `dashboard_pass` | H | Dashboard login password. |
 | `dashboard_pass_hash` | H | Argon2id hash of the dashboard password. |
@@ -94,10 +106,12 @@ classified differently — the row note spells out which is which.
 | `passkey_rp_id` | R | WebAuthn Relying Party ID — the `Webauthn` instance is built once at boot. |
 | `passkey_rp_origin` | R | WebAuthn Relying Party origin — baked into the `Webauthn` instance at boot. |
 | `users` | H | RBAC user list — rebuilds the `AuthManager`. |
+| `groups` | N | User groups (#7745) — membership and conferred roles are resolved from the live config on every lookup, so the config swap is the whole of the reload. |
+| `default_owner` | N | Fleet-wide fallback owner for artifacts created by a turn with no authenticated caller (#7744) — parsed from the live config at each creation. Changing it does not rewrite owners already recorded. |
 | `require_auth_for_reads` | R | Whether the dashboard-reads allowlist requires auth. |
 | `external_auth_proxy` | R | Acknowledges an external auth proxy is in front. |
 | `channel_role_mapping` | R | Maps platform-native channel roles to LibreFang roles. |
-| `external_auth` | H/N | OAuth2/OIDC provider config. **IdP-identity** changes (`enabled`, `issuer_url`, per-provider `id`/`issuer_url`/`jwks_uri` — see `external_auth_idp_changed`) are **H**: they emit `ReloadExternalAuth` to flush the OIDC discovery + JWKS caches, no restart. **Non-IdP** sub-fields (`session_ttl_secs`, `allowed_domains`, `redirect_url`, scopes, audience, `require_email_verified`) are **N**: the OAuth layer reads them live from the ArcSwap config on every request (`oauth.rs`: `config_ref()` / `config_snapshot()`), so a bare config swap makes them effective on the next request — no restart, no cache eviction. |
+| `external_auth` | H/N | OAuth2/OIDC provider config. **IdP-identity** changes (`enabled`, `issuer_url`, per-provider `id`/`issuer_url`/`jwks_uri` — see `external_auth_idp_changed`) are **H**: they emit `ReloadExternalAuth` to flush the OIDC discovery + JWKS caches, no restart. **Non-IdP** sub-fields (`session_ttl_secs`, `allowed_domains`, `redirect_url`, scopes, audience, `require_email_verified`, `role_map`, `group_map`, `claim_paths`) are **N**: the OAuth layer reads them live from the ArcSwap config on every request (`oauth.rs`: `config_ref()` / `config_snapshot()`), so a bare config swap makes them effective on the next request — no restart, no cache eviction. |
 | `oauth` | R | OAuth client-ID overrides for PKCE flows. |
 | `auth_profiles` | R | Per-provider auth profiles for key rotation. |
 | `pairing` | N | Device pairing config (read live per request). |
@@ -118,7 +132,7 @@ classified differently — the row note spells out which is which.
 | `provider_max_retries` | R | Per-provider in-driver retry-count overrides (captured by cached drivers at creation). |
 | `vertex_ai` | R | Vertex AI provider config. |
 | `azure_openai` | R | Azure OpenAI provider config. |
-| `llm` | R | `[llm]` section (auxiliary side-task chain config). |
+| `llm` | N | `[llm]` section (auxiliary side-task chain config). AuxClient rebuilt on config swap. |
 | `qwen_code_path` | N | Override path to the Qwen Code CLI binary. |
 | `local_probe_interval_secs` | R | Interval between local-provider reachability probes. |
 | `thinking` | N | Extended-thinking config (read live per message). |
@@ -136,6 +150,7 @@ classified differently — the row note spells out which is which.
 | `context_engine` | R | Pluggable context-engine config. |
 | `tool_results` | N | Tool-result context budget + artifact spill config. |
 | `max_history_messages` | N | Global message-history trim cap (see arch doc). |
+| `memory_fact_budget_percent` | N | Share of the prompt memory section budget reserved for extracted facts (#7920). |
 | `agent_max_iterations` | N | Operator override for the agent-loop iteration cap. |
 | `max_agent_call_depth` | N | Maximum inter-agent call depth. |
 
@@ -149,7 +164,7 @@ classified differently — the row note spells out which is which.
 | `tool_timeouts` | N | Per-tool timeout overrides. |
 | `tool_invoke` | N | `POST /api/tools/{name}/invoke` allowlist. |
 | `exec_policy` | R | Shell/exec security policy. |
-| `tool_exec` | R | Pluggable tool-execution backend selection. |
+| `tool_exec` | R | Pluggable tool-execution backend selection, plus `default_timeout_secs` — the local backend's per-command timeout, which falls back to `tool_timeout_secs` when unset. `POST /api/config/reload` reports restart-required for any change in this section: the comparison is whole-section, and the backend object is built once per agent. Restart the daemon. |
 | `parallel_tools` | R | Parallel-tool dispatcher config. |
 | `docker` | R | Docker container sandbox config. |
 | `terminal` | R | Terminal / CLI access control (tmux wiring is boot-captured). |
@@ -184,7 +199,7 @@ classified differently — the row note spells out which is which.
 | `a2a` | H | Agent-to-Agent protocol config. |
 | `skills` | H | Skills config (bundled + user-installed) — reloads registry. |
 | `plugins` | R | Plugin registry config. |
-| `registry` | R | Registry sync config (cache TTL, …). |
+| `registry` | R/N | Registry sync config. `cache_ttl_secs` / `registry_mirror` / `registry_host` are **R**: they are read when the checkout is set up. `auto_sync` is **N**: the 24 h catalog task calls `config_snapshot()` at the top of each tick and passes the value into `sync_catalog_to`, so flipping it off freezes `~/.librefang/registry/` from the next tick on, with no restart. Splitting the section this way is what makes that true — while the whole section was classified R, a registry-only reload produced neither a hot action nor a noop change, so `should_store_config` discarded the new config and the task kept reading the old value until the daemon restarted. Boot's own sync pass has of course already run by reload time, so `auto_sync = false` written *before* a start is still what prevents the boot-time fast-forward. |
 | `hands` | N | Hands marketplace SSRF allowlist (`registry_allowed_hosts`) — read live by the install handler per request. |
 | `bindings` | R | Agent bindings for multi-account routing. |
 
@@ -215,7 +230,7 @@ classified differently — the row note spells out which is which.
 |---|---|---|
 | `web` | H | Web tools config (search + fetch) — rebuilds web context. |
 | `browser` | R | Browser automation config — the `BrowserManager` captures it by value at boot with no rebuild path, so a change needs a restart. |
-| `media` | N | Media-understanding config. |
+| `media` | R | Media-understanding config — `MediaEngine` captures it by value at boot with no rebuild path, so a change needs a restart. |
 | `links` | N | Link-understanding config. |
 | `canvas` | R | Canvas (A2UI) config. |
 | `tts` | N | Text-to-speech config. |
@@ -226,13 +241,14 @@ classified differently — the row note spells out which is which.
 |---|---|---|
 | `notification` | N | Notification-engine config for alerts and task state. |
 | `usage_footer` | H | Usage footer mode (what to show after each response). |
+| `usage` | N | Retention horizon for the `usage_events` table; the daily metering sweep reads it live, so a change is in force on the next sweep. |
 | `inbox` | R | File-based input inbox config. |
 | `audit` | R | Audit log config. |
 | `telemetry` | R | OpenTelemetry + Prometheus config. |
 | `health_check` | R | Health-check config. |
 | `heartbeat` | R | Heartbeat-monitor global defaults. |
 | `prompt_intelligence` | R | Prompt-intelligence (versioning + A/B) config. |
-| `task_board` | R | Shared task-board safety knobs. |
+| `task_board` | N | Shared task-board knobs. The sweeper re-reads `claim_ttl_secs` / `sweep_interval_secs` / `max_retries` on every tick, and the same tick re-reads `pending_grace_secs` / `wake_backoff_max_secs` for the delivery reconcile; `assignee_wake` is read per task post. All six take effect without a restart. |
 | `background` | R | Background autonomous-loop executor knobs. |
 
 ### Proxy / runtime / paths / misc

@@ -36,6 +36,51 @@ pub struct DiscoveredModelInfo {
     /// Newer Ollama versions (≥0.7) include this in /api/tags; older versions omit it.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub capabilities: Vec<String>,
+    /// Context window in tokens **as reported by the listing endpoint**, when it reports one at all.
+    ///
+    /// `None` means the endpoint said nothing, which is the common case: the bare OpenAI `/v1/models` shape carries only `id` / `object` / `created` / `owned_by`, and Ollama's `/api/tags` carries no token capacity either.
+    /// It MUST NOT be back-filled with a plausible default here — [`crate::model_catalog::ModelCatalog::merge_discovered_models`] records the absence as `limits_known: false` instead of inventing a number (#7780).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_window: Option<u64>,
+    /// Maximum output tokens as reported by the listing endpoint.
+    /// `None` carries the same meaning as for [`Self::context_window`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u64>,
+    /// Image-input support **as declared by the listing endpoint**, when it declares it at all (#7957).
+    ///
+    /// Distinct from [`Self::capabilities`] above, which is Ollama's `/api/tags` string array.
+    /// This is the OpenAI-compatible-gateway shape: LiteLLM and its kin expose a per-model `supports_vision` boolean and OpenRouter an `architecture.input_modalities` list, and until #7957 the `/v1/models` parser threw all of it away — leaving the model's *name* as the only signal anyone downstream had.
+    ///
+    /// `None` means the endpoint said nothing, and it MUST stay `None`: [`crate::model_catalog::ModelCatalog::merge_discovered_models`] records the absence as `vision_known: false`, which the request-build gate reads as unknown and keeps sending images for.
+    /// Collapsing it to `Some(false)` here would assert that a gateway declared its model blind when it merely declined to answer, and that assertion is the silent image drop #7957 reports.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_vision: Option<bool>,
+    /// Tool/function-calling support as declared by the listing endpoint (LiteLLM's `supports_function_calling`).
+    /// `None` carries the same meaning as for [`Self::supports_vision`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_function_calling: Option<bool>,
+}
+
+impl DiscoveredModelInfo {
+    /// A discovered model for which the probe learned nothing but the name.
+    ///
+    /// Every optional field stays empty on purpose.
+    /// Callers holding only a list of model IDs use this instead of hand-writing the literal, so a future field cannot be quietly given a fabricated value at one of the several call sites (#7780).
+    pub fn bare(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            parameter_size: None,
+            quantization_level: None,
+            family: None,
+            families: None,
+            size: None,
+            capabilities: Vec::new(),
+            context_window: None,
+            max_output_tokens: None,
+            supports_vision: None,
+            supports_function_calling: None,
+        }
+    }
 }
 
 /// Result of probing a provider endpoint.
@@ -113,6 +158,21 @@ pub fn is_local_provider(provider: &str) -> bool {
         provider.to_lowercase().as_str(),
         "ollama" | "vllm" | "lmstudio" | "lemonade"
     )
+}
+
+/// Whether a provider participates in live model discovery — the periodic
+/// probe loop, the `/api/providers/{name}/test` refresh, and the live-model
+/// filter applied to `/api/models`.
+///
+/// Discovery used to be gated on [`is_local_provider`] alone, so a custom
+/// OpenAI-compatible endpoint (a self-hosted vLLM behind an API key registered
+/// under its own id) was never probed and its model list stayed empty forever
+/// (#6702). The opt-in `discover_models` flag on the provider is ORed with the
+/// built-in id check rather than replacing it, so a built-in local provider
+/// keeps discovering whatever the flag says and an existing install sees no
+/// behavioural change.
+pub fn discovers_models(provider: &librefang_types::model_catalog::ProviderInfo) -> bool {
+    is_local_provider(&provider.id) || provider.discover_models
 }
 
 /// Per-request total timeout for loopback probe targets.
@@ -556,14 +616,25 @@ fn parse_ollama_tags(body: &serde_json::Value) -> EndpointOutcome {
             // Ollama ≥0.7 exposes a top-level `capabilities` array per
             // model in /api/tags. Older versions omit it — we fall back
             // to heuristic detection from the model name and family.
-            let capabilities: Vec<String> =
-                if let Some(caps) = m.get("capabilities").and_then(|v| v.as_array()) {
-                    caps.iter()
-                        .filter_map(|c| c.as_str().map(String::from))
-                        .collect()
-                } else {
-                    infer_ollama_capabilities(&name, family.as_deref())
-                };
+            let declared = m.get("capabilities").and_then(|v| v.as_array());
+            let capabilities: Vec<String> = match declared {
+                Some(caps) => caps
+                    .iter()
+                    .filter_map(|c| c.as_str().map(String::from))
+                    .collect(),
+                None => infer_ollama_capabilities(&name, family.as_deref()),
+            };
+            // Only a `capabilities` array the *server* sent is a statement about the model (#7957).
+            // The synthesized fallback above is `infer_ollama_capabilities` reading the model's
+            // name, and it stays in `capabilities` because the dashboard surfaces that list — but it
+            // must not reach the catalog as a declared capability, or an Ollama < 0.7 daemon serving
+            // a vision model under a name the heuristic misses records it as blind and the agent
+            // loop strips the images with nothing to show for it.
+            let supports_vision = declared.map(|_| {
+                capabilities
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case("vision"))
+            });
 
             Some(DiscoveredModelInfo {
                 name,
@@ -579,6 +650,15 @@ fn parse_ollama_tags(body: &serde_json::Value) -> EndpointOutcome {
                 families,
                 size: m.get("size").and_then(|v| v.as_u64()),
                 capabilities,
+                // /api/tags reports on-disk size and quantization but never a token capacity — the context length lives in /api/show's `model_info`, which would cost one extra request per model.
+                // Report it as unknown rather than guessing from the family name.
+                context_window: None,
+                max_output_tokens: None,
+                supports_vision,
+                // Ollama's `capabilities` array is the only capability channel `/api/tags` has, and
+                // `resolve_discovered_capabilities` reads tool support out of it directly. There is
+                // no separate OpenAI-style boolean to report here.
+                supports_function_calling: None,
             })
         })
         .collect();
@@ -589,12 +669,20 @@ fn parse_ollama_tags(body: &serde_json::Value) -> EndpointOutcome {
     }
 }
 
-/// Parse an OpenAI-compatible `/v1/models` response into discovered model IDs.
+/// Parse an OpenAI-compatible `/v1/models` response into discovered model IDs
+/// plus whatever token capacity the entries happen to report.
 ///
-/// `data[].id` is the only field required by spec. We don't try to derive
-/// capabilities from this shape because OpenAI-format `/v1/models` doesn't
-/// expose vision/tools flags — capability inference is left to whatever
-/// downstream consumer cares (e.g. `merge_discovered_models`).
+/// `data[].id` is the only field required by spec.
+///
+/// Capabilities used to be skipped here on the grounds that "OpenAI-format `/v1/models` doesn't expose vision/tools flags", which left the model's *name* as the only signal `merge_discovered_models` had.
+/// That is wrong for the deployments where it matters most: an operator-run gateway (LiteLLM, a vLLM / llama.cpp proxy) names its models `team-default` or `fast` or an internal ticket id, so a name heuristic guesses — and those same gateways do publish `supports_vision` / `supports_function_calling` per model.
+/// The flags are read here when present and propagated as `Option<bool>`, so an absent flag stays "it did not say" rather than becoming a declared `false` (#7957).
+///
+/// Capacity is different: gateways and self-hosted servers *do* put it here, under a handful of non-standard keys (vLLM `max_model_len`, LM Studio and llama.cpp `context_length`, LiteLLM `max_input_tokens` / `max_output_tokens`, OpenRouter `context_length` and `top_provider.max_completion_tokens`).
+/// It used to be discarded, so every gateway-discovered catalog entry was built from a literal even when the gateway had answered the question.
+/// The shared parsers in [`crate::model_metadata`] are the single place that key priority is defined (#7780).
+///
+/// A model whose entry reports nothing yields `None` for both fields — the absence is propagated, never replaced with a default.
 fn parse_openai_models(body: &serde_json::Value) -> EndpointOutcome {
     let arr = match body.get("data").and_then(|v| v.as_array()) {
         Some(a) => a,
@@ -610,9 +698,24 @@ fn parse_openai_models(body: &serde_json::Value) -> EndpointOutcome {
         .filter_map(|m| m.get("id").and_then(|n| n.as_str()).map(String::from))
         .collect();
 
+    let info: Vec<DiscoveredModelInfo> =
+        arr.iter()
+            .filter_map(|m| {
+                let name = m.get("id").and_then(|n| n.as_str())?;
+                Some(DiscoveredModelInfo {
+                    context_window: crate::model_metadata::parse_openai_model(m),
+                    max_output_tokens: crate::model_metadata::parse_openai_model_max_output(m),
+                    supports_vision: crate::model_metadata::parse_openai_model_supports_vision(m),
+                    supports_function_calling:
+                        crate::model_metadata::parse_openai_model_supports_tools(m),
+                    ..DiscoveredModelInfo::bare(name)
+                })
+            })
+            .collect();
+
     EndpointOutcome::Ok {
         models: names,
-        model_info: vec![],
+        model_info: info,
     }
 }
 
@@ -641,6 +744,55 @@ pub async fn probe_provider_cached(
 /// circuit breaker to re-test a provider during cooldown.
 ///
 /// Returns `Ok(latency_ms)` if the model responds, or `Err(error_message)` if it fails.
+fn build_model_probe_request(
+    client: &reqwest::Client,
+    provider: &str,
+    base_url: &str,
+    model: &str,
+    api_key: Option<&str>,
+) -> reqwest::RequestBuilder {
+    let normalized_provider = provider.to_ascii_lowercase();
+    let is_anthropic = matches!(
+        librefang_llm_drivers::drivers::provider_api_format(&normalized_provider),
+        Some(librefang_llm_drivers::drivers::ApiFormat::Anthropic)
+    );
+    let path = if is_anthropic {
+        "/v1/messages"
+    } else {
+        "/chat/completions"
+    };
+    let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+    let body = if is_anthropic {
+        serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 1
+        })
+    } else {
+        serde_json::json!({
+            "model": model,
+            "messages": [{"role": "user", "content": "Hi"}],
+            "max_tokens": 1,
+            "temperature": 0.0
+        })
+    };
+
+    let mut req = client.post(url).json(&body);
+    if is_anthropic {
+        req = req.header("anthropic-version", "2023-06-01");
+    }
+    if let Some(key) = api_key {
+        req = if is_anthropic {
+            req.header("x-api-key", key)
+        } else if provider.eq_ignore_ascii_case("gemini") {
+            req.header("x-goog-api-key", key)
+        } else {
+            req.header("Authorization", format!("Bearer {key}"))
+        };
+    }
+    req
+}
+
 pub async fn probe_model(
     provider: &str,
     base_url: &str,
@@ -654,27 +806,10 @@ pub async fn probe_model(
         .build()
         .map_err(|e| format!("HTTP client error: {e}"))?;
 
-    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
-
-    let body = serde_json::json!({
-        "model": model,
-        "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 1,
-        "temperature": 0.0
-    });
-
-    let mut req = client.post(&url).json(&body);
-    if let Some(key) = api_key {
-        // Detect provider to set correct auth header
-        let lower = provider.to_lowercase();
-        if lower == "gemini" {
-            req = req.header("x-goog-api-key", key);
-        } else {
-            req = req.header("Authorization", format!("Bearer {key}"));
-        }
-    }
-
-    let resp = req.send().await.map_err(|e| format!("{e}"))?;
+    let resp = build_model_probe_request(&client, provider, base_url, model, api_key)
+        .send()
+        .await
+        .map_err(|e| format!("{e}"))?;
     let latency = start.elapsed().as_millis() as u64;
 
     if resp.status().is_success() {
@@ -711,6 +846,57 @@ mod tests {
         assert!(!is_local_provider("groq"));
         assert!(!is_local_provider("claude-code"));
         assert!(!is_local_provider("qwen-code"));
+    }
+
+    /// #6702: discovery is the union of the built-in local ids and the
+    /// per-provider opt-in, never one replacing the other.
+    #[test]
+    fn discovers_models_is_local_id_or_opt_in() {
+        use librefang_types::model_catalog::ProviderInfo;
+
+        let builtin_local = ProviderInfo {
+            id: "vllm".to_string(),
+            ..Default::default()
+        };
+        assert!(
+            discovers_models(&builtin_local),
+            "a built-in local provider discovers without the flag"
+        );
+
+        let builtin_local_flag_off = ProviderInfo {
+            id: "ollama".to_string(),
+            discover_models: false,
+            ..Default::default()
+        };
+        assert!(
+            discovers_models(&builtin_local_flag_off),
+            "the flag never turns discovery OFF for a built-in local id"
+        );
+
+        let custom_opted_in = ProviderInfo {
+            id: "vllm-local".to_string(),
+            discover_models: true,
+            ..Default::default()
+        };
+        assert!(
+            discovers_models(&custom_opted_in),
+            "a custom provider discovers once it opts in"
+        );
+
+        let custom_default = ProviderInfo {
+            id: "vllm-local".to_string(),
+            ..Default::default()
+        };
+        assert!(
+            !discovers_models(&custom_default),
+            "a custom provider without the flag stays out of the probe path"
+        );
+
+        let remote = ProviderInfo {
+            id: "openai".to_string(),
+            ..Default::default()
+        };
+        assert!(!discovers_models(&remote));
     }
 
     #[test]
@@ -779,19 +965,64 @@ mod tests {
     }
 
     #[test]
-    fn test_probe_model_url_construction() {
-        // Verify the URL format logic used inside probe_model.
-        let url = format!(
-            "{}/chat/completions",
-            "http://localhost:8000/v1".trim_end_matches('/')
-        );
-        assert_eq!(url, "http://localhost:8000/v1/chat/completions");
+    fn test_openai_model_probe_request() {
+        let request = build_model_probe_request(
+            &reqwest::Client::new(),
+            "openai",
+            "http://localhost:8000/v1/",
+            "test-model",
+            Some("secret"),
+        )
+        .build()
+        .expect("request should build");
 
-        let url2 = format!(
-            "{}/chat/completions",
-            "http://localhost:8000/v1/".trim_end_matches('/')
+        assert_eq!(
+            request.url().as_str(),
+            "http://localhost:8000/v1/chat/completions"
         );
-        assert_eq!(url2, "http://localhost:8000/v1/chat/completions");
+        assert_eq!(request.headers()["authorization"], "Bearer secret");
+        assert!(!request.headers().contains_key("x-api-key"));
+        let body: serde_json::Value = serde_json::from_slice(
+            request
+                .body()
+                .and_then(reqwest::Body::as_bytes)
+                .expect("JSON body should be buffered"),
+        )
+        .expect("body should be JSON");
+        assert_eq!(body["temperature"], 0.0);
+    }
+
+    #[test]
+    fn test_anthropic_model_probe_request() {
+        for provider in ["anthropic", "Anthropic", "kimi_coding", "byteplus_coding"] {
+            let request = build_model_probe_request(
+                &reqwest::Client::new(),
+                provider,
+                "https://api.example.com/",
+                "test-model",
+                Some("secret"),
+            )
+            .build()
+            .expect("request should build");
+
+            assert_eq!(
+                request.url().as_str(),
+                "https://api.example.com/v1/messages"
+            );
+            assert_eq!(request.headers()["x-api-key"], "secret");
+            assert_eq!(request.headers()["anthropic-version"], "2023-06-01");
+            assert!(!request.headers().contains_key("authorization"));
+            let body: serde_json::Value = serde_json::from_slice(
+                request
+                    .body()
+                    .and_then(reqwest::Body::as_bytes)
+                    .expect("JSON body should be buffered"),
+            )
+            .expect("body should be JSON");
+            assert_eq!(body["model"], "test-model");
+            assert_eq!(body["max_tokens"], 1);
+            assert!(body.get("temperature").is_none());
+        }
     }
 
     #[tokio::test]
@@ -841,6 +1072,10 @@ mod tests {
             families: None,
             size: Some(1_928_000_000),
             capabilities: vec!["completion".to_string()],
+            context_window: None,
+            max_output_tokens: None,
+            supports_vision: None,
+            supports_function_calling: None,
         };
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["name"], "llama3.2:latest");
@@ -852,21 +1087,16 @@ mod tests {
 
     #[test]
     fn test_discovered_model_info_skips_none_fields() {
-        let info = DiscoveredModelInfo {
-            name: "gpt-4".to_string(),
-            parameter_size: None,
-            quantization_level: None,
-            family: None,
-            families: None,
-            size: None,
-            capabilities: vec![],
-        };
+        let info = DiscoveredModelInfo::bare("gpt-4");
         let json = serde_json::to_value(&info).unwrap();
         assert_eq!(json["name"], "gpt-4");
         assert!(json.get("parameter_size").is_none());
         assert!(json.get("quantization_level").is_none());
         // Empty capabilities should be skipped
         assert!(json.get("capabilities").is_none());
+        // An unknown capacity is absent from the payload rather than rendered as a number a reader could mistake for a measurement (#7780).
+        assert!(json.get("context_window").is_none());
+        assert!(json.get("max_output_tokens").is_none());
     }
 
     #[test]
@@ -939,6 +1169,42 @@ mod tests {
         assert_eq!(info[0].name, "llama3.2:latest");
         assert_eq!(info[0].family.as_deref(), Some("llama"));
         assert_eq!(info[0].capabilities, vec!["completion", "tools"]);
+        // The server sent the array, so it is a declaration: no `vision` in it means this model
+        // genuinely has none, and the catalog may act on that.
+        assert_eq!(info[0].supports_vision, Some(false));
+    }
+
+    /// #7957: an Ollama daemon that omits `capabilities` (< 0.7) still gets a synthesized array for
+    /// the dashboard, but that array is `infer_ollama_capabilities` reading the model's *name*, and
+    /// it must not be reported as the server's declaration.
+    ///
+    /// `supports_vision: None` is what keeps the catalog honest: the entry is stamped
+    /// `vision_known: false`, so a vision model whose name misses the heuristic keeps its images
+    /// instead of being silently recorded as blind.
+    #[test]
+    fn test_parse_ollama_tags_does_not_declare_inferred_capabilities() {
+        let body = serde_json::json!({
+            "models": [
+                {
+                    "name": "llava:latest",
+                    "details": {"family": "llama", "families": ["llama", "clip"]}
+                },
+                {
+                    "name": "Gemma-4-26B-A4B-it-GGUF:latest",
+                    "details": {"family": "gemma", "families": ["gemma"]}
+                }
+            ]
+        });
+        let (_models, info) = ok_or_panic(parse_ollama_tags(&body));
+        // The synthesized array is still populated — the dashboard reads it.
+        assert!(info
+            .iter()
+            .all(|i| i.capabilities.contains(&"completion".to_string())));
+        // …but nothing here is a declaration, for the guessed-vision model or the guessed-text one.
+        assert!(
+            info.iter().all(|i| i.supports_vision.is_none()),
+            "an inferred capability array must not be reported as the server's own flag"
+        );
     }
 
     #[test]
@@ -966,8 +1232,96 @@ mod tests {
             models,
             vec!["Gemma-4-26B-A4B-it-GGUF", "nomic-embed-text-v2-moe-GGUF"]
         );
-        // OpenAI shape has no capability metadata.
-        assert!(info.is_empty());
+        // One info row per model, name only: this body declares neither capacity nor capability, so every optional field stays `None` rather than acquiring a default (#7780, #7957).
+        assert_eq!(info.len(), 2);
+        assert!(info.iter().all(|i| i.family.is_none()
+            && i.capabilities.is_empty()
+            && i.context_window.is_none()
+            && i.max_output_tokens.is_none()
+            && i.supports_vision.is_none()
+            && i.supports_function_calling.is_none()));
+    }
+
+    /// #7957: a gateway that declares its models' capabilities must have them reach
+    /// `DiscoveredModelInfo`, and a gateway that declares nothing must leave them `None`.
+    ///
+    /// The model ids here are the point of the issue: `team-default`, `fast` and an internal ticket
+    /// id are what operators actually call their LiteLLM / vLLM deployments, and no name heuristic
+    /// can read a capability out of any of them. Before this the parser discarded the flags, so the
+    /// name was the only signal left.
+    #[test]
+    fn test_parse_openai_models_reads_declared_capability_flags() {
+        let body = serde_json::json!({
+            "object": "list",
+            "data": [
+                {"id": "team-default", "supports_vision": true, "supports_function_calling": true},
+                {"id": "fast", "supports_vision": false},
+                {"id": "internal-4412", "model_info": {"supports_vision": true}},
+                {"id": "vendor/multimodal", "architecture": {"input_modalities": ["text", "image"]}},
+                {"id": "says-nothing"}
+            ]
+        });
+        let (_models, info) = ok_or_panic(parse_openai_models(&body));
+        let by_name = |n: &str| {
+            info.iter()
+                .find(|i| i.name == n)
+                .unwrap_or_else(|| panic!("missing {n}"))
+        };
+        assert_eq!(by_name("team-default").supports_vision, Some(true));
+        assert_eq!(
+            by_name("team-default").supports_function_calling,
+            Some(true)
+        );
+        assert_eq!(by_name("fast").supports_vision, Some(false));
+        assert_eq!(by_name("internal-4412").supports_vision, Some(true));
+        assert_eq!(by_name("vendor/multimodal").supports_vision, Some(true));
+        // Silence stays silence. This is the field that must never be `Some(false)` by default.
+        assert_eq!(by_name("says-nothing").supports_vision, None);
+        assert_eq!(by_name("says-nothing").supports_function_calling, None);
+    }
+
+    #[test]
+    fn test_parse_openai_models_reads_reported_capacity() {
+        // A LiteLLM / vLLM / OpenRouter-shaped listing does report capacity, under keys that differ per server.
+        // Every one of them must reach `DiscoveredModelInfo` — discarding them is what forced `merge_discovered_models` to invent a number (#7780).
+        let body = serde_json::json!({
+            "object": "list",
+            "data": [
+                {"id": "vllm-model", "max_model_len": 32_768u64},
+                {"id": "litellm-model", "max_input_tokens": 200_000u64, "max_output_tokens": 8_192u64},
+                {"id": "openrouter-model", "context_length": 1_048_576u64,
+                 "top_provider": {"max_completion_tokens": 65_536u64}},
+                {"id": "silent-model"}
+            ]
+        });
+        let (_models, info) = ok_or_panic(parse_openai_models(&body));
+        let by_name = |n: &str| {
+            info.iter()
+                .find(|i| i.name == n)
+                .unwrap_or_else(|| panic!("missing {n}"))
+        };
+        assert_eq!(by_name("vllm-model").context_window, Some(32_768));
+        assert_eq!(by_name("vllm-model").max_output_tokens, None);
+        assert_eq!(by_name("litellm-model").context_window, Some(200_000));
+        assert_eq!(by_name("litellm-model").max_output_tokens, Some(8_192));
+        assert_eq!(by_name("openrouter-model").context_window, Some(1_048_576));
+        assert_eq!(by_name("openrouter-model").max_output_tokens, Some(65_536));
+        // The reproduction case from the issue: LiteLLM answering with the bare OpenAI shape.
+        // Nothing is reported, so nothing is claimed.
+        assert_eq!(by_name("silent-model").context_window, None);
+        assert_eq!(by_name("silent-model").max_output_tokens, None);
+    }
+
+    #[test]
+    fn test_parse_openai_models_rejects_zero_capacity() {
+        // `0` is the catalog's "unknown / not applicable" encoding, so a server reporting it must not be recorded as having answered.
+        let body = serde_json::json!({
+            "object": "list",
+            "data": [{"id": "m", "max_model_len": 0u64, "max_output_tokens": 0u64}]
+        });
+        let (_models, info) = ok_or_panic(parse_openai_models(&body));
+        assert_eq!(info[0].context_window, None);
+        assert_eq!(info[0].max_output_tokens, None);
     }
 
     #[test]

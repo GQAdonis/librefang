@@ -110,7 +110,7 @@ export function SchedulerPage() {
   const updateTriggerMut = useUpdateTrigger();
   const deleteTriggerMut = useDeleteTrigger();
 
-  const agents = agentsQuery.data ?? [];
+  const agents = useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
   const workflows = workflowsQuery.data ?? [];
   const agentMap = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents]);
   const schedules = useMemo(() => [...(schedulesQuery.data ?? [])].sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? "")), [schedulesQuery.data]);
@@ -206,7 +206,7 @@ export function SchedulerPage() {
     patch.session_mode = te.sessionMode === "" ? null : te.sessionMode;
     patch.target_agent_id = te.targetAgent === "" ? null : te.targetAgent;
     try {
-      await updateTriggerMut.mutateAsync({ id: te.trigger.id, data: patch, agentId: te.trigger.agent_id });
+      await updateTriggerMut.mutateAsync({ id: te.trigger.id, data: patch });
       setTriggerEdit(prev => ({ ...prev, trigger: null }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -235,8 +235,7 @@ export function SchedulerPage() {
     }
     setConfirmDelete(null);
     try {
-      const agentId = triggersQuery.data?.find((tr: TriggerItem) => tr.id === id)?.agent_id;
-      await deleteTriggerMut.mutateAsync({ id, agentId });
+      await deleteTriggerMut.mutateAsync({ id });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       addToast(msg || t("common.error"), "error");
@@ -394,7 +393,7 @@ export function SchedulerPage() {
                       <h3 className="text-xs sm:text-sm font-bold truncate">{formatTriggerPattern(tr.pattern) || truncateId(tr.id, 12)}</h3>
                     </div>
                     <button
-                      onClick={() => updateTriggerMut.mutate({ id: tr.id, data: { enabled: !isEnabled }, agentId: tr.agent_id })}
+                      onClick={() => updateTriggerMut.mutate({ id: tr.id, data: { enabled: !isEnabled } })}
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors ${isEnabled ? "bg-success/10 text-success hover:bg-success/20" : "bg-main text-text-dim/40 hover:text-text-dim"}`}
                       disabled={updateTriggerMut.isPending && updateTriggerMut.variables?.id === tr.id}
                     >

@@ -1,7 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
-import { type ApprovalAuditEntry, type ApprovalItem } from "../api";
+import {
+  type ApprovalAuditEntry,
+  type ApprovalItem,
+  type KnownApprovalDecision,
+} from "../api";
 import {
   useApprovals,
   useApprovalAudit,
@@ -12,8 +16,9 @@ import {
   useRejectApproval,
   useModifyAndRetryApproval,
 } from "../lib/mutations/approvals";
+import { useFullConfig } from "../lib/queries/config";
 import { useListNav } from "../lib/useListNav";
-import { ListSkeleton } from "../components/ui/Skeleton";
+import { Skeleton, ListSkeleton } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { Card } from "../components/ui/Card";
@@ -32,15 +37,36 @@ import {
   Edit3,
   Eye,
   EyeOff,
+  HelpCircle,
   History as HistoryIcon,
+  Hourglass,
+  SkipForward,
+  UserCheck,
   Zap,
 } from "lucide-react";
 
 const TOTP_REGEX = /^\d{6}$/;
 const RECOVERY_REGEX = /^\d{4}-\d{4}$/;
 
-function isValidTotpOrRecovery(v: string) {
+export function isValidTotpOrRecovery(v: string) {
   return TOTP_REGEX.test(v) || RECOVERY_REGEX.test(v);
+}
+
+export function sanitizeTotpOrRecovery(value: string): string {
+  const filtered = value.replace(/[^0-9-]/g, "");
+  const dashIndex = filtered.indexOf("-");
+  if (dashIndex < 0) return filtered.slice(0, 6);
+
+  const beforeDash = filtered
+    .slice(0, dashIndex)
+    .replace(/-/g, "")
+    .slice(0, 4);
+  const afterDash = filtered
+    .slice(dashIndex + 1)
+    .replace(/-/g, "")
+    .slice(0, 4);
+  if (beforeDash.length < 4) return `${beforeDash}${afterDash}`.slice(0, 6);
+  return `${beforeDash}-${afterDash}`;
 }
 
 type Tab = "pending" | "history";
@@ -98,21 +124,21 @@ function useNow(intervalMs = 30_000) {
 /*  Inline edit-and-approve form                                      */
 /* ------------------------------------------------------------------ */
 
-function EditAndApproveForm({ id, onDone }: { id: string; onDone: () => void }) {
+function EditAndApproveForm({
+  isPending,
+  onSubmit,
+  onCancel,
+}: {
+  isPending: boolean;
+  onSubmit: (feedback: string) => void;
+  onCancel: () => void;
+}) {
   const { t } = useTranslation();
   const [feedback, setFeedback] = useState("");
-  const addToast = useUIStore((s) => s.addToast);
-  const modifyAndRetry = useModifyAndRetryApproval();
 
-  async function handleSubmit() {
+  function handleSubmit() {
     if (!feedback.trim()) return;
-    try {
-      await modifyAndRetry.mutateAsync({ id, feedback: feedback.trim() });
-      addToast(t("approvals.modifiedToast"), "success");
-      onDone();
-    } catch (e: unknown) {
-      addToast(e instanceof Error ? e.message : String(e), "error");
-    }
+    onSubmit(feedback.trim());
   }
 
   return (
@@ -128,15 +154,15 @@ function EditAndApproveForm({ id, onDone }: { id: string; onDone: () => void }) 
         className="w-full rounded-lg border border-border-subtle bg-main px-3 py-2 text-sm focus:border-brand focus:ring-2 focus:ring-brand/10 outline-none transition-colors resize-none"
       />
       <div className="flex gap-2 justify-end">
-        <Button variant="ghost" size="sm" onClick={onDone}>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={isPending}>
           {t("common.cancel", "Cancel")}
         </Button>
         <Button
           variant="primary"
           size="sm"
           onClick={handleSubmit}
-          disabled={modifyAndRetry.isPending || !feedback.trim()}
-          isLoading={modifyAndRetry.isPending}
+          disabled={isPending || !feedback.trim()}
+          isLoading={isPending}
         >
           {t("approvals.editApproveSubmit")}
         </Button>
@@ -178,7 +204,7 @@ function TotpModal({
   const digits = isRecovery ? null : value.padEnd(6, " ").slice(0, 6).split("");
   const cursorIdx = Math.min(value.length, 5);
   const valid = isValidTotpOrRecovery(value);
-  const maskedRecovery = reveal ? value : value.replace(/[^-]/g, "•");
+  const maskedRecovery = reveal ? value : "•".repeat(value.length);
 
   return (
     <div
@@ -269,9 +295,7 @@ function TotpModal({
           ref={inputRef}
           type="password"
           value={value}
-          onChange={(e) =>
-            setValue(e.target.value.replace(/[^0-9-]/g, "").slice(0, 9))
-          }
+          onChange={(e) => setValue(sanitizeTotpOrRecovery(e.target.value))}
           onKeyDown={(e) => {
             if (e.key === "Enter" && valid && !pending) onSubmit(value);
           }}
@@ -309,6 +333,105 @@ function TotpModal({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Audit decision presentation                                       */
+/* ------------------------------------------------------------------ */
+
+/** Every lucide icon shares one type; anchor to a concrete one. */
+type LucideIconComponent = typeof CheckCircle;
+
+type DecisionPresentation = {
+  /** i18n key for the visible label. */
+  labelKey: string;
+  Icon: LucideIconComponent;
+  /** Theme variable — resolves per light/dark mode, never a literal hex. */
+  color: string;
+};
+
+/**
+ * How each known `approval_audit.decision` value renders in the History table.
+ *
+ * Typed as a total `Record` over `KnownApprovalDecision` on purpose (#6607): adding a member to that union without giving it a row here is a compile error, so a newly-emitted backend variant cannot silently inherit another decision's label.
+ * Every entry carries its own label text and its own icon — colour is never the sole carrier of the distinction, because an approval audit trail has to be readable without colour perception.
+ */
+const DECISION_PRESENTATION: Record<KnownApprovalDecision, DecisionPresentation> = {
+  approved: {
+    labelKey: "approvals.history.decisions.approved",
+    Icon: CheckCircle,
+    color: "var(--color-success)",
+  },
+  // Request verb, kept as an alias of `approved` — see `KnownApprovalDecision`.
+  approve: {
+    labelKey: "approvals.history.decisions.approved",
+    Icon: CheckCircle,
+    color: "var(--color-success)",
+  },
+  denied: {
+    labelKey: "approvals.history.decisions.denied",
+    Icon: XCircle,
+    color: "var(--color-error)",
+  },
+  // `routes/approvals.rs` spelling of `Denied` on sibling shapes.
+  rejected: {
+    labelKey: "approvals.history.decisions.denied",
+    Icon: XCircle,
+    color: "var(--color-error)",
+  },
+  // Request verb, kept as an alias of `denied`.
+  reject: {
+    labelKey: "approvals.history.decisions.denied",
+    Icon: XCircle,
+    color: "var(--color-error)",
+  },
+  // The one decision that genuinely represents an operator edit.
+  modify_and_retry: {
+    labelKey: "approvals.history.decisions.edited",
+    Icon: Edit3,
+    color: "var(--color-warning)",
+  },
+  // Nobody answered before the timeout expired — neutral, not an operator action.
+  timed_out: {
+    labelKey: "approvals.history.decisions.timedOut",
+    Icon: Clock,
+    color: "var(--color-text-dim)",
+  },
+  // Submission row: written before any decision exists, so it is not a completed outcome.
+  // `Hourglass` rather than `Loader2` — every other `Loader2` in the dashboard is paired with `animate-spin` to mean "request in flight", and a static spinner glyph repeated down a history table reads as a stalled one.
+  pending: {
+    labelKey: "approvals.history.decisions.pending",
+    Icon: Hourglass,
+    color: "var(--color-brand)",
+  },
+  // Timeout fallback ran the agent on without the tool.
+  skipped: {
+    labelKey: "approvals.history.decisions.skipped",
+    Icon: SkipForward,
+    color: "var(--color-accent)",
+  },
+};
+
+/**
+ * Fallback for a value this build does not know.
+ *
+ * Referenced by identity in `HistoryRow` to decide between the translated label and the raw server value, so it must stay a single shared object.
+ */
+const UNKNOWN_DECISION: DecisionPresentation = {
+  labelKey: "approvals.history.decisions.unknown",
+  Icon: HelpCircle,
+  color: "var(--color-text-dim)",
+};
+
+/**
+ * Resolve a raw `decision` string to its presentation.
+ *
+ * `hasOwnProperty` rather than `in` so a prototype key ("toString", "constructor") arriving from the server cannot resolve to a presentation.
+ */
+function decisionPresentation(decision: string): DecisionPresentation {
+  return Object.prototype.hasOwnProperty.call(DECISION_PRESENTATION, decision)
+    ? DECISION_PRESENTATION[decision as KnownApprovalDecision]
+    : UNKNOWN_DECISION;
+}
+
+/* ------------------------------------------------------------------ */
 /*  History row (memoised)                                            */
 /* ------------------------------------------------------------------ */
 
@@ -319,23 +442,20 @@ const HistoryRow = React.memo(function HistoryRow({
 }: {
   h: ApprovalAuditEntry;
   isLast: boolean;
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const risk = normalizeRisk(h.risk_level);
   const decision = h.decision;
-  const isApprove = decision === "approved" || decision === "approve";
-  const isDeny = decision === "rejected" || decision === "reject";
-  const decisionColor = isApprove
-    ? "var(--color-success)"
-    : isDeny
-      ? "var(--color-error)"
-      : "var(--color-warning)";
-  const DecisionIcon = isApprove ? CheckCircle : isDeny ? XCircle : Edit3;
-  const decisionLabel = isApprove
-    ? t("approvals.history.decisions.approved")
-    : isDeny
-      ? t("approvals.history.decisions.denied")
-      : t("approvals.history.decisions.edited");
+  const presentation = decisionPresentation(decision);
+  const isKnown = presentation !== UNKNOWN_DECISION;
+  const DecisionIcon = presentation.Icon;
+  // An unrecognised decision shows the raw server value rather than borrowing another decision's label, so a future backend variant degrades visibly instead of becoming a false record (#6607).
+  const decisionLabel = isKnown
+    ? t(presentation.labelKey)
+    : decision || t(UNKNOWN_DECISION.labelKey);
+  const decisionAria = isKnown
+    ? t("approvals.history.decisions.aria", { label: t(presentation.labelKey) })
+    : t("approvals.history.decisions.unknownAria", { value: decisionLabel });
   const dt = h.decided_at ? new Date(h.decided_at) : null;
   const auto = (h.decided_by ?? "").startsWith("auto");
 
@@ -348,11 +468,13 @@ const HistoryRow = React.memo(function HistoryRow({
     >
       <span
         role="cell"
-        className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider"
-        style={{ color: decisionColor }}
+        aria-label={decisionAria}
+        title={decisionLabel}
+        className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider"
+        style={{ color: presentation.color }}
       >
-        <DecisionIcon className="w-3 h-3" />
-        {decisionLabel}
+        <DecisionIcon className="w-3 h-3 shrink-0" aria-hidden="true" />
+        <span className="truncate">{decisionLabel}</span>
       </span>
 
       <span role="cell" className="hidden lg:inline font-mono text-[12px] truncate pr-2">
@@ -395,6 +517,12 @@ const HistoryRow = React.memo(function HistoryRow({
 
 const HISTORY_PAGE_SIZE = 50;
 
+export function maxHistoryOffset(total: number): number {
+  return total > 0
+    ? Math.floor((total - 1) / HISTORY_PAGE_SIZE) * HISTORY_PAGE_SIZE
+    : 0;
+}
+
 function HistoryTab() {
   const { t } = useTranslation();
   const [offset, setOffset] = useState(0);
@@ -404,6 +532,11 @@ function HistoryTab() {
   const total = auditQuery.data?.total ?? 0;
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + HISTORY_PAGE_SIZE, total);
+
+  useEffect(() => {
+    const maximum = maxHistoryOffset(total);
+    if (offset > maximum) setOffset(maximum);
+  }, [offset, total]);
 
   if (auditQuery.isLoading) return <ListSkeleton rows={5} />;
   if (auditQuery.isError) {
@@ -482,6 +615,7 @@ function PendingCard({
   approval,
   totpEnforced,
   isPending,
+  onModifyAndRetry,
   onApprove,
   onDeny,
   isEditing,
@@ -492,6 +626,7 @@ function PendingCard({
   approval: ApprovalItem;
   totpEnforced: boolean;
   isPending: boolean;
+  onModifyAndRetry: (feedback: string) => void;
   onApprove: () => void;
   onDeny: () => void;
   isEditing: boolean;
@@ -597,10 +732,106 @@ function PendingCard({
           </Button>
         </div>
 
-        {isEditing && <EditAndApproveForm id={approval.id} onDone={onToggleEdit} />}
+        {isEditing && (
+          <EditAndApproveForm
+            isPending={isPending}
+            onSubmit={onModifyAndRetry}
+            onCancel={onToggleEdit}
+          />
+        )}
       </div>
     </Card>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Trusted senders (approval bypass list)                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Narrow the untyped `GET /api/config` body down to `approval.trusted_senders`.
+ *
+ * The config endpoint is `Record<string, unknown>` by design — it mirrors whatever `KernelConfig` serializes — so the shape is checked here rather than asserted.
+ * A malformed section yields an empty list, which renders the same as "nobody is on it"; that is the safe direction to fail, because the alternative is inventing entries that are not configured.
+ */
+function readTrustedSenders(config: Record<string, unknown> | undefined): string[] {
+  if (!config) return [];
+  const approval = config["approval"];
+  if (typeof approval !== "object" || approval === null) return [];
+  const senders = (approval as Record<string, unknown>)["trusted_senders"];
+  if (!Array.isArray(senders)) return [];
+  return senders.filter((s): s is string => typeof s === "string");
+}
+
+/**
+ * Read-only audit surface for `approval.trusted_senders` (#6611).
+ *
+ * A sender on this list skips the approval prompt for every tool the risk classifier does not rank high, so it is the one approval setting whose *populated* state deserves attention — an empty list means every sender goes through the gate, which is the safe configuration and is presented as such.
+ * The list is deliberately not editable here: it is excluded from the config write allowlist so that holding an API key is not enough to grant yourself the bypass.
+ */
+function TrustedSendersCard() {
+  const { t } = useTranslation();
+  const configQuery = useFullConfig();
+  const senders = useMemo(
+    () => readTrustedSenders(configQuery.data),
+    [configQuery.data],
+  );
+
+  return (
+    <Card padding="md" className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <UserCheck className="w-3.5 h-3.5 text-text-dim" aria-hidden="true" />
+        <h3 className="m-0 text-[12.5px] font-semibold">
+          {t("approvals.trustedSendersTitle", "Trusted senders")}
+        </h3>
+        {senders.length > 0 && (
+          <span className="font-mono text-[10px] px-1.5 py-px rounded-full bg-warning/15 text-warning">
+            {senders.length}
+          </span>
+        )}
+      </div>
+      <p className="text-[11.5px] text-text-dim mb-2.5">
+        {t(
+          "approvals.trustedSendersDesc",
+          "Senders listed here skip the approval prompt for every tool that is not classified high-risk. Edit the list in config.toml — it is intentionally not writable over the API.",
+        )}
+      </p>
+      {configQuery.isLoading ? (
+        <div className="flex gap-2" role="status" aria-busy="true">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-5 w-20" />
+        </div>
+      ) : configQuery.isError ? (
+        <ErrorState
+          message={t(
+            "approvals.trustedSendersLoadError",
+            "Could not load the approval configuration.",
+          )}
+          onRetry={() => configQuery.refetch()}
+        />
+      ) : senders.length === 0 ? (
+        <p className="text-[11.5px] text-success">
+          {t(
+            "approvals.trustedSendersEmpty",
+            "No trusted senders — every sender goes through the approval gate.",
+          )}
+        </p>
+      ) : (
+        <ul
+          className="flex flex-wrap gap-1.5 list-none m-0 p-0"
+          aria-label={t("approvals.trustedSendersTitle", "Trusted senders")}
+        >
+          {senders.map((sender) => (
+            <li key={sender}>
+              <code className="inline-block rounded-md border border-warning/20 bg-warning/10 px-1.5 py-0.5 font-mono text-[11px] text-warning break-all">
+                {sender}
+              </code>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -611,7 +842,8 @@ function PendingCard({
 export function ApprovalsPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("pending");
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const pendingIdsRef = useRef<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [totpFor, setTotpFor] = useState<ApprovalItem | null>(null);
   const [filter, setFilter] = useState("");
@@ -622,9 +854,10 @@ export function ApprovalsPage() {
   const totpQuery = useTotpStatus();
   const approveMutation = useApproveApproval();
   const rejectMutation = useRejectApproval();
+  const modifyAndRetryMutation = useModifyAndRetryApproval();
 
-  const totpEnforced = totpQuery.data?.enforced ?? false;
-  const approvals = approvalsQuery.data ?? [];
+  const totpEnforced = !totpQuery.isSuccess || totpQuery.data?.enforced !== false;
+  const approvals = useMemo(() => approvalsQuery.data ?? [], [approvalsQuery.data]);
   const pendingApprovals = useMemo(
     () => approvals.filter((a) => !a.status || a.status === "pending"),
     [approvals],
@@ -654,8 +887,20 @@ export function ApprovalsPage() {
     },
   });
 
+  function beginDecision(id: string): boolean {
+    if (pendingIdsRef.current.has(id)) return false;
+    pendingIdsRef.current.add(id);
+    setPendingIds(new Set(pendingIdsRef.current));
+    return true;
+  }
+
+  function finishDecision(id: string) {
+    pendingIdsRef.current.delete(id);
+    setPendingIds(new Set(pendingIdsRef.current));
+  }
+
   async function executeApprove(id: string, totpCode?: string) {
-    setPendingId(id);
+    if (!beginDecision(id)) return;
     try {
       await approveMutation.mutateAsync({ id, totpCode });
       addToast(t("approvals.approvedToast"), "success");
@@ -663,19 +908,32 @@ export function ApprovalsPage() {
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : String(e), "error");
     } finally {
-      setPendingId(null);
+      finishDecision(id);
     }
   }
 
   async function executeReject(id: string) {
-    setPendingId(id);
+    if (!beginDecision(id)) return;
     try {
       await rejectMutation.mutateAsync(id);
       addToast(t("approvals.rejectedToast"), "success");
     } catch (e: unknown) {
       addToast(e instanceof Error ? e.message : String(e), "error");
     } finally {
-      setPendingId(null);
+      finishDecision(id);
+    }
+  }
+
+  async function executeModifyAndRetry(id: string, feedback: string) {
+    if (!beginDecision(id)) return;
+    try {
+      await modifyAndRetryMutation.mutateAsync({ id, feedback });
+      addToast(t("approvals.modifiedToast"), "success");
+      setEditingId(null);
+    } catch (e: unknown) {
+      addToast(e instanceof Error ? e.message : String(e), "error");
+    } finally {
+      finishDecision(id);
     }
   }
 
@@ -788,6 +1046,9 @@ export function ApprovalsPage() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4 lg:p-5">
+        {/* Who currently bypasses this queue.
+            Sits above the queue itself because it explains requests that never arrive. */}
+        {activeTab === "pending" && <TrustedSendersCard />}
         {activeTab === "history" ? (
           <HistoryTab />
         ) : approvalsQuery.isLoading ? (
@@ -812,10 +1073,13 @@ export function ApprovalsPage() {
                 key={a.id}
                 approval={a}
                 totpEnforced={totpEnforced}
-                isPending={pendingId === a.id}
+                isPending={pendingIds.has(a.id)}
                 isEditing={editingId === a.id}
                 onApprove={() => handleApprove(a)}
                 onDeny={() => void executeReject(a.id)}
+                onModifyAndRetry={(feedback) =>
+                  void executeModifyAndRetry(a.id, feedback)
+                }
                 onToggleEdit={() => setEditingId(editingId === a.id ? null : a.id)}
                 navProps={nav.getItemProps(i)}
                 selected={nav.selectedIndex === i}
@@ -829,7 +1093,7 @@ export function ApprovalsPage() {
       {totpFor && (
         <TotpModal
           approval={totpFor}
-          pending={pendingId === totpFor.id}
+          pending={pendingIds.has(totpFor.id)}
           onCancel={() => setTotpFor(null)}
           onSubmit={(code) => void executeApprove(totpFor.id, code)}
         />

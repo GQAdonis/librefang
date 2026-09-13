@@ -38,9 +38,9 @@ Skills are installed to `~/.librefang/skills/`. Official skills are available in
 | `prompt_only` | Markdown | N/A | Expert knowledge injected into system prompt. No code execution. |
 | `builtin` | Rust | N/A | Compiled into the binary. For core tools only. |
 
-### 60 Bundled Skills
+### 61 Bundled Skills
 
-BossFang provides 60 expert knowledge skills available for installation from the dashboard:
+BossFang provides 61 expert knowledge skills available for installation from the dashboard:
 
 | Category | Skills |
 |----------|--------|
@@ -58,6 +58,7 @@ BossFang provides 60 expert knowledge skills available for installation from the
 | Collaboration | `slack-tools`, `notion`, `confluence`, `figma-expert` |
 | Career | `interview-prep`, `project-manager` |
 | Advanced | `wasm-expert`, `pdf-reader`, `web-search` |
+| Automation | `workflow-creator` |
 
 These are `prompt_only` skills using the SKILL.md format -- expert knowledge that gets injected into the agent's system prompt.
 
@@ -829,7 +830,7 @@ The Skills page in the dashboard includes:
 4. **Provide clear input schemas** -- include descriptions for every parameter so the LLM knows what to pass.
 5. **Handle errors gracefully** -- always return a JSON error object rather than crashing.
 6. **Version carefully** -- use semantic versioning; breaking changes require a major version bump.
-7. **Test with multiple agents** -- verify your skill works with different agent templates and providers.
+7. **Test with multiple agents** -- verify your skill works with different agent types and providers.
 8. **Include a README** -- document setup steps, dependencies, and example usage.
 
 

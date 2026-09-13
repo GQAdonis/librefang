@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import type { ProviderItem } from "../api";
-import { isProviderAvailable } from "../lib/status";
+import { isCliProvider, isProviderAvailable } from "../lib/status";
 import { useProviders } from "../lib/queries/providers";
 import {
   useSetDefaultProvider,
@@ -32,7 +31,9 @@ export function WizardPage() {
   const [apiKey, setApiKey] = useState<string>("");
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [defaultProviderApplied, setDefaultProviderApplied] = useState(false);
   const [done, setDone] = useState(false);
+  const finalizeLockRef = useRef(false);
 
   // Storage step state
   const [storageBackend, setStorageBackend] = useState<"embedded" | "remote">("embedded");
@@ -69,33 +70,36 @@ export function WizardPage() {
   }, [providersQuery.data]);
 
   const selectedProvider = providerOptions.find((p) => p.id === providerId);
+  // `key_required` says whether a key is MANDATORY, not whether one is
+  // accepted (#6703): a self-hosted vLLM / Ollama behind auth declares
+  // `key_required: false` yet needs a Bearer token, and the runtime sends
+  // whatever is stored. The field is therefore offered for every HTTP
+  // provider; only the "you must fill this in before continuing" gate reads
+  // the flag. CLI passthroughs are the exception — they spawn a subprocess and
+  // have no endpoint, so there is nowhere for a key to go.
   const requiresKey = selectedProvider?.key_required !== false;
+  const acceptsKey = !!selectedProvider && !isCliProvider(selectedProvider);
   // If the provider already has a working key and the user is typing a new one,
   // they're about to overwrite a credential we know was good. A failed test
   // post-write leaves the provider broken with no way to restore the old key,
   // so gate the persist behind an explicit confirm checkbox.
   const existingKeyWorking =
     !!selectedProvider && isProviderAvailable(selectedProvider.auth_status);
-  const typingNewKey = requiresKey && apiKey.trim().length > 0;
+  const typingNewKey = apiKey.trim().length > 0;
   const needsReplaceConfirm = existingKeyWorking && typingNewKey && !confirmReplace;
   const isValidatedSelection = !!providerId && validatedProviderId === providerId;
 
-  const validateProvider = useMutation({
-    mutationFn: () =>
-      validateProviderMutation.mutateAsync({
-        providerId,
-        apiKey,
-        requiresKey,
-      }),
-    onSuccess: () => {
+  const validateProvider = async () => {
+    try {
+      await validateProviderMutation.mutateAsync({ providerId, apiKey });
       setValidatedProviderId(providerId);
       addToast(t("wizard.provider_connected"), "success");
       setStep(3);
-    },
-    onError: (err: Error) => {
-      addToast(t("wizard.provider_failed", { message: err.message || "" }), "error");
-    },
-  });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      addToast(t("wizard.provider_failed", { message }), "error");
+    }
+  };
 
   // Pre-populate storage fields from live config when step 3 is reached
   const storageConfig = storageConfigQuery.data;
@@ -131,15 +135,27 @@ export function WizardPage() {
   });
 
   const finalize = async () => {
-    if (!providerId || !isValidatedSelection) return;
+    if (!providerId || !isValidatedSelection || finalizeLockRef.current) return;
+    finalizeLockRef.current = true;
     setFinalizing(true);
     try {
-      await setDefaultProviderMutation.mutateAsync({ id: providerId });
-      await quickInitMutation.mutateAsync();
+      if (!defaultProviderApplied) {
+        await setDefaultProviderMutation.mutateAsync({ id: providerId });
+        setDefaultProviderApplied(true);
+      }
+      try {
+        await quickInitMutation.mutateAsync();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        addToast(t("wizard.quick_init_failed", { message }), "error");
+        return;
+      }
       setDone(true);
     } catch (err) {
-      addToast(t("wizard.finalize_failed", { message: (err as Error).message }), "error");
+      const message = err instanceof Error ? err.message : String(err);
+      addToast(t("wizard.finalize_failed", { message }), "error");
     } finally {
+      finalizeLockRef.current = false;
       setFinalizing(false);
     }
   };
@@ -226,6 +242,7 @@ export function WizardPage() {
                         if (providerId !== p.id) {
                           setProviderId(p.id);
                           setValidatedProviderId("");
+                          setDefaultProviderApplied(false);
                           setApiKey("");
                           setConfirmReplace(false);
                           setStep(2);
@@ -272,26 +289,31 @@ export function WizardPage() {
               </div>
             )}
 
-            {requiresKey ? (
-              <Input
-                label={t("wizard.api_key_label")}
-                type="password"
-                placeholder={t("wizard.api_key_placeholder")}
-                leftIcon={<Key className="h-4 w-4" />}
-                value={apiKey}
-                onChange={(e) => {
-                  setValidatedProviderId("");
-                  setApiKey(e.target.value);
-                  // Any edit invalidates a prior confirmation — we don't want
-                  // a lingering approval from an earlier typed-then-erased key
-                  // to cover a different string the user later retypes.
-                  setConfirmReplace(false);
-                  setStep(2);
-                }}
-                autoFocus
-              />
+            {acceptsKey ? (
+              <>
+                <Input
+                  label={requiresKey ? t("wizard.api_key_label") : t("wizard.api_key_label_optional")}
+                  type="password"
+                  placeholder={t("wizard.api_key_placeholder")}
+                  leftIcon={<Key className="h-4 w-4" />}
+                  value={apiKey}
+                  onChange={(e) => {
+                    setValidatedProviderId("");
+                    setApiKey(e.target.value);
+                    // Any edit invalidates a prior confirmation — we don't want
+                    // a lingering approval from an earlier typed-then-erased key
+                    // to cover a different string the user later retypes.
+                    setConfirmReplace(false);
+                    setStep(2);
+                  }}
+                  autoFocus
+                />
+                {!requiresKey && (
+                  <p className="text-[11px] text-text-dim/70 mt-2">{t("wizard.no_key_needed")}</p>
+                )}
+              </>
             ) : (
-              <p className="text-sm text-text-dim">{t("wizard.no_key_needed")}</p>
+              <p className="text-sm text-text-dim">{t("wizard.no_key_needed_cli")}</p>
             )}
 
             {selectedProvider?.api_key_env && (
@@ -317,9 +339,9 @@ export function WizardPage() {
               </label>
             )}
 
-            {validateProvider.isError && (
+            {validateProviderMutation.isError && (
               <p className="text-xs text-error mt-3 font-medium">
-                {(validateProvider.error as Error)?.message}
+                {(validateProviderMutation.error as Error)?.message}
               </p>
             )}
           </div>
@@ -534,12 +556,12 @@ export function WizardPage() {
             <Button
               variant="primary"
               rightIcon={<ArrowRight className="h-4 w-4" />}
-              isLoading={validateProvider.isPending}
+              isLoading={validateProviderMutation.isPending}
               disabled={
                 (requiresKey && !apiKey.trim() && !isProviderAvailable(selectedProvider?.auth_status))
                 || needsReplaceConfirm
               }
-              onClick={() => validateProvider.mutate()}
+              onClick={validateProvider}
             >
               {t("wizard.connect")}
             </Button>
@@ -572,10 +594,12 @@ export function WizardPage() {
               variant="primary"
               rightIcon={<Rocket className="h-4 w-4" />}
               isLoading={finalizing}
-              disabled={!isValidatedSelection}
+              disabled={!isValidatedSelection || finalizing}
               onClick={finalize}
             >
-              {t("wizard.finish_action")}
+              {defaultProviderApplied
+                ? t("common.retry")
+                : t("wizard.finish_action")}
             </Button>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agentKeys,
+  agentTypeKeys,
   modelKeys,
   handKeys,
   workflowKeys,
@@ -191,6 +192,16 @@ describe("query key factories", () => {
       // Always same
       expect(configKeys.full()).toEqual(configKeys.full());
     });
+
+    it("status is anchored under configKeys.all so a config write invalidates it", () => {
+      // A save that flips the daemon into managed mode must not leave a stale
+      // `writable: true` behind, and every config mutation invalidates
+      // `configKeys.all` — which only reaches this key while it stays nested.
+      expect(configKeys.status()).toEqual(["config", "status"]);
+      expect(configKeys.status().slice(0, configKeys.all.length)).toEqual(
+        configKeys.all,
+      );
+    });
   });
 
   describe("approvalKeys", () => {
@@ -208,6 +219,63 @@ describe("query key factories", () => {
     });
   });
 
+  describe("usageKeys", () => {
+    // #8062 — the reporting window is a filter, so it has to live in the key.
+    // If it did not, switching from "last month" to "this month" would serve
+    // the previous month's numbers from cache under the new caption.
+    const RANGE = { start_date: "2026-03-01", end_date: "2026-03-31" };
+
+    it("carries the date range in every ranged factory", () => {
+      expect(usageKeys.summary(RANGE)).toEqual([
+        "usage",
+        "summary",
+        RANGE,
+      ]);
+      expect(usageKeys.byAgent(RANGE)).toEqual(["usage", "byAgent", RANGE]);
+      expect(usageKeys.byModel(RANGE)).toEqual(["usage", "byModel", RANGE]);
+      expect(usageKeys.modelPerformance(RANGE)).toEqual([
+        "usage",
+        "modelPerformance",
+        RANGE,
+      ]);
+    });
+
+    it("defaults to the unbounded window", () => {
+      expect(usageKeys.summary()).toEqual(["usage", "summary", {}]);
+      expect(usageKeys.daily()).toEqual(["usage", "daily", {}, null]);
+    });
+
+    it("gives two different ranges two different keys", () => {
+      const march = usageKeys.summary(RANGE);
+      const april = usageKeys.summary({
+        start_date: "2026-04-01",
+        end_date: "2026-04-30",
+      });
+      expect(march).not.toEqual(april);
+    });
+
+    it("keys the daily breakdown on `days` as well as the range", () => {
+      // `days` only applies to the unbounded window, so the unbounded 366-day
+      // chart must not share a cache entry with an unbounded default one.
+      expect(usageKeys.daily({}, 366)).toEqual(["usage", "daily", {}, 366]);
+      expect(usageKeys.daily({}, 366)).not.toEqual(usageKeys.daily({}));
+    });
+
+    it("anchors every factory under usageKeys.all so domain invalidation works", () => {
+      const prefix = usageKeys.all;
+      for (const key of [
+        usageKeys.summary(RANGE),
+        usageKeys.byAgent(RANGE),
+        usageKeys.byModel(RANGE),
+        usageKeys.modelPerformance(RANGE),
+        usageKeys.daily(RANGE),
+        usageKeys.daily({}, 366),
+      ]) {
+        expect(key.slice(0, prefix.length)).toEqual(prefix);
+      }
+    });
+  });
+
   describe("memoryKeys", () => {
     it("list with filters", () => {
       expect(memoryKeys.list()).toEqual(["memory", "list", {}]);
@@ -219,8 +287,9 @@ describe("query key factories", () => {
     });
 
     it("searchOrList is nested under lists", () => {
-      const searchKey = memoryKeys.searchOrList("test");
-      expect(searchKey).toEqual(["memory", "list", "searchOrList", "test"]);
+      const params = { search: "test", agentId: "a1", offset: 50, limit: 50 };
+      const searchKey = memoryKeys.searchOrList(params);
+      expect(searchKey).toEqual(["memory", "list", "searchOrList", params]);
       const listsPrefix = memoryKeys.lists();
       expect(searchKey.slice(0, listsPrefix.length)).toEqual(listsPrefix);
     });
@@ -260,6 +329,27 @@ describe("query key factories", () => {
       const a = modelKeys.list({ provider: "openai" });
       const b = modelKeys.list({ provider: "anthropic" });
       expect(a).not.toEqual(b);
+    });
+  });
+
+  describe("agentTypeKeys", () => {
+    it("hierarchy is anchored so invalidating `all` reaches list and detail", () => {
+      expect(agentTypeKeys.all).toEqual(["agentTypes"]);
+      expect(agentTypeKeys.lists()).toEqual(["agentTypes", "list"]);
+      expect(agentTypeKeys.list()).toEqual(["agentTypes", "list"]);
+      expect(agentTypeKeys.details()).toEqual(["agentTypes", "detail"]);
+      expect(agentTypeKeys.detail("coder")).toEqual([
+        "agentTypes",
+        "detail",
+        "coder",
+      ]);
+      const prefix = agentTypeKeys.all;
+      expect(agentTypeKeys.lists().slice(0, prefix.length)).toEqual(prefix);
+      expect(agentTypeKeys.detail("coder").slice(0, prefix.length)).toEqual(prefix);
+    });
+
+    it("does not collide with agentKeys, which owns a different domain", () => {
+      expect(agentTypeKeys.all).not.toEqual(agentKeys.all);
     });
   });
 
@@ -371,24 +461,6 @@ describe("query key factories", () => {
       expect(mediaKeys.videoTask("task-1", "fal").slice(0, taskPrefix.length)).toEqual(taskPrefix);
       expect(mediaKeys.videoTasks().slice(0, mediaKeys.all.length)).toEqual(mediaKeys.all);
     });
-
-    it("videoTaskDisabled is stable and only collides with a literal sentinel id", () => {
-      expect(mediaKeys.videoTaskDisabled()).toEqual([
-        "media",
-        "videoTasks",
-        "__disabled__",
-        "__disabled__",
-      ]);
-      // Stable across calls (so useQuery's cache identity is preserved).
-      expect(mediaKeys.videoTaskDisabled()).toEqual(mediaKeys.videoTaskDisabled());
-      // 4-segment shape matches videoTask(taskId, provider) so useQuery's
-      // generics unify cleanly across the enabled/disabled branches.
-      expect(mediaKeys.videoTaskDisabled().length).toBe(4);
-      // Shares the videoTasks prefix — consumers can invalidate all video
-      // task queries (live + disabled placeholder) in one call.
-      const prefix = mediaKeys.videoTasks();
-      expect(mediaKeys.videoTaskDisabled().slice(0, prefix.length)).toEqual(prefix);
-    });
   });
 
   describe("telemetryKeys", () => {
@@ -402,6 +474,7 @@ describe("query key factories", () => {
   describe("all factories exist", () => {
     const factories = [
       agentKeys,
+      agentTypeKeys,
       modelKeys,
       providerKeys,
       channelKeys,
@@ -482,6 +555,23 @@ describe("query key factories", () => {
       ]);
       // Empty filters still produces a stable key.
       expect(auditKeys.query()).toEqual(["audit", "query", {}]);
+      expect(
+        auditKeys.query({
+          agent: "agent-1",
+          channel: "slack",
+          from: "2026-08-01T00:00:00Z",
+          to: "2026-08-02T00:00:00Z",
+        }),
+      ).toEqual([
+        "audit",
+        "query",
+        {
+          agent: "agent-1",
+          channel: "slack",
+          from: "2026-08-01T00:00:00Z",
+          to: "2026-08-02T00:00:00Z",
+        },
+      ]);
     });
   });
 

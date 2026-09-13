@@ -266,12 +266,17 @@ fn lookup_hardcoded(model_id: &str) -> Option<u64> {
 }
 
 /// Build a synthetic `ModelCatalogEntry` for a layer that doesn't have a
-/// registry-backed entry to borrow (L1 / L5).
+/// registry-backed entry to borrow (L1 / L3 / L4 / L5 / final default).
+///
+/// `limits_known` mirrors the layer that produced the numbers, which is the same distinction [`MetadataSource`] already records alongside the entry.
+/// An operator override, a persisted cache entry and a live probe all have a source; the L5 substring table and the two provider-shaped defaults are guesses this crate invented.
+/// Recording it on the entry means a caller that sees only the entry, and not the `ResolvedModel` wrapper, can still tell the two apart.
 fn synthesize_entry(
     model: &str,
     provider: &str,
     context_window: u64,
     max_output_tokens: u64,
+    limits_known: bool,
 ) -> ModelCatalogEntry {
     ModelCatalogEntry {
         id: model.to_string(),
@@ -284,10 +289,14 @@ fn synthesize_entry(
         input_cost_per_m: 0.0,
         output_cost_per_m: 0.0,
         pricing_known: false,
+        limits_known,
         image_input_cost_per_m: None,
         image_output_cost_per_m: None,
         supports_tools: false,
         supports_vision: false,
+        // Nothing in this pipeline ever learns a capability: the four booleans above are placeholders on an entry synthesized to carry *capacity*.
+        // `vision_known: false` says so, so the request-build gate reads this entry as `VisionSupport::Unknown` and keeps sending images rather than stripping them on the strength of a placeholder (#7957).
+        vision_known: false,
         supports_streaming: false,
         supports_thinking: false,
         reasoning_echo_policy: librefang_types::model_catalog::ReasoningEchoPolicy::default(),
@@ -295,10 +304,13 @@ fn synthesize_entry(
     }
 }
 
-/// Whether this provider name is anthropic-shaped — used to pick the
-/// 200K vs 32K final default. Matches the bare `"anthropic"` provider
-/// plus claude-routed providers like `bedrock` and `vertexai` whose
-/// catalog entries are also Claude models with 200K minimum windows.
+/// Whether the final provider-level default is Anthropic-shaped.
+///
+/// This deliberately matches only providers dedicated to Claude. Claude
+/// model IDs on multi-model hosts such as Bedrock already match the
+/// hardcoded `"claude"` substring before resolution reaches this fallback;
+/// treating the whole host as Anthropic would also assign 200K to its
+/// non-Claude models.
 fn is_anthropic_host(provider: &str, model_id: &str) -> bool {
     let p = provider.to_ascii_lowercase();
     if p == "anthropic" || p == "claude-code" {
@@ -568,7 +580,9 @@ async fn probe_anthropic(
 ///
 /// Zero values are rejected at every step so a misconfigured server
 /// can't poison the cache with a useless `0`.
-fn parse_openai_model(json: &serde_json::Value) -> Option<u64> {
+///
+/// Also used by [`crate::provider_health`] against each element of a `GET /v1/models` listing: the per-model objects in a listing carry the same keys as the single-model response, and reading them there is what keeps a gateway-discovered catalog entry from being filled in with a literal (#7780).
+pub(crate) fn parse_openai_model(json: &serde_json::Value) -> Option<u64> {
     const KEYS: &[&str] = &[
         "max_model_len",
         "context_length",
@@ -584,6 +598,69 @@ fn parse_openai_model(json: &serde_json::Value) -> Option<u64> {
         }
     }
     None
+}
+
+/// Extract the maximum-output-tokens ceiling from one OpenAI-compatible model object, in the same spirit as [`parse_openai_model`].
+///
+/// The key list is deliberately **disjoint** from the context-window list above.
+/// `max_tokens` is claimed there as a last-ditch reading of the full window, and a server that reports only `max_tokens` gives no way to tell which of the two it meant — counting it as both would silently assert an output ceiling equal to the whole context.
+///
+/// 1. `max_output_tokens` — LiteLLM normalised key, also OpenRouter.
+/// 2. `max_completion_tokens` — OpenAI request-side name, echoed by some proxies.
+/// 3. `/top_provider/max_completion_tokens` — OpenRouter's listing shape.
+///
+/// Zero is rejected at every step: `0` is the catalog's "unknown / not applicable" encoding, and a misconfigured server reporting it must not be recorded as having answered.
+pub(crate) fn parse_openai_model_max_output(json: &serde_json::Value) -> Option<u64> {
+    const KEYS: &[&str] = &["max_output_tokens", "max_completion_tokens"];
+    for key in KEYS {
+        if let Some(n) = json.get(*key).and_then(|v| v.as_u64()) {
+            if n > 0 {
+                return Some(n);
+            }
+        }
+    }
+    json.pointer("/top_provider/max_completion_tokens")
+        .and_then(|v| v.as_u64())
+        .filter(|n| *n > 0)
+}
+
+/// Read a boolean capability flag from one OpenAI-compatible model object, trying the top level first and LiteLLM's nested `model_info` block second (refs #7957).
+///
+/// LiteLLM normalises its per-model capability booleans under `model_info` on `/v1/model/info`, and echoes them at the top level of `/v1/models` entries when the deployment is configured to expose them.
+/// Both shapes are the gateway stating a fact about its own model, so both count.
+///
+/// `None` means the object said nothing, and it is propagated as "unknown" rather than collapsed to `false` — the same discipline [`parse_openai_model`] follows for capacity since #7780, and for the same reason: a silent `false` here is indistinguishable from a declared `false` at every point downstream.
+fn openai_capability_flag(json: &serde_json::Value, key: &str) -> Option<bool> {
+    json.get(key)
+        .and_then(|v| v.as_bool())
+        .or_else(|| json.pointer(&format!("/model_info/{key}"))?.as_bool())
+}
+
+/// Whether one OpenAI-compatible model object declares image-input support, or says nothing.
+///
+/// Sources, in priority order:
+///
+/// 1. `supports_vision` — LiteLLM's normalised key, top level or under `model_info`.
+/// 2. `/architecture/input_modalities` — OpenRouter's listing shape.
+///    A *present* array is authoritative in both directions: a gateway that enumerates its input modalities and omits `image` has said the model is text-only.
+///
+/// `None` when neither is present, which sends the caller to the name heuristic and records the answer as a guess.
+pub(crate) fn parse_openai_model_supports_vision(json: &serde_json::Value) -> Option<bool> {
+    if let Some(flag) = openai_capability_flag(json, "supports_vision") {
+        return Some(flag);
+    }
+    let modalities = json
+        .pointer("/architecture/input_modalities")
+        .and_then(|v| v.as_array())?;
+    Some(modalities.iter().any(|m| m.as_str() == Some("image")))
+}
+
+/// Whether one OpenAI-compatible model object declares tool/function-calling support, or says nothing.
+///
+/// Reads LiteLLM's `supports_function_calling`, top level or under `model_info`.
+/// `None` when absent, leaving the caller's existing "any non-embedding chat model is tool-capable" assumption in place.
+pub(crate) fn parse_openai_model_supports_tools(json: &serde_json::Value) -> Option<bool> {
+    openai_capability_flag(json, "supports_function_calling")
 }
 
 /// Probe a generic OpenAI-compatible `GET /v1/models/{model}` endpoint.
@@ -648,7 +725,7 @@ pub async fn resolve_model_metadata<'a>(
     // ----- Layer 1: agent manifest override -----
     if let Some(ctx) = request.manifest_override_context.filter(|v| *v > 0) {
         let max_out = request.manifest_override_max_output.unwrap_or(0);
-        let entry = synthesize_entry(request.model, request.provider, ctx, max_out);
+        let entry = synthesize_entry(request.model, request.provider, ctx, max_out, true);
         return ResolvedModel {
             entry: Cow::Owned(entry),
             source: MetadataSource::AgentManifest,
@@ -686,6 +763,7 @@ pub async fn resolve_model_metadata<'a>(
                 request.provider,
                 cached.context_window,
                 cached.max_output_tokens,
+                true,
             );
             return ResolvedModel {
                 entry: Cow::Owned(entry),
@@ -709,7 +787,7 @@ pub async fn resolve_model_metadata<'a>(
             },
         )
         .await;
-        let entry = synthesize_entry(request.model, request.provider, ctx, 0);
+        let entry = synthesize_entry(request.model, request.provider, ctx, 0, true);
         return ResolvedModel {
             entry: Cow::Owned(entry),
             source: MetadataSource::RuntimeProbe,
@@ -718,7 +796,7 @@ pub async fn resolve_model_metadata<'a>(
 
     // ----- Layer 5: hardcoded substring table + provider default -----
     if let Some(ctx) = lookup_hardcoded(stripped) {
-        let entry = synthesize_entry(request.model, request.provider, ctx, 0);
+        let entry = synthesize_entry(request.model, request.provider, ctx, 0, false);
         return ResolvedModel {
             entry: Cow::Owned(entry),
             source: MetadataSource::HardcodedFallback,
@@ -732,13 +810,20 @@ pub async fn resolve_model_metadata<'a>(
             request.provider,
             DEFAULT_ANTHROPIC_CONTEXT,
             0,
+            false,
         );
         return ResolvedModel {
             entry: Cow::Owned(entry),
             source: MetadataSource::Default200kAnthropic,
         };
     }
-    let entry = synthesize_entry(request.model, request.provider, DEFAULT_GENERIC_CONTEXT, 0);
+    let entry = synthesize_entry(
+        request.model,
+        request.provider,
+        DEFAULT_GENERIC_CONTEXT,
+        0,
+        false,
+    );
     ResolvedModel {
         entry: Cow::Owned(entry),
         source: MetadataSource::Default32k,
@@ -768,10 +853,12 @@ mod tests {
             input_cost_per_m: 0.0,
             output_cost_per_m: 0.0,
             pricing_known: true,
+            limits_known: true,
             image_input_cost_per_m: None,
             image_output_cost_per_m: None,
             supports_tools: false,
             supports_vision: false,
+            vision_known: true,
             supports_streaming: false,
             supports_thinking: false,
             reasoning_echo_policy: librefang_types::model_catalog::ReasoningEchoPolicy::default(),
@@ -888,6 +975,27 @@ mod tests {
             resolve_model_metadata(&cat, home, &req("anthropic", "totally-unknown-model")).await;
         assert_eq!(r.source, MetadataSource::Default200kAnthropic);
         assert_eq!(r.entry.context_window, 200_000);
+    }
+
+    #[tokio::test]
+    async fn layer_5_bedrock_claude_uses_model_fallback_not_provider_default() {
+        let _home = fresh_home();
+        let home = _home.path();
+        let cat = catalog_with(vec![]);
+
+        let claude = resolve_model_metadata(
+            &cat,
+            home,
+            &req("bedrock", "us.anthropic.claude-unknown-v1:0"),
+        )
+        .await;
+        assert_eq!(claude.source, MetadataSource::HardcodedFallback);
+        assert_eq!(claude.entry.context_window, 200_000);
+
+        let titan =
+            resolve_model_metadata(&cat, home, &req("bedrock", "amazon.titan-unknown-v1")).await;
+        assert_eq!(titan.source, MetadataSource::Default32k);
+        assert_eq!(titan.entry.context_window, 32_768);
     }
 
     #[tokio::test]
@@ -1263,6 +1371,76 @@ mod tests {
             "max_tokens": 0u64
         });
         assert_eq!(parse_openai_model(&json), None);
+    }
+
+    // --- #7957: capability flags a gateway declares on its own models ---
+
+    /// LiteLLM's normalised top-level key is read, and read as a `Some` so the caller can tell it
+    /// apart from an entry that said nothing.
+    #[test]
+    fn parse_openai_model_reads_a_top_level_supports_vision_flag() {
+        let json = serde_json::json!({ "id": "team-default", "supports_vision": true });
+        assert_eq!(parse_openai_model_supports_vision(&json), Some(true));
+        let json = serde_json::json!({ "id": "team-default", "supports_vision": false });
+        assert_eq!(parse_openai_model_supports_vision(&json), Some(false));
+    }
+
+    /// LiteLLM nests the same booleans under `model_info` on `/v1/model/info`, and mirrors that
+    /// block into `/v1/models` entries on some deployments. Both are the gateway declaring a fact.
+    #[test]
+    fn parse_openai_model_reads_a_nested_model_info_supports_vision_flag() {
+        let json = serde_json::json!({
+            "id": "internal-4412",
+            "model_info": { "supports_vision": true, "supports_function_calling": false }
+        });
+        assert_eq!(parse_openai_model_supports_vision(&json), Some(true));
+        assert_eq!(parse_openai_model_supports_tools(&json), Some(false));
+    }
+
+    /// OpenRouter enumerates input modalities instead of exposing a boolean.
+    /// A present array is authoritative in *both* directions: listing the inputs and omitting
+    /// `image` is a statement that the model is text-only.
+    #[test]
+    fn parse_openai_model_reads_openrouter_input_modalities() {
+        let vision = serde_json::json!({
+            "id": "vendor/some-model",
+            "architecture": { "input_modalities": ["text", "image"] }
+        });
+        assert_eq!(parse_openai_model_supports_vision(&vision), Some(true));
+        let text_only = serde_json::json!({
+            "id": "vendor/other-model",
+            "architecture": { "input_modalities": ["text"] }
+        });
+        assert_eq!(parse_openai_model_supports_vision(&text_only), Some(false));
+    }
+
+    /// The bare OpenAI `/v1/models` shape declares nothing, and that MUST stay `None`.
+    /// A `Some(false)` here is the whole of #7957: it would assert that a gateway called its model
+    /// blind when the gateway simply never mentioned the subject, and the agent loop would then
+    /// strip the images with no error anyone could act on.
+    #[test]
+    fn parse_openai_model_reports_unknown_capability_as_none() {
+        let json = serde_json::json!({
+            "id": "fast",
+            "object": "model",
+            "created": 1_700_000_000u64,
+            "owned_by": "operator"
+        });
+        assert_eq!(parse_openai_model_supports_vision(&json), None);
+        assert_eq!(parse_openai_model_supports_tools(&json), None);
+    }
+
+    /// A non-boolean value is not a declaration either — a gateway that reports
+    /// `supports_vision: null` has answered "I do not know", which is exactly `None`.
+    #[test]
+    fn parse_openai_model_treats_a_null_capability_as_unknown() {
+        let json = serde_json::json!({
+            "id": "fast",
+            "supports_vision": serde_json::Value::Null,
+            "supports_function_calling": serde_json::Value::Null
+        });
+        assert_eq!(parse_openai_model_supports_vision(&json), None);
+        assert_eq!(parse_openai_model_supports_tools(&json), None);
     }
 
     /// Cache key composition: `provider|base_url|model` triple keeps

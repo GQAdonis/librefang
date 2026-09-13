@@ -17,7 +17,6 @@ use librefang_types::event::{Event, EventPayload, EventTarget};
 
 use tracing::{debug, warn};
 
-use super::cron_bridge::{cron_deliver_response, cron_fan_out_targets};
 use super::cron_compaction::{
     apply_cron_prune, cron_clamp_keep_recent, cron_compute_keep_count,
     cron_resolve_compaction_mode, try_summarize_trim,
@@ -42,8 +41,11 @@ pub(super) async fn run_cron_scheduler_loop(kernel: Arc<LibreFangKernel>) {
     loop {
         interval.tick().await;
         if kernel.agents.supervisor.is_shutting_down() {
-            // Persist on shutdown
-            let _ = kernel.workflows.cron_scheduler.persist();
+            // This is the scheduler's last chance to flush execution state.
+            // Keep shutdown moving, but never hide the durability failure.
+            if let Err(error) = kernel.workflows.cron_scheduler.persist() {
+                warn!(%error, "failed to persist cron scheduler during shutdown");
+            }
             break;
         }
 
@@ -290,21 +292,23 @@ pub(super) async fn run_cron_scheduler_loop(kernel: Arc<LibreFangKernel>) {
                             {
                                 let cron_sid = SessionId::for_channel(agent_id, "cron");
                                 // #3443 / cron-prune-lock-across-llm-await:
-                                // the per-session mutex is acquired around the
-                                // read-then-write cycle so two cron fires for
-                                // the same agent cannot clobber each other's
-                                // keep-set. **The lock MUST NOT be held across
+                                // the per-agent and per-session mutexes are
+                                // acquired around each read-then-write cycle so
+                                // cron sends and sibling prune fires cannot
+                                // clobber each other's keep-set. **The locks
+                                // MUST NOT be held across
                                 // `try_summarize_trim().await`** — under a
                                 // congested provider the LLM call can stall
                                 // for tens of seconds, and the persistent
                                 // `(agent, "cron")` lock would jam every
                                 // sibling cron fire for the duration. Instead:
                                 //
-                                //   1. Take the lock, snapshot the messages
-                                //      and record `messages_generation`.
-                                //   2. Drop the lock.
+                                //   1. Take both locks (agent then session),
+                                //      snapshot the messages and record
+                                //      `messages_generation`.
+                                //   2. Drop both locks.
                                 //   3. Run `try_summarize_trim` lock-free.
-                                //   4. Re-acquire the lock; if
+                                //   4. Re-acquire both locks; if
                                 //      `messages_generation` is unchanged,
                                 //      apply the trim result; otherwise drop
                                 //      our result (a concurrent fire won the
@@ -363,31 +367,16 @@ pub(super) async fn run_cron_scheduler_loop(kernel: Arc<LibreFangKernel>) {
                                 if let Err(e) = kernel_job.workflows.cron_scheduler.persist() {
                                     tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
                                 }
-                                // Deliver response to configured channel (skip NO_REPLY/silent)
-                                if !result.silent {
-                                    cron_deliver_response(
-                                        &kernel_job,
+                                kernel_job
+                                    .deliver_cron_output(
                                         agent_id,
+                                        &job_name,
                                         &result.response,
+                                        result.silent,
                                         &delivery,
+                                        &delivery_targets,
                                     )
                                     .await;
-                                    // Fan out to multi-destination
-                                    // delivery_targets (best-effort,
-                                    // failure-isolated). Skip the whole
-                                    // call when there are no targets so
-                                    // we never construct a fan-out engine
-                                    // for the common no-webhook job (#5127).
-                                    if !delivery_targets.is_empty() {
-                                        cron_fan_out_targets(
-                                            &kernel_job,
-                                            &job_name,
-                                            &result.response,
-                                            &delivery_targets,
-                                        )
-                                        .await;
-                                    }
-                                }
                             }
                             Ok(Err(e)) => {
                                 let err_msg = format!("{e}");
@@ -477,26 +466,16 @@ pub(super) async fn run_cron_scheduler_loop(kernel: Arc<LibreFangKernel>) {
                                         {
                                             tracing::warn!(job = %job_name, "Cron post-run persist failed: {e}");
                                         }
-                                        cron_deliver_response(
-                                            &kernel_job,
-                                            agent_id,
-                                            &output,
-                                            &delivery,
-                                        )
-                                        .await;
-                                        // Skip the fan-out call when no
-                                        // targets are configured so we
-                                        // don't construct an engine for
-                                        // the common no-webhook job (#5127).
-                                        if !delivery_targets.is_empty() {
-                                            cron_fan_out_targets(
-                                                &kernel_job,
+                                        kernel_job
+                                            .deliver_cron_output(
+                                                agent_id,
                                                 &job_name,
                                                 &output,
+                                                false,
+                                                &delivery,
                                                 &delivery_targets,
                                             )
                                             .await;
-                                        }
                                     }
                                     Ok(Err(e)) => {
                                         let err_msg = format!("{e}");
@@ -577,6 +556,22 @@ enum CronPrunePlan {
     },
 }
 
+/// Acquire the two lock namespaces that serialize cron-session write-back.
+/// The global order is agent first, then session; message sends use the same
+/// order, so prune cannot blind-overwrite a concurrent appended turn or form
+/// an AB-BA cycle.
+async fn acquire_cron_prune_write_locks(
+    agent_lock: Arc<tokio::sync::Mutex<()>>,
+    session_lock: Arc<tokio::sync::Mutex<()>>,
+) -> (
+    tokio::sync::OwnedMutexGuard<()>,
+    tokio::sync::OwnedMutexGuard<()>,
+) {
+    let agent_guard = agent_lock.lock_owned().await;
+    let session_guard = session_lock.lock_owned().await;
+    (agent_guard, session_guard)
+}
+
 /// Cron-session prune / compaction with the lock released across the LLM
 /// `try_summarize_trim` await.
 ///
@@ -606,9 +601,20 @@ async fn cron_prune_session(
     compaction_mode: librefang_types::config::CronCompactionMode,
     keep_recent_cfg: usize,
 ) {
-    // Phase 1 — plan under the lock.
+    let agent_lock = kernel_job
+        .agents
+        .agent_msg_locks
+        .entry(agent_id)
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+
+    // Phase 1 — plan under both write locks. The cheap Prune path performs
+    // its blind storage upsert here, so it must serialize with persistent
+    // cron message sends on the agent lock as well as sibling compaction on
+    // the session lock.
     let plan = {
-        let _g = prune_lock.lock().await;
+        let (_agent_guard, _session_guard) =
+            acquire_cron_prune_write_locks(agent_lock.clone(), prune_lock.clone()).await;
         cron_prune_plan(
             kernel_job,
             agent_id,
@@ -651,11 +657,21 @@ async fn cron_prune_session(
         &snapshot,
         effective_keep_recent,
         {
-            kernel_job
-                .llm
-                .aux_client
-                .load()
-                .driver_for(librefang_types::config::AuxTask::Compression)
+            // `model` above is the agent's, so the driver has to be one that
+            // can serve it: an explicitly configured aux chain, else the
+            // agent's own — never `AuxClient`'s process-wide primary (#8093).
+            // The registry lookup that produced `model` already established the
+            // agent is present; if it has gone since, fall back to the aux
+            // resolution rather than skipping the trim.
+            match kernel_job.agents.registry.get(agent_id) {
+                Some(e) => kernel_job
+                    .side_task_driver(&e.manifest, librefang_types::config::AuxTask::Compression),
+                None => kernel_job
+                    .llm
+                    .aux_client
+                    .load()
+                    .driver_for(librefang_types::config::AuxTask::Compression),
+            }
         },
         &model,
         echo_policy,
@@ -685,14 +701,8 @@ async fn cron_prune_session(
     // pair and there is no AB-BA cycle. The guard is dropped when this function
     // returns, before the fire's own `send_message_full` call re-acquires the
     // agent lock, so there is no self-re-entry on the non-reentrant mutex.
-    let agent_lock = kernel_job
-        .agents
-        .agent_msg_locks
-        .entry(agent_id)
-        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
-        .clone();
-    let _agent_g = agent_lock.lock().await;
-    let _g = prune_lock.lock().await;
+    let (_agent_guard, _session_guard) =
+        acquire_cron_prune_write_locks(agent_lock, prune_lock).await;
     let mut session = match kernel_job.memory.substrate.get_session(cron_sid) {
         Ok(Some(s)) => s,
         Ok(None) | Err(_) => {
@@ -954,6 +964,7 @@ mod tests {
     //! in `crates/librefang-kernel/tests/cron_compaction_test.rs` and the
     //! `librefang-api` integration suite.
 
+    use super::acquire_cron_prune_write_locks;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
     use tokio::sync::Mutex;
@@ -1204,5 +1215,45 @@ mod tests {
              survived (final messages: {without_fix:?}) — the test no longer \
              reproduces finding #22"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cron_prune_write_locks_are_acquired_agent_then_session() {
+        let agent_lock = Arc::new(Mutex::new(()));
+        let session_lock = Arc::new(Mutex::new(()));
+        let session_guard = session_lock.lock().await;
+        let (acquired_tx, acquired_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+
+        let task_agent_lock = agent_lock.clone();
+        let task_session_lock = session_lock.clone();
+        let task = tokio::spawn(async move {
+            let guards = acquire_cron_prune_write_locks(task_agent_lock, task_session_lock).await;
+            acquired_tx.send(()).unwrap();
+            release_rx.await.unwrap();
+            drop(guards);
+        });
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if agent_lock.try_lock().is_err() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("prune helper never acquired the agent lock");
+
+        drop(session_guard);
+        acquired_rx.await.unwrap();
+        assert!(
+            agent_lock.try_lock().is_err(),
+            "agent lock must remain held for the full prune write section"
+        );
+        release_tx.send(()).unwrap();
+        task.await.unwrap();
+        assert!(agent_lock.try_lock().is_ok());
+        assert!(session_lock.try_lock().is_ok());
     }
 }

@@ -29,6 +29,48 @@ use crate::workflow::WorkflowEngine;
 use super::workspace_setup::migrate_legacy_agent_dirs;
 use super::LibreFangKernel;
 
+fn read_accessor_state<'a, T>(
+    lock: &'a std::sync::RwLock<T>,
+    state: &'static str,
+) -> std::sync::RwLockReadGuard<'a, T> {
+    lock.read().unwrap_or_else(|poisoned| {
+        warn!(
+            state,
+            "kernel accessor read lock poisoned; recovering inner state"
+        );
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+fn write_accessor_state<'a, T>(
+    lock: &'a std::sync::RwLock<T>,
+    state: &'static str,
+) -> std::sync::RwLockWriteGuard<'a, T> {
+    lock.write().unwrap_or_else(|poisoned| {
+        warn!(
+            state,
+            "kernel accessor write lock poisoned; recovering inner state"
+        );
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+fn lock_accessor_state<'a, T>(
+    lock: &'a std::sync::Mutex<T>,
+    state: &'static str,
+) -> std::sync::MutexGuard<'a, T> {
+    lock.lock().unwrap_or_else(|poisoned| {
+        warn!(
+            state,
+            "kernel accessor lock poisoned; recovering inner state"
+        );
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
 pub(super) fn should_refresh_openrouter_catalog_after_error(
     manifest: &librefang_types::agent::AgentManifest,
     error: &str,
@@ -65,6 +107,15 @@ impl LibreFangKernel {
     #[inline]
     pub fn home_dir(&self) -> &Path {
         &self.home_dir_boot
+    }
+
+    /// Path of the `config.toml` this daemon loaded (boot-time immutable).
+    ///
+    /// The one answer to "which file is the configuration", for hot-reload, the change watcher, the managed-mode `423` body, and every route that persists into it.
+    /// Do not reconstruct it as `home_dir().join("config.toml")`: that expression disagrees with the loader whenever `LIBREFANG_CONFIG_PATH` is set, whenever the daemon was started with `--config`, and whenever the loaded file sets its own `home_dir` (#6695).
+    #[inline]
+    pub fn config_path(&self) -> &Path {
+        &self.config_path_boot
     }
 
     /// Snapshot the inbox subsystem's status (config + on-disk file counts).
@@ -255,7 +306,7 @@ impl LibreFangKernel {
         &self,
         agent_workspace: Option<&std::path::Path>,
     ) -> Option<tokio::sync::Mutex<Vec<librefang_runtime::mcp::McpConnection>>> {
-        use librefang_runtime::mcp::{McpConnection, McpServerConfig, McpTransport};
+        use librefang_runtime::mcp::{McpServerConfig, McpTransport};
         use librefang_types::config::McpTransportEntry;
 
         let servers = self
@@ -355,7 +406,12 @@ impl LibreFangKernel {
                 roots: server_roots,
             };
 
-            match McpConnection::connect(mcp_config).await {
+            // Through the wiring helper, not a bare `connect` (#7963): these connections
+            // serve the same agent tool calls the daemon-global pool does, so a transport
+            // wedge observed on one has to reach the health monitor too. A bare connect
+            // compiles and dispatches fine while silently reporting nothing, which is
+            // exactly the invisible hole #7963 was.
+            match self.connect_mcp_wired(mcp_config).await {
                 Ok(conn) => connections.push(conn),
                 Err(e) => warn!(
                     server = %server_config.name,
@@ -544,11 +600,10 @@ impl LibreFangKernel {
                             // Hot-migrate the effective default to another live free model.
                             // Explicitly selected agent models remain pinned.
                             let current = {
-                                let guard = kernel
-                                    .llm
-                                    .default_model_override
-                                    .read()
-                                    .unwrap_or_else(|e| e.into_inner());
+                                let guard = read_accessor_state(
+                                    &kernel.llm.default_model_override,
+                                    "default_model_override",
+                                );
                                 guard.clone().unwrap_or_else(|| {
                                     kernel.config.load().default_model.clone()
                                 })
@@ -573,11 +628,10 @@ impl LibreFangKernel {
                                     ..current
                                 };
                                 {
-                                    let mut guard = kernel
-                                        .llm
-                                        .default_model_override
-                                        .write()
-                                        .unwrap_or_else(|e| e.into_inner());
+                                    let mut guard = write_accessor_state(
+                                        &kernel.llm.default_model_override,
+                                        "default_model_override",
+                                    );
                                     *guard = Some(migrated.clone());
                                 }
                                 let failures = kernel.sync_default_model_agents(
@@ -737,9 +791,15 @@ impl LibreFangKernel {
                     }
                 }
 
+                // Delivery reconcile (#6728) runs BEFORE the `ttl_secs` gate on purpose: `claim_ttl_secs = 0` means "do not reclaim tasks a worker is holding", which an operator sets for human-in-the-loop workflows.
+                // It must not also switch off the guarantee that an addressed task eventually reaches its assignee — two rules, two switches.
+                // The reconcile's own switches are `[task_board] pending_grace_secs` and `assignee_wake`.
+                let _ = kernel.reconcile_pending_task_wakes().await;
+
                 if ttl_secs == 0 {
-                    // Sweeper disabled by operator — keep the loop alive so a
-                    // later hot-reload can flip it back on without restart.
+                    // Stuck-task reclaim disabled by operator — keep the loop
+                    // alive so a later hot-reload can flip it back on without
+                    // restart.
                     continue;
                 }
 
@@ -903,13 +963,45 @@ impl LibreFangKernel {
             Ok(h) => h,
             Err(_) => return None,
         };
-        let guard = handle.read().unwrap_or_else(|e| e.into_inner());
+        {
+            let guard = read_accessor_state(&handle, "credential_vault");
+            if guard.is_unlocked() {
+                return guard.get(key).map(|s| s.to_string());
+            }
+        }
+        // The cached handle is locked exactly when `vault.enc` was absent at cache-population time, and `vault_handle` never re-checks.
+        // The file can appear afterwards — `librefang vault set` from another process, or an MCP OAuth flow writing through `KernelOAuthProvider`'s own instance — and a handle left locked would answer "no such key" for the rest of the daemon's lifetime, which reads as a missing credential rather than as a stale cache.
+        // Upgrading to the write guard costs one Argon2id KDF once; every later call takes the read fast path above.
+        let mut guard = write_accessor_state(&handle, "credential_vault");
         if !guard.is_unlocked() {
-            // Vault file did not exist when the cache was populated and no
-            // `set()` has initialised it yet — nothing to read.
-            return None;
+            if !guard.exists() {
+                return None;
+            }
+            if let Err(e) = guard.unlock() {
+                warn!(error = %e, "vault_get: cached handle could not be unlocked after vault.enc appeared");
+                return None;
+            }
         }
         guard.get(key).map(|s| s.to_string())
+    }
+
+    /// Reconcile the cached in-memory vault with `vault.enc` before mutating it.
+    ///
+    /// `CredentialVault::save` re-encrypts the whole file from the instance's own map, so mutating a map that predates an out-of-band write erases that write.
+    /// The daemon has more than one writer: `KernelOAuthProvider` opens a fresh `CredentialVault` per call for the `mcp-oauth:*` entries, and `librefang vault set` runs in a separate process.
+    /// Without this, an operator storing a `GITHUB_TOKEN` over HTTP would silently drop every OAuth client secret and token stored since the kernel first unlocked, dropping the affected MCP servers back to `NeedsAuth`.
+    ///
+    /// A missing file is not an error — the caller decides whether that means "create it" (`vault_set`) or "nothing to remove" (`vault_remove`).
+    /// The re-read costs one Argon2id KDF, which the `save` on the very next line pays again regardless; the hot read path in `vault_get` is untouched.
+    fn reconcile_cached_vault(
+        guard: &mut librefang_extensions::vault::CredentialVault,
+    ) -> Result<(), String> {
+        if !guard.exists() {
+            return Ok(());
+        }
+        guard
+            .reload()
+            .map_err(|e| format!("Vault unlock failed: {e}"))
     }
 
     /// Write a secret to the encrypted vault.
@@ -919,18 +1011,42 @@ impl LibreFangKernel {
     /// instead of once per call. The save-time KDF inside
     /// `CredentialVault::set` still runs on every write — at-rest
     /// security is unchanged. Creates the vault if it does not exist.
+    ///
+    /// Re-reads the file first, so a write never clobbers entries another writer added since this kernel unlocked — see `reconcile_cached_vault`.
+    /// Creating a missing vault is left to `CredentialVault::set`, whose own `!unlocked && !path.exists()` guard is the one that gets the file-appeared-since-boot case right; calling `init()` here instead failed permanently with "Vault already exists. Delete it first to re-initialize." once anything else had created the file.
     pub fn vault_set(&self, key: &str, value: &str) -> Result<(), String> {
         let handle = self.vault_handle()?;
-        let mut guard = handle.write().unwrap_or_else(|e| e.into_inner());
-        if !guard.is_unlocked() {
-            // Vault did not exist at cache-population time; create it now.
-            guard
-                .init()
-                .map_err(|e| format!("Vault init failed: {e}"))?;
-        }
+        let mut guard = write_accessor_state(&handle, "credential_vault");
+        Self::reconcile_cached_vault(&mut guard)?;
         guard
             .set(key.to_string(), zeroize::Zeroizing::new(value.to_string()))
             .map_err(|e| format!("Vault write failed: {e}"))
+    }
+
+    /// Remove a secret from the encrypted vault, returning whether the key
+    /// was present.
+    ///
+    /// Goes through the same cached handle as `vault_get` / `vault_set`
+    /// (#3598), so the deletion is visible to subsequent reads in this
+    /// process without a restart.
+    ///
+    /// A vault that does not exist holds no secrets, so removing from one
+    /// is `Ok(false)` rather than an error — the caller asked for the key
+    /// to be absent and it is.
+    ///
+    /// "Does not exist" is a check against the file, not against `is_unlocked()`.
+    /// The two differ whenever `vault.enc` appeared after the cache was populated, and answering `Ok(false)` there told the caller a credential had been removed while it was still in the file and still resolved after the next restart.
+    pub fn vault_remove(&self, key: &str) -> Result<bool, String> {
+        let handle = self.vault_handle()?;
+        let mut guard = write_accessor_state(&handle, "credential_vault");
+        Self::reconcile_cached_vault(&mut guard)?;
+        if !guard.is_unlocked() {
+            // `reconcile_cached_vault` unlocks whenever the file is there, so this is the genuinely-no-vault case.
+            return Ok(false);
+        }
+        guard
+            .remove(key)
+            .map_err(|e| format!("Vault remove failed: {e}"))
     }
 
     /// Install an MCP catalog template into the configured server set,
@@ -1009,11 +1125,10 @@ impl LibreFangKernel {
     /// - `Err(e)`    — vault read/write error, or vault_set failed (#3633).
     pub fn vault_redeem_recovery_code(&self, code: &str) -> Result<bool, String> {
         // Hold the mutex for the entire read-verify-write sequence.
-        let _guard = self
-            .security
-            .vault_recovery_codes_mutex
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _guard = lock_accessor_state(
+            &self.security.vault_recovery_codes_mutex,
+            "vault_recovery_codes",
+        );
 
         let stored = match self.vault_get("totp_recovery_codes") {
             Some(s) => s,
@@ -1260,6 +1375,22 @@ impl LibreFangKernel {
                     task.abort.abort();
                     total_removed += 1;
                 }
+            }
+        }
+
+        // 2. agent_watchers — completed background tasks no longer need to be retained just so a future kill_agent can abort them.
+        // Registration also performs this cleanup opportunistically, but an agent that starts only one watcher would otherwise retain its finished JoinHandle for the rest of the daemon lifetime.
+        for slot in self.agents.agent_watchers.iter() {
+            match slot.value().lock() {
+                Ok(mut handles) => {
+                    let before = handles.len();
+                    handles.retain(|handle| !handle.is_finished());
+                    total_removed += before - handles.len();
+                }
+                Err(_) => warn!(
+                    agent_id = %slot.key(),
+                    "Agent watcher lock poisoned during GC; leaving handles for a later sweep"
+                ),
             }
         }
 
@@ -1566,6 +1697,56 @@ mod tests {
         }
     }
 
+    #[test]
+    fn poisoned_accessor_state_locks_recover_and_remain_usable() {
+        let rw_state = std::sync::RwLock::new(vec!["loaded"]);
+        let rw_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut state = rw_state.write().unwrap();
+                    state.push("stale");
+                    panic!("poison accessor rwlock");
+                })
+                .join()
+        });
+        assert!(rw_poison.is_err());
+        assert!(rw_state.is_poisoned());
+        assert_eq!(
+            &*read_accessor_state(&rw_state, "test_state"),
+            &["loaded", "stale"]
+        );
+        assert!(!rw_state.is_poisoned());
+
+        let rw_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _state = rw_state.write().unwrap();
+                    panic!("poison accessor rwlock before write recovery");
+                })
+                .join()
+        });
+        assert!(rw_poison.is_err());
+        assert!(rw_state.is_poisoned());
+        write_accessor_state(&rw_state, "test_state").clear();
+        assert!(!rw_state.is_poisoned());
+        assert!(read_accessor_state(&rw_state, "test_state").is_empty());
+
+        let mutex_state = std::sync::Mutex::new(vec!["cached"]);
+        let mutex_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _state = mutex_state.lock().unwrap();
+                    panic!("poison accessor mutex");
+                })
+                .join()
+        });
+        assert!(mutex_poison.is_err());
+        assert!(mutex_state.is_poisoned());
+        lock_accessor_state(&mutex_state, "test_state").clear();
+        assert!(!mutex_state.is_poisoned());
+        assert!(lock_accessor_state(&mutex_state, "test_state").is_empty());
+    }
+
     /// Lazily install a process-wide tracing subscriber that captures every
     /// formatted event into [`TRACE_BUF`]. `try_init` is a no-op if another
     /// test binary in the same process already installed a global default —
@@ -1624,6 +1805,7 @@ mod tests {
             .spawn_agent_inner(
                 AgentManifest {
                     name: "atomic-resolver-test-agent".to_string(),
+                    source_template: None,
                     description: "persistent + cap=4 forces the clamp branch".to_string(),
                     author: "test".to_string(),
                     module: "builtin:chat".to_string(),

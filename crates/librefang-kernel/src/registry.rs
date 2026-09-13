@@ -2,7 +2,7 @@
 
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
-use librefang_types::agent::{AgentEntry, AgentId, AgentMode, AgentState};
+use librefang_types::agent::{AgentEntry, AgentId, AgentMode, AgentState, ResourceQuota};
 use librefang_types::error::{LibreFangError, LibreFangResult};
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -41,6 +41,38 @@ pub struct AgentRegistry {
     /// receivers re-snapshot from the registry on every signal anyway, and
     /// `RecvError::Lagged` is treated as "send a fresh snapshot".
     changed_tx: broadcast::Sender<()>,
+}
+
+/// Warn when a manifest swap changes a concurrency-affecting field.
+///
+/// `session_mode` and `max_concurrent_invocations` are intentionally NOT invalidated in the per-agent semaphore cache — see `agent_concurrency_for` in `kernel/accessors.rs` and the project CLAUDE.md "respawn to re-read" policy.
+/// To make that policy visible to operators, every manifest swap emits a single `warn!` when either field changed, telling them an agent kill + respawn (or daemon restart) is required for the new cap to take effect.
+/// Without the WARN, a hot-reload from `Persistent + cap=1` to `New + cap=5` would silently mint fresh sessions while still throttling them at the old 1-permit semaphore — a half-upgraded state with no operator signal.
+/// See `docs/issues/trigger-dispatch-two-snapshots.md`.
+fn warn_if_concurrency_fields_changed(
+    id: AgentId,
+    old: &librefang_types::agent::AgentManifest,
+    new: &librefang_types::agent::AgentManifest,
+) {
+    let session_mode_changed = old.session_mode != new.session_mode;
+    let cap_changed = old.max_concurrent_invocations != new.max_concurrent_invocations;
+    if !session_mode_changed && !cap_changed {
+        return;
+    }
+    tracing::warn!(
+        agent_id = %id,
+        session_mode_changed,
+        cap_changed,
+        old_session_mode = ?old.session_mode,
+        new_session_mode = ?new.session_mode,
+        old_max_concurrent_invocations = ?old.max_concurrent_invocations,
+        new_max_concurrent_invocations = ?new.max_concurrent_invocations,
+        "Agent manifest changed concurrency-affecting field(s); cached \
+         per-agent semaphore is retained until the agent respawns. \
+         Kill+respawn the agent (or restart the daemon) for the new \
+         session_mode / max_concurrent_invocations to take effect on \
+         trigger dispatch.",
+    );
 }
 
 impl AgentRegistry {
@@ -236,8 +268,11 @@ impl AgentRegistry {
             .remove(&id)
             .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
         for tag in &tags {
-            if let Some(mut ids) = self.tag_index.get_mut(tag) {
-                ids.retain(|&agent_id| agent_id != id);
+            if let Entry::Occupied(mut bucket) = self.tag_index.entry(tag.clone()) {
+                bucket.get_mut().retain(|&agent_id| agent_id != id);
+                if bucket.get().is_empty() {
+                    bucket.remove();
+                }
             }
         }
         self.notify_changed();
@@ -351,53 +386,62 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Replace an agent's manifest wholesale. The caller is responsible for
-    /// preserving runtime-only fields (workspace, tags) and invalidating any
-    /// caches that depend on the manifest. Used by `reload_agent_from_disk`.
+    /// Replace an agent's manifest wholesale, leaving the runtime tag projections (`AgentEntry::tags`, `AgentEntry::is_hand`, `tag_index`) exactly as they were.
     ///
-    /// Concurrency-affecting fields (`session_mode`,
-    /// `max_concurrent_invocations`) are intentionally NOT invalidated in
-    /// the per-agent semaphore cache — see `agent_concurrency_for` in
-    /// `kernel/accessors.rs` and the project CLAUDE.md "respawn to re-read"
-    /// policy. To make that policy visible to operators, this method emits
-    /// a single `warn!` per swap when either of those fields changed,
-    /// telling them an agent kill + respawn (or daemon restart) is
-    /// required for the new cap to take effect. Without the WARN, a
-    /// hot-reload from `Persistent + cap=1` to `New + cap=5` would
-    /// silently mint fresh sessions while still throttling them at the
-    /// old 1-permit semaphore — a half-upgraded state with no operator
-    /// signal. See `docs/issues/trigger-dispatch-two-snapshots.md`.
+    /// The caller is responsible for preserving runtime-only fields (workspace, tags) and invalidating any caches that depend on the manifest.
+    /// Use [`Self::replace_manifest_and_retag`] instead when the incoming `manifest.tags` is meant to take effect.
     pub fn replace_manifest(
         &self,
         id: AgentId,
         manifest: librefang_types::agent::AgentManifest,
     ) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
-            let old_session_mode = entry.manifest.session_mode;
-            let new_session_mode = manifest.session_mode;
-            let old_cap = entry.manifest.max_concurrent_invocations;
-            let new_cap = manifest.max_concurrent_invocations;
-            let session_mode_changed = old_session_mode != new_session_mode;
-            let cap_changed = old_cap != new_cap;
-            if session_mode_changed || cap_changed {
-                tracing::warn!(
-                    agent_id = %id,
-                    session_mode_changed,
-                    cap_changed,
-                    old_session_mode = ?old_session_mode,
-                    new_session_mode = ?new_session_mode,
-                    old_max_concurrent_invocations = ?old_cap,
-                    new_max_concurrent_invocations = ?new_cap,
-                    "Agent manifest changed concurrency-affecting field(s); cached \
-                     per-agent semaphore is retained until the agent respawns. \
-                     Kill+respawn the agent (or restart the daemon) for the new \
-                     session_mode / max_concurrent_invocations to take effect on \
-                     trigger dispatch.",
-                );
-            }
+            warn_if_concurrency_fields_changed(id, &entry.manifest, &manifest);
             entry.manifest = manifest;
             entry.last_active = chrono::Utc::now();
         })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Replace an agent's manifest wholesale **and** re-project `manifest.tags` onto the runtime tag surface: `AgentEntry::tags` and the registry's `tag_index`.
+    ///
+    /// Without this, `manifest.tags` and `AgentEntry::tags` are two copies of the same list that only agree because nothing was ever allowed to change either after spawn — which is why `update_manifest` used to pin the incoming tags back to the stored ones and leave `tags` unreachable through every API route (#7742).
+    ///
+    /// `AgentEntry::is_hand` is deliberately **not** recomputed.
+    /// Hand membership tags are system-owned and the caller (`merge_agent_tags` in `kernel/manifest_helpers.rs`) filters them out of the incoming list, so they cannot be added or dropped here and the flag cannot go stale.
+    /// A recompute would instead turn any future leak in that filter into a silent privilege change.
+    ///
+    /// Index maintenance happens **after** the entry guard is released, in the same order `remove` uses, so the two DashMaps are never held at once.
+    /// Empty buckets are pruned rather than left behind as empty vectors.
+    pub fn replace_manifest_and_retag(
+        &self,
+        id: AgentId,
+        manifest: librefang_types::agent::AgentManifest,
+    ) -> LibreFangResult<()> {
+        let new_tags = manifest.tags.clone();
+        let old_tags = self.with_entry_mut(id, |entry| {
+            warn_if_concurrency_fields_changed(id, &entry.manifest, &manifest);
+            entry.manifest = manifest;
+            entry.last_active = chrono::Utc::now();
+            std::mem::replace(&mut entry.tags, new_tags.clone())
+        })?;
+
+        for tag in old_tags.iter().filter(|t| !new_tags.contains(t)) {
+            if let Entry::Occupied(mut bucket) = self.tag_index.entry(tag.clone()) {
+                bucket.get_mut().retain(|&agent_id| agent_id != id);
+                if bucket.get().is_empty() {
+                    bucket.remove();
+                }
+            }
+        }
+        for tag in new_tags.iter().filter(|t| !old_tags.contains(t)) {
+            let mut bucket = self.tag_index.entry(tag.clone()).or_default();
+            if !bucket.contains(&id) {
+                bucket.push(id);
+            }
+        }
+
         self.notify_changed();
         Ok(())
     }
@@ -462,8 +506,12 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Update an agent's max_tokens (response length limit).
-    pub fn update_max_tokens(&self, id: AgentId, max_tokens: u32) -> LibreFangResult<()> {
+    /// Update an agent's max_tokens (requested response length).
+    ///
+    /// `None` clears the agent's own value, putting the field back to
+    /// "inherit" so the per-model override — or, failing that, the system
+    /// default — supplies it.
+    pub fn update_max_tokens(&self, id: AgentId, max_tokens: Option<u32>) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             entry.manifest.model.max_tokens = max_tokens;
             entry.last_active = chrono::Utc::now();
@@ -472,10 +520,67 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Update an agent's sampling temperature.
-    pub fn update_temperature(&self, id: AgentId, temperature: f32) -> LibreFangResult<()> {
+    /// Update an agent's sampling temperature. `None` = inherit.
+    pub fn update_temperature(&self, id: AgentId, temperature: Option<f32>) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             entry.manifest.model.temperature = temperature;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's top-p / nucleus sampling. `None` = inherit.
+    pub fn update_top_p(&self, id: AgentId, top_p: Option<f32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.top_p = top_p;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's frequency penalty. `None` = inherit.
+    pub fn update_frequency_penalty(&self, id: AgentId, value: Option<f32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.frequency_penalty = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's presence penalty. `None` = inherit.
+    pub fn update_presence_penalty(&self, id: AgentId, value: Option<f32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.presence_penalty = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's context-window override (`agent.toml: [model] context_window`).
+    ///
+    /// A limit, not a preference: it tells the runtime what the endpoint can
+    /// accept. `None` hands resolution back to the registry / probe chain.
+    pub fn update_context_window(&self, id: AgentId, value: Option<u64>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.context_window = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's max-output-tokens override. See [`Self::update_context_window`].
+    pub fn update_model_max_output_tokens(
+        &self,
+        id: AgentId,
+        value: Option<u64>,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.max_output_tokens = value;
             entry.last_active = chrono::Utc::now();
         })?;
         self.notify_changed();
@@ -569,14 +674,18 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Update an agent's declared tools and/or allowlist/blocklist in a
-    /// single registry lock. Fields left as `None` are not modified.
+    /// Update an agent's declared tools, allowlist/blocklist and/or the `tools_disabled` master switch in a single registry lock.
+    /// Fields left as `None` are not modified.
+    ///
+    /// `tools_disabled` used to be forced to `false` on every successful write, which made it the one field of the four that a caller could read back but never set, and turned an unrelated blocklist edit into a silent re-enable of every tool on an agent whose operator had deliberately switched them off (#7742).
+    /// It is now a tri-state like the three lists above it: absent means unchanged, present means exactly what it says.
     pub fn update_tool_config(
         &self,
         id: AgentId,
         capabilities_tools: Option<Vec<String>>,
         allowlist: Option<Vec<String>>,
         blocklist: Option<Vec<String>>,
+        disabled: Option<bool>,
     ) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             if let Some(ct) = capabilities_tools {
@@ -588,7 +697,9 @@ impl AgentRegistry {
             if let Some(bl) = blocklist {
                 entry.manifest.tool_blocklist = bl;
             }
-            entry.manifest.tools_disabled = false;
+            if let Some(d) = disabled {
+                entry.manifest.tools_disabled = d;
+            }
             entry.last_active = chrono::Utc::now();
         })?;
         self.notify_changed();
@@ -615,10 +726,8 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// Rollback helper for [`Self::update_tool_config`]: restores tool fields
-    /// AND the `tools_disabled` flag. `update_tool_config` always sets
-    /// `tools_disabled = false`; a rollback that only restored the lists would
-    /// silently leave the flag flipped on a failed DB persist (#3499).
+    /// Rollback helper for [`Self::update_tool_config`]: restores tool fields AND the `tools_disabled` flag (#3499).
+    /// `update_tool_config` no longer forces the flag to `false`, but it does write it when the caller submits one, so a rollback that only restored the lists would still leave the flag flipped on a failed DB persist.
     pub fn restore_tool_state(
         &self,
         id: AgentId,
@@ -642,6 +751,33 @@ impl AgentRegistry {
     pub fn update_system_prompt(&self, id: AgentId, new_prompt: String) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             entry.manifest.model.system_prompt = new_prompt;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Re-materialize a hand agent's rendered system prompt together with its `hand_allowed_env` metadata, in a single entry mutation.
+    ///
+    /// Both derive from the same hand instance config, so writing them apart would leave a window where the prompt advertises a setting whose env var the subprocess sandbox still refuses to pass through.
+    ///
+    /// An empty `allowed_env` **removes** the metadata key rather than storing an empty list: a setting change that drops the last `provider_env` must narrow the passthrough, not leave the previous list in place.
+    pub fn update_hand_rendered_prompt(
+        &self,
+        id: AgentId,
+        new_prompt: String,
+        allowed_env: Vec<String>,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.system_prompt = new_prompt;
+            if allowed_env.is_empty() {
+                entry.manifest.metadata.remove("hand_allowed_env");
+            } else {
+                entry.manifest.metadata.insert(
+                    "hand_allowed_env".to_string(),
+                    serde_json::to_value(&allowed_env).unwrap_or_default(),
+                );
+            }
             entry.last_active = chrono::Utc::now();
         })?;
         self.notify_changed();
@@ -749,6 +885,20 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Replace an agent's complete resource quota.
+    ///
+    /// Used to roll back a live budget mutation when durable persistence
+    /// fails. Replaying individual optional fields cannot restore
+    /// `max_llm_tokens_per_hour = None` after it was set to `Some(_)`.
+    pub fn replace_resources(&self, id: AgentId, resources: ResourceQuota) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.resources = resources;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
     /// Mark an agent's onboarding as complete.
     pub fn mark_onboarding_complete(&self, id: AgentId) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
@@ -832,6 +982,7 @@ mod tests {
             name: name.to_string(),
             manifest: AgentManifest {
                 name: name.to_string(),
+                source_template: None,
                 description: "test".to_string(),
                 author: "test".to_string(),
                 module: "test".to_string(),
@@ -889,6 +1040,27 @@ mod tests {
     }
 
     #[test]
+    fn remove_prunes_empty_tag_buckets() {
+        let registry = AgentRegistry::new();
+        let mut first = test_entry("first-tagged");
+        first.tags = vec!["shared".to_string(), "first-only".to_string()];
+        let first_id = first.id;
+        let mut second = test_entry("second-tagged");
+        second.tags = vec!["shared".to_string()];
+        let second_id = second.id;
+        registry.register(first).unwrap();
+        registry.register(second).unwrap();
+
+        registry.remove(first_id).unwrap();
+
+        assert!(!registry.tag_index.contains_key("first-only"));
+        assert_eq!(
+            registry.tag_index.get("shared").unwrap().as_slice(),
+            &[second_id]
+        );
+    }
+
+    #[test]
     fn test_update_skills_reenables_disabled_skills() {
         let registry = AgentRegistry::new();
         let mut entry = test_entry("skills-disabled");
@@ -909,7 +1081,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_tool_config_reenables_disabled_tools() {
+    fn update_tool_config_leaves_disabled_flag_alone_when_absent() {
         let registry = AgentRegistry::new();
         let mut entry = test_entry("tools-disabled");
         entry.manifest.tools_disabled = true;
@@ -917,7 +1089,7 @@ mod tests {
         registry.register(entry).unwrap();
 
         registry
-            .update_tool_config(id, None, Some(vec!["file_read".to_string()]), None)
+            .update_tool_config(id, None, Some(vec!["file_read".to_string()]), None, None)
             .expect("update should succeed");
 
         let updated = registry.get(id).expect("agent should exist");
@@ -926,9 +1098,95 @@ mod tests {
             vec!["file_read".to_string()]
         );
         assert!(
-            !updated.manifest.tools_disabled,
-            "updating tool filters should re-enable tool resolution"
+            updated.manifest.tools_disabled,
+            "a filter edit that says nothing about tools_disabled must not re-enable every tool (#7742)"
         );
+    }
+
+    #[test]
+    fn update_tool_config_writes_disabled_flag_in_both_directions() {
+        let registry = AgentRegistry::new();
+        let entry = test_entry("tools-switch");
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        registry
+            .update_tool_config(id, None, None, None, Some(true))
+            .expect("disable should succeed");
+        assert!(
+            registry.get(id).expect("agent").manifest.tools_disabled,
+            "tools_disabled = true must be storable"
+        );
+
+        registry
+            .update_tool_config(id, None, None, None, Some(false))
+            .expect("re-enable should succeed");
+        assert!(
+            !registry.get(id).expect("agent").manifest.tools_disabled,
+            "tools_disabled = false must be storable"
+        );
+    }
+
+    #[test]
+    fn replace_manifest_and_retag_reprojects_entry_tags_and_index() {
+        let registry = AgentRegistry::new();
+        let mut entry = test_entry("retagged");
+        entry.tags = vec!["old".to_string(), "kept".to_string()];
+        entry.manifest.tags = entry.tags.clone();
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        let mut manifest = registry.get(id).expect("agent").manifest.clone();
+        manifest.tags = vec!["kept".to_string(), "fresh".to_string()];
+        registry
+            .replace_manifest_and_retag(id, manifest)
+            .expect("retag should succeed");
+
+        let updated = registry.get(id).expect("agent");
+        assert_eq!(updated.manifest.tags, vec!["kept", "fresh"]);
+        assert_eq!(
+            updated.tags,
+            vec!["kept", "fresh"],
+            "AgentEntry::tags is what the hand / autonomy / memory-scoping checks read, so it must track the manifest"
+        );
+        assert!(
+            !registry.tag_index.contains_key("old"),
+            "a dropped tag must not leave a stale index bucket behind"
+        );
+        assert_eq!(
+            registry.tag_index.get("fresh").unwrap().as_slice(),
+            &[id],
+            "an added tag must be indexed"
+        );
+        assert_eq!(
+            registry.tag_index.get("kept").unwrap().as_slice(),
+            &[id],
+            "an unchanged tag must be indexed exactly once, not duplicated"
+        );
+    }
+
+    #[test]
+    fn replace_manifest_leaves_runtime_tags_untouched() {
+        let registry = AgentRegistry::new();
+        let mut entry = test_entry("pinned-tags");
+        entry.tags = vec!["pinned".to_string()];
+        entry.manifest.tags = entry.tags.clone();
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        let mut manifest = registry.get(id).expect("agent").manifest.clone();
+        manifest.tags = vec!["ignored".to_string()];
+        registry
+            .replace_manifest(id, manifest)
+            .expect("replace should succeed");
+
+        let updated = registry.get(id).expect("agent");
+        assert_eq!(
+            updated.tags,
+            vec!["pinned"],
+            "replace_manifest must not touch the runtime tag projection"
+        );
+        assert!(!registry.tag_index.contains_key("ignored"));
     }
 
     #[test]
@@ -1037,19 +1295,23 @@ mod tests {
         let id = entry.id;
         registry.register(entry).unwrap();
 
-        // Default temperature is 0.7
+        // A fresh agent inherits rather than pinning a number.
         let before = registry.get(id).unwrap();
         let old_active = before.last_active;
-        assert!((before.manifest.model.temperature - 0.7).abs() < f32::EPSILON);
+        assert_eq!(before.manifest.model.temperature, None);
 
         // Wait a tiny bit so last_active changes
         std::thread::sleep(std::time::Duration::from_millis(1));
 
-        registry.update_temperature(id, 1.5).unwrap();
+        registry.update_temperature(id, Some(1.5)).unwrap();
 
         let after = registry.get(id).unwrap();
-        assert!((after.manifest.model.temperature - 1.5).abs() < f32::EPSILON);
+        assert_eq!(after.manifest.model.temperature, Some(1.5));
         assert!(after.last_active > old_active);
+
+        // …and can be handed back to inherit.
+        registry.update_temperature(id, None).unwrap();
+        assert_eq!(registry.get(id).unwrap().manifest.model.temperature, None);
     }
 
     #[test]

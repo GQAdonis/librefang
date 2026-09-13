@@ -5,10 +5,34 @@ import {
   deleteProviderKey,
   enableProvider,
   setProviderUrl,
+  setProviderDiscovery,
   setDefaultProvider,
   createRegistryContent,
 } from "../http/client";
 import { modelKeys, providerKeys, runtimeKeys } from "../queries/keys";
+
+export class ProviderProbeError extends Error {
+  constructor(public readonly status: string, message?: string) {
+    super(message || "test_failed");
+    this.name = "ProviderProbeError";
+  }
+}
+
+export type EveryApiConnectPhase = "create" | "key_after_create";
+
+export class EveryApiConnectError extends Error {
+  public readonly cause: unknown;
+
+  constructor(public readonly phase: EveryApiConnectPhase, cause: unknown) {
+    const detail = cause instanceof Error && cause.message ? `: ${cause.message}` : "";
+    const summary = phase === "create"
+      ? "EveryAPI provider creation failed"
+      : "EveryAPI provider was created, but its relay key could not be saved";
+    super(`${summary}${detail}`);
+    this.name = "EveryApiConnectError";
+    this.cause = cause;
+  }
+}
 
 // Probes the provider and persists `latency_ms` + `last_tested` on the
 // kernel side, so callers must refetch the provider list to see the new
@@ -86,14 +110,32 @@ export function useSetProviderUrl() {
 }
 
 /**
- * POST /registry/content/{contentType} — generic registry content creation.
+ * PUT /providers/{id}/discovery — opt a provider in or out of live model
+ * discovery (#6702).
  *
- * Today the only call site is the "Add provider" wizard on ProvidersPage,
- * which writes a `provider` content entry. We invalidate `providerKeys.all`
- * (list refresh) and `modelKeys.lists()` (a new provider may surface new
- * models on the next list fetch) for that case. Other content types are
- * accepted but currently invalidate the same scoped slices because no other
- * caller exists yet — extend here when a non-provider call site lands.
+ * Invalidates the model lists as well as the provider slice: turning discovery
+ * on makes the next probe merge the endpoint's `/v1/models` listing into the
+ * catalog, and turning it off stops refreshing it — either way the Models page
+ * is showing a stale set until it refetches.
+ */
+export function useSetProviderDiscovery() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, discoverModels }: { id: string; discoverModels: boolean }) =>
+      setProviderDiscovery(id, discoverModels),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: providerKeys.all });
+      qc.invalidateQueries({ queryKey: modelKeys.lists() });
+    },
+  });
+}
+
+/**
+ * POST /registry/content/provider — provider registry creation.
+ *
+ * This hook is intentionally provider-specific even though the transport API
+ * accepts arbitrary registry content. A future content type must define its
+ * own cache contract instead of silently inheriting provider invalidation.
  */
 export function useCreateRegistryContent() {
   const qc = useQueryClient();
@@ -102,14 +144,12 @@ export function useCreateRegistryContent() {
       contentType,
       values,
     }: {
-      contentType: string;
+      contentType: "provider";
       values: Record<string, unknown>;
     }) => createRegistryContent(contentType, values),
-    onSuccess: (_data, variables) => {
-      if (variables.contentType === "provider") {
-        qc.invalidateQueries({ queryKey: providerKeys.all });
-        qc.invalidateQueries({ queryKey: modelKeys.lists() });
-      }
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: providerKeys.all });
+      qc.invalidateQueries({ queryKey: modelKeys.lists() });
     },
   });
 }
@@ -172,15 +212,23 @@ export function useConnectEveryApi() {
       const trimmedKey = relayKey.trim();
       if (!trimmedKey) throw new Error("empty_relay_key");
       const trimmedBase = (baseUrl ?? "").trim();
-      await createRegistryContent("provider", {
-        id: EVERYAPI_PROVIDER.id,
-        display_name: EVERYAPI_PROVIDER.displayName,
-        api_key_env: EVERYAPI_PROVIDER.apiKeyEnv,
-        base_url: trimmedBase || EVERYAPI_PROVIDER.defaultBaseUrl,
-        key_required: true,
-        models: [],
-      });
-      await setProviderKey(EVERYAPI_PROVIDER.id, trimmedKey);
+      try {
+        await createRegistryContent("provider", {
+          id: EVERYAPI_PROVIDER.id,
+          display_name: EVERYAPI_PROVIDER.displayName,
+          api_key_env: EVERYAPI_PROVIDER.apiKeyEnv,
+          base_url: trimmedBase || EVERYAPI_PROVIDER.defaultBaseUrl,
+          key_required: true,
+          models: [],
+        });
+      } catch (error) {
+        throw new EveryApiConnectError("create", error);
+      }
+      try {
+        await setProviderKey(EVERYAPI_PROVIDER.id, trimmedKey);
+      } catch (error) {
+        throw new EveryApiConnectError("key_after_create", error);
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: providerKeys.all });
@@ -191,28 +239,36 @@ export function useConnectEveryApi() {
 
 const TEST_SUCCESS_STATUSES = new Set(["ok", "success"]);
 
+/**
+ * Persist a typed key (when there is one) and then probe the provider.
+ *
+ * The save is gated on the key being non-empty, NOT on the provider declaring
+ * `key_required` (#6703). A `key_required: false` provider — every built-in
+ * local one — may still sit behind an authenticating server, and the runtime
+ * forwards whatever key is stored as `Authorization: Bearer`; dropping the key
+ * here because the provider "doesn't need one" silently discarded what the
+ * user typed and left the probe 401ing.
+ */
 export function useValidateProviderKey() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       providerId,
       apiKey,
-      requiresKey,
     }: {
       providerId: string;
       apiKey: string;
-      requiresKey: boolean;
     }) => {
       if (!providerId) throw new Error("no_provider");
-      if (requiresKey && apiKey.trim()) {
+      if (apiKey.trim()) {
         await setProviderKey(providerId, apiKey.trim());
       }
       const test = await testProvider(providerId);
       if (!TEST_SUCCESS_STATUSES.has(test.status ?? "")) {
-        throw new Error(test.message || "test_failed");
+        throw new ProviderProbeError(test.status ?? "unknown", test.message);
       }
     },
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: providerKeys.all });
       qc.invalidateQueries({ queryKey: modelKeys.lists() });
     },

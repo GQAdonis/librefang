@@ -54,6 +54,7 @@ use crate::kernel_handle::KernelHandle;
 use crate::pairing::PairingManager;
 use crate::registry::AgentRegistry;
 use crate::scheduler::AgentScheduler;
+use crate::session_lifecycle::SessionLifecycleBus;
 use crate::session_stream_hub::SessionStreamHub;
 use crate::supervisor::Supervisor;
 use crate::trajectory::TrajectoryBundle;
@@ -95,21 +96,76 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     fn event_bus_ref(&self) -> &EventBus;
     fn hands(&self) -> &librefang_hands::registry::HandRegistry;
     fn home_dir(&self) -> &Path;
+    /// Path of the `config.toml` this daemon loaded — see [`LibreFangKernel::config_path`].
+    fn config_path(&self) -> &Path;
+    /// What the deployment's provisioning tree owns right now, with per-resource drift (#6695).
+    fn provisioning_status(&self) -> crate::provisioning::ProvisioningStatus;
+    /// Provenance for one provisioned resource, or `None` when it is runtime-owned.
+    ///
+    /// The lookup every resource write guard performs, so it reads an in-memory snapshot and never touches the filesystem.
+    fn provisioned_resource(
+        &self,
+        kind: crate::provisioning::ResourceKind,
+        name: &str,
+    ) -> Option<crate::provisioning::ResourceProvenance>;
     fn media(&self) -> &librefang_runtime::media_understanding::MediaEngine;
     fn media_drivers(&self) -> &librefang_runtime::media::MediaDriverCache;
     fn memory_substrate(&self) -> &Arc<MemorySubstrate>;
     fn metering_ref(&self) -> &Arc<MeteringEngine>;
     fn pairing_ref(&self) -> &PairingManager;
     fn proactive_memory_store(&self) -> Option<&Arc<librefang_memory::ProactiveMemoryStore>>;
+    /// What boot actually wired memory extraction to (#7828 follow-up).
+    ///
+    /// Reporting surfaces read this instead of re-deriving "which model
+    /// extracts memories" from `config_ref()`. A re-derivation names the
+    /// configured model even when no LLM is running at all — the store was
+    /// never built, a sidecar took over, or the driver failed to build and
+    /// extraction dropped to substring matching — which is precisely the class
+    /// of silent divergence the feature exists to surface.
+    ///
+    /// `None` only if boot never reached the proactive-memory step.
+    fn extraction_model_resolution(
+        &self,
+    ) -> Option<&crate::kernel::subsystems::memory::MemoryExtractionResolution>;
     fn processes(&self) -> &Arc<librefang_runtime::process_manager::ProcessManager>;
     fn process_registry(&self) -> &Arc<librefang_runtime::process_registry::ProcessRegistry>;
     fn scheduler_ref(&self) -> &AgentScheduler;
+    fn session_lifecycle_bus(&self) -> Arc<SessionLifecycleBus>;
     fn session_stream_hub(&self) -> Arc<SessionStreamHub>;
     fn supervisor_ref(&self) -> &Supervisor;
     fn templates(&self) -> &crate::workflow::WorkflowTemplateRegistry;
     fn tts(&self) -> &librefang_runtime::tts::TtsEngine;
     fn web_tools(&self) -> &librefang_runtime::web_search::WebToolsContext;
     fn workflow_engine(&self) -> &WorkflowEngine;
+
+    // ====================================================================
+    // Workflow step agent resolution (#7712)
+    // ====================================================================
+
+    /// Resolve a workflow step's agent reference for a real run, returning
+    /// `(agent id, agent name, inherit_parent_context)`.
+    ///
+    /// Every workflow driver in the API layer routes through this rather than
+    /// re-implementing the `match` over [`StepAgent`]: the variants are a
+    /// kernel-side policy (in particular `ByType`'s find-or-spawn, which the
+    /// API layer has no way to perform), and a driver carrying its own copy
+    /// silently reports "agent not found" for any variant it has not been
+    /// taught about.
+    fn resolve_step_agent(
+        &self,
+        agent_ref: &crate::workflow::StepAgent,
+    ) -> Option<(AgentId, String, bool)>;
+
+    /// Resolve a workflow step's agent reference **without** side effects,
+    /// for dry runs and previews.
+    ///
+    /// Identical to [`Self::resolve_step_agent`] except that a `type`
+    /// reference with no registered instance is previewed from its template
+    /// instead of spawned — a dry run is documented as side-effect free.
+    fn preview_step_agent(
+        &self,
+        agent_ref: &crate::workflow::StepAgent,
+    ) -> Option<(AgentId, String, bool)>;
 
     // ====================================================================
     // Autonomous goal runner (#5744)
@@ -123,7 +179,7 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         goal_id: librefang_types::goal::GoalId,
         agent_id: AgentId,
         max_iterations: Option<u32>,
-    );
+    ) -> bool;
     /// Stop an active goal run. Returns whether a run was stopped.
     fn stop_goal_run(&self, goal_id: librefang_types::goal::GoalId) -> bool;
     /// Snapshot the observable state of a goal's run, if one is active.
@@ -195,6 +251,7 @@ pub trait KernelApi: KernelHandle + Send + Sync {
 
     fn vault_get(&self, key: &str) -> Option<String>;
     fn vault_set(&self, key: &str, value: &str) -> Result<(), String>;
+    fn vault_remove(&self, key: &str) -> Result<bool, String>;
     fn vault_redeem_recovery_code(&self, code: &str) -> Result<bool, String>;
 
     // ====================================================================
@@ -340,17 +397,28 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         agent_id: AgentId,
         schedule: librefang_types::agent::ScheduleMode,
     ) -> KernelResult<()>;
+    /// Update tool filters.
+    /// Every argument is a tri-state: `None` leaves the stored value alone, `Some(_)` writes it.
+    /// `disabled` is the `tools_disabled` master switch (#7742).
     fn set_agent_tool_filters(
         &self,
         agent_id: AgentId,
         capabilities_tools: Option<Vec<String>>,
         allowlist: Option<Vec<String>>,
         blocklist: Option<Vec<String>>,
+        disabled: Option<bool>,
     ) -> KernelResult<()>;
     fn list_running_sessions(&self, agent_id: AgentId) -> Vec<RunningSessionSnapshot>;
     fn running_session_ids(&self) -> std::collections::HashSet<SessionId>;
     fn verify_signed_manifest(&self, signed_json: &str) -> KernelResult<String>;
     fn available_tools(&self, agent_id: AgentId) -> Arc<Vec<ToolDefinition>>;
+    /// Skills and MCP servers the agent declares but cannot use right now (#7713).
+    ///
+    /// Async because the MCP half is resolved against the live connection pool, not the configured server list — a server that is configured and unreachable must read as pending.
+    async fn pending_skill_and_mcp_declarations(
+        &self,
+        agent_id: AgentId,
+    ) -> crate::kernel::PendingSkillMcpDeclarations;
 
     // ====================================================================
     // Messaging
@@ -404,6 +472,13 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         config: std::collections::HashMap<String, serde_json::Value>,
     ) -> KernelResult<librefang_hands::HandInstance>;
     fn deactivate_hand(&self, instance_id: uuid::Uuid) -> KernelResult<()>;
+    /// Save a hand instance's `[[settings]]` values and re-render them into the live agents' system prompts.
+    /// Prefer this over `hands().update_config(..)` plus `persist_hand_state()`: the bare registry write persists the values but leaves every running agent on the prompt it was activated with (#6636).
+    fn update_hand_config(
+        &self,
+        instance_id: uuid::Uuid,
+        config: std::collections::HashMap<String, serde_json::Value>,
+    ) -> KernelResult<librefang_hands::HandInstance>;
     fn pause_hand(&self, instance_id: uuid::Uuid) -> KernelResult<()>;
     fn resume_hand(&self, instance_id: uuid::Uuid) -> KernelResult<()>;
     fn reload_hands(&self) -> (usize, usize);
@@ -613,7 +688,7 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         message: &str,
         kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
         sender_context: Option<librefang_channels::types::SenderContext>,
-        thinking_override: Option<bool>,
+        thinking_override: librefang_types::config::ThinkingOverride,
         session_id_override: Option<SessionId>,
         incognito: bool,
         owner: Option<librefang_types::agent::UserId>,
@@ -643,6 +718,7 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         message: &str,
         kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
         sender_context: Option<librefang_channels::types::SenderContext>,
+        thinking_override: librefang_types::config::ThinkingOverride,
         session_id_override: Option<SessionId>,
         incognito: bool,
         owner: Option<librefang_types::agent::UserId>,
@@ -687,6 +763,15 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     fn channel_adapters_ref(
         &self,
     ) -> &dashmap::DashMap<String, Arc<dyn librefang_channels::types::ChannelAdapter>>;
+    async fn deliver_cron_output(
+        self: Arc<Self>,
+        agent_id: AgentId,
+        job_name: &str,
+        output: &str,
+        silent: bool,
+        delivery: &librefang_types::scheduler::CronDelivery,
+        delivery_targets: &[librefang_types::scheduler::CronDeliveryTarget],
+    );
     fn trigger_engine(&self) -> &crate::triggers::TriggerEngine;
     fn broadcast_ref(&self) -> &librefang_types::config::BroadcastConfig;
     fn auto_reply(&self) -> &crate::auto_reply::AutoReplyEngine;
@@ -697,29 +782,23 @@ pub trait KernelApi: KernelHandle + Send + Sync {
         message: &str,
         blocks: Vec<librefang_types::message::ContentBlock>,
     ) -> KernelResult<librefang_runtime::agent_loop::AgentLoopResult>;
+    /// `thinking_override` carries the conversation's `/think` preference (`None` = agent/global default). Channel turns resolve it per conversation, so it has to ride the send call rather than be read off the agent (#7140).
     async fn send_message_with_sender_context(
         &self,
         agent_id: AgentId,
         message: &str,
         sender: librefang_channels::types::SenderContext,
+        thinking_override: Option<bool>,
     ) -> KernelResult<librefang_runtime::agent_loop::AgentLoopResult>;
+    /// Multimodal counterpart of [`KernelApi::send_message_with_sender_context`]; `thinking_override` has the same per-conversation meaning.
     async fn send_message_with_blocks_and_sender(
         &self,
         agent_id: AgentId,
         message: &str,
         blocks: Vec<librefang_types::message::ContentBlock>,
         sender: librefang_channels::types::SenderContext,
+        thinking_override: Option<bool>,
     ) -> KernelResult<librefang_runtime::agent_loop::AgentLoopResult>;
-    async fn send_message_streaming_with_sender_context_and_routing(
-        self: Arc<Self>,
-        agent_id: AgentId,
-        message: &str,
-        kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
-        sender: librefang_channels::types::SenderContext,
-    ) -> KernelResult<(
-        tokio::sync::mpsc::Receiver<librefang_runtime::llm_driver::StreamEvent>,
-        tokio::task::JoinHandle<KernelResult<librefang_runtime::agent_loop::AgentLoopResult>>,
-    )>;
 
     // ====================================================================
     // Test-only / boot-only kernel ops surfaced for integration tests
@@ -826,6 +905,19 @@ impl KernelApi for LibreFangKernel {
     fn home_dir(&self) -> &Path {
         Self::home_dir(self)
     }
+    fn config_path(&self) -> &Path {
+        Self::config_path(self)
+    }
+    fn provisioning_status(&self) -> crate::provisioning::ProvisioningStatus {
+        Self::provisioning_status(self)
+    }
+    fn provisioned_resource(
+        &self,
+        kind: crate::provisioning::ResourceKind,
+        name: &str,
+    ) -> Option<crate::provisioning::ResourceProvenance> {
+        Self::provisioned_resource(self, kind, name)
+    }
     fn media(&self) -> &librefang_runtime::media_understanding::MediaEngine {
         <Self as crate::MediaSubsystemApi>::media_engine(self)
     }
@@ -844,6 +936,11 @@ impl KernelApi for LibreFangKernel {
     fn proactive_memory_store(&self) -> Option<&Arc<librefang_memory::ProactiveMemoryStore>> {
         <Self as crate::MemorySubsystemApi>::proactive_store(self)
     }
+    fn extraction_model_resolution(
+        &self,
+    ) -> Option<&crate::kernel::subsystems::memory::MemoryExtractionResolution> {
+        <Self as crate::MemorySubsystemApi>::extraction_resolution(self)
+    }
     fn processes(&self) -> &Arc<librefang_runtime::process_manager::ProcessManager> {
         <Self as crate::ProcessSubsystemApi>::process_manager_ref(self)
     }
@@ -852,6 +949,9 @@ impl KernelApi for LibreFangKernel {
     }
     fn scheduler_ref(&self) -> &AgentScheduler {
         <Self as crate::AgentSubsystemApi>::scheduler_ref(self)
+    }
+    fn session_lifecycle_bus(&self) -> Arc<SessionLifecycleBus> {
+        Self::session_lifecycle_bus(self)
     }
     fn session_stream_hub(&self) -> Arc<SessionStreamHub> {
         Self::session_stream_hub(self)
@@ -871,14 +971,26 @@ impl KernelApi for LibreFangKernel {
     fn workflow_engine(&self) -> &WorkflowEngine {
         <Self as crate::WorkflowSubsystemApi>::engine_ref(self)
     }
+    fn resolve_step_agent(
+        &self,
+        agent_ref: &crate::workflow::StepAgent,
+    ) -> Option<(AgentId, String, bool)> {
+        LibreFangKernel::resolve_step_agent(self, agent_ref)
+    }
+    fn preview_step_agent(
+        &self,
+        agent_ref: &crate::workflow::StepAgent,
+    ) -> Option<(AgentId, String, bool)> {
+        LibreFangKernel::preview_step_agent(self, agent_ref)
+    }
 
     fn start_goal_run(
         &self,
         goal_id: librefang_types::goal::GoalId,
         agent_id: AgentId,
         max_iterations: Option<u32>,
-    ) {
-        self.goal_run_start(goal_id, agent_id, max_iterations);
+    ) -> bool {
+        self.goal_run_start(goal_id, agent_id, max_iterations)
     }
     fn stop_goal_run(&self, goal_id: librefang_types::goal::GoalId) -> bool {
         self.goal_run_stop(goal_id)
@@ -981,6 +1093,9 @@ impl KernelApi for LibreFangKernel {
     }
     fn vault_set(&self, key: &str, value: &str) -> Result<(), String> {
         Self::vault_set(self, key, value)
+    }
+    fn vault_remove(&self, key: &str) -> Result<bool, String> {
+        Self::vault_remove(self, key)
     }
     fn vault_redeem_recovery_code(&self, code: &str) -> Result<bool, String> {
         Self::vault_redeem_recovery_code(self, code)
@@ -1149,8 +1264,16 @@ impl KernelApi for LibreFangKernel {
         capabilities_tools: Option<Vec<String>>,
         allowlist: Option<Vec<String>>,
         blocklist: Option<Vec<String>>,
+        disabled: Option<bool>,
     ) -> KernelResult<()> {
-        Self::set_agent_tool_filters(self, agent_id, capabilities_tools, allowlist, blocklist)
+        Self::set_agent_tool_filters(
+            self,
+            agent_id,
+            capabilities_tools,
+            allowlist,
+            blocklist,
+            disabled,
+        )
     }
     fn list_running_sessions(&self, agent_id: AgentId) -> Vec<RunningSessionSnapshot> {
         Self::list_running_sessions(self, agent_id)
@@ -1163,6 +1286,13 @@ impl KernelApi for LibreFangKernel {
     }
     fn available_tools(&self, agent_id: AgentId) -> Arc<Vec<ToolDefinition>> {
         Self::available_tools(self, agent_id)
+    }
+
+    async fn pending_skill_and_mcp_declarations(
+        &self,
+        agent_id: AgentId,
+    ) -> crate::kernel::PendingSkillMcpDeclarations {
+        Self::pending_skill_and_mcp_declarations(self, agent_id).await
     }
 
     async fn send_message(
@@ -1202,6 +1332,13 @@ impl KernelApi for LibreFangKernel {
     }
     fn deactivate_hand(&self, instance_id: uuid::Uuid) -> KernelResult<()> {
         Self::deactivate_hand(self, instance_id)
+    }
+    fn update_hand_config(
+        &self,
+        instance_id: uuid::Uuid,
+        config: std::collections::HashMap<String, serde_json::Value>,
+    ) -> KernelResult<librefang_hands::HandInstance> {
+        Self::update_hand_config(self, instance_id, config)
     }
     fn pause_hand(&self, instance_id: uuid::Uuid) -> KernelResult<()> {
         Self::pause_hand(self, instance_id)
@@ -1480,7 +1617,7 @@ impl KernelApi for LibreFangKernel {
         message: &str,
         kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
         sender_context: Option<librefang_channels::types::SenderContext>,
-        thinking_override: Option<bool>,
+        thinking_override: librefang_types::config::ThinkingOverride,
         session_id_override: Option<SessionId>,
         incognito: bool,
         owner: Option<librefang_types::agent::UserId>,
@@ -1522,6 +1659,7 @@ impl KernelApi for LibreFangKernel {
         message: &str,
         kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
         sender_context: Option<librefang_channels::types::SenderContext>,
+        thinking_override: librefang_types::config::ThinkingOverride,
         session_id_override: Option<SessionId>,
         incognito: bool,
         owner: Option<librefang_types::agent::UserId>,
@@ -1535,6 +1673,7 @@ impl KernelApi for LibreFangKernel {
             message,
             kernel_handle,
             sender_context.as_ref(),
+            thinking_override,
             session_id_override,
             incognito,
             owner,
@@ -1591,6 +1730,26 @@ impl KernelApi for LibreFangKernel {
     ) -> &dashmap::DashMap<String, Arc<dyn librefang_channels::types::ChannelAdapter>> {
         <Self as crate::MeshSubsystemApi>::channel_adapters_ref(self)
     }
+    async fn deliver_cron_output(
+        self: Arc<Self>,
+        agent_id: AgentId,
+        job_name: &str,
+        output: &str,
+        silent: bool,
+        delivery: &librefang_types::scheduler::CronDelivery,
+        delivery_targets: &[librefang_types::scheduler::CronDeliveryTarget],
+    ) {
+        LibreFangKernel::deliver_cron_output(
+            &self,
+            agent_id,
+            job_name,
+            output,
+            silent,
+            delivery,
+            delivery_targets,
+        )
+        .await;
+    }
     fn trigger_engine(&self) -> &crate::triggers::TriggerEngine {
         <Self as crate::WorkflowSubsystemApi>::triggers_ref(self)
     }
@@ -1616,8 +1775,16 @@ impl KernelApi for LibreFangKernel {
         agent_id: AgentId,
         message: &str,
         sender: librefang_channels::types::SenderContext,
+        thinking_override: Option<bool>,
     ) -> KernelResult<librefang_runtime::agent_loop::AgentLoopResult> {
-        Self::send_message_with_sender_context(self, agent_id, message, &sender).await
+        Self::send_message_with_sender_context_and_thinking(
+            self,
+            agent_id,
+            message,
+            &sender,
+            thinking_override,
+        )
+        .await
     }
     async fn send_message_with_blocks_and_sender(
         &self,
@@ -1625,25 +1792,15 @@ impl KernelApi for LibreFangKernel {
         message: &str,
         blocks: Vec<librefang_types::message::ContentBlock>,
         sender: librefang_channels::types::SenderContext,
+        thinking_override: Option<bool>,
     ) -> KernelResult<librefang_runtime::agent_loop::AgentLoopResult> {
-        Self::send_message_with_blocks_and_sender(self, agent_id, message, blocks, &sender).await
-    }
-    async fn send_message_streaming_with_sender_context_and_routing(
-        self: Arc<Self>,
-        agent_id: AgentId,
-        message: &str,
-        kernel_handle: Option<Arc<dyn crate::kernel_handle::KernelHandle>>,
-        sender: librefang_channels::types::SenderContext,
-    ) -> KernelResult<(
-        tokio::sync::mpsc::Receiver<librefang_runtime::llm_driver::StreamEvent>,
-        tokio::task::JoinHandle<KernelResult<librefang_runtime::agent_loop::AgentLoopResult>>,
-    )> {
-        LibreFangKernel::send_message_streaming_with_sender_context_and_routing(
-            &self,
+        Self::send_message_with_blocks_and_sender(
+            self,
             agent_id,
             message,
-            kernel_handle,
+            blocks,
             &sender,
+            thinking_override,
         )
         .await
     }

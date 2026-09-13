@@ -444,6 +444,18 @@ function normalizeJsxText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const ROOT_RECOVERY_TEXT = new Set([
+  "Something went wrong",
+  "An unexpected error occurred.",
+  "Reload",
+]);
+
+function isDependencyFreeRootRecoveryText(text: string, path: string): boolean {
+  return (
+    path === "components/RootErrorBoundary.tsx" && ROOT_RECOVERY_TEXT.has(text)
+  );
+}
+
 function isTechnicalLiteral(text: string): boolean {
   if (text === "") return true;
   if (text === "×") return true;
@@ -481,7 +493,7 @@ function isStylingLiteral(text: string): boolean {
 
 function isAllowedHardcodedText(text: string, kind: string): boolean {
   if (isTechnicalLiteral(text)) return true;
-  if (["English", "Українська", "中文", "简体中文", "한국어"].includes(text)) return true;
+  if (["English", "Українська", "中文", "简体中文", "한국어", "Polski"].includes(text)) return true;
   // Channel product / brand names are proper nouns and must NOT be translated.
   // Mirrors DeliveryTargetsEditor's CHANNEL_PRESETS labels — adding a channel
   // there only needs an entry here when its name is not already brand-like
@@ -639,7 +651,11 @@ describe("Dashboard locale coverage", () => {
         path,
         line,
       }))
-      .filter(({ text, kind }) => !isAllowedHardcodedText(text, kind))
+      .filter(
+        ({ text, kind, path }) =>
+          !isAllowedHardcodedText(text, kind) &&
+          !isDependencyFreeRootRecoveryText(text, path),
+      )
       .map(({ text, kind, path, line }) => {
         return `${path}:${line} ${kind} ${JSON.stringify(text)}`;
       })
@@ -659,7 +675,11 @@ describe("Dashboard locale coverage", () => {
         path,
         line,
       }))
-      .filter(({ text, kind }) => !isAllowedLiteralCandidate(text, kind))
+      .filter(
+        ({ text, kind, path }) =>
+          !isAllowedLiteralCandidate(text, kind) &&
+          !isDependencyFreeRootRecoveryText(text, path),
+      )
       .map(({ text, kind, path, line }) => {
         return `${path}:${line} ${kind} ${JSON.stringify(text)}`;
       })

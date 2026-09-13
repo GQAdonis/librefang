@@ -4,6 +4,12 @@ import { AlertTriangle, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { generateUid } from "../lib/agentManifest";
 import type { ManifestExtras, ManifestFormState } from "../lib/agentManifest";
 import { MultiSelectCmdk } from "./ui/MultiSelectCmdk";
+import { StepLadderInput } from "./ui/StepLadderInput";
+import {
+  CONTEXT_WINDOW_LADDER,
+  MAX_OUTPUT_TOKENS_LADDER,
+  formatTokens,
+} from "../lib/modelParamLadders";
 
 /**
  * Catalog entry for the skill/tool finder (#5049). Both fields are
@@ -20,7 +26,23 @@ interface AgentManifestFormProps {
   value: ManifestFormState;
   onChange: (next: ManifestFormState) => void;
   providers: { name: string }[];
-  models: { provider: string; id: string }[];
+  /**
+   * Model options for the picker. The capacity fields are optional because a
+   * caller may only have ids to hand; when they are present they trim the
+   * ladders and drive the over-limit advisory.
+   *
+   * `limits_known === false` marks the capacities as discovery placeholders
+   * rather than measurements (#7780). The form ignores them in that case: an
+   * unknown limit is not a ceiling, and warning against an invented one trains
+   * operators to ignore warnings.
+   */
+  models: {
+    provider: string;
+    id: string;
+    context_window?: number;
+    max_output_tokens?: number;
+    limits_known?: boolean;
+  }[];
   invalidFields: Set<string>;
   // Read-only view of preserved-but-not-form-renderable extras. We show
   // a hint next to dropdowns whose form widget can't represent the
@@ -98,6 +120,42 @@ export function AgentManifestForm({
   const mcpFinder = useMemo(
     () => mergeCatalog(mcpCatalog, value.mcp_servers),
     [mcpCatalog, value.mcp_servers],
+  );
+
+  // Limits for the selected model, and only when the catalog vouches for them.
+  const selectedModelLimits = useMemo(() => {
+    const entry = models.find(
+      (m) => m.id === value.model.model && m.provider === value.model.provider,
+    );
+    if (!entry || entry.limits_known === false) return {};
+    return {
+      contextWindow: entry.context_window && entry.context_window > 0 ? entry.context_window : undefined,
+      maxOutputTokens:
+        entry.max_output_tokens && entry.max_output_tokens > 0 ? entry.max_output_tokens : undefined,
+    };
+  }, [models, value.model.model, value.model.provider]);
+
+  // Advisory, not a validation error: the field is not marked invalid and the
+  // value is saved as typed. If the catalog figure is the thing that is wrong,
+  // an explicit provider error beats a silent truncation.
+  const overLimit = (raw: string, limit?: number): string | undefined => {
+    const parsed = Number(raw.trim());
+    if (raw.trim() === "" || !Number.isFinite(parsed) || limit === undefined) return undefined;
+    return parsed > limit
+      ? t("agents.form.over_limit_warning", { limit: formatTokens(limit) })
+      : undefined;
+  };
+  const maxTokensWarning = overLimit(
+    value.model.max_tokens,
+    // An operator-set output cap describes this endpoint and outranks the
+    // catalog's figure for it.
+    value.model.max_output_tokens.trim() !== ""
+      ? Number(value.model.max_output_tokens)
+      : selectedModelLimits.maxOutputTokens,
+  );
+  const contextWindowWarning = overLimit(
+    value.model.context_window,
+    selectedModelLimits.contextWindow,
   );
 
   const jsonSchemaFormat =
@@ -218,30 +276,116 @@ export function AgentManifestForm({
             className={textareaClass}
           />
         </Field>
+        {/*
+          Sampling preferences. Each is tri-state and empty means inherit —
+          this agent has no opinion, so the per-model override supplies the
+          value. An agent that does state a preference wins over that override,
+          which is what lets two instances of one agent type run the same model
+          at different temperatures.
+        */}
+        <p className="text-[11px] text-text-dim">{t("agents.form.preferences_hint")}</p>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("agents.form.temperature")}>
             <input
               type="number"
-              step="0.1"
+              step="0.05"
               min="0"
               max="2"
               value={value.model.temperature}
               onChange={(e) => updateModel({ temperature: e.target.value })}
-              placeholder={t("agents.form.temperature_placeholder")}
+              // `Field` wraps in a <div> rather than a <label> (#5246), so the
+              // visible label is not associated with the control. Without this
+              // the input has no accessible name.
+              aria-label={t("agents.form.temperature")}
+              placeholder={t("agents.form.inherit_default")}
               className={inputClass}
             />
           </Field>
-          <Field label={t("agents.form.max_tokens")}>
+          <Field label={t("agents.form.top_p")}>
             <input
               type="number"
-              min="1"
-              value={value.model.max_tokens}
-              onChange={(e) => updateModel({ max_tokens: e.target.value })}
-              placeholder={t("agents.form.max_tokens_placeholder")}
+              step="0.05"
+              min="0"
+              max="1"
+              value={value.model.top_p}
+              onChange={(e) => updateModel({ top_p: e.target.value })}
+              // `Field` wraps in a <div> rather than a <label> (#5246), so the
+              // visible label is not associated with the control. Without this
+              // the input has no accessible name.
+              aria-label={t("agents.form.top_p")}
+              placeholder={t("agents.form.inherit_default")}
+              className={inputClass}
+            />
+          </Field>
+          <Field label={t("agents.form.frequency_penalty")}>
+            <input
+              type="number"
+              step="0.1"
+              min="-2"
+              max="2"
+              value={value.model.frequency_penalty}
+              onChange={(e) => updateModel({ frequency_penalty: e.target.value })}
+              // `Field` wraps in a <div> rather than a <label> (#5246), so the
+              // visible label is not associated with the control. Without this
+              // the input has no accessible name.
+              aria-label={t("agents.form.frequency_penalty")}
+              placeholder={t("agents.form.inherit_default")}
+              className={inputClass}
+            />
+          </Field>
+          <Field label={t("agents.form.presence_penalty")}>
+            <input
+              type="number"
+              step="0.1"
+              min="-2"
+              max="2"
+              value={value.model.presence_penalty}
+              onChange={(e) => updateModel({ presence_penalty: e.target.value })}
+              // `Field` wraps in a <div> rather than a <label> (#5246), so the
+              // visible label is not associated with the control. Without this
+              // the input has no accessible name.
+              aria-label={t("agents.form.presence_penalty")}
+              placeholder={t("agents.form.inherit_default")}
               className={inputClass}
             />
           </Field>
         </div>
+        <StepLadderInput
+          label={t("agents.form.max_tokens")}
+          value={value.model.max_tokens}
+          onChange={(next) => updateModel({ max_tokens: next })}
+          ladder={MAX_OUTPUT_TOKENS_LADDER}
+          cap={selectedModelLimits.maxOutputTokens}
+          inheritLabel={t("agents.form.inherit_default")}
+          customLabel={t("agents.form.custom")}
+          customPlaceholder={t("agents.form.max_tokens_placeholder")}
+          warning={maxTokensWarning}
+        />
+        {/*
+          Endpoint limits, not preferences. These describe what the model can
+          accept; over-limit values are reported rather than clamped, so the
+          operator sees the conflict instead of a number they never chose.
+        */}
+        <p className="text-[11px] text-text-dim">{t("agents.form.limits_hint")}</p>
+        <StepLadderInput
+          label={t("agents.form.context_window")}
+          value={value.model.context_window}
+          onChange={(next) => updateModel({ context_window: next })}
+          ladder={CONTEXT_WINDOW_LADDER}
+          inheritLabel={t("agents.form.inherit_default")}
+          customLabel={t("agents.form.custom")}
+          customPlaceholder={t("agents.form.context_window_placeholder")}
+          warning={contextWindowWarning}
+        />
+        <StepLadderInput
+          label={t("agents.form.max_output_tokens")}
+          value={value.model.max_output_tokens}
+          onChange={(next) => updateModel({ max_output_tokens: next })}
+          ladder={MAX_OUTPUT_TOKENS_LADDER}
+          inheritLabel={t("agents.form.inherit_default")}
+          customLabel={t("agents.form.custom")}
+          customPlaceholder={t("agents.form.max_output_tokens_placeholder")}
+        />
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("agents.form.api_key_env")} hint={t("agents.form.api_key_env_hint")}>
             <input
@@ -493,7 +637,14 @@ export function AgentManifestForm({
         </Field>
       </Section>
 
-      <CollapsibleSection title={t("agents.form.scheduling")} defaultOpen={false}>
+      <CollapsibleSection
+        title={t("agents.form.scheduling")}
+        defaultOpen={false}
+        invalid={
+          invalidFields.has("schedule.cron") ||
+          invalidFields.has("schedule.check_interval_secs")
+        }
+      >
         <Field label={t("agents.form.schedule_mode")} hint={t("agents.form.schedule_mode_hint")}>
           <select
             value={value.schedule.mode}
@@ -513,13 +664,29 @@ export function AgentManifestForm({
           </select>
         </Field>
         {value.schedule.mode === "periodic" && (
-          <Field label={t("agents.form.cron")} hint={t("agents.form.cron_hint")}>
+          <Field
+            label={t("agents.form.cron")}
+            hint={t("agents.form.cron_hint")}
+            required
+            invalid={invalidFields.has("schedule.cron")}
+            error={t("agents.form.cron_required_error")}
+            errorId="agent-manifest-schedule-cron-error"
+          >
             <input
+              id="agent-manifest-schedule-cron"
               type="text"
               value={value.schedule.cron}
               onChange={(e) => update({ schedule: { mode: "periodic", cron: e.target.value } })}
               placeholder={t("agents.form.cron_placeholder")}
               className={inputClass}
+              aria-label={t("agents.form.cron")}
+              aria-invalid={invalidFields.has("schedule.cron") || undefined}
+              aria-required="true"
+              aria-describedby={
+                invalidFields.has("schedule.cron")
+                  ? "agent-manifest-schedule-cron-error"
+                  : undefined
+              }
             />
           </Field>
         )}
@@ -533,8 +700,15 @@ export function AgentManifestForm({
           </Field>
         )}
         {value.schedule.mode === "continuous" && (
-          <Field label={t("agents.form.check_interval_secs")}>
+          <Field
+            label={t("agents.form.check_interval_secs")}
+            required
+            invalid={invalidFields.has("schedule.check_interval_secs")}
+            error={t("agents.detail.schedule_invalid_interval")}
+            errorId="agent-manifest-schedule-interval-error"
+          >
             <input
+              id="agent-manifest-schedule-interval"
               type="number"
               min="1"
               value={value.schedule.check_interval_secs}
@@ -545,6 +719,16 @@ export function AgentManifestForm({
               }
               placeholder={t("agents.form.check_interval_placeholder")}
               className={inputClass}
+              aria-label={t("agents.form.check_interval_secs")}
+              aria-invalid={
+                invalidFields.has("schedule.check_interval_secs") || undefined
+              }
+              aria-required="true"
+              aria-describedby={
+                invalidFields.has("schedule.check_interval_secs")
+                  ? "agent-manifest-schedule-interval-error"
+                  : undefined
+              }
             />
           </Field>
         )}
@@ -638,6 +822,7 @@ export function AgentManifestForm({
             <Field label={t("agents.form.stream_thinking")}>
               <Toggle
                 label=""
+                ariaLabel={t("agents.form.stream_thinking")}
                 checked={value.thinking.stream_thinking}
                 onChange={(checked) => updateThinking({ stream_thinking: checked })}
               />
@@ -862,7 +1047,11 @@ export function AgentManifestForm({
         </button>
       </CollapsibleSection>
 
-      <CollapsibleSection title={t("agents.form.response_format")} defaultOpen={false}>
+      <CollapsibleSection
+        title={t("agents.form.response_format")}
+        defaultOpen={false}
+        invalid={invalidFields.has("response_format.schema")}
+      >
         {value.response_format.mode === "text" && extras.topLevel.response_format !== undefined && (
           <ExtrasOverrideHint message={t("agents.form.response_format_extras_hint")} />
         )}
@@ -902,8 +1091,15 @@ export function AgentManifestForm({
                 className={inputClass}
               />
             </Field>
-            <Field label={t("agents.form.schema_body")}>
+            <Field
+              label={t("agents.form.schema_body")}
+              required
+              invalid={invalidFields.has("response_format.schema")}
+              error={t("agents.form.schema_invalid_error")}
+              errorId="agent-manifest-response-schema-error"
+            >
               <textarea
+                id="agent-manifest-response-schema"
                 value={jsonSchemaFormat.schema}
                 onChange={(e) =>
                   update({
@@ -917,6 +1113,14 @@ export function AgentManifestForm({
                 }
                 rows={6}
                 className={textareaClass}
+                aria-label={t("agents.form.schema_body")}
+                aria-invalid={invalidFields.has("response_format.schema") || undefined}
+                aria-required="true"
+                aria-describedby={
+                  invalidFields.has("response_format.schema")
+                    ? "agent-manifest-response-schema-error"
+                    : undefined
+                }
               />
             </Field>
             <Toggle
@@ -1045,6 +1249,90 @@ export function AgentManifestForm({
           />
         </div>
       </CollapsibleSection>
+
+      <CollapsibleSection
+        title={t("agents.form.shared_folders")}
+        defaultOpen={false}
+        invalid={value.workspaces.some(
+          (ws) =>
+            invalidFields.has(`workspaces.${ws._uid}.name`) ||
+            invalidFields.has(`workspaces.${ws._uid}.path`),
+        )}
+      >
+        <p className="text-[10px] text-text-dim/70 mb-2">
+          {t("agents.form.shared_folders_hint")}
+        </p>
+        {value.workspaces.map((ws, idx) => {
+          const nameInvalid = invalidFields.has(`workspaces.${ws._uid}.name`);
+          const pathInvalid = invalidFields.has(`workspaces.${ws._uid}.path`);
+          return (
+            <div
+              key={ws._uid}
+              className="rounded-lg border border-border-subtle/60 bg-main/40 p-2 mb-2"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={ws.name}
+                  onChange={(e) => update({ workspaces: patchListItem(value.workspaces, idx, { ...ws, name: e.target.value }) })}
+                  placeholder={t("agents.form.folder_name")}
+                  className={`${inputClass} flex-1`}
+                  aria-invalid={nameInvalid || undefined}
+                />
+                <input
+                  type="text"
+                  value={ws.path}
+                  onChange={(e) => update({ workspaces: patchListItem(value.workspaces, idx, { ...ws, path: e.target.value }) })}
+                  placeholder={t("agents.form.folder_path")}
+                  className={`${inputClass} flex-[2]`}
+                  aria-invalid={pathInvalid || undefined}
+                />
+                <select
+                  value={ws.mode}
+                  onChange={(e) => update({ workspaces: patchListItem(value.workspaces, idx, { ...ws, mode: e.target.value as "rw" | "r" }) })}
+                  className={`${inputClass} w-20`}
+                >
+                  <option value="rw">rw</option>
+                  <option value="r">r</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => update({ workspaces: value.workspaces.filter((_, i) => i !== idx) })}
+                  className="text-text-dim hover:text-error"
+                  aria-label={t("agents.form.remove_folder")}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {nameInvalid && (
+                <p className="text-[10px] text-error mt-1">
+                  {t("agents.form.duplicate_folder_name")}
+                </p>
+              )}
+              {pathInvalid && (
+                <p className="text-[10px] text-error mt-1">
+                  {t("agents.form.folder_path_invalid")}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          onClick={() =>
+            update({
+              workspaces: [
+                ...value.workspaces,
+                { _uid: generateUid(), name: "", path: "", mode: "rw" },
+              ],
+            })
+          }
+          className="flex items-center gap-1 text-xs text-brand hover:underline"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {t("agents.form.add_folder")}
+        </button>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -1103,20 +1391,27 @@ function CollapsibleSection({
   title,
   children,
   defaultOpen,
+  invalid,
 }: {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  invalid?: boolean;
 }) {
   return (
     <details
       className="group rounded-xl border border-border-subtle/60 bg-surface/40 overflow-hidden"
-      open={defaultOpen}
+      open={defaultOpen || invalid}
     >
       <summary
+        aria-invalid={invalid || undefined}
         className="flex items-center justify-between p-3 cursor-pointer list-none select-none"
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
+        <span
+          className={`text-[10px] font-bold uppercase tracking-widest ${
+            invalid ? "text-error" : "text-text-dim"
+          }`}
+        >
           {title}
         </span>
         <ChevronDown className="w-4 h-4 text-text-dim transition-transform group-open:rotate-180" />
@@ -1131,12 +1426,16 @@ function Field({
   hint,
   required,
   invalid,
+  error,
+  errorId,
   children,
 }: {
   label: string;
   hint?: string;
   required?: boolean;
   invalid?: boolean;
+  error?: string;
+  errorId?: string;
   children: React.ReactNode;
 }) {
   // Use a <div> wrapper rather than a <label> (#5246). A <label>
@@ -1164,6 +1463,15 @@ function Field({
         </span>
       )}
       <span className={label ? "mt-1 block" : "block"}>{children}</span>
+      {invalid && error && (
+        <span
+          id={errorId}
+          className="mt-1 block text-[10px] text-error"
+          role="alert"
+        >
+          {error}
+        </span>
+      )}
       {hint && <span className="mt-1 text-[10px] text-text-dim/70 block">{hint}</span>}
     </div>
   );
@@ -1180,10 +1488,12 @@ function ExtrasOverrideHint({ message }: { message: string }) {
 
 function Toggle({
   label,
+  ariaLabel,
   checked,
   onChange,
 }: {
   label: string;
+  ariaLabel?: string;
   checked: boolean;
   onChange: (next: boolean) => void;
 }) {
@@ -1192,10 +1502,11 @@ function Toggle({
       <input
         type="checkbox"
         checked={checked}
+        aria-label={ariaLabel}
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 rounded border-border-subtle accent-brand"
       />
-      {label}
+      {label ? <span>{label}</span> : null}
     </label>
   );
 }
@@ -1214,9 +1525,9 @@ function TagInput({
   const commit = (raw: string): void => {
     const cleaned = raw.trim();
     if (!cleaned) return;
+    setInputValue("");
     if (value.includes(cleaned)) return;
     onChange([...value, cleaned]);
-    setInputValue("");
   };
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-border-subtle bg-main px-2 py-1.5 focus-within:border-primary">

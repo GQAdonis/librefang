@@ -101,6 +101,10 @@ impl AuditResult {
 pub struct AuditContext {
     /// `~/.librefang/` (or `$LIBREFANG_HOME`).
     pub librefang_home: PathBuf,
+    /// The `config.toml` the daemon would load, resolved once by the caller.
+    ///
+    /// Carried rather than recomputed as `librefang_home.join("config.toml")` so a doctor run under `LIBREFANG_CONFIG_PATH` inspects the file the daemon reads instead of an unrelated path that happens to sit in the home directory (#6695).
+    pub config_path: PathBuf,
 }
 
 pub trait AuditCheck {
@@ -210,7 +214,7 @@ pub struct ApiListenAddrCheck;
 impl AuditCheck for ApiListenAddrCheck {
     fn run(&self, ctx: &AuditContext) -> AuditResult {
         const NAME: &str = "api_listen_addr";
-        let config_path = ctx.librefang_home.join("config.toml");
+        let config_path = ctx.config_path.clone();
         let raw = match std::fs::read_to_string(&config_path) {
             Ok(s) => s,
             Err(_) => {
@@ -287,7 +291,7 @@ pub struct ConfigTomlSchemaCheck;
 impl AuditCheck for ConfigTomlSchemaCheck {
     fn run(&self, ctx: &AuditContext) -> AuditResult {
         const NAME: &str = "config_toml_schema";
-        let path = ctx.librefang_home.join("config.toml");
+        let path = ctx.config_path.clone();
         if !path.exists() {
             return AuditResult::warn(
                 NAME,
@@ -473,12 +477,8 @@ fn grade_everyapi_wiring(state: &EveryApiState) -> AuditResult {
         );
     }
 
-    // Credentials exist but nothing routes to them. Deliberately Info, not
-    // Warn: having the EveryAPI CLI installed without wiring LibreFang to it
-    // is a legitimate state, and `doctor` should not paint it yellow every
-    // run. The remediation command therefore lives in the summary — the
-    // human path only renders `hint` for Warn/Error (see
-    // `commands/doctor_cmd.rs`).
+    // No provider file is required for CLI-managed credentials. Kernel boot
+    // registers EveryAPI in memory and resolves the current key per request.
     if state.credentials_usable {
         return AuditResult::info(NAME, i18n::t("doctor-everyapi-not-connected"));
     }
@@ -638,10 +638,6 @@ const WEBKIT_PKG_MODULES: [&str; 2] = ["webkit2gtk-4.1", "webkit2gtk-4.0"];
 #[cfg_attr(not(test), cfg(target_os = "linux"))]
 const GTK_PKG_MODULE: &str = "gtk+-3.0";
 
-/// Tray icon support.
-#[cfg_attr(not(test), cfg(target_os = "linux"))]
-const TRAY_PKG_MODULE: &str = "libayatana-appindicator3-0.1";
-
 /// Result of one `pkg-config --exists <module>` invocation.
 #[cfg_attr(not(test), cfg(target_os = "linux"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -777,7 +773,6 @@ fn unquote_os_release_value(value: &str) -> String {
 fn required_modules_list() -> String {
     let mut modules = WEBKIT_PKG_MODULES.to_vec();
     modules.push(GTK_PKG_MODULE);
-    modules.push(TRAY_PKG_MODULE);
     modules.join(", ")
 }
 
@@ -838,23 +833,9 @@ where
     }
 
     if let Some(module) = webkit_module {
-        if matches!(probe(TRAY_PKG_MODULE), ProbeOutcome::Present) {
-            return AuditResult::pass(
-                NAME,
-                i18n::t_args(
-                    "doctor-audit-desktop-deps-ok",
-                    &[("module", module), ("tray", TRAY_PKG_MODULE)],
-                ),
-            );
-        }
-        // The hint names the whole stack rather than the tray alone; every package manager below no-ops on what is already installed.
-        return AuditResult::warn(
+        return AuditResult::pass(
             NAME,
-            i18n::t_args(
-                "doctor-audit-desktop-deps-tray-missing",
-                &[("module", module), ("tray", TRAY_PKG_MODULE)],
-            ),
-            Some(desktop_deps_hint(os_release)),
+            i18n::t_args("doctor-audit-desktop-deps-ok", &[("module", module)]),
         );
     }
 
@@ -902,6 +883,7 @@ mod tests {
 
     fn ctx_with_home(home: PathBuf) -> AuditContext {
         AuditContext {
+            config_path: home.join("config.toml"),
             librefang_home: home,
         }
     }
@@ -1129,18 +1111,15 @@ mod tests {
         assert!(r.summary.contains("relay_key"));
     }
 
-    /// The actionable case.
-    /// Info (not Warn) on purpose — see the comment in `grade_everyapi_wiring`.
-    /// Because the human path only renders `hint` for Warn/Error, the remediation command MUST be in the summary; this assertion is what stops someone from silently moving it to `hint`.
     #[test]
-    fn everyapi_credentials_without_provider_entry_names_connect_command_in_summary() {
+    fn everyapi_credentials_without_provider_entry_report_auto_detection() {
         let r = grade_everyapi_wiring(&EveryApiState {
             cli_on_path: true,
             credentials_usable: true,
             ..state()
         });
         assert_eq!(r.severity, Severity::Info);
-        assert!(r.summary.contains("librefang models connect everyapi"));
+        assert!(r.summary.contains("auto-detect"));
     }
 
     #[test]
@@ -1398,7 +1377,7 @@ mod tests {
     #[test]
     fn desktop_deps_full_stack_is_pass() {
         let r = evaluate_desktop_deps(
-            stub_probe(&[WEBKIT_PKG_MODULES[0], GTK_PKG_MODULE, TRAY_PKG_MODULE]),
+            stub_probe(&[WEBKIT_PKG_MODULES[0], GTK_PKG_MODULE]),
             Some(DEEPIN_OS_RELEASE),
         );
         assert_eq!(r.severity, Severity::Pass);
@@ -1408,21 +1387,11 @@ mod tests {
     #[test]
     fn desktop_deps_older_webkit_abi_still_passes() {
         let r = evaluate_desktop_deps(
-            stub_probe(&[WEBKIT_PKG_MODULES[1], TRAY_PKG_MODULE]),
+            stub_probe(&[WEBKIT_PKG_MODULES[1]]),
             Some(DEEPIN_OS_RELEASE),
         );
         assert_eq!(r.severity, Severity::Pass);
         assert!(r.summary.contains(WEBKIT_PKG_MODULES[1]));
-    }
-
-    #[test]
-    fn desktop_deps_tray_missing_is_warn() {
-        let r = evaluate_desktop_deps(
-            stub_probe(&[WEBKIT_PKG_MODULES[0]]),
-            Some(DEEPIN_OS_RELEASE),
-        );
-        assert_eq!(r.severity, Severity::Warn);
-        assert!(r.summary.contains(TRAY_PKG_MODULE));
     }
 
     #[test]
@@ -1452,7 +1421,7 @@ mod tests {
         for hint in [&apt, &nix, &pacman, &dnf, &generic] {
             // Every hint renders (no `[key]` miss marker) and lists the pkg-config modules the build actually needs.
             assert!(!hint.starts_with('['), "unrendered hint: {hint}");
-            assert!(hint.contains(TRAY_PKG_MODULE), "hint omits modules: {hint}");
+            assert!(hint.contains(GTK_PKG_MODULE), "hint omits modules: {hint}");
         }
     }
 
@@ -1463,7 +1432,6 @@ mod tests {
             assert!(list.contains(module));
         }
         assert!(list.contains(GTK_PKG_MODULE));
-        assert!(list.contains(TRAY_PKG_MODULE));
     }
 
     #[test]

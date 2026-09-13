@@ -3,6 +3,8 @@ name = "librefang-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "HTTP/WebSocket API server for the LibreFang Agent OS daemon"
 readme = "README.md"
 
@@ -65,7 +67,7 @@ dirs = { workspace = true }
 jsonwebtoken = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
-argon2 = "0.5"
+argon2 = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
 zeroize = { workspace = true }
@@ -96,6 +98,15 @@ totp-rs = { workspace = true }
 # be driven end-to-end without a live identity provider.
 rsa = { workspace = true }
 wiremock = "0.6"
+# Storage-failure route tests (#6653 / #6654): the goals routes must answer a substrate read failure with a 500 rather than an empty 200, and the only way to make `structured_get` fail from outside `librefang-memory` is to write a non-JSON blob straight through the connection pool that `MemorySubstrate::pool()` already exposes.
+# Test-only; the same workspace version the memory crate compiles.
+rusqlite = { workspace = true }
+tokio-tungstenite = { workspace = true }
+# Manifest-parity route tests (#7742): the `manifest_toml` fixtures are serialized
+# from a real `AgentManifest` rather than hand-written, so a field rename cannot
+# leave the test asserting against a document the production parser no longer
+# produces.
+toml = { workspace = true }
 
 [features]
 # Default = telemetry + surreal-backend. Channel adapters all run as

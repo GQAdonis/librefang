@@ -28,11 +28,12 @@
 //! edit by hand, but it is human-readable for emergency surgery.
 
 use chrono::{DateTime, Utc};
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use librefang_types::agent::AgentId;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use tracing::{debug, warn};
 
 /// File name used inside `home_dir`.
@@ -71,6 +72,9 @@ struct OnDisk {
 pub struct AgentIdentityRegistry {
     map: DashMap<String, AgentIdentityRecord>,
     persist_path: Option<PathBuf>,
+    /// Load failures block writes for the lifetime of this registry so an
+    /// empty recovery view cannot overwrite a recoverable on-disk file.
+    persist_blocked: Option<(std::io::ErrorKind, String)>,
     /// Serialises atomic writes so two `register` calls in flight never
     /// produce an interleaved on-disk file.
     persist_lock: Mutex<()>,
@@ -82,6 +86,7 @@ impl AgentIdentityRegistry {
         Self {
             map: DashMap::new(),
             persist_path: None,
+            persist_blocked: None,
             persist_lock: Mutex::new(()),
         }
     }
@@ -90,17 +95,18 @@ impl AgentIdentityRegistry {
     /// `agent_identities.toml`. Errors during load are logged and treated
     /// as "empty registry" — we never want to silently lose entries by
     /// returning `Err` from boot, but we also don't want a malformed file
-    /// to wipe the user's history. See [`load_from`] for the explicit form
-    /// used by tests.
+    /// to wipe the user's history. If loading fails, later persistence
+    /// remains visibly blocked for this process so mutations cannot overwrite
+    /// the original recoverable file with the empty fallback view.
     pub fn load(home_dir: &Path) -> Self {
         let persist_path = home_dir.join(FILE_NAME);
-        let map = match Self::read_file(&persist_path) {
+        let (map, persist_blocked) = match Self::read_file(&persist_path) {
             Ok(entries) => {
                 let map = DashMap::with_capacity(entries.len());
                 for (name, identity) in entries {
                     map.insert(name, identity);
                 }
-                map
+                (map, None)
             }
             Err(e) => {
                 warn!(
@@ -108,12 +114,13 @@ impl AgentIdentityRegistry {
                     error = %e,
                     "agent_identities.toml: failed to load — starting empty (existing file left intact)"
                 );
-                DashMap::new()
+                (DashMap::new(), Some((e.kind(), e.to_string())))
             }
         };
         Self {
             map,
             persist_path: Some(persist_path),
+            persist_blocked,
             persist_lock: Mutex::new(()),
         }
     }
@@ -174,28 +181,24 @@ impl AgentIdentityRegistry {
     /// to be authoritative for the running process even if the disk is
     /// momentarily wedged.
     pub fn register_if_absent(&self, name: &str, canonical_uuid: AgentId) -> AgentId {
-        if let Some(existing) = self.map.get(name) {
-            return existing.canonical_uuid;
-        }
-        let entry = AgentIdentityRecord {
-            canonical_uuid,
-            created_at: Utc::now(),
+        let (final_uuid, inserted) = match self.map.entry(name.to_string()) {
+            Entry::Occupied(existing) => (existing.get().canonical_uuid, false),
+            Entry::Vacant(vacant) => {
+                let record = AgentIdentityRecord {
+                    canonical_uuid,
+                    created_at: Utc::now(),
+                };
+                (vacant.insert(record).canonical_uuid, true)
+            }
         };
-        // Race-window: between the `get` above and the insert below, another
-        // thread could register the same name. `entry().or_insert_with` would
-        // be cleaner, but DashMap's `entry` API holds a write guard for the
-        // duration of the closure — fine here since the closure is cheap.
-        let final_uuid = self
-            .map
-            .entry(name.to_string())
-            .or_insert(entry)
-            .canonical_uuid;
-        if let Err(e) = self.persist() {
-            warn!(
-                name,
-                error = %e,
-                "agent_identities.toml: persist failed (in-memory entry retained)"
-            );
+        if inserted {
+            if let Err(e) = self.persist() {
+                warn!(
+                    name,
+                    error = %e,
+                    "agent_identities.toml: persist failed (in-memory entry retained)"
+                );
+            }
         }
         final_uuid
     }
@@ -217,11 +220,19 @@ impl AgentIdentityRegistry {
     /// Persist the current in-memory state to disk via atomic write.
     /// No-op when the registry was constructed without a persist path.
     pub fn persist(&self) -> Result<(), std::io::Error> {
+        if let Some((kind, load_error)) = &self.persist_blocked {
+            return Err(std::io::Error::new(
+                *kind,
+                format!(
+                    "agent_identities.toml: persistence blocked after load failure: {load_error}"
+                ),
+            ));
+        }
         let path = match &self.persist_path {
             Some(p) => p,
             None => return Ok(()),
         };
-        let _guard = self.persist_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = self.persist_lock.lock();
 
         let snapshot: std::collections::BTreeMap<String, AgentIdentityRecord> = self
             .map
@@ -273,7 +284,7 @@ mod tests {
         let bob_uuid = AgentId::from_name("bob");
         let returned = reg.register_if_absent("alice", alice_uuid);
         assert_eq!(returned, alice_uuid);
-        reg.register_if_absent("bob", bob_uuid);
+        assert_eq!(reg.register_if_absent("bob", bob_uuid), bob_uuid);
         assert_eq!(reg.len(), 2);
 
         // Re-load — same path — should reproduce the same entries.
@@ -298,6 +309,39 @@ mod tests {
             got2, first,
             "second register must not clobber the canonical UUID"
         );
+    }
+
+    #[test]
+    fn concurrent_registration_of_same_name_persists_one_winner() {
+        const CONTENDERS: usize = 16;
+
+        let dir = tempdir().unwrap();
+        let reg = std::sync::Arc::new(AgentIdentityRegistry::load(dir.path()));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(CONTENDERS));
+        let handles: Vec<_> = (0..CONTENDERS)
+            .map(|index| {
+                let reg = std::sync::Arc::clone(&reg);
+                let barrier = std::sync::Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let candidate = AgentId::from_name(&format!("candidate-{index}"));
+                    barrier.wait();
+                    reg.register_if_absent("shared-name", candidate)
+                })
+            })
+            .collect();
+
+        let returned: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("registration thread panicked"))
+            .collect();
+        let winner = returned[0];
+        assert!(returned.iter().all(|id| *id == winner));
+        assert_eq!(reg.len(), 1);
+        assert_eq!(reg.get("shared-name"), Some(winner));
+
+        let reloaded = AgentIdentityRegistry::load(dir.path());
+        assert_eq!(reloaded.len(), 1);
+        assert_eq!(reloaded.get("shared-name"), Some(winner));
     }
 
     #[test]
@@ -340,6 +384,23 @@ mod tests {
     }
 
     #[test]
+    fn mutation_after_malformed_load_preserves_original_file() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        let original = b"this is not valid toml ===\n";
+        std::fs::write(&path, original).unwrap();
+
+        let reg = AgentIdentityRegistry::load(dir.path());
+        let uuid = AgentId::from_name("recoverable");
+        assert_eq!(reg.register_if_absent("recoverable", uuid), uuid);
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let error = reg
+            .persist()
+            .expect_err("persistence must remain visibly blocked after a failed load");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
     fn in_memory_persist_is_noop() {
         let reg = AgentIdentityRegistry::in_memory();
         let uuid = AgentId::from_name("foo");
@@ -353,7 +414,8 @@ mod tests {
         let dir = tempdir().unwrap();
         let reg = AgentIdentityRegistry::load(dir.path());
         for name in ["c", "a", "b"] {
-            reg.register_if_absent(name, AgentId::from_name(name));
+            let expected = AgentId::from_name(name);
+            assert_eq!(reg.register_if_absent(name, expected), expected);
         }
         let listed: Vec<String> = reg.list().keys().cloned().collect();
         assert_eq!(

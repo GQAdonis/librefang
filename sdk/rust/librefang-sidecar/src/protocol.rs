@@ -19,6 +19,15 @@ use serde_json::{json, Value};
 // We return `Value` instead of defining our own typed enum to avoid drifting from the kernel-side source of truth — the conformance corpus is the executable contract.
 // Adapter authors who want a typed variant can construct a struct that serializes to the same shape.
 
+/// Wire-protocol version this SDK implements, carried on every `ready` frame
+/// by [`SidecarAdapter::protocol_version`](crate::runtime::SidecarAdapter::protocol_version).
+///
+/// The daemon's `librefang_channels::sidecar::SIDECAR_PROTOCOL_VERSION` is the source of truth for the number; this constant mirrors it and `crates/librefang-channels/tests/sidecar_version_contract.rs` fails the build if the two ever disagree.
+///
+/// Bump only for a non-additive change to a frozen-core frame — see
+/// `docs/architecture/sidecar-protocol.md`.
+pub const PROTOCOL_VERSION: u32 = 1;
+
 /// Builders for every `ChannelContent` variant the wire accepts.
 pub struct Content;
 
@@ -144,7 +153,7 @@ impl Content {
         question: impl Into<String>,
         options: Vec<String>,
         is_quiz: bool,
-        correct_option_id: Option<u32>,
+        correct_option_id: Option<u8>,
         explanation: Option<String>,
     ) -> Value {
         let mut p = json!({"question": question.into(), "options": options, "is_quiz": is_quiz});
@@ -157,7 +166,7 @@ impl Content {
         json!({"Poll": p})
     }
 
-    pub fn poll_answer(poll_id: impl Into<String>, option_ids: Vec<i64>) -> Value {
+    pub fn poll_answer(poll_id: impl Into<String>, option_ids: Vec<u8>) -> Value {
         json!({"PollAnswer": {"poll_id": poll_id.into(), "option_ids": option_ids}})
     }
 
@@ -587,8 +596,14 @@ pub enum Command {
 #[derive(Deserialize)]
 struct Envelope {
     method: String,
-    #[serde(default)]
-    params: Value,
+}
+
+fn take_params(value: &mut Value) -> Value {
+    value
+        .as_object_mut()
+        .and_then(|object| object.remove("params"))
+        .filter(|params| !params.is_null())
+        .unwrap_or_else(|| Value::Object(serde_json::Map::new()))
 }
 
 /// Parse one stdin line into a typed [`Command`].
@@ -596,31 +611,27 @@ struct Envelope {
 /// Returns `Err` on malformed JSON, on a JSON value that is not an object (a bare number/array), AND on a typed-params variant whose `params` shape does not deserialize.
 /// The reader loop in [`crate::runtime::run`] catches all three, emits a protocol-level `error` event with the deserialization message, and continues — so a wire-shape skew is surfaced instead of silently degrading the affected command to default values.
 ///
+/// Unlike the Python SDK's legacy parser, the Rust SDK intentionally rejects missing required fields instead of replacing them with empty strings or default structs. This prevents a malformed daemon frame from reaching adapter business logic as an apparently valid command. Fields marked optional in the wire protocol retain their explicit `#[serde(default)]` behavior.
+///
 /// Unknown `method` strings become [`Command::Unknown`] rather than an error, so a newer daemon can introduce a method without breaking an older adapter.
 pub fn parse_command(line: &str) -> Result<Command, serde_json::Error> {
-    let v: Value = serde_json::from_str(line)?;
+    let mut v: Value = serde_json::from_str(line)?;
     if !v.is_object() {
         // Mirror Python's behavior: surface as a JSON error so the runtime can react identically across implementations.
         return Err(serde::de::Error::custom("expected a JSON object"));
     }
-    let env: Envelope = serde_json::from_value(v.clone())?;
-    let params = env.params;
-    let params_or_empty = if params.is_null() {
-        Value::Object(serde_json::Map::new())
-    } else {
-        params
-    };
+    let env = Envelope::deserialize(&v)?;
     let cmd = match env.method.as_str() {
-        "send" => Command::Send(serde_json::from_value(params_or_empty)?),
+        "send" => Command::Send(serde_json::from_value(take_params(&mut v))?),
         "ready_ack" => Command::ReadyAck,
         "shutdown" => Command::Shutdown,
         "heartbeat" => Command::Heartbeat,
-        "typing" => Command::Typing(serde_json::from_value(params_or_empty)?),
-        "reaction" => Command::Reaction(serde_json::from_value(params_or_empty)?),
-        "interactive" => Command::Interactive(serde_json::from_value(params_or_empty)?),
-        "stream_start" => Command::StreamStart(serde_json::from_value(params_or_empty)?),
-        "stream_delta" => Command::StreamDelta(serde_json::from_value(params_or_empty)?),
-        "stream_end" => Command::StreamEnd(serde_json::from_value(params_or_empty)?),
+        "typing" => Command::Typing(serde_json::from_value(take_params(&mut v))?),
+        "reaction" => Command::Reaction(serde_json::from_value(take_params(&mut v))?),
+        "interactive" => Command::Interactive(serde_json::from_value(take_params(&mut v))?),
+        "stream_start" => Command::StreamStart(serde_json::from_value(take_params(&mut v))?),
+        "stream_delta" => Command::StreamDelta(serde_json::from_value(take_params(&mut v))?),
+        "stream_end" => Command::StreamEnd(serde_json::from_value(take_params(&mut v))?),
         other => Command::Unknown(UnknownCommand {
             method: other.to_string(),
             raw: v,
@@ -699,6 +710,10 @@ pub struct Schema {
     pub display_name: String,
     pub description: String,
     pub fields: Vec<Field>,
+    /// This SDK's own package version, reported on `--describe`.
+    ///
+    /// Filled in by [`Schema::new`] rather than declared per adapter, and mirrors the Python SDK's `sdk_version` key: the daemon caches the describe output at boot, so this is the one place an adapter's SDK version can reach an operator without reading sidecar logs.
+    pub sdk_version: String,
 }
 
 impl Schema {
@@ -713,6 +728,7 @@ impl Schema {
             display_name: display_name.into(),
             description: description.into(),
             fields,
+            sdk_version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
 }

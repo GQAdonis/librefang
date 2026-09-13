@@ -271,6 +271,11 @@ pub fn memory_to_fragment(mem: surreal_memory::memory::Memory) -> MemoryFragment
         image_url,
         image_embedding,
         modality,
+        // Upstream added `similarity` as the cosine score against a *query*
+        // embedding. This mapper materializes a stored row with no query in
+        // scope, so there is nothing to score against — matching upstream's own
+        // construction sites (semantic.rs:726, proactive.rs:4277).
+        similarity: None,
     }
 }
 
@@ -302,6 +307,9 @@ impl SemanticBackend for SurrealSemanticBackend {
             image_url: None,
             image_embedding: None,
             modality: MemoryModality::default(),
+            // A fragment being stored for the first time has no query to be
+            // scored against; `similarity` is populated only on recall.
+            similarity: None,
         };
         let lf_id = frag.id;
         let mem = fragment_to_memory(&frag);

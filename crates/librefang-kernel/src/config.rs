@@ -13,6 +13,74 @@ use tracing::info;
 /// Maximum include nesting depth.
 const MAX_INCLUDE_DEPTH: u32 = 10;
 
+fn atomic_write_config(path: &Path, content: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+
+    // Preserve a configured symlink. Renaming over `path` itself would replace
+    // the link rather than atomically updating the operator-owned target.
+    let target = match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => std::fs::canonicalize(path)?,
+        _ => path.to_path_buf(),
+    };
+    let original_permissions = match std::fs::metadata(&target) {
+        Ok(metadata) => {
+            // Atomic rename is governed by directory permissions and could
+            // otherwise replace an operator-owned read-only config that the
+            // previous direct-write path correctly refused to modify.
+            std::fs::OpenOptions::new().write(true).open(&target)?;
+            Some(metadata.permissions())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "missing filename"))?;
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut temp_name = file_name.to_os_string();
+    temp_name.push(format!(".{}.{seq}.{timestamp}.tmp", std::process::id()));
+    let temp_path = target.with_file_name(temp_name);
+
+    let write_result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)?;
+        if let Some(permissions) = original_permissions {
+            file.set_permissions(permissions)?;
+        }
+        file.write_all(content.as_bytes())?;
+        file.sync_all()
+    })();
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    if let Err(error) = std::fs::rename(&temp_path, &target) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    #[cfg(unix)]
+    {
+        let parent = target
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        std::fs::File::open(parent)?.sync_all()?;
+    }
+
+    Ok(())
+}
+
 /// Load kernel configuration from a TOML file, with defaults.
 ///
 /// Returns `Err` when the config file exists but cannot be parsed as valid TOML
@@ -205,12 +273,27 @@ pub fn load_config(path: Option<&Path>) -> Result<KernelConfig, String> {
                                      sidecar-crate change."
                                 );
                             }
-                            // Write migrated config back to disk so future loads skip migration
-                            if migrated && file_version < CONFIG_VERSION {
+                            // Write migrated config back to disk so future loads skip migration.
+                            //
+                            // Managed mode owns the file, so the write is skipped rather than attempted and warned about.
+                            // Attempting it against a read-only ConfigMap mount fails on every boot, and because the failure is only a `warn!` the migration silently re-runs forever with nothing but a repeating log line to show for it.
+                            // The in-memory config is already migrated either way, so skipping costs nothing at runtime — what the operator loses is the on-disk persistence, and they need to know that their manifest is now a schema version behind.
+                            if migrated
+                                && file_version < CONFIG_VERSION
+                                && config_mode() == ConfigMode::Managed
+                            {
+                                tracing::warn!(
+                                    path = %config_path.display(),
+                                    from_version = file_version,
+                                    to_version = CONFIG_VERSION,
+                                    "Config was migrated in memory but NOT written back: the file is deployment-managed (LIBREFANG_CONFIG_MODE=managed). \
+                                     This migration re-runs on every boot until the managed source is updated to the new schema."
+                                );
+                            } else if migrated && file_version < CONFIG_VERSION {
                                 let toml_str = toml::to_string_pretty(&config);
                                 match toml_str {
                                     Ok(s) => {
-                                        if let Err(e) = std::fs::write(&config_path, &s) {
+                                        if let Err(e) = atomic_write_config(&config_path, &s) {
                                             tracing::warn!(
                                                 error = %e,
                                                 path = %config_path.display(),
@@ -478,6 +561,10 @@ fn resolve_config_includes(
         // Recursively resolve includes in the included file
         let include_dir = canonical.parent().unwrap_or(config_dir).to_path_buf();
         resolve_config_includes(&mut include_value, &include_dir, visited, depth + 1)?;
+        // `visited` models the active recursion stack, not every file seen
+        // during the whole traversal. A shared dependency in a diamond graph
+        // is valid once the first branch has unwound.
+        visited.remove(&canonical);
 
         // Remove include field from the included file
         if let toml::Value::Table(ref mut tbl) = include_value {
@@ -522,11 +609,244 @@ pub fn deep_merge_toml(base: &mut toml::Value, overlay: &toml::Value) {
     }
 }
 
+/// Env var that relocates `config.toml` away from `LIBREFANG_HOME`.
+///
+/// Relocation and locking are deliberately separate concerns — see [`ConfigMode`].
+pub const CONFIG_PATH_ENV: &str = "LIBREFANG_CONFIG_PATH";
+
+/// Env var that selects [`ConfigMode`]. Only the exact value `managed` locks.
+pub const CONFIG_MODE_ENV: &str = "LIBREFANG_CONFIG_MODE";
+
+/// Who owns `config.toml`.
+///
+/// The mode is read from the process environment, never from the config file itself, so a write through the API can never unlock the very file it is being refused access to (#6695).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigMode {
+    /// Default. The file is application state: the API may persist to it.
+    Mutable,
+    /// The file is owned by the deployment (a Kubernetes ConfigMap, a bind mount, a config management system).
+    /// Every API surface that would persist to it refuses with `423 Locked`.
+    Managed,
+}
+
+impl ConfigMode {
+    /// Whether configuration may be persisted through the API in this mode.
+    pub fn is_writable(self) -> bool {
+        matches!(self, ConfigMode::Mutable)
+    }
+
+    /// The stable wire string used by the API and the dashboard.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ConfigMode::Mutable => "mutable",
+            ConfigMode::Managed => "managed",
+        }
+    }
+}
+
+/// Resolve the configuration ownership mode from the environment.
+///
+/// Anything other than a case-insensitive `managed` — including unset, empty, and a typo — resolves to [`ConfigMode::Mutable`].
+/// Defaulting a typo to the locked mode would brick the dashboard for a deployment that never asked for it; defaulting it to mutable preserves today's behaviour, which is the compatibility guarantee the RFC requires.
+pub fn config_mode() -> ConfigMode {
+    match std::env::var(CONFIG_MODE_ENV) {
+        Ok(v) if v.trim().eq_ignore_ascii_case("managed") => ConfigMode::Managed,
+        _ => ConfigMode::Mutable,
+    }
+}
+
 /// Get the default config file path.
 ///
-/// Respects `BOSSFANG_HOME` / `LIBREFANG_HOME` env vars (in that order).
+/// Priority: `LIBREFANG_CONFIG_PATH` > `LIBREFANG_HOME`/config.toml > `~/.librefang/config.toml`.
+/// Home-directory resolution respects `BOSSFANG_HOME` / `LIBREFANG_HOME` env vars (in that order) — see [`librefang_home`].
+///
+/// `LIBREFANG_CONFIG_PATH` relocates the file and nothing more.
+/// It is independent of [`config_mode`] on purpose: a Compose deployment may reasonably bind-mount the config directory somewhere outside `LIBREFANG_HOME` while still editing it from the dashboard, and inferring the lock from the path would hand that operator a read-only UI they never asked for.
 pub fn default_config_path() -> PathBuf {
-    librefang_home().join("config.toml")
+    config_path_override().unwrap_or_else(|| librefang_home().join("config.toml"))
+}
+
+/// The `LIBREFANG_CONFIG_PATH` override, or `None` when it is unset, empty, or whitespace.
+///
+/// The single place that reads the variable, so relocation cannot be honoured by one resolver and ignored by another.
+fn config_path_override() -> Option<PathBuf> {
+    let raw = std::env::var(CONFIG_PATH_ENV).ok()?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(trimmed))
+    }
+}
+
+/// Resolve the `config.toml` that backs an already-loaded [`KernelConfig`].
+///
+/// `LIBREFANG_CONFIG_PATH` wins exactly as it does in [`default_config_path`]; otherwise the file sits in the config's own `home_dir`.
+/// This is the resolver for [`crate::LibreFangKernel::boot_with_config`], where an embedder handed over a `KernelConfig` without saying where it came from — `boot` records the path it actually loaded from instead.
+///
+/// It deliberately reads `home_dir` from the config rather than from `LIBREFANG_HOME`: an embedder that builds a `KernelConfig` in memory and points `home_dir` at a scratch directory means that directory, and resolving to the real user's `~/.librefang/config.toml` would have such a process write over a config it never read.
+pub fn config_path_for(config: &KernelConfig) -> PathBuf {
+    config_path_override().unwrap_or_else(|| config.home_dir.join("config.toml"))
+}
+
+/// Every file that contributes to the effective configuration, the primary file first (#6695).
+///
+/// Deliberately tolerant where [`resolve_config_includes`] is strict: this feeds a status endpoint, not a loader, so a broken `include` chain yields a shorter list rather than an error.
+/// The traversal applies the same two security rules — absolute paths and `..` components are skipped, never followed — and dedupes across the whole walk so a diamond graph lists a shared file once and a cycle terminates instead of hanging.
+///
+/// Paths are canonicalised where possible, so the primary file appears exactly once even when the caller passed a path through a symlink.
+pub fn config_source_files(path: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut seen: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
+    collect_config_sources(path, 0, &mut seen, &mut out);
+    out
+}
+
+fn collect_config_sources(
+    path: &Path,
+    depth: u32,
+    seen: &mut std::collections::BTreeSet<PathBuf>,
+    out: &mut Vec<PathBuf>,
+) {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    if !seen.insert(canonical.clone()) {
+        return;
+    }
+    if !canonical.is_file() {
+        return;
+    }
+    out.push(canonical.clone());
+    if depth >= MAX_INCLUDE_DEPTH {
+        return;
+    }
+
+    let Ok(text) = std::fs::read_to_string(&canonical) else {
+        return;
+    };
+    let Ok(toml::Value::Table(table)) = toml::from_str::<toml::Value>(&text) else {
+        return;
+    };
+    let Some(toml::Value::Array(includes)) = table.get("include") else {
+        return;
+    };
+    let dir = canonical
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    for value in includes {
+        let Some(relative) = value.as_str() else {
+            continue;
+        };
+        let relative = Path::new(relative);
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            continue;
+        }
+        collect_config_sources(&dir.join(relative), depth + 1, seen, out);
+    }
+}
+
+/// Provenance of the effective configuration, for the authenticated status endpoint.
+///
+/// Deliberately carries no secret material: the checksum is over file bytes, which the caller already has to be authenticated to influence, and the paths are deployment facts an operator needs in order to know where to make a change.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ConfigProvenance {
+    /// `"mutable"` or `"managed"`.
+    pub mode: &'static str,
+    /// Absolute path the effective configuration was loaded from.
+    pub source: String,
+    /// Whether the API will accept a write.
+    /// Equivalent to `mode == "mutable"`, surfaced separately so the dashboard branches on a boolean rather than string-matching a mode name.
+    pub writable: bool,
+    /// `sha256:<hex>` covering every file that contributes to the effective configuration, or `None` when the primary file does not exist.
+    ///
+    /// With no `include`, this is the digest of the primary file's raw bytes, unchanged from before #6695 so an existing `checksum/config` rollout annotation keeps matching.
+    ///
+    /// With includes, hashing the primary file alone would report a rollout that never happened — an edit to an included file changes the effective configuration and leaves the primary byte-identical.
+    /// The composite is therefore the digest of `sha256sum` output over the source files in include order, relative to the primary file's directory, which an operator can reproduce with
+    /// `(cd /etc/librefang && sha256sum config.toml extra.toml) | sha256sum`.
+    pub checksum: Option<String>,
+    /// Paths of the included files that contribute, relative to the primary file's directory, in include order.
+    ///
+    /// Empty for the ordinary single-file deployment. Non-empty means `checksum` is the composite form described above.
+    pub includes: Vec<String>,
+    /// RFC 3339 timestamp of the most recent modification across every source file, or `None` when unavailable.
+    ///
+    /// Across every source rather than the primary alone for the same reason as the checksum: an operator watching this field to confirm an edit landed must not be told nothing happened.
+    pub modified_at: Option<String>,
+}
+
+/// Build the provenance record for the config file currently in effect.
+pub fn config_provenance(path: Option<&Path>) -> ConfigProvenance {
+    use sha2::{Digest, Sha256};
+
+    let config_path = path
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(default_config_path);
+    let mode = config_mode();
+
+    let sources = config_source_files(&config_path);
+    let base_dir = sources
+        .first()
+        .and_then(|p| p.parent())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let checksum = match sources.len() {
+        // No includes: the historical digest, byte for byte.
+        0 | 1 => std::fs::read(&config_path)
+            .ok()
+            .map(|bytes| format!("sha256:{:x}", Sha256::digest(&bytes))),
+        _ => {
+            let mut manifest = String::new();
+            for source in &sources {
+                let Ok(bytes) = std::fs::read(source) else {
+                    continue;
+                };
+                let name = source
+                    .strip_prefix(&base_dir)
+                    .unwrap_or(source.as_path())
+                    .display();
+                manifest.push_str(&format!("{:x}  {name}\n", Sha256::digest(&bytes)));
+            }
+            Some(format!("sha256:{:x}", Sha256::digest(manifest.as_bytes())))
+        }
+    };
+
+    let includes = sources
+        .iter()
+        .skip(1)
+        .map(|p| {
+            p.strip_prefix(&base_dir)
+                .unwrap_or(p.as_path())
+                .display()
+                .to_string()
+        })
+        .collect();
+
+    let modified_at = sources
+        .iter()
+        .filter_map(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+        .max()
+        .or_else(|| {
+            std::fs::metadata(&config_path)
+                .and_then(|m| m.modified())
+                .ok()
+        })
+        .map(|t| chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339());
+
+    ConfigProvenance {
+        mode: mode.as_str(),
+        source: config_path.display().to_string(),
+        writable: mode.is_writable(),
+        checksum,
+        includes,
+        modified_at,
+    }
 }
 
 /// Get the home directory for on-disk state (config, vault, registry
@@ -621,6 +941,86 @@ mod tests {
     }
 
     #[test]
+    fn atomic_config_write_never_exposes_partial_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let seed = "config_version = 2\n".to_string();
+        let payload_a = format!("marker = \"{}\"\n", "a".repeat(16 * 1024));
+        let payload_b = format!("marker = \"{}\"\n", "b".repeat(16 * 1024));
+        std::fs::write(&path, &seed).unwrap();
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let writer = |payload: String| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for _ in 0..30 {
+                    atomic_write_config(&path, &payload).unwrap();
+                }
+            })
+        };
+        let writer_a = writer(payload_a.clone());
+        let writer_b = writer(payload_b.clone());
+        barrier.wait();
+
+        for _ in 0..200 {
+            let observed = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                observed == seed || observed == payload_a || observed == payload_b,
+                "observed partial config: {} bytes",
+                observed.len()
+            );
+        }
+        writer_a.join().unwrap();
+        writer_b.join().unwrap();
+
+        let final_content = std::fs::read_to_string(path).unwrap();
+        assert!(final_content == payload_a || final_content == payload_b);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_config_write_preserves_symlink_and_target_permissions() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("operator-config.toml");
+        let link = dir.path().join("config.toml");
+        std::fs::write(&target, "old = true\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+        symlink(&target, &link).unwrap();
+
+        atomic_write_config(&link, "new = true\n").unwrap();
+
+        assert!(std::fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new = true\n");
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_config_write_refuses_a_read_only_target() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "old = true\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o400)).unwrap();
+
+        let error = atomic_write_config(&path, "new = true\n").unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "old = true\n");
+    }
+
+    #[test]
     fn test_deep_merge_simple() {
         let mut base: toml::Value = toml::from_str(
             r#"
@@ -663,6 +1063,118 @@ mod tests {
         let mem = base["memory"].as_table().unwrap();
         assert_eq!(mem["decay_rate"].as_float(), Some(0.5));
         assert_eq!(mem["consolidation_threshold"].as_integer(), Some(10000));
+    }
+
+    /// A deployment with no `include` must keep the exact digest the `checksum/config` rollout
+    /// annotation was generated from, or #7902's overlay and its kind e2e assertion both break.
+    #[test]
+    fn provenance_checksum_of_a_single_file_is_the_raw_byte_digest() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, b"log_level = \"info\"\n").unwrap();
+
+        let provenance = config_provenance(Some(&path));
+
+        use sha2::{Digest, Sha256};
+        let expected = format!("sha256:{:x}", Sha256::digest(std::fs::read(&path).unwrap()));
+        assert_eq!(provenance.checksum.as_deref(), Some(expected.as_str()));
+        assert!(provenance.includes.is_empty(), "{:?}", provenance.includes);
+    }
+
+    /// The defect this fixes: an edit to an included file changes the effective configuration,
+    /// so a checksum that ignores it tells an operator a rollout landed when it did not.
+    #[test]
+    fn provenance_checksum_covers_included_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("config.toml");
+        let extra = dir.path().join("extra.toml");
+        std::fs::write(&root, b"include = [\"extra.toml\"]\nlog_level = \"info\"\n").unwrap();
+        std::fs::write(&extra, b"api_listen = \"0.0.0.0:4545\"\n").unwrap();
+
+        let before = config_provenance(Some(&root));
+        assert_eq!(before.includes, vec!["extra.toml".to_string()]);
+
+        let root_bytes_digest = {
+            use sha2::{Digest, Sha256};
+            format!("sha256:{:x}", Sha256::digest(std::fs::read(&root).unwrap()))
+        };
+        assert_ne!(
+            before.checksum.as_deref(),
+            Some(root_bytes_digest.as_str()),
+            "with includes the checksum must be the composite, not the primary file alone"
+        );
+
+        std::fs::write(&extra, b"api_listen = \"0.0.0.0:9999\"\n").unwrap();
+        let after = config_provenance(Some(&root));
+
+        assert_eq!(
+            std::fs::read(&root).unwrap(),
+            b"include = [\"extra.toml\"]\nlog_level = \"info\"\n",
+            "the primary file is deliberately untouched — that is the whole point of the case"
+        );
+        assert_ne!(
+            before.checksum, after.checksum,
+            "editing an included file must move the checksum"
+        );
+    }
+
+    /// The published reproduction command has to actually reproduce it, or an operator
+    /// comparing a ConfigMap annotation against the API gets a mismatch with no explanation.
+    #[test]
+    fn composite_checksum_matches_the_documented_sha256sum_pipeline() {
+        use sha2::{Digest, Sha256};
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("config.toml");
+        let extra = dir.path().join("extra.toml");
+        std::fs::write(&root, b"include = [\"extra.toml\"]\n").unwrap();
+        std::fs::write(&extra, b"log_level = \"debug\"\n").unwrap();
+
+        // `sha256sum config.toml extra.toml | sha256sum`, spelled out.
+        let mut manifest = String::new();
+        for name in ["config.toml", "extra.toml"] {
+            let bytes = std::fs::read(dir.path().join(name)).unwrap();
+            manifest.push_str(&format!("{:x}  {name}\n", Sha256::digest(&bytes)));
+        }
+        let expected = format!("sha256:{:x}", Sha256::digest(manifest.as_bytes()));
+
+        assert_eq!(
+            config_provenance(Some(&root)).checksum.as_deref(),
+            Some(expected.as_str())
+        );
+    }
+
+    /// Provenance feeds a status endpoint, so a broken chain must degrade rather than error.
+    #[test]
+    fn source_walk_skips_unsafe_and_missing_includes_instead_of_failing() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("config.toml");
+        std::fs::write(
+            &root,
+            b"include = [\"/etc/passwd\", \"../escape.toml\", \"missing.toml\"]\n",
+        )
+        .unwrap();
+
+        let sources = config_source_files(&root);
+        assert_eq!(
+            sources.len(),
+            1,
+            "only the primary file contributes; got {sources:?}"
+        );
+        assert!(config_provenance(Some(&root)).includes.is_empty());
+    }
+
+    /// A cycle makes the loader error; the provenance walk must terminate and list each file once.
+    #[test]
+    fn source_walk_terminates_on_a_circular_include() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("config.toml");
+        let b = dir.path().join("b.toml");
+        std::fs::write(&a, b"include = [\"b.toml\"]\n").unwrap();
+        std::fs::write(&b, b"include = [\"config.toml\"]\n").unwrap();
+
+        let sources = config_source_files(&a);
+        assert_eq!(sources.len(), 2, "{sources:?}");
     }
 
     #[test]
@@ -714,12 +1226,46 @@ mod tests {
     }
 
     #[test]
+    fn test_diamond_include_is_not_treated_as_a_cycle() {
+        let dir = tempfile::tempdir().unwrap();
+        let shared = dir.path().join("shared.toml");
+        let left = dir.path().join("left.toml");
+        let right = dir.path().join("right.toml");
+        let root = dir.path().join("config.toml");
+
+        std::fs::write(&shared, "network_enabled = true\n").unwrap();
+        std::fs::write(
+            &left,
+            "include = [\"shared.toml\"]\nlog_level = \"debug\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &right,
+            "include = [\"shared.toml\"]\napi_listen = \"127.0.0.1:5555\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &root,
+            format!(
+                "config_version = {CONFIG_VERSION}\ninclude = [\"left.toml\", \"right.toml\"]\n"
+            ),
+        )
+        .unwrap();
+
+        let config = try_load_config(&root).expect("diamond includes must be valid");
+        assert!(config.network_enabled, "shared config must be retained");
+        assert_eq!(config.log_level, "debug");
+        assert_eq!(config.api_listen, "127.0.0.1:5555");
+    }
+
+    #[test]
     fn test_circular_include_detected() {
         let dir = tempfile::tempdir().unwrap();
         let a_path = dir.path().join("a.toml");
         let b_path = dir.path().join("b.toml");
 
         let mut f = std::fs::File::create(&a_path).unwrap();
+        writeln!(f, "config_version = {CONFIG_VERSION}").unwrap();
         writeln!(f, "include = [\"b.toml\"]").unwrap();
         writeln!(f, "log_level = \"info\"").unwrap();
         drop(f);
@@ -731,6 +1277,12 @@ mod tests {
         // Include errors are tolerated — the root file still loads with its own fields.
         let config = load_config(Some(&a_path)).unwrap();
         assert!(!config.log_level.is_empty());
+
+        let error = try_load_config(&a_path).expect_err("real cycles must remain invalid");
+        assert!(
+            error.contains("Circular config include detected"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

@@ -20,10 +20,12 @@ fi
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 HOOK="$REPO_ROOT/scripts/hooks/pre-commit"
-test -x "$HOOK" || chmod +x "$HOOK"
+test -x "$HOOK" || { echo "FAIL: hook is not executable: $HOOK" >&2; exit 1; }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+SHIM_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK" "$SHIM_DIR"' EXIT
+LOG="$WORK/hook.log"
 
 cd "$WORK"
 git init -q
@@ -48,16 +50,21 @@ printf '{"info":{"version":"0.0.1"}}' > openapi.json
 git add openapi.json
 
 EXPECTED=$(sha256sum openapi.json | awk '{print $1}')
+# Remove the working-tree post-image. The hook must hash the index blob and
+# must not skip the check merely because the staged file is absent on disk.
+rm openapi.json
 
 # Mask shasum out of PATH so the hook MUST use sha256sum via the shim.
-SHIM_DIR="$(mktemp -d)"
-trap 'rm -rf "$WORK" "$SHIM_DIR"' EXIT
 cat > "$SHIM_DIR/shasum" <<'EOF'
 #!/bin/sh
 echo "shasum: deliberately disabled by pre-commit-sha-fallback.sh" >&2
 exit 127
 EOF
-chmod +x "$SHIM_DIR/shasum"
+cat > "$SHIM_DIR/gitleaks" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$SHIM_DIR/shasum" "$SHIM_DIR/gitleaks"
 
 # Sanity: confirm masking works (PATH-prefix wins).
 PATH="$SHIM_DIR:$PATH"
@@ -67,14 +74,14 @@ if shasum -a 256 openapi.json >/dev/null 2>&1; then
 fi
 
 set +e
-"$HOOK" >/tmp/precommit-shafallback-out.log 2>&1
+"$HOOK" >"$LOG" 2>&1
 rc=$?
 set -e
 
 if [ "$rc" -ne 0 ]; then
     echo "FAIL: pre-commit errored under sha256sum-only PATH (rc=$rc)" >&2
     echo "----- hook output -----" >&2
-    cat /tmp/precommit-shafallback-out.log >&2
+    cat "$LOG" >&2
     exit 1
 fi
 
@@ -84,7 +91,7 @@ if [ "$RECORDED" != "$EXPECTED" ]; then
     echo "  expected: $EXPECTED" >&2
     echo "  recorded: $RECORDED" >&2
     echo "----- hook output -----" >&2
-    cat /tmp/precommit-shafallback-out.log >&2
+    cat "$LOG" >&2
     exit 1
 fi
 
@@ -93,4 +100,50 @@ if ! git diff --cached --name-only | grep -qx "xtask/baselines/openapi.sha256"; 
     exit 1
 fi
 
-echo "PASS: pre-commit auto-synced openapi.sha256 via sha256sum fallback"
+if [ "$(git show :openapi.json)" != '{"info":{"version":"0.0.1"}}' ]; then
+    echo "FAIL: hook changed the staged openapi.json blob." >&2
+    exit 1
+fi
+
+if [ -e openapi.json ]; then
+    echo "FAIL: hook recreated the deliberately absent working-tree post-image." >&2
+    exit 1
+fi
+
+cat >"$SHIM_DIR/python3" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$SHIM_DIR/python3"
+printf '%s\n' '## [Unreleased]' >CHANGELOG.md
+git add CHANGELOG.md
+printf '%s\n' '## [Unreleased]' '' '## [Unreleased]' >CHANGELOG.md
+if ! "$HOOK" >"$WORK/changelog.log" 2>&1; then
+    echo "FAIL: hook inspected the unstaged CHANGELOG.md post-image." >&2
+    cat "$WORK/changelog.log" >&2
+    exit 1
+fi
+
+git commit -q -m sync
+git restore openapi.json xtask/baselines/openapi.sha256
+printf '{"info":{"version":"0.0.2"}}' >openapi.json
+git add openapi.json
+printf '%s\n' 'preserve this unstaged baseline edit' \
+    >xtask/baselines/openapi.sha256
+if "$HOOK" >"$WORK/baseline-dirty.log" 2>&1; then
+    echo "FAIL: hook overwrote an unstaged OpenAPI baseline edit." >&2
+    exit 1
+fi
+if ! grep -Fq 'has unstaged changes; refusing to overwrite' \
+    "$WORK/baseline-dirty.log"; then
+    echo "FAIL: hook rejected dirty baseline for the wrong reason." >&2
+    cat "$WORK/baseline-dirty.log" >&2
+    exit 1
+fi
+if ! grep -Fxq 'preserve this unstaged baseline edit' \
+    xtask/baselines/openapi.sha256; then
+    echo "FAIL: hook changed the unstaged OpenAPI baseline edit." >&2
+    exit 1
+fi
+
+echo "PASS: pre-commit consumed staged OpenAPI and CHANGELOG content safely"

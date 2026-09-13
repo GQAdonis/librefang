@@ -140,7 +140,8 @@ impl ConsolidationEngine {
             let rows = stmt
                 .query_map([], |row| row.get::<_, String>(0))
                 .map_err(LibreFangError::memory)?;
-            rows.filter_map(|r| r.ok()).collect()
+            rows.collect::<rusqlite::Result<Vec<String>>>()
+                .map_err(LibreFangError::memory)?
         };
 
         // One outer transaction wraps every merge in this run so we pay a
@@ -190,8 +191,8 @@ impl ConsolidationEngine {
                     },
                 )
                 .map_err(LibreFangError::memory)?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(LibreFangError::memory)?;
 
             // Pre-lowercase content once per row. The inner loop is O(N²)
             // and `text_similarity` lowercases its inputs on every call —
@@ -370,8 +371,10 @@ fn decode_embedding(bytes: &[u8]) -> Option<Vec<f32>> {
     }
     Some(
         bytes
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect(),
     )
 }
@@ -806,8 +809,10 @@ mod tests {
         let emb_bytes = emb_bytes.expect("embedding must not be null after merge");
         assert_eq!(emb_bytes.len(), 16, "4 f32 = 16 bytes");
         let emb: Vec<f32> = emb_bytes
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect();
         // Both axes should be > 0 since we blended (1,0,0,0) and (0,1,0,0).
         assert!(
@@ -904,8 +909,10 @@ mod tests {
             .unwrap()
             .expect("embedding present");
         let emb: Vec<f32> = emb_bytes
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect();
 
         // After running weighted average:
@@ -985,8 +992,10 @@ mod tests {
         );
 
         let emb: Vec<f32> = emb_bytes
-            .chunks_exact(4)
-            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| f32::from_le_bytes(*c))
             .collect();
         // After the dim-mismatched merge the keeper bytes are preserved
         // verbatim; after the subsequent same-dim merge, x stays the

@@ -1,4 +1,57 @@
 use super::*;
+use librefang_types::config::DefaultModelConfig;
+use std::sync::RwLock;
+
+fn status_default_model_snapshot(
+    model_override: &RwLock<Option<DefaultModelConfig>>,
+    configured: &DefaultModelConfig,
+) -> (String, String) {
+    let guard = model_override.read().unwrap_or_else(|poisoned| {
+        tracing::warn!(
+            "System status default-model override lock poisoned; recovering response state"
+        );
+        model_override.clear_poison();
+        poisoned.into_inner()
+    });
+    let effective = guard.as_ref().unwrap_or(configured);
+    (effective.provider.clone(), effective.model.clone())
+}
+
+#[derive(serde::Serialize)]
+struct QuickInitConfig<'a> {
+    log_level: &'a str,
+    api_listen: &'a str,
+    default_model: QuickInitDefaultModel<'a>,
+}
+
+#[derive(serde::Serialize)]
+struct QuickInitDefaultModel<'a> {
+    provider: &'a str,
+    model: &'a str,
+    api_key_env: &'a str,
+}
+
+fn quick_init_config_content(
+    provider: &str,
+    model: &str,
+    api_key_env: &str,
+) -> Result<String, toml::ser::Error> {
+    let config = QuickInitConfig {
+        log_level: "info",
+        api_listen: "127.0.0.1:4545",
+        default_model: QuickInitDefaultModel {
+            provider,
+            model,
+            api_key_env,
+        },
+    };
+    let serialized = toml::to_string_pretty(&config)?;
+    Ok(format!(
+        "# LibreFang configuration (auto-generated)\n\
+         # Run `librefang init --upgrade` for full annotated config.\n\n\
+         {serialized}"
+    ))
+}
 
 #[utoipa::path(
     get,
@@ -9,6 +62,7 @@ use super::*;
     )
 )]
 pub async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let (memory_used_mb, hostname) = tokio::join!(current_process_rss_mb(), system_hostname());
     let agents: Vec<serde_json::Value> = state
         .kernel
         .agent_registry()
@@ -50,9 +104,11 @@ pub async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         .count_sessions()
         .unwrap_or(0);
 
-    let memory_used_mb = current_process_rss_mb();
-
     let cfg = state.kernel.config_snapshot();
+    let (default_provider, default_model) = status_default_model_snapshot(
+        state.kernel.default_model_override_ref(),
+        &cfg.default_model,
+    );
     Json(serde_json::json!({
         "status": "running",
         "version": env!("CARGO_PKG_VERSION"),
@@ -60,16 +116,16 @@ pub async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         "active_agent_count": active_agent_count,
         "session_count": session_count,
         "memory_used_mb": memory_used_mb,
-        "default_provider": state.kernel.default_model_override_ref().read().ok().and_then(|g| g.as_ref().map(|dm| dm.provider.clone())).unwrap_or_else(|| cfg.default_model.provider.clone()),
-        "default_model": state.kernel.default_model_override_ref().read().ok().and_then(|g| g.as_ref().map(|dm| dm.model.clone())).unwrap_or_else(|| cfg.default_model.model.clone()),
+        "default_provider": default_provider,
+        "default_model": default_model,
         "uptime_seconds": uptime,
         "api_listen": cfg.api_listen,
         "home_dir": state.kernel.home_dir().display().to_string(),
         "log_level": cfg.log_level,
-        "hostname": system_hostname(),
+        "hostname": hostname,
         "network_enabled": cfg.network_enabled,
         "terminal_enabled": cfg.terminal.enabled,
-        "config_exists": state.kernel.home_dir().join("config.toml").exists(),
+        "config_exists": state.kernel.config_path().exists(),
         "agents": agents,
     }))
 }
@@ -86,20 +142,14 @@ pub async fn status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     )
 )]
 pub async fn quick_init(State(state): State<Arc<AppState>>) -> axum::response::Response {
-    let home = state.kernel.home_dir();
-    let config_path = home.join("config.toml");
-
-    if config_path.exists() {
+    let config_path = state.kernel.config_path().to_path_buf();
+    if tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
         return Json(serde_json::json!({
             "status": "already_initialized",
             "message": "config.toml already exists"
         }))
         .into_response();
     }
-
-    // Ensure directories exist
-    let _ = std::fs::create_dir_all(home);
-    let _ = std::fs::create_dir_all(home.join("data"));
 
     // Detect best available provider
     let (provider, api_key_env) = if let Some((p, _model, env_var)) =
@@ -121,33 +171,64 @@ pub async fn quick_init(State(state): State<Arc<AppState>>) -> axum::response::R
         .automatic_default_model_for_provider(&provider)
         .unwrap_or_else(|| "auto".to_string());
 
-    // Write minimal config.toml
-    let config_content = format!(
-        r#"# LibreFang configuration (auto-generated)
-# Run `librefang init --upgrade` for full annotated config.
+    // Use the TOML serializer so catalog-provided identifiers cannot escape their string values.
+    let config_content = match quick_init_config_content(&provider, &model, &api_key_env) {
+        Ok(content) => content,
+        Err(error) => {
+            tracing::error!(%error, "failed to serialize quick init config");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "Internal server error"
+                })),
+            )
+                .into_response();
+        }
+    };
 
-log_level = "info"
-api_listen = "127.0.0.1:4545"
-
-[default_model]
-provider = "{provider}"
-model = "{model}"
-api_key_env = "{api_key_env}"
-"#
-    );
-
-    if let Err(e) = crate::atomic_write(&config_path, config_content.as_bytes()) {
-        // Scrub the io error (audit: rusqlite-errors-leak) — path /
-        // permission detail stays in the log, generic body to client.
-        tracing::error!(error = %e, "failed to write config during init");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": "Internal server error"
-            })),
-        )
+    if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+        return locked.into_response();
+    }
+    let _config_guard = state.config_write_lock.lock().await;
+    let home = state.kernel.home_dir().to_path_buf();
+    let write_result = tokio::task::spawn_blocking(move || {
+        write_quick_init_config(&home, &config_path, config_content.as_bytes())
+    })
+    .await;
+    match write_result {
+        Ok(Ok(false)) => {
+            return Json(serde_json::json!({
+                "status": "already_initialized",
+                "message": "config.toml already exists"
+            }))
             .into_response();
+        }
+        Ok(Ok(true)) => {}
+        Ok(Err(e)) => {
+            // Scrub the io error (audit: rusqlite-errors-leak) — path /
+            // permission detail stays in the log, generic body to client.
+            tracing::error!(error = %e, "failed to write config during init");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "Internal server error"
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "quick init config write task failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "Internal server error"
+                })),
+            )
+                .into_response();
+        }
     }
 
     // Reload config so kernel picks up new settings. Surface failures (#3374) —
@@ -177,6 +258,127 @@ api_key_env = "{api_key_env}"
         "model": model,
     }))
     .into_response()
+}
+
+/// Write the quick-init `config.toml`, refusing to overwrite one that already exists.
+///
+/// `config_path` is the kernel's resolved path rather than `home/config.toml`, so an init through a relocated (`LIBREFANG_CONFIG_PATH`) config writes the file the daemon will actually reload (#6695).
+/// `home` still governs the directory layout — `data/` belongs to the home directory whether or not the config file lives inside it.
+fn write_quick_init_config(
+    home: &std::path::Path,
+    config_path: &std::path::Path,
+    contents: &[u8],
+) -> std::io::Result<bool> {
+    if config_path.exists() {
+        return Ok(false);
+    }
+    std::fs::create_dir_all(home)?;
+    std::fs::create_dir_all(home.join("data"))?;
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    crate::atomic_write(config_path, contents)?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        quick_init_config_content, status_default_model_snapshot, write_quick_init_config,
+    };
+    use librefang_types::config::DefaultModelConfig;
+    use std::sync::RwLock;
+
+    #[test]
+    fn status_model_snapshot_recovers_consistent_override_after_poison() {
+        let configured = DefaultModelConfig {
+            provider: "configured-provider".to_string(),
+            model: "configured-model".to_string(),
+            ..DefaultModelConfig::default()
+        };
+        let model_override = RwLock::new(Some(DefaultModelConfig {
+            provider: "override-provider".to_string(),
+            model: "override-model".to_string(),
+            ..DefaultModelConfig::default()
+        }));
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = model_override.write().unwrap();
+            panic!("poison status default-model override");
+        });
+        assert!(model_override.is_poisoned());
+
+        assert_eq!(
+            status_default_model_snapshot(&model_override, &configured),
+            (
+                "override-provider".to_string(),
+                "override-model".to_string()
+            )
+        );
+
+        assert!(!model_override.is_poisoned());
+        assert!(model_override.read().is_ok());
+        assert!(model_override.write().is_ok());
+    }
+
+    #[test]
+    fn status_model_snapshot_uses_configured_pair_without_override() {
+        let configured = DefaultModelConfig {
+            provider: "configured-provider".to_string(),
+            model: "configured-model".to_string(),
+            ..DefaultModelConfig::default()
+        };
+        let model_override = RwLock::new(None);
+
+        assert_eq!(
+            status_default_model_snapshot(&model_override, &configured),
+            (
+                "configured-provider".to_string(),
+                "configured-model".to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn quick_init_write_is_create_once_and_preserves_existing_config() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let home = temp.path().join("home");
+
+        assert!(
+            write_quick_init_config(&home, &home.join("config.toml"), b"first = true\n").unwrap()
+        );
+        assert!(home.join("data").is_dir());
+        assert!(
+            !write_quick_init_config(&home, &home.join("config.toml"), b"second = true\n").unwrap()
+        );
+        assert_eq!(
+            std::fs::read_to_string(home.join("config.toml")).unwrap(),
+            "first = true\n"
+        );
+    }
+
+    #[test]
+    fn quick_init_config_serializes_untrusted_model_fields_as_toml_strings() {
+        let provider = "provider\"\n[network]\nenabled = true\n#";
+        let model = "vendor\\model\"\n[default_model]";
+        let api_key_env = "KEY\\NAME\nVALUE";
+
+        let contents = quick_init_config_content(provider, model, api_key_env).unwrap();
+        let parsed: toml::Value = toml::from_str(&contents).unwrap();
+
+        assert_eq!(parsed["default_model"]["provider"].as_str(), Some(provider));
+        assert_eq!(parsed["default_model"]["model"].as_str(), Some(model));
+        assert_eq!(
+            parsed["default_model"]["api_key_env"].as_str(),
+            Some(api_key_env)
+        );
+        assert!(parsed.get("network").is_none());
+        assert_eq!(parsed.as_table().unwrap().len(), 3);
+
+        let config: librefang_types::config::KernelConfig = toml::from_str(&contents).unwrap();
+        assert_eq!(config.default_model.provider, provider);
+        assert_eq!(config.default_model.model, model);
+        assert_eq!(config.default_model.api_key_env, api_key_env);
+    }
 }
 
 /// POST /api/shutdown — Graceful shutdown.
@@ -245,6 +447,119 @@ pub async fn version() -> impl IntoResponse {
     }))
 }
 
+/// Probe the SQLite memory substrate with the cheapest possible read.
+///
+/// Shared by `/api/health`, `/api/health/detail`, and `/api/ready` so all
+/// three agree on what "the database is reachable" means. `structured_get`
+/// on a well-known sentinel key hits the connection pool and the schema
+/// without depending on any row existing — a missing key is `Ok(None)`,
+/// only a genuine connection / schema failure is `Err`.
+fn database_probe_ok(state: &Arc<AppState>) -> bool {
+    let shared_id = librefang_types::agent::AgentId(uuid::Uuid::from_bytes([
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+    ]));
+    state
+        .kernel
+        .memory_substrate()
+        .structured_get(shared_id, "__health_check__")
+        .is_ok()
+}
+
+/// Is a working embedding driver a *requirement* for this deployment, or an
+/// optional enhancement?
+///
+/// It is a requirement only when the operator pinned a specific embedding
+/// provider while leaving vector search enabled: that combination states an
+/// intent the daemon failed to satisfy, so serving traffic would silently
+/// degrade memory recall. In every other shape the absence of a driver is
+/// the documented, supported fallback and must not fail readiness:
+///
+/// * `fts_only = true` — vector search is switched off; `boot.rs` never
+///   constructs a driver at all.
+/// * `embedding_provider` unset or `"auto"` — boot probes provider API-key
+///   env vars and falls back to local Ollama, then to FTS. Nothing was
+///   promised, so nothing is broken.
+///
+/// Callers must evaluate this against the config the process **booted** with
+/// and cache the answer in `AppState::readiness_requires_embedding`, not read
+/// it live per request. See that field's documentation for why.
+pub(crate) fn embedding_is_required(config: &librefang_types::config::KernelConfig) -> bool {
+    if config.memory.fts_only.unwrap_or(false) {
+        return false;
+    }
+    config
+        .memory
+        .embedding_provider
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|provider| !provider.is_empty() && !provider.eq_ignore_ascii_case("auto"))
+}
+
+/// GET /api/ready — Readiness probe (public, no auth required).
+///
+/// Distinct from `/api/health` on purpose. `/api/health` answers "is this
+/// process alive?" and always returns 200 while the HTTP server can respond,
+/// so a Kubernetes `livenessProbe` pointed at it never restarts a pod over a
+/// recoverable storage or provider incident. This endpoint answers "can this
+/// process accept work?" and returns 503 when a dependency required to do so
+/// is unavailable, which is what removes the pod from Service endpoints
+/// without killing it.
+///
+/// The body is deliberately minimal — check names and a coarse status only.
+/// It carries no version, hostname, provider id, model name, path, or error
+/// text, because an unauthenticated caller reaches it; detailed diagnostics
+/// remain behind `GET /api/health/detail`.
+#[utoipa::path(
+    get,
+    path = "/api/ready",
+    tag = "system",
+    responses(
+        (status = 200, description = "All required dependencies are ready", body = crate::types::JsonObject),
+        (status = 503, description = "A required dependency is unavailable", body = crate::types::JsonObject)
+    )
+)]
+pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let db_ok = database_probe_ok(&state);
+
+    // Boot-time snapshot, not `config_ref()`: the requirement and the driver
+    // must be read from the same point in time, or a `POST /api/config/reload`
+    // that adds `memory.embedding_provider` pins readiness at 503 against a
+    // driver that a `restart_required` change will never rebuild. See
+    // `AppState::readiness_requires_embedding`.
+    let embedding_required = state.readiness_requires_embedding;
+    let embedding_present = state.kernel.embedding().is_some();
+    let embedding_status = match (embedding_required, embedding_present) {
+        (true, true) => "ok",
+        (true, false) => "error",
+        // Not required: report whether one happens to be available so the
+        // payload stays useful for humans, without gating readiness on it.
+        (false, true) => "ok",
+        (false, false) => "skipped",
+    };
+
+    // Written as "database ok, and the embedding requirement is satisfied"
+    // rather than negating the failure case: `clippy::nonminimal_bool` rejects
+    // the `!(a && !b)` form, and the positive reading matches the two `checks`
+    // entries reported below.
+    let is_ready = db_ok && (!embedding_required || embedding_present);
+    let code = if is_ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+
+    (
+        code,
+        Json(serde_json::json!({
+            "status": if is_ready { "ready" } else { "not_ready" },
+            "checks": [
+                { "name": "database", "status": if db_ok { "ok" } else { "error" }, "required": true },
+                { "name": "embedding", "status": embedding_status, "required": embedding_required },
+            ],
+        })),
+    )
+}
+
 /// GET /api/health — Minimal liveness probe (public, no auth required).
 /// Returns only status and version to prevent information leakage.
 /// Use GET /api/health/detail for full diagnostics (requires auth).
@@ -257,15 +572,7 @@ pub async fn version() -> impl IntoResponse {
     )
 )]
 pub async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    // Check database connectivity
-    let shared_id = librefang_types::agent::AgentId(uuid::Uuid::from_bytes([
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    ]));
-    let db_ok = state
-        .kernel
-        .memory_substrate()
-        .structured_get(shared_id, "__health_check__")
-        .is_ok();
+    let db_ok = database_probe_ok(&state);
 
     let status = if db_ok { "ok" } else { "degraded" };
 
@@ -294,14 +601,7 @@ pub async fn health(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 pub async fn health_detail(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let health = state.kernel.supervisor_ref().health();
 
-    let shared_id = librefang_types::agent::AgentId(uuid::Uuid::from_bytes([
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-    ]));
-    let db_ok = state
-        .kernel
-        .memory_substrate()
-        .structured_get(shared_id, "__health_check__")
-        .is_ok();
+    let db_ok = database_probe_ok(&state);
 
     let hcfg = state.kernel.config_ref();
     let config_warnings = hcfg.validate();
@@ -310,10 +610,14 @@ pub async fn health_detail(State(state): State<Arc<AppState>>) -> impl IntoRespo
     // Budget snapshot — already aggregated by MeteringEngine (single-row SQL
     // queries, all indexed). `daily_spend_percent` is `None` when no daily
     // cap is configured so monitors don't false-fire on undefined ratios.
-    let budget_status = state
+    let budget_status = match state
         .kernel
         .metering_ref()
-        .budget_status(&state.kernel.budget_config());
+        .budget_status(&state.kernel.budget_config())
+    {
+        Ok(status) => status,
+        Err(error) => return ApiErrorResponse::internal_scrub(error).into_response(),
+    };
     let daily_spend_percent = if budget_status.daily_limit > 0.0 {
         Some(budget_status.daily_pct * 100.0)
     } else {
@@ -374,11 +678,25 @@ pub async fn health_detail(State(state): State<Arc<AppState>>) -> impl IntoRespo
             "model_count": llm.model_count,
         },
     }))
+    .into_response()
 }
 
 // ---------------------------------------------------------------------------
 // Prometheus metrics endpoint
 // ---------------------------------------------------------------------------
+fn escape_prometheus_label_value(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for character in value.chars() {
+        match character {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' | '\r' => escaped.push_str("\\n"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
 /// GET /api/metrics — Prometheus text-format metrics.
 ///
 /// Returns counters and gauges for monitoring LibreFang in production:
@@ -437,10 +755,10 @@ pub async fn prometheus_metrics(State(state): State<Arc<AppState>>) -> impl Into
     out.push_str("# HELP librefang_llm_calls LLM API calls made (rolling 1h window).\n");
     out.push_str("# TYPE librefang_llm_calls gauge\n");
     for agent in &agents {
-        let name = &agent.name;
-        let provider = &agent.manifest.model.provider;
-        let model = &agent.manifest.model.model;
         if let Some(snap) = state.kernel.scheduler_ref().get_usage(agent.id) {
+            let name = escape_prometheus_label_value(&agent.name);
+            let provider = escape_prometheus_label_value(&agent.manifest.model.provider);
+            let model = escape_prometheus_label_value(&agent.manifest.model.model);
             let labels = format!("agent=\"{name}\",provider=\"{provider}\",model=\"{model}\"");
             out.push_str(&format!(
                 "librefang_tokens{{{labels}}} {}\n",

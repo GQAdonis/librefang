@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use librefang_types::ephemeral::{EphemeralSpawnRequest, EphemeralSpawnResult};
 
 use super::*;
 
@@ -13,6 +14,38 @@ pub struct AgentInfo {
     pub description: String,
     pub tags: Vec<String>,
     pub tools: Vec<String>,
+}
+
+/// A newly created agent type, as the runtime hands it back to the model (#7722).
+///
+/// Deliberately a struct rather than the raw `AgentManifest`: the tool's caller is an LLM that just authored seven fields and needs to see those seven fields resolved, not fifty-eight defaults it never asked about and cannot act on.
+/// `provider` and `model` are the two that most often come back different from what was sent — an omitted one resolves to the `"default"` sentinel the kernel later maps onto `[default_model]` — so they are reported rather than assumed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentTypeSummary {
+    pub name: String,
+    pub description: String,
+    pub provider: String,
+    pub model: String,
+    pub tools: Vec<String>,
+    pub skills: Vec<String>,
+}
+
+/// What [`AgentControl::send_to_agent_async_tracked`] actually did (#6650).
+///
+/// The method has two legitimate outcomes and they mean opposite things to the caller, so they must not share one `String` slot.
+/// Before this enum both returned a bare `Ok(String)`: a task id on the tracked path, the callee's full response body on the fallback.
+/// The single production caller (`tool_agent_send`) could not tell them apart, so it labelled the response body `task_id` and told the model *"Delegation started asynchronously; the target's reply will be delivered to this session when it completes. Do not wait"* — for a reply that had already arrived and would never be delivered again, because no task was ever registered.
+///
+/// The fallback itself is correct and stays: with no parseable caller session there is nowhere to deliver a completion event, and a blocking send at least gets the caller its answer.
+/// Only the conflation was the bug.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AsyncSendOutcome {
+    /// Registered on the async-task tracker.
+    /// The payload is the task id; the callee's reply arrives later as a `TaskCompletionEvent`.
+    Tracked(String),
+    /// Fell back to a blocking send — no task was registered and no completion event will ever arrive.
+    /// The payload is the callee's response body, already complete.
+    Inline(String),
 }
 
 // ============================================================================
@@ -117,10 +150,10 @@ pub trait AgentControl: Send + Sync {
     /// delivered to; `conversation_key` optionally pins the callee session
     /// (see [`send_to_agent_with_key`](Self::send_to_agent_with_key)).
     ///
-    /// Defaults to the blocking [`send_to_agent_as`](Self::send_to_agent_as)
-    /// for handles that don't support the tracker (mocks/tests) — in that
-    /// fallback the returned string is the response body, delivered inline,
-    /// because there is no tracker to register against.
+    /// Returns an [`AsyncSendOutcome`] rather than a bare string because the method has two outcomes that mean opposite things (#6650): a task id the caller should stop waiting on, or an already-complete response body delivered inline when tracking was not possible.
+    /// Callers must branch on the variant — never render the payload as a task id unconditionally.
+    ///
+    /// Defaults to the blocking [`send_to_agent_as`](Self::send_to_agent_as) for handles that don't support the tracker (mocks/tests), returning [`AsyncSendOutcome::Inline`] because there is no tracker to register against.
     async fn send_to_agent_async_tracked(
         &self,
         agent_id: &str,
@@ -129,7 +162,7 @@ pub trait AgentControl: Send + Sync {
         caller_session_id: Option<&str>,
         conversation_key: Option<&str>,
         chat_id: Option<&str>,
-    ) -> Result<String, KernelOpError> {
+    ) -> Result<AsyncSendOutcome, KernelOpError> {
         let _ = (caller_session_id, conversation_key, chat_id);
         tracing::trace!(
             agent = %agent_id,
@@ -137,6 +170,7 @@ pub trait AgentControl: Send + Sync {
         );
         self.send_to_agent_as(agent_id, message, caller_agent_id)
             .await
+            .map(AsyncSendOutcome::Inline)
     }
 
     /// Register a background operation on the kernel's async-task tracker
@@ -223,6 +257,43 @@ pub trait AgentControl: Send + Sync {
         _allowed_tools: Option<Vec<String>>,
     ) -> Result<String, KernelOpError> {
         Err(KernelOpError::unavailable("run_forked_agent_oneshot"))
+    }
+
+    /// Run an ephemeral worker turn on behalf of `request.parent_id` and return its result (refs #6699).
+    ///
+    /// The worker gets a caller-supplied system prompt (or an agent type's), a mission workspace that exists only for the duration of the run, and a tool set bounded by what the parent itself may call.
+    /// It leaves nothing behind: no registry entry, no persisted session, no workspace.
+    ///
+    /// Spend, resource quota and tool-call attribution all land on the parent — see [`EphemeralSpawnRequest::parent_id`] for why that is a hard requirement rather than a convenience.
+    ///
+    /// Nesting is bounded by the same `max_agent_call_depth` quota `agent_send` and `run_workflow` use, so a worker that spawns a worker cannot recurse without bound.
+    ///
+    /// Default: unavailable. The real kernel overrides; stubs and test handles keep the default so a caller learns the capability is absent instead of silently getting an empty answer.
+    async fn spawn_ephemeral(
+        &self,
+        request: EphemeralSpawnRequest,
+    ) -> Result<EphemeralSpawnResult, KernelOpError> {
+        let _ = request;
+        Err(KernelOpError::unavailable("spawn_ephemeral"))
+    }
+
+    /// Create an operator-authored agent type — a reusable manifest under `$LIBREFANG_HOME/agent-types/` that `agent_spawn` and the dashboard can later spawn from (#7722).
+    ///
+    /// This sits on `AgentControl` rather than on a role trait of its own because an agent type is the thing `spawn_agent` consumes, and because a new supertrait on `KernelHandle` would break every stub implementor in the workspace at once for one method.
+    ///
+    /// `name` is the identity, validated kernel-side against the same rule `/api/templates/{name}` applies; `spec.name` is ignored.
+    /// The kernel writes through `AgentTypeSpec::into_new_manifest` and the shared `agent_type_store`, so this path and the HTTP path cannot disagree about what a new agent type contains, what names are legal, or what happens when two creates race for one name.
+    ///
+    /// Errors are typed because the tool relays them to a model that can act on them next turn: `InvalidInput` for a name the store refuses, `Conflict` for a name already taken by an agent type or a live agent.
+    ///
+    /// Default: unavailable, so stubs and mocks that never author agent types need no impl.
+    async fn create_agent_type(
+        &self,
+        name: &str,
+        spec: librefang_types::agent_type::AgentTypeSpec,
+    ) -> Result<AgentTypeSummary, KernelOpError> {
+        let _ = (name, spec);
+        Err(KernelOpError::unavailable("create_agent_type"))
     }
 
     /// Maximum inter-agent call depth (from config). Default: 5.

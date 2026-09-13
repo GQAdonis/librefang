@@ -41,7 +41,7 @@ export function PromptsPage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<PromptOverviewItem | null>(null);
 
-  const items = overviewQuery.data ?? [];
+  const items = useMemo(() => overviewQuery.data ?? [], [overviewQuery.data]);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return items;
@@ -178,7 +178,11 @@ function AgentPromptRepoModal({
 
   const handleBind = (version: PromptVersion) => {
     bindMutation.mutate(
-      { agentId: item.agent_id, version },
+      {
+        agentId: item.agent_id,
+        version,
+        previousSystemPrompt: item.live_system_prompt,
+      },
       {
         onSuccess: () =>
           addToast(

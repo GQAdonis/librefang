@@ -31,6 +31,22 @@ impl librefang_memory::proactive::EmbeddingFn for EmbeddingBridge {
     }
 }
 
+/// Wall-clock ceiling on the single extraction call that turns a conversation
+/// slice into candidate memories.
+///
+/// Named rather than inlined so it sits next to [`DECISION_TIMEOUT_SECS`] and
+/// can be compared to it. The caller (`agent_loop::end_turn`) does not wrap
+/// `auto_memorize` in a timeout of its own — this ceiling is enforced
+/// entirely inside the extraction call.
+pub const EXTRACTION_TIMEOUT_SECS: u64 = 30;
+
+/// Wall-clock ceiling on the follow-up call that decides whether a candidate
+/// is new, an update of an existing memory, or a duplicate to drop.
+///
+/// Shorter than [`EXTRACTION_TIMEOUT_SECS`] because it is a small
+/// classification over text the model has already been given.
+pub const DECISION_TIMEOUT_SECS: u64 = 15;
+
 /// Initialize proactive memory system.
 ///
 /// Creates a `ProactiveMemoryStore` if either auto_retrieve or auto_memorize is enabled.
@@ -361,7 +377,7 @@ pub struct LlmMemoryExtractor {
     /// in that case the OpenAI driver's substring fallback resolves the
     /// policy by model name.
     kernel_handle:
-        std::sync::Mutex<Option<std::sync::Weak<dyn crate::kernel_handle::KernelHandle>>>,
+        parking_lot::Mutex<Option<std::sync::Weak<dyn crate::kernel_handle::KernelHandle>>>,
 }
 
 impl LlmMemoryExtractor {
@@ -382,8 +398,21 @@ impl LlmMemoryExtractor {
             driver,
             model,
             prompt_caching,
-            kernel_handle: std::sync::Mutex::new(None),
+            kernel_handle: parking_lot::Mutex::new(None),
         }
+    }
+
+    fn lock_kernel_handle_slot(
+        &self,
+    ) -> parking_lot::MutexGuard<'_, Option<std::sync::Weak<dyn crate::kernel_handle::KernelHandle>>>
+    {
+        self.kernel_handle.lock()
+    }
+
+    fn kernel_handle(&self) -> Option<std::sync::Arc<dyn crate::kernel_handle::KernelHandle>> {
+        self.lock_kernel_handle_slot()
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
     }
 
     /// Store a weak handle to the kernel so the extractor can look up
@@ -401,9 +430,7 @@ impl LlmMemoryExtractor {
         &self,
         handle: std::sync::Weak<dyn crate::kernel_handle::KernelHandle>,
     ) {
-        if let Ok(mut slot) = self.kernel_handle.lock() {
-            *slot = Some(handle);
-        }
+        *self.lock_kernel_handle_slot() = Some(handle);
     }
 
     /// Resolve the `reasoning_echo_policy` for the given model via the
@@ -412,10 +439,7 @@ impl LlmMemoryExtractor {
     /// isn't in the catalog — the driver's substring fallback handles
     /// those cases.
     fn echo_policy_for(&self, model: &str) -> librefang_types::model_catalog::ReasoningEchoPolicy {
-        self.kernel_handle
-            .lock()
-            .ok()
-            .and_then(|slot| slot.as_ref()?.upgrade())
+        self.kernel_handle()
             .map(|k| k.reasoning_echo_policy_for(model))
             .unwrap_or_default()
     }
@@ -442,10 +466,7 @@ impl LlmMemoryExtractor {
     /// (see `ProactiveMemoryOverrides::extraction_model` doc).
     fn resolve_model_for_agent(&self, agent_id: &str) -> String {
         let Some(override_spec) = self
-            .kernel_handle
-            .lock()
-            .ok()
-            .and_then(|slot| slot.as_ref()?.upgrade())
+            .kernel_handle()
             .and_then(|k| k.proactive_memory_extraction_model_for(agent_id))
         else {
             return self.model.clone();
@@ -488,7 +509,7 @@ impl LlmMemoryExtractor {
         // Skip system messages — only include user and assistant roles.
         // Cap total text to ~8000 chars to avoid exceeding extraction model context.
         const MAX_EXTRACTION_CHARS: usize = 8000;
-        let mut conversation_text = String::new();
+        let mut conversation_text = String::with_capacity(MAX_EXTRACTION_CHARS);
         for msg in messages {
             let role = msg
                 .get("role")
@@ -517,18 +538,17 @@ impl LlmMemoryExtractor {
                 _ => String::new(),
             };
             if !content.is_empty() {
-                conversation_text.push_str(&format!("{role}: {content}\n"));
+                use std::fmt::Write as _;
+                let _ = writeln!(conversation_text, "{role}: {content}");
                 if conversation_text.len() > MAX_EXTRACTION_CHARS {
-                    if let Some(last_newline) =
-                        conversation_text[..MAX_EXTRACTION_CHARS].rfind('\n')
-                    {
+                    let mut safe_end = MAX_EXTRACTION_CHARS;
+                    while safe_end > 0 && !conversation_text.is_char_boundary(safe_end) {
+                        safe_end -= 1;
+                    }
+                    if let Some(last_newline) = conversation_text[..safe_end].rfind('\n') {
                         conversation_text.truncate(last_newline);
                     } else {
-                        let mut safe = MAX_EXTRACTION_CHARS;
-                        while safe > 0 && !conversation_text.is_char_boundary(safe) {
-                            safe -= 1;
-                        }
-                        conversation_text.truncate(safe);
+                        conversation_text.truncate(safe_end);
                     }
                     break;
                 }
@@ -559,7 +579,7 @@ impl LlmMemoryExtractor {
             cache_ttl: None,
             prompt_cache_strategy: None,
             response_format: Some(ResponseFormat::Json),
-            timeout_secs: Some(30),
+            timeout_secs: Some(EXTRACTION_TIMEOUT_SECS),
             extra_body: None,
             agent_id: None,
             session_id: None,
@@ -684,7 +704,7 @@ impl MemoryExtractor for LlmMemoryExtractor {
             // — tell JSON-mode-capable providers to honour it so weak models
             // can't drift into prose.
             response_format: Some(ResponseFormat::Json),
-            timeout_secs: Some(15),
+            timeout_secs: Some(DECISION_TIMEOUT_SECS),
             extra_body: None,
             agent_id: None,
             session_id: None,
@@ -952,6 +972,11 @@ fn parse_llm_extraction_response(
                 accessed_at: None,
                 access_count: None,
                 agent_id: None,
+                // Freshly extracted, never retrieved by a query — nothing has
+                // measured this against anything (#7808).
+                similarity: None,
+                // Not stored yet, so there is no storage scope to carry (#7920).
+                scope: None,
             })
         })
         // H2: cap memories per extraction. A misbehaving extractor can
@@ -1091,7 +1116,27 @@ mod tests {
             accessed_at: None,
             access_count: None,
             agent_id: None,
+            similarity: None,
+            scope: None,
         }
+    }
+
+    #[test]
+    fn kernel_handle_slot_remains_usable_after_holder_panics() {
+        let extractor = LlmMemoryExtractor::new(
+            Arc::new(CannedLlmDriver {
+                response: r#"{"memories":[],"relations":[]}"#.to_string(),
+            }),
+            "test-model".to_string(),
+        );
+
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _slot = extractor.lock_kernel_handle_slot();
+            panic!("poison the kernel handle lock");
+        }));
+        assert!(panic.is_err());
+
+        assert!(extractor.lock_kernel_handle_slot().is_none());
     }
 
     fn make_fragment(
@@ -1113,6 +1158,7 @@ mod tests {
             image_url: None,
             image_embedding: None,
             modality: Default::default(),
+            similarity: None,
         }
     }
 
@@ -1326,6 +1372,7 @@ mod tests {
             image_url: None,
             image_embedding: None,
             modality: Default::default(),
+            similarity: None,
         }];
         let json = format!(r#"{{"action": "UPDATE", "existing_id": "{}"}}"#, mem_id);
         let result = parse_decision_response(&json, &fragments).unwrap();
@@ -1804,6 +1851,29 @@ mod tests {
         assert!(ctx.contains("based on my memory"));
         // But the memory content itself should appear as a bullet, not as a recitation
         assert!(ctx.contains("- test"));
+    }
+
+    #[tokio::test]
+    async fn extraction_truncates_at_utf8_boundary_before_searching_for_newline() {
+        let extractor = LlmMemoryExtractor::new(
+            Arc::new(CannedLlmDriver {
+                response: r#"{"memories":[],"relations":[]}"#.to_string(),
+            }),
+            "test-model".to_string(),
+        );
+        // `user: ` is six bytes. Include an earlier newline, then put the
+        // four-byte emoji at byte 7,999 so the 8,000-byte extraction boundary
+        // falls inside its encoding before `rfind('\n')` can run.
+        let content = format!("line\n{}😀tail", "a".repeat(7_988));
+        let messages = vec![serde_json::json!({
+            "role": "user",
+            "content": content,
+        })];
+
+        let result = extractor
+            .extract_with_model(&messages, "test-model", &[])
+            .await;
+        assert!(result.is_ok(), "UTF-8 truncation must not panic or fail");
     }
 
     /// H4 regression: even a runaway list of fat memories must not push

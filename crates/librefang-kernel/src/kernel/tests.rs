@@ -41,6 +41,7 @@ fn boot_with_retry(config: KernelConfig) -> LibreFangKernel {
 struct RecordingChannelAdapter {
     name: String,
     channel_type: ChannelType,
+    account_id: Option<String>,
     sent: Arc<std::sync::Mutex<Vec<String>>>,
     overrides: Option<librefang_types::config::ChannelOverrides>,
 }
@@ -50,8 +51,20 @@ impl RecordingChannelAdapter {
         Self {
             name: channel_type.to_string(),
             channel_type: ChannelType::Custom(channel_type.to_string()),
+            account_id: None,
             sent: Arc::new(std::sync::Mutex::new(Vec::new())),
             overrides: None,
+        }
+    }
+
+    /// A **named instance** of a channel type — the shape `[[sidecar_channels]]` produces as soon as `name` and `channel_type` differ (#8046 / #8055).
+    ///
+    /// The `account_id` mirrors the bridge exactly: `channel_bridge.rs` pushes `Some(sidecar_config.name.clone())` alongside each adapter, so a named instance's account id *is* its instance name.
+    fn named_instance(name: &str, channel_type: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            account_id: Some(name.to_string()),
+            ..Self::new(channel_type)
         }
     }
 
@@ -75,6 +88,10 @@ impl ChannelAdapter for RecordingChannelAdapter {
 
     fn channel_type(&self) -> ChannelType {
         self.channel_type.clone()
+    }
+
+    fn account_id(&self) -> Option<&str> {
+        self.account_id.as_deref()
     }
 
     fn channel_overrides(&self) -> Option<librefang_types::config::ChannelOverrides> {
@@ -111,12 +128,22 @@ impl ChannelAdapter for RecordingChannelAdapter {
 
 struct EnvVarGuard {
     key: &'static str,
+    /// What the variable held before this guard overwrote it, so drop can put it back.
+    ///
+    /// Restoring the previous value — rather than unconditionally removing the variable — is what keeps one test from silently reconfiguring the rest of the process.
+    /// CI sets `LIBREFANG_REGISTRY_OFFLINE=1` for the whole `Test / macOS` job, and that lane's Mach-port guard step runs every kernel unit test as threads in ONE process, so a guard that removed the variable handed every later `boot_with_config` a live network registry sync.
+    /// That sync's fan-out writes `agent-types/<type>.toml` into the test's own home, which is the first candidate `load_agent_template` consults — shadowing the templates the step-agent tests seed under `workspaces/agents/`.
+    /// Nextest cannot observe the leak at all (one process per test), which is why it was macOS-guard-step-only.
+    previous: Option<String>,
 }
 
 impl Drop for EnvVarGuard {
     fn drop(&mut self) {
         // SAFETY: see set_test_env comment above.
-        unsafe { std::env::remove_var(self.key) };
+        match &self.previous {
+            Some(value) => unsafe { std::env::set_var(self.key, value) },
+            None => unsafe { std::env::remove_var(self.key) },
+        }
     }
 }
 
@@ -124,11 +151,37 @@ fn set_test_env(key: &'static str, value: &str) -> EnvVarGuard {
     // SAFETY: every caller is annotated `#[serial_test::serial(librefang_vault_key)]`,
     // so no two env-mutating tests in this file run concurrently — process-global
     // `set_var`/`remove_var` cannot race a `getenv` on another test thread. The
-    // guard removes the variable on drop so it never persists across tests.
+    // guard restores whatever the variable held before, so it neither persists across tests nor erases a value the surrounding environment set.
     // (The earlier claim that the default test runner is single-threaded was
     // incorrect: `cargo test` runs tests across multiple threads in one process.)
+    let previous = std::env::var(key).ok();
     unsafe { std::env::set_var(key, value) };
-    EnvVarGuard { key }
+    EnvVarGuard { key, previous }
+}
+
+/// `set_test_env` must put back whatever the variable held, not erase it.
+///
+/// The guard used to `remove_var` unconditionally, which is indistinguishable from "restore" only when the variable was unset to begin with.
+/// CI sets `LIBREFANG_REGISTRY_OFFLINE=1` for the whole `Test / macOS` job, so the first test to guard that variable disarmed the offline switch for every kernel boot that ran after it in the same process — see the `previous` field above.
+#[test]
+#[serial_test::serial(librefang_vault_key)]
+fn set_test_env_restores_the_previous_value_instead_of_removing_it() {
+    const KEY: &str = "LIBREFANG_TEST_ENV_GUARD_RESTORE";
+    let outer = set_test_env(KEY, "ambient");
+    {
+        let _inner = set_test_env(KEY, "overridden");
+        assert_eq!(std::env::var(KEY).as_deref(), Ok("overridden"));
+    }
+    assert_eq!(
+        std::env::var(KEY).as_deref(),
+        Ok("ambient"),
+        "the inner guard erased a value the surrounding scope had set"
+    );
+    drop(outer);
+    assert!(
+        std::env::var(KEY).is_err(),
+        "a guard over a variable that started out unset must leave it unset"
+    );
 }
 
 #[test]
@@ -474,6 +527,238 @@ async fn test_post_approval_reply_routes_to_account_qualified_adapter_6492() {
         "bare-account reply must NOT reach the account-qualified adapter (still only the case-1 send)"
     );
 
+    // Case 3 (#8055 guard): an account the registry does not know must NOT fall back to the bare key.
+    // That fallback would deliver one tenant's reply into another tenant's chat — the leak the approval listener in `librefang_channels::bridge` documents.
+    // The #8055 channel-type scan added a second path into this resolution, so pin the behaviour explicitly.
+    let err = kernel
+        .send_channel_message(
+            "whatsapp",
+            "dm-2",
+            "approved — wrong account",
+            None,
+            Some("acct-unknown"),
+        )
+        .await
+        .expect_err("an unknown account_id must not resolve to any adapter");
+    assert!(
+        err.to_string().contains("acct-unknown"),
+        "the error must name the account that failed to resolve: {err}"
+    );
+    assert_eq!(
+        bare_sent.lock().unwrap().len(),
+        1,
+        "an unknown account_id must NOT fall back to the bare adapter (cross-tenant leak)"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_send_channel_message_resolves_named_instance_by_channel_type_8055() {
+    // #8055: a sidecar channel whose `name` differs from its `channel_type` was unreachable from every outbound send.
+    //
+    // The channel bridge registers each adapter under `adapter.name()` and `"<name>:<account_id>"`, where `account_id` is that same name — so a `[[sidecar_channels]]` entry `name = "slack-hr", channel_type = "slack"` produces exactly the two keys the bug report shows, `["slack-hr", "slack-hr:slack-hr"]`.
+    // Inbound turns, however, are stamped with the *channel type*, so the post-approval wake path called `send_channel_message("slack", …, Some("slack-hr"))` and missed both keys.
+    // The agent's reply was produced and persisted, and silently never delivered.
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let hr = Arc::new(RecordingChannelAdapter::named_instance("slack-hr", "slack"));
+    let hr_sent = hr.sent.clone();
+    // Register exactly as `channel_bridge::start_channel_bridge_with_config` does — both keys built from the instance name, neither from the type.
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("slack-hr".to_string(), hr.clone());
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("slack-hr:slack-hr".to_string(), hr);
+
+    // The failing call from the bug report, verbatim.
+    kernel
+        .send_channel_message(
+            "slack",
+            "C0BN6UAQ75M",
+            "approved — file uploaded",
+            None,
+            Some("slack-hr"),
+        )
+        .await
+        .expect("a named instance must be reachable by its channel type + account_id");
+    assert_eq!(
+        hr_sent.lock().unwrap().clone(),
+        vec!["C0BN6UAQ75M:approved — file uploaded".to_string()],
+        "the post-approval reply must reach the 'slack-hr' instance the turn arrived on"
+    );
+
+    // The instance name itself keeps working — that is how an explicit `channel_send({channel: "slack-hr"})` and the per-instance status reads in `routes/channels.rs` address the adapter.
+    kernel
+        .send_channel_message("slack-hr", "C0BN6UAQ75M", "by name", None, None)
+        .await
+        .expect("the instance name must remain a valid channel key");
+
+    // With a single instance of the type registered, a bare channel type is unambiguous and resolves too.
+    // This is what an out-of-band caller with no account context (`notify_owner`, a cron target written as `slack`) hands in.
+    kernel
+        .send_channel_message("slack", "C0BN6UAQ75M", "by bare type", None, None)
+        .await
+        .expect("a lone instance of a channel type must resolve from the bare type");
+    assert_eq!(
+        hr_sent.lock().unwrap().len(),
+        3,
+        "all three addressing forms must land on the same single instance"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_interactive_approval_notification_reaches_a_named_instance_8055() {
+    // The interactive approval notification is the *other* half of #8055, and it fails in a way no error surfaces.
+    // `NotificationTarget.channel_type` is documented as a channel type ("telegram", "slack", "email") and that is what an operator writes in `[notification] approval_channels`, but the channel bridge keys the adapter registry by `[[sidecar_channels]] name`.
+    // A bare `channel_adapters.get(&target.channel_type)` therefore missed on every named instance and dropped silently to the plain-text fallback, so the approver got the escalation text with no Approve / Reject buttons — on the one notification whose entire purpose is those buttons — while the fallback's own `send_channel_message` resolved the same pair fine.
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let hr = Arc::new(RecordingChannelAdapter::named_instance("slack-hr", "slack"));
+    let hr_sent = hr.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("slack-hr".to_string(), hr.clone());
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("slack-hr:slack-hr".to_string(), hr);
+
+    kernel
+        .push_approval_interactive(
+            &NotificationTarget {
+                // A channel TYPE, exactly as the field's own doc comment and every config example write it.
+                channel_type: "slack".to_string(),
+                recipient: "C0BN6UAQ75M".to_string(),
+                thread_id: None,
+            },
+            "agent wants to run `file_write`",
+            "abcdef1234",
+        )
+        .await;
+
+    // `ChannelAdapter::send_interactive`'s default renders each button label as `[Label]` and forwards to `send`, so the recorded text is what distinguishes the interactive path from the plain-text fallback.
+    let sent = hr_sent.lock().unwrap().clone();
+    assert_eq!(
+        sent.len(),
+        1,
+        "the notification must reach the named instance exactly once: {sent:?}"
+    );
+    assert!(
+        sent[0].contains("[Approve]") && sent[0].contains("[Reject]"),
+        "the interactive path must be taken, not the buttonless plain-text fallback: {sent:?}"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_channel_type_resolution_refuses_to_guess_between_tenants_8055() {
+    // The #8055 channel-type scan must never widen cross-tenant reach.
+    // Two named instances of one channel type are two different customers, so the scan resolves only when the `account_id` singles one out — and a bare channel type with two instances registered stays an error rather than picking whichever adapter `DashMap` iteration happened to yield first.
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let hr = Arc::new(RecordingChannelAdapter::named_instance("slack-hr", "slack"));
+    let hr_sent = hr.sent.clone();
+    let eng = Arc::new(RecordingChannelAdapter::named_instance(
+        "slack-eng",
+        "slack",
+    ));
+    let eng_sent = eng.sent.clone();
+    for (name, adapter) in [
+        ("slack-hr", hr.clone() as Arc<dyn ChannelAdapter>),
+        ("slack-eng", eng.clone() as Arc<dyn ChannelAdapter>),
+    ] {
+        kernel
+            .mesh
+            .channel_adapters
+            .insert(name.to_string(), adapter.clone());
+        kernel
+            .mesh
+            .channel_adapters
+            .insert(format!("{name}:{name}"), adapter);
+    }
+
+    // Each account reaches its own instance and only its own instance.
+    kernel
+        .send_channel_message("slack", "C-HR", "hr only", None, Some("slack-hr"))
+        .await
+        .expect("account_id must single out the hr instance");
+    kernel
+        .send_channel_message("slack", "C-ENG", "eng only", None, Some("slack-eng"))
+        .await
+        .expect("account_id must single out the eng instance");
+    assert_eq!(
+        hr_sent.lock().unwrap().clone(),
+        vec!["C-HR:hr only".to_string()]
+    );
+    assert_eq!(
+        eng_sent.lock().unwrap().clone(),
+        vec!["C-ENG:eng only".to_string()]
+    );
+
+    // An account that matches no instance is an error, not a guess.
+    let err = kernel
+        .send_channel_message("slack", "C-HR", "nobody", None, Some("slack-legal"))
+        .await
+        .expect_err("an unregistered account must not resolve");
+    assert!(
+        err.to_string().contains("slack-legal"),
+        "the error must name the unresolved account: {err}"
+    );
+
+    // A bare channel type with two instances is ambiguous; the error says so, and lists the registered keys in sorted order so two operator reports of the same daemon are comparable.
+    let err = kernel
+        .send_channel_message("slack", "C-HR", "which tenant?", None, None)
+        .await
+        .expect_err("a bare channel type must not pick a tenant at random");
+    let err = err.to_string();
+    assert!(
+        err.contains("ambiguous"),
+        "an ambiguous bare channel type must say so: {err}"
+    );
+    assert!(
+        err.contains(r#"["slack-eng", "slack-eng:slack-eng", "slack-hr", "slack-hr:slack-hr"]"#),
+        "the available-key list must be sorted for comparability: {err}"
+    );
+
+    assert_eq!(
+        hr_sent.lock().unwrap().len(),
+        1,
+        "neither the unresolved account nor the ambiguous type may deliver anything"
+    );
+    assert_eq!(eng_sent.lock().unwrap().len(), 1);
+
     kernel.shutdown();
 }
 
@@ -481,6 +766,7 @@ async fn test_post_approval_reply_routes_to_account_qualified_adapter_6492() {
 fn test_manifest_to_capabilities() {
     let mut manifest = AgentManifest {
         name: "test".to_string(),
+        source_template: None,
         description: "test".to_string(),
         author: "test".to_string(),
         module: "test".to_string(),
@@ -498,6 +784,7 @@ fn test_manifest_to_capabilities() {
 fn test_manifest(name: &str, description: &str, tags: Vec<String>) -> AgentManifest {
     AgentManifest {
         name: name.to_string(),
+        source_template: None,
         description: description.to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -621,6 +908,7 @@ fn test_find_agents_by_tag() {
 fn test_manifest_to_capabilities_with_profile() {
     use librefang_types::agent::ToolProfile;
     let manifest = AgentManifest {
+        source_template: None,
         profile: Some(ToolProfile::Coding),
         ..Default::default()
     };
@@ -640,6 +928,7 @@ fn test_manifest_to_capabilities_with_profile() {
 fn test_manifest_to_capabilities_profile_overridden_by_explicit_tools() {
     use librefang_types::agent::ToolProfile;
     let mut manifest = AgentManifest {
+        source_template: None,
         profile: Some(ToolProfile::Coding),
         ..Default::default()
     };
@@ -653,6 +942,45 @@ fn test_manifest_to_capabilities_profile_overridden_by_explicit_tools() {
     assert!(!caps
         .iter()
         .any(|c| matches!(c, Capability::ToolInvoke(name) if name == "shell_exec")));
+}
+
+#[test]
+fn poisoned_config_override_locks_recover_and_remain_usable() {
+    let default_model = std::sync::RwLock::new(vec!["loaded"]);
+    let poison = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut state = default_model.write().unwrap();
+                state.push("preserved");
+                panic!("poison default model override before read recovery");
+            })
+            .join()
+    });
+    assert!(poison.is_err());
+    assert!(default_model.is_poisoned());
+    assert_eq!(
+        &*read_config_override(&default_model, "default_model_override"),
+        &["loaded", "preserved"]
+    );
+    assert!(!default_model.is_poisoned());
+
+    let tool_policy = std::sync::RwLock::new(vec!["old"]);
+    let poison = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let _state = tool_policy.write().unwrap();
+                panic!("poison tool policy override before write recovery");
+            })
+            .join()
+    });
+    assert!(poison.is_err());
+    assert!(tool_policy.is_poisoned());
+    write_config_override(&tool_policy, "tool_policy_override").push("new");
+    assert!(!tool_policy.is_poisoned());
+    assert_eq!(
+        &*read_config_override(&tool_policy, "tool_policy_override"),
+        &["old", "new"]
+    );
 }
 
 #[test]
@@ -684,20 +1012,19 @@ fn test_spawn_agent_applies_local_default_model_override() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "local-model-agent".to_string(),
+                source_template: None,
                 description: "uses local model override".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "default".to_string(),
                     model: "default".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: None,
                     base_url: None,
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -719,6 +1046,176 @@ fn test_spawn_agent_applies_local_default_model_override() {
     assert_eq!(entry.manifest.model.model, "default");
     assert!(entry.manifest.model.base_url.is_none());
     assert!(entry.manifest.model.api_key_env.is_none());
+
+    kernel.shutdown();
+}
+
+/// Source-shape sentinel for the #6732 diagnostic wiring.
+///
+/// `warn_invalid_group_trigger_patterns` returns nothing and only emits a `warn!`, so a test that calls it — or calls the validator underneath it — proves the validator works without proving anything is wired to it.
+/// Delete all four call sites and every behavioural assertion in this file still passes, which is precisely the hole this closes.
+///
+/// This is a shape check, not a behavioural one, and is labelled as such: it cannot tell you the warning reached a subscriber, only that the manifest is still handed to the diagnostic on each of the four paths that accept one.
+/// Exercising all four behaviourally means driving a spawn, two `agent_state` transitions and a boot-time restore against a real kernel with tracing captured; that is worth doing and is not done here.
+///
+/// The boot-restore site is the one that matters most in production: after a daemon's first run every agent arrives through it, so a manifest whose pattern silently never matches is re-loaded on every restart with no diagnostic at all if that call is dropped.
+#[test]
+fn group_trigger_pattern_diagnostic_is_wired_into_every_manifest_path() {
+    // Comments are stripped so a leftover doc reference cannot satisfy the assertion after the call itself is removed.
+    //
+    // The open/close scan loops within a line rather than handling one delimiter per line.
+    // A single-line `/* … */` — `boot.rs` has one at the sqlite match arm — would otherwise leave the stripper stuck in block-comment state and silently swallow the entire rest of the file, including the call this test exists to find.
+    //
+    // The scan also tracks double-quoted string literals so a `//` inside one (e.g. `"https://api.everyapi.ai/v1"` in `boot.rs`) is not mistaken for a line-comment start.
+    // Without that, a call site sharing a line with such a literal would be silently truncated away, the same "shape check stops finding what it's for" failure mode this sentinel already fixed once for block comments.
+    let strip = |src: &str| -> String {
+        let mut out = String::with_capacity(src.len());
+        let mut in_block = false;
+        for line in src.lines() {
+            let mut kept = String::with_capacity(line.len());
+            let chars: Vec<char> = line.chars().collect();
+            let mut i = 0;
+            let mut in_string = false;
+            while i < chars.len() {
+                if in_block {
+                    if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                        in_block = false;
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                    continue;
+                }
+                if in_string {
+                    kept.push(chars[i]);
+                    if chars[i] == '\\' && i + 1 < chars.len() {
+                        kept.push(chars[i + 1]);
+                        i += 2;
+                        continue;
+                    }
+                    if chars[i] == '"' {
+                        in_string = false;
+                    }
+                    i += 1;
+                    continue;
+                }
+                if chars[i] == '"' {
+                    in_string = true;
+                    kept.push(chars[i]);
+                    i += 1;
+                    continue;
+                }
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'/') {
+                    break;
+                }
+                if chars[i] == '/' && chars.get(i + 1) == Some(&'*') {
+                    in_block = true;
+                    i += 2;
+                    continue;
+                }
+                kept.push(chars[i]);
+                i += 1;
+            }
+            out.push_str(&kept);
+            out.push('\n');
+        }
+        out
+    };
+
+    const CALL: &str = "warn_invalid_group_trigger_patterns(";
+    for (path, src, why) in [
+        (
+            "kernel/spawn.rs",
+            strip(include_str!("spawn.rs")),
+            "a freshly spawned agent",
+        ),
+        (
+            "kernel/agent_state.rs",
+            strip(include_str!("agent_state.rs")),
+            "an agent reloaded or updated from disk",
+        ),
+        (
+            "kernel/boot.rs",
+            strip(include_str!("boot.rs")),
+            "an agent restored at boot — the route every agent takes after the daemon's first run",
+        ),
+    ] {
+        assert!(
+            src.contains(CALL),
+            "{path} no longer calls `{CALL}`, so {why} can declare a \
+             `group_trigger_patterns` entry that never matches and get no \
+             diagnostic (#6732). The helper only emits a `warn!`, so nothing \
+             else in the test suite notices it going missing."
+        );
+    }
+
+    // agent_state.rs carries two independent paths — the disk manifest and the replacement manifest — and a single `contains` would pass with either one wired.
+    let agent_state = strip(include_str!("agent_state.rs"));
+    assert_eq!(
+        agent_state.matches(CALL).count(),
+        2,
+        "expected both `agent_state.rs` manifest paths (the on-disk manifest \
+         and the replacement) to run the #6732 diagnostic"
+    );
+}
+
+/// #6732: a mis-escaped `group_trigger_patterns` entry is a diagnostic, not a rejection.
+///
+/// The whole point of the new check is that the operator's alias silently never matches; failing the spawn would convert a cosmetic typo into an agent that does not exist at all, which is a strictly worse outcome.
+/// This pins WARN-not-Err so a later refactor cannot promote the report-only validator into `validate_spawnable`'s rejecting group by accident.
+///
+/// `"(?i)\u{8}vivi\u{8}"` is the exact byte sequence a TOML basic string `"(?i)\bvivi\b"` produces — see `librefang_channels::bridge::validate_group_trigger_patterns`.
+#[test]
+fn spawn_still_succeeds_when_group_trigger_pattern_has_control_char_6732() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-bad-trigger-pattern-test");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let manifest = AgentManifest {
+        name: "vivi".to_string(),
+        source_template: None,
+        description: "has a mis-escaped group alias".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        channel_overrides: Some(librefang_types::config::ChannelOverrides {
+            group_trigger_patterns: vec![
+                "(?i)\u{8}vivi\u{8}".to_string(),
+                // An unparseable pattern in the same list must also not escalate to a rejection.
+                "(".to_string(),
+            ],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    // The validator is pure and side-effect free, so assert directly that it *did* have something to say — otherwise this test could pass for the wrong reason (e.g. the manifest field silently not reaching the check at all).
+    let diagnostics = librefang_channels::bridge::validate_group_trigger_patterns(
+        &manifest
+            .channel_overrides
+            .as_ref()
+            .expect("overrides set above")
+            .group_trigger_patterns,
+    );
+    assert_eq!(
+        diagnostics.len(),
+        3,
+        "expected two control-char diagnostics plus one bad-regex diagnostic; got {diagnostics:?}"
+    );
+
+    kernel
+        .validate_spawnable(&manifest, "vivi")
+        .expect("a mis-escaped group trigger pattern must not make an agent unspawnable");
+
+    let agent_id = kernel
+        .spawn_agent_inner(manifest, None, None, None)
+        .expect("agent with a broken group trigger pattern must still spawn");
+    assert!(kernel.agents.registry.get(agent_id).is_some());
 
     kernel.shutdown();
 }
@@ -750,6 +1247,7 @@ fn test_spawn_child_exceeding_parent_is_rejected() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "restricted-parent".to_string(),
+                source_template: None,
                 description: "can only read".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -771,6 +1269,7 @@ fn test_spawn_child_exceeding_parent_is_rejected() {
     let escalation = kernel.spawn_agent_inner(
         AgentManifest {
             name: "escalated-child".to_string(),
+            source_template: None,
             description: "requests full privileges".to_string(),
             author: "test".to_string(),
             module: "builtin:chat".to_string(),
@@ -826,6 +1325,7 @@ fn test_spawn_child_with_subset_capabilities_is_allowed() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "parent-with-file-tools".to_string(),
+                source_template: None,
                 description: "file-reading parent".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -845,6 +1345,7 @@ fn test_spawn_child_with_subset_capabilities_is_allowed() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "subset-child".to_string(),
+                source_template: None,
                 description: "narrower read-only child".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -890,6 +1391,7 @@ fn test_spawn_with_unknown_parent_fails_closed() {
     let result = kernel.spawn_agent_inner(
         AgentManifest {
             name: "orphan".to_string(),
+            source_template: None,
             description: "parent does not exist".to_string(),
             author: "test".to_string(),
             module: "builtin:chat".to_string(),
@@ -992,20 +1494,19 @@ fn test_set_agent_model_clears_overrides_when_provider_changes() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "switch-provider-agent".to_string(),
+                source_template: None,
                 description: "carries stale overrides from prior provider".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "cloudverse".to_string(),
                     model: "anthropic-claude-4-5-sonnet".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: Some("CLOUDVERSE_API_KEY".to_string()),
                     base_url: Some("https://cloudverse.freshworkscorp.com/api/v1".to_string()),
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -1261,11 +1762,13 @@ fn test_hand_reactivation_rebuilds_same_runtime_profile() {
         "provider override should not survive a new hand activation"
     );
     assert_ne!(
-        second_manifest.model.max_tokens, 12345,
+        second_manifest.model.max_tokens,
+        Some(12345),
         "max_tokens override should be cleared on fresh activation"
     );
     assert_ne!(
-        second_manifest.model.temperature, 0.2,
+        second_manifest.model.temperature,
+        Some(0.2),
         "temperature override should be cleared on fresh activation"
     );
     assert_ne!(
@@ -1342,8 +1845,8 @@ fn reactivate_builds_from_hand_toml_not_override() {
         overridden_entry.manifest.model.base_url.as_deref(),
         Some("https://override.invalid/v1")
     );
-    assert_eq!(overridden_entry.manifest.model.max_tokens, 12345);
-    assert!((overridden_entry.manifest.model.temperature - 0.2).abs() < 1e-6);
+    assert_eq!(overridden_entry.manifest.model.max_tokens, Some(12345));
+    assert_eq!(overridden_entry.manifest.model.temperature, Some(0.2));
     assert_eq!(
         overridden_entry.manifest.web_search_augmentation,
         WebSearchAugmentationMode::Always
@@ -1424,11 +1927,11 @@ fn reactivate_builds_from_hand_toml_not_override() {
     );
     assert_ne!(
         reactivated_manifest.model.max_tokens,
-        runtime_override.max_tokens.unwrap()
+        runtime_override.max_tokens
     );
     assert_ne!(
         reactivated_manifest.model.temperature,
-        runtime_override.temperature.unwrap()
+        runtime_override.temperature
     );
     assert_ne!(
         reactivated_manifest.web_search_augmentation,
@@ -1915,7 +2418,7 @@ fn assert_reactive_schedule(manifest: &AgentManifest, why: &str) {
     }
 }
 
-/// Regression test for issue #6595 — `max_iterations` is the agent-loop iteration cap, not a request for autonomous ticking, and a hand that declares no `[metadata]` block declares no wake-up cycle at all (`HandFrequency::default()` is `OnDemand`).
+/// Regression test for issue #6595 — `max_iterations` is the agent-loop iteration cap and nothing else, so a role that declares only that stays `Reactive`.
 ///
 /// Both assertions matter.
 /// The schedule staying `Reactive` is the fix; the `AutonomousConfig` surviving with the declared cap is what distinguishes this from the tempting "just leave `manifest.autonomous` as `None`" shortcut, which would silently drop the loop cap the hand author asked for (`librefang_runtime::agent_loop` resolves `manifest.autonomous.max_iterations` first — there is no other manifest field carrying it).
@@ -1943,8 +2446,8 @@ max_iterations = 80
 
     assert_reactive_schedule(
         &manifest,
-        "a hand agent declaring only `max_iterations`, with no declared hand \
-         frequency, must not be given a wake-up cycle (#6595)",
+        "a hand agent declaring only `max_iterations` must not be given a wake-up \
+         cycle (#6595)",
     );
     assert_eq!(
         manifest
@@ -1958,8 +2461,8 @@ max_iterations = 80
     );
 }
 
-/// The reporter's exact shape in #6595: a hand that says in its own metadata that it runs on demand, and whose agent declares a loop-depth cap.
-/// It used to tick every 30 seconds regardless of that declaration.
+/// A hand whose catalog metadata says it runs on demand, whose role declares nothing but a loop-depth cap, and which ticked every 30 seconds anyway.
+/// #6595 records the reporter reaching for `[metadata] frequency` to switch that off and finding it controls nothing — which is still true, and is why the fix has to come from the role's own manifest instead.
 #[test]
 fn hand_activation_keeps_reactive_schedule_for_on_demand_frequency() {
     let manifest = materialize_hand_agent_manifest(
@@ -1987,8 +2490,8 @@ max_iterations = 80
 
     assert_reactive_schedule(
         &manifest,
-        "a hand declaring `frequency = \"on-demand\"` must never be given a \
-         wake-up cycle, whatever loop cap its roles declare (#6595)",
+        "a role declaring only a loop cap must not be given a wake-up cycle, on an \
+         `on-demand` hand or any other (#6595)",
     );
     assert_eq!(
         manifest.autonomous.as_ref().map(|a| a.max_iterations),
@@ -1997,14 +2500,17 @@ max_iterations = 80
     );
 }
 
-/// The other half of #6595: `[metadata] frequency` is the wake-up declaration hand authors actually write, and the shipped hands rely on it — the bundled `devops` hand's own prompt says "The Hand is `frequency = \"continuous\"`, so the next tick will re-read `devops_queue.json`".
-/// So a `continuous` hand must still get a background loop, at the cadence its `[autonomous]` guardrails name.
+/// The decisive regression for #6595, in the exact shape of the bundled `researcher` hand: `[metadata] frequency = "continuous"`, and a role whose only autonomy-adjacent field is `max_iterations = 80`.
+/// `researcher`'s own HAND.toml sizes its `max_history_messages` off that number as "80 iterations × ~4 messages each", so the author plainly meant per-turn loop depth — and the hand still materialized `ScheduleMode::Continuous { check_interval_secs: 30 }` and woke up twice a minute forever.
+///
+/// Both assertions matter, and the second is the one that rules out #6595's own "minimal" suggestion of leaving `manifest.autonomous` as `None`: `librefang_runtime::agent_loop` resolves the cap from `manifest.autonomous.max_iterations` and no other manifest field carries it, so dropping the block to stop the ticking would silently discard the cap the author asked for.
+///
+/// `frequency = "continuous"` is deliberately the *loudest* possible catalog value here.
+/// #6603 promoted that field into a scheduling control, which would have kept this exact fixture ticking; the field is catalog-display metadata and must not influence the schedule.
 #[test]
-fn hand_activation_derives_continuous_schedule_from_hand_frequency() {
-    // Default `AutonomousConfig::heartbeat_interval_secs` is 30, which is the interval every ticking registry hand ran at before the fix.
-    // Deriving the schedule from `frequency` rather than from `autonomous.is_some()` must not change it.
-    let default_heartbeat = materialize_hand_agent_manifest(
-        "librefang-kernel-hand-continuous-default",
+fn hand_activation_keeps_reactive_schedule_for_loop_cap_on_a_continuous_hand() {
+    let manifest = materialize_hand_agent_manifest(
+        "librefang-kernel-hand-continuous-loop-cap",
         "continuous-test",
         r#"
 id = "continuous-test"
@@ -2018,47 +2524,54 @@ frequency = "continuous"
 
 [agents.worker]
 name = "continuous-worker"
-description = "A continuous hand's loop-running role"
+description = "Declares a loop-depth cap on a hand the catalog calls continuous"
 provider = "default"
 model = "default"
 system_prompt = "You are a test worker."
-max_iterations = 60
+max_iterations = 80
 "#,
     );
-    assert_continuous_schedule(
-        &default_heartbeat,
-        30,
-        "a `continuous` hand must keep ticking at its heartbeat interval — \
-         deleting the wake-up derivation outright would silently disable every \
-         monitoring hand and the shipped auto-evolution pipeline",
+
+    assert_reactive_schedule(
+        &manifest,
+        "a role declaring only `max_iterations` must stay reactive whatever the \
+         hand's catalog `frequency` says — this is the bundled `researcher` hand, \
+         the real-world instance reported in #6595",
     );
     assert_eq!(
-        default_heartbeat
+        manifest
             .autonomous
             .as_ref()
-            .map(|a| a.max_iterations),
-        Some(60),
-        "the loop cap is independent of the derived schedule"
+            .map(|a| a.max_iterations)
+            .expect("the declared loop cap must still reach the manifest"),
+        80,
+        "`max_iterations` must survive as the agent-loop iteration cap; dropping \
+         the whole `[autonomous]` block to stop the ticking would take the cap \
+         with it"
     );
+}
 
-    // `continuous` means "as often as this agent's heartbeat", so a role that raises `heartbeat_interval_secs` ticks that much less often.
-    // A hardcoded interval could not produce this.
-    let explicit_heartbeat = materialize_hand_agent_manifest(
-        "librefang-kernel-hand-continuous-explicit",
-        "continuous-slow-test",
+/// Route 2 end-to-end: a role that writes its own `[autonomous]` block ticks, at that block's `heartbeat_interval_secs`.
+///
+/// The parse-level counterpart lives in `librefang_hands` (`explicit_autonomous_block_yields_continuous_schedule_in_flat_format`).
+/// This one covers the rest of the path: the resolved schedule has to survive `activate_hand_with_id`'s manifest rewriting — which sets provider, tools, tags, skills, MCP servers, plugins, exec policy and the system-prompt tail — and land in the agent registry, which is where `background_lifecycle` reads it to decide whether to start a loop.
+///
+/// The interval is non-default on purpose: 30 is both the `AutonomousConfig` default and the interval the old `autonomous.is_some()` derivation produced, so a 30 here would pass under the behaviour this replaces.
+#[test]
+fn hand_activation_honours_explicit_autonomous_block() {
+    let manifest = materialize_hand_agent_manifest(
+        "librefang-kernel-hand-explicit-autonomous",
+        "explicit-autonomous-test",
         r#"
-id = "continuous-slow-test"
+id = "explicit-autonomous-test"
 version = "0.1.0"
-name = "Slow Continuous Test Hand"
+name = "Explicit Autonomous Test Hand"
 description = "Regression fixture for issue #6595"
 category = "development"
 
-[metadata]
-frequency = "continuous"
-
 [agents.worker]
-name = "continuous-slow-worker"
-description = "A continuous role that asks for a slower heartbeat"
+name = "explicit-autonomous-worker"
+description = "Declares autonomous guardrails of its own"
 provider = "default"
 model = "default"
 system_prompt = "You are a test worker."
@@ -2068,81 +2581,92 @@ max_iterations = 12
 heartbeat_interval_secs = 900
 "#,
     );
+
     assert_continuous_schedule(
-        &explicit_heartbeat,
+        &manifest,
         900,
-        "an explicit `heartbeat_interval_secs` must set the derived cadence",
+        "a role's own `[autonomous]` block is the opt-in to a wake-up cycle, and \
+         its `heartbeat_interval_secs` sets the cadence",
     );
     assert_eq!(
-        explicit_heartbeat
-            .autonomous
-            .as_ref()
-            .map(|a| a.max_iterations),
+        manifest.autonomous.as_ref().map(|a| a.max_iterations),
         Some(12),
-        "an explicit `[autonomous]` block must reach the manifest whole"
+        "an explicit `[autonomous]` block must reach the manifest whole, not just \
+         as a schedule"
     );
 }
 
-/// The fixed cadences are honoured as declared rather than collapsing to the `continuous` heartbeat.
-/// Before the fix an `hourly` hand with a loop cap ticked every 30 seconds — 120x its own declaration.
+/// `[metadata] frequency` is inert (#6595): one role definition, every catalog value plus no `[metadata]` block at all, and the resolved schedule never moves off `Reactive`.
+///
+/// This is the guard against re-promoting `frequency` to a scheduling control, and it is where the `hourly` and `daily` fixtures that used to assert derived 3600s / 86400s cadences now live, inverted.
+/// The table is exhaustive over `HandFrequency` on purpose: adding a variant without deciding what it means for scheduling should show up here.
 #[test]
-fn hand_activation_derives_fixed_cadence_from_hourly_and_daily_frequency() {
-    let hourly = materialize_hand_agent_manifest(
-        "librefang-kernel-hand-hourly",
-        "hourly-test",
-        r#"
-id = "hourly-test"
+fn hand_activation_schedule_ignores_hand_frequency() {
+    for (label, hand_id, metadata_block) in [
+        (
+            "librefang-kernel-hand-freq-continuous",
+            "freq-continuous-test",
+            "[metadata]\nfrequency = \"continuous\"\n",
+        ),
+        (
+            "librefang-kernel-hand-freq-hourly",
+            "freq-hourly-test",
+            "[metadata]\nfrequency = \"hourly\"\n",
+        ),
+        (
+            "librefang-kernel-hand-freq-daily",
+            "freq-daily-test",
+            "[metadata]\nfrequency = \"daily\"\n",
+        ),
+        (
+            "librefang-kernel-hand-freq-periodic",
+            "freq-periodic-test",
+            "[metadata]\nfrequency = \"periodic\"\n",
+        ),
+        (
+            "librefang-kernel-hand-freq-on-demand",
+            "freq-on-demand-test",
+            "[metadata]\nfrequency = \"on-demand\"\n",
+        ),
+        ("librefang-kernel-hand-freq-absent", "freq-absent-test", ""),
+    ] {
+        let hand_toml = format!(
+            r#"
+id = "{hand_id}"
 version = "0.1.0"
-name = "Hourly Test Hand"
+name = "Frequency Inertness Test Hand"
 description = "Regression fixture for issue #6595"
 category = "development"
 
-[metadata]
-frequency = "hourly"
-
+{metadata_block}
 [agents.worker]
-name = "hourly-worker"
-description = "An hourly hand's loop-running role"
+name = "{hand_id}-worker"
+description = "Declares a loop-depth cap and nothing else"
 provider = "default"
 model = "default"
 system_prompt = "You are a test worker."
-max_iterations = 50
-"#,
-    );
-    assert_continuous_schedule(
-        &hourly,
-        3_600,
-        "`frequency = \"hourly\"` must tick hourly, not at the 30s \
-         `AutonomousConfig` heartbeat default",
-    );
-
-    let daily = materialize_hand_agent_manifest(
-        "librefang-kernel-hand-daily",
-        "daily-test",
-        r#"
-id = "daily-test"
-version = "0.1.0"
-name = "Daily Test Hand"
-description = "Regression fixture for issue #6595"
-category = "development"
-
-[metadata]
-frequency = "daily"
-
-[agents.worker]
-name = "daily-worker"
-description = "A daily hand's loop-running role"
-provider = "default"
-model = "default"
-system_prompt = "You are a test worker."
-max_iterations = 50
-"#,
-    );
-    assert_continuous_schedule(&daily, 86_400, "`frequency = \"daily\"` must tick daily");
+max_iterations = 80
+"#
+        );
+        let manifest = materialize_hand_agent_manifest(label, hand_id, &hand_toml);
+        assert_reactive_schedule(
+            &manifest,
+            &format!(
+                "`frequency` is catalog-display metadata and must not affect \
+                 scheduling, but this fixture ({hand_id}) resolved to a non-reactive \
+                 schedule"
+            ),
+        );
+        assert_eq!(
+            manifest.autonomous.as_ref().map(|a| a.max_iterations),
+            Some(80),
+            "the loop cap is unaffected by `frequency` too ({hand_id})"
+        );
+    }
 }
 
-/// The hand's `frequency` decides *whether* its roles tick; the role's own `[autonomous]` guardrails decide *which* ones do.
-/// A multi-role hand gives guardrails only to the roles that run loops — the bundled `devops` hand has five roles and caps two — so a role with no guardrails must stay reactive even on a `continuous` hand, or activating such a hand would start background loops for sub-agents that exist purely to be delegated to.
+/// A role that declares no guardrails at all keeps its `Reactive` default.
+/// This is the ordinary shape of a multi-role hand's delegated sub-agents — the bundled `devops` hand has five roles and only two carry `max_iterations` — and activation must not invent a schedule for them from anything at the hand level.
 #[test]
 fn hand_activation_keeps_reactive_schedule_without_autonomous_guardrails() {
     let manifest = materialize_hand_agent_manifest(
@@ -2179,13 +2703,16 @@ system_prompt = "You are a test worker."
     );
 }
 
-/// The most specific declaration wins: a role that writes its own `[schedule.continuous]` keeps it verbatim, even when the hand's `frequency` would have derived a different cadence.
-/// This is also the only way to reach the `Periodic` (cron) and `Proactive` schedule variants, which `frequency` cannot express.
+/// Route 1 of the resolution order: an explicit `schedule` is honoured verbatim and wins over an explicit `[autonomous]` block on the same role.
+/// This is also the only way to reach the `Periodic` (cron) and `Proactive` variants, which no other declaration can express.
+///
+/// The two declarations are deliberately in conflict here — 900s in the schedule against a 60s heartbeat — because the resolution has to have a defined winner: the schedule is the field that says *when the role wakes up*, and `[autonomous]` is the field that says *how it behaves once awake*.
+/// A role can therefore want a heartbeat timeout of one minute and a wake-up cycle of fifteen.
 ///
 /// `ScheduleMode` is externally tagged, so the sub-table (or an inline `schedule = { continuous = { check_interval_secs = 900 } }`) is the form that parses — a bare `schedule = "continuous"` string cannot resolve a struct variant.
 /// The section is in the flat format on purpose: that is the path the `LegacyHandAgentConfig` passthrough enables.
 #[test]
-fn hand_activation_honours_explicit_continuous_schedule() {
+fn hand_activation_honours_explicit_schedule_over_explicit_autonomous() {
     let manifest = materialize_hand_agent_manifest(
         "librefang-kernel-hand-explicit-schedule",
         "explicit-schedule-test",
@@ -2205,28 +2732,31 @@ description = "Explicitly opts into continuous scheduling"
 provider = "default"
 model = "default"
 system_prompt = "You are a test worker."
-max_iterations = 80
 
 [agents.worker.schedule.continuous]
 check_interval_secs = 900
+
+[agents.worker.autonomous]
+max_iterations = 80
+heartbeat_interval_secs = 60
 "#,
     );
 
     assert_continuous_schedule(
         &manifest,
         900,
-        "a role's own `schedule` must win over the cadence derived from the \
-         hand's `frequency` (which would have been 3600 here)",
+        "a role's own `schedule` must be honoured verbatim, beating both the 60s \
+         heartbeat of its `[autonomous]` block and the hand's catalog `frequency`",
     );
     assert_eq!(
         manifest
             .autonomous
             .as_ref()
             .map(|a| a.max_iterations)
-            .expect("the declared loop cap must still reach the manifest"),
+            .expect("the declared guardrails must still reach the manifest"),
         80,
-        "an explicit schedule and a loop cap are independent knobs — declaring \
-         one must not drop the other"
+        "an explicit schedule and the autonomy guardrails are independent knobs — \
+         declaring one must not drop the other"
     );
 }
 
@@ -2245,6 +2775,7 @@ fn test_available_tools_returns_empty_when_tools_disabled() {
     let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
     let manifest = AgentManifest {
         name: "no-tools".to_string(),
+        source_template: None,
         description: "agent with tools disabled".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -2287,6 +2818,7 @@ fn test_available_tools_glob_pattern_matches_mcp_tools() {
     // Agent with a glob pattern in declared tools — should match builtins
     let manifest = AgentManifest {
         name: "glob-tools".to_string(),
+        source_template: None,
         description: "agent using glob in tools".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -2346,6 +2878,7 @@ fn test_shell_exec_available_when_declared_in_tools_without_explicit_exec_policy
 
     let manifest = AgentManifest {
         name: "shell-agent".to_string(),
+        source_template: None,
         description: "agent with shell_exec in tools, no exec_policy".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -2378,6 +2911,113 @@ fn test_shell_exec_available_when_declared_in_tools_without_explicit_exec_policy
     assert!(
         names.contains(&"shell_exec"),
         "shell_exec must be in available_tools when declared in capabilities.tools, got: {names:?}"
+    );
+
+    kernel.shutdown();
+}
+
+/// A spawn-resolved `exec_policy` must survive both manifest-replacement paths: `reload_agent_from_disk` and `update_manifest`.
+///
+/// `exec_policy` is materialized when the agent enters the registry and is not part of the `agent.toml` an operator maintains, so both paths parsed a policy-less manifest and assigned it verbatim, blanking the field.
+/// `None` does not mean "deny" to any consumer: `available_tools` strips `shell_exec` only on an explicit `Deny`, and the runtime's `shell_exec` dispatch gates the whole deny / allowlist check on `if let Some(policy)`.
+/// So a hot-reload — or any `PATCH /api/agents/{id}` with a `manifest_toml`, which routes through `update_manifest` — silently un-restricted the agent's shell until the next daemon restart re-stamped the policy.
+///
+/// The global policy here is `Allowlist` rather than the compiled default `Deny` so a blanked field cannot be mistaken for a correctly inherited one, and `allowed_commands` is asserted too: preserving only the mode would still drop the operator's command list.
+#[tokio::test(flavor = "multi_thread")]
+async fn resolved_exec_policy_survives_reload_and_update_manifest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-exec-policy-restamp");
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+
+    let global_policy = librefang_types::config::ExecPolicy {
+        mode: librefang_types::config::ExecSecurityMode::Allowlist,
+        allowed_commands: vec!["git".to_string(), "ls".to_string()],
+        ..Default::default()
+    };
+
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        exec_policy: global_policy.clone(),
+        ..KernelConfig::default()
+    };
+
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    // The on-disk manifest carries no `[exec_policy]`, which is the normal case — the field is a resolved runtime value, not something an operator writes.
+    let toml_path = home_dir.join("agent-src").join("agent.toml");
+    std::fs::create_dir_all(toml_path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &toml_path,
+        "name = \"exec-policy-agent\"\n\
+         description = \"agent that declares no exec_policy of its own\"\n\
+         author = \"test\"\n\
+         module = \"builtin:chat\"\n",
+    )
+    .unwrap();
+
+    let manifest = AgentManifest {
+        name: "exec-policy-agent".to_string(),
+        description: "agent that declares no exec_policy of its own".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        exec_policy: None,
+        ..Default::default()
+    };
+
+    let agent_id = kernel
+        .spawn_agent_with_source(manifest, Some(toml_path.clone()))
+        .expect("spawn should succeed");
+
+    let resolved_policy = |stage: &str| {
+        let entry = kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .unwrap_or_else(|| panic!("agent must still be registered {stage}"));
+        let policy = entry
+            .manifest
+            .exec_policy
+            .clone()
+            .unwrap_or_else(|| panic!("exec_policy must still be resolved {stage}"));
+        (policy.mode, policy.allowed_commands)
+    };
+
+    let expected = (
+        librefang_types::config::ExecSecurityMode::Allowlist,
+        vec!["git".to_string(), "ls".to_string()],
+    );
+
+    assert_eq!(
+        resolved_policy("after spawn"),
+        expected,
+        "spawn must materialize the global exec_policy onto a manifest that declares none"
+    );
+
+    kernel
+        .reload_agent_from_disk(agent_id)
+        .expect("hot-reload should succeed");
+    assert_eq!(
+        resolved_policy("after reload_agent_from_disk"),
+        expected,
+        "hot-reload must not drop the resolved exec_policy — None re-exposes shell_exec and skips the allowlist"
+    );
+
+    let mut replacement = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent must be registered")
+        .manifest
+        .clone();
+    replacement.exec_policy = None;
+    kernel
+        .update_manifest(agent_id, replacement)
+        .expect("manifest update should succeed");
+    assert_eq!(
+        resolved_policy("after update_manifest"),
+        expected,
+        "update_manifest must not drop the resolved exec_policy either"
     );
 
     kernel.shutdown();
@@ -2416,6 +3056,80 @@ fn test_assistant_route_key_scopes_sender_and_thread() {
     assert_ne!(with_sender, without_sender);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn explicit_only_reads_canonical_thread_scoped_cache_key() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).unwrap();
+    let assistant_id = kernel.agents.registry.find_by_name("assistant").unwrap().id;
+    let coder_id = kernel
+        .spawn_agent(test_manifest("coder", "A coding specialist", vec![]))
+        .unwrap();
+    let sender = SenderContext {
+        channel: "telegram".to_string(),
+        user_id: "user-123".to_string(),
+        thread_id: Some("thread-9".to_string()),
+        auto_route: AutoRouteStrategy::ExplicitOnly,
+        ..Default::default()
+    };
+    let route_key = LibreFangKernel::assistant_route_key(assistant_id, Some(&sender));
+    kernel.events.assistant_routes.insert(
+        route_key,
+        (
+            AssistantRouteTarget::Specialist("coder".to_string()),
+            std::time::Instant::now(),
+        ),
+    );
+
+    let resolved = kernel
+        .resolve_assistant_target(
+            assistant_id,
+            "Please handle this deliberately generic but sufficiently long request.",
+            Some(&sender),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resolved, coder_id);
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn explicit_only_cache_miss_never_falls_through_to_classification() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).unwrap();
+    let assistant_id = kernel.agents.registry.find_by_name("assistant").unwrap().id;
+    kernel
+        .spawn_agent(test_manifest("coder", "A coding specialist", vec![]))
+        .unwrap();
+    let sender = SenderContext {
+        channel: "telegram".to_string(),
+        user_id: "user-123".to_string(),
+        thread_id: Some("thread-9".to_string()),
+        auto_route: AutoRouteStrategy::ExplicitOnly,
+        ..Default::default()
+    };
+
+    let resolved = kernel
+        .resolve_assistant_target(
+            assistant_id,
+            "请实现一个新的 Rust API 并补丁修复它",
+            Some(&sender),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resolved, assistant_id);
+    kernel.shutdown();
+}
+
 #[test]
 fn test_boot_spawns_assistant_as_default_agent() {
     let tmp = tempfile::tempdir().unwrap();
@@ -2448,6 +3162,10 @@ async fn test_send_message_ephemeral_unknown_agent_returns_not_found() {
     let config = KernelConfig {
         home_dir: home_dir.clone(),
         data_dir: home_dir.join("data"),
+        // #7743: this test dispatches an agent turn, so the default provider must be the
+        // explicit driverless sentinel rather than `"auto"` — otherwise boot adopts whatever
+        // provider the host machine has credentials or a logged-in CLI for.
+        default_model: DefaultModelConfig::driverless(),
         ..KernelConfig::default()
     };
 
@@ -2475,6 +3193,11 @@ async fn test_send_message_ephemeral_does_not_modify_session() {
     let config = KernelConfig {
         home_dir: home_dir.clone(),
         data_dir: home_dir.join("data"),
+        // #7743: the ephemeral turn below is expected to fail for want of a driver, so say so
+        // explicitly. With the `"auto"` default, boot probes the host and — on any machine
+        // with the Anthropic `claude` CLI installed — the turn instead *succeeded*, spawning
+        // the real CLI against the checkout and making a billable call.
+        default_model: DefaultModelConfig::driverless(),
         ..KernelConfig::default()
     };
 
@@ -2493,11 +3216,25 @@ async fn test_send_message_ephemeral_does_not_modify_session() {
     let session_before = kernel.memory.substrate.get_session(session_id).unwrap();
     let msg_count_before = session_before.map(|s| s.messages.len()).unwrap_or(0);
 
-    // Send ephemeral message (will fail because no LLM provider, but that's OK —
-    // the point is the session should remain untouched)
-    let _ = kernel
+    // The turn must not run, for the stated reason. The kernel is declared driverless, so
+    // resolution lands on the stub and the loop reports that structurally rather than
+    // erroring. Asserting the specific outcome instead of swallowing the result with
+    // `let _ =` is what keeps this test honest (#7743): pre-fix, on any machine with the
+    // Anthropic `claude` CLI installed, boot adopted a live `claude-code` driver and this
+    // turn *succeeded* — spawning the real CLI against the checkout and making a billable
+    // call — which `let _ =` could not tell apart from the intended outcome.
+    let result = kernel
         .send_message_ephemeral(agent_id, "what is 2+2?", None, None)
-        .await;
+        .await
+        .expect("the ephemeral path itself must not error");
+    assert!(
+        result.provider_not_configured,
+        "the ephemeral turn must stop on the driverless stub; got: {result:?}"
+    );
+    assert_eq!(
+        result.iterations, 0,
+        "no agent-loop iteration may run without a driver; got: {result:?}"
+    );
 
     // Check session is unchanged
     let session_after = kernel.memory.substrate.get_session(session_id).unwrap();
@@ -2764,13 +3501,18 @@ fn test_peer_scoped_key() {
 #[test]
 fn test_apply_thinking_override_none_leaves_manifest_untouched() {
     let mut manifest = librefang_types::agent::AgentManifest {
+        source_template: None,
         thinking: Some(librefang_types::config::ThinkingConfig {
             budget_tokens: 4242,
             stream_thinking: true,
+            ..Default::default()
         }),
         ..Default::default()
     };
-    apply_thinking_override(&mut manifest, None);
+    apply_thinking_override(
+        &mut manifest,
+        librefang_types::config::ThinkingOverride::Inherit,
+    );
     let cfg = manifest.thinking.as_ref().expect("thinking preserved");
     assert_eq!(cfg.budget_tokens, 4242);
     assert!(cfg.stream_thinking);
@@ -2779,10 +3521,14 @@ fn test_apply_thinking_override_none_leaves_manifest_untouched() {
 #[test]
 fn test_apply_thinking_override_force_off_clears_thinking() {
     let mut manifest = librefang_types::agent::AgentManifest {
+        source_template: None,
         thinking: Some(librefang_types::config::ThinkingConfig::default()),
         ..Default::default()
     };
-    apply_thinking_override(&mut manifest, Some(false));
+    apply_thinking_override(
+        &mut manifest,
+        librefang_types::config::ThinkingOverride::Disable,
+    );
     assert!(manifest.thinking.is_none());
 }
 
@@ -2790,7 +3536,10 @@ fn test_apply_thinking_override_force_off_clears_thinking() {
 fn test_apply_thinking_override_force_on_inserts_default() {
     let mut manifest = librefang_types::agent::AgentManifest::default();
     assert!(manifest.thinking.is_none());
-    apply_thinking_override(&mut manifest, Some(true));
+    apply_thinking_override(
+        &mut manifest,
+        librefang_types::config::ThinkingOverride::Enable,
+    );
     let cfg = manifest.thinking.as_ref().expect("thinking inserted");
     assert_eq!(
         cfg.budget_tokens,
@@ -2801,15 +3550,224 @@ fn test_apply_thinking_override_force_on_inserts_default() {
 #[test]
 fn test_apply_thinking_override_force_on_keeps_existing_budget() {
     let mut manifest = librefang_types::agent::AgentManifest {
+        source_template: None,
         thinking: Some(librefang_types::config::ThinkingConfig {
             budget_tokens: 1234,
             stream_thinking: false,
+            ..Default::default()
         }),
         ..Default::default()
     };
-    apply_thinking_override(&mut manifest, Some(true));
+    apply_thinking_override(
+        &mut manifest,
+        librefang_types::config::ThinkingOverride::Enable,
+    );
     let cfg = manifest.thinking.as_ref().expect("thinking preserved");
     assert_eq!(cfg.budget_tokens, 1234);
+}
+
+// ── Reasoning-mode resolution order (#7946) ────────────────────────
+//
+// Documented order: per-call > per-agent > global > compiled default.
+// The first two rungs are applied by `apply_thinking_override`; the third is
+// the global-backfill assignment in `messaging.rs` / `agent_execution.rs`,
+// which these tests reproduce literally (`if manifest.thinking.is_none() {
+// manifest.thinking = cfg.thinking.clone() }`) so a change to that line's
+// direction shows up here rather than in production.
+
+/// Rung 3: an agent that declares no `[thinking]` table inherits the global
+/// `reasoning_mode`.
+#[test]
+fn test_reasoning_mode_global_reaches_an_agent_that_declares_nothing() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+    let global = ThinkingConfig {
+        reasoning_mode: Some(ReasoningMode::High),
+        ..Default::default()
+    };
+    let mut manifest = librefang_types::agent::AgentManifest::default();
+    assert!(manifest.thinking.is_none());
+
+    // The global backfill, as the kernel performs it.
+    if manifest.thinking.is_none() {
+        manifest.thinking = Some(global.clone());
+    }
+    apply_thinking_override(&mut manifest, ThinkingOverride::Inherit);
+
+    assert_eq!(
+        manifest.thinking.expect("backfilled").reasoning_mode,
+        Some(ReasoningMode::High),
+    );
+}
+
+/// Rung 2 beats rung 3: a per-agent `[thinking]` table suppresses the global
+/// backfill entirely, so its `reasoning_mode` wins.
+#[test]
+fn test_reasoning_mode_per_agent_beats_global() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+    let global = ThinkingConfig {
+        reasoning_mode: Some(ReasoningMode::High),
+        ..Default::default()
+    };
+    let mut manifest = librefang_types::agent::AgentManifest {
+        source_template: None,
+        thinking: Some(ThinkingConfig {
+            reasoning_mode: Some(ReasoningMode::Low),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    if manifest.thinking.is_none() {
+        manifest.thinking = Some(global.clone());
+    }
+    apply_thinking_override(&mut manifest, ThinkingOverride::Inherit);
+
+    assert_eq!(
+        manifest.thinking.expect("per-agent kept").reasoning_mode,
+        Some(ReasoningMode::Low),
+        "the per-agent table must not be overwritten by the global backfill",
+    );
+}
+
+/// Rung 1 beats both: the per-call override is stamped on last.
+#[test]
+fn test_reasoning_mode_per_call_beats_per_agent_beats_global() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+    let global = ThinkingConfig {
+        reasoning_mode: Some(ReasoningMode::High),
+        ..Default::default()
+    };
+    let mut manifest = librefang_types::agent::AgentManifest {
+        source_template: None,
+        thinking: Some(ThinkingConfig {
+            budget_tokens: 7777,
+            reasoning_mode: Some(ReasoningMode::Low),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    if manifest.thinking.is_none() {
+        manifest.thinking = Some(global.clone());
+    }
+    apply_thinking_override(&mut manifest, ThinkingOverride::Mode(ReasoningMode::Max));
+
+    let cfg = manifest.thinking.expect("thinking present");
+    assert_eq!(cfg.reasoning_mode, Some(ReasoningMode::Max));
+    assert_eq!(
+        cfg.budget_tokens, 7777,
+        "a mode override must not disturb the agent's configured budget",
+    );
+}
+
+/// A per-call mode on an agent with no `[thinking]` table at all must still
+/// land. Creating the config lazily is the difference between the feature
+/// working and silently doing nothing.
+#[test]
+fn test_reasoning_mode_per_call_creates_thinking_config_when_absent() {
+    use librefang_types::config::{ReasoningMode, ThinkingOverride};
+    let mut manifest = librefang_types::agent::AgentManifest::default();
+    assert!(manifest.thinking.is_none());
+
+    apply_thinking_override(&mut manifest, ThinkingOverride::Mode(ReasoningMode::None));
+
+    assert_eq!(
+        manifest
+            .thinking
+            .expect("thinking config created for the mode")
+            .reasoning_mode,
+        Some(ReasoningMode::None),
+    );
+}
+
+/// The legacy boolean documents itself as "force thinking on even if the
+/// manifest has it off". A manifest (or backfilled global) `reasoning_mode =
+/// "none"` is exactly that off-state, so `thinking: true` has to clear it —
+/// otherwise the override deserializes, resolves to `Enable`, reaches the
+/// manifest, and the driver still sends the provider's non-think toggle.
+#[test]
+fn test_enable_clears_an_inherited_non_think_mode() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+
+    let mut manifest = librefang_types::agent::AgentManifest {
+        thinking: Some(ThinkingConfig {
+            budget_tokens: 7777,
+            reasoning_mode: Some(ReasoningMode::None),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    apply_thinking_override(&mut manifest, ThinkingOverride::Enable);
+
+    let cfg = manifest
+        .thinking
+        .expect("Enable must keep a thinking config");
+    assert_eq!(
+        cfg.reasoning_mode, None,
+        "`thinking: true` must not be silently overruled by an inherited non-think mode",
+    );
+    assert_eq!(
+        cfg.budget_tokens, 7777,
+        "Enable still keeps the configured budget",
+    );
+}
+
+/// Enable must not disturb a *graded* mode — the caller asked for reasoning,
+/// not for a particular amount of it, so an agent pinned to `max` stays at
+/// `max`.
+#[test]
+fn test_enable_leaves_a_graded_mode_alone() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+
+    for mode in [ReasoningMode::Low, ReasoningMode::High, ReasoningMode::Max] {
+        let mut manifest = librefang_types::agent::AgentManifest {
+            thinking: Some(ThinkingConfig {
+                reasoning_mode: Some(mode),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        apply_thinking_override(&mut manifest, ThinkingOverride::Enable);
+        assert_eq!(
+            manifest.thinking.expect("kept").reasoning_mode,
+            Some(mode),
+            "Enable must not downgrade a graded mode",
+        );
+    }
+}
+
+/// `Mode(None)` and `Disable` are deliberately different. `Disable` clears the
+/// thinking config, which only *omits* the reasoning opt-in — a model that
+/// reasons by default keeps reasoning. `Mode(None)` keeps a config carrying the
+/// mode, which is what lets the driver send the provider's explicit non-think
+/// toggle. Collapsing the two would re-open exactly the gap #7946 closes.
+#[test]
+fn test_disable_and_mode_none_are_not_the_same_thing() {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
+
+    let base = librefang_types::agent::AgentManifest {
+        source_template: None,
+        thinking: Some(ThinkingConfig::default()),
+        ..Default::default()
+    };
+
+    let mut disabled = base.clone();
+    apply_thinking_override(&mut disabled, ThinkingOverride::Disable);
+    assert!(
+        disabled.thinking.is_none(),
+        "Disable keeps its pre-#7946 meaning: drop the thinking config",
+    );
+
+    let mut non_think = base.clone();
+    apply_thinking_override(&mut non_think, ThinkingOverride::Mode(ReasoningMode::None));
+    assert_eq!(
+        non_think
+            .thinking
+            .expect("Mode(None) must keep a thinking config to carry the mode")
+            .reasoning_mode,
+        Some(ReasoningMode::None),
+    );
 }
 
 // ── JSON extraction tests ──────────────────────────────────────────
@@ -3075,7 +4033,19 @@ fn sanitize_reviewer_line_strips_newlines_and_brackets() {
 /// registry's `load_skill` accepts it. Also drops a prompt_context.md
 /// to exercise the progressive-loading branch.
 fn install_test_skill(skills_parent: &std::path::Path, name: &str, tags: &[&str]) {
-    let dir = skills_parent.join(name);
+    install_test_skill_named(skills_parent, name, name, tags);
+}
+
+/// Install a skill whose directory name and `[skill].name` are given independently.
+///
+/// [`install_test_skill`] derives both from one argument, which makes it structurally unable to catch a caller that validates an allowlist against directory names instead of manifest names — the two values are always equal (#7772).
+fn install_test_skill_named(
+    skills_parent: &std::path::Path,
+    dir_name: &str,
+    manifest_name: &str,
+    tags: &[&str],
+) {
+    let dir = skills_parent.join(dir_name);
     std::fs::create_dir_all(&dir).unwrap();
     let tag_toml = tags
         .iter()
@@ -3084,7 +4054,7 @@ fn install_test_skill(skills_parent: &std::path::Path, name: &str, tags: &[&str]
         .join(", ");
     let toml = format!(
         "[skill]\n\
-         name = \"{name}\"\n\
+         name = \"{manifest_name}\"\n\
          version = \"0.1.0\"\n\
          description = \"test skill\"\n\
          author = \"test\"\n\
@@ -3212,6 +4182,7 @@ fn test_set_agent_skills_persists_allowlist_to_agent_toml() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "skill-persist-agent".to_string(),
+                source_template: None,
                 description: "skill persistence regression".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -3260,6 +4231,7 @@ fn test_set_agent_mcp_servers_persists_allowlist_to_agent_toml() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "mcp-persist-agent".to_string(),
+                source_template: None,
                 description: "MCP persistence regression".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -3297,6 +4269,988 @@ fn test_set_agent_mcp_servers_persists_allowlist_to_agent_toml() {
         "agent.toml must contain the assigned MCP server so it survives a restart, got:\n{written}"
     );
 
+    kernel.shutdown();
+}
+
+/// Boot a kernel over `home_dir` with a `data/` subdir, the shape every allowlist test below needs.
+fn boot_kernel_at(home_dir: &std::path::Path) -> LibreFangKernel {
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.to_path_buf(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    LibreFangKernel::boot_with_config(config).expect("boot")
+}
+
+/// Spawn a minimal agent for an allowlist test.
+fn spawn_allowlist_test_agent(kernel: &LibreFangKernel, name: &str) -> AgentId {
+    kernel
+        .spawn_agent_inner(
+            AgentManifest {
+                name: name.to_string(),
+                source_template: None,
+                description: "allowlist validation regression".to_string(),
+                author: "test".to_string(),
+                module: "builtin:chat".to_string(),
+                ..Default::default()
+            },
+            None,
+            None,
+            None,
+        )
+        .expect("spawn")
+}
+
+/// Write a minimal MCP catalog entry at `<home_dir>/mcp/catalog/<id>.toml`, the layout `McpCatalog::load` reads at boot.
+fn write_test_mcp_catalog_entry(home_dir: &std::path::Path, id: &str) {
+    let dir = home_dir.join("mcp").join("catalog");
+    std::fs::create_dir_all(&dir).unwrap();
+    let toml = format!(
+        "id = \"{id}\"\n\
+         name = \"{id}\"\n\
+         description = \"test catalog entry\"\n\
+         category = \"devtools\"\n\
+         \n\
+         [transport]\n\
+         type = \"stdio\"\n\
+         command = \"true\"\n"
+    );
+    std::fs::write(dir.join(format!("{id}.toml")), toml).unwrap();
+}
+
+#[test]
+fn test_set_agent_skills_validates_against_manifest_name_not_directory_name() {
+    // #7772 review item: the pending-skill check must compare against `[skill].name`, which is what the loaded registry is keyed by, not against the directory name.
+    // The two identifiers are equal in every other skill test in this file, so only a deliberately mismatched fixture can tell the accessors apart.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("skills")).unwrap();
+    let kernel = boot_kernel_at(&home_dir);
+
+    // Installed after boot, so it is on disk but absent from the loaded registry.
+    install_test_skill_named(&home_dir.join("skills"), "package-dir", "actual-skill", &[]);
+
+    let agent_id = spawn_allowlist_test_agent(&kernel, "manifest-name-skill-agent");
+
+    kernel
+        .set_agent_skills(agent_id, vec!["actual-skill".to_string()])
+        .expect(
+            "the manifest name is the identifier the skill will load under, so it must be accepted",
+        );
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .skills,
+        vec!["actual-skill".to_string()]
+    );
+
+    // The directory name must not be silently accepted in its place: once the skill loads it lands in the registry under `actual-skill`, so a stored `package-dir` would match nothing and quietly strip the agent's skill at the next restart.
+    let err = kernel
+        .set_agent_skills(agent_id, vec!["package-dir".to_string()])
+        .expect_err("the directory name can never match after load and must be rejected");
+    match err {
+        KernelError::LibreFang(LibreFangError::InvalidInput(ref msg)) => {
+            assert!(
+                msg.contains("package-dir"),
+                "the error must name the rejected value, got: {msg}"
+            );
+        }
+        other => panic!("expected InvalidInput, got: {other:?}"),
+    }
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .skills,
+        vec!["actual-skill".to_string()],
+        "a rejected save must leave the previously stored allowlist untouched"
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_skills_accepts_on_disk_unloaded_pending_name() {
+    // A skill directory that exists on disk but is not in the running registry is a legitimate pending declaration — the same state `pending_skill_and_mcp_declarations` reports on the read side — and accepting it must not load or activate anything.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("skills")).unwrap();
+    let kernel = boot_kernel_at(&home_dir);
+
+    install_test_skill(&home_dir.join("skills"), "unloaded-pending-skill", &[]);
+
+    let agent_id = spawn_allowlist_test_agent(&kernel, "unloaded-skill-agent");
+
+    {
+        let registry = kernel.skills.skill_registry.read().unwrap();
+        assert!(
+            !registry
+                .skill_names()
+                .iter()
+                .any(|n| n == "unloaded-pending-skill"),
+            "precondition: the skill must not be loaded yet"
+        );
+    }
+
+    kernel
+        .set_agent_skills(agent_id, vec!["unloaded-pending-skill".to_string()])
+        .expect("an on-disk-but-unloaded skill name must be accepted as a pending declaration");
+
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .skills,
+        vec!["unloaded-pending-skill".to_string()]
+    );
+    {
+        let registry = kernel.skills.skill_registry.read().unwrap();
+        assert!(
+            !registry
+                .skill_names()
+                .iter()
+                .any(|n| n == "unloaded-pending-skill"),
+            "accepting a pending declaration must not load the skill as a side effect"
+        );
+    }
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_skills_rejects_name_unknown_everywhere_as_invalid_input() {
+    // A name that is neither loaded nor on disk is a typo, and must be rejected as `InvalidInput` — the old `Internal` variant is what rendered as "Internal error" at the API boundary for a user-input problem.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("skills")).unwrap();
+    let kernel = boot_kernel_at(&home_dir);
+    let agent_id = spawn_allowlist_test_agent(&kernel, "unknown-skill-agent");
+
+    let err = kernel
+        .set_agent_skills(agent_id, vec!["totally-made-up-skill".to_string()])
+        .expect_err("a name absent from both the registry and disk must be rejected");
+    match err {
+        KernelError::LibreFang(LibreFangError::InvalidInput(ref msg)) => {
+            assert!(
+                msg.contains("totally-made-up-skill"),
+                "the error must name the rejected skill, got: {msg}"
+            );
+            assert!(
+                !msg.contains("Internal"),
+                "a validation failure must not read as an internal fault, got: {msg}"
+            );
+        }
+        other => panic!("expected InvalidInput, got: {other:?}"),
+    }
+
+    kernel.shutdown();
+}
+
+/// #8093: with no `[llm.auxiliary]` entry, a side task must run on the agent's
+/// own driver, not on `AuxClient`'s primary.
+///
+/// Every kernel caller pairs the driver this returns with the *agent's* model.
+/// `AuxClient::primary` is the process-wide `default_driver`, so for an agent
+/// overriding provider/model the request went to the default provider carrying
+/// a model only the agent's provider can serve — a LiteLLM
+/// `403 team_model_access_denied` naming the agent's model, after which
+/// compaction silently degraded to its fallback stub.
+#[test]
+fn test_side_task_driver_prefers_the_agents_own_chain_over_aux_primary() {
+    use librefang_types::config::AuxTask;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    let kernel = boot_kernel_at(&home_dir);
+
+    // A default config carries no `[llm.auxiliary]`, so the resolution reports
+    // `used_primary` — the branch this test pins.
+    let aux = kernel.llm.aux_client.load();
+    assert!(
+        aux.resolve(AuxTask::Compression).used_primary,
+        "test premise: an unconfigured Compression task resolves to the primary driver"
+    );
+    let aux_primary = aux.driver_for(AuxTask::Compression);
+    drop(aux);
+
+    // A *named, keyless* provider on purpose. A default manifest short-circuits
+    // to the driverless sentinel (#7743), which is the same object boot handed
+    // to `AuxClient` as its primary — so the identity check below would compare
+    // a stub against itself and report the fix as broken in any environment
+    // without provider credentials. `ollama` is local and needs no API key, so
+    // it builds regardless of the test environment (same reasoning as the
+    // allowlist tests in `llm_drivers.rs`).
+    let mut manifest = librefang_types::agent::AgentManifest {
+        name: "side-task-driver-agent".to_string(),
+        description: "side-task driver selection regression".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        ..Default::default()
+    };
+    manifest.model.provider = "ollama".to_string();
+    manifest.model.model = "llama3.2:latest".to_string();
+    kernel
+        .spawn_agent_inner(manifest.clone(), None, None, None)
+        .expect("spawn");
+
+    // Precondition first: if the agent's own chain cannot be built,
+    // `side_task_driver` legitimately falls back to the aux primary and the
+    // identity assertion below would fail for a reason that has nothing to do
+    // with the fix. Fail here instead, where the message says so.
+    let own = kernel
+        .resolve_driver(&manifest)
+        .expect("the agent's own driver must build, or this test proves nothing");
+    assert!(
+        !std::sync::Arc::ptr_eq(&own, &aux_primary),
+        "test premise: a named keyless provider must not resolve to the same object as the aux primary"
+    );
+
+    let chosen = kernel.side_task_driver(&manifest, AuxTask::Compression);
+    assert!(
+        !std::sync::Arc::ptr_eq(&chosen, &aux_primary),
+        "an unconfigured side task must not run on AuxClient's primary — that is the driver \
+         that cannot serve the agent's model"
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_accepts_catalog_only_pending_name() {
+    // The reported bug: `fetch` is in the local MCP catalog but was never configured, so it never connected, so the old accept-set (built from connected tools) rejected it.
+    // Accepting it must persist the name and nothing else — no install, no connect, no `effective_mcp_servers` mutation.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    write_test_mcp_catalog_entry(&home_dir, "fetch");
+    let kernel = boot_kernel_at(&home_dir);
+
+    let before = kernel.mcp.effective_mcp_servers.read().unwrap().len();
+    let agent_id = spawn_allowlist_test_agent(&kernel, "catalog-only-agent");
+
+    kernel
+        .set_agent_mcp_servers(agent_id, vec!["fetch".to_string()])
+        .expect("a catalog-only server name is a legitimate pending declaration");
+
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .mcp_servers,
+        vec!["fetch".to_string()]
+    );
+    let after = kernel.mcp.effective_mcp_servers.read().unwrap();
+    assert_eq!(
+        before,
+        after.len(),
+        "accepting a pending declaration must not configure a server as a side effect"
+    );
+    assert!(
+        !after.iter().any(|s| s.name == "fetch"),
+        "fetch must not have been added to the effective server list"
+    );
+    drop(after);
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_grandfathers_a_name_the_agent_already_stores() {
+    // #8095: uninstall an MCP server and every agent still naming it became
+    // uneditable. The dashboard editor round-trips the current allowlist, so
+    // the now-unknown name comes back in on every save — including the save
+    // that would have removed it. The operator could not add a server, remove
+    // the stale one, or repair the agent from any surface.
+    //
+    // The pre-existing state is seeded through the registry rather than by
+    // deleting a catalog file, because that is literally what an uninstall
+    // leaves behind: the manifest keeps the name and nothing rewrites it.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    let kernel = boot_kernel_at(&home_dir);
+    register_mcp_server(&kernel, "still-installed");
+
+    let agent_id = spawn_allowlist_test_agent(&kernel, "stale-declaration-agent");
+    kernel
+        .agents
+        .registry
+        .update_mcp_servers(agent_id, vec!["uninstalled-mcp".to_string()])
+        .expect("seed the post-uninstall state");
+
+    // Re-submitting the stale name unchanged must not be refused: it is
+    // already on disk, so rejecting it protects nothing.
+    kernel
+        .set_agent_mcp_servers(agent_id, vec!["uninstalled-mcp".to_string()])
+        .expect("a name the agent already stores must stay saveable");
+
+    // The edit the operator actually wants: add a real server alongside it.
+    kernel
+        .set_agent_mcp_servers(
+            agent_id,
+            vec!["uninstalled-mcp".to_string(), "still-installed".to_string()],
+        )
+        .expect("a stale declaration must not block adding a working server");
+
+    // And the repair: drop the stale name entirely.
+    kernel
+        .set_agent_mcp_servers(agent_id, vec!["still-installed".to_string()])
+        .expect("removing the stale declaration must be possible");
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .mcp_servers,
+        vec!["still-installed".to_string()],
+        "the stale name is gone once the operator removes it"
+    );
+
+    // Grandfathering is scoped to names already present: a newly introduced
+    // unknown name is still a typo and still refused. This is the assertion
+    // that keeps the fix from becoming "stop validating".
+    let err = kernel
+        .set_agent_mcp_servers(
+            agent_id,
+            vec!["still-installed".to_string(), "uninstalled-mcp".to_string()],
+        )
+        .expect_err("a name that is no longer stored is new again, and unknown");
+    assert!(
+        err.to_string().contains("uninstalled-mcp"),
+        "the rejection must name the offending server, got: {err}"
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_accepts_configured_but_unconnected_name() {
+    // The old check resolved connected *tools* back to servers, so a server configured in `config.toml` that had not dialed yet — or failed to dial — was rejected even though it is exactly what the operator wrote down.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    let kernel = boot_kernel_at(&home_dir);
+    register_mcp_server(&kernel, "configured-not-connected");
+    // Deliberately no tools pushed into `tools_ref` — nothing has connected.
+
+    let agent_id = spawn_allowlist_test_agent(&kernel, "unconnected-mcp-agent");
+    kernel
+        .set_agent_mcp_servers(agent_id, vec!["configured-not-connected".to_string()])
+        .expect("a configured server must be accepted whether or not it has connected");
+
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .mcp_servers,
+        vec!["configured-not-connected".to_string()]
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_keeps_pending_name_when_adding_configured_ones() {
+    // The reported failure in full: the dashboard PUTs the whole array, so one inherited pending name (`fetch`) took down a save whose actual purpose was adding two configured servers.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    write_test_mcp_catalog_entry(&home_dir, "fetch");
+    let kernel = boot_kernel_at(&home_dir);
+    register_mcp_server(&kernel, "memory");
+    register_mcp_server(&kernel, "camoufox");
+    register_mcp_server(&kernel, "sequential-thinking");
+
+    let agent_id = spawn_allowlist_test_agent(&kernel, "inherited-fetch-agent");
+    let saved = vec![
+        "memory".to_string(),
+        "fetch".to_string(),
+        "camoufox".to_string(),
+        "sequential-thinking".to_string(),
+    ];
+    kernel
+        .set_agent_mcp_servers(agent_id, saved.clone())
+        .expect("adding configured servers alongside an inherited pending one must succeed");
+
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .mcp_servers,
+        saved
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_accepts_wildcard_allowlist() {
+    // `["*"]` is a documented value meaning "all connected servers", but it is not the name of anything, so the connected-tool accept-set never contained it and saving it failed with `Unknown MCP server: *`.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    let kernel = boot_kernel_at(&home_dir);
+    let agent_id = spawn_allowlist_test_agent(&kernel, "wildcard-mcp-agent");
+
+    kernel
+        .set_agent_mcp_servers(agent_id, vec!["*".to_string()])
+        .expect("the documented wildcard must be storable");
+    assert_eq!(
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent exists")
+            .manifest
+            .mcp_servers,
+        vec!["*".to_string()]
+    );
+
+    kernel.shutdown();
+}
+
+#[test]
+fn test_set_agent_mcp_servers_rejects_name_unknown_everywhere_as_invalid_input() {
+    // A name absent from both `config.toml` and the catalog is genuinely unknown, and must still be rejected — as `InvalidInput`, not `Internal`.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    let kernel = boot_kernel_at(&home_dir);
+    let agent_id = spawn_allowlist_test_agent(&kernel, "unknown-mcp-agent");
+
+    let err = kernel
+        .set_agent_mcp_servers(agent_id, vec!["totally-made-up-server".to_string()])
+        .expect_err("a name absent from config and catalog must be rejected");
+    match err {
+        KernelError::LibreFang(LibreFangError::InvalidInput(ref msg)) => {
+            assert!(
+                msg.contains("totally-made-up-server"),
+                "the error must name the rejected server, got: {msg}"
+            );
+            assert!(
+                !msg.contains("Internal"),
+                "a validation failure must not read as an internal fault, got: {msg}"
+            );
+        }
+        other => panic!("expected InvalidInput, got: {other:?}"),
+    }
+
+    kernel.shutdown();
+}
+
+#[test]
+fn concurrent_full_and_mcp_manifest_persists_keep_both_registry_updates() {
+    let tmp = tempfile::tempdir().unwrap();
+    let toml_path = tmp.path().join("agent.toml");
+    let kernel = Arc::new(
+        LibreFangKernel::boot_with_config(KernelConfig {
+            home_dir: tmp.path().to_path_buf(),
+            data_dir: tmp.path().join("data"),
+            ..KernelConfig::default()
+        })
+        .expect("boot"),
+    );
+    let agent_id = kernel
+        .spawn_agent_inner(
+            AgentManifest {
+                name: "concurrent-manifest-writers".to_string(),
+                source_template: None,
+                ..Default::default()
+            },
+            None,
+            Some(toml_path.clone()),
+            None,
+        )
+        .expect("spawn");
+    kernel.persist_manifest_to_disk(agent_id);
+    register_mcp_server(&kernel, "concurrent-server");
+    kernel
+        .tools_ref()
+        .lock()
+        .unwrap()
+        .push(librefang_types::tool::ToolDefinition {
+            name: "mcp_concurrent_server_dummy".to_string(),
+            description: String::new(),
+            input_schema: serde_json::json!({}),
+        });
+
+    let write_lock = Arc::new(std::sync::Mutex::new(()));
+    kernel
+        .agents
+        .manifest_write_locks
+        .insert(toml_path.clone(), Arc::clone(&write_lock));
+    let write_guard = write_lock.lock().unwrap();
+    let mcp_writer = {
+        let kernel = Arc::clone(&kernel);
+        std::thread::spawn(move || {
+            kernel
+                .set_agent_mcp_servers(agent_id, vec!["concurrent-server".to_string()])
+                .expect("MCP persist");
+        })
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .unwrap()
+        .manifest
+        .mcp_servers
+        .is_empty()
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "MCP registry update timed out"
+        );
+        std::thread::yield_now();
+    }
+    kernel
+        .agents
+        .registry
+        .update_model(agent_id, "concurrent-model".to_string())
+        .expect("model registry update");
+    let full_writer = {
+        let kernel = Arc::clone(&kernel);
+        std::thread::spawn(move || kernel.persist_manifest_to_disk(agent_id))
+    };
+    drop(write_guard);
+    mcp_writer.join().unwrap();
+    full_writer.join().unwrap();
+
+    let persisted: AgentManifest =
+        toml::from_str(&std::fs::read_to_string(toml_path).unwrap()).unwrap();
+    assert_eq!(persisted.model.model, "concurrent-model");
+    assert_eq!(persisted.mcp_servers, vec!["concurrent-server"]);
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn concurrent_mcp_connect_paths_register_one_connection_per_server() {
+    use librefang_types::config::{HttpCompatToolConfig, McpServerConfigEntry, McpTransportEntry};
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let backend = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(100)))
+        .mount(&backend)
+        .await;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    config.mcp_servers.push(McpServerConfigEntry {
+        name: "concurrent-http-compat".to_string(),
+        template_id: None,
+        transport: Some(McpTransportEntry::HttpCompat {
+            base_url: backend.uri(),
+            headers: Vec::new(),
+            tools: vec![HttpCompatToolConfig {
+                name: "probe".to_string(),
+                path: "/probe".to_string(),
+                ..Default::default()
+            }],
+        }),
+        timeout_secs: 5,
+        env: Vec::new(),
+        headers: Vec::new(),
+        oauth: None,
+        taint_scanning: true,
+        taint_policy: None,
+    });
+
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    let ((), reloaded) = tokio::join!(kernel.connect_mcp_servers(), kernel.reload_mcp_servers());
+    reloaded.expect("reload");
+
+    let connections = kernel.mcp.mcp_connections.lock().await;
+    assert_eq!(
+        connections.len(),
+        1,
+        "concurrent connection paths must not both publish the same server"
+    );
+    drop(connections);
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn disconnect_waits_for_inflight_mcp_connection_before_removing_it() {
+    use librefang_types::config::{HttpCompatToolConfig, McpServerConfigEntry, McpTransportEntry};
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let backend = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_millis(500)))
+        .mount(&backend)
+        .await;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    config.mcp_servers.push(McpServerConfigEntry {
+        name: "disconnect-inflight".to_string(),
+        template_id: None,
+        transport: Some(McpTransportEntry::HttpCompat {
+            base_url: backend.uri(),
+            headers: Vec::new(),
+            tools: vec![HttpCompatToolConfig {
+                name: "probe".to_string(),
+                path: "/probe".to_string(),
+                ..Default::default()
+            }],
+        }),
+        timeout_secs: 5,
+        env: Vec::new(),
+        headers: Vec::new(),
+        oauth: None,
+        taint_scanning: true,
+        taint_policy: None,
+    });
+
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    let connector = {
+        let kernel = Arc::clone(&kernel);
+        tokio::spawn(async move { kernel.connect_mcp_servers().await })
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if !backend
+                .received_requests()
+                .await
+                .expect("recorded requests")
+                .is_empty()
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("connection probe should reach backend");
+
+    assert!(kernel.disconnect_mcp_server("disconnect-inflight").await);
+    connector.await.expect("connector task");
+    assert!(kernel.mcp.mcp_connections.lock().await.is_empty());
+    assert!(kernel.mcp.mcp_tools.lock().unwrap().is_empty());
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_connection_paths_do_not_reconnect_after_auth_is_revoked() {
+    use librefang_runtime::mcp_oauth::McpAuthState;
+    use librefang_types::config::{HttpCompatToolConfig, McpServerConfigEntry, McpTransportEntry};
+    use wiremock::MockServer;
+
+    let backend = MockServer::start().await;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    config.mcp_servers.push(McpServerConfigEntry {
+        name: "revoked-server".to_string(),
+        template_id: None,
+        transport: Some(McpTransportEntry::HttpCompat {
+            base_url: backend.uri(),
+            headers: Vec::new(),
+            tools: vec![HttpCompatToolConfig {
+                name: "probe".to_string(),
+                path: "/probe".to_string(),
+                ..Default::default()
+            }],
+        }),
+        timeout_secs: 5,
+        env: Vec::new(),
+        headers: Vec::new(),
+        oauth: None,
+        taint_scanning: true,
+        taint_policy: None,
+    });
+
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    kernel
+        .mcp
+        .mcp_auth_states
+        .lock()
+        .await
+        .insert("revoked-server".to_string(), McpAuthState::NeedsAuth);
+    kernel.connect_mcp_servers().await;
+    assert_eq!(kernel.reload_mcp_servers().await.unwrap(), 0);
+    assert!(kernel.reconnect_mcp_server("revoked-server").await.is_err());
+    kernel.retry_mcp_connection("revoked-server").await;
+
+    assert!(kernel.mcp.mcp_connections.lock().await.is_empty());
+    assert!(backend
+        .received_requests()
+        .await
+        .expect("recorded requests")
+        .is_empty());
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_config_change_clears_stale_needs_auth_before_reconnect() {
+    use librefang_runtime::mcp_oauth::McpAuthState;
+    use librefang_types::config::{HttpCompatToolConfig, McpServerConfigEntry, McpTransportEntry};
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let old_backend = MockServer::start().await;
+    let new_backend = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&new_backend)
+        .await;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    };
+    config.mcp_servers.push(McpServerConfigEntry {
+        name: "changed-auth-server".to_string(),
+        template_id: None,
+        transport: Some(McpTransportEntry::HttpCompat {
+            base_url: old_backend.uri(),
+            headers: Vec::new(),
+            tools: vec![HttpCompatToolConfig {
+                name: "probe".to_string(),
+                path: "/probe".to_string(),
+                ..Default::default()
+            }],
+        }),
+        timeout_secs: 5,
+        env: Vec::new(),
+        headers: Vec::new(),
+        oauth: None,
+        taint_scanning: true,
+        taint_policy: None,
+    });
+
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    kernel
+        .mcp
+        .mcp_auth_states
+        .lock()
+        .await
+        .insert("changed-auth-server".to_string(), McpAuthState::NeedsAuth);
+    let mut changed_config = (*kernel.config.load_full()).clone();
+    changed_config.mcp_servers[0].transport = Some(McpTransportEntry::HttpCompat {
+        base_url: new_backend.uri(),
+        headers: Vec::new(),
+        tools: vec![HttpCompatToolConfig {
+            name: "probe".to_string(),
+            path: "/probe".to_string(),
+            ..Default::default()
+        }],
+    });
+    kernel.config.store(Arc::new(changed_config));
+
+    assert_eq!(kernel.reload_mcp_servers().await.unwrap(), 1);
+    assert!(kernel
+        .mcp
+        .mcp_auth_states
+        .lock()
+        .await
+        .get("changed-auth-server")
+        .is_none());
+    assert_eq!(kernel.mcp.mcp_connections.lock().await.len(), 1);
+    assert!(old_backend
+        .received_requests()
+        .await
+        .expect("old requests")
+        .is_empty());
+    assert_eq!(
+        new_backend
+            .received_requests()
+            .await
+            .expect("new requests")
+            .len(),
+        1
+    );
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn config_hot_reload_waits_for_inflight_mcp_auth_result_before_resetting_state() {
+    use librefang_runtime::mcp_oauth::McpAuthState;
+    use librefang_types::config::{HttpCompatToolConfig, McpServerConfigEntry, McpTransportEntry};
+    use wiremock::matchers::method;
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let old_backend = MockServer::start().await;
+    let new_backend = MockServer::start().await;
+    Mock::given(method("GET"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&new_backend)
+        .await;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut config = KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        default_model: DefaultModelConfig {
+            provider: "anthropic".to_string(),
+            model: "user-picked-model".to_string(),
+            api_key_env: "ANTHROPIC_API_KEY".to_string(),
+            base_url: None,
+            message_timeout_secs: 300,
+            extra_params: std::collections::BTreeMap::new(),
+            cli_profile_dirs: Vec::new(),
+        },
+        ..KernelConfig::default()
+    };
+    config.mcp_servers.push(McpServerConfigEntry {
+        name: "hot-reload-auth-server".to_string(),
+        template_id: None,
+        transport: Some(McpTransportEntry::HttpCompat {
+            base_url: old_backend.uri(),
+            headers: Vec::new(),
+            tools: vec![HttpCompatToolConfig {
+                name: "probe".to_string(),
+                path: "/probe".to_string(),
+                ..Default::default()
+            }],
+        }),
+        timeout_secs: 5,
+        env: Vec::new(),
+        headers: Vec::new(),
+        oauth: None,
+        taint_scanning: true,
+        taint_policy: None,
+    });
+
+    let mut file_config = config.clone();
+    file_config.mcp_servers.clear();
+    let baseline_toml = toml::to_string_pretty(&file_config).expect("serialize baseline config");
+    let changed_toml = format!(
+        "{baseline_toml}\n[[mcp_servers]]\nname = \"hot-reload-auth-server\"\ntimeout_secs = 5\ntaint_scanning = true\n\n[mcp_servers.transport]\ntype = \"http_compat\"\nbase_url = \"{}\"\n\n[[mcp_servers.transport.tools]]\nname = \"probe\"\npath = \"/probe\"\nmethod = \"get\"\n",
+        new_backend.uri()
+    );
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    kernel.set_self_handle();
+    std::fs::write(tmp.path().join("config.toml"), changed_toml).expect("write changed config");
+
+    let connection_op = kernel.mcp.mcp_connection_ops.lock().await;
+    let mut reload_task = {
+        let kernel = Arc::clone(&kernel);
+        tokio::spawn(async move { kernel.reload_config().await })
+    };
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(250), &mut reload_task)
+            .await
+            .is_err(),
+        "config hot reload must wait for the in-flight connection operation"
+    );
+    kernel.mcp.mcp_auth_states.lock().await.insert(
+        "hot-reload-auth-server".to_string(),
+        McpAuthState::NeedsAuth,
+    );
+    drop(connection_op);
+    reload_task
+        .await
+        .expect("reload task")
+        .expect("reload config");
+
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            if kernel.mcp.mcp_connections.lock().await.len() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("new config should reconnect after the stale auth state is reset");
+    assert!(kernel
+        .mcp
+        .mcp_auth_states
+        .lock()
+        .await
+        .get("hot-reload-auth-server")
+        .is_none());
+    assert_eq!(kernel.mcp.mcp_connections.lock().await.len(), 1);
+    assert_eq!(
+        new_backend
+            .received_requests()
+            .await
+            .expect("new backend requests")
+            .len(),
+        1
+    );
+    assert!(old_backend
+        .received_requests()
+        .await
+        .expect("old backend requests")
+        .is_empty());
+    kernel.shutdown();
+}
+
+#[test]
+fn hand_agent_mcp_update_is_rejected_without_touching_shared_manifest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let source_path = tmp.path().join("hand.toml");
+    let original = "# shared hand manifest\nid = \"test-hand\"\n";
+    std::fs::write(&source_path, original).unwrap();
+    let kernel = LibreFangKernel::boot_with_config(KernelConfig {
+        home_dir: tmp.path().to_path_buf(),
+        data_dir: tmp.path().join("data"),
+        ..KernelConfig::default()
+    })
+    .expect("boot");
+    let agent_id = kernel
+        .spawn_agent_inner(
+            AgentManifest {
+                name: "test-hand:worker".to_string(),
+                source_template: None,
+                tags: vec!["hand:test-hand".to_string()],
+                ..Default::default()
+            },
+            None,
+            Some(source_path.clone()),
+            None,
+        )
+        .expect("spawn hand-derived agent");
+
+    let error = kernel
+        .set_agent_mcp_servers(agent_id, Vec::new())
+        .expect_err("hand-derived allowlist must be controlled by the Hand definition");
+    assert!(matches!(
+        error,
+        KernelError::LibreFang(LibreFangError::InvalidInput(_))
+    ));
+    assert_eq!(std::fs::read_to_string(source_path).unwrap(), original);
+    assert!(kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .unwrap()
+        .manifest
+        .mcp_servers
+        .is_empty());
     kernel.shutdown();
 }
 
@@ -3481,6 +5435,7 @@ fn test_skill_evolve_tools_present_when_both_flags_true() {
     // Restricted agent: only memory tools declared; both evolution paths on.
     let manifest = AgentManifest {
         name: "matrix-tt-agent".to_string(),
+        source_template: None,
         description: "matrix (T,T) test agent".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -3611,6 +5566,7 @@ fn test_skill_evolve_tool_survives_when_explicitly_declared_and_evolution_disabl
     // still honour the explicit declaration.
     let manifest = AgentManifest {
         name: "explicit-evolve-agent".to_string(),
+        source_template: None,
         description: "agent with explicit evolve tool and evolution disabled".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -3678,7 +5634,7 @@ async fn test_cron_create_preserves_peer_id() {
     });
 
     kernel
-        .cron_create(&agent_id, job_json)
+        .cron_create(&agent_id, job_json, None)
         .await
         .expect("cron_create should succeed");
 
@@ -3705,7 +5661,7 @@ async fn test_cron_create_preserves_peer_id() {
         "action": { "kind": "agent_turn", "message": "ping" },
     });
     kernel
-        .cron_create(&agent_id, job_no_peer)
+        .cron_create(&agent_id, job_no_peer, None)
         .await
         .expect("cron_create without peer_id should succeed");
     let jobs2 = kernel
@@ -3910,6 +5866,36 @@ fn atomic_write_leaves_no_tmp_file_on_success() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn parent_dir_for_fsync_maps_bare_filename_to_current_dir() {
+    use std::path::Path;
+
+    // The premise this resolution exists for: a bare filename has an empty-but-present parent, so `ok_or_else`-style handling would let `""` through to `File::open` and fail with ENOENT after the rename already succeeded.
+    assert_eq!(Path::new("agent.toml").parent(), Some(Path::new("")));
+
+    assert_eq!(
+        super::cron_script::parent_dir_for_fsync(Path::new("agent.toml")),
+        Path::new("."),
+        "a bare filename must fsync the current directory, not \"\""
+    );
+    assert_eq!(
+        super::cron_script::parent_dir_for_fsync(Path::new("/")),
+        Path::new("."),
+        "a rootless path (parent() == None) must also fall back to \".\""
+    );
+    assert_eq!(
+        super::cron_script::parent_dir_for_fsync(Path::new("/srv/librefang/agent.toml")),
+        Path::new("/srv/librefang"),
+        "an absolute path must fsync its real containing directory"
+    );
+    assert_eq!(
+        super::cron_script::parent_dir_for_fsync(Path::new("nested/agent.toml")),
+        Path::new("nested"),
+        "a relative path with a directory component must keep that directory"
+    );
+}
+
 #[test]
 fn atomic_write_no_partial_state_under_concurrency() {
     // Spawn two threads racing to write the same path with very
@@ -3967,6 +5953,54 @@ fn atomic_write_no_partial_state_under_concurrency() {
     assert!(
         leftovers.is_empty(),
         "no .tmp staging files should remain after concurrent writes"
+    );
+}
+
+/// A hash-only config leaves the MCP bridge with no bearer to send.
+///
+/// Not a bug to fix inside `build_mcp_bridge_cfg` — a verifier cannot yield the secret it verifies, and this leg *transmits* the credential — but it is the posture `api_key_hash`'s own documentation and `librefang hash-api-key` both recommend, and on that posture every CLI-driver tool call 401s against the daemon's own middleware.
+/// Pinning the shape keeps the accompanying `WARN` and the documented `vault:` / env workarounds honest about what actually happens.
+#[test]
+fn mcp_bridge_omits_the_bearer_when_only_a_hash_is_configured() {
+    if std::env::var(API_KEY_ENV).is_ok_and(|v| !v.trim().is_empty()) {
+        // The environment already supplies a transmittable key — one of the two documented fixes — so there is no keyless path left to assert.
+        return;
+    }
+    let cfg = KernelConfig {
+        api_key: String::new(),
+        api_key_hash: "$sha256$0000000000000000000000000000000000000000000000000000000000000000"
+            .to_string(),
+        ..KernelConfig::default()
+    };
+
+    let bridge = build_mcp_bridge_cfg(&cfg);
+
+    assert_eq!(
+        bridge.api_key, None,
+        "a hash is a verifier, so the bridge has nothing to transmit"
+    );
+}
+
+/// Keeping a transmittable `api_key` beside the hash is the documented fix, so it must actually reach the bridge — the hash must not shadow it.
+#[test]
+fn mcp_bridge_sends_the_plaintext_key_when_a_hash_is_also_set() {
+    if std::env::var(API_KEY_ENV).is_ok_and(|v| !v.trim().is_empty()) {
+        // Env wins by design; asserting the config value would fail for the right reason and prove nothing.
+        return;
+    }
+    let cfg = KernelConfig {
+        api_key: "plaintext-master-key".to_string(),
+        api_key_hash: "$sha256$0000000000000000000000000000000000000000000000000000000000000000"
+            .to_string(),
+        ..KernelConfig::default()
+    };
+
+    let bridge = build_mcp_bridge_cfg(&cfg);
+
+    assert_eq!(
+        bridge.api_key.as_deref(),
+        Some("plaintext-master-key"),
+        "a configured hash must not suppress the transmittable key beside it"
     );
 }
 
@@ -4118,6 +6152,86 @@ system_prompt = "BASE PROMPT"
     assert!(
         prompt.contains("STT"),
         "rendered settings line must be present; got: {prompt}"
+    );
+
+    kernel.shutdown();
+}
+
+/// `[registry] auto_sync = false` must make boot leave the checkout alone.
+///
+/// This is the restart-survival half of the claim: the config round-trip and the catalog-task path are covered elsewhere, but the gate that actually decides whether `sync_registry` runs lives in `boot_with_config`, and nothing exercised it.
+/// No `.sync_marker` is written, which is the state `should_refresh` answers `true` for unconditionally — so a boot that ignored `auto_sync` would fast-forward the checkout with `git reset --hard origin/main` and destroy the local edit.
+///
+/// The load-bearing assertion is the absent fan-out file, not the surviving `HAND.toml`.
+/// `sync_registry` ends with `fanout_registry_content`, which copies `registry/providers/*.toml` into `<home>/providers/` and needs no network to do it — so the probe file appears if and only if the gate stopped honouring `auto_sync`, whether or not the machine can reach the mirror.
+/// Asserting only on the checkout's contents would pass vacuously on an offline runner, where the fetch fails and leaves the files alone by accident.
+///
+/// Only the frozen direction is asserted: the `auto_sync = true` path reaches the network, which a unit test must not depend on.
+#[test]
+fn boot_with_auto_sync_disabled_leaves_the_registry_checkout_alone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+
+    let hand_dir = home_dir.join("registry").join("hands").join("frozenhand");
+    std::fs::create_dir_all(&hand_dir).unwrap();
+    let local_edit = r#"
+id = "frozenhand"
+version = "1.0.0"
+name = "Operator Edited Hand"
+description = "local edit that must survive boot"
+category = "other"
+
+[agent]
+name = "frozen-agent"
+description = "test agent"
+system_prompt = "Test"
+"#;
+    std::fs::write(hand_dir.join("HAND.toml"), local_edit).unwrap();
+
+    // Network-independent probe: `fanout_registry_content` copies `registry/providers/*.toml` into `<home>/providers/`, and it runs on every `sync_registry` call regardless of whether the fetch succeeded.
+    let probe = home_dir.join("registry").join("providers");
+    std::fs::create_dir_all(&probe).unwrap();
+    std::fs::write(probe.join("zzz-frozen-probe.toml"), "name = \"probe\"\n").unwrap();
+
+    // Deliberately no `.sync_marker`: `should_refresh` returns true when the marker is absent, so the boot sync would run if the gate were not honoured.
+    // Sibling boot tests pre-touch the marker precisely to avoid that; this one must not.
+    assert!(
+        !home_dir.join("registry").join(".sync_marker").exists(),
+        "pre-check: the refresh must be due, or the assertions below prove nothing"
+    );
+
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    config.registry.auto_sync = false;
+
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    assert!(
+        !home_dir
+            .join("providers")
+            .join("zzz-frozen-probe.toml")
+            .exists(),
+        "boot ran the registry sync despite auto_sync = false — its fan-out copied \
+         the probe provider into the home dir"
+    );
+    // On a networked runner the sync replaces the whole checkout, so this is the assertion that fires there — and it reads without unwrapping, because the file being gone is precisely the regression being reported.
+    assert_eq!(
+        std::fs::read_to_string(hand_dir.join("HAND.toml")).unwrap_or_default(),
+        local_edit,
+        "boot fast-forwarded the registry checkout despite auto_sync = false — the \
+         operator's local edit is gone"
+    );
+    assert!(
+        kernel
+            .skills
+            .hand_registry
+            .get_definition("frozenhand")
+            .is_some(),
+        "the surviving hand must still be loaded from the frozen checkout"
     );
 
     kernel.shutdown();
@@ -4381,8 +6495,8 @@ fn hand_runtime_override_survives_restart_via_activate_hand_with_id() {
             .expect("apitester hand agent entry");
         assert_eq!(entry.manifest.model.model, "test-override-model");
         assert_eq!(entry.manifest.model.provider, "test-override-provider");
-        assert_eq!(entry.manifest.model.max_tokens, 54321);
-        assert!((entry.manifest.model.temperature - 0.37).abs() < 1e-6);
+        assert_eq!(entry.manifest.model.max_tokens, Some(54321));
+        assert_eq!(entry.manifest.model.temperature, Some(0.37));
         assert_eq!(
             entry.manifest.web_search_augmentation,
             WebSearchAugmentationMode::Always
@@ -4472,13 +6586,14 @@ fn hand_runtime_override_survives_restart_via_activate_hand_with_id() {
         "provider override must be re-applied on restart"
     );
     assert_eq!(
-        m.model.max_tokens, 54321,
+        m.model.max_tokens,
+        Some(54321),
         "max_tokens override must be re-applied on restart"
     );
-    assert!(
-        (m.model.temperature - 0.37).abs() < 1e-6,
-        "temperature override must be re-applied on restart (got {})",
-        m.model.temperature
+    assert_eq!(
+        m.model.temperature,
+        Some(0.37),
+        "temperature override must be re-applied on restart"
     );
     assert_eq!(
         m.web_search_augmentation,
@@ -4577,8 +6692,8 @@ fn hand_runtime_override_survives_restart_via_start_background_agents() {
     let m = &entry.manifest;
     assert_eq!(m.model.model, "e2e-override-model");
     assert_eq!(m.model.provider, "e2e-override-provider");
-    assert_eq!(m.model.max_tokens, 13579);
-    assert!((m.model.temperature - 0.42).abs() < 1e-6);
+    assert_eq!(m.model.max_tokens, Some(13579));
+    assert_eq!(m.model.temperature, Some(0.42));
     assert_eq!(m.web_search_augmentation, WebSearchAugmentationMode::Always);
 
     // Explicitly drop the runtime before shutdown so background tasks can
@@ -4703,6 +6818,7 @@ fn boot_gc_removes_orphaned_hand_agent_rows() {
 
         let mut manifest = librefang_types::agent::AgentManifest {
             name: "orphan-hand-agent".to_string(),
+            source_template: None,
             description: "stale hand-agent row".to_string(),
             module: "builtin:chat".to_string(),
             ..Default::default()
@@ -4799,6 +6915,7 @@ fn boot_gc_skips_orphan_cleanup_when_hand_state_is_corrupt() {
 
         let mut manifest = librefang_types::agent::AgentManifest {
             name: "orphan-hand-agent-corrupt".to_string(),
+            source_template: None,
             description: "stale hand-agent row".to_string(),
             module: "builtin:chat".to_string(),
             ..Default::default()
@@ -4932,7 +7049,7 @@ fn clear_hand_agent_runtime_override_resets_manifest_and_state() {
         .get(agent_id)
         .expect("apitester hand agent entry post-override");
     assert_eq!(overridden.manifest.model.model, "clear-override-model");
-    assert_eq!(overridden.manifest.model.max_tokens, 9999);
+    assert_eq!(overridden.manifest.model.max_tokens, Some(9999));
 
     // Clear and check the manifest is back to defaults.
     kernel
@@ -4963,8 +7080,8 @@ fn clear_hand_agent_runtime_override_resets_manifest_and_state() {
         cleared.manifest.model.max_tokens, default_manifest.model.max_tokens,
         "max_tokens must match the HAND.toml default after clear"
     );
-    assert!(
-        (cleared.manifest.model.temperature - default_manifest.model.temperature).abs() < 1e-6,
+    assert_eq!(
+        cleared.manifest.model.temperature, default_manifest.model.temperature,
         "temperature must match the HAND.toml default after clear"
     );
     assert_eq!(
@@ -5172,6 +7289,7 @@ async fn kill_agent_aborts_in_flight_run_5142() {
 
     let manifest = AgentManifest {
         name: "victim".to_string(),
+        source_template: None,
         description: "agent whose run must be aborted on kill".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -5258,6 +7376,7 @@ async fn kill_agent_dispatch_insert_race_leaves_no_orphan_5142() {
 
     let manifest = AgentManifest {
         name: "race-victim".to_string(),
+        source_template: None,
         description: "agent for kill/dispatch race".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -5426,6 +7545,75 @@ async fn gc_sweep_aborts_orphaned_running_task_5142() {
     kernel.shutdown();
 }
 
+/// A live agent that starts one short-lived background watcher may never call `register_agent_watcher` again, so registration-time cleanup alone cannot reclaim the completed JoinHandle.
+/// The periodic sweep must drop completed handles while retaining tasks that are still running for `kill_agent` to abort later.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn gc_sweep_reaps_finished_agent_watchers() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-gc-agent-watchers");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let kernel = LibreFangKernel::boot_with_config(KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    })
+    .expect("kernel should boot");
+
+    let manifest = AgentManifest {
+        name: "gc-agent-watcher".to_string(),
+        source_template: None,
+        description: "agent for watcher GC".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        ..Default::default()
+    };
+    let agent_id = kernel.spawn_agent(manifest).expect("spawn should succeed");
+
+    let finished = tokio::spawn(async {});
+    while !finished.is_finished() {
+        tokio::task::yield_now().await;
+    }
+    let running = tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    });
+    let running_abort = running.abort_handle();
+
+    kernel.agents.agent_watchers.insert(
+        agent_id,
+        Arc::new(std::sync::Mutex::new(vec![finished, running])),
+    );
+
+    kernel.gc_sweep();
+
+    {
+        let slot = kernel
+            .agents
+            .agent_watchers
+            .get(&agent_id)
+            .expect("live agent watcher slot must remain");
+        let handles = slot.lock().expect("watcher lock");
+        assert_eq!(handles.len(), 1, "finished watcher must be reclaimed");
+        assert!(
+            !handles[0].is_finished(),
+            "running watcher must remain tracked for kill_agent"
+        );
+    }
+
+    kernel.kill_agent(agent_id).expect("kill should succeed");
+    for _ in 0..50 {
+        if running_abort.is_finished() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert!(
+        running_abort.is_finished(),
+        "retained watcher must still be aborted when the agent is killed"
+    );
+
+    kernel.shutdown();
+}
+
 /// TOCTOU regression: the periodic GC sweep must NOT abort a *successor* turn that swapped into `running_tasks` after the sweep snapshotted a finished predecessor under the same `(agent, session)` key.
 /// Pre-fix the sweep collected the keys, then did a bare `running_tasks.remove(&key)`; a faster successor inserted between the collect and the remove was dropped and its in-flight `AbortHandle` fired, killing a live turn.
 /// The fix snapshots the observed `task_id` and removes via `remove_if(... v.task_id == observed)`, so a swapped-in successor (different task_id) is never touched.
@@ -5452,6 +7640,7 @@ async fn gc_sweep_does_not_abort_live_successor_turn() {
     // is exactly the path the successor race lives on.
     let manifest = AgentManifest {
         name: "gc-successor-victim".to_string(),
+        source_template: None,
         description: "agent for gc successor TOCTOU".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -5870,6 +8059,7 @@ fn fork_session_snapshot_is_unaffected_by_registry_mutation_4291() {
         name: format!("toctou-agent-{}", agent_id),
         manifest: librefang_types::agent::AgentManifest {
             name: format!("toctou-agent-{}", agent_id),
+            source_template: None,
             description: "test".into(),
             author: "test".into(),
             module: "test".into(),
@@ -6075,6 +8265,7 @@ fn test_agent_concurrency_for_resolves_new_mode_cap() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "parallel-trigger-agent".to_string(),
+                source_template: None,
                 description: "new-mode agent allowed to fan out".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -6117,6 +8308,7 @@ fn test_agent_concurrency_for_clamps_persistent_cap() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "misconfigured-persistent-agent".to_string(),
+                source_template: None,
                 description: "persistent + cap=4 must clamp".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -6159,6 +8351,7 @@ fn test_agent_concurrency_for_floors_zero_to_one() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "typo-zero-agent".to_string(),
+                source_template: None,
                 description: "Some(0) must floor to 1".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -6198,6 +8391,7 @@ fn test_agent_concurrency_for_returns_cached_semaphore() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "cache-test-agent".to_string(),
+                source_template: None,
                 description: "second resolve returns same Arc".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -6261,6 +8455,7 @@ async fn workflow_send_message_closure_honours_per_agent_semaphore() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "wf-fanout-cap-agent".to_string(),
+                source_template: None,
                 description: "cap=1 + 3 parallel fan-out steps must serialise".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -6462,6 +8657,217 @@ fn workflow_spawn_holds_lane_permit_across_run() {
          ends. Removing the drop allows Rust to release the permit early — \
          the bug that \
          docs/issues/workflow-path-drops-lane-permit.md describes."
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Nested workflow runs are bounded by `max_agent_call_depth` (refs #6659).
+//
+// `workflow_run` executes the target workflow inline on the calling task, and each step nests a whole agent turn.
+// Before the fix nothing counted that nesting, so a workflow whose step target runs a workflow again recursed until the tokio worker's stack ran out (SIGABRT, taking the HTTP API and every cron job with it, since the daemon runs 2 workers).
+// ---------------------------------------------------------------------------
+
+/// Build a one-step workflow whose step targets a registry agent name that does not exist.
+/// Enough to drive `run_workflow` end-to-end: the depth check sits ahead of `create_run`, and a missing step agent makes the accepted path fail fast (`format_missing_agent_error`) without any LLM call.
+fn depth_probe_workflow() -> crate::workflow::Workflow {
+    use crate::workflow::{ErrorMode, StepAgent, StepMode, Workflow, WorkflowId, WorkflowStep};
+    Workflow {
+        id: WorkflowId::new(),
+        name: "depth-probe".to_string(),
+        description: "one step targeting an unregistered agent".to_string(),
+        steps: vec![WorkflowStep {
+            name: "only-step".to_string(),
+            agent: StepAgent::ByName {
+                name: "no-such-agent".to_string(),
+            },
+            prompt_template: "{{input}}".to_string(),
+            mode: StepMode::Sequential,
+            timeout_secs: 5,
+            error_mode: ErrorMode::Fail,
+            output_var: None,
+            inherit_context: None,
+            depends_on: vec![],
+            session_mode: None,
+            required_skills: Vec::new(),
+        }],
+        created_at: chrono::Utc::now(),
+        layout: None,
+        total_timeout_secs: Some(5),
+        input_schema: None,
+        owner: None,
+    }
+}
+
+/// A workflow run entered from inside `max_agent_call_depth` already-stacked agent turns must be refused as a policy error, and refused *before* `create_run` so no orphan `Pending` run is left behind.
+/// The same call at depth 0 must be accepted — that pairing is what proves the refusal comes from the depth quota and not from the workflow being unrunnable.
+#[tokio::test(flavor = "multi_thread")]
+async fn nested_workflow_run_past_max_agent_call_depth_is_capability_denied() {
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        // Keep the cap small so the test can nest to it literally rather than looping a recursive async helper.
+        // The production default is 5.
+        max_agent_call_depth: 2,
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let wf = depth_probe_workflow();
+    let wf_id = kernel.register_workflow(wf).await;
+
+    // Depth 0 — accepted.
+    // It still fails (the step's agent is not registered), but with `Internal("Workflow failed: ...")`, not the depth refusal.
+    let accepted = kernel.run_workflow(wf_id, "hello".to_string()).await;
+    if let Err(KernelError::LibreFang(LibreFangError::CapabilityDenied(msg))) = accepted {
+        panic!("a top-level workflow run must not be refused by the depth quota, got: {msg}");
+    }
+    assert_eq!(
+        kernel.workflows.engine.list_runs(None).await.len(),
+        1,
+        "the accepted run must have been created — otherwise the assertion \
+         below (no run created on refusal) proves nothing"
+    );
+
+    // Depth 2 == `max_agent_call_depth` — refused.
+    // Two nested `with_agent_call_depth` frames stand in for two stacked agent turns, which is exactly what the workflow step dispatch establishes in production.
+    let refused = librefang_runtime::tool_runner::with_agent_call_depth(
+        librefang_runtime::tool_runner::with_agent_call_depth(
+            kernel.run_workflow(wf_id, "hello".to_string()),
+        ),
+    )
+    .await;
+    match refused {
+        Err(KernelError::LibreFang(LibreFangError::CapabilityDenied(msg))) => {
+            assert!(
+                msg.contains("Nested workflow run depth exceeded"),
+                "refusal text must name the quota so an operator can raise it, got: {msg}"
+            );
+            assert!(
+                msg.contains("max 2"),
+                "refusal must report the configured cap, not a hardcoded one, got: {msg}"
+            );
+        }
+        other => panic!(
+            "expected CapabilityDenied (kernel-policy quota → HTTP 403); an \
+             Internal error here would read as a downstream crash to retry \
+             logic. Got: {other:?}"
+        ),
+    }
+    assert_eq!(
+        kernel.workflows.engine.list_runs(None).await.len(),
+        1,
+        "a refused nesting must not create a run — the depth check has to sit \
+         ahead of `create_run` or every capped attempt leaves an orphan \
+         Pending run in the engine"
+    );
+
+    // The `WorkflowRunner` trait impl is the path `workflow_run` actually takes, and it used to stringify every `KernelError` into `KernelOpError::Internal`.
+    // That erased the policy shape before the tool layer could see it, so the refusal reached the model as an opaque upstream (5xx-class) failure.
+    // Assert the variant survives the hop.
+    {
+        use librefang_runtime::kernel_handle::WorkflowRunner;
+        let wf_id_str = wf_id.to_string();
+        let via_trait = librefang_runtime::tool_runner::with_agent_call_depth(
+            librefang_runtime::tool_runner::with_agent_call_depth(WorkflowRunner::run_workflow(
+                &kernel, &wf_id_str, "hello",
+            )),
+        )
+        .await;
+        match via_trait {
+            Err(LibreFangError::CapabilityDenied(msg)) => assert!(
+                msg.contains("Nested workflow run depth exceeded"),
+                "the refusal text must survive the trait hop, got: {msg}"
+            ),
+            other => panic!(
+                "the WorkflowRunner trait impl must preserve CapabilityDenied; folding it into \
+                 Internal delivers a policy quota to the tool layer as a downstream crash. \
+                 Got: {other:?}"
+            ),
+        }
+    }
+
+    kernel.shutdown();
+}
+
+/// Source-shape sentinel for the other half of the fix, in the style of `workflow_send_message_closure_contains_per_agent_semaphore_acquire` above.
+///
+/// The behavioral test proves the quota *check* rejects a deep run.
+/// It cannot prove the step dispatch actually enters the depth scope, because observing the depth inside `send_message_full` needs a real LLM turn and this crate's tests have no driver-injection seam.
+/// Without that wrap every nesting level would read depth 0 and the check would never fire, so pin the wiring: the `run_workflow` step dispatch must call `send_message_full` through `with_agent_call_depth`.
+#[test]
+fn workflow_step_dispatch_enters_agent_call_depth_scope() {
+    let src = include_str!("triggers_and_workflow.rs");
+    // Strip line + block comments so a leftover doc reference cannot satisfy the assertion after the wiring is removed (same approach as the two sentinels above).
+    let stripped: String = {
+        let mut out = String::with_capacity(src.len());
+        let mut in_block = false;
+        for line in src.lines() {
+            let mut s = line.to_string();
+            if in_block {
+                if let Some(end) = s.find("*/") {
+                    s = s.split_at(end + 2).1.to_string();
+                    in_block = false;
+                } else {
+                    continue;
+                }
+            }
+            while let Some(start) = s.find("/*") {
+                if let Some(end_rel) = s[start..].find("*/") {
+                    let end = start + end_rel + 2;
+                    s.replace_range(start..end, "");
+                } else {
+                    s.truncate(start);
+                    in_block = true;
+                    break;
+                }
+            }
+            if let Some(idx) = s.find("//") {
+                s.truncate(idx);
+            }
+            out.push_str(&s);
+            out.push('\n');
+        }
+        out
+    };
+
+    // Counted, not `contains`.
+    // There are two step-dispatch closures in this file — `run_workflow::send_message` and its operator-resume twin in `KernelOperatorResumeDriver::drive_operator_timeout` — and a single containment check passes with either one wrapped, which is exactly how the resume twin was missed.
+    // The semaphore sentinel above counts for the same reason.
+    let dispatches = stripped.matches("send_message_full(").count();
+    let wrapped = stripped.matches("with_agent_call_depth(").count();
+    assert!(
+        wrapped >= 2,
+        "expected BOTH step-dispatch closures in triggers_and_workflow.rs to \
+         wrap `send_message_full` in \
+         `librefang_runtime::tool_runner::with_agent_call_depth` — \
+         `run_workflow::send_message` and the operator-resume twin in \
+         `drive_operator_timeout` — but found {wrapped}. Without it a workflow \
+         step's agent turn runs at the caller's depth, so a workflow that \
+         re-runs itself through a step target's `workflow_run` recurses \
+         unbounded and overflows the worker stack (refs #6659). An \
+         operator-timeout resume drives the remaining steps through the twin, \
+         so leaving it unwrapped gives that path one extra stacked turn of \
+         budget."
+    );
+    assert_eq!(
+        dispatches - wrapped,
+        1,
+        "exactly one `send_message_full` call in triggers_and_workflow.rs is \
+         expected to run outside a depth scope: the trigger dispatch path, \
+         which STARTS a chain on its own task rather than nesting inside one, \
+         so depth 0 is correct there. Found {dispatches} dispatches and \
+         {wrapped} wrapped. If a new inline dispatch was added it needs the \
+         wrapper; if the trigger path was changed, update this sentinel \
+         deliberately rather than adjusting the number."
+    );
+    assert!(
+        stripped.contains("cfg.max_agent_call_depth"),
+        "expected `run_workflow` to read the operator knob \
+         `cfg.max_agent_call_depth` for its nesting cap, so raising the limit \
+         in config.toml raises it on the workflow path too."
     );
 }
 
@@ -7128,6 +9534,10 @@ fn boot_kernel_for_display_tests() -> LibreFangKernel {
     let config = KernelConfig {
         home_dir: home_dir.clone(),
         data_dir: home_dir.join("data"),
+        // #7743: the hook tests built on this helper dispatch an ephemeral turn and only care
+        // that the hook fired before driver resolution. Declare the absence of a driver rather
+        // than inheriting `"auto"`, which resolves a live provider off the host.
+        default_model: DefaultModelConfig::driverless(),
         ..KernelConfig::default()
     };
     // Leak the tempdir so the kernel keeps a valid home for the rest of the
@@ -7450,6 +9860,41 @@ fn mcp_summary_cache_key_is_order_independent() {
 }
 
 #[test]
+fn mcp_summary_cache_is_bounded_across_distinct_allowlists() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("librefang-mcp-cache-bound-test");
+    std::fs::create_dir_all(home.join("data")).unwrap();
+    let kernel = LibreFangKernel::boot_with_config(KernelConfig {
+        home_dir: home.clone(),
+        data_dir: home.join("data"),
+        ..KernelConfig::default()
+    })
+    .expect("kernel should boot");
+
+    kernel
+        .tools_ref()
+        .lock()
+        .unwrap()
+        .push(librefang_types::tool::ToolDefinition {
+            name: "mcp_server_tool".to_string(),
+            description: String::new(),
+            input_schema: serde_json::json!({}),
+        });
+
+    let cap = super::subsystems::mcp::MAX_MCP_SUMMARY_CACHE_ENTRIES;
+    for index in 0..=cap {
+        let _ = kernel.build_mcp_summary(&[format!("server-{index}")]);
+    }
+
+    let cache = kernel.mcp.mcp_summary_cache.lock();
+    assert!(
+        cache.len() <= cap,
+        "caller-controlled allowlists must not grow the cache past {cap} entries"
+    );
+    assert!(cache.contains_key(&format!("server-{cap}")));
+}
+
+#[test]
 fn available_tools_mcp_section_is_sorted_across_connect_orders() {
     // Regression for #3765: connect / hot-reload order of MCP servers must
     // not mutate the LLM tool definition list, otherwise provider prompt
@@ -7466,6 +9911,7 @@ fn available_tools_mcp_section_is_sorted_across_connect_orders() {
     let kernel = LibreFangKernel::boot_with_config(cfg).expect("kernel should boot");
     let manifest = AgentManifest {
         name: "mcp-order".to_string(),
+        source_template: None,
         description: "agent for mcp order regression".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -7573,6 +10019,7 @@ fn mcp_disabled_suppresses_all_mcp_tools() {
 
     let manifest = AgentManifest {
         name: "no-mcp".to_string(),
+        source_template: None,
         description: "agent with mcp_disabled".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -7626,6 +10073,7 @@ fn mcp_disabled_false_preserves_mcp_tools() {
 
     let manifest = AgentManifest {
         name: "with-mcp".to_string(),
+        source_template: None,
         description: "agent with mcp enabled".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -7730,6 +10178,7 @@ fn mcp_tool_names_for_servers(
 
     let manifest = AgentManifest {
         name: "allowlist-agent".to_string(),
+        source_template: None,
         description: "agent under mcp_servers allowlist test".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -7887,6 +10336,7 @@ fn mcp_disabled_hot_reload_takes_effect_without_respawn() {
     // Start with MCP enabled.
     let manifest = AgentManifest {
         name: "hot-reload-mcp".to_string(),
+        source_template: None,
         description: "agent for mcp_disabled hot-reload test".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -8062,6 +10512,16 @@ fn minimal_kernel(test_name: &str) -> (LibreFangKernel, tempfile::TempDir) {
     (k, dir)
 }
 
+#[test]
+fn goal_run_start_reports_unset_self_handle() {
+    let (kernel, _dir) = minimal_kernel("goal-run-start-unset-self-handle");
+    let goal_id = librefang_types::goal::GoalId::new();
+    let agent_id = AgentId::new();
+
+    assert!(!kernel.goal_run_start(goal_id, agent_id, Some(1)));
+    assert!(kernel.goal_run_status(goal_id).is_none());
+}
+
 /// Helper: minimal agent manifest with a specific session_mode and
 /// max_concurrent_invocations.
 fn concurrency_manifest(
@@ -8071,6 +10531,7 @@ fn concurrency_manifest(
 ) -> AgentManifest {
     AgentManifest {
         name: name.to_string(),
+        source_template: None,
         description: "concurrency test agent".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -8910,6 +11371,7 @@ fn spawn_agent_allows_empty_name() {
 
     let manifest = AgentManifest {
         name: "".to_string(),
+        source_template: None,
         ..Default::default()
     };
 
@@ -8935,6 +11397,7 @@ fn spawn_agent_allows_special_chars_in_name() {
 
     let manifest = AgentManifest {
         name: "invalid/name".to_string(),
+        source_template: None,
         ..Default::default()
     };
 
@@ -8963,6 +11426,7 @@ fn spawn_agent_rejects_duplicate_name() {
 
     let manifest = AgentManifest {
         name: "duplicate-test-agent".to_string(),
+        source_template: None,
         module: "builtin:chat".to_string(),
         ..Default::default()
     };
@@ -8998,6 +11462,7 @@ fn spawn_agent_with_parent_rejects_unregistered_parent() {
     let parent_id = AgentId::from_name("non-existent-parent");
     let manifest = AgentManifest {
         name: "child-agent".to_string(),
+        source_template: None,
         module: "builtin:chat".to_string(),
         ..Default::default()
     };
@@ -9482,6 +11947,7 @@ fn test_spawn_agent_rejects_absolute_module_path() {
 
     let result = kernel.spawn_agent(AgentManifest {
         name: "evil-abs".to_string(),
+        source_template: None,
         description: "tries to exec /etc/passwd.py".to_string(),
         author: "test".to_string(),
         module: "python:/etc/passwd.py".to_string(),
@@ -9518,6 +11984,7 @@ fn test_spawn_agent_rejects_parent_traversal_module_path() {
 
     let result = kernel.spawn_agent(AgentManifest {
         name: "evil-traversal".to_string(),
+        source_template: None,
         description: "tries ../../etc/shadow.py".to_string(),
         author: "test".to_string(),
         module: "python:../../etc/shadow.py".to_string(),
@@ -11266,6 +13733,7 @@ fn kill_agent_with_purge_removes_agent_row_from_sqlite() {
 
     let manifest = AgentManifest {
         name: "agent-5117".to_string(),
+        source_template: None,
         description: "agent for #5117 regression".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -11330,6 +13798,10 @@ fn reentrant_test_kernel() -> (Arc<LibreFangKernel>, AgentId) {
     let config = KernelConfig {
         home_dir: home_dir.clone(),
         data_dir: home_dir.join("data"),
+        // #7743: the re-entrancy tests call `send_message_full`, which reaches driver
+        // resolution on the non-cycle path. Explicitly driverless, so neither leg can spawn a
+        // coding-agent CLI on a developer machine.
+        default_model: DefaultModelConfig::driverless(),
         ..KernelConfig::default()
     };
     let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("kernel should boot"));
@@ -11762,6 +14234,7 @@ fn boot_canonical_recovery_advances_pointer_to_most_recently_active_session_5198
         name: format!("recovery-agent-{}", agent_id),
         manifest: librefang_types::agent::AgentManifest {
             name: format!("recovery-agent-{}", agent_id),
+            source_template: None,
             description: "test".into(),
             author: "test".into(),
             module: "test".into(),
@@ -11880,6 +14353,143 @@ fn boot_canonical_recovery_advances_pointer_to_most_recently_active_session_5198
 // Regression test for #5201: when a session is over the token threshold but
 // under threshold_messages, the inner gate in compact_agent_session_with_id
 // must NOT return "No compaction needed" — it must proceed to the compactor.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn compact_session_serializes_with_message_writers_without_self_deadlock() {
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let kernel = Arc::new(
+        LibreFangKernel::boot_with_config(KernelConfig {
+            home_dir: home_dir.clone(),
+            data_dir: home_dir.join("data"),
+            ..KernelConfig::default()
+        })
+        .expect("kernel should boot"),
+    );
+
+    let manifest = AgentManifest {
+        name: "compact-session-lock-test".to_string(),
+        source_template: None,
+        description: "test".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        ..Default::default()
+    };
+    let agent_id = kernel.spawn_agent(manifest).expect("spawn should succeed");
+    let session_id = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent entry")
+        .session_id;
+
+    // The default-session entry point must wait behind an agent-scoped turn.
+    let agent_lock = kernel
+        .agents
+        .agent_msg_locks
+        .entry(agent_id)
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    let agent_guard = agent_lock.lock_owned().await;
+    let default_task = {
+        let kernel = Arc::clone(&kernel);
+        tokio::spawn(async move { kernel.compact_agent_session(agent_id, false).await })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !default_task.is_finished(),
+        "default-session compaction must wait for the agent message lock"
+    );
+    drop(agent_guard);
+    let default_result = tokio::time::timeout(std::time::Duration::from_secs(2), default_task)
+        .await
+        .expect("default compaction should finish after lock release")
+        .expect("compaction task should not panic")
+        .expect("empty-session compaction should succeed");
+    assert!(default_result.starts_with("No compaction needed"));
+
+    // A public explicit-session entry point lacks the caller's dispatch lock-domain bit.
+    // It must wait behind both agent-scoped channel writers and explicit-session writers.
+    let agent_guard = kernel
+        .agents
+        .agent_msg_locks
+        .get(&agent_id)
+        .expect("agent lock")
+        .clone()
+        .lock_owned()
+        .await;
+    let explicit_agent_task = {
+        let kernel = Arc::clone(&kernel);
+        tokio::spawn(async move {
+            kernel
+                .compact_agent_session_with_id(agent_id, Some(session_id), false)
+                .await
+        })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !explicit_agent_task.is_finished(),
+        "explicit-session compaction must wait for an agent-scoped channel writer"
+    );
+    drop(agent_guard);
+    tokio::time::timeout(std::time::Duration::from_secs(2), explicit_agent_task)
+        .await
+        .expect("explicit compaction should finish after agent lock release")
+        .expect("compaction task should not panic")
+        .expect("empty-session compaction should succeed");
+
+    let session_lock = kernel
+        .agents
+        .session_msg_locks
+        .entry(session_id)
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone();
+    let session_guard = session_lock.lock_owned().await;
+    let explicit_task = {
+        let kernel = Arc::clone(&kernel);
+        tokio::spawn(async move {
+            kernel
+                .compact_agent_session_with_id(agent_id, Some(session_id), false)
+                .await
+        })
+    };
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    assert!(
+        !explicit_task.is_finished(),
+        "explicit-session compaction must also wait for the session message lock"
+    );
+    drop(session_guard);
+    tokio::time::timeout(std::time::Duration::from_secs(2), explicit_task)
+        .await
+        .expect("explicit compaction should finish after lock release")
+        .expect("compaction task should not panic")
+        .expect("empty-session compaction should succeed");
+
+    // Automatic compaction is called inside the turn that already owns the lock.
+    // Its task-local registration must make the compactor skip a second acquisition of the same non-reentrant mutex.
+    let kernel_for_scope = Arc::clone(&kernel);
+    librefang_runtime::held_agent_locks::scope(async move {
+        let lock = kernel_for_scope
+            .agents
+            .agent_msg_locks
+            .get(&agent_id)
+            .expect("agent lock")
+            .clone();
+        let _lock_guard = lock.lock_owned().await;
+        let _held_guard = librefang_runtime::held_agent_locks::HeldLockGuard::register(agent_id);
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            kernel_for_scope.compact_agent_session(agent_id, false),
+        )
+        .await
+        .expect("re-entrant automatic compaction must not self-deadlock")
+        .expect("empty-session compaction should succeed");
+    })
+    .await;
+
+    kernel.shutdown();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_gate_passes_when_tokens_above_threshold_but_messages_below() {
     use librefang_memory::session::Session as MemSession;
@@ -11900,6 +14510,7 @@ async fn test_compact_gate_passes_when_tokens_above_threshold_but_messages_below
 
     let manifest = AgentManifest {
         name: "compact-token-gate-test".to_string(),
+        source_template: None,
         description: "test".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -12016,6 +14627,7 @@ fn test_context_report_uses_catalog_context_window_not_200k() {
 
     let manifest = AgentManifest {
         name: "ctx-report-test-agent".to_string(),
+        source_template: None,
         description: "agent for context_report regression test".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -12063,6 +14675,7 @@ fn test_context_report_honours_manifest_context_window_override() {
 
     let manifest = AgentManifest {
         name: "ctx-override-test-agent".to_string(),
+        source_template: None,
         description: "agent with explicit context_window in manifest".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -12114,6 +14727,7 @@ fn suspend_resume_actually_transition_in_memory_state() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "suspend-resume-agent".to_string(),
+                source_template: None,
                 description: "exercises suspend/resume state propagation".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
@@ -12176,20 +14790,19 @@ fn sync_default_model_agents_migrates_legacy_and_keeps_default_sentinel() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "default-tracking-agent".to_string(),
+                source_template: None,
                 description: "tracks the kernel default model".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "default".to_string(),
                     model: "default".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: None,
                     base_url: None,
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -12203,20 +14816,19 @@ fn sync_default_model_agents_migrates_legacy_and_keeps_default_sentinel() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "legacy-default-agent".to_string(),
+                source_template: None,
                 description: "contains a previously resolved default".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "anthropic".to_string(),
                     model: "claude-old-default".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: None,
                     base_url: None,
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -12510,20 +15122,19 @@ fn sync_default_model_agents_with_old_model_spares_agents_on_other_models() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "migrated-agent".to_string(),
+                source_template: None,
                 description: "agent pinned to delisted model".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "openrouter".to_string(),
                     model: "poolside/laguna-xs.2:free".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: None,
                     base_url: None,
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -12538,20 +15149,19 @@ fn sync_default_model_agents_with_old_model_spares_agents_on_other_models() {
         .spawn_agent_inner(
             AgentManifest {
                 name: "spared-agent".to_string(),
+                source_template: None,
                 description: "agent pinned to different model".to_string(),
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
                     provider: "openrouter".to_string(),
                     model: "openai/gpt-4o".to_string(),
-                    max_tokens: 4096,
-                    temperature: 0.7,
+                    max_tokens: Some(4096),
+                    temperature: Some(0.7),
                     system_prompt: String::new(),
                     api_key_env: None,
                     base_url: None,
-                    context_window: None,
-                    max_output_tokens: None,
-                    extra_params: std::collections::BTreeMap::new(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -12966,6 +15576,7 @@ fn spawn_evolution_agent(
 ) -> AgentId {
     let manifest = AgentManifest {
         name: name.to_string(),
+        source_template: None,
         description: "evolution-mode test agent".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -13416,6 +16027,7 @@ fn engine_manifest(
 ) -> AgentManifest {
     AgentManifest {
         name: name.to_string(),
+        source_template: None,
         description: "ctx engine resolution fixture".to_string(),
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
@@ -13844,4 +16456,1585 @@ mod provider_budget_gate_5980 {
 
         kernel.shutdown();
     }
+}
+
+// ---------------------------------------------------------------------------
+// #7808 — semantic-memory tool gating in `available_tools`.
+//
+// The `memory_semantic_*` tools reach the embedding-backed `memories` table:
+// cross-session, PII-bearing content the three KV tools never touch. The
+// common `capabilities.tools = ["memory_*"]` declaration glob-matches the new
+// names, so `capabilities.tools` alone cannot express "KV yes, semantic no" —
+// which is why the declared `memory_read` / `memory_write` scopes gate them a
+// second time. These tests pin every arm of that gate through the real kernel
+// path (`boot_with_config` -> `spawn_agent` -> `available_tools`), not an
+// inline mirror of the predicate.
+// ---------------------------------------------------------------------------
+
+/// All four semantic tool names, so a rename cannot silently drop one from the
+/// gate's coverage.
+/// The semantic tools gated by memory scopes alone.
+///
+/// `memory_semantic_consolidate` is deliberately absent: it carries a second,
+/// independent gate (`[proactive_memory] allow_self_consolidation` in
+/// `agent.toml`) that defaults to off, so it is withheld even from the manifests
+/// every tool below is granted to. Its own tests are further down.
+const SEMANTIC_MEMORY_TOOLS: &[&str] = &[
+    "memory_semantic_search",
+    "memory_semantic_stats",
+    "memory_semantic_duplicates",
+    "memory_semantic_add",
+    "memory_semantic_forget",
+];
+
+fn boot_gate_kernel(slug: &str) -> (LibreFangKernel, tempfile::TempDir) {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join(slug);
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("boot");
+    (kernel, tmp)
+}
+
+fn gate_manifest(name: &str, caps: ManifestCapabilities) -> AgentManifest {
+    AgentManifest {
+        name: name.to_string(),
+        source_template: None,
+        description: "semantic memory gate test agent".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        capabilities: caps,
+        ..Default::default()
+    }
+}
+
+fn tool_names(kernel: &LibreFangKernel, manifest: AgentManifest) -> Vec<String> {
+    let agent_id = kernel.spawn_agent(manifest).expect("spawn should succeed");
+    kernel
+        .available_tools(agent_id)
+        .iter()
+        .map(|t| t.name.clone())
+        .collect()
+}
+
+#[test]
+fn semantic_memory_tools_available_when_memory_scopes_are_undeclared() {
+    // The default manifest declares no memory scopes at all. Empty means
+    // "undeclared", which stays open — the same reading `capabilities.tools`
+    // already has, and the one that keeps the feature reachable out of the box.
+    let (kernel, _tmp) = boot_gate_kernel("gate-undeclared");
+    let names = tool_names(
+        &kernel,
+        gate_manifest("gate-undeclared-agent", ManifestCapabilities::default()),
+    );
+    for tool in SEMANTIC_MEMORY_TOOLS {
+        assert!(
+            names.contains(&tool.to_string()),
+            "{tool} must be available to an agent with no declared memory scopes; got {names:?}"
+        );
+    }
+    kernel.shutdown();
+}
+
+#[test]
+fn semantic_memory_tools_available_with_wildcard_memory_scopes() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-wildcard");
+    let names = tool_names(
+        &kernel,
+        gate_manifest(
+            "gate-wildcard-agent",
+            ManifestCapabilities {
+                tools: vec!["memory_*".to_string()],
+                memory_read: Some(vec!["*".to_string()]),
+                memory_write: Some(vec!["*".to_string()]),
+                ..Default::default()
+            },
+        ),
+    );
+    for tool in SEMANTIC_MEMORY_TOOLS {
+        assert!(
+            names.contains(&tool.to_string()),
+            "{tool} must be available with wildcard memory scopes; got {names:?}"
+        );
+    }
+    kernel.shutdown();
+}
+
+#[test]
+fn semantic_memory_tools_are_withheld_when_scopes_cover_only_kv() {
+    // The regression this gate exists for: `capabilities.tools = ["memory_*"]`
+    // glob-matches the semantic names, so without the scope gate an operator
+    // who granted key/value memory would silently acquire read AND write access
+    // to the semantic store as well.
+    let (kernel, _tmp) = boot_gate_kernel("gate-kv-only");
+    let names = tool_names(
+        &kernel,
+        gate_manifest(
+            "gate-kv-only-agent",
+            ManifestCapabilities {
+                tools: vec!["memory_*".to_string()],
+                memory_read: Some(vec!["kv:*".to_string()]),
+                memory_write: Some(vec!["kv:*".to_string()]),
+                ..Default::default()
+            },
+        ),
+    );
+    for tool in SEMANTIC_MEMORY_TOOLS {
+        assert!(
+            !names.contains(&tool.to_string()),
+            "{tool} must NOT be available when memory scopes cover only kv:*; got {names:?}"
+        );
+    }
+    // The KV tools the declaration actually asked for must still be there —
+    // the gate must not take the whole `memory_*` family down with it.
+    for tool in ["memory_store", "memory_recall", "memory_list"] {
+        assert!(
+            names.contains(&tool.to_string()),
+            "{tool} must still be available; got {names:?}"
+        );
+    }
+    kernel.shutdown();
+}
+
+#[test]
+fn semantic_memory_read_and_write_halves_are_gated_independently() {
+    // A read-only grant on the semantic store must yield search + stats and
+    // withhold add + forget. Getting this wrong in either direction is the
+    // failure mode worth pinning: a read grant that leaks writes lets an agent
+    // rewrite memory it was only meant to inspect, and a write grant that
+    // withholds reads leaves it unable to see what it just wrote.
+    let (kernel, _tmp) = boot_gate_kernel("gate-read-only");
+    let names = tool_names(
+        &kernel,
+        gate_manifest(
+            "gate-read-only-agent",
+            ManifestCapabilities {
+                tools: vec!["memory_*".to_string()],
+                memory_read: Some(vec!["proactive".to_string()]),
+                memory_write: Some(vec!["kv:*".to_string()]),
+                ..Default::default()
+            },
+        ),
+    );
+    for tool in [
+        "memory_semantic_search",
+        "memory_semantic_stats",
+        "memory_semantic_duplicates",
+    ] {
+        assert!(
+            names.contains(&tool.to_string()),
+            "{tool} is a read and must be granted by memory_read; got {names:?}"
+        );
+    }
+    for tool in ["memory_semantic_add", "memory_semantic_forget"] {
+        assert!(
+            !names.contains(&tool.to_string()),
+            "{tool} mutates memory and must need memory_write, not memory_read; got {names:?}"
+        );
+    }
+    kernel.shutdown();
+}
+
+#[test]
+fn explicitly_named_semantic_tool_overrides_the_scope_gate() {
+    // An operator naming the tool outright in `capabilities.tools` is a
+    // positive grant, and the gate must not second-guess it — the same
+    // precedence the evolve gate gives an explicit declaration. Only the tool
+    // actually named is admitted; its siblings stay gated.
+    let (kernel, _tmp) = boot_gate_kernel("gate-explicit");
+    let names = tool_names(
+        &kernel,
+        gate_manifest(
+            "gate-explicit-agent",
+            ManifestCapabilities {
+                tools: vec!["memory_semantic_search".to_string()],
+                memory_read: Some(vec!["kv:*".to_string()]),
+                memory_write: Some(vec!["kv:*".to_string()]),
+                ..Default::default()
+            },
+        ),
+    );
+    assert!(
+        names.contains(&"memory_semantic_search".to_string()),
+        "an explicitly declared tool must survive the scope gate; got {names:?}"
+    );
+    assert!(
+        !names.contains(&"memory_semantic_stats".to_string()),
+        "a sibling that was not declared must stay gated; got {names:?}"
+    );
+    kernel.shutdown();
+}
+
+#[test]
+fn scope_covers_own_memory_accepts_profile_implied_scopes() {
+    // Every non-memory `ToolProfile` implies `memory_write = ["self.*"]`. That
+    // means "this agent may write its own memory", not "this agent is barred
+    // from the semantic store", so matching it literally against the
+    // `proactive` namespace string would strip the write tools from every
+    // profile-based agent.
+    assert!(LibreFangKernel::scope_covers_own_memory("*"));
+    assert!(LibreFangKernel::scope_covers_own_memory("self.*"));
+    assert!(LibreFangKernel::scope_covers_own_memory("proactive"));
+    assert!(!LibreFangKernel::scope_covers_own_memory("kv:*"));
+    assert!(!LibreFangKernel::scope_covers_own_memory("wiki"));
+}
+
+#[test]
+fn semantic_memory_tool_access_classifies_every_semantic_tool() {
+    use crate::SemanticMemoryAccess;
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_search"),
+        Some(SemanticMemoryAccess::Read)
+    );
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_stats"),
+        Some(SemanticMemoryAccess::Read)
+    );
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_add"),
+        Some(SemanticMemoryAccess::Write)
+    );
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_forget"),
+        Some(SemanticMemoryAccess::Write)
+    );
+    // #7808: reporting duplicate groups changes nothing; merging them deletes.
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_duplicates"),
+        Some(SemanticMemoryAccess::Read)
+    );
+    assert_eq!(
+        LibreFangKernel::semantic_memory_tool_access("memory_semantic_consolidate"),
+        Some(SemanticMemoryAccess::Write)
+    );
+    // The KV tools are NOT semantic and must never be caught by the gate.
+    for kv in ["memory_store", "memory_recall", "memory_list"] {
+        assert_eq!(
+            LibreFangKernel::semantic_memory_tool_access(kv),
+            None,
+            "{kv} must not be classified as a semantic-memory tool"
+        );
+    }
+    // Every semantic tool in the builtin list must be classified, or the gate
+    // silently stops covering a tool someone added later.
+    for def in librefang_runtime::tool_runner::builtin_tool_definitions() {
+        if def.name.starts_with("memory_semantic_") {
+            assert!(
+                LibreFangKernel::semantic_memory_tool_access(&def.name).is_some(),
+                "{} is declared but unclassified — the gate would let it through ungated",
+                def.name
+            );
+        }
+    }
+}
+
+#[test]
+fn semantic_memory_tools_are_stripped_when_the_subsystem_is_disabled() {
+    // With `[proactive_memory] enabled = false` the store is never built, so
+    // these tools could only ever answer `Unavailable`. Advertising them would
+    // spend prompt tokens on four dead schemas and invite the model to plan
+    // around a capability it does not have.
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("gate-subsystem-off");
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        proactive_memory: librefang_types::memory::ProactiveMemoryConfig {
+            enabled: false,
+            ..Default::default()
+        },
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("boot");
+    let names = tool_names(
+        &kernel,
+        gate_manifest("gate-subsystem-off-agent", ManifestCapabilities::default()),
+    );
+    for tool in SEMANTIC_MEMORY_TOOLS {
+        assert!(
+            !names.contains(&tool.to_string()),
+            "{tool} must not be advertised when [proactive_memory] is off; got {names:?}"
+        );
+    }
+    // The KV tools do not depend on the proactive subsystem and must survive.
+    assert!(
+        names.contains(&"memory_store".to_string()),
+        "memory_store is key/value and must be unaffected; got {names:?}"
+    );
+    kernel.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// #7808 — the self-consolidation opt-in.
+//
+// `memory_semantic_consolidate` merges near-duplicate groups across an agent's
+// entire store and soft-deletes every member but the newest, unattended and in
+// one call. It exists because an agent buried under near-duplicates
+// reinforcing a stale belief has no remedy short of a full reset — but it
+// arrives switched off, and only `agent.toml` can switch it on (#5476).
+//
+// Two gates, tested separately because they fail differently: `available_tools`
+// decides what the model is told about, and the kernel handle decides what
+// actually runs. A name can reach dispatch without passing through the first —
+// a replayed transcript, a cached `tool_load`, a manifest edited mid-session —
+// so the second is the one that has to hold.
+// ---------------------------------------------------------------------------
+
+/// A manifest with the memory scopes the semantic write tools need, so the
+/// only thing separating these cases is the opt-in itself.
+fn consolidation_manifest(name: &str, allow: Option<bool>) -> AgentManifest {
+    let mut manifest = gate_manifest(
+        name,
+        ManifestCapabilities {
+            tools: vec!["memory_*".to_string()],
+            memory_read: Some(vec!["*".to_string()]),
+            memory_write: Some(vec!["*".to_string()]),
+            ..Default::default()
+        },
+    );
+    manifest.proactive_memory = librefang_types::memory::ProactiveMemoryOverrides {
+        allow_self_consolidation: allow,
+        ..Default::default()
+    };
+    manifest
+}
+
+#[test]
+fn consolidate_is_withheld_from_an_agent_that_did_not_opt_in() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-default");
+    let names = tool_names(
+        &kernel,
+        consolidation_manifest("gate-consolidate-default-agent", None),
+    );
+    assert!(
+        !names.contains(&"memory_semantic_consolidate".to_string()),
+        "consolidation must not be advertised without an explicit opt-in; got {names:?}"
+    );
+    // Everything else on the semantic surface is still granted — the opt-in
+    // withholds one destructive tool, not the feature.
+    for tool in SEMANTIC_MEMORY_TOOLS {
+        assert!(
+            names.contains(&tool.to_string()),
+            "{tool} must remain available; got {names:?}"
+        );
+    }
+    // Specifically: the read-only way to see the same duplicate groups stays
+    // reachable, so an agent that cannot merge can still report the problem.
+    assert!(names.contains(&"memory_semantic_duplicates".to_string()));
+    kernel.shutdown();
+}
+
+#[test]
+fn consolidate_appears_once_the_manifest_opts_in() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-optin");
+    let names = tool_names(
+        &kernel,
+        consolidation_manifest("gate-consolidate-optin-agent", Some(true)),
+    );
+    assert!(
+        names.contains(&"memory_semantic_consolidate".to_string()),
+        "an agent whose manifest sets allow_self_consolidation must get the tool; got {names:?}"
+    );
+    kernel.shutdown();
+}
+
+/// Naming the tool outright in `capabilities.tools` overrides the *scope* gate
+/// but must NOT override this one.
+///
+/// Naming a tool grants reach; this switch grants permission to delete rows the
+/// caller never named. If an explicit name were enough, the ordinary way to
+/// grant memory access — `tools = ["memory_semantic_consolidate"]` in a
+/// hand-written manifest, or a template copied from one — would arm destructive
+/// maintenance as a side effect of asking for the tool.
+#[test]
+fn naming_consolidate_in_capabilities_does_not_bypass_the_opt_in() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-named");
+    let mut manifest = gate_manifest(
+        "gate-consolidate-named-agent",
+        ManifestCapabilities {
+            tools: vec!["memory_semantic_consolidate".to_string()],
+            memory_read: Some(vec!["*".to_string()]),
+            memory_write: Some(vec!["*".to_string()]),
+            ..Default::default()
+        },
+    );
+    manifest.proactive_memory = librefang_types::memory::ProactiveMemoryOverrides::default();
+    let names = tool_names(&kernel, manifest);
+    assert!(
+        !names.contains(&"memory_semantic_consolidate".to_string()),
+        "an explicit tools entry must not stand in for the opt-in; got {names:?}"
+    );
+    kernel.shutdown();
+}
+
+/// A wildcard `tools = ["*"]` grant is the widest declaration a manifest can
+/// make, and it still must not reach consolidation.
+#[test]
+fn wildcard_tools_do_not_bypass_the_opt_in() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-wildcard");
+    let names = tool_names(
+        &kernel,
+        gate_manifest(
+            "gate-consolidate-wildcard-agent",
+            ManifestCapabilities {
+                tools: vec!["*".to_string()],
+                memory_read: Some(vec!["*".to_string()]),
+                memory_write: Some(vec!["*".to_string()]),
+                ..Default::default()
+            },
+        ),
+    );
+    assert!(
+        !names.contains(&"memory_semantic_consolidate".to_string()),
+        "`tools = [\"*\"]` must not arm destructive consolidation; got {names:?}"
+    );
+    kernel.shutdown();
+}
+
+/// The enforcement gate, reached directly rather than through
+/// `available_tools` — because that is how a replayed or cached tool name
+/// reaches it.
+// Multi-threaded flavour: kernel boot uses `block_in_place`, which the
+// current-thread runtime rejects.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn consolidate_call_is_refused_without_the_opt_in() {
+    use librefang_kernel_handle::MemoryAccess;
+
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-enforced");
+    let opted_out = kernel
+        .spawn_agent(consolidation_manifest("consolidate-opted-out", None))
+        .expect("spawn");
+
+    let err = kernel
+        .memory_semantic_consolidate(&opted_out.to_string(), None, None)
+        .await
+        .expect_err("consolidation must be refused without the opt-in");
+    let message = format!("{err:?}");
+    assert!(
+        message.contains("allow_self_consolidation"),
+        "the refusal must name the setting that would allow it: {message}"
+    );
+    assert!(
+        message.contains("memory_semantic_duplicates"),
+        "the refusal must point at the read-only alternative: {message}"
+    );
+
+    // And the gate is checked before the store is consulted, so an agent that
+    // DID opt in gets past it — here that surfaces as the proactive store being
+    // unavailable in this test kernel, which is a different error entirely.
+    let opted_in = kernel
+        .spawn_agent(consolidation_manifest("consolidate-opted-in", Some(true)))
+        .expect("spawn");
+    let past_the_gate = kernel
+        .memory_semantic_consolidate(&opted_in.to_string(), None, None)
+        .await;
+    let past_message = format!("{past_the_gate:?}");
+    assert!(
+        !past_message.contains("allow_self_consolidation"),
+        "an opted-in agent must not be stopped by the opt-in gate: {past_message}"
+    );
+
+    kernel.shutdown();
+}
+
+/// An agent the kernel cannot resolve to a manifest is exactly the caller whose
+/// opt-in cannot be confirmed, so the gate must fail closed rather than treat
+/// "no manifest" as "no restriction".
+#[test]
+fn unknown_agent_is_not_treated_as_opted_in() {
+    let (kernel, _tmp) = boot_gate_kernel("gate-consolidate-unknown");
+    assert!(
+        !kernel.allows_self_consolidation(librefang_types::agent::AgentId::new()),
+        "an unregistered agent must never be treated as having opted in"
+    );
+    kernel.shutdown();
+}
+
+/// The dream loop runs unattended by definition, so what it may call is a
+/// separate decision from what an interactive agent may call. Pin the list
+/// itself: widening it is the thing that decides what a background loop with no
+/// human in it may delete.
+#[test]
+fn dream_allowed_tools_covers_the_semantic_surface_and_nothing_else() {
+    use crate::auto_dream::DREAM_ALLOWED_TOOLS;
+
+    for expected in [
+        "memory_store",
+        "memory_recall",
+        "memory_list",
+        "memory_semantic_search",
+        "memory_semantic_stats",
+        "memory_semantic_duplicates",
+        "memory_semantic_add",
+        "memory_semantic_forget",
+        "memory_semantic_consolidate",
+    ] {
+        assert!(
+            DREAM_ALLOWED_TOOLS.contains(&expected),
+            "{expected} must be reachable from the dream loop that exists to use it"
+        );
+    }
+    // The dream prompt is built from memories, which are derived from
+    // conversation content — so this list is the blast radius of a prompt
+    // injection carried in a memory. Nothing outside memory belongs in it.
+    for name in DREAM_ALLOWED_TOOLS {
+        assert!(
+            name.starts_with("memory_"),
+            "{name} is not a memory tool and must not be reachable from an unattended loop"
+        );
+    }
+    // Every name must be a real, dispatchable tool: a ghost entry grants
+    // nothing and hides the fact that the loop cannot do what the list claims.
+    let builtins: Vec<String> = librefang_runtime::tool_runner::builtin_tool_definitions()
+        .into_iter()
+        .map(|d| d.name)
+        .collect();
+    for name in DREAM_ALLOWED_TOOLS {
+        assert!(
+            builtins.contains(&name.to_string()),
+            "{name} is allow-listed for dreams but is not a builtin tool"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Workflow step agent types — find-or-spawn (#7712)
+// ---------------------------------------------------------------------------
+
+/// Boot a kernel over a fresh tempdir home and hand back both, so the caller
+/// can seed agent templates on disk before resolving a `type` reference.
+fn boot_kernel_for_step_agent_tests(label: &str) -> (tempfile::TempDir, LibreFangKernel) {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join(label);
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    // These tests seed their own templates under `workspaces/agents/` and assert on which one `load_agent_template` picks.
+    // The boot registry sync fans registry content out into `agent-types/<type>.toml`, which is the *first* candidate that search consults — so a synced `researcher` (the registry ships one) shadows the seeded template and turns "malformed", "name_mismatch" and "spawn_failed" into a perfectly successful spawn.
+    // Freezing the sync per-config keeps the fixture hermetic without depending on `LIBREFANG_REGISTRY_OFFLINE` being set in the ambient environment.
+    config.registry.auto_sync = false;
+    let kernel = LibreFangKernel::boot_with_config(config).expect("boot");
+    (tmp, kernel)
+}
+
+/// Write `<home>/workspaces/agents/<name>/agent.toml`.
+fn seed_agent_template(kernel: &LibreFangKernel, name: &str, body: &str) {
+    let dir = kernel
+        .home_dir()
+        .join("workspaces")
+        .join("agents")
+        .join(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("agent.toml"), body).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_spawns_from_template_when_unregistered() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-spawn");
+    seed_agent_template(
+        &kernel,
+        "researcher",
+        "name = \"researcher\"\ndescription = \"finds things out\"\n",
+    );
+
+    let resolved = kernel.resolve_step_agent(&StepAgent::ByType {
+        template: "researcher".to_string(),
+    });
+    let (id, name, _) = resolved.expect("type should resolve by spawning the template");
+    assert_eq!(name, "researcher");
+    // Top-level spawn -> canonical name-derived UUID (#4614), so the same
+    // type keeps its id and session history across daemon restarts.
+    assert_eq!(id, AgentId::from_name("researcher"));
+    assert!(kernel.agents.registry.find_by_name("researcher").is_some());
+    kernel.shutdown();
+}
+
+/// A step agent spawned from a type came from a template, so it must carry the
+/// same `source_template` stamp `POST /api/agents` applies (#8018). Without it
+/// the dashboard's origin column is blank, which reads as "not created from a
+/// template" rather than "we did not record it".
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_records_the_template_it_came_from() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-provenance");
+    seed_agent_template(
+        &kernel,
+        "researcher",
+        "name = \"researcher\"\ndescription = \"finds things out\"\n",
+    );
+
+    kernel
+        .resolve_step_agent(&StepAgent::ByType {
+            template: "researcher".to_string(),
+        })
+        .expect("type should resolve by spawning the template");
+
+    let entry = kernel
+        .agents
+        .registry
+        .find_by_name("researcher")
+        .expect("spawned agent is registered");
+    assert_eq!(
+        entry.manifest.source_template.as_deref(),
+        Some("researcher"),
+        "a step agent spawned from a type must record the type it came from"
+    );
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_reuses_the_registered_agent() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-reuse");
+    // A template exists, but so does a live agent of that name: the live one wins
+    // and no second instance is created.
+    seed_agent_template(&kernel, "researcher", "name = \"researcher\"\n");
+    let existing = kernel
+        .spawn_agent(AgentManifest {
+            name: "researcher".to_string(),
+            source_template: None,
+            ..AgentManifest::default()
+        })
+        .expect("seed agent");
+    let before = kernel.agents.registry.list().len();
+
+    let (id, name, _) = kernel
+        .resolve_step_agent(&StepAgent::ByType {
+            template: "researcher".to_string(),
+        })
+        .expect("type should resolve to the registered agent");
+    assert_eq!(id, existing);
+    assert_eq!(name, "researcher");
+    assert_eq!(
+        kernel.agents.registry.list().len(),
+        before,
+        "reuse must not spawn a second instance"
+    );
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_resolves_to_none_when_the_template_is_missing() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-missing");
+    assert!(kernel
+        .resolve_step_agent(&StepAgent::ByType {
+            template: "nope".to_string(),
+        })
+        .is_none());
+    let err = kernel.find_or_spawn_agent_type("nope").unwrap_err();
+    assert_eq!(err.kind(), "missing");
+    kernel.shutdown();
+}
+
+/// A corrupt template must be reported as corrupt, not as "no such type" —
+/// the two demand completely different operator actions.
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_distinguishes_a_corrupt_template_from_a_missing_one() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-corrupt");
+    seed_agent_template(
+        &kernel,
+        "researcher",
+        "name = \"researcher\"\nnot valid toml [[[\n",
+    );
+    let err = kernel.find_or_spawn_agent_type("researcher").unwrap_err();
+    assert_eq!(err.kind(), "malformed");
+    assert!(err.to_string().contains("agent.toml"), "{err}");
+    // Nothing was spawned off a manifest that never parsed.
+    assert!(kernel.agents.registry.find_by_name("researcher").is_none());
+    kernel.shutdown();
+}
+
+/// A template directory whose manifest names a *different* agent is refused.
+///
+/// Spawning it would register the agent under the declared name, so the next
+/// resolution of this type would miss the registry again and try to spawn a
+/// second copy — the type would never converge on one instance.
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_rejects_a_template_naming_a_different_agent() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-mismatch");
+    seed_agent_template(&kernel, "researcher", "name = \"summarizer\"\n");
+    let err = kernel.find_or_spawn_agent_type("researcher").unwrap_err();
+    assert_eq!(err.kind(), "name_mismatch");
+    assert!(kernel.agents.registry.find_by_name("researcher").is_none());
+    assert!(kernel.agents.registry.find_by_name("summarizer").is_none());
+    kernel.shutdown();
+}
+
+/// A spawn that fails for a reason *other* than a duplicate name must surface
+/// as a spawn error, never as a silent reuse of whatever holds that name.
+///
+/// The template here declares a traversing `module` path, so
+/// `validate_spawnable` rejects it before anything is registered. The old
+/// shape re-probed the registry after *any* spawn error and returned whatever
+/// it found; the reuse arm now matches only `AgentAlreadyExists`, and
+/// `load_agent_template` pins the manifest name to the requested type so the
+/// entry a duplicate race hands back is the same agent this spawn was
+/// building — never a different one that happens to share the name.
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_surfaces_a_rejected_manifest_as_a_spawn_failure() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-rejected");
+    seed_agent_template(
+        &kernel,
+        "researcher",
+        "name = \"researcher\"\nmodule = \"python:../../etc/passwd\"\n",
+    );
+    let err = kernel.find_or_spawn_agent_type("researcher").unwrap_err();
+    assert_eq!(
+        err.kind(),
+        "spawn_failed",
+        "a rejected manifest must not be reported as a template problem: {err}"
+    );
+    assert!(
+        kernel.agents.registry.find_by_name("researcher").is_none(),
+        "a rejected spawn must leave no registry entry to fall back onto"
+    );
+    // And the run-facing resolver reports it as unresolved rather than
+    // binding the step to something else.
+    assert!(kernel
+        .resolve_step_agent(&StepAgent::ByType {
+            template: "researcher".to_string(),
+        })
+        .is_none());
+    kernel.shutdown();
+}
+
+/// `dry_run_workflow` is documented as side-effect free, so previewing a
+/// `type` step must not mint an agent.
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_preview_does_not_spawn() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-preview");
+    seed_agent_template(&kernel, "researcher", "name = \"researcher\"\n");
+    let before = kernel.agents.registry.list().len();
+
+    let (id, name, _) = kernel
+        .preview_step_agent(&StepAgent::ByType {
+            template: "researcher".to_string(),
+        })
+        .expect("preview should report the agent the run would use");
+    assert_eq!(name, "researcher");
+    assert_eq!(id, AgentId::from_name("researcher"));
+    assert_eq!(
+        kernel.agents.registry.list().len(),
+        before,
+        "a dry run must not spawn the template agent"
+    );
+    assert!(kernel.agents.registry.find_by_name("researcher").is_none());
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn step_agent_by_type_preview_reports_none_for_a_missing_template() {
+    let (_tmp, kernel) = boot_kernel_for_step_agent_tests("by-type-preview-missing");
+    assert!(kernel
+        .preview_step_agent(&StepAgent::ByType {
+            template: "nope".to_string(),
+        })
+        .is_none());
+    kernel.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Ephemeral worker spawn (refs #6699, #7723)
+// ---------------------------------------------------------------------------
+//
+// Four properties are pinned here, and each one is a thing that has already
+// gone wrong once in this feature's history:
+//
+//   * the worker advertises exactly the tools it can execute (#6930 handed the
+//     model definitions while the loop held `None` for every capability that
+//     would run them),
+//   * spend and quota land on the parent (#6930 checked the quota against the
+//     throwaway worker manifest, whose defaults are unlimited),
+//   * a worker that spawns a worker is bounded,
+//   * the mission workspace exists for the run and for nothing longer,
+//     including when the run fails.
+
+/// Boot a kernel that has no LLM driver, so an ephemeral spawn runs every step
+/// up to the LLM call and then stops.
+///
+/// That is exactly the seam these tests need: everything under test — the
+/// depth check, the quota check, the tool-set computation, the mission
+/// workspace lifecycle — happens before the driver is resolved, and declaring
+/// the absence of a driver keeps the test off any provider the host happens to
+/// have credentials for (#7743).
+fn boot_kernel_for_ephemeral_tests(label: &str) -> (tempfile::TempDir, Arc<LibreFangKernel>) {
+    boot_kernel_for_ephemeral_tests_with(label, KernelConfig::default())
+}
+
+/// As [`boot_kernel_for_ephemeral_tests`], with `base` supplying the fields the
+/// caller cares about (`max_agent_call_depth`, `agent_max_iterations`, …).
+///
+/// The kernel is `Arc`-wrapped and `set_self_handle`d because the ephemeral
+/// path hands the worker a real kernel handle — that is the whole point of it —
+/// and `kernel_handle()` panics on a bare kernel that never completed the
+/// bootstrap. A test kernel that skips this would exercise a spawn path that
+/// cannot exist in production.
+fn boot_kernel_for_ephemeral_tests_with(
+    label: &str,
+    base: KernelConfig,
+) -> (tempfile::TempDir, Arc<LibreFangKernel>) {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join(label);
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        // Every ephemeral test here stops at the LLM call: `provider = "none"`
+        // resolves to the stub driver, which refuses without touching the
+        // network, so the run reaches `run_agent_loop` and fails there rather
+        // than dialling whatever provider the host has credentials for.
+        default_model: DefaultModelConfig::driverless(),
+        ..base
+    };
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("boot"));
+    LibreFangKernel::set_self_handle(&kernel);
+    (tmp, kernel)
+}
+
+/// Register a parent agent carrying `resources`, so a test can exhaust its
+/// budget without touching any other agent's.
+fn register_parent_with_quota(
+    kernel: &LibreFangKernel,
+    name: &str,
+    resources: librefang_types::agent::ResourceQuota,
+) -> AgentId {
+    let id = AgentId::new();
+    let mut manifest = test_manifest(name, "ephemeral spawn parent", vec![]);
+    manifest.resources = resources;
+    kernel
+        .agents
+        .registry
+        .register(AgentEntry {
+            id,
+            name: name.to_string(),
+            manifest,
+            state: AgentState::Running,
+            session_id: SessionId::new(),
+            ..Default::default()
+        })
+        .unwrap();
+    id
+}
+
+/// Everything currently sitting in `<home>/transient`.
+///
+/// A mission workspace that outlives its run shows up here; so does one that
+/// was created by a spawn the guards should have refused before it got that
+/// far.
+fn transient_entries(kernel: &LibreFangKernel) -> Vec<std::path::PathBuf> {
+    let root = kernel
+        .home_dir()
+        .join(crate::kernel::mission_workspace::TRANSIENT_DIR_NAME);
+    match std::fs::read_dir(&root) {
+        Ok(entries) => entries.filter_map(|e| e.ok().map(|e| e.path())).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+fn ephemeral_request(parent: AgentId) -> librefang_types::ephemeral::EphemeralSpawnRequest {
+    librefang_types::ephemeral::EphemeralSpawnRequest::new(parent, "mission", "do the thing")
+}
+
+fn advertised_names(tools: &[ToolDefinition]) -> Vec<String> {
+    tools.iter().map(|t| t.name.clone()).collect()
+}
+
+/// The advertised set and the executable set are the same set.
+///
+/// "Executable" is defined here as "the parent could execute it": the worker
+/// runs under the parent's identity, against the same capability handles the
+/// parent's own turns are given, so `available_tools(parent)` is precisely the
+/// set that will dispatch rather than answer `Unavailable`.
+///
+/// The three assertions cover the three ways the sets could diverge — the
+/// worker getting *more* than the parent, the worker getting something the
+/// parent's manifest never granted, and a requested name being silently
+/// dropped so a typo looks like success.
+#[tokio::test(flavor = "multi_thread")]
+async fn ephemeral_spawn_advertises_exactly_what_the_parent_can_execute() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-tools");
+    let parent = register_test_agent(&kernel, "unrestricted-parent");
+
+    // 1. No narrowing asked for: the worker gets the parent's set, exactly.
+    let advertised = kernel.ephemeral_tool_set(parent, None, None).unwrap();
+    let parent_set = kernel.available_tools(parent);
+    assert_eq!(
+        advertised_names(&advertised),
+        advertised_names(&parent_set),
+        "an unnarrowed worker must advertise exactly what its parent can execute — \
+         any name in one list and not the other is either a tool the worker \
+         cannot run or a privilege the parent does not hold"
+    );
+    assert!(
+        !advertised.is_empty(),
+        "the equality above is only meaningful over a non-empty set"
+    );
+
+    // 2. Narrowing to a requested subset yields that subset and nothing else.
+    let requested = vec!["file_read".to_string(), "agent_list".to_string()];
+    let narrowed = kernel
+        .ephemeral_tool_set(parent, None, Some(&requested))
+        .unwrap();
+    let mut got = advertised_names(&narrowed);
+    got.sort();
+    assert_eq!(got, vec!["agent_list".to_string(), "file_read".to_string()]);
+
+    // 3. A name the parent cannot call is an error naming the offender, not a
+    //    silent omission — otherwise a typo and a success are the same event.
+    let bogus = vec!["file_read".to_string(), "flie_raed".to_string()];
+    match kernel.ephemeral_tool_set(parent, None, Some(&bogus)) {
+        Err(KernelError::LibreFang(LibreFangError::InvalidInput(msg))) => assert!(
+            msg.contains("flie_raed"),
+            "the refusal must name the tool that could not be granted, got: {msg}"
+        ),
+        other => panic!("an unavailable tool name must be rejected, got: {other:?}"),
+    }
+
+    kernel.shutdown();
+}
+
+/// A restricted parent cannot launder an escalation through a worker.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ephemeral_worker_cannot_exceed_its_parents_tools() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-escalate");
+    let id = AgentId::new();
+    let mut manifest = test_manifest("restricted-parent", "narrow tool grant", vec![]);
+    manifest.capabilities.tools = vec!["file_read".to_string()];
+    kernel
+        .agents
+        .registry
+        .register(AgentEntry {
+            id,
+            name: "restricted-parent".to_string(),
+            manifest,
+            state: AgentState::Running,
+            session_id: SessionId::new(),
+            ..Default::default()
+        })
+        .unwrap();
+
+    let advertised = kernel.ephemeral_tool_set(id, None, None).unwrap();
+    assert!(
+        !advertised_names(&advertised).iter().any(|t| t == "shell_exec"),
+        "a parent that was never granted shell_exec must not be able to hand it to a worker, got: {:?}",
+        advertised_names(&advertised)
+    );
+
+    let escalation = vec!["shell_exec".to_string()];
+    assert!(
+        matches!(
+            kernel.ephemeral_tool_set(id, None, Some(&escalation)),
+            Err(KernelError::LibreFang(LibreFangError::InvalidInput(_)))
+        ),
+        "asking for a tool the parent may not call must be refused"
+    );
+
+    // The same ceiling applies to a tool an agent *type* declares: a template
+    // is operator-authored, but the agent running it still decides the
+    // ceiling.
+    let declared = vec!["shell_exec".to_string()];
+    assert!(
+        matches!(
+            kernel.ephemeral_tool_set(id, Some(&declared), None),
+            Err(KernelError::LibreFang(LibreFangError::CapabilityDenied(_)))
+        ),
+        "an agent type cannot grant a worker more than the agent spawning it holds"
+    );
+
+    kernel.shutdown();
+}
+
+/// Pin the capability wiring at the `run_agent_loop` call site.
+///
+/// The equality test above is only true while the ephemeral path actually
+/// holds the handles a permanent agent's turn holds. #6930 advertised the same
+/// tool definitions while passing `None` for the kernel handle, skills, MCP,
+/// web, browser, workspace and process manager — nothing failed at spawn, and
+/// the model discovered the gap by spending a turn on a tool call that came
+/// back `Unavailable`.
+///
+/// Source inspection is the right shape for this because the defect *is* an
+/// argument at a call site: the tokens are read out of the permanent path
+/// (`agent_execution.rs`) rather than hardcoded here, so a rename that moves
+/// the permanent path forward fails this test instead of letting the two
+/// drift apart silently.
+#[test]
+fn ephemeral_spawn_wires_every_capability_the_permanent_path_wires() {
+    let permanent = include_str!("agent_execution.rs");
+    let ephemeral = include_str!("ephemeral_spawn.rs");
+
+    // Every handle whose absence turns an advertised tool into `Unavailable`.
+    const CAPABILITY_ARGS: &[&str] = &[
+        "Some(&skill_snapshot)",
+        "Some(effective_mcp)",
+        "Some(&self.media.web_ctx)",
+        "Some(&self.media.browser_ctx)",
+        "Some(&self.media.media_engine)",
+        "Some(&self.media.media_drivers)",
+        "Some(&self.governance.hooks)",
+        "Some(&self.processes.manager)",
+        "Some(&self.processes.registry)",
+        "manifest.workspace.as_deref()",
+    ];
+
+    for arg in CAPABILITY_ARGS {
+        assert!(
+            permanent.contains(arg),
+            "`{arg}` is no longer how the permanent agent path wires this capability — \
+             update CAPABILITY_ARGS in this test to the new spelling, and check that \
+             `ephemeral_spawn.rs` was updated with it"
+        );
+        assert!(
+            ephemeral.contains(arg),
+            "the ephemeral spawn path does not pass `{arg}` to `run_agent_loop`. \
+             A capability slot left empty while the matching tools are still advertised \
+             is the #6930 defect: the model spends a turn on a tool call and receives \
+             `Unavailable`. Either wire the handle or stop advertising its tools."
+        );
+    }
+
+    // The kernel handle is what `agent_spawn`, `agent_send`, the task, cron,
+    // workflow and channel tools all resolve through, and it is the one whose
+    // absence would quietly make the depth guard below unreachable.
+    assert!(
+        ephemeral.contains("Some(kernel_handle)"),
+        "the ephemeral worker must receive a kernel handle — without it every \
+         kernel-backed tool answers `Unavailable`, and a worker could never reach \
+         `agent_spawn`, which is what the depth guard exists to bound"
+    );
+}
+
+/// A worker that spawns a worker is bounded by the same counter `agent_send`
+/// and `run_workflow` use, and the refusal costs nothing — no mission
+/// directory is created for a spawn that is turned away.
+#[tokio::test(flavor = "multi_thread")]
+async fn ephemeral_spawn_past_max_agent_call_depth_is_refused() {
+    // Small enough to nest to literally rather than looping a recursive async
+    // helper. The production default is 5.
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests_with(
+        "eph-depth",
+        KernelConfig {
+            max_agent_call_depth: 2,
+            ..KernelConfig::default()
+        },
+    );
+    let parent = register_test_agent(&kernel, "depth-parent");
+
+    // Depth 0 — accepted. It still fails, at the LLM driver, but not with the
+    // depth refusal. This pairing is what proves the refusal below comes from
+    // the quota and not from the spawn being unrunnable in a test kernel.
+    let accepted = kernel
+        .spawn_ephemeral_worker(ephemeral_request(parent))
+        .await;
+    if let Err(KernelError::LibreFang(LibreFangError::CapabilityDenied(msg))) = &accepted {
+        assert!(
+            !msg.contains("depth exceeded"),
+            "a top-level ephemeral spawn must not be refused by the depth quota, got: {msg}"
+        );
+    }
+
+    // Depth 2 == `max_agent_call_depth` — refused. Two nested frames stand in
+    // for two stacked agent turns, which is what a worker spawning a worker
+    // establishes in production.
+    let refused = librefang_runtime::tool_runner::with_agent_call_depth(
+        librefang_runtime::tool_runner::with_agent_call_depth(
+            kernel.spawn_ephemeral_worker(ephemeral_request(parent)),
+        ),
+    )
+    .await;
+    match refused {
+        Err(KernelError::LibreFang(LibreFangError::CapabilityDenied(msg))) => {
+            assert!(
+                msg.contains("depth exceeded"),
+                "the refusal must say what was exceeded, got: {msg}"
+            );
+            assert!(
+                msg.contains("max 2"),
+                "the refusal must report the configured cap rather than a hardcoded one, got: {msg}"
+            );
+        }
+        other => panic!("a spawn at max depth must be refused, got: {other:?}"),
+    }
+
+    assert!(
+        transient_entries(&kernel).is_empty(),
+        "a spawn refused by the depth quota must not have created a mission workspace, found: {:?}",
+        transient_entries(&kernel)
+    );
+
+    kernel.shutdown();
+}
+
+/// Spend is checked against the *parent's* quota, before the LLM call.
+///
+/// #6930 attributed the usage record to the parent but ran the quota check
+/// against the throwaway worker manifest, whose `ResourceQuota::default()` is
+/// unlimited — so attribution was correct for reporting and absent for
+/// enforcement. The second half of this test (a different agent with the same
+/// quota and no spend is *not* refused) is what makes it an attribution test
+/// rather than a "some quota somewhere tripped" test.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_exhausted_parent_budget_refuses_the_spawn_before_the_llm_call() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-budget");
+    let quota = librefang_types::agent::ResourceQuota {
+        max_cost_per_hour_usd: 0.50,
+        ..Default::default()
+    };
+    let broke = register_parent_with_quota(&kernel, "broke-parent", quota.clone());
+    let solvent = register_parent_with_quota(&kernel, "solvent-parent", quota);
+
+    kernel
+        .metering
+        .engine
+        .record(&librefang_memory::usage::UsageRecord {
+            agent_id: broke,
+            provider: "test".to_string(),
+            model: "test-model".to_string(),
+            cost_usd: 5.0,
+            latency_ms: 1,
+            ..Default::default()
+        })
+        .unwrap();
+
+    match kernel.spawn_ephemeral_worker(ephemeral_request(broke)).await {
+        Err(KernelError::LibreFang(LibreFangError::QuotaExceeded(msg))) => assert!(
+            msg.contains(&broke.to_string()),
+            "the refusal must name the agent whose budget was exhausted, got: {msg}"
+        ),
+        other => panic!(
+            "a spawn on behalf of an over-quota parent must be refused before the LLM call, got: {other:?}"
+        ),
+    }
+
+    // Same quota, no spend: not refused. Whatever this fails on, it is not the
+    // budget — which is only true if the check reads the *parent's* ledger.
+    let solvent_result = kernel
+        .spawn_ephemeral_worker(ephemeral_request(solvent))
+        .await;
+    assert!(
+        !matches!(
+            solvent_result,
+            Err(KernelError::LibreFang(LibreFangError::QuotaExceeded(_)))
+        ),
+        "an agent with the same quota and no spend must not inherit another agent's exhaustion, got: {solvent_result:?}"
+    );
+
+    assert!(
+        transient_entries(&kernel).is_empty(),
+        "neither a refused spawn nor a failed run may leave a mission workspace behind, found: {:?}",
+        transient_entries(&kernel)
+    );
+
+    kernel.shutdown();
+}
+
+/// Observes the mission workspace from *inside* the run.
+///
+/// `BeforePromptBuild` fires after the mission directory is created and before
+/// the LLM driver is resolved, which is the only moment at which a test with
+/// no driver can see the run in flight.
+struct MissionObserver {
+    /// Path the spawn reported, and whether it existed when the hook fired.
+    observed: Arc<std::sync::Mutex<Option<(std::path::PathBuf, bool)>>>,
+}
+
+impl librefang_runtime::hooks::HookHandler for MissionObserver {
+    fn on_event(&self, _ctx: &librefang_runtime::hooks::HookContext) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn provide_prompt_section(
+        &self,
+        ctx: &librefang_runtime::hooks::HookContext,
+    ) -> Result<Option<librefang_runtime::hooks::DynamicSection>, String> {
+        if ctx.data["call_site"] == serde_json::json!("ephemeral_worker") {
+            let path = std::path::PathBuf::from(
+                ctx.data["mission_workspace"].as_str().unwrap_or_default(),
+            );
+            let exists = path.is_dir();
+            *self.observed.lock().unwrap() = Some((path, exists));
+        }
+        Ok(None)
+    }
+}
+
+/// A finished ephemeral run leaves a record filed under the agent that spawned it (#7752).
+///
+/// The three properties in one test, because they are the same claim seen from three sides:
+///
+/// - the run is **reachable** under its parent, which it was not before — a worker vanished completely, so "what did this agent delegate, and what did it cost" had no answer at all;
+/// - the mission workspace is still **gone**, because a run record and a surviving workspace are different things and #7723's guarantee is not being traded away to get the first one;
+/// - an agent that spawned nothing is **untouched**, so the table cannot attribute one agent's workers to another.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_finished_ephemeral_run_is_recorded_under_its_parent() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-record");
+    let parent = register_test_agent(&kernel, "record-parent");
+    let bystander = register_test_agent(&kernel, "record-bystander");
+
+    // The stub driver's refusal is recovered by the agent loop into an ordinary response, so this reaches the completion path.
+    // Whether it returns Ok or Err, a record must exist either way — that is the point.
+    let _ = kernel
+        .spawn_ephemeral_worker(ephemeral_request(parent))
+        .await;
+
+    let runs = kernel
+        .ephemeral_runs_for_agent(parent, 50)
+        .expect("run records are readable");
+    assert_eq!(
+        runs.len(),
+        1,
+        "one ephemeral spawn must leave exactly one run record under its parent"
+    );
+    let run = &runs[0];
+    assert_eq!(run.parent_agent_id, parent.0.to_string());
+    assert_eq!(run.label, "mission");
+    assert!(
+        run.worker_name.starts_with("mission-"),
+        "the record must name the uid the worker ran under, got {}",
+        run.worker_name
+    );
+    assert_eq!(
+        run.task, "do the thing",
+        "the record must say what was delegated"
+    );
+
+    // The workspace is a separate guarantee and it still holds.
+    // Persisting a run record is not the same as keeping the worker's scratch directory, and #7723 says the directory goes.
+    assert!(
+        transient_entries(&kernel).is_empty(),
+        "a recorded run must not keep its mission workspace alive, found: {:?}",
+        transient_entries(&kernel)
+    );
+
+    // A parent that spawned nothing sees nothing, and in particular does not see the other parent's worker.
+    assert!(
+        kernel
+            .ephemeral_runs_for_agent(bystander, 50)
+            .expect("an agent with no runs is an ordinary answer, not an error")
+            .is_empty(),
+        "an agent that spawned no workers must have no run records"
+    );
+
+    kernel.shutdown();
+}
+
+/// The run record names the parent, exactly as the usage row does (#7752, #7714).
+///
+/// The ledger already bills a worker's spend to `billed_agent_id = parent`.
+/// If the run record disagreed about the owner, the two views of one run would answer "whose was this" differently, which is the orphan problem the record exists to end, moved one table over.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_run_record_and_its_usage_row_agree_on_the_owner() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-owner");
+    let parent = register_test_agent(&kernel, "owner-parent");
+
+    let _ = kernel
+        .spawn_ephemeral_worker(ephemeral_request(parent))
+        .await;
+
+    let runs = kernel.ephemeral_runs_for_agent(parent, 50).unwrap();
+    assert_eq!(runs.len(), 1);
+    assert_eq!(
+        runs[0].parent_agent_id,
+        parent.0.to_string(),
+        "the run record must name the parent, not a throwaway id"
+    );
+
+    let rollup = kernel.ephemeral_run_rollup_for_agent(parent).unwrap();
+    assert_eq!(rollup.runs, 1, "the rollup must count the run it recorded");
+
+    kernel.shutdown();
+}
+
+/// Deleting the parent takes its run records with it — no orphans by construction (#7752).
+#[tokio::test(flavor = "multi_thread")]
+async fn removing_a_parent_removes_its_ephemeral_run_records() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-cascade");
+    let parent = register_test_agent(&kernel, "cascade-parent");
+
+    let _ = kernel
+        .spawn_ephemeral_worker(ephemeral_request(parent))
+        .await;
+    assert_eq!(
+        kernel.ephemeral_runs_for_agent(parent, 50).unwrap().len(),
+        1
+    );
+
+    kernel
+        .memory
+        .substrate
+        .remove_agent(parent)
+        .expect("removing an agent cascades its owned rows");
+
+    assert!(
+        kernel
+            .ephemeral_runs_for_agent(parent, 50)
+            .unwrap()
+            .is_empty(),
+        "a deleted agent's ephemeral run records must not outlive it"
+    );
+
+    kernel.shutdown();
+}
+
+/// The mission folder exists while the worker runs and is gone once it stops.
+///
+/// This is #7723's acceptance criterion — "folder exists during the run and is
+/// gone after; registry never registers the uid" — asserted from both sides:
+/// the observer sees the directory from *inside* the run, and the assertions
+/// after the call see it gone.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mission_workspace_exists_during_the_run_and_is_gone_after() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-mission");
+    let parent = register_test_agent(&kernel, "mission-parent");
+
+    let observer = Arc::new(MissionObserver {
+        observed: Arc::new(std::sync::Mutex::new(None)),
+    });
+    kernel.hook_registry().register(
+        librefang_types::agent::HookEvent::BeforePromptBuild,
+        observer.clone(),
+    );
+
+    // Deliberately no assertion on the outcome: the stub driver's refusal is
+    // recovered by the agent loop into an ordinary response, so this exercises
+    // the *completion* path. The failure path has its own test below, and the
+    // point of both is that the directory is gone either way.
+    let _ = kernel
+        .spawn_ephemeral_worker(ephemeral_request(parent))
+        .await;
+
+    let (path, existed_during_run) = observer.observed.lock().unwrap().clone().expect(
+        "the ephemeral spawn must build its prompt, which is where the mission path is reported",
+    );
+
+    assert!(
+        existed_during_run,
+        "the mission workspace {} did not exist while the run was in flight — \
+         a worker told to write scratch files there would fail on every write",
+        path.display()
+    );
+    // Both sides are canonicalized before the comparison. `MissionWorkspace`
+    // stores the resolved path — that resolution *is* the containment check
+    // that keeps a hostile label from escaping the transient root — while
+    // `home_dir()` returns the path as configured. On macOS the two differ by
+    // the `/var` → `/private/var` symlink, so comparing them raw fails here
+    // and passes on Linux, which would make this assertion a coin flip on the
+    // runner rather than a statement about the code.
+    let transient_root = std::fs::canonicalize(
+        kernel
+            .home_dir()
+            .join(crate::kernel::mission_workspace::TRANSIENT_DIR_NAME),
+    )
+    .expect("the transient root outlives the mission directories inside it");
+    assert!(
+        path.starts_with(&transient_root),
+        "the mission workspace must live under the transient root {}, got: {}",
+        transient_root.display(),
+        path.display()
+    );
+    assert!(
+        !path.exists(),
+        "the mission workspace {} outlived the run — a failed run must not leave an orphan",
+        path.display()
+    );
+    assert!(
+        transient_entries(&kernel).is_empty(),
+        "the transient root must be empty once the run is over, found: {:?}",
+        transient_entries(&kernel)
+    );
+
+    // Nothing was registered: an ephemeral worker has no agent record, so the
+    // uid name must not be findable and must not have taken the name-unique
+    // slot a permanent agent would need.
+    assert!(
+        kernel
+            .agents
+            .registry
+            .find_by_name(&path.file_name().unwrap().to_string_lossy())
+            .is_none(),
+        "an ephemeral worker must never appear in the agent registry"
+    );
+
+    kernel.shutdown();
+}
+
+/// A run that fails after the mission workspace exists still leaves nothing behind.
+///
+/// The refusal is injected through real configuration rather than a test hook:
+/// a non-empty `[providers] allowed` list makes driver resolution fail-closed
+/// (#6459), and driver resolution happens after the mission directory is
+/// created. That is the ordering that matters — a cleanup that only runs on
+/// the happy path is exactly the orphan-directory bug this guards.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_run_leaves_no_mission_workspace_behind() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests_with(
+        "eph-mission-fail",
+        KernelConfig {
+            providers: librefang_types::config::ProvidersConfig {
+                allowed: vec!["some-other-provider".to_string()],
+            },
+            ..KernelConfig::default()
+        },
+    );
+
+    let id = AgentId::new();
+    let mut manifest = test_manifest("failing-parent", "pins a disallowed provider", vec![]);
+    manifest.model.provider = "openai".to_string();
+    kernel
+        .agents
+        .registry
+        .register(AgentEntry {
+            id,
+            name: "failing-parent".to_string(),
+            manifest,
+            state: AgentState::Running,
+            session_id: SessionId::new(),
+            ..Default::default()
+        })
+        .unwrap();
+
+    let observer = Arc::new(MissionObserver {
+        observed: Arc::new(std::sync::Mutex::new(None)),
+    });
+    kernel.hook_registry().register(
+        librefang_types::agent::HookEvent::BeforePromptBuild,
+        observer.clone(),
+    );
+
+    let result = kernel.spawn_ephemeral_worker(ephemeral_request(id)).await;
+    assert!(
+        result.is_err(),
+        "this test's premise is a run that fails; it succeeded, so the assertions \
+         below no longer exercise the failure path"
+    );
+
+    let (path, existed_during_run) = observer
+        .observed
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("the run must have got as far as building its prompt — otherwise it failed before the workspace existed and proves nothing");
+    assert!(
+        existed_during_run,
+        "premise: the mission workspace {} must have existed before the failure",
+        path.display()
+    );
+    assert!(
+        !path.exists(),
+        "the mission workspace {} survived a failed run",
+        path.display()
+    );
+    assert!(
+        transient_entries(&kernel).is_empty(),
+        "a failed run must leave the transient root empty, found: {:?}",
+        transient_entries(&kernel)
+    );
+
+    // …and no run record either (#7752).
+    // This failure is driver resolution, which happens before `run_agent_loop` is entered, so no turn ran and there is nothing to report a cost or an answer for.
+    // That is the line the record draws: a run record exists exactly when a run actually started.
+    // A failure *inside* the loop does leave a record, marked `failed`.
+    assert!(
+        kernel.ephemeral_runs_for_agent(id, 50).unwrap().is_empty(),
+        "a refusal before the agent loop ran must not fabricate a run record"
+    );
+
+    kernel.shutdown();
+}
+
+/// An agent type supplies the worker's prompt and tools, and names the mission.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ephemeral_worker_from_an_agent_type_uses_the_templates_tools() {
+    let (_tmp, kernel) = boot_kernel_for_ephemeral_tests("eph-type");
+    let parent = register_test_agent(&kernel, "type-parent");
+    seed_agent_template(
+        &kernel,
+        "researcher",
+        "name = \"researcher\"\ndescription = \"finds things out\"\n\
+         [capabilities]\ntools = [\"file_read\", \"web_search\"]\n",
+    );
+
+    let declared = vec!["file_read".to_string(), "web_search".to_string()];
+    let mut got = advertised_names(
+        &kernel
+            .ephemeral_tool_set(parent, Some(&declared), None)
+            .unwrap(),
+    );
+    got.sort();
+    assert_eq!(
+        got,
+        vec!["file_read".to_string(), "web_search".to_string()],
+        "an agent type that declares tools must narrow the worker to them"
+    );
+
+    // And the spawn resolves the type by name rather than requiring the caller
+    // to restate its manifest.
+    let mut request = ephemeral_request(parent);
+    request.agent_type = Some("researcher".to_string());
+    request.label = "researcher".to_string();
+    let result = kernel.spawn_ephemeral_worker(request).await;
+    assert!(
+        !matches!(
+            &result,
+            Err(KernelError::LibreFang(LibreFangError::InvalidInput(_)))
+        ),
+        "a seeded agent type must resolve, got: {result:?}"
+    );
+
+    // An unknown type is a caller-fixable input error naming the searched
+    // directories, not an internal fault.
+    let mut missing = ephemeral_request(parent);
+    missing.agent_type = Some("no-such-type".to_string());
+    match kernel.spawn_ephemeral_worker(missing).await {
+        Err(KernelError::LibreFang(LibreFangError::InvalidInput(msg))) => assert!(
+            msg.contains("no-such-type"),
+            "the refusal must name the type that was not found, got: {msg}"
+        ),
+        other => panic!("an unknown agent type must be an input error, got: {other:?}"),
+    }
+
+    assert!(transient_entries(&kernel).is_empty());
+    kernel.shutdown();
+}
+
+/// A worker cannot be handed an unbounded iteration budget by a tool call.
+///
+/// The request's `max_iterations` reaches the kernel from `agent_spawn` tool
+/// input, so it is model-controlled. It may only narrow the operator's ceiling.
+#[test]
+fn a_requested_iteration_cap_is_clamped_to_the_operator_ceiling() {
+    use crate::kernel::ephemeral_spawn::clamp_iterations;
+    let compiled = librefang_types::agent::AutonomousConfig::DEFAULT_MAX_ITERATIONS;
+
+    assert_eq!(
+        clamp_iterations(Some(2), Some(10)),
+        2,
+        "a smaller request is honoured"
+    );
+    assert_eq!(
+        clamp_iterations(Some(1_000), Some(10)),
+        10,
+        "a request above the operator ceiling is clamped down to it, not used as-is"
+    );
+    assert_eq!(
+        clamp_iterations(None, Some(10)),
+        10,
+        "no request means the operator ceiling"
+    );
+    assert_eq!(
+        clamp_iterations(Some(u32::MAX), None),
+        compiled,
+        "an unset `agent_max_iterations` means the compiled limit applies, not that there is none"
+    );
+    assert_eq!(
+        clamp_iterations(Some(0), Some(10)),
+        10,
+        "zero is not a request for a worker that does nothing before answering"
+    );
 }

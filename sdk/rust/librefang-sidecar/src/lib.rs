@@ -4,7 +4,7 @@
 //!
 //! ```ignore
 //! use async_trait::async_trait;
-//! use librefang_sidecar::{run_stdio, EmitFn, SendCommand, SidecarAdapter, events};
+//! use librefang_sidecar::{run_stdio, SendCommand, SidecarAdapter};
 //!
 //! struct MyAdapter;
 //!
@@ -16,7 +16,7 @@
 //!     }
 //! }
 //!
-//! #[tokio::main]
+//! #[tokio::main(flavor = "current_thread")]
 //! async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //!     run_stdio(MyAdapter).await
 //! }
@@ -36,7 +36,7 @@ pub mod runtime;
 pub use protocol::{
     events, parse_command, ChannelUser, Command, Content, Field, FieldType, Interactive,
     InteractiveButton, InteractiveMessage, MessageBuilder, Reaction, Schema, SendCommand,
-    StreamDelta, StreamEnd, StreamStart, TypingCmd, UnknownCommand,
+    StreamDelta, StreamEnd, StreamStart, TypingCmd, UnknownCommand, PROTOCOL_VERSION,
 };
 pub use runtime::{
     run, run_stdio, run_stdio_main, run_stdio_with, with_backoff, DynError, EmitFn,

@@ -14,12 +14,12 @@ describe("parseCsvText", () => {
   });
 
   it("strips a leading UTF-8 BOM", () => {
-    // The BOM ("﻿") used to bleed into the first header cell.
-    const out = parseCsvText("﻿name,role\nalice,admin\n");
+    // The BOM used to bleed into the first header cell.
+    const out = parseCsvText("\uFEFFname,role\nalice,admin\n");
     expect(out.records[0]).toEqual(["name", "role"]);
     // Sanity: only ONE BOM is stripped — a stray one mid-stream stays.
-    const out2 = parseCsvText("name,role\n﻿alice,admin\n");
-    expect(out2.records[1][0]).toBe("﻿alice");
+    const out2 = parseCsvText("name,role\n\uFEFFalice,admin\n");
+    expect(out2.records[1][0]).toBe("\uFEFFalice");
   });
 
   it("preserves embedded newlines inside quoted fields", () => {
@@ -68,6 +68,28 @@ describe("parseCsvText", () => {
       ["1", "2"],
     ]);
   });
+
+  it("reports an unterminated quoted field", () => {
+    const out = parseCsvText('name,note\nalice,"unfinished\ncontent');
+    expect(out.errors).toEqual(["Record 2: unterminated quoted field."]);
+    expect(out.records[1]).toEqual(["alice", "unfinished\ncontent"]);
+  });
+
+  it("reports and preserves a quote inside an unquoted field", () => {
+    const out = parseCsvText('name,note\nalice,foo"bar,baz\n');
+    expect(out.errors).toEqual([
+      "Record 2: unexpected quote in an unquoted field; treating it literally.",
+    ]);
+    expect(out.records[1]).toEqual(["alice", 'foo"bar', "baz"]);
+  });
+
+  it("reports and preserves text after a closing quote", () => {
+    const out = parseCsvText('name,note\nalice,"quoted"suffix\n');
+    expect(out.errors).toEqual([
+      "Record 2: unexpected character after a closing quote; treating it literally.",
+    ]);
+    expect(out.records[1]).toEqual(["alice", "quotedsuffix"]);
+  });
 });
 
 describe("parseUsersCsv", () => {
@@ -82,7 +104,7 @@ describe("parseUsersCsv", () => {
   });
 
   it("imports a BOM-prefixed file (regression: import used to fail)", () => {
-    const csv = "﻿name,role,telegram\nalice,admin,123\n";
+    const csv = "\uFEFFname,role,telegram\nalice,admin,123\n";
     const out = parseUsersCsv(csv, ROLES);
     expect(out.errors).toEqual([]);
     expect(out.rows).toHaveLength(1);
@@ -138,6 +160,22 @@ describe("parseUsersCsv", () => {
     const csv = "name,role\nalice,admin\n\n\nbob,user\n";
     const out = parseUsersCsv(csv, ROLES);
     expect(out.rows.map(r => r.name)).toEqual(["alice", "bob"]);
+  });
+
+  it("keeps source row numbers after blank records are filtered", () => {
+    const csv = "name,role\nalice,admin\n\n,wizard\n";
+    const out = parseUsersCsv(csv, ROLES);
+    expect(out.errors).toContain("Row 4: missing name");
+  });
+
+  it("reports duplicate headers instead of silently discarding later values", () => {
+    const out = parseUsersCsv("name,role,telegram,telegram\nalice,user,first,second\n", ROLES);
+    expect(out.errors).toContain("Header: duplicate column 'telegram'.");
+  });
+
+  it("propagates CSV syntax diagnostics to the import preview", () => {
+    const out = parseUsersCsv('name,role\nalice,"admin', ROLES);
+    expect(out.errors).toContain("Record 2: unterminated quoted field.");
   });
 
   it("treats unknown columns as channel bindings", () => {

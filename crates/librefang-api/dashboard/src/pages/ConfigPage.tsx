@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import {
   RefreshCw, Save, Zap, Settings, Search, RotateCcw,
-  AlertTriangle, X, Copy, Check, FileText,
+  AlertTriangle, X, Copy, Check, FileText, Lock,
 } from "lucide-react";
 import {
   type ConfigSchemaRoot,
@@ -16,6 +16,7 @@ import {
 } from "../api";
 import {
   useConfigSchema,
+  useConfigStatus,
   useFullConfig,
   useRawConfigToml,
 } from "../lib/queries/config";
@@ -24,9 +25,85 @@ import {
   useSetConfigValue,
   useReloadConfig,
 } from "../lib/mutations/config";
+import { copyToClipboard } from "../lib/clipboard";
+import { useUIStore } from "../lib/store";
 import { TomlViewer } from "../components/TomlViewer";
+import { AuxiliaryLlmSection } from "../components/AuxiliaryLlmSection";
 import { StringMapEditor } from "../components/config/StringMapEditor";
 import { StructListEditor } from "../components/config/StructListEditor";
+
+export function configValuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== "object" ||
+    typeof b !== "object"
+  ) {
+    return false;
+  }
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+    if (
+      !configValuesEqual(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key],
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+type ConfigStatusResponse = {
+  status?: string;
+  restart_required?: boolean;
+  reload_error?: string | null;
+};
+
+export function configSavePresentation(
+  data: ConfigStatusResponse,
+  t: (key: string, fallback: string) => string,
+): { ok: boolean; msg: string } {
+  if (data.status === "saved_reload_failed") {
+    const base = t("config.saved_reload_failed", "Saved but reload failed");
+    return {
+      ok: false,
+      msg: data.reload_error ? `${base}: ${data.reload_error}` : base,
+    };
+  }
+  if (data.status === "applied_partial" || data.restart_required) {
+    return {
+      ok: true,
+      msg: t("config.saved_restart", "Saved (restart required)"),
+    };
+  }
+  return { ok: true, msg: t("common.saved", "Saved") };
+}
+
+export function effectiveConfigTab(
+  isSearching: boolean,
+  activeSection: string | null,
+  sectionKeys: string[],
+): string | null {
+  if (isSearching) return null;
+  if (activeSection && sectionKeys.includes(activeSection)) return activeSection;
+  return sectionKeys[0] ?? null;
+}
+
+export function configSectionTabClass(
+  isActive: boolean,
+  isSearching: boolean,
+): string {
+  if (isActive) return "border-brand text-brand";
+  if (isSearching) return "border-transparent text-text-dim/40 cursor-not-allowed";
+  return "border-transparent text-text-dim hover:text-text hover:border-border-subtle";
+}
 
 /* ------------------------------------------------------------------ */
 /*  Category → sections mapping                                        */
@@ -55,7 +132,7 @@ const CATEGORY_SECTIONS: Record<string, string[]> = {
   ],
   network: ["network", "a2a", "pairing"],
   infra: [
-    "docker", "extensions", "session", "queue",
+    "docker", "extensions", "session", "queue", "usage",
     "compaction", "registry", "context_engine", "prompt_intelligence",
     "task_board", "rate_limit", "health_check", "heartbeat",
     "telemetry", "notification", "background",
@@ -123,7 +200,6 @@ function pickType(node: JsonSchema): string {
   // Warn once so unexpected shapes surface during dev rather than silently
   // rendering as a text input.
   if (!node.anyOf && !node.oneOf && !node.$ref && !Array.isArray(node.enum)) {
-    // eslint-disable-next-line no-console
     console.warn("[ConfigPage] schema node missing 'type'; defaulting to string", node);
   }
   return "string";
@@ -344,16 +420,24 @@ function FieldTypeBadge({ type }: { type: string }) {
 /* ------------------------------------------------------------------ */
 
 function CopyPathButton({ path }: { path: string }) {
+  const { t } = useTranslation();
+  const addToast = useUIStore((s) => s.addToast);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // `copyToClipboard` resolves to `false` instead of rejecting, so the flag must be gated on the result: a dashboard served over plain HTTP on a LAN address has no `navigator.clipboard` at all, and showing the check mark regardless would report a copy that never happened.
+  // The failure needs a toast rather than a silent return, or a total failure reproduces the reported symptom exactly — no clipboard write, no error, no feedback — and matches what the other five converted call sites do.
   const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(path).then(() => {
+    void copyToClipboard(path).then(ok => {
+      if (!ok) {
+        addToast(t("common.copy_failed", "Copy failed"), "error");
+        return;
+      }
       setCopied(true);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setCopied(false), 1500);
     });
-  }, [path]);
+  }, [path, addToast, t]);
 
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
@@ -372,14 +456,24 @@ function CopyPathButton({ path }: { path: string }) {
 /*  Field input                                                        */
 /* ------------------------------------------------------------------ */
 
-function JsonEditor({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
+export function JsonEditor({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
   const [text, setText] = useState(() => value != null ? JSON.stringify(value, null, 2) : "");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const incoming = value != null ? JSON.stringify(value, null, 2) : "";
     setText((prev) => {
-      try { if (JSON.stringify(JSON.parse(prev), null, 2) === incoming) return prev; } catch { /* empty */ }
+      try {
+        if (JSON.stringify(JSON.parse(prev), null, 2) === incoming) return prev;
+      } catch {
+        return prev;
+      }
       return incoming;
     });
   }, [value]);
@@ -564,16 +658,33 @@ function ConfigFieldInput({
 /*  Page component — one per category                                  */
 /* ------------------------------------------------------------------ */
 
+// Section fields that have a purpose-built editor elsewhere on this page and
+// must not also appear in the generic field grid.
+//
+// `llm.auxiliary` is writable and schema-typed as an object, so the grid renders
+// it as a `JsonEditor` whose edits are *staged* into `pendingChanges`, while
+// `AuxiliaryLlmSection` writes *immediately* through `useSetConfigValue`. Left
+// side by side, editing the JSON blob and then the chain panel makes "Save
+// changes" post the pre-edit object, silently reverting the chain that was
+// already written to disk (#8059 review).
+const SECTION_FIELDS_WITH_DEDICATED_EDITOR: Record<string, ReadonlySet<string>> = {
+  llm: new Set(["auxiliary"]),
+};
+
 export function ConfigPage({ category }: { category: string }) {
   const { t } = useTranslation();
 
   const schemaQuery = useConfigSchema();
   const configQuery = useFullConfig();
+  const statusQuery = useConfigStatus();
 
   const [pendingChanges, setPendingChanges] = useState<Record<string, unknown>>({});
   const [saveStatus, setSaveStatus] = useState<Record<string, { ok: boolean; msg: string }>>({});
   const [searchQuery, setSearchQuery] = useState("");
-  const [reloadStatus, setReloadStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [reloadStatus, setReloadStatus] = useState<{
+    kind: "success" | "warning" | "error";
+    msg: string;
+  } | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [showRawToml, setShowRawToml] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -592,11 +703,31 @@ export function ConfigPage({ category }: { category: string }) {
     return out;
   }, [schemaRoot]);
 
+  // Paths the write endpoint refuses.
+  // Rendering an editable control for one meant the operator changed it, hit Save, and got a bare 403 with no explanation — the reported symptom was "the save appears to succeed and config.toml is unchanged".
+  // These stay visible (an operator must be able to read back a security setting) but are not offered as editable.
+  const nonWritablePaths = useMemo(
+    () => new Set(schemaRoot?.["x-non-writable"] ?? []),
+    [schemaRoot],
+  );
+
+  // Managed mode (#6695): the deployment owns config.toml and every write endpoint answers `423 config_managed`.
+  // This is the whole-file counterpart of `nonWritablePaths` above — same remedy, wider scope — and it is derived the same way, from server-reported state rather than from a failed save.
+  //
+  // Default to **writable** while the status query is in flight or has failed.
+  // The lock is enforced server-side, so an optimistic UI costs at worst one honest `423` on save; a pessimistic one would grey out every control on an older daemon whose `/api/config/status` 404s, which is a far worse failure and one the operator cannot diagnose.
+  const isManaged = statusQuery.data?.writable === false;
+  const managedSource = statusQuery.data?.source ?? "";
+
   const resolvedFields = useMemo<Record<string, Array<[string, FieldRender]>>>(() => {
     const out: Record<string, Array<[string, FieldRender]>> = {};
     if (!schemaRoot) return out;
     for (const desc of schemaRoot["x-sections"] ?? []) {
-      out[desc.key] = resolveSectionFields(schemaRoot, desc);
+      const dedicated = SECTION_FIELDS_WITH_DEDICATED_EDITOR[desc.key];
+      const fields = resolveSectionFields(schemaRoot, desc);
+      // Filtered here rather than at the render, so the search index and the
+      // section's "Reset all" set agree with what is on screen.
+      out[desc.key] = dedicated ? fields.filter(([fKey]) => !dedicated.has(fKey)) : fields;
     }
     return out;
   }, [schemaRoot]);
@@ -625,6 +756,15 @@ export function ConfigPage({ category }: { category: string }) {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasPendingChanges]);
+
+  // Drop pending edits once the daemon reports managed mode (#6695).
+  //
+  // Fields render editable until `/api/config/status` answers, so an operator who starts typing immediately can accumulate changes that turn out to be unsavable.
+  // Leaving them would strand a navigation blocker and a `beforeunload` prompt behind a "Save All" bar that is no longer on screen — a dialog with no visible way to satisfy it.
+  // Discarding is the honest resolution: nothing here can be persisted, and the banner that appears in the same commit says why.
+  useEffect(() => {
+    if (isManaged) setPendingChanges({});
+  }, [isManaged]);
 
   const blocker = useBlocker({
     shouldBlockFn: () => hasPendingChanges,
@@ -680,16 +820,13 @@ export function ConfigPage({ category }: { category: string }) {
 
   const saveMutation = useSetConfigValue({
     onSuccess: (data, variables) => {
-      const reloadFailed = data.status === "saved_reload_failed";
-      const restartRequired = data.status === "applied_partial" || data.restart_required;
-      if (reloadFailed) {
-        setSaveStatus((s) => ({ ...s, [variables.path]: { ok: false, msg: t("config.saved_reload_failed", "Saved but reload failed") } }));
-      } else {
-        const msg = restartRequired ? t("config.saved_restart", "Saved (restart required)") : t("common.saved", "Saved");
-        setSaveStatus((s) => ({ ...s, [variables.path]: { ok: true, msg } }));
-      }
+      const presentation = configSavePresentation(data, t);
+      setSaveStatus((s) => ({ ...s, [variables.path]: presentation }));
       setPendingChanges((p) => {
-        if (!(variables.path in p) || JSON.stringify(p[variables.path]) === JSON.stringify(variables.value)) {
+        if (
+          !(variables.path in p) ||
+          configValuesEqual(p[variables.path], variables.value)
+        ) {
           const next = { ...p }; delete next[variables.path]; return next;
         }
         return p;
@@ -753,18 +890,9 @@ export function ConfigPage({ category }: { category: string }) {
           continue;
         }
 
-        const reloadFailed = result.data?.status === "saved_reload_failed";
-        const restartRequired = result.data?.status === "applied_partial" || result.data?.restart_required;
-        const reloadErr = reloadFailed && result.data?.reload_error ? result.data.reload_error : null;
-        const msg = reloadFailed
-          ? reloadErr
-            ? `${t("config.saved_reload_failed", "Saved but reload failed")}: ${reloadErr}`
-            : t("config.saved_reload_failed", "Saved but reload failed")
-          : restartRequired
-            ? t("config.saved_restart", "Saved (restart required)")
-            : t("common.saved", "Saved");
-        nextStatuses[result.path] = { ok: !reloadFailed, msg };
-        if (reloadFailed) errors++;
+        const presentation = configSavePresentation(result.data ?? {}, t);
+        nextStatuses[result.path] = presentation;
+        if (!presentation.ok) errors++;
       }
 
       setSaveStatus((current) => ({ ...current, ...nextStatuses }));
@@ -772,7 +900,10 @@ export function ConfigPage({ category }: { category: string }) {
       setPendingChanges((current) => {
         const next = { ...current };
         for (const result of results) {
-          if (!result.error && JSON.stringify(current[result.path]) === JSON.stringify(result.value)) {
+          if (
+            !result.error &&
+            configValuesEqual(current[result.path], result.value)
+          ) {
             delete next[result.path];
           }
         }
@@ -833,11 +964,25 @@ export function ConfigPage({ category }: { category: string }) {
   );
 
   const reloadMutation = useReloadConfig({
-    onSuccess: () => {
-      setReloadStatus({ ok: true, msg: t("config.reload_success", "Config reloaded") });
+    onSuccess: (data) => {
+      const details = [
+        ...(data.warnings ?? []),
+        ...(data.restart_required ? (data.restart_reasons ?? []) : []),
+      ].filter(Boolean);
+      const isPartial = data.status === "partial"
+        || data.restart_required === true
+        || details.length > 0;
+      setReloadStatus({
+        kind: isPartial ? "warning" : "success",
+        msg: details.length > 0
+          ? `${t("runtime.reload_success", { status: data.status })} — ${details.join(" ")}`
+          : isPartial
+            ? t("runtime.reload_success", { status: data.status })
+            : t("config.reload_success", "Config reloaded"),
+      });
     },
     onError: (err: Error) => {
-      setReloadStatus({ ok: false, msg: err.message });
+      setReloadStatus({ kind: "error", msg: err.message });
     },
   });
 
@@ -855,9 +1000,11 @@ export function ConfigPage({ category }: { category: string }) {
   const q = searchQuery.toLowerCase();
   const isSearching = q.length > 0;
 
-  const effectiveTab = isSearching
-    ? null
-    : (activeSection && sectionKeys.includes(activeSection) ? activeSection : sectionKeys[0] ?? null);
+  const effectiveTab = effectiveConfigTab(
+    isSearching,
+    activeSection,
+    sectionKeys,
+  );
 
   // Which sections have pending changes (for tab dot indicators)
   const sectionsWithPending = useMemo(() => {
@@ -943,7 +1090,13 @@ export function ConfigPage({ category }: { category: string }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {reloadStatus && (
-            <span className={`text-xs font-semibold ${reloadStatus.ok ? "text-success" : "text-danger"}`}>
+            <span className={`text-xs font-semibold ${
+              reloadStatus.kind === "success"
+                ? "text-success"
+                : reloadStatus.kind === "warning"
+                  ? "text-warning"
+                  : "text-danger"
+            }`}>
               {reloadStatus.msg}
             </span>
           )}
@@ -951,12 +1104,47 @@ export function ConfigPage({ category }: { category: string }) {
             <FileText className="w-3 h-3 mr-1.5" />
             {t("config.view_raw_toml", "View Raw TOML")}
           </Button>
+          {/* Reload survives managed mode — it re-reads the file, which is a read. */}
           <Button variant="secondary" size="sm" onClick={() => reloadMutation.mutate()} isLoading={reloadMutation.isPending}>
             <RefreshCw className="w-3 h-3 mr-1.5" />
             {t("config.reload", "Reload")}
           </Button>
         </div>
       </div>
+
+      {/* Managed-mode banner (#6695).
+          Every field below is rendered inert, so without this the page would look like a UI that had simply stopped responding.
+          The banner names the file the deployment owns and the checksum over its bytes, which is what an operator needs to confirm a rollout actually replaced it. */}
+      {isManaged && (
+        <div
+          role="status"
+          data-testid="managed-config-banner"
+          className="flex items-start gap-2.5 rounded-2xl border border-warning/30 bg-warning/5 px-4 py-3"
+        >
+          <Lock className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-warning leading-tight">
+              {t("config.managed_title", "Configuration is managed by the deployment")}
+            </p>
+            <p className="text-[11px] text-text-dim leading-relaxed mt-1">
+              {t(
+                "config.managed_body",
+                "Settings are shown read-only. Change them at the source — the ConfigMap, bind mount, or configuration-management system that owns this file — and roll the daemon.",
+              )}
+            </p>
+            {managedSource && (
+              <p className="text-[10px] text-text-dim font-mono leading-tight mt-1.5 break-all">
+                {managedSource}
+              </p>
+            )}
+            {statusQuery.data?.checksum && (
+              <p className="text-[10px] text-text-dim font-mono leading-tight mt-0.5 break-all">
+                {statusQuery.data.checksum}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Row 1.5: category tabs — all 7 categories reachable from any /config
           page. Closes #4678: previously the sidebar only had a single Config
@@ -997,18 +1185,13 @@ export function ConfigPage({ category }: { category: string }) {
           {sectionKeys.map((sKey) => {
             const isActive = !isSearching && effectiveTab === sKey;
             const hasDot = sectionsWithPending.has(sKey);
+            const tabClass = configSectionTabClass(isActive, isSearching);
             return (
               <button
                 key={sKey}
                 onClick={() => { setActiveSection(sKey); setSearchQuery(""); }}
                 disabled={isSearching}
-                className={`relative px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                  isActive
-                    ? "border-primary text-primary"
-                    : isSearching
-                      ? "border-transparent text-text-dim/40 cursor-not-allowed"
-                      : "border-transparent text-text-dim hover:text-text hover:border-border-subtle"
-                }`}
+                className={`relative px-3 py-2 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap flex items-center gap-1.5 ${tabClass}`}
               >
                 {t(`config.sec_${sKey}`, sectionLabelFallback(sKey))}
                 {hasDot && (
@@ -1065,7 +1248,8 @@ export function ConfigPage({ category }: { category: string }) {
           const showSectionHeader = isSearching || hasBadges;
 
           return (
-            <div key={sKey} className="rounded-2xl border border-border-subtle bg-surface overflow-hidden">
+            <React.Fragment key={sKey}>
+            <div className="rounded-2xl border border-border-subtle bg-surface overflow-hidden">
               {showSectionHeader && (
                 <div className="flex items-center gap-2 px-5 py-2.5 border-b border-border-subtle/50">
                   {isSearching && (
@@ -1133,8 +1317,17 @@ export function ConfigPage({ category }: { category: string }) {
                   const hasPending = path in pendingChanges;
                   const isSaving = saveMutation.isPending && saveMutation.variables?.path === path;
                   const statusForField = saveStatus[path] ?? null;
-                  const fieldDesc = t(`config.desc_${fieldKey}`, "");
-                  const fieldLabel = t(`config.fld_${fieldKey}`, fieldLabelFallback(fieldKey));
+                  // Section-qualified key first, bare leaf name as fallback.
+                  // Keying on the leaf alone made every `mode` field in the config — exec_policy, reload, docker, privacy, sanitize — render the root-level `mode` description ("Kernel operating mode"), which is wrong for all five.
+                  // Most leaf names are genuinely section-neutral (`enabled`, `timeout_secs`, `model`), so the fallback keeps them on one string and only the ambiguous ones need a qualified entry.
+                  // Two independent reasons a control is not offered as editable, folded into one flag for the render but kept distinct for the explanation below it: this path is never dashboard-writable, or this whole file is owned by the deployment.
+                  const pathNotWritable = nonWritablePaths.has(path);
+                  const readOnly = isManaged || pathNotWritable;
+                  const fieldDesc =
+                    t(`config.desc_${sKey}_${fieldKey}`, "") || t(`config.desc_${fieldKey}`, "");
+                  const fieldLabel =
+                    t(`config.fld_${sKey}_${fieldKey}`, "") ||
+                    t(`config.fld_${fieldKey}`, fieldLabelFallback(fieldKey));
 
                   // Cascading filter: when editing model in default_model, only show
                   // models matching the selected provider.
@@ -1177,23 +1370,12 @@ export function ConfigPage({ category }: { category: string }) {
                         </div>
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col gap-1 pt-1">
-                        {isComposite ? (
-                          <div role="group" aria-labelledby={fieldLabelId}>
-                            <ConfigFieldInput
-                              inputId={fieldInputId}
-                              fieldKey={fieldKey}
-                              fieldType={fieldType}
-                              options={options}
-                              min={min}
-                              max={max}
-                              step={step}
-                              value={currentValue}
-                              onChange={(v) => handleFieldChange(sKey, fieldKey, v, useRootSemantics)}
-                              itemSchema={itemSchema}
-                              schemaRoot={schemaRoot}
-                            />
-                          </div>
-                        ) : (
+                        {/* `inert` rather than a `disabled` prop threaded into every ConfigFieldInput branch: it blocks pointer *and* keyboard interaction for the whole subtree, including the composite editors that render several controls. */}
+                        <div
+                          inert={readOnly || undefined}
+                          className={readOnly ? "opacity-60" : undefined}
+                          {...(isComposite ? { role: "group", "aria-labelledby": fieldLabelId } : {})}
+                        >
                           <ConfigFieldInput
                             inputId={fieldInputId}
                             fieldKey={fieldKey}
@@ -1207,6 +1389,23 @@ export function ConfigPage({ category }: { category: string }) {
                             itemSchema={itemSchema}
                             schemaRoot={schemaRoot}
                           />
+                        </div>
+                        {readOnly && (
+                          <p
+                            className="text-[10px] text-warning leading-relaxed"
+                            data-testid={`locked-reason-${path}`}
+                          >
+                            {/* Managed mode wins the message when both apply: "change it in config.toml" is actively wrong advice for a file the deployment owns and the next rollout overwrites. */}
+                            {isManaged
+                              ? t(
+                                  "config.managed_field",
+                                  "Locked — this daemon's configuration is owned by the deployment.",
+                                )
+                              : t(
+                                  "config.read_only_field",
+                                  "Not editable from the dashboard — change it in config.toml and reload.",
+                                )}
+                          </p>
                         )}
                         {fieldDesc && (
                           <p className="text-[10px] text-text-dim leading-relaxed">{fieldDesc}</p>
@@ -1236,7 +1435,7 @@ export function ConfigPage({ category }: { category: string }) {
                                 if (path in pendingChanges) saveMutation.mutate({ path, value: pendingChanges[path] });
                               }}
                               isLoading={isSaving}
-                              disabled={isSaving}
+                              disabled={isSaving || batchSaving}
                             >
                               <Save className="w-3 h-3" />
                             </Button>
@@ -1248,12 +1447,15 @@ export function ConfigPage({ category }: { category: string }) {
                 })}
               </div>
             </div>
+            {sKey === "llm" && <AuxiliaryLlmSection />}
+            </React.Fragment>
           );
         })}
       </div>
 
-      {/* Sticky unsaved changes bar */}
-      {hasPendingChanges && (
+      {/* Sticky unsaved changes bar.
+          Suppressed in managed mode: every field is inert so nothing can become pending through the UI, and offering "Save All" for a batch that can only answer `423` is the exact failure this page is being changed to remove. */}
+      {hasPendingChanges && !isManaged && (
         <div className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pointer-events-none pb-safe">
           <div className="mb-5 flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-warning/30 bg-surface shadow-lg pointer-events-auto">
             <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
@@ -1264,7 +1466,13 @@ export function ConfigPage({ category }: { category: string }) {
             <Button variant="ghost" size="sm" onClick={() => setPendingChanges({})}>
               {t("config.discard", "Discard")}
             </Button>
-            <Button variant="primary" size="sm" onClick={handleBatchSave} isLoading={batchSaving} disabled={batchSaving}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleBatchSave}
+              isLoading={batchSaving}
+              disabled={batchSaving || saveMutation.isPending}
+            >
               <Save className="w-3 h-3 mr-1" />
               {t("config.save_all", "Save All")}
             </Button>

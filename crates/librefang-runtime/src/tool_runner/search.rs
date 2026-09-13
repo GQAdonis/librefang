@@ -2,6 +2,7 @@
 
 use super::error::{ToolError, ToolResult};
 use super::fs::resolve_file_path_ext;
+use super::io_retry;
 use regex::RegexBuilder;
 use std::path::{Path, PathBuf};
 
@@ -63,13 +64,14 @@ pub(super) async fn tool_code_search(
     let mut stack: Vec<PathBuf> = vec![root.clone()];
 
     'walk: while let Some(dir) = stack.pop() {
-        let mut rd = match tokio::fs::read_dir(&dir).await {
+        // #8050: an interrupted syscall here would silently drop a whole directory from the search rather than fail it, so the retry matters even though the error itself is swallowed by design below.
+        let mut rd = match io_retry::read_dir(&dir).await {
             Ok(rd) => rd,
             // Unreadable directory: skip it rather than failing the whole search.
             Err(_) => continue,
         };
         let mut entries: Vec<PathBuf> = Vec::new();
-        while let Ok(Some(e)) = rd.next_entry().await {
+        while let Ok(Some(e)) = io_retry::next_entry(&mut rd).await {
             entries.push(e.path());
         }
         entries.sort();
@@ -132,7 +134,7 @@ pub(super) async fn tool_code_search(
     }
 
     if matches.is_empty() {
-        return Ok(format!("No matches for /{query}/ under '{raw_path}'."));
+        return Ok(format_empty_result(query, raw_path, truncated));
     }
     matches.sort();
     let mut out = String::with_capacity(matches.len() * 48);
@@ -146,6 +148,16 @@ pub(super) async fn tool_code_search(
         ));
     }
     Ok(out)
+}
+
+fn format_empty_result(query: &str, raw_path: &str, truncated: bool) -> String {
+    if truncated {
+        format!(
+            "Search incomplete after scanning {MAX_FILES_SCANNED} files under '{raw_path}'; no matches were found in the scanned files for /{query}/. Narrow `path` or refine the query."
+        )
+    } else {
+        format!("No matches for /{query}/ under '{raw_path}'.")
+    }
 }
 
 /// Trim a matched line and cap it at [`MAX_LINE_CHARS`] characters, counting by
@@ -248,5 +260,15 @@ mod tests {
             .await
             .unwrap();
         assert!(out.contains("No matches"), "got: {out}");
+    }
+
+    #[test]
+    fn truncated_scan_without_matches_is_not_reported_as_complete() {
+        let out = format_empty_result("needle", ".", true);
+
+        assert!(out.contains("Search incomplete"));
+        assert!(out.contains(&MAX_FILES_SCANNED.to_string()));
+        assert!(out.contains("scanned files"));
+        assert!(!out.starts_with("No matches"));
     }
 }

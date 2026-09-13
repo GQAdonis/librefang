@@ -1,4 +1,18 @@
 use super::*;
+use librefang_types::config::DefaultModelConfig;
+use std::sync::{RwLock, RwLockReadGuard};
+
+fn read_message_default_model_override(
+    model_override: &RwLock<Option<DefaultModelConfig>>,
+) -> RwLockReadGuard<'_, Option<DefaultModelConfig>> {
+    model_override.read().unwrap_or_else(|poisoned| {
+        tracing::warn!(
+            "Agent message default-model override lock poisoned; recovering provider state"
+        );
+        model_override.clear_poison();
+        poisoned.into_inner()
+    })
+}
 
 /// POST /api/agents/:id/message — Send a message to an agent.
 #[utoipa::path(
@@ -70,16 +84,22 @@ pub async fn send_message(
         );
     }
 
+    // Owner-scoping (#6753): `agent_message` in `middleware::user_role_allows_request` deliberately lets any `User`-role caller POST `/message` on an arbitrary agent id.
+    // Without this check a non-owner could drive a full LLM turn — tool execution and budget spend included — on another user's agent by guessing/enumerating its UUID, which is the exact class of gap this PR closes for the read-only agent-scoped routes.
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return crate::extensions::with_agent_id(
+            agent_id,
+            ApiErrorResponse::not_found(err_not_found).with_code("agent_not_found"),
+        );
+    }
+
     // Reject messages when the agent's provider has no API key configured
     {
         let registry = state.kernel.agent_registry();
         if let Some(entry) = registry.get(agent_id) {
             let dm = {
-                let dm_override = state
-                    .kernel
-                    .default_model_override_ref()
-                    .read()
-                    .unwrap_or_else(|e| e.into_inner());
+                let dm_override =
+                    read_message_default_model_override(state.kernel.default_model_override_ref());
                 effective_default_model(
                     &state.kernel.config_ref().default_model,
                     dm_override.as_ref(),
@@ -135,11 +155,29 @@ pub async fn send_message(
     // attachment lands on the agent's most-recent registry session
     // (typically a warm group session for chat agents) and leaks across
     // chats — the 2026-05-20 incident this PR closes.
-    let sender_context = request_sender_context(&req);
+    let sender_context = request_sender_context(
+        &req,
+        api_user.as_ref().map(|u| &u.0),
+        state.kernel.auth_manager(),
+    );
 
     // Resolve file attachments into image content blocks
     if !req.attachments.is_empty() {
-        let image_blocks = resolve_attachments(&state, &req.attachments);
+        let image_blocks = match resolve_attachments(
+            &state,
+            &req.attachments,
+            api_user.as_ref().map(|user| &user.0),
+        )
+        .await
+        {
+            Ok(blocks) => blocks,
+            Err(denied) => {
+                tracing::warn!(file_id = %denied.file_id, "message attachment access denied");
+                return ApiErrorResponse::forbidden("You are not authorized to access this upload")
+                    .with_code("upload_access_denied")
+                    .into_response();
+            }
+        };
         if !image_blocks.is_empty() {
             // Snapshot the agent's persistent (registry) session id as
             // the last-resort fallback in
@@ -172,7 +210,11 @@ pub async fn send_message(
         (req.message.clone(), false)
     };
 
-    let thinking_override = req.thinking;
+    // Per-call rung of the #7946 resolution order. `reasoning_mode` wins over
+    // the legacy boolean when a caller sends both; the kernel applies the
+    // per-agent and global rungs below this one.
+    let thinking_override =
+        librefang_types::config::ThinkingOverride::resolve(req.thinking, req.reasoning_mode);
     let show_thinking = req.show_thinking.unwrap_or(true);
 
     let result = if is_ephemeral {
@@ -393,6 +435,40 @@ pub async fn send_message(
     }
 }
 
+#[cfg(test)]
+mod model_override_poison_tests {
+    use super::read_message_default_model_override;
+    use librefang_types::config::DefaultModelConfig;
+    use std::sync::RwLock;
+
+    #[test]
+    fn message_model_override_recovers_after_held_write_lock_panic() {
+        let expected = DefaultModelConfig {
+            provider: "private-provider".to_string(),
+            model: "private-model".to_string(),
+            api_key_env: "PRIVATE_API_KEY".to_string(),
+            ..DefaultModelConfig::default()
+        };
+        let model_override = RwLock::new(Some(expected.clone()));
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = model_override.write().unwrap();
+            panic!("poison message default-model override");
+        });
+        assert!(model_override.is_poisoned());
+
+        let recovered_guard = read_message_default_model_override(&model_override);
+        let recovered = recovered_guard.as_ref().expect("model override preserved");
+        assert_eq!(recovered.provider, expected.provider);
+        assert_eq!(recovered.model, expected.model);
+        assert_eq!(recovered.api_key_env, expected.api_key_env);
+        drop(recovered_guard);
+
+        assert!(!model_override.is_poisoned());
+        assert!(model_override.read().is_ok());
+        assert!(model_override.write().is_ok());
+    }
+}
+
 /// POST /api/agents/:id/message/stream — SSE streaming response.
 #[utoipa::path(
     post,
@@ -453,6 +529,13 @@ pub async fn send_message_stream(
             .into_response();
     }
 
+    // Owner-scoping (#6753): see the matching check in `send_message` above — `agent_message` in `middleware::user_role_allows_request` allows any `User`-role caller to POST here for an arbitrary agent id, so this handler must scope by ownership itself.
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return ApiErrorResponse::not_found(err_not_found)
+            .with_code("agent_not_found")
+            .into_response();
+    }
+
     // Parse optional explicit session_id override from the request body.
     // Hoisted above the attachment-injection block so it can be threaded
     // into `inject_attachments_into_session`.
@@ -468,11 +551,29 @@ pub async fn send_message_stream(
         },
     };
 
-    let (sender_context, incognito, session_override) =
-        build_streaming_kernel_args(&req, session_id_override);
+    let (sender_context, incognito, session_override) = build_streaming_kernel_args(
+        &req,
+        api_user.as_ref().map(|u| &u.0),
+        state.kernel.auth_manager(),
+        session_id_override,
+    );
 
     if !req.attachments.is_empty() {
-        let image_blocks = resolve_attachments(&state, &req.attachments);
+        let image_blocks = match resolve_attachments(
+            &state,
+            &req.attachments,
+            api_user.as_ref().map(|user| &user.0),
+        )
+        .await
+        {
+            Ok(blocks) => blocks,
+            Err(denied) => {
+                tracing::warn!(file_id = %denied.file_id, "stream attachment access denied");
+                return ApiErrorResponse::forbidden("You are not authorized to access this upload")
+                    .with_code("upload_access_denied")
+                    .into_response();
+            }
+        };
         if !image_blocks.is_empty() {
             let fallback_session_id = state
                 .kernel
@@ -499,6 +600,11 @@ pub async fn send_message_stream(
             &req.message,
             Some(kernel_handle),
             sender_context,
+            // #7946: the streaming endpoint deserializes the same
+            // `MessageRequest` as its non-streaming twin, so it honours the
+            // same two override keys. Before #7946 it dropped both on the
+            // floor and always ran at the manifest/global default.
+            librefang_types::config::ThinkingOverride::resolve(req.thinking, req.reasoning_mode),
             session_override,
             incognito,
             owner,
@@ -625,6 +731,7 @@ pub async fn send_message_stream(
 )]
 pub async fn get_agent_deliveries(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
     lang: Option<axum::Extension<RequestLanguage>>,
     Query(params): Query<HashMap<String, String>>,
@@ -645,6 +752,12 @@ pub async fn get_agent_deliveries(
             }
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": t.t("api-error-agent-not-found")})),
+        );
+    }
 
     let limit = params
         .get("limit")
@@ -735,15 +848,17 @@ pub async fn inject_message(
                 .with_code("backpressure")
                 .into_response()
         }
-        Err(e) => if e.to_string().contains("not found") {
-            ApiErrorResponse::not_found(e.to_string())
-        } else {
+        Err(crate::error::KernelError::LibreFang(
+            librefang_types::error::LibreFangError::AgentNotFound(_),
+        )) => ApiErrorResponse::not_found("agent not found")
+            .with_code("agent_not_found")
+            .into_response(),
+        Err(e) => {
             // Scrub the catch-all 500 (audit: rusqlite-errors-leak):
             // an inject failure rooted in the memory substrate would
             // otherwise leak SQL detail. Full error logged in scrub.
-            ApiErrorResponse::internal_scrub(&e)
+            ApiErrorResponse::internal_scrub(&e).into_response()
         }
-        .into_response(),
     }
 }
 
@@ -835,13 +950,21 @@ pub async fn push_message(
                 "agent_id": agent_id.to_string(),
             })),
         ),
-        Err(e) => (
-            StatusCode::BAD_GATEWAY,
-            Json(serde_json::json!({
-                "success": false,
-                "detail": e,
-                "agent_id": agent_id.to_string(),
-            })),
-        ),
+        Err(e) => {
+            tracing::warn!(
+                agent_id = %agent_id,
+                channel = %req.channel,
+                error = %e,
+                "Channel adapter rejected proactive message"
+            );
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "success": false,
+                    "detail": "Channel adapter rejected the message",
+                    "agent_id": agent_id.to_string(),
+                })),
+            )
+        }
     }
 }

@@ -138,8 +138,15 @@ pub struct ChannelOverrides {
     /// This must stay distinct from `Some(GroupPolicy::MentionOnly)` (the enum default): before #6445, writing any single override field silently flipped an unset group policy to `MentionOnly` and dropped all non-mention group traffic.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_policy: Option<GroupPolicy>,
-    /// Regex patterns that can trigger a reply in group chats when
-    /// `group_policy` is `mention_only`.
+    /// Extra `regex`-crate patterns (full syntax, not globs) that widen the mention gate in group chats — a message matching any of them wakes the agent as if it had been @mentioned.
+    /// As a *gate* these are consulted only under mention-only semantics: an explicit `group_policy = "mention_only"`, or an unset `group_policy` together with a non-empty list here (setting patterns is itself a gating decision, so it resolves to mention-only).
+    /// Under `commands_only` / `ignore` the policy decides on its own and the list is not read at all.
+    /// `all` is the exception, and it is not a gating one: with `reply_precheck = true` the list is handed to the reply-intent classifier as the bot's aliases and interpolated into its prompt, so the patterns still shape whether the bot answers even though they gate nothing.
+    /// A pattern broken by the escaping trap below therefore degrades the classifier's alias list too, not just the mention gate.
+    /// Prefer a TOML **literal** (single-quoted) string: `group_trigger_patterns = ['(?i)\bvivi\b']`.
+    /// In a TOML *basic* (double-quoted) string `\b` is the backspace escape, so `"(?i)\bvivi\b"` silently becomes `(?i)<U+0008>vivi<U+0008>` — which the regex crate accepts as a literal, so it compiles without error and then never matches anything (#6732).
+    /// The double-quoted form needs every backslash doubled: `"(?i)\\bvivi\\b"`.
+    /// A pattern that is unparseable, or that contains a control character from a mis-read escape, is reported with a `WARN` naming the agent when its manifest is accepted; it never blocks the spawn.
     #[serde(default)]
     pub group_trigger_patterns: Vec<String>,
     /// Enable LLM-based reply-intent precheck for group messages.
@@ -435,6 +442,60 @@ pub struct UserConfig {
 
 fn default_role() -> String {
     "user".to_string()
+}
+
+/// A named collection of users, declared as `[[groups]]` in `config.toml`.
+///
+/// A group exists so a permission or an ownership decision can name a team instead of a person.
+/// The support rota, the on-call shift, the project team and the department all outlive the individuals filling them, and every one of them is currently expressible only by enumerating names (#7745).
+///
+/// # Membership is flat — groups do not nest
+///
+/// This is a deliberate decision, not an omission.
+/// A `GroupConfig` has `members` (user names) and no parent or child pointer, so the set of principals a group denotes is exactly its `members` list and resolving it is a single lookup that cannot cycle, cannot fan out, and cannot change cost as the deployment grows.
+/// Nesting would buy expressiveness that the two consumers of this type do not ask for: #7744 needs `Principal::Group(name)` to answer "does this user belong", and #7746 maps an external identity provider's group claim onto a local group — and every IdP hands us the *flattened* effective membership on each login precisely because it has already resolved its own hierarchy.
+/// Re-deriving a hierarchy locally from flattened claims would be guesswork, and maintaining a second one by hand would drift from the IdP's.
+/// The cost of the decision is that an operator who wants `platform-oncall ⊂ platform` lists the members in both groups, or grants both groups the same entry in `roles`; the benefit is that membership resolution stays O(members), is trivially deterministic, and has no cycle-detection code to get wrong.
+/// If a deployment ever produces a concrete case that flat membership cannot express, adding a `parent` field is a backwards-compatible change — a group that names no parent behaves exactly as it does today.
+///
+/// # Relationship to roles
+///
+/// `roles` is not a new vocabulary.
+/// It holds the same role strings that [`BindingContext::roles`](../../librefang_channels/router/struct.BindingContext.html) already carries through channel-binding resolution and that [`ChannelRoleMapping`] already produces from platform-native roles, so a group can confer a role on its members without a third parallel notion of identity growing beside the two that exist.
+/// [`KernelConfig::roles_for_user`] is the resolver: it returns each group the user belongs to *by name* plus every string in that group's `roles`, so a binding rule can gate on the group directly (`roles = ["oncall"]` matches membership in the `oncall` group) without the operator restating the group name inside its own `roles` list.
+///
+/// # Dangling members are tolerated
+///
+/// A name in `members` need not resolve to a `[[users]]` entry.
+/// #7746 syncs membership from an IdP on every login, and the claim can name a person before that person has ever authenticated here and therefore before any local user row exists; rejecting the write would make the group the thing that has to be repaired by hand, which is the failure mode groups exist to remove.
+/// Deleting a user does strip that name from every group it appears in, so a *removed* member never lingers — the tolerance is for names that have not arrived yet, not for names that have left.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GroupConfig {
+    /// Group name. Unique across `[[groups]]`, and the string a
+    /// `Principal::Group` / a binding `match_rule.roles` entry names.
+    pub name: String,
+    /// Free-text description of what the group is for. Operator-facing
+    /// only; nothing branches on it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+    /// User names belonging to this group. Stored sorted and de-duplicated
+    /// so the on-disk `config.toml` and every prompt-facing stringification
+    /// are byte-identical across writes (#3298).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<String>,
+    /// Role strings conferred on every member, in the same vocabulary as
+    /// [`ChannelRoleMapping`] and `BindingContext.roles`. Stored sorted and
+    /// de-duplicated for the same determinism reason as `members`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub roles: Vec<String>,
+}
+
+impl GroupConfig {
+    /// True when `user` is a member of this group. Case-sensitive, matching
+    /// how `UserConfig.name` is compared everywhere else in the codebase.
+    pub fn has_member(&self, user: &str) -> bool {
+        self.members.iter().any(|m| m == user)
+    }
 }
 
 impl Default for UserConfig {
@@ -841,9 +902,10 @@ pub struct BrowserConfig {
     /// Remote CDP endpoint to attach to instead of spawning a local Chromium.
     ///
     /// Accepted formats:
-    /// - `ws://host:port/devtools/browser/<id>` — page-level WebSocket (direct attach)
-    /// - `http://host:port` — HTTP discovery endpoint; librefang calls `GET /json/new`
-    ///   to create a fresh tab and connects to the returned WebSocket URL.
+    /// - `ws://host:port/…` — direct WebSocket attach.
+    ///   Both page-level and browser-level endpoints work: librefang asks `Target.getTargetInfo` which it is, and on a browser-level endpoint creates a target with `Target.createTarget`, attaches to it with `Target.attachToTarget` (flattened), and routes later commands through the returned `sessionId`.
+    ///   Required by CDP servers that expose no Chrome-style HTTP discovery routes, such as Lightpanda.
+    /// - `http://host:port` — HTTP discovery endpoint; librefang calls `/json/new` to create a fresh tab and connects to the returned WebSocket URL.
     ///
     /// When set, `headless`, `chromium_path`, and local-process discovery are
     /// ignored. Browser lifecycle (start/stop) is the operator's responsibility.
@@ -860,6 +922,18 @@ pub struct BrowserConfig {
     /// value at connect time and never logs it.
     #[serde(default)]
     pub cdp_auth_token_env: Option<String>,
+    /// Maximum characters of extracted page content returned by `browser_navigate` / `browser_read_page`, before the truncation marker.
+    ///
+    /// This is a real ceiling on what reaches the model: the script cuts the content short enough that appending `... (truncated, N chars total)` still lands within the limit, so an operator can size this against a context window without accounting for the marker separately.
+    ///
+    /// The default of 50,000 characters is roughly 12–15k tokens, which suits a 200k-context model and is actively hostile to a 32k local one — the reason this is a knob rather than a compile-time constant (#6624).
+    /// A mainstream Wikipedia article overruns it.
+    #[serde(default = "default_max_content_chars")]
+    pub max_content_chars: usize,
+}
+
+fn default_max_content_chars() -> usize {
+    50_000
 }
 
 impl Default for BrowserConfig {
@@ -875,6 +949,7 @@ impl Default for BrowserConfig {
             chromium_path: None,
             cdp_endpoint: None,
             cdp_auth_token_env: None,
+            max_content_chars: default_max_content_chars(),
         }
     }
 }
@@ -1185,6 +1260,27 @@ impl AuxTask {
             AuxTask::SessionSummary => "session_summary",
         }
     }
+
+    /// Every task, in declaration order.
+    ///
+    /// Served as `x-aux-tasks` on `GET /api/config/schema` so the dashboard
+    /// and TUI editors enumerate the task list from the kernel instead of
+    /// keeping a hand-copied list that drifts when a variant is added
+    /// (#8059 review). `as_str` above is an exhaustive match, so a new
+    /// variant cannot compile until it has a slug; the
+    /// `all_slugs_covered_by_all_const` test below then fails until `ALL`
+    /// picks it up.
+    pub const ALL: [AuxTask; 9] = [
+        AuxTask::Compression,
+        AuxTask::Title,
+        AuxTask::Search,
+        AuxTask::Vision,
+        AuxTask::BrowserVision,
+        AuxTask::Fold,
+        AuxTask::SkillReview,
+        AuxTask::SkillWorkshopReview,
+        AuxTask::SessionSummary,
+    ];
 }
 
 impl std::fmt::Display for AuxTask {
@@ -1606,13 +1702,14 @@ pub struct SkillsConfig {
     /// Example: `{ "gog" = ["GOG_KEYRING_PASSWORD"] }`.
     #[serde(default)]
     pub env_passthrough_per_skill: std::collections::HashMap<String, Vec<String>>,
-    /// Upstream skill-registry repository, in GitHub `owner/name` form,
-    /// targeted by the "Propose to Registry" action
-    /// (`POST /api/skills/{name}/propose`). When unset the API falls back
-    /// to the built-in default (`librefang/librefang-registry`). The
+    /// Upstream registry repository, in GitHub `owner/name` form, targeted
+    /// by the "Propose to Registry" actions for skills
+    /// (`POST /api/skills/{name}/propose`) and agent types
+    /// (`POST /api/templates/{name}/promote`). When unset the API falls
+    /// back to the built-in default (`librefang/librefang-registry`). The
     /// proposal flow forks this repo under the authenticated GitHub user,
-    /// pushes the evolved skill files to a branch, and opens a pull
-    /// request back upstream.
+    /// pushes the files to a branch, and opens a pull request back
+    /// upstream.
     #[serde(default)]
     pub registry_repo: Option<String>,
 }
@@ -2125,6 +2222,19 @@ pub struct ExecPolicy {
     /// (The skip is gated to a strict subset of the execution allowlist — metacharacters and wrappers are still rejected — but the approval prompt is gone.)
     #[serde(default)]
     pub safe_bins_skip_approval: bool,
+    /// Whether `mode = "full"` also waives the global `approval.require_approval` list for `shell_exec`.
+    ///
+    /// Default `true` preserves the historical coupling, and the default is deliberately NOT flipped (#6594).
+    /// Two facts make a flipped default a breaking change for ordinary installs: `ApprovalPolicy::default()` puts `shell_exec` in `require_approval`, and `Kernel::spawn` promotes any standalone agent whose `capabilities.tools` contains `shell_exec` or `*` and which declares no `exec_policy` to `mode = "full"`.
+    /// So on a default install this waiver is the only reason ordinary agents run shell commands unattended, and flipping it would make every install prompt on every command.
+    ///
+    /// Set `false` to hold both positions at once — unrestricted commands that still prompt.
+    /// `Full` then waives only allowlist *validation*, and `require_approval` is honoured exactly as it is for any other mode.
+    /// This overrides a coupling that was deliberate rather than accidental: `Full` skipping the approval queue was documented behaviour, and `false` narrows `Full` to what its name describes — a command-validation mode — leaving who-must-confirm to `[approval]`.
+    ///
+    /// Independent of this flag in both positions: a per-user RBAC `NeedsApproval` still forces the approval queue, and the dangerous-command denylist still screens every command under `full`.
+    #[serde(default = "default_full_mode_skips_approval")]
+    pub full_mode_skips_approval: bool,
     /// Global command allowlist (when mode = allowlist).
     pub allowed_commands: Vec<String>,
     /// Environment variables explicitly allowed to pass through to `shell_exec`.
@@ -2144,6 +2254,10 @@ fn default_no_output_timeout() -> u64 {
     30
 }
 
+fn default_full_mode_skips_approval() -> bool {
+    true
+}
+
 impl Default for ExecPolicy {
     fn default() -> Self {
         Self {
@@ -2156,6 +2270,7 @@ impl Default for ExecPolicy {
             .map(String::from)
             .collect(),
             safe_bins_skip_approval: false,
+            full_mode_skips_approval: default_full_mode_skips_approval(),
             allowed_commands: Vec::new(),
             allowed_env_vars: Vec::new(),
             timeout_secs: 30,
@@ -2269,6 +2384,88 @@ pub enum TypingMode {
 // Gap 7: Thinking level support
 // ---------------------------------------------------------------------------
 
+/// How hard the model should reason on a turn (#7946).
+///
+/// `budget_tokens` cannot express two things operators need.
+/// It cannot say "do not reason at all" — a sub-1024 budget merely omits the opt-in, which leaves a model that reasons by default (every DeepSeek V4 id) reasoning anyway — and it cannot reach the top rung of providers that have one (`max` / `xhigh`), because the bucket mapping in the OpenAI-compatible driver tops out at `high`.
+/// This enum is the direct control: it names the intent and each driver translates it into whatever its wire actually accepts.
+///
+/// Deliberately four rungs rather than the union of every provider's vocabulary.
+/// `medium` is reachable only as the `budget_tokens` fallback bucket, because a fifth rung whose only distinct meaning is "DeepSeek folds it into `high`" is a knob that does nothing on the provider that motivated it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningMode {
+    /// Do not reason — the wire-level "non-think" toggle.
+    None,
+    /// Reason briefly.
+    Low,
+    /// Reason at the provider's normal full effort.
+    High,
+    /// Reason at the provider's highest available effort.
+    Max,
+}
+
+impl ReasoningMode {
+    /// The mode's canonical string, identical to its serde representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReasoningMode::None => "none",
+            ReasoningMode::Low => "low",
+            ReasoningMode::High => "high",
+            ReasoningMode::Max => "max",
+        }
+    }
+}
+
+impl std::fmt::Display for ReasoningMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// A per-call reasoning override, resolved from the request body before it
+/// reaches the kernel (#7946).
+///
+/// Not a config field — it is the shape the per-message API's two override
+/// keys collapse into, so that everything below the HTTP boundary threads one
+/// value instead of two that can disagree.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ThinkingOverride {
+    /// No per-call override: use the agent manifest, else the global config.
+    #[default]
+    Inherit,
+    /// Legacy `thinking: true`.
+    /// Ensures reasoning is requested at the inherited budget without pinning a mode.
+    Enable,
+    /// Legacy `thinking: false`.
+    /// Clears the manifest's thinking config for this turn.
+    Disable,
+    /// An explicit `reasoning_mode` from the caller.
+    Mode(ReasoningMode),
+}
+
+impl ThinkingOverride {
+    /// Collapse the per-message API's two override keys into one value.
+    ///
+    /// `reasoning_mode` wins over the older boolean when a caller sends both: it is
+    /// strictly more specific, and a client that has learned to send it is not also
+    /// relying on the boolean to mean something different.
+    pub fn resolve(thinking: Option<bool>, reasoning_mode: Option<ReasoningMode>) -> Self {
+        match (reasoning_mode, thinking) {
+            (Some(mode), _) => ThinkingOverride::Mode(mode),
+            (None, Some(true)) => ThinkingOverride::Enable,
+            (None, Some(false)) => ThinkingOverride::Disable,
+            (None, None) => ThinkingOverride::Inherit,
+        }
+    }
+}
+
+impl From<Option<bool>> for ThinkingOverride {
+    fn from(thinking: Option<bool>) -> Self {
+        ThinkingOverride::resolve(thinking, None)
+    }
+}
+
 /// Extended thinking configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -2277,6 +2474,13 @@ pub struct ThinkingConfig {
     pub budget_tokens: u32,
     /// Whether to stream thinking tokens to the client.
     pub stream_thinking: bool,
+    /// Explicit reasoning mode (#7946).
+    ///
+    /// When set it wins over the [`Self::budget_tokens`] bucket mapping for
+    /// drivers that honour it; when `None` the budget bucket is used, which is
+    /// the pre-#7946 behaviour.
+    #[serde(default)]
+    pub reasoning_mode: Option<ReasoningMode>,
 }
 
 impl Default for ThinkingConfig {
@@ -2284,6 +2488,7 @@ impl Default for ThinkingConfig {
         Self {
             budget_tokens: 10_000,
             stream_thinking: false,
+            reasoning_mode: None,
         }
     }
 }
@@ -2916,6 +3121,53 @@ impl Default for QueueConfig {
     }
 }
 
+/// Usage/metering retention (#7891).
+///
+/// The daemon runs a daily sweep that hard-deletes `usage_events` rows older
+/// than `retention_days`. Before #7891 that horizon was a literal `90` in
+/// `background_lifecycle.rs`, so an operator who needed a longer window for
+/// quarterly or annual cost reporting had no way to ask for one, and one who
+/// wanted a shorter window for data-minimisation reasons had no way to shorten
+/// it either.
+///
+/// This is the retention of the underlying event table, so it bounds every
+/// `/api/usage*` endpoint at once — not just the daily breakdown. Raising it
+/// grows the table roughly linearly with call volume; the rows are small
+/// (a dozen scalar columns) but they are the highest-cardinality table in the
+/// substrate, so treat a multi-year horizon as a storage decision rather than a
+/// free one.
+///
+/// Configure in config.toml:
+///
+/// ```toml
+/// [usage]
+/// retention_days = 365
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct UsageConfig {
+    /// How many days of `usage_events` the daily retention sweep keeps.
+    ///
+    /// Default: 90, which is the horizon the sweep has always enforced.
+    /// Set to 0 to disable pruning entirely — the table then grows without
+    /// bound, which is the right call only when an external archival job
+    /// (for example a scheduled `GET /api/usage/export`) owns the lifecycle.
+    #[serde(default = "default_usage_retention_days")]
+    pub retention_days: u32,
+}
+
+fn default_usage_retention_days() -> u32 {
+    90
+}
+
+impl Default for UsageConfig {
+    fn default() -> Self {
+        Self {
+            retention_days: default_usage_retention_days(),
+        }
+    }
+}
+
 /// Per-lane concurrency limits for the command queue.
 ///
 /// Configure in config.toml:
@@ -2987,11 +3239,17 @@ impl Default for QueueConcurrencyConfig {
 /// [task_board]
 /// claim_ttl_secs = 600         # 10 minutes — auto-reset after this
 /// sweep_interval_secs = 30     # how often the sweeper runs
+/// assignee_wake = true         # wake the assignee even with no trigger declared
 /// ```
 ///
 /// Setting `claim_ttl_secs = 0` disables the sweeper entirely — useful
 /// for long-running human-in-the-loop tasks where a 10 minute reset
 /// would be wrong.
+///
+/// Every field is re-read live by its consumer — the sweeper re-reads its
+/// three knobs on each tick, and `assignee_wake` is read at the synthesis
+/// site on each `TaskPosted` — so the whole struct is hot-reloadable
+/// (`config_reload::build_reload_plan`).
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct TaskBoardConfig {
@@ -3003,6 +3261,38 @@ pub struct TaskBoardConfig {
     /// Maximum number of auto-resets before a stuck task is marked `failed`.
     /// Default: 0 = no limit (retry indefinitely).
     pub max_retries: u32,
+    /// Wake the assignee of a `TaskPosted` event even when no stored trigger covers them (issue #6728).
+    /// Default: `true`.
+    ///
+    /// A task addressed to an agent used to reach that agent only if an operator had separately registered a matching `TaskPosted` trigger; with none, the task sat `pending` indefinitely and nothing said so.
+    /// When this is enabled the kernel synthesizes the wake itself, so delivery no longer depends on out-of-band operator setup.
+    ///
+    /// The synthesized wake defers to a stored trigger whenever one can currently fire for that assignee, so an operator who declared their own wake keeps full control of its prompt, session mode and routing.
+    /// Set to `false` (globally here, or per agent via the manifest's `assignee_wake`) to opt out entirely — that flag is the only suppression; a disabled or fire-exhausted trigger is not one.
+    pub assignee_wake: bool,
+    /// How long a task may sit `pending` before the sweeper's reconcile
+    /// wakes its assignee, in seconds. Default: 60.
+    ///
+    /// The event-driven wake is the fast path; this is the floor under it,
+    /// so the grace window is what keeps the two from racing. A task younger
+    /// than this is assumed to be in the hands of the wake its own
+    /// `TaskPosted` event produced.
+    ///
+    /// Lower means work lost by a dropped event is recovered sooner; higher
+    /// means fewer redundant activations while an agent is mid-turn.
+    /// `0` disables the reconcile, leaving delivery purely event-driven —
+    /// which is the behaviour this floor exists to correct, so prefer the
+    /// per-agent `assignee_wake` opt-out for one noisy agent.
+    pub pending_grace_secs: u64,
+    /// Upper bound, in seconds, on the exponential backoff applied when
+    /// reconcile wakes do not move an agent's pending tasks. Default: 900.
+    ///
+    /// Each wake that leaves the agent's pending set unchanged doubles the
+    /// delay from `pending_grace_secs` up to this cap; any task leaving
+    /// `pending` resets it. Without the cap, an agent that cannot act on its
+    /// tasks — a failing provider, a missing `task_claim` capability —
+    /// would be woken on every tick forever.
+    pub wake_backoff_max_secs: u64,
 }
 
 impl Default for TaskBoardConfig {
@@ -3011,6 +3301,9 @@ impl Default for TaskBoardConfig {
             claim_ttl_secs: 600,
             sweep_interval_secs: 30,
             max_retries: 0,
+            assignee_wake: true,
+            pending_grace_secs: 60,
+            wake_backoff_max_secs: 900,
         }
     }
 }
@@ -3545,6 +3838,17 @@ pub struct KernelConfig {
     /// emitting a `warn!` log with `agent`, `requested`, and `applied`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_history_messages: Option<usize>,
+    /// Share of the prompt memory section's character budget reserved for extracted facts, as a percentage; the remainder goes to raw dialogue.
+    ///
+    /// The two classes differ by roughly nine to one in row size, so a single ranked list spends the section on dialogue by size alone and leaves a large fraction of turns with no extracted fact in the prompt at all (#7920).
+    /// Neither share is wasted: whatever one class does not use spills to the other, so a turn with only one class still fills the whole budget.
+    ///
+    /// `None` means "use the compiled-in default" (`prompt_builder::MEMORY_FACT_BUDGET_PERCENT`, 70 — the best arm of the measurement, which could not separate 30/50/70 from run-to-run noise).
+    /// Values above 100 are clamped down.
+    /// Lower it when raw dialogue carries narrative continuity your agents depend on; raise it when the store is dominated by per-turn dialogue rows.
+    /// The section's total character budget is unaffected either way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_fact_budget_percent: Option<u8>,
     /// Kernel-wide Smart Model Router defaults applied to any agent whose
     /// `agent.toml` does not set its own `[routing]` block. The `init` wizard
     /// writes user-selected tier models here under `[default_routing]` so the
@@ -3567,8 +3871,49 @@ pub struct KernelConfig {
     pub channels: ChannelsConfig,
     /// API authentication key. When set, all API endpoints (except /api/health)
     /// require a `Authorization: Bearer <key>` header.
-    /// If empty, the API is unauthenticated (local development only).
+    /// If empty (and no `api_key_hash` is set), the API is unauthenticated (local development only).
+    ///
+    /// The value is resolved by the API layer in three steps, the same order the dashboard credentials use:
+    /// 1. The `LIBREFANG_API_KEY` environment variable, when set to a non-empty value, wins over whatever this field holds.
+    /// 2. A `vault:KEY_NAME` prefix reads `KEY_NAME` out of the encrypted vault (`$LIBREFANG_HOME/vault.enc`).
+    ///    Example: `api_key = "vault:master_api_key"`, then run `librefang vault set master_api_key`.
+    /// 3. Anything else is the literal bearer token.
+    ///
+    /// Steps 1 and 2 keep the working secret out of `config.toml` entirely, which matters because the daemon rewrites that file and cannot read it from a read-only Kubernetes Secret mount.
+    /// Resolution happens per auth snapshot rather than once at boot, so an env-sourced or vault-sourced key survives `POST /api/config/reload` — a reload re-reads `config.toml` from disk and would otherwise clobber the boot-time override.
+    ///
+    /// Prefer [`KernelConfig::api_key_hash`] when the daemon only needs to *verify* the key rather than transmit it — run `librefang hash-api-key` to produce the value.
+    /// The two can be combined, and a plaintext value here is verified with a constant-time comparison.
     pub api_key: String,
+    /// Hash of the API authentication key, so the master credential does not have to sit in cleartext on disk.
+    ///
+    /// When set, a presented bearer token is verified against this hash after the constant-time comparison against `api_key` misses.
+    ///
+    /// **Generate it with `librefang hash-api-key`** — `--generate` mints a fresh 256-bit key and prints it beside its hash, or omit the flag to hash a key you already have.
+    /// Put the hash here, give the key to your clients, and leave `api_key` unset.
+    ///
+    /// The recommended form is `$sha256$…` (what `hash-api-key` produces).
+    /// `$argon2id$…` is also accepted, dispatched by prefix exactly as the per-user `users[].api_key_hash` column is, so a hand-written value keeps working.
+    ///
+    /// The default is SHA-256 rather than Argon2id on purpose, and it is the reverse of the advice for [`KernelConfig::dashboard_pass_hash`].
+    /// A dashboard password is human-chosen and low-entropy, so a memory-hard KDF is what makes an offline dictionary attack uneconomic.
+    /// A master API key is a machine-generated bearer token: there is no dictionary to enumerate, so the KDF buys nothing against an offline attacker and charges its cost to every request instead.
+    /// That cost is ~50–100 ms of CPU per verify by construction, and with `api_key` unset *every* presented token reaches it — including every wrong one, from an unauthenticated caller, on paths with no login-attempt limiter.
+    /// So an `$argon2id$` value here is verified on a blocking thread rather than inline, which keeps the async runtime responsive but does not make the CPU cost go away.
+    /// If you want a short human-memorable master key, `$argon2id$` is the right trade; otherwise use a generated key and the cheap verifier.
+    ///
+    /// Existing plaintext deployments keep working and are upgraded transparently: the first request that authenticates against a plaintext-only `api_key` writes a `$sha256$` hash of it to `$LIBREFANG_HOME/api-key-hash.upgrade-hint` (mode 0600) and logs a pointer to the file.
+    /// Copy the value into `api_key_hash`, remove `api_key`, delete the hint file.
+    /// Clients keep sending the same key — only the daemon's stored copy changes.
+    /// The hash itself is never logged — it is the verifier, so anyone reading the log stream could paste it into their own config and authenticate.
+    ///
+    /// **A hash alone is not enough if you run a CLI-based driver** (`claude-code`, and any other driver that reaches the daemon's own `/mcp` endpoint).
+    /// Those drivers are clients of this daemon, so they need the key itself, and a hash cannot yield it: the daemon would have to reverse its own verifier.
+    /// With `api_key` unset and no `LIBREFANG_API_KEY`, the MCP bridge goes out with no `Authorization` header and the daemon's own middleware answers 401 — precisely because the hash *is* honoured as configured auth.
+    /// Keep a transmittable copy for that case: `api_key = "vault:master_api_key"` or `LIBREFANG_API_KEY`, either of which keeps the secret out of `config.toml` while leaving the bridge able to authenticate.
+    /// The kernel logs a `WARN` naming this at every driver rebuild when the bridge ends up keyless while a hash is set, so it fails loudly rather than as an unexplained 401 on every tool call.
+    #[serde(default)]
+    pub api_key_hash: String,
     /// Controls whether the dashboard read-endpoint allowlist (agents,
     /// config, budget, sessions, approvals, hands, skills, workflows, …)
     /// requires a bearer token.
@@ -3681,6 +4026,19 @@ pub struct KernelConfig {
     /// User configurations for RBAC multi-user support.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub users: Vec<UserConfig>,
+    /// Named user groups (#7745). See [`GroupConfig`] for why membership is
+    /// flat and how `roles` lines up with the role strings the channel layer
+    /// already carries.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub groups: Vec<GroupConfig>,
+    /// Fleet-wide fallback owner for artifacts created by a turn that has neither an authenticated caller nor an `owner` on the agent's manifest (#7744).
+    ///
+    /// An operator spec string — `user:alice`, `group:platform`, or a bare `alice` meaning `user:alice` — parsed by [`crate::principal::Principal::from_spec`].
+    ///
+    /// `None` (the default) means unowned artifacts stay unowned rather than being attributed to a synthetic principal nobody chose.
+    /// The first artifact created with no principal resolvable logs one `WARN` per daemon naming this key ([`crate::principal::warn_once_unowned`]), so the gap is visible without being fatal or noisy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_owner: Option<String>,
     /// Maps platform-native channel roles (Telegram admin, Discord guild
     /// roles, Slack workspace roles) to LibreFang `UserRole`. Used by
     /// `AuthManager::resolve_role_for_sender` after explicit `UserConfig.role`
@@ -4043,6 +4401,9 @@ pub struct KernelConfig {
     /// Message queue configuration (depth limits, TTL, concurrency).
     #[serde(default)]
     pub queue: QueueConfig,
+    /// Usage/metering retention for the `usage_events` table (#7891).
+    #[serde(default)]
+    pub usage: UsageConfig,
     /// Task-board (shared task queue) safety knobs — see [`TaskBoardConfig`].
     #[serde(default)]
     pub task_board: TaskBoardConfig,
@@ -5086,6 +5447,106 @@ pub struct ExternalAuthConfig {
     /// rejected — prevents `allowed_domains` impersonation via unverified addresses (#3703).
     #[serde(default = "default_true")]
     pub require_email_verified: bool,
+    /// IdP role/group claim value → LibreFang role string (`owner` / `admin` / `user` / `viewer` / `guest`).
+    ///
+    /// Empty by default, and an empty map means an OIDC bearer authorizes nothing — exactly the behaviour before #7744, where the validated `roles` claim was injected into request extensions and never read.
+    /// Declaring an entry is what turns a signed ID token into an API credential, so the grant is always something the operator wrote down rather than something the identity provider decided unilaterally.
+    ///
+    /// A caller holding several mapped roles gets the **highest-privilege** match, mirroring `[channel_role_mapping.discord] role_map` — claim ordering is the IdP's business, and letting it pick the effective LibreFang role would put privilege outside operator control.
+    /// A claim value that is absent from this map, or present but mapped to an unrecognised LibreFang role string, grants nothing: the caller falls through to the same 401 they get today rather than being demoted to `User`.
+    ///
+    /// ```toml
+    /// [external_auth.role_map]
+    /// "librefang-owners" = "owner"
+    /// "librefang-operators" = "admin"
+    /// "engineering" = "user"
+    /// ```
+    ///
+    /// `BTreeMap` rather than `HashMap` so `GET /api/config` renders the entries in a stable order and a diff of two config snapshots reflects real edits.
+    ///
+    /// The claim values matched against this map are the ones [`ExternalAuthConfig::claim_paths`] resolves, which is `roles` and `groups` by default rather than `roles` alone.
+    /// The key's documented meaning has always been "role/group claim value"; before #7746 only the `roles` array was actually read, so an operator who wrote a group name here got silence.
+    #[serde(default)]
+    pub role_map: BTreeMap<String, String>,
+
+    /// IdP group (or role, or scope) claim value → the name of a `[[groups]]` entry the caller is treated as a member of for the lifetime of the request (#7746).
+    ///
+    /// # Why a map and not "the claim value *is* the group name"
+    ///
+    /// Matching by name would let the identity provider mint a LibreFang grant by inventing a claim value.
+    /// Anyone who can create a group in the IdP — in most tenants a far larger set of people than "LibreFang operators", and in a self-service Entra or Google Workspace tenant frequently *every employee* — could create one named `oncall` and acquire whatever `oncall` owns and confers here.
+    /// The same argument [`ExternalAuthConfig::role_map`] makes for roles applies unchanged to groups, and for the same reason the answer is the same: a grant is something an operator wrote down in `config.toml`, and the IdP only gets to say which of the operator's written-down grants a given caller matches.
+    ///
+    /// The map is also what makes the two namespaces independent.
+    /// An IdP group is named for the organisation (`platform-oncall-emea`, or a bare GUID in Entra's case, where the `groups` claim carries object ids rather than display names); a LibreFang group is named for what it owns. A GUID cannot be a name-match against anything.
+    ///
+    /// # An unmapped claim value grants nothing
+    ///
+    /// Not "grants a lower group", not "grants viewer" — nothing.
+    /// A claim value absent from this map, or present but naming a `[[groups]]` entry that does not exist, contributes no membership, no group-conferred role string and no [`crate::principal::Principal`], and the caller falls through to exactly the outcome they would have had with no claim at all.
+    /// A typo'd target is skipped rather than creating a phantom group, mirroring how a typo'd target in `role_map` is skipped rather than resolving to `User`: an unrecognised value must never be an escalation, and a group that exists only in this map would be a principal that owns things and that no operator can see in `[[groups]]`.
+    ///
+    /// # Membership is ephemeral
+    ///
+    /// A match here does **not** write the caller's name into `[[groups]] members`.
+    /// The membership is recomputed from the presented token on every request and discarded with the request.
+    /// Persisting it would turn operator-owned `config.toml` into an unmanaged cache of IdP state with no invalidation path — the entry is written when someone logs in, and the one event that should remove it (their removal from the group in the IdP) is precisely the event after which they never log in again, so a revoked membership would persist forever in the file that is supposed to be the operator's own record. It would also make every login a config write, with the reload, the backup rotation and the `git diff` churn that implies.
+    /// Recomputing per request is strictly stronger than what #7746 asked for ("re-evaluate on every login"): a revocation in the IdP takes effect here when the caller's token expires, with no local action at all.
+    ///
+    /// # Precedence against a declared `[[groups]]` member
+    ///
+    /// The two are **unioned**, and no arbitration is needed because there is nothing to arbitrate: group membership is a set, not a ladder, so "both say yes" and "one says yes" have the same answer.
+    /// This is deliberately unlike `role_map`, which picks the highest-privilege match — an ordinal ladder has a defined `max`, a set does not.
+    /// The consequence worth stating: removing someone from the IdP group does not remove them from a `[[groups]] members` list that names them explicitly.
+    /// That is correct rather than a leak. A name in `members` is an independent grant an operator typed, and letting an IdP retract it would make the IdP authoritative over config the operator owns — the mirror image of the drift this feature exists to fix.
+    ///
+    /// # Relationship to `role_map`
+    ///
+    /// The two maps compose over the same claim-value vocabulary and confer different things, so one claim can feed both and neither implies the other.
+    /// `role_map` confers RBAC privilege (`viewer < user < admin < owner`) and decides *what the caller may do*; `group_map` confers membership and decides *which teams the caller is on*, which is what group-conferred role strings ([`KernelConfig::effective_roles_for`]) and group-shaped ownership ([`crate::principal::Principal::group_named`]) key off.
+    /// A group is still not a route of privilege escalation: membership confers no `UserRole` whatsoever, so an operator who wants an IdP group to also carry admin privilege writes that claim value into *both* maps, and writes it deliberately.
+    ///
+    /// ```toml
+    /// [external_auth.group_map]
+    /// "platform-oncall" = "oncall"
+    /// "3f2a9c81-0e4d-4c9a-9a2e-77e2a1b4c5d6" = "compliance"
+    /// ```
+    ///
+    /// `BTreeMap` for the same `GET /api/config` stability reason as `role_map` (#3298).
+    #[serde(default)]
+    pub group_map: BTreeMap<String, String>,
+
+    /// Where in the token to look for the identity attributes [`ExternalAuthConfig::role_map`] and [`ExternalAuthConfig::group_map`] are matched against (#7746).
+    ///
+    /// Every entry is a **dotted path** into the validated ID token (or the userinfo document, when the provider issued no ID token).
+    /// Keycloak — named as a conformance target on #7746 and the common self-hosted case — puts realm roles at `realm_access.roles` and per-client roles at `resource_access.<client>.roles`, neither of which a flat claim *name* can address, so the path form is the minimum that reaches the deployment this feature is for.
+    /// The literal token `<client>` is substituted with the provider's configured `client_id`, so one entry works across providers without restating the id.
+    ///
+    /// Resolution is permissive about shape and strict about nothing else: a path resolving to an array of strings contributes each element, and a path resolving to a single string contributes its whitespace-separated words.
+    /// The second rule is what makes `scope` work — RFC 6749 defines it as a space-delimited list in one string — and it also handles a provider that emits a single-valued `role` claim.
+    /// Its cost is that a claim value containing a space is split; that is documented rather than solved, because the IdPs this targets do not produce them (Entra sends GUIDs, Keycloak forbids spaces in role names) and a quoting convention would be a worse trade than the limitation.
+    /// A path that resolves to nothing, or to a value of any other shape, contributes nothing and is not an error — providers differ in which claims they emit, and a missing claim is the normal case rather than a misconfiguration.
+    ///
+    /// # Why `scope` is not in the default
+    ///
+    /// The default is `["roles", "groups"]`. `scope` is deliberately absent, and adding it is a one-line opt-in.
+    ///
+    /// `roles` and `groups` are assertions the identity provider makes *about the user*. `scope` is an assertion about *what a client application asked for and was granted*, which is a different trust question with a different attacker: a token minted for some other OAuth client in the same tenant carries that client's scopes, and the only thing standing between such a token and this daemon is audience binding.
+    /// Audience binding is enforced — a provider with neither `audience` nor `client_id` set grants nothing at all — so opting in is safe where an operator has bound the audience, and defaulting it off means nobody inherits the weaker assertion by accident.
+    ///
+    /// ```toml
+    /// [external_auth]
+    /// claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
+    /// ```
+    #[serde(default = "default_idp_claim_paths")]
+    pub claim_paths: Vec<String>,
+}
+
+/// Default identity-attribute claim paths: the two standard-shaped claims, and
+/// not `scope`. See [`ExternalAuthConfig::claim_paths`] for why `scope` is an
+/// explicit opt-in.
+fn default_idp_claim_paths() -> Vec<String> {
+    vec!["roles".to_string(), "groups".to_string()]
 }
 
 /// Configuration for a single OIDC/OAuth2 provider.
@@ -5175,6 +5636,9 @@ impl Default for ExternalAuthConfig {
             session_ttl_secs: default_session_ttl(),
             providers: Vec::new(),
             require_email_verified: true,
+            role_map: BTreeMap::new(),
+            group_map: BTreeMap::new(),
+            claim_paths: default_idp_claim_paths(),
         }
     }
 }
@@ -5859,6 +6323,17 @@ pub struct RegistryConfig {
     /// conflict the parallel `base_url` field caused.
     #[serde(default)]
     pub registry_host: Option<String>,
+    /// Whether the daemon refreshes `~/.librefang/registry/` from upstream on its own (default: `true`).
+    ///
+    /// That checkout is a git clone the sync fast-forwards with `git reset --hard origin/main`, so every local modification under it is destroyed — including the ones `PUT /api/hands/{id}/manifest` writes, which land in `registry/hands/<id>/HAND.toml` for a hand that shipped with the registry.
+    /// Set to `false` to freeze the checkout: boot skips its `sync_registry` pass and the periodic catalog task skips the network refresh while still rebuilding the model catalog from what is already on disk.
+    ///
+    /// Only *automatic* refreshes are gated. `librefang init` and `POST /api/catalog/update` are explicit operator actions and still fetch, so freezing the registry does not strand an operator who wants an update.
+    /// `POST /api/hands/reload` never fetched from upstream in the first place — it only reloads hand definitions already on disk into memory — so it is unaffected either way.
+    ///
+    /// Equivalent to setting `LIBREFANG_REGISTRY_OFFLINE=1`, except it is scoped to the automatic paths rather than every fetch in the process tree, and it survives in `config.toml` rather than in whatever launched the daemon.
+    #[serde(default = "default_true")]
+    pub auto_sync: bool,
 }
 
 fn default_registry_cache_ttl_secs() -> u64 {
@@ -5871,6 +6346,7 @@ impl Default for RegistryConfig {
             cache_ttl_secs: default_registry_cache_ttl_secs(),
             registry_mirror: String::new(),
             registry_host: None,
+            auto_sync: true,
         }
     }
 }
@@ -6502,17 +6978,28 @@ pub enum HttpCompatResponseMode {
 }
 
 /// Header injection config for the built-in HTTP compatibility transport.
+//
+// `deny_unknown_fields` for the same reason as [`McpServerConfigEntry`] and [`McpTransportEntry`]: this struct is only ever reached through `[[mcp_servers.transport.headers]]`, which the `detect_unknown_nested_fields` walker cannot descend into because every hop is an array of tables.
+// Without the attribute a typo such as `value_from_env` deserialises into a header with neither `value` nor `value_env` set, and the transport sends the header unset instead of reporting the mistake (#6612).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HttpCompatHeaderConfig {
     pub name: String,
-    #[serde(default)]
+    // `skip_serializing_if` is load-bearing here for the same reason it is on [`McpServerConfigEntry::template_id`] and `oauth`, and the consequence is worse than theirs (#6612).
+    // `upsert_mcp_server_config` writes the `File` store by going serde_json → `json_to_toml_value` → TOML, and TOML has no null: that converter maps `Value::Null` to an *empty string* rather than dropping the key, so an absent `Option` is written as `value = ""` and reloads as `Some("")` instead of `None`.
+    // `apply_http_compat_headers` tests `value` *before* `value_env`, so an env-sourced header that survived a config write would send an empty header and never resolve its variable — a silent credential failure with no error anywhere.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value_env: Option<String>,
 }
 
 /// Declarative tool mapping for the built-in HTTP compatibility transport.
+//
+// `deny_unknown_fields` for the same reason as [`HttpCompatHeaderConfig`] — `[[mcp_servers.transport.tools]]` is an array of tables nested inside another array of tables, so serde is the only layer that can see a typo here.
+// Every field except `name` and `path` has a `#[serde(default)]`, which means a misspelled `responce_mode` would otherwise leave the tool silently wired to the default JSON response mode (#6612).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HttpCompatToolConfig {
     pub name: String,
     #[serde(default)]
@@ -6529,8 +7016,18 @@ pub struct HttpCompatToolConfig {
 }
 
 /// Transport configuration for an MCP server.
+//
+// `deny_unknown_fields` mirrors the guard on the parent [`McpServerConfigEntry`] (#6612).
+// Without it a misspelled or unsupported key inside `[mcp_servers.transport]` was accepted and dropped: an operator who wrote a `[mcp_servers.transport.env]` table — plausible, but not the mechanism, which is the parent's `env: Vec<String>` name list — got a server that looked configured and ran on its own hardcoded fallbacks, with the failure deferred to the next credential rotation.
+// The `detect_unknown_nested_fields` walker cannot reach here (it bails on array-of-table paths such as `mcp_servers`, the same limitation that motivated the parent's guard in #5130), so serde is the only layer that sees the key at all.
+//
+// The attribute applies per variant on an internally-tagged enum: serde buffers the content and each variant rejects fields outside its own set, so the discriminating `type` key itself is still accepted.
+// That behaviour is not obvious from the attribute alone — `deny_unknown_fields` is documented as unsupported on *adjacently*- and *untagged*-enum containers — so it is pinned by `mcp_transport_rejects_unknown_key_in_transport_table_6612` rather than left to the reader to assume.
+//
+// Guarding the enum makes `GET /api/mcp/servers/{name}` → `PUT` load-bearing rather than merely conventional: any key the read route synthesises into the `transport` object that is not a real field now fails the write.
+// `serialize_mcp_transport` in `librefang-api` is therefore a faithful representation of the stored variant, not a display summary — see the comment on that function.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum McpTransportEntry {
     /// Subprocess with JSON-RPC over stdin/stdout.
     Stdio {
@@ -6673,6 +7170,7 @@ impl Default for KernelConfig {
             api_listen: DEFAULT_API_LISTEN.to_string(),
             network_enabled: false,
             agent_max_iterations: None,
+            memory_fact_budget_percent: None,
             max_history_messages: None,
             default_routing: None,
             default_model: DefaultModelConfig::default(),
@@ -6681,6 +7179,7 @@ impl Default for KernelConfig {
             network: NetworkConfig::default(),
             channels: ChannelsConfig::default(),
             api_key: String::new(),
+            api_key_hash: String::new(),
             require_auth_for_reads: None,
             external_auth_proxy: false,
             trusted_manifest_signers: Vec::new(),
@@ -6693,6 +7192,8 @@ impl Default for KernelConfig {
             mode: KernelMode::default(),
             language: "en".to_string(),
             users: Vec::new(),
+            groups: Vec::new(),
+            default_owner: None,
             channel_role_mapping: ChannelRoleMapping::default(),
             mcp_servers: Vec::new(),
             mcp_runtime_store: McpRuntimeStore::default(),
@@ -6756,6 +7257,7 @@ impl Default for KernelConfig {
             compaction: CompactionTomlConfig::default(),
             gateway_compression: GatewayCompressionConfig::default(),
             queue: QueueConfig::default(),
+            usage: UsageConfig::default(),
             task_board: TaskBoardConfig::default(),
             external_auth: ExternalAuthConfig::default(),
             tool_policy: crate::tool_policy::ToolPolicy::default(),
@@ -6803,6 +7305,165 @@ impl Default for KernelConfig {
 }
 
 impl KernelConfig {
+    /// Every group `user` belongs to, ordered by group name.
+    ///
+    /// Ordering is by name rather than by declaration order in `config.toml` so that
+    /// two deployments with the same groups declared in a different order produce the
+    /// same list — the same determinism rule the prompt boundary is held to (#3298),
+    /// applied here because a group list is one edit away from being stringified into
+    /// an agent's context by #7744's ownership surface.
+    pub fn groups_for_user(&self, user: &str) -> Vec<&GroupConfig> {
+        let mut out: Vec<&GroupConfig> =
+            self.groups.iter().filter(|g| g.has_member(user)).collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    /// The role strings `user` holds by virtue of group membership.
+    ///
+    /// Each group contributes its own **name** plus every entry in its `roles` list.
+    /// Including the name means an operator who creates the `oncall` group can write a
+    /// binding `match_rule.roles = ["oncall"]` immediately, without also restating
+    /// `roles = ["oncall"]` inside the group — the two would otherwise have to be kept
+    /// in sync by hand for no gain.
+    ///
+    /// This does NOT include `UserConfig.role`. That field is the RBAC privilege level
+    /// (`owner` / `admin` / `user` / `viewer`) resolved by `AuthManager`, a different
+    /// question from "which teams is this person on"; conflating them here would let a
+    /// group named `owner` silently confer owner privilege. #7746 is where the two
+    /// ladders are deliberately connected, under an operator-defined mapping.
+    ///
+    /// `BTreeSet` rather than `Vec` because the result is a set by nature (two groups
+    /// may confer the same role) and because the ordering must not depend on which
+    /// group happened to be declared first.
+    pub fn roles_for_user(&self, user: &str) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        for group in self.groups.iter().filter(|g| g.has_member(user)) {
+            out.insert(group.name.clone());
+            out.extend(group.roles.iter().cloned());
+        }
+        out
+    }
+
+    /// Look up a group by exact name.
+    pub fn group(&self, name: &str) -> Option<&GroupConfig> {
+        self.groups.iter().find(|g| g.name == name)
+    }
+
+    /// Every group `user` effectively belongs to: the `[[groups]]` entries that
+    /// name them in `members`, unioned with `idp_groups` — the local group names
+    /// an identity provider's claims resolved to for *this request* under
+    /// `[external_auth.group_map]` (#7746).
+    ///
+    /// Union rather than a precedence rule, because membership is a set and not
+    /// an ordinal ladder: "declared *and* claimed" and "declared only" denote the
+    /// same membership, so there is no conflict for a precedence rule to settle.
+    /// See [`ExternalAuthConfig::group_map`] for why that means an IdP cannot
+    /// retract a `members` entry an operator typed.
+    ///
+    /// `idp_groups` is passed in rather than read from anywhere, because it does
+    /// not live anywhere: it is derived from the token the caller presented and
+    /// discarded with the request. Passing an empty set makes this exactly
+    /// [`KernelConfig::groups_for_user`] by name, which is the shape every
+    /// non-OIDC credential path calls it with.
+    ///
+    /// Names that resolve to no `[[groups]]` entry are dropped. A declared member
+    /// list cannot produce one, and `translate_oidc_groups` already refuses to
+    /// emit one, so this is a belt-and-braces filter that keeps the return type's
+    /// contract — "names of groups that exist" — true by construction.
+    pub fn effective_groups_for(
+        &self,
+        user: &str,
+        idp_groups: &std::collections::BTreeSet<String>,
+    ) -> std::collections::BTreeSet<String> {
+        let mut out: std::collections::BTreeSet<String> = self
+            .groups
+            .iter()
+            .filter(|g| g.has_member(user))
+            .map(|g| g.name.clone())
+            .collect();
+        out.extend(
+            idp_groups
+                .iter()
+                .filter(|n| self.group(n).is_some())
+                .cloned(),
+        );
+        out
+    }
+
+    /// The role strings `user` holds by virtue of effective group membership —
+    /// [`KernelConfig::roles_for_user`] widened to include IdP-derived
+    /// membership (#7746).
+    ///
+    /// Each effective group contributes its own name plus every entry in its
+    /// `roles` list, identically to `roles_for_user`; with an empty `idp_groups`
+    /// the two return the same set, which
+    /// `effective_roles_for_matches_roles_for_user_when_no_claims_are_present`
+    /// pins.
+    ///
+    /// This still does **not** include [`UserConfig::role`]. Connecting the group
+    /// vocabulary to the RBAC privilege ladder is what #7746 was expected to do,
+    /// and it does — via `[external_auth.role_map]`, a *separate* operator-written
+    /// map over the same claim values, so that an operator says "this claim means
+    /// admin" explicitly rather than a group name acquiring privilege by
+    /// resembling one. Folding the ladder in here would mean an IdP group called
+    /// `owner` silently confers owner, which is the exact forgeability the two-map
+    /// design exists to prevent.
+    pub fn effective_roles_for(
+        &self,
+        user: &str,
+        idp_groups: &std::collections::BTreeSet<String>,
+    ) -> std::collections::BTreeSet<String> {
+        let mut out = std::collections::BTreeSet::new();
+        for name in self.effective_groups_for(user, idp_groups) {
+            if let Some(group) = self.group(&name) {
+                out.insert(group.name.clone());
+                out.extend(group.roles.iter().cloned());
+            }
+        }
+        out
+    }
+
+    /// The display name of a recorded [`Principal`], or `None` when nothing declared here matches it.
+    ///
+    /// A principal id is a UUIDv5 of a name, so the forward direction is a pure function and needs no index; this is the reverse, and it is a linear scan of `[[users]]` / `[[groups]]` rather than a stored mapping.
+    /// That is deliberate: both lists are operator-authored and small, whereas a persisted id → name table would be a second source of truth that could disagree with `config.toml` after an edit.
+    ///
+    /// `None` is a real answer, not an error — it is what a principal whose user or group has since been deleted or renamed looks like, and the caller should render the canonical `kind:uuid` string rather than inventing a placeholder.
+    pub fn principal_name(&self, principal: &crate::principal::Principal) -> Option<&str> {
+        use crate::principal::{Principal, PrincipalKind};
+        match principal.kind {
+            PrincipalKind::User => self
+                .users
+                .iter()
+                .find(|u| Principal::user_named(&u.name) == *principal)
+                .map(|u| u.name.as_str()),
+            PrincipalKind::Group => self
+                .groups
+                .iter()
+                .find(|g| Principal::group_named(&g.name) == *principal)
+                .map(|g| g.name.as_str()),
+        }
+    }
+
+    /// The fleet-wide fallback owner, parsed from [`KernelConfig::default_owner`].
+    ///
+    /// A malformed spec logs a `WARN` and resolves to `None`: a typo in this key must leave artifacts unowned, which is recoverable, rather than refusing to start the daemon or attributing them to something arbitrary.
+    pub fn default_owner_principal(&self) -> Option<crate::principal::Principal> {
+        let spec = self.default_owner.as_deref()?;
+        match crate::principal::Principal::from_spec(spec) {
+            Ok(p) => Some(p),
+            Err(e) => {
+                tracing::warn!(
+                    default_owner = spec,
+                    error = %e,
+                    "`default_owner` in config.toml is not a valid principal spec (expected `user:<name>` or `group:<name>`); artifacts created without an authenticated caller will stay unowned"
+                );
+                None
+            }
+        }
+    }
+
     /// Resolved workspaces root directory.
     pub fn effective_workspaces_dir(&self) -> PathBuf {
         self.workspaces_dir
@@ -6870,6 +7531,16 @@ impl std::fmt::Debug for KernelConfig {
             .field(
                 "api_key",
                 &if self.api_key.is_empty() {
+                    "<empty>"
+                } else {
+                    "<redacted>"
+                },
+            )
+            // The PHC string is the verifier: anyone who reads it can paste it into
+            // their own config.toml and authenticate. Redact it like the plaintext.
+            .field(
+                "api_key_hash",
+                &if self.api_key_hash.is_empty() {
                     "<empty>"
                 } else {
                     "<redacted>"
@@ -6968,10 +7639,28 @@ fn librefang_home_dir() -> PathBuf {
         .join(".librefang")
 }
 
+/// Sentinel [`DefaultModelConfig::provider`] value meaning "this kernel has no LLM driver, and boot must not go looking for one".
+///
+/// It is the exact opposite of `"auto"`, which instructs boot to probe the machine it happens to be running on — provider API-key env vars, a reachable local Ollama, a logged-in coding-agent CLI on `PATH` — and adopt whatever it finds.
+/// It is also distinct from an unrecognised provider name: an unrecognised name is a *misconfiguration*, so boot treats the failed driver construction as something to recover from and falls back to that same host probe.
+/// That recovery path is why a test which pinned a deliberately nonexistent provider still ended up spawning the real Anthropic `claude` CLI on a contributor's laptop (#7743).
+///
+/// Boot honours the sentinel by installing the non-functional stub driver directly: no `create_driver` call, no provider env-var read, no credential-helper subprocess, no fallback slot, and no auto-detection.
+/// Per-turn driver resolution short-circuits to the same stub, so every agent turn fails with a deterministic "no LLM provider configured" error no matter what the host machine has installed.
+///
+/// Its intended use is a test kernel whose subject is anything other than an LLM call.
+/// Reach for it through [`DefaultModelConfig::driverless`] rather than writing the literal.
+pub const NO_LLM_PROVIDER: &str = "none";
+
 /// Default LLM model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct DefaultModelConfig {
+    // `provider` intentionally carries no rustdoc beyond the line below: this struct
+    // derives `schemars::JsonSchema`, field docs become `description` entries in the
+    // generated `KernelConfig` schema, and that schema is pinned byte-for-byte by
+    // `librefang-api/tests/config_schema_golden.rs`. The `"auto"` / `NO_LLM_PROVIDER`
+    // contract is documented on `NO_LLM_PROVIDER` and `DefaultModelConfig::driverless`.
     /// Provider name (e.g., "anthropic", "openai").
     pub provider: String,
     /// Model identifier.
@@ -7002,6 +7691,26 @@ pub struct DefaultModelConfig {
 
 fn default_message_timeout_secs() -> u64 {
     300
+}
+
+impl DefaultModelConfig {
+    /// An explicitly driverless default model: no LLM driver is resolved, and boot performs no host probing to find one.
+    ///
+    /// Prefer this over [`Default`] in any test that does not exercise an LLM call.
+    /// `Default` sets `provider = "auto"`, which makes boot interrogate the machine the test runs on, so a test built on `KernelConfig::default()` is only *accidentally* driverless — green on a CI runner with no credentials, and wired to a live billable provider on the laptop of anyone who develops with a coding-agent CLI installed (#7743).
+    pub fn driverless() -> Self {
+        Self {
+            provider: NO_LLM_PROVIDER.to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// Whether this configuration explicitly declares that no LLM driver is to be resolved.
+    ///
+    /// See [`NO_LLM_PROVIDER`] for what boot and per-turn driver resolution owe this answer.
+    pub fn is_driverless(&self) -> bool {
+        self.provider == NO_LLM_PROVIDER
+    }
 }
 
 impl Default for DefaultModelConfig {
@@ -7090,10 +7799,21 @@ pub struct MemoryConfig {
     /// the `librefang_memory_pool_get_failed_total{store=...}` counter.
     #[serde(default = "default_memory_pool_size")]
     pub pool_size: u32,
+    /// Upper bound, in characters, on the text of a single episodic memory row written by the agent loop's per-turn writer (#7911).
+    /// Zero disables the cap.
+    ///
+    /// The per-turn writer composes `[Past exchange]\nThem: …\nYou: …` from the raw turn, so an inbound attachment that the channel adapter rendered into the user message — a transcribed PDF, a pasted log — was previously stored verbatim and embedded verbatim.
+    /// The cap is applied before the embedding call, so it bounds embedding cost as well as row size, and it is split across the two halves of the exchange so a large user message can never truncate the agent's reply away entirely.
+    #[serde(default = "default_max_episodic_chars")]
+    pub max_episodic_chars: usize,
 }
 
 fn default_soft_delete_retention_days() -> u64 {
     30
+}
+
+fn default_max_episodic_chars() -> usize {
+    8_000
 }
 
 fn default_memory_pool_size() -> u32 {
@@ -7144,6 +7864,7 @@ impl Default for MemoryConfig {
             vector_store_url: None,
             soft_delete_retention_days: default_soft_delete_retention_days(),
             pool_size: default_memory_pool_size(),
+            max_episodic_chars: default_max_episodic_chars(),
         }
     }
 }
@@ -7277,10 +7998,15 @@ fn expand_tilde(path: &std::path::Path) -> PathBuf {
 pub struct MemoryDecayConfig {
     /// Whether time-based decay is enabled.
     pub enabled: bool,
-    /// SESSION-scope memories expire after this many days of no access.
+    /// SESSION-scope memories expire after this many days of no access. Zero disables expiry.
     pub session_ttl_days: u32,
-    /// AGENT-scope memories expire after this many days of no access.
+    /// AGENT-scope memories expire after this many days of no access. Zero disables expiry.
     pub agent_ttl_days: u32,
+    /// EPISODIC-scope memories expire after this many days of no access. Zero disables expiry.
+    ///
+    /// `episodic` is the default scope of the `memories` table and the scope the agent loop writes one row into on every non-fork, non-incognito turn, so before #7911 it was the only scope with no exit at all: never decayed, never distilled, never deleted.
+    /// The TTL is deliberately longer than the AGENT default because an episodic row is the only record that a conversation happened, and `accessed_at` is refreshed by recall — a row that keeps being retrieved keeps living.
+    pub episodic_ttl_days: u32,
     /// How often to run the decay sweep (hours).
     pub decay_interval_hours: u32,
 }
@@ -7291,6 +8017,7 @@ impl Default for MemoryDecayConfig {
             enabled: false,
             session_ttl_days: 7,
             agent_ttl_days: 30,
+            episodic_ttl_days: 90,
             decay_interval_hours: 1,
         }
     }
@@ -7846,6 +8573,52 @@ impl Default for ToolResultsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #8059 review: `AuxTask::ALL` is the single Rust-side enumeration the
+    /// config-schema endpoint serves as `x-aux-tasks`, so a variant added to
+    /// the enum but not to `ALL` would silently vanish from both UI editors.
+    /// `schemars::schema_for!` enumerates the variants from the derive
+    /// itself, so this test fails until `ALL` picks the new variant up.
+    #[test]
+    fn all_slugs_covered_by_all_const() {
+        let schema = serde_json::to_value(schemars::schema_for!(AuxTask))
+            .expect("AuxTask schema serialises");
+        // schemars 0.8 renders a unit-only enum whose variants carry
+        // doc-comments as `oneOf` of `{enum: [slug], type: "string"}` — one
+        // object per variant — rather than a single flat `enum` array.
+        let mut expected: Vec<String> = schema
+            .get("oneOf")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.get("enum"))
+                    .filter_map(|e| e.as_array())
+                    .filter_map(|e| e.first())
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .filter(|v: &Vec<String>| !v.is_empty())
+            .unwrap_or_else(|| {
+                schema
+                    .get("enum")
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            });
+        assert!(!expected.is_empty(), "schema enumerated no variants");
+        expected.sort();
+
+        let mut have: Vec<String> = AuxTask::ALL
+            .iter()
+            .map(|t| t.as_str().to_string())
+            .collect();
+        have.sort();
+        assert_eq!(have, expected, "AuxTask::ALL must cover every variant");
+    }
 
     /// #6459 — an empty `[providers] allowed` list means "no restriction":
     /// every provider is permitted, preserving pre-allowlist behaviour.

@@ -24,7 +24,7 @@
 //! protection independent of the general token budget. See [`AuthLoginLimiter`].
 
 use axum::body::Body;
-use axum::http::{HeaderMap, Request, Response, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, Request, Response, StatusCode};
 use axum::middleware::Next;
 use dashmap::DashMap;
 use governor::{clock::DefaultClock, state::keyed::DashMapStateStore, Quota, RateLimiter};
@@ -53,6 +53,17 @@ pub fn is_rate_limit_exempt(path: &str) -> bool {
 pub fn operation_cost(method: &str, path: &str) -> NonZeroU32 {
     match (method, path) {
         (_, "/api/health") => NonZeroU32::new(1).unwrap(),
+        // Priced with `/api/health`, not at the 5-token fallback: a
+        // Kubernetes pod runs startup + liveness + readiness probes
+        // concurrently, and all three arrive from the node's kubelet — one
+        // source IP, which is what the GCRA limiter keys on. At the fallback
+        // cost a startup probe on a 1s period alone would drain the
+        // 500-token/min budget and 429 the pod out of its own rollout.
+        // Both spellings are listed because `operation_cost` matches the raw
+        // path with no version normalisation, and a probe URL is written by
+        // hand into a manifest — an operator who reaches for the versioned
+        // form should not silently get the expensive tier.
+        (_, "/api/ready") | (_, "/api/v1/ready") => NonZeroU32::new(1).unwrap(),
         ("GET", "/api/status") => NonZeroU32::new(1).unwrap(),
         ("GET", "/api/version") => NonZeroU32::new(1).unwrap(),
         ("GET", "/api/tools") => NonZeroU32::new(1).unwrap(),
@@ -114,6 +125,21 @@ fn has_forwarding_header(headers: &HeaderMap) -> bool {
     headers.contains_key("x-forwarded-for")
         || headers.contains_key("x-real-ip")
         || headers.contains_key("forwarded")
+}
+
+fn rate_limit_response(error: &str, retry_after_secs: u64) -> Response<Body> {
+    let mut response = Response::new(Body::from(serde_json::json!({"error": error}).to_string()));
+    *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    response.headers_mut().insert(
+        header::RETRY_AFTER,
+        HeaderValue::from_str(&retry_after_secs.to_string())
+            .expect("a decimal u64 is always a valid HTTP header value"),
+    );
+    response
 }
 
 pub type KeyedRateLimiter = RateLimiter<IpAddr, DashMapStateStore<IpAddr>, DefaultClock>;
@@ -220,15 +246,7 @@ pub async fn gcra_rate_limit(
     };
     if rate_limited {
         tracing::warn!(ip = %ip, cost = cost.get(), path = %path, "GCRA rate limit exceeded");
-        let retry_after = state.retry_after_secs.to_string();
-        return Response::builder()
-            .status(StatusCode::TOO_MANY_REQUESTS)
-            .header("content-type", "application/json")
-            .header("retry-after", retry_after)
-            .body(Body::from(
-                serde_json::json!({"error": "Rate limit exceeded"}).to_string(),
-            ))
-            .unwrap_or_default();
+        return rate_limit_response("Rate limit exceeded", state.retry_after_secs);
     }
 
     next.run(request).await
@@ -411,17 +429,10 @@ pub async fn auth_rate_limit_layer(
             max_attempts,
             "Auth rate limit exceeded"
         );
-        return Response::builder()
-            .status(StatusCode::TOO_MANY_REQUESTS)
-            .header("content-type", "application/json")
-            .header("retry-after", AUTH_RATE_LIMIT_RETRY_AFTER_SECS.to_string())
-            .body(Body::from(
-                serde_json::json!({
-                    "error": "Too many login attempts. Please wait before trying again."
-                })
-                .to_string(),
-            ))
-            .unwrap_or_default();
+        return rate_limit_response(
+            "Too many login attempts. Please wait before trying again.",
+            AUTH_RATE_LIMIT_RETRY_AFTER_SECS,
+        );
     }
 
     next.run(request).await
@@ -441,6 +452,14 @@ mod tests {
     use axum::Router;
     use std::net::SocketAddr;
     use tower::ServiceExt;
+
+    #[test]
+    fn rate_limit_response_is_fail_closed() {
+        let response = rate_limit_response("limited", 42);
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "application/json");
+        assert_eq!(response.headers()[header::RETRY_AFTER], "42");
+    }
 
     /// Regression: a small-quota limiter must actually start rejecting
     /// after the burst is drained. Before this fix the nested-Result
@@ -766,6 +785,11 @@ mod tests {
     #[test]
     fn test_costs() {
         assert_eq!(operation_cost("GET", "/api/health").get(), 1);
+        // Both spellings, kubelet-probe cost (#6633). See the comment on the
+        // match arm for why the versioned form must not silently fall through
+        // to the 5-token default.
+        assert_eq!(operation_cost("GET", "/api/ready").get(), 1);
+        assert_eq!(operation_cost("GET", "/api/v1/ready").get(), 1);
         assert_eq!(operation_cost("GET", "/api/tools").get(), 1);
         assert_eq!(operation_cost("POST", "/api/agents/1/message").get(), 30);
         assert_eq!(operation_cost("POST", "/api/agents").get(), 50);

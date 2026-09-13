@@ -14,8 +14,9 @@ use librefang_memory::usage::{ModelUsage, UsageRecord, UsageStore, UsageSummary}
 use librefang_types::agent::{AgentId, ResourceQuota, UserId};
 use librefang_types::error::{LibreFangError, LibreFangResult};
 use librefang_types::model_catalog::ModelCatalogEntry;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
+use tracing::warn;
 
 const DEFAULT_INPUT_COST_PER_M: f64 = 1.0;
 const DEFAULT_OUTPUT_COST_PER_M: f64 = 3.0;
@@ -38,8 +39,20 @@ struct CostReservationLedger {
 }
 
 impl CostReservationLedger {
+    fn lock_reserved(&self) -> MutexGuard<'_, f64> {
+        match self.reserved_usd.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                warn!("cost reservation ledger lock poisoned; recovering pending budget state");
+                let guard = poisoned.into_inner();
+                self.reserved_usd.clear_poison();
+                guard
+            }
+        }
+    }
+
     fn current(&self) -> f64 {
-        *self.reserved_usd.lock().unwrap_or_else(|e| e.into_inner())
+        *self.lock_reserved()
     }
 
     /// Atomically check that adding `usd` to the current pending total
@@ -56,7 +69,7 @@ impl CostReservationLedger {
     /// second waits on the mutex until the first has either added or
     /// returned.
     fn check_and_add(&self, usd: f64, caps: &[(f64, f64)]) -> Result<(f64, f64), CapBreach> {
-        let mut g = self.reserved_usd.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = self.lock_reserved();
         let add = usd.max(0.0);
         for (idx, (limit, already_spent)) in caps.iter().enumerate() {
             if *limit <= 0.0 {
@@ -81,7 +94,7 @@ impl CostReservationLedger {
         if usd <= 0.0 {
             return;
         }
-        let mut g = self.reserved_usd.lock().unwrap_or_else(|e| e.into_inner());
+        let mut g = self.lock_reserved();
         *g = (*g - usd).max(0.0);
     }
 }
@@ -377,12 +390,15 @@ impl MeteringEngine {
     }
 
     /// Get budget status — current spend vs limits for all time windows.
-    pub fn budget_status(&self, budget: &librefang_types::config::BudgetConfig) -> BudgetStatus {
-        let hourly = self.store.query_global_hourly().unwrap_or(0.0);
-        let daily = self.store.query_today_cost().unwrap_or(0.0);
-        let monthly = self.store.query_global_monthly().unwrap_or(0.0);
+    pub fn budget_status(
+        &self,
+        budget: &librefang_types::config::BudgetConfig,
+    ) -> LibreFangResult<BudgetStatus> {
+        let hourly = self.store.query_global_hourly()?;
+        let daily = self.store.query_today_cost()?;
+        let monthly = self.store.query_global_monthly()?;
 
-        BudgetStatus {
+        Ok(BudgetStatus {
             hourly_spend: hourly,
             hourly_limit: budget.max_hourly_usd,
             hourly_pct: if budget.max_hourly_usd > 0.0 {
@@ -406,7 +422,7 @@ impl MeteringEngine {
             },
             alert_threshold: budget.alert_threshold,
             default_max_llm_tokens_per_hour: budget.default_max_llm_tokens_per_hour,
-        }
+        })
     }
 
     /// Get a usage summary, optionally filtered by agent.
@@ -802,9 +818,51 @@ mod tests {
         MeteringEngine::new(store)
     }
 
+    #[test]
+    fn budget_status_surfaces_usage_query_errors() {
+        let substrate = MemorySubstrate::open_in_memory(0.1).unwrap();
+        let pool = substrate.pool();
+        let engine = MeteringEngine::new(Arc::new(UsageStore::new(pool.clone())));
+        pool.get()
+            .unwrap()
+            .execute("DROP TABLE usage_events", [])
+            .unwrap();
+
+        assert!(engine
+            .budget_status(&librefang_types::config::BudgetConfig::default())
+            .is_err());
+    }
+
     fn test_catalog() -> librefang_runtime::model_catalog::ModelCatalog {
         let home = librefang_runtime::registry_sync::resolve_home_dir_for_tests();
         librefang_runtime::model_catalog::ModelCatalog::new(&home)
+    }
+
+    #[test]
+    fn poisoned_cost_ledger_lock_recovers_and_preserves_budget_accounting() {
+        let ledger = CostReservationLedger::default();
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut reserved = ledger.reserved_usd.lock().unwrap();
+                    *reserved = 0.4;
+                    panic!("poison cost reservation ledger");
+                })
+                .join()
+        });
+
+        assert!(poison.is_err());
+        assert!(ledger.reserved_usd.is_poisoned());
+        assert_eq!(ledger.current(), 0.4);
+        assert!(!ledger.reserved_usd.is_poisoned());
+        let (pending_before, added) = ledger.check_and_add(0.5, &[(1.0, 0.0)]).unwrap();
+        assert_eq!(pending_before, 0.4);
+        assert_eq!(added, 0.5);
+        assert_eq!(ledger.current(), 0.9);
+        assert!(ledger.check_and_add(0.2, &[(1.0, 0.0)]).is_err());
+        ledger.release(0.5);
+        assert!((ledger.current() - 0.4).abs() < f64::EPSILON);
+        assert!((*ledger.reserved_usd.lock().unwrap() - 0.4).abs() < f64::EPSILON);
     }
 
     #[test]

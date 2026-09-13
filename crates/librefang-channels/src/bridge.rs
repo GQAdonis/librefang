@@ -27,6 +27,65 @@ use std::time::Instant;
 use tokio::sync::{mpsc, watch};
 use tracing::{debug, error, info, warn};
 
+/// Why one adapter did not deliver an approval notification.
+///
+/// Recorded per adapter so the once-per-approval warning can name the
+/// configuration the operator actually has to change. The pre-#8228 warning
+/// asserted a missing `channel_default` / `AgentBinding` unconditionally,
+/// which is wrong on the `NoRecipients` path: routing is present and correct
+/// there, and the operator sent to `channel_default` config finds nothing to
+/// fix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApprovalSkipReason {
+    /// Neither a `channel_default` nor an `AgentBinding` peer on this adapter
+    /// resolves to the requesting agent. This is the #5002 case: the operator
+    /// configured nothing that reaches this agent.
+    NoRouting,
+    /// Routing resolves to the requesting agent, but the adapter exposes no
+    /// `notification_recipients()`. That empty default is documented as
+    /// correct for group-only and public-broadcast integrations
+    /// (`types.rs:975-981`), so the remedy is the adapter's admin /
+    /// allowed-users list, not the routing config.
+    NoRecipients,
+    /// Routing and recipients both resolved, and every send failed. Each
+    /// failure already logged its own error; the aggregate must not blame
+    /// this on missing configuration.
+    DeliveryFailed,
+}
+
+impl ApprovalSkipReason {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::NoRouting => "no routing to this agent",
+            Self::NoRecipients => "routed but no notification_recipients",
+            Self::DeliveryFailed => "delivery failed",
+        }
+    }
+}
+
+/// One adapter's contribution to the aggregate approval warning.
+///
+/// Carries the `adapter` / `account_id` / `channel` triple the pre-#8228
+/// per-adapter warning named and the aggregate dropped — those are the fields
+/// an operator acts on, and `adapters=N` alone gives no way to tell which
+/// channels were even considered.
+struct SkippedApprovalAdapter {
+    adapter: String,
+    account_id: String,
+    channel: String,
+    reason: ApprovalSkipReason,
+}
+
+impl std::fmt::Display for SkippedApprovalAdapter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.adapter)?;
+        if !self.account_id.is_empty() {
+            write!(f, "/{}", self.account_id)?;
+        }
+        write!(f, " ({}, {})", self.channel, self.reason.as_str())
+    }
+}
+
 /// Two-channel reply envelope returned by the bridge. The `public` field is
 /// what should reach the source chat (DM or group). The `owner_notice` field
 /// is a structured private message intended for the operator's DM only —
@@ -247,8 +306,15 @@ pub trait ChannelBridgeHandle: Send + Sync {
         Err("Not implemented".to_string())
     }
 
-    /// Toggle extended thinking mode for an agent.
-    async fn set_thinking(&self, _agent_id: AgentId, _on: bool) -> Result<String, String> {
+    /// Toggle extended thinking for one conversation on `agent_id`.
+    ///
+    /// `scope` is the conversation the command was typed in, not the agent: one agent commonly serves many chats across many channel accounts, and `/think` acks say "for this chat", so the preference must be stored and read back per conversation (#7140). Implementations that key it by `agent_id` alone leak one user's reasoning mode — and its cost — into every other conversation the agent serves.
+    async fn set_thinking(
+        &self,
+        _agent_id: AgentId,
+        _on: bool,
+        _scope: &crate::types::ConversationScope,
+    ) -> Result<String, String> {
         Ok("Extended thinking preference saved.".to_string())
     }
 
@@ -343,8 +409,26 @@ pub trait ChannelBridgeHandle: Send + Sync {
         None
     }
 
-    /// Persist a group roster member to the kernel's persistent storage.
+    /// Persist a group roster member the daemon has **observed speaking** to the kernel's persistent storage.
+    ///
+    /// This is the set `channel_dm` authorizes a private message against, so a caller reaching for it is asserting the person actually addressed the agent.
+    /// For a platform's bulk member list use [`ChannelBridgeHandle::roster_upsert_enumerated`] instead (#7086).
     async fn roster_upsert(
+        &self,
+        _channel: &str,
+        _chat_id: &str,
+        _user_id: &str,
+        _display_name: &str,
+        _username: Option<&str>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Persist a group roster member a platform's member list named, whom the daemon has never heard from.
+    ///
+    /// Recorded as `source = 'enumerated'`: reportable by `channel_members`, never addressable by `channel_dm`.
+    /// The store refuses to demote an already-observed row, so a channel-wide enumeration sweep cannot revoke anyone's private-message reachability (#7086).
+    async fn roster_upsert_enumerated(
         &self,
         _channel: &str,
         _chat_id: &str,
@@ -400,8 +484,29 @@ pub trait ChannelBridgeHandle: Send + Sync {
     }
 
     /// Run a workflow by name with the given input text.
-    async fn run_workflow_text(&self, _name: &str, _input: &str) -> String {
+    ///
+    /// `owner` is the agent currently bound to the channel and chat the
+    /// command arrived on, when one is bound. The kernel records it as the
+    /// run's owner (#7714), which is what keeps two channels driving the same
+    /// workflow — and therefore the same shared step-agent type — attributable
+    /// to different agents. `None` when no agent is selected for the channel.
+    async fn run_workflow_text(
+        &self,
+        _name: &str,
+        _input: &str,
+        _owner: Option<AgentId>,
+    ) -> String {
         "Workflows not available.".to_string()
+    }
+
+    /// Create an autonomous goal and start driving it with the given agent.
+    async fn create_and_start_goal(
+        &self,
+        _agent_id: AgentId,
+        _description: &str,
+        _loop_engineering: bool,
+    ) -> Result<String, String> {
+        Err("Goals not available.".to_string())
     }
 
     /// List all registered triggers as formatted text.
@@ -1007,7 +1112,16 @@ fn content_to_text(content: &ChannelContent) -> String {
         ChannelContent::Location { lat, lon } => format!("[Location: {lat}, {lon}]"),
         ChannelContent::FileData { filename, .. } => format!("[File: {filename}]"),
         ChannelContent::Interactive { text, .. } => text.clone(),
-        ChannelContent::ButtonCallback { action, .. } => format!("[Button: {action}]"),
+        ChannelContent::ButtonCallback { action, .. } => {
+            // Slash-prefixed actions are commands (e.g. "/agent X" from the /agents inline keyboard), not button labels.
+            // They must survive debounce coalescing as command text, or the merged Text reaches `dispatch_message` as prose and the slash-command dispatcher never sees it — the "tapping the button does nothing" symptom.
+            // Non-command actions keep the human-readable placeholder.
+            if action.starts_with('/') {
+                action.clone()
+            } else {
+                format!("[Button: {action}]")
+            }
+        }
         ChannelContent::DeleteMessage { message_id } => {
             format!("[Delete message: {message_id}]")
         }
@@ -1052,7 +1166,8 @@ fn content_to_text(content: &ChannelContent) -> String {
 /// sanitizer entirely, even in Block mode (this closed the gap where
 /// `File` / `FileData` filenames and `Interactive` text reached the agent
 /// unchecked). Variants that never carry free-form user text (Location,
-/// ButtonCallback action, Sticker, poll ids, …) return `None`.
+/// Sticker, poll ids, …) return `None`.
+/// `ButtonCallback` is not among them — its `action` is attacker-controlled text that `content_to_text` renders into the prompt, so its arm returns `Some(action)`.
 fn sanitizer_text_to_check(content: &ChannelContent) -> Option<String> {
     // Every arm that `content_to_text` renders into agent-facing prompt text
     // from an attacker-controlled field MUST be scanned here, or Block mode is
@@ -1333,6 +1448,14 @@ pub struct BridgeManager {
 }
 
 impl BridgeManager {
+    fn lock_abort_handles(&self) -> std::sync::MutexGuard<'_, Vec<tokio::task::AbortHandle>> {
+        self.abort_handles.lock().unwrap_or_else(|poisoned| {
+            warn!("Channel bridge abort-handle lock poisoned; recovering tracked tasks");
+            self.abort_handles.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
     pub fn new(handle: Arc<dyn ChannelBridgeHandle>, router: Arc<AgentRouter>) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let sanitize_config = librefang_types::config::SanitizeConfig::default();
@@ -1749,37 +1872,54 @@ impl BridgeManager {
                                         &approval.description,
                                     );
 
-                                    for adapter in &adapters {
-                                        // #4985 / PR #4994 follow-up: scope
-                                        // delivery to adapters bound to the
-                                        // requesting agent. We build the same
-                                        // channel key the bridge boot stores
-                                        // in `channel_defaults` — bare
-                                        // `<channel_type>` for single-bot
-                                        // adapters (`account_id().is_none()`),
-                                        // account-qualified
-                                        // `<channel_type>:<account_id>` for
-                                        // multi-bot adapters
-                                        // (`account_id().is_some()`).
-                                        //
-                                        // Crucially, when the adapter exposes
-                                        // an `account_id`, ONLY the qualified
-                                        // key counts. A bare-key fallback in
-                                        // mixed configs (one single-bot
-                                        // adapter + one multi-bot adapter
-                                        // both on the same channel type)
-                                        // would point the multi-bot
-                                        // adapter's qualified miss at the
-                                        // single-bot adapter's default,
-                                        // leaking the approval into the
-                                        // multi-bot adapter's chat. The
-                                        // resolver's "qualified > bare"
-                                        // precedence is for inbound routing
-                                        // where the same physical message
-                                        // can fall through; the approval
-                                        // listener has no such fallback
-                                        // semantics — each adapter must
-                                        // match on its own configured key.
+                                    // #8227: "this approval reached nobody" is
+                                    // a verdict on the whole fan-out, not on
+                                    // one adapter's turn in it. A host running
+                                    // one sidecar per agent is a supported
+                                    // configuration, and there every approval
+                                    // has N-1 adapters that legitimately do not
+                                    // cover the requesting agent. The signal is
+                                    // "some adapter produced a delivery
+                                    // target", not "some adapter's send
+                                    // succeeded": a transport failure already
+                                    // logs its own WARN naming the error, and
+                                    // blaming it on missing routing config
+                                    // would point the operator at the wrong
+                                    // thing.
+                                    let mut covered_by_any_adapter = false;
+                                    let mut skipped: Vec<SkippedApprovalAdapter> = Vec::new();
+
+                                    // #4985 / PR #4994 follow-up: scope
+                                    // delivery to adapters bound to the
+                                    // requesting agent. We build the same
+                                    // channel key the bridge boot stores
+                                    // in `channel_defaults` — bare
+                                    // `<channel_type>` for single-bot
+                                    // adapters (`account_id().is_none()`),
+                                    // account-qualified
+                                    // `<channel_type>:<account_id>` for
+                                    // multi-bot adapters
+                                    // (`account_id().is_some()`).
+                                    //
+                                    // Crucially, when the adapter exposes
+                                    // an `account_id`, ONLY the qualified
+                                    // key counts. A bare-key fallback in
+                                    // mixed configs (one single-bot
+                                    // adapter + one multi-bot adapter
+                                    // both on the same channel type)
+                                    // would point the multi-bot
+                                    // adapter's qualified miss at the
+                                    // single-bot adapter's default,
+                                    // leaking the approval into the
+                                    // multi-bot adapter's chat. The
+                                    // resolver's "qualified > bare"
+                                    // precedence is for inbound routing
+                                    // where the same physical message
+                                    // can fall through; the approval
+                                    // listener has no such fallback
+                                    // semantics — each adapter must
+                                    // match on its own configured key.
+                                    let adapter_routing = |adapter: &Arc<dyn ChannelAdapter>| {
                                         let channel_type = adapter.channel_type();
                                         let ct_str = channel_type_str(&channel_type);
                                         let bound_agent = match adapter.account_id() {
@@ -1788,35 +1928,74 @@ impl BridgeManager {
                                             }
                                             None => router.channel_default(ct_str),
                                         };
+                                        let binding_peers = router.bound_recipients_for_agent(
+                                            requesting_agent,
+                                            ct_str,
+                                            adapter.account_id(),
+                                        );
+                                        (bound_agent, binding_peers)
+                                    };
 
-                                        // Recipients to notify on this adapter.
-                                        // Two sources, in order of precedence:
-                                        //   1. If `channel_default` resolves
-                                        //      to the requesting agent, the
-                                        //      adapter's static
-                                        //      `notification_recipients()`
-                                        //      list (the operator inbox /
-                                        //      admin list shape pre-#5002).
-                                        //   2. If `channel_default` is None
-                                        //      or points elsewhere, fall
-                                        //      back to `AgentBinding`-derived
-                                        //      `peer_id`s on this adapter
-                                        //      that route to the requesting
-                                        //      agent — this is the #5002
-                                        //      fix for adapters with
-                                        //      `default_agent = None` that
-                                        //      route purely via bindings.
-                                        //
-                                        // The two are NOT merged when (1)
-                                        // applies: pre-#5002 behaviour for
-                                        // operator-inbox channels is
-                                        // unchanged, and bindings on those
-                                        // channels are already covered by
-                                        // the inbound routing path. Mixing
-                                        // would re-enable the leak shape
-                                        // #4985 was about (admin inbox +
-                                        // unrelated bound chat both
-                                        // receiving the same approval).
+                                    // #8228: may the direct route below be
+                                    // narrowed to the adapters that route to
+                                    // the requesting agent?
+                                    //
+                                    // Pre-#8228 every adapter whose
+                                    // `channel_type` matched `approval.channel`
+                                    // sent the keyboard to the same `chat_id`.
+                                    // On a one-sidecar-per-agent deployment the
+                                    // bots that are not in that chat each fail
+                                    // and log a WARN — the
+                                    // N-1-warnings-per-approval symptom #8227
+                                    // is about, under a different message — and
+                                    // any sibling bot that *is* in the chat
+                                    // delivers a duplicate approval keyboard.
+                                    //
+                                    // Narrowing is only safe where some adapter
+                                    // on the originating channel actually shows
+                                    // that routing. An agent can be reached by
+                                    // mechanisms this lookup does not model —
+                                    // a role- or guild-gated `AgentBinding`
+                                    // matches every peer and so carries no
+                                    // `peer_id` for `bound_recipients_for_agent`
+                                    // to return, and broadcast routes live in a
+                                    // separate table — and there the narrow
+                                    // form would drop a notification that
+                                    // pre-#8228 delivered. When no adapter
+                                    // qualifies we therefore keep the old set:
+                                    // a duplicate keyboard is a smaller failure
+                                    // than a silently dropped approval.
+                                    let narrow_direct_route = match (
+                                        approval.sender_id.as_deref(),
+                                        approval.channel.as_deref(),
+                                    ) {
+                                        (Some(src_sender), Some(src_channel))
+                                            if !src_sender.is_empty() =>
+                                        {
+                                            adapters.iter().any(|candidate| {
+                                                let ct = candidate.channel_type();
+                                                if channel_type_str(&ct) != src_channel {
+                                                    return false;
+                                                }
+                                                let (bound, peers) = adapter_routing(candidate);
+                                                matches!(bound, Some(b) if b == requesting_agent)
+                                                    || !peers.is_empty()
+                                            })
+                                        }
+                                        _ => false,
+                                    };
+
+                                    for adapter in &adapters {
+                                        let channel_type = adapter.channel_type();
+                                        let ct_str = channel_type_str(&channel_type);
+                                        let (bound_agent, binding_peers) = adapter_routing(adapter);
+                                        let default_covers_agent = matches!(
+                                            bound_agent,
+                                            Some(bound) if bound == requesting_agent
+                                        );
+                                        let routes_to_requesting_agent =
+                                            default_covers_agent || !binding_peers.is_empty();
+
                                         // ── Fast path: route back to the
                                         // originating chat when the kernel
                                         // populated `sender_id` + `channel`
@@ -1839,8 +2018,21 @@ impl BridgeManager {
                                         if let (Some(src_sender), Some(src_channel)) =
                                             (approval.sender_id.as_deref(), approval.channel.as_deref())
                                         {
+                                            // The `narrow_direct_route` term is
+                                            // what stops the sibling bots of a
+                                            // one-sidecar-per-agent deployment
+                                            // from all firing at the same
+                                            // `chat_id` (#8228). It is only
+                                            // applied when some adapter on this
+                                            // channel demonstrably routes to
+                                            // the requesting agent, so a
+                                            // deployment routing by a mechanism
+                                            // the check cannot see keeps the
+                                            // pre-#8228 fast path.
                                             if src_channel == ct_str
                                                 && !src_sender.is_empty()
+                                                && (!narrow_direct_route
+                                                    || routes_to_requesting_agent)
                                             {
                                                 // Group-chat fix:
                                                 // prefer `chat_id` (group id)
@@ -1882,6 +2074,24 @@ impl BridgeManager {
                                                         error = %e,
                                                         "Failed to deliver approval notification (direct-route)"
                                                     );
+                                                    // Coverage is claimed on a
+                                                    // delivered notification,
+                                                    // not on an attempted one:
+                                                    // marking it before the
+                                                    // result is known lets a
+                                                    // run where every direct
+                                                    // send failed suppress the
+                                                    // aggregate warning
+                                                    // entirely.
+                                                    skipped.push(SkippedApprovalAdapter {
+                                                        adapter: adapter.name().to_string(),
+                                                        account_id: adapter
+                                                            .account_id()
+                                                            .unwrap_or("")
+                                                            .to_string(),
+                                                        channel: ct_str.to_string(),
+                                                        reason: ApprovalSkipReason::DeliveryFailed,
+                                                    });
                                                 } else {
                                                     info!(
                                                         adapter = adapter.name(),
@@ -1889,6 +2099,7 @@ impl BridgeManager {
                                                         recipient = %direct_recipient.platform_id,
                                                         "Delivered approval notification (direct-route to originating chat)"
                                                     );
+                                                    covered_by_any_adapter = true;
                                                 }
                                                 // Direct route handled this
                                                 // adapter; skip the legacy
@@ -1897,108 +2108,103 @@ impl BridgeManager {
                                             }
                                         }
 
-                                        let recipients: Vec<ChannelUser> = match bound_agent {
-                                            Some(bound) if bound == requesting_agent => {
-                                                adapter.notification_recipients()
-                                            }
-                                            Some(_) => {
-                                                // channel_default points at a
-                                                // DIFFERENT agent. Even so,
-                                                // an explicit binding on the
-                                                // same adapter that targets
-                                                // the requesting agent is a
-                                                // valid delivery target —
-                                                // operators set the binding
-                                                // deliberately. This is the
-                                                // "Telegram bot bound to
-                                                // agent A by default but
-                                                // also bound to agent B in
-                                                // chat Z via AgentBinding"
-                                                // case. Fan out to those
-                                                // bound chats only; do NOT
-                                                // touch the static
-                                                // notification_recipients
-                                                // (that's agent A's
-                                                // operator inbox).
-                                                let peers = router.bound_recipients_for_agent(
-                                                    requesting_agent,
-                                                    ct_str,
-                                                    adapter.account_id(),
-                                                );
-                                                if peers.is_empty() {
-                                                    debug!(
-                                                        adapter = adapter.name(),
-                                                        account_id = adapter.account_id().unwrap_or(""),
-                                                        request_id = %approval.request_id,
-                                                        requesting_agent = %requesting_agent,
-                                                        "Adapter bound to a different agent and no peer-binding override — skipping approval broadcast"
-                                                    );
-                                                    continue;
-                                                }
-                                                peers
-                                                    .into_iter()
-                                                    .map(|peer| ChannelUser {
-                                                        platform_id: peer,
-                                                        display_name: String::new(),
-                                                        librefang_user: None,
-                                                    })
-                                                    .collect()
-                                            }
-                                            None => {
-                                                // No `channel_default` for
-                                                // this adapter's key. Pre-
-                                                // #5002 silently dropped
-                                                // here — that's the bug.
-                                                // Walk bindings and fan out
-                                                // to every `peer_id` whose
-                                                // binding resolves to the
-                                                // requesting agent on this
-                                                // (channel, account_id).
-                                                let peers = router.bound_recipients_for_agent(
-                                                    requesting_agent,
-                                                    ct_str,
-                                                    adapter.account_id(),
-                                                );
-                                                if peers.is_empty() {
-                                                    // No default AND no
-                                                    // binding-derived peers.
-                                                    // Surface this loudly:
-                                                    // the operator probably
-                                                    // forgot to configure
-                                                    // either (and would
-                                                    // otherwise have no
-                                                    // signal that approvals
-                                                    // are being dropped on
-                                                    // the floor).
-                                                    warn!(
-                                                        adapter = adapter.name(),
-                                                        account_id = adapter.account_id().unwrap_or(""),
-                                                        channel = ct_str,
-                                                        request_id = %approval.request_id,
-                                                        requesting_agent = %requesting_agent,
-                                                        "Approval dropped: no channel_default and no AgentBinding peer_id covers the requesting agent on this adapter"
-                                                    );
-                                                    continue;
-                                                }
-                                                peers
-                                                    .into_iter()
-                                                    .map(|peer| ChannelUser {
-                                                        platform_id: peer,
-                                                        display_name: String::new(),
-                                                        librefang_user: None,
-                                                    })
-                                                    .collect()
-                                            }
+                                        if !routes_to_requesting_agent {
+                                            // Says nothing about whether the
+                                            // approval is deliverable — a
+                                            // sibling adapter may well cover
+                                            // the agent — so it stays a debug
+                                            // line. The "operator forgot to
+                                            // configure anything" signal #5002
+                                            // wanted is the aggregate WARN
+                                            // after the loop.
+                                            debug!(
+                                                adapter = adapter.name(),
+                                                account_id = adapter.account_id().unwrap_or(""),
+                                                channel = ct_str,
+                                                request_id = %approval.request_id,
+                                                requesting_agent = %requesting_agent,
+                                                bound_elsewhere = bound_agent.is_some(),
+                                                "Adapter has no channel_default and no AgentBinding peer_id covering the requesting agent — skipping approval broadcast"
+                                            );
+                                            skipped.push(SkippedApprovalAdapter {
+                                                adapter: adapter.name().to_string(),
+                                                account_id: adapter
+                                                    .account_id()
+                                                    .unwrap_or("")
+                                                    .to_string(),
+                                                channel: ct_str.to_string(),
+                                                reason: ApprovalSkipReason::NoRouting,
+                                            });
+                                            continue;
+                                        }
+
+                                        // Routing is resolved, so this is only
+                                        // the choice of *which* target list to
+                                        // use. The two are still not merged
+                                        // when `channel_default` names the
+                                        // requesting agent: pre-#5002
+                                        // behaviour for operator-inbox
+                                        // channels is unchanged, bindings on
+                                        // those channels are already covered
+                                        // by the inbound routing path, and
+                                        // mixing would re-enable the leak
+                                        // shape #4985 was about (admin inbox +
+                                        // unrelated bound chat both receiving
+                                        // the same approval).
+                                        let recipients: Vec<ChannelUser> = if default_covers_agent {
+                                            adapter.notification_recipients()
+                                        } else {
+                                            // `channel_default` is absent or
+                                            // points at a different agent, but
+                                            // an explicit binding on this
+                                            // adapter targets the requesting
+                                            // agent — operators set those
+                                            // deliberately. Fan out to the
+                                            // bound chats only; do NOT touch
+                                            // the static
+                                            // notification_recipients, which
+                                            // is the other agent's operator
+                                            // inbox.
+                                            binding_peers
+                                                .into_iter()
+                                                .map(|peer| ChannelUser {
+                                                    platform_id: peer,
+                                                    display_name: String::new(),
+                                                    librefang_user: None,
+                                                })
+                                                .collect()
                                         };
 
                                         if recipients.is_empty() {
+                                            // Only reachable via
+                                            // `notification_recipients()`:
+                                            // the binding branch cannot be
+                                            // empty here, the routing check
+                                            // above already `continue`d on
+                                            // that. So routing IS configured
+                                            // and correct, and blaming
+                                            // `channel_default` would send the
+                                            // operator to the one part of the
+                                            // config that needs no change.
                                             debug!(
                                                 adapter = adapter.name(),
+                                                account_id = adapter.account_id().unwrap_or(""),
+                                                channel = ct_str,
                                                 request_id = %approval.request_id,
-                                                "Adapter has no notification recipients — skipping approval broadcast"
+                                                "Adapter routes to the requesting agent but exposes no notification recipients — skipping approval broadcast"
                                             );
+                                            skipped.push(SkippedApprovalAdapter {
+                                                adapter: adapter.name().to_string(),
+                                                account_id: adapter
+                                                    .account_id()
+                                                    .unwrap_or("")
+                                                    .to_string(),
+                                                channel: ct_str.to_string(),
+                                                reason: ApprovalSkipReason::NoRecipients,
+                                            });
                                             continue;
                                         }
+                                        let mut delivered_here = false;
                                         for user in &recipients {
                                             // `send_interactive` has a built-in
                                             // text fallback for adapters that
@@ -2031,8 +2237,71 @@ impl BridgeManager {
                                                     recipient = %user.platform_id,
                                                     "Delivered approval notification (inline buttons; adapters without `interactive` capability render the text body verbatim)"
                                                 );
+                                                delivered_here = true;
                                             }
                                         }
+                                        if delivered_here {
+                                            covered_by_any_adapter = true;
+                                        } else {
+                                            skipped.push(SkippedApprovalAdapter {
+                                                adapter: adapter.name().to_string(),
+                                                account_id: adapter
+                                                    .account_id()
+                                                    .unwrap_or("")
+                                                    .to_string(),
+                                                channel: ct_str.to_string(),
+                                                reason: ApprovalSkipReason::DeliveryFailed,
+                                            });
+                                        }
+                                    }
+
+                                    // #5002's guarantee, evaluated once: an
+                                    // approval nobody can act on must not be
+                                    // swallowed silently.
+                                    //
+                                    // Skipped when there are no channel
+                                    // adapters at all — a daemon approving
+                                    // through the dashboard or CLI is not
+                                    // misconfigured, and warning there would
+                                    // trade one false positive for another.
+                                    if !covered_by_any_adapter && !adapters.is_empty() {
+                                        // The remedy is worded off what the
+                                        // adapters actually reported, because
+                                        // the three reasons send the operator
+                                        // to three different places and the
+                                        // pre-#8228 text asserted the first
+                                        // one unconditionally.
+                                        let remedy = if skipped.is_empty() {
+                                            "no adapter produced a delivery target"
+                                        } else if skipped
+                                            .iter()
+                                            .all(|s| s.reason == ApprovalSkipReason::NoRecipients)
+                                        {
+                                            "every adapter routing to this agent has an empty notification_recipients list — configure the adapter's admin / allowed-users list, not channel_default"
+                                        } else if skipped.iter().any(|s| {
+                                            s.reason == ApprovalSkipReason::DeliveryFailed
+                                        }) {
+                                            "delivery was attempted and every send failed — see the per-adapter errors above"
+                                        } else {
+                                            "no adapter has a channel_default or AgentBinding peer_id covering the requesting agent"
+                                        };
+                                        // The adapter / account_id / channel
+                                        // triples the #5002 per-adapter WARN
+                                        // carried: `adapters=N` alone gives an
+                                        // operator no way to tell which
+                                        // channels were even considered.
+                                        let considered = skipped
+                                            .iter()
+                                            .map(|s| s.to_string())
+                                            .collect::<Vec<_>>()
+                                            .join("; ");
+                                        warn!(
+                                            request_id = %approval.request_id,
+                                            requesting_agent = %requesting_agent,
+                                            adapters = adapters.len(),
+                                            skipped = %considered,
+                                            "Approval reached no channel: {remedy}"
+                                        );
                                     }
                                 }
                             }
@@ -2123,9 +2392,7 @@ impl BridgeManager {
     /// owns MUST go through here so the two collections never drift —
     /// otherwise `abort()` would silently leak the un-mirrored task.
     fn track(&mut self, handle: tokio::task::JoinHandle<()>) {
-        if let Ok(mut guard) = self.abort_handles.lock() {
-            guard.push(handle.abort_handle());
-        }
+        self.lock_abort_handles().push(handle.abort_handle());
         self.tasks.push(handle);
     }
 
@@ -2160,17 +2427,16 @@ impl BridgeManager {
         if let Err(e) = self.shutdown_tx.send(true) {
             debug!(error = %e, "Channel bridge shutdown signal had no live receivers");
         }
-        if let Ok(mut guard) = self.abort_handles.lock() {
-            let n = guard.len();
-            for h in guard.drain(..) {
-                h.abort();
-            }
-            if n > 0 {
-                debug!(
-                    tasks = n,
-                    "Channel bridge tasks aborted via shared-ref abort()"
-                );
-            }
+        let mut guard = self.lock_abort_handles();
+        let n = guard.len();
+        for h in guard.drain(..) {
+            h.abort();
+        }
+        if n > 0 {
+            debug!(
+                tasks = n,
+                "Channel bridge tasks aborted via shared-ref abort()"
+            );
         }
     }
 
@@ -2197,9 +2463,7 @@ impl BridgeManager {
         // The graceful join above completed every task, so the mirrored
         // abort handles are now stale no-ops; clear them so a later
         // `abort()` on a re-shared Arc doesn't iterate dead handles.
-        if let Ok(mut guard) = self.abort_handles.lock() {
-            guard.clear();
-        }
+        self.lock_abort_handles().clear();
     }
 }
 
@@ -2332,6 +2596,80 @@ fn compile_group_trigger_patterns(patterns: &[String]) -> Arc<CompiledGroupTrigg
 
     group_trigger_pattern_cache().insert(cache_key, compiled.clone());
     compiled
+}
+
+/// Eagerly diagnose `group_trigger_patterns` so a broken declaration is loud at spawn time (#6732).
+///
+/// `compile_group_trigger_patterns` cannot serve this purpose: it is lazy (it only runs when a group message actually arrives), memoised on `patterns.join("\u{1f}")` so its `error!` fires at most once per distinct pattern set per process, and — critically — it does not consider the dominant failure mode a problem at all.
+///
+/// That failure mode is TOML escaping.
+/// In a TOML *basic* (double-quoted) string `\b` is the backspace escape, so `group_trigger_patterns = ["(?i)\bvivi\b"]` reaches the kernel as `(?i)<U+0008>vivi<U+0008>` rather than a word-boundary anchored regex.
+/// The regex crate accepts a bare control character as a verbatim literal, so the pattern *compiles* and simply never matches any real message — no error, no match, no reply.
+/// See `group_trigger_pattern_with_backspace_compiles_but_never_matches_6732`, which pins that behaviour so this validator's control-character arm can be dropped if regex-syntax ever starts rejecting such patterns.
+///
+/// Returns one human-readable diagnostic per problem pattern, empty when every pattern is sound.
+/// This is a reporting helper only — it never rejects.
+/// Callers WARN; a mis-escaped alias must not stop an agent from spawning.
+pub fn validate_group_trigger_patterns(patterns: &[String]) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    for (idx, pattern) in patterns.iter().enumerate() {
+        if let Err(err) = regex::Regex::new(pattern) {
+            diagnostics.push(format!(
+                "group_trigger_patterns[{idx}] is not a valid regex: {err}"
+            ));
+            // A pattern that does not compile is dropped outright by `compile_group_trigger_patterns`; the escaping hint below would only add noise.
+            continue;
+        }
+        // Report every control character, not just the first, so an operator who wrote both `\b` anchors sees that both ends are broken.
+        for c in pattern.chars().filter(|c| c.is_control()) {
+            // Tab, newline and carriage return DO occur in chat messages, so a pattern carrying one can still match — on the literal whitespace rather than on the anchor the operator meant.
+            // Claiming it "never matches" would be wrong, and the silent-wrong-match case is the harder one to debug of the two.
+            let effect = if matches!(c, '\t' | '\n' | '\r') {
+                "so this pattern matches a literal control character instead of the anchor you intended — \
+                 and unlike the other escapes this one can still fire, on whitespace"
+            } else {
+                "so this pattern compiles but never matches"
+            };
+            diagnostics.push(format!(
+                "group_trigger_patterns[{idx}] contains U+{:04X} ({}): in a TOML basic (double-quoted) string \
+                 `\\{}` is the {} escape, not a regex escape, {effect}. \
+                 Use a TOML literal (single-quoted) string — group_trigger_patterns = ['(?i)\\bvivi\\b'] — \
+                 or double every backslash: \"(?i)\\\\bvivi\\\\b\"",
+                c as u32,
+                control_char_name(c),
+                toml_escape_letter(c),
+                control_char_name(c),
+            ));
+        }
+    }
+    diagnostics
+}
+
+/// Human-readable name for the control characters TOML can produce from a backslash escape,
+/// so the diagnostic can say "backspace" instead of only "U+0008".
+fn control_char_name(c: char) -> &'static str {
+    match c {
+        '\u{8}' => "backspace",
+        '\t' => "tab",
+        '\n' => "line feed",
+        '\u{b}' => "vertical tab",
+        '\u{c}' => "form feed",
+        '\r' => "carriage return",
+        _ => "control character",
+    }
+}
+
+/// The TOML escape letter that produces `c`, used to quote the operator's likely typo back at them.
+/// Falls back to the codepoint's own `\u` form for anything without a letter escape.
+fn toml_escape_letter(c: char) -> String {
+    match c {
+        '\u{8}' => "b".to_string(),
+        '\t' => "t".to_string(),
+        '\n' => "n".to_string(),
+        '\u{c}' => "f".to_string(),
+        '\r' => "r".to_string(),
+        _ => format!("u{:04X}", c as u32),
+    }
 }
 
 /// Pick the candidate agent whose declared group-trigger aliases best match `text` (#5323).
@@ -2706,8 +3044,13 @@ fn should_process_group_message(
 }
 
 /// Extract structured `GroupMember` entries from the inbound message metadata.
-/// Channels that supply `group_members` (a JSON array of `{user_id, display_name, username?}`)
-/// populate this; the bridge persists them to the roster store for later queries.
+///
+/// Channels that supply `group_members` (a JSON array of `{user_id, display_name, username?}`) populate `SenderContext.group_members` through this, and, since #7086, the enumerated half of the persistent roster through [`upsert_enumerated_members_into_roster`].
+/// The Slack sidecar emits the key when `SLACK_ENUMERATE_MEMBERS` is on; the WhatsApp gateway's bulk list arrives under the separate `group_participants` key and feeds the addressee guard instead.
+///
+/// The two roster writes stay apart on purpose, and the distinction is load-bearing rather than pedantic.
+/// `upsert_sender_into_roster` records one row per person actually observed speaking, as `source = 'observed'`, and that is the set `channel_dm` authorizes a private message against.
+/// What this function feeds is `source = 'enumerated'` — reportable by `channel_members`, never addressable — because widening the authorization set from "people this daemon has heard from" to "everyone a platform reports as a member" would let an agent DM someone who has never interacted with it.
 fn extract_group_members(message: &ChannelMessage) -> Vec<GroupMember> {
     message
         .metadata
@@ -2742,6 +3085,37 @@ fn extract_agent_name(message: &ChannelMessage) -> String {
         .to_string()
 }
 
+/// The `(channel, chat_id)` pair a channel conversation is session-scoped under.
+///
+/// This is the single source of truth on the channels side, and it is load-bearing that it has exactly one implementation.
+/// The kernel turns the pair into a `SessionId` via `SessionId::for_sender_scope`, so every producer of the pair must agree byte-for-byte or they address different sessions: the inbound message path through [`build_sender_context`], and the `/new` / `/reboot` / `/compact` arms of [`handle_command`] that reset the session the inbound path created.
+///
+/// #7701 is what disagreement looks like.
+/// The command arms read `sender.platform_id` and passed `None` when it was empty, while `build_sender_context` fell back to the metadata-derived sender id — which is precisely the case the Telegram adapter hits, since it sets the sender id in metadata and may leave `platform_id` empty.
+/// Inbound messages landed in `for_channel(agent, "telegram:<user_id>")`; `/new` cleared `for_channel(agent, "telegram")`.
+/// The reset reported success on an empty session while the conversation the user could see kept every message.
+///
+/// The channel half drifted too: the inbound path sanitizes the channel name so a `Custom("cron")` adapter cannot collide with the kernel's reserved system channels, and the command arms did not.
+fn session_scope(
+    channel: &crate::types::ChannelType,
+    platform_id: &str,
+    sender_user_id: &str,
+) -> (String, Option<String>) {
+    // Adapters that don't populate platform_id (e.g. Telegram sets it on the sidecar message but the field might be stripped).
+    // Fall back to the sender id — for DMs they coincide.
+    let chat_id = if platform_id.is_empty() {
+        if sender_user_id.is_empty() {
+            None
+        } else {
+            Some(sender_user_id.to_string())
+        }
+    } else {
+        Some(platform_id.to_string())
+    };
+    // sanitize_channel_name guards against ChannelType::Custom collisions with reserved kernel-internal channels — see its doc-comment + audit: cron-channel-name-not-reserved.
+    (sanitize_channel_name(channel_type_str(channel)), chat_id)
+}
+
 /// Build a `SenderContext` from an incoming `ChannelMessage`.
 ///
 /// Per-channel auto-routing fields are populated from `overrides` when provided,
@@ -2766,24 +3140,14 @@ fn build_sender_context(
         ),
         None => (AutoRouteStrategy::Off, 0, 0, 0, 0),
     };
-    let chat_id = if message.sender.platform_id.is_empty() {
-        // Adapters that don't populate platform_id (e.g. Telegram
-        // sets it on the sidecar message but the field might be
-        // stripped). Fall back to user_id — for DMs they coincide.
-        let uid = sender_user_id(message).to_string();
-        if uid.is_empty() {
-            None
-        } else {
-            Some(uid)
-        }
-    } else {
-        Some(message.sender.platform_id.clone())
-    };
+    // Shared with the `/new` / `/reboot` / `/compact` command arms so the session they reset is the session this context resolves to — see `session_scope`.
+    let (channel, chat_id) = session_scope(
+        &message.channel,
+        &message.sender.platform_id,
+        sender_user_id(message),
+    );
     SenderContext {
-        // sanitize_channel_name guards against ChannelType::Custom
-        // collisions with reserved kernel-internal channels — see
-        // its doc-comment + audit: cron-channel-name-not-reserved.
-        channel: sanitize_channel_name(channel_type_str(&message.channel)),
+        channel,
         user_id: sender_user_id(message).to_string(),
         chat_id,
         display_name: message.sender.display_name.clone(),
@@ -2903,6 +3267,73 @@ async fn upsert_sender_into_roster(
             error = %e,
             "roster_upsert failed; group member will not be remembered for this turn"
         );
+    }
+}
+
+/// The most members a single inbound message may enumerate into the roster.
+///
+/// A Slack workspace channel can list tens of thousands of people, and every one of them would become a stored identity row.
+/// The adapter caps its own page count, but the bridge trusts nothing it is handed over the sidecar wire: a metadata array is attacker-adjacent input, and an unbounded loop here is a write amplification of one message into an arbitrary number of SQLite transactions.
+/// Overflow is truncated and logged rather than rejected, because a partial roster is still a useful answer to "who is in this channel?" and a rejected one is not.
+const MAX_ENUMERATED_MEMBERS_PER_MESSAGE: usize = 1_000;
+
+/// Persist the platform-supplied member list riding on an inbound group message (#7086).
+///
+/// This is the bulk half of the roster, and it is deliberately a different write from [`upsert_sender_into_roster`].
+/// Those rows land as `source = 'observed'` and authorize `channel_dm`; these land as `source = 'enumerated'` and do not.
+/// Merging the two — which is what "just fill the roster from `conversations.members`" would have meant — would let an agent privately message any member of a channel it sits in, including people who have never addressed it.
+///
+/// Skips DMs (a one-to-one chat has no membership to enumerate) and messages carrying no `group_members` metadata, which is every message from every adapter that has not opted in.
+/// A failed row is logged and the sweep continues: one unwritable member should not cost the rest of the list.
+async fn upsert_enumerated_members_into_roster(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    message: &ChannelMessage,
+) {
+    if !message.is_group || message.sender.platform_id.is_empty() {
+        return;
+    }
+    let members = extract_group_members(message);
+    if members.is_empty() {
+        return;
+    }
+    let channel_str = channel_type_str(&message.channel);
+    if members.len() > MAX_ENUMERATED_MEMBERS_PER_MESSAGE {
+        warn!(
+            channel = channel_str,
+            chat_id = %message.sender.platform_id,
+            supplied = members.len(),
+            cap = MAX_ENUMERATED_MEMBERS_PER_MESSAGE,
+            "group_members metadata exceeds the per-message enumeration cap; truncating"
+        );
+    }
+    for member in members.iter().take(MAX_ENUMERATED_MEMBERS_PER_MESSAGE) {
+        if member.user_id.is_empty() {
+            continue;
+        }
+        // An adapter that cannot resolve a name sends the raw platform id, and so do we — an empty `display_name` would render as a blank line in `channel_members`.
+        let display_name = if member.display_name.is_empty() {
+            member.user_id.as_str()
+        } else {
+            member.display_name.as_str()
+        };
+        if let Err(e) = handle
+            .roster_upsert_enumerated(
+                channel_str,
+                &message.sender.platform_id,
+                &member.user_id,
+                display_name,
+                member.username.as_deref(),
+            )
+            .await
+        {
+            warn!(
+                channel = channel_str,
+                chat_id = %message.sender.platform_id,
+                user_id = %member.user_id,
+                error = %e,
+                "roster_upsert_enumerated failed; this member will not appear in channel_members"
+            );
+        }
     }
 }
 
@@ -4085,6 +4516,7 @@ async fn dispatch_message(
                 &message.channel,
                 message.metadata.get("account_id").and_then(|v| v.as_str()),
                 overrides.as_ref(),
+                sender_user_id(message),
             )
             .await;
             if !suppress_button_command_ack(&message.content, name) {
@@ -4502,6 +4934,7 @@ async fn dispatch_message(
                     &message.channel,
                     message.metadata.get("account_id").and_then(|v| v.as_str()),
                     overrides.as_ref(),
+                    sender_user_id(message),
                 )
                 .await;
                 if !suppress_button_command_ack(&message.content, cmd) {
@@ -4543,6 +4976,10 @@ async fn dispatch_message(
                 }
             }
 
+            // Broadcast dispatch carries the same `SenderContext` every other channel turn carries (#7140, session dimension).
+            // Without it the kernel's session resolver falls past its channel branch — `resolve_dispatch_session_id` only derives `SessionId::for_sender_scope` when a sender context is present — and lands the turn on the agent's canonical `entry.session_id`, the session the dashboard chat writes to.
+            // The conversation the broadcast user sees then lives somewhere `/new` cannot reach: the reset commands address the per-chat session, so they clear an empty row and report success while the visible history survives.
+            let broadcast_sender_ctx = build_sender_context(message, overrides.as_ref());
             let strategy = router.broadcast_strategy();
             let mut responses = Vec::new();
 
@@ -4555,8 +4992,9 @@ async fn dispatch_message(
                             let t = text.clone();
                             let aid = *aid;
                             let name = name.clone();
+                            let sctx = broadcast_sender_ctx.clone();
                             handles_vec.push(tokio::spawn(async move {
-                                let result = h.send_message(aid, &t).await;
+                                let result = h.send_message_with_sender(aid, &t, &sctx).await;
                                 (name, aid, result)
                             }));
                         }
@@ -4578,7 +5016,10 @@ async fn dispatch_message(
                 librefang_types::config::BroadcastStrategy::Sequential => {
                     for (name, maybe_id) in &targets {
                         if let Some(aid) = maybe_id {
-                            match handle.send_message(*aid, &text).await {
+                            match handle
+                                .send_message_with_sender(*aid, &text, &broadcast_sender_ctx)
+                                .await
+                            {
                                 Ok(r) if !r.is_empty() => responses.push(format!("[{name}]: {r}")),
                                 Ok(_) => {} // silent response — skip
                                 Err(e) => {
@@ -4712,7 +5153,22 @@ async fn dispatch_message(
             metadata: std::collections::HashMap::new(),
             next_retry_after: None,
         };
-        j.record(entry).await;
+        if !j.record(entry).await {
+            error!(
+                id = %message.platform_message_id,
+                channel = ct_str,
+                "Message dispatch aborted because the recovery journal could not persist it"
+            );
+            send_response(
+                adapter,
+                &message.sender,
+                "Message could not be queued safely. Please try again.".to_string(),
+                thread_id,
+                output_format,
+            )
+            .await;
+            return;
+        }
     }
 
     // Send typing indicator (best-effort)
@@ -4742,6 +5198,7 @@ async fn dispatch_message(
     .await;
 
     upsert_sender_into_roster(handle, message).await;
+    upsert_enumerated_members_into_roster(handle, message).await;
 
     // Build sender context to propagate identity to the agent
     let sender_ctx = build_sender_context(message, overrides.as_ref());
@@ -6598,7 +7055,22 @@ async fn dispatch_with_blocks(
             metadata: std::collections::HashMap::new(),
             next_retry_after: None,
         };
-        j.record(entry).await;
+        if !j.record(entry).await {
+            error!(
+                id = %message.platform_message_id,
+                channel = ct_str,
+                "Multimodal dispatch aborted because the recovery journal could not persist it"
+            );
+            send_response(
+                adapter,
+                &message.sender,
+                "Message could not be queued safely. Please try again.".to_string(),
+                thread_id,
+                output_format,
+            )
+            .await;
+            return;
+        }
     }
 
     if !typing_indicator_suppressed(overrides.and_then(|o| o.typing_mode)) {
@@ -6628,6 +7100,7 @@ async fn dispatch_with_blocks(
     .await;
 
     upsert_sender_into_roster(handle, message).await;
+    upsert_enumerated_members_into_roster(handle, message).await;
 
     // Build sender context to propagate identity to the agent
     let sender_ctx = build_sender_context(message, overrides);
@@ -6696,6 +7169,54 @@ async fn dispatch_with_blocks(
     }
 }
 
+/// Which session-reset command a channel user typed.
+#[derive(Clone, Copy)]
+enum ChannelResetKind {
+    New,
+    Reboot,
+    Compact,
+}
+
+/// Apply `/new`, `/reboot` or `/compact` to every agent this chat's traffic reaches.
+///
+/// A sender with broadcast routing configured has each of their turns fanned out to several agents, and after #7140 each of those agents keeps its own per-chat session.
+/// Resetting only the router-resolved agent would leave the rest answering out of the history the user just asked to clear — the same "the command acked but nothing changed" symptom, one agent removed.
+///
+/// Acks are deduplicated, so a single target produces exactly the wording it produced before broadcast was taken into account.
+async fn apply_channel_reset(
+    kind: ChannelResetKind,
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    targets: &[AgentId],
+    channel: &str,
+    chat_id: Option<&str>,
+) -> String {
+    let mut replies: Vec<String> = Vec::new();
+    for agent_id in targets {
+        let reply = match kind {
+            ChannelResetKind::New => {
+                handle
+                    .reset_channel_session(*agent_id, channel, chat_id)
+                    .await
+            }
+            ChannelResetKind::Reboot => {
+                handle
+                    .reboot_channel_session(*agent_id, channel, chat_id)
+                    .await
+            }
+            ChannelResetKind::Compact => {
+                handle
+                    .compact_channel_session(*agent_id, channel, chat_id)
+                    .await
+            }
+        }
+        .unwrap_or_else(|e| format!("Error: {e}"));
+        if !replies.contains(&reply) {
+            replies.push(reply);
+        }
+    }
+    replies.join("\n")
+}
+
 /// Handle a bot command (returns the response text).
 ///
 /// `overrides` reflects the merged agent + channel policy for the calling
@@ -6709,6 +7230,10 @@ async fn dispatch_with_blocks(
 /// to the first-registered agent (#5672 Layer A). When the adapter does
 /// not expose an `account_id` (single-bot deployments, channels with no
 /// account concept), pass `None`.
+///
+/// `sender_user_id` is `message.metadata[SENDER_USER_ID_KEY]` (see [`sender_user_id`]), which the `/new` / `/reboot` / `/compact` arms need to reproduce the session scope `build_sender_context` derived for the inbound message.
+/// Passing `&sender.platform_id` here is wrong whenever the adapter carries the sender id in metadata and leaves `platform_id` empty — that is the #7701 drift.
+/// Callers hold the `ChannelMessage`, so they can always supply it.
 #[allow(clippy::too_many_arguments)]
 async fn handle_command(
     name: &str,
@@ -6719,6 +7244,7 @@ async fn handle_command(
     channel_type: &crate::types::ChannelType,
     account_id: Option<&str>,
     overrides: Option<&ChannelOverrides>,
+    sender_user_id: &str,
 ) -> String {
     // Helper closure: build a `BindingContext` for the command and resolve
     // the target agent via the context-aware resolver. This is what the
@@ -6741,6 +7267,24 @@ async fn handle_command(
             sender.librefang_user.as_deref(),
             &ctx,
         )
+    };
+
+    // The agents a `/new` / `/reboot` / `/compact` has to cover.
+    // Normally exactly one: the agent this chat resolves to.
+    // A sender with broadcast routing talks to several at once, and each keeps its own session for this chat, so a reset that stopped at the router-resolved agent would leave the others replying from the cleared history.
+    let reset_targets = || {
+        let mut targets: Vec<AgentId> = Vec::new();
+        if let Some(agent_id) = resolve_for_command() {
+            targets.push(agent_id);
+        }
+        for (_, maybe_id) in router.resolve_broadcast(&sender.platform_id) {
+            if let Some(agent_id) = maybe_id {
+                if !targets.contains(&agent_id) {
+                    targets.push(agent_id);
+                }
+            }
+        }
+        targets
     };
 
     // Channel-account key used to scope user-default writes (e.g. `/agent`)
@@ -6848,63 +7392,51 @@ async fn handle_command(
             }
         }
         "new" => {
-            // Resolve the user's current agent and the channel-derived sid
-            // so /new only resets THIS chat (#4868). The (channel, chat_id)
-            // pair must match `build_sender_context` exactly so the sid we
-            // delete here equals the sid the next inbound message will
-            // resolve via `SessionId::for_channel`.
-            let agent_id = resolve_for_command();
-            match agent_id {
-                Some(aid) => {
-                    let ch = channel_type_str(channel_type);
-                    let chat = if sender.platform_id.is_empty() {
-                        None
-                    } else {
-                        Some(sender.platform_id.as_str())
-                    };
-                    handle
-                        .reset_channel_session(aid, ch, chat)
-                        .await
-                        .unwrap_or_else(|e| format!("Error: {e}"))
-                }
-                None => "No agent selected. Use /agent <name> first.".to_string(),
+            // Reset only the sessions this chat actually owns (#4868).
+            // The (channel, chat_id) pair must match `build_sender_context` exactly so the sid we delete here equals the sid the next inbound message will resolve via `SessionId::for_channel` — hence the shared `session_scope` rather than a re-inlined derivation (#7701).
+            let targets = reset_targets();
+            if targets.is_empty() {
+                return "No agent selected. Use /agent <name> first.".to_string();
             }
+            let (ch, chat) = session_scope(channel_type, &sender.platform_id, sender_user_id);
+            apply_channel_reset(
+                ChannelResetKind::New,
+                handle,
+                &targets,
+                &ch,
+                chat.as_deref(),
+            )
+            .await
         }
         "reboot" => {
-            let agent_id = resolve_for_command();
-            match agent_id {
-                Some(aid) => {
-                    let ch = channel_type_str(channel_type);
-                    let chat = if sender.platform_id.is_empty() {
-                        None
-                    } else {
-                        Some(sender.platform_id.as_str())
-                    };
-                    handle
-                        .reboot_channel_session(aid, ch, chat)
-                        .await
-                        .unwrap_or_else(|e| format!("Error: {e}"))
-                }
-                None => "No agent selected. Use /agent <name> first.".to_string(),
+            let targets = reset_targets();
+            if targets.is_empty() {
+                return "No agent selected. Use /agent <name> first.".to_string();
             }
+            let (ch, chat) = session_scope(channel_type, &sender.platform_id, sender_user_id);
+            apply_channel_reset(
+                ChannelResetKind::Reboot,
+                handle,
+                &targets,
+                &ch,
+                chat.as_deref(),
+            )
+            .await
         }
         "compact" => {
-            let agent_id = resolve_for_command();
-            match agent_id {
-                Some(aid) => {
-                    let ch = channel_type_str(channel_type);
-                    let chat = if sender.platform_id.is_empty() {
-                        None
-                    } else {
-                        Some(sender.platform_id.as_str())
-                    };
-                    handle
-                        .compact_channel_session(aid, ch, chat)
-                        .await
-                        .unwrap_or_else(|e| format!("Error: {e}"))
-                }
-                None => "No agent selected. Use /agent <name> first.".to_string(),
+            let targets = reset_targets();
+            if targets.is_empty() {
+                return "No agent selected. Use /agent <name> first.".to_string();
             }
+            let (ch, chat) = session_scope(channel_type, &sender.platform_id, sender_user_id);
+            apply_channel_reset(
+                ChannelResetKind::Compact,
+                handle,
+                &targets,
+                &ch,
+                chat.as_deref(),
+            )
+            .await
         }
         "model" => {
             let agent_id = resolve_for_command();
@@ -6947,12 +7479,24 @@ async fn handle_command(
             }
         }
         "think" => {
+            // Bare `/think` means "on"; anything that is not a recognised on/off word is a typo, and silently reading it as "off" is how `/think of` used to disable thinking while acking success.
+            let on = match args.first().map(|a| a.to_ascii_lowercase()).as_deref() {
+                None | Some("on") | Some("true") | Some("enable") | Some("enabled") => true,
+                Some("off") | Some("false") | Some("disable") | Some("disabled") => false,
+                Some(other) => {
+                    return format!("Unknown argument '{other}'. Usage: /think [on|off]");
+                }
+            };
             let agent_id = resolve_for_command();
             match agent_id {
                 Some(aid) => {
-                    let on = args.first().map(|a| a == "on").unwrap_or(true);
+                    // Same (channel, chat_id) pair `/new` resets and the next inbound turn resolves its session from, plus the account dimension — see `ConversationScope` (#7140).
+                    let (ch, chat) =
+                        session_scope(channel_type, &sender.platform_id, sender_user_id);
+                    let scope =
+                        crate::types::ConversationScope::new(ch, account_id, chat.as_deref());
                     handle
-                        .set_thinking(aid, on)
+                        .set_thinking(aid, on, &scope)
                         .await
                         .unwrap_or_else(|e| format!("Error: {e}"))
                 }
@@ -6974,9 +7518,31 @@ async fn handle_command(
                 } else {
                     String::new()
                 };
-                handle.run_workflow_text(wf_name, &input).await
+                // #7714: a channel `/workflow run` is owned by the agent bound
+                // to that channel, the same binding every other command in
+                // this dispatcher resolves through.
+                handle
+                    .run_workflow_text(wf_name, &input, resolve_for_command())
+                    .await
             } else {
                 "Usage: /workflow run <name> [input]".to_string()
+            }
+        }
+        "goal" => {
+            let usage = || {
+                crate::commands::lookup("goal")
+                    .map(|def| def.usage())
+                    .unwrap_or_default()
+            };
+            match librefang_types::goal::parse_goal_args(&args.join(" ")) {
+                None => usage(),
+                Some((description, loop_engineering)) => match resolve_for_command() {
+                    Some(aid) => handle
+                        .create_and_start_goal(aid, &description, loop_engineering)
+                        .await
+                        .unwrap_or_else(|e| format!("Error: {e}")),
+                    None => "No agent selected. Use /agent <name> first.".to_string(),
+                },
             }
         }
         "triggers" => handle.list_triggers_text().await,
@@ -7417,6 +7983,283 @@ mod tests {
         }
     }
 
+    /// Records every `/think` toggle with the conversation scope it arrived with, so a test can assert the command path passes the conversation identity down instead of the bare agent id (#7140).
+    struct ThinkRecorderHandle {
+        agents: Mutex<Vec<(AgentId, String)>>,
+        calls: Mutex<Vec<(AgentId, bool, crate::types::ConversationScope)>>,
+    }
+
+    impl ThinkRecorderHandle {
+        fn new(agents: Vec<(AgentId, String)>) -> Self {
+            Self {
+                agents: Mutex::new(agents),
+                calls: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl ChannelBridgeHandle for ThinkRecorderHandle {
+        async fn send_message(&self, _agent_id: AgentId, message: &str) -> Result<String, String> {
+            Ok(format!("Echo: {message}"))
+        }
+        async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+            let agents = self.agents.lock().unwrap();
+            Ok(agents.iter().find(|(_, n)| n == name).map(|(id, _)| *id))
+        }
+        async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+            Ok(self.agents.lock().unwrap().clone())
+        }
+        async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+            Err("spawn not implemented in mock".to_string())
+        }
+        async fn set_thinking(
+            &self,
+            agent_id: AgentId,
+            on: bool,
+            scope: &crate::types::ConversationScope,
+        ) -> Result<String, String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((agent_id, on, scope.clone()));
+            Ok("ok".to_string())
+        }
+        fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+            // Test mock: no event bus to forward to.
+        }
+    }
+
+    /// Records every session-reset call with the `(channel, chat_id)` scope it arrived with, so a test can assert which agents a `/new` / `/reboot` / `/compact` actually reached (#7140).
+    struct ResetRecorderHandle {
+        agents: Mutex<Vec<(AgentId, String)>>,
+        resets: Mutex<Vec<(AgentId, String, Option<String>)>>,
+        reboots: Mutex<Vec<(AgentId, String, Option<String>)>>,
+        compacts: Mutex<Vec<(AgentId, String, Option<String>)>>,
+    }
+
+    impl ResetRecorderHandle {
+        fn new(agents: Vec<(AgentId, String)>) -> Self {
+            Self {
+                agents: Mutex::new(agents),
+                resets: Mutex::new(Vec::new()),
+                reboots: Mutex::new(Vec::new()),
+                compacts: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn reset_agents(&self) -> Vec<AgentId> {
+            self.resets.lock().unwrap().iter().map(|c| c.0).collect()
+        }
+    }
+
+    #[async_trait]
+    impl ChannelBridgeHandle for ResetRecorderHandle {
+        async fn send_message(&self, _agent_id: AgentId, message: &str) -> Result<String, String> {
+            Ok(format!("Echo: {message}"))
+        }
+        async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+            let agents = self.agents.lock().unwrap();
+            Ok(agents.iter().find(|(_, n)| n == name).map(|(id, _)| *id))
+        }
+        async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+            Ok(self.agents.lock().unwrap().clone())
+        }
+        async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+            Err("spawn not implemented in mock".to_string())
+        }
+        async fn reset_channel_session(
+            &self,
+            agent_id: AgentId,
+            channel: &str,
+            chat_id: Option<&str>,
+        ) -> Result<String, String> {
+            self.resets.lock().unwrap().push((
+                agent_id,
+                channel.to_string(),
+                chat_id.map(str::to_string),
+            ));
+            Ok(format!(
+                "Session reset for this {channel} chat. Other surfaces untouched."
+            ))
+        }
+        async fn reboot_channel_session(
+            &self,
+            agent_id: AgentId,
+            channel: &str,
+            chat_id: Option<&str>,
+        ) -> Result<String, String> {
+            self.reboots.lock().unwrap().push((
+                agent_id,
+                channel.to_string(),
+                chat_id.map(str::to_string),
+            ));
+            Ok(format!(
+                "Session rebooted for this {channel} chat. Other surfaces untouched."
+            ))
+        }
+        async fn compact_channel_session(
+            &self,
+            agent_id: AgentId,
+            channel: &str,
+            chat_id: Option<&str>,
+        ) -> Result<String, String> {
+            self.compacts.lock().unwrap().push((
+                agent_id,
+                channel.to_string(),
+                chat_id.map(str::to_string),
+            ));
+            Ok("Compacted.".to_string())
+        }
+        fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+            // Test mock: no event bus to forward to.
+        }
+    }
+
+    fn broadcast_router(peer: &str, agents: &[(AgentId, &str)]) -> Arc<AgentRouter> {
+        let router = Arc::new(AgentRouter::new());
+        let mut routes = std::collections::HashMap::new();
+        routes.insert(
+            peer.to_string(),
+            agents.iter().map(|(_, name)| name.to_string()).collect(),
+        );
+        for (id, name) in agents {
+            router.register_agent((*name).to_string(), *id);
+        }
+        router.load_broadcast(librefang_types::config::BroadcastConfig {
+            strategy: librefang_types::config::BroadcastStrategy::Parallel,
+            routes,
+        });
+        router
+    }
+
+    fn channel_user(platform_id: &str) -> ChannelUser {
+        ChannelUser {
+            platform_id: platform_id.to_string(),
+            display_name: "Test".to_string(),
+            librefang_user: None,
+        }
+    }
+
+    /// A sender with broadcast routing talks to several agents at once, and each of them keeps its own session for this chat.
+    /// `/new` resolved a single agent through the router chain, so the other targets kept answering out of the history the user had just asked to clear — the command acked, the conversation did not change (#7140).
+    #[tokio::test]
+    async fn new_resets_every_broadcast_target() {
+        let alice = AgentId::new();
+        let bob = AgentId::new();
+        let recorder = Arc::new(ResetRecorderHandle::new(vec![
+            (alice, "alice".to_string()),
+            (bob, "bob".to_string()),
+        ]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = broadcast_router("vip", &[(alice, "alice"), (bob, "bob")]);
+        router.set_user_default("vip".to_string(), alice);
+        let sender = channel_user("vip");
+
+        let reply = handle_command(
+            "new",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::Telegram,
+            None,
+            None,
+            "vip",
+        )
+        .await;
+
+        let mut reached = recorder.reset_agents();
+        reached.sort_by_key(|a| a.to_string());
+        let mut expected = vec![alice, bob];
+        expected.sort_by_key(|a| a.to_string());
+        assert_eq!(
+            reached, expected,
+            "every broadcast target must have its session for this chat reset, not just the router-resolved one",
+        );
+        for (_, channel, chat_id) in recorder.resets.lock().unwrap().iter() {
+            assert_eq!(
+                (channel.as_str(), chat_id.as_deref()),
+                ("telegram", Some("vip")),
+                "the reset must address the same per-chat scope the inbound path derives",
+            );
+        }
+        assert_eq!(
+            reply, "Session reset for this telegram chat. Other surfaces untouched.",
+            "identical acks collapse to one line — the wording a single-agent chat has always seen",
+        );
+    }
+
+    /// The overwhelmingly common case must be untouched: no broadcast routing means exactly one reset, for the agent the chat resolves to, with the ack unchanged.
+    #[tokio::test]
+    async fn new_without_broadcast_resets_only_the_resolved_agent() {
+        let alice = AgentId::new();
+        let bob = AgentId::new();
+        let recorder = Arc::new(ResetRecorderHandle::new(vec![
+            (alice, "alice".to_string()),
+            (bob, "bob".to_string()),
+        ]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = Arc::new(AgentRouter::new());
+        router.set_user_default("solo".to_string(), alice);
+        let sender = channel_user("solo");
+
+        let reply = handle_command(
+            "new",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::Telegram,
+            None,
+            None,
+            "solo",
+        )
+        .await;
+
+        assert_eq!(
+            recorder.reset_agents(),
+            vec![alice],
+            "a chat without broadcast routing must reset exactly the agent it resolves to",
+        );
+        assert_eq!(
+            reply,
+            "Session reset for this telegram chat. Other surfaces untouched."
+        );
+    }
+
+    /// `/reboot` and `/compact` share the fan-out with `/new`; a per-command regression would otherwise leave two of the three half-fixed.
+    #[tokio::test]
+    async fn reboot_and_compact_reach_every_broadcast_target() {
+        let alice = AgentId::new();
+        let bob = AgentId::new();
+        let recorder = Arc::new(ResetRecorderHandle::new(vec![
+            (alice, "alice".to_string()),
+            (bob, "bob".to_string()),
+        ]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = broadcast_router("vip", &[(alice, "alice"), (bob, "bob")]);
+        let sender = channel_user("vip");
+
+        for command in ["reboot", "compact"] {
+            handle_command(
+                command,
+                &[],
+                &handle,
+                &router,
+                &sender,
+                &ChannelType::Telegram,
+                None,
+                None,
+                "vip",
+            )
+            .await;
+        }
+
+        assert_eq!(recorder.reboots.lock().unwrap().len(), 2);
+        assert_eq!(recorder.compacts.lock().unwrap().len(), 2);
+    }
+
     /// Helper: replicate the metadata read + key build the bridge does, then
     /// ask the registry. Exercises the same logic `dispatch_message` runs
     /// without standing up the full channel handle / adapter mocks.
@@ -7438,6 +8281,70 @@ mod tests {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         Some(registry.decide(key, candidate, was_mentioned))
+    }
+
+    /// #7701, the `/new` no-op: the inbound path and the reset command arms must derive the same `(channel, chat_id)`, because the kernel turns that pair into the `SessionId` both of them address (`SessionId::for_sender_scope`).
+    ///
+    /// This is the exact Telegram shape that broke it — the sender id arrives in `SENDER_USER_ID_KEY` metadata and `platform_id` is empty.
+    /// Before the shared `session_scope`, the command arms passed `None` for `chat_id` here while `build_sender_context` fell back to the metadata id, so `/new` cleared `for_channel(agent, "telegram")` while the conversation lived in `for_channel(agent, "telegram:tg-user-42")`.
+    #[test]
+    fn session_scope_agrees_with_build_sender_context_when_platform_id_is_empty() {
+        let mut metadata = std::collections::HashMap::new();
+        metadata.insert(
+            SENDER_USER_ID_KEY.to_string(),
+            serde_json::Value::String("tg-user-42".to_string()),
+        );
+        let message = ChannelMessage {
+            channel: ChannelType::Telegram,
+            platform_message_id: "1".into(),
+            sender: ChannelUser {
+                platform_id: String::new(),
+                display_name: "user".into(),
+                librefang_user: None,
+            },
+            content: ChannelContent::Text("/new".into()),
+            target_agent: None,
+            timestamp: chrono::Utc::now(),
+            is_group: false,
+            thread_id: None,
+            metadata,
+        };
+
+        let ctx = build_sender_context(&message, None);
+        let (command_channel, command_chat) = session_scope(
+            &message.channel,
+            &message.sender.platform_id,
+            sender_user_id(&message),
+        );
+
+        assert_eq!(
+            command_chat.as_deref(),
+            Some("tg-user-42"),
+            "an empty platform_id must fall back to the metadata sender id, not collapse to None",
+        );
+        assert_eq!(
+            (command_channel.as_str(), command_chat.as_deref()),
+            (ctx.channel.as_str(), ctx.chat_id.as_deref()),
+            "the command scope and the inbound scope must be byte-identical",
+        );
+    }
+
+    /// The channel half of the same invariant.
+    /// `build_sender_context` sanitizes a `Custom` channel whose name collides with a reserved kernel system channel; the command arms used the raw name, so `/new` on a `Custom("cron")` adapter addressed a different session than its own inbound messages.
+    #[test]
+    fn session_scope_sanitizes_reserved_custom_channel_names() {
+        for reserved in ["cron", "autonomous", "webui"] {
+            let (channel, _) = session_scope(
+                &ChannelType::Custom(reserved.to_string()),
+                "peer-1",
+                "peer-1",
+            );
+            assert_eq!(
+                channel,
+                format!("ext-{reserved}"),
+                "reserved channel {reserved:?} must be rewritten, not passed through",
+            );
+        }
     }
 
     fn group_thread_message(thread: &str, was_mentioned: bool) -> ChannelMessage {
@@ -7627,6 +8534,7 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("coder"));
@@ -7640,9 +8548,58 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("/agents"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_command_goal_is_dispatched() {
+        let agent_id = AgentId::new();
+        let handle: Arc<dyn ChannelBridgeHandle> = Arc::new(MockHandle {
+            agents: Mutex::new(vec![(agent_id, "coder".to_string())]),
+        });
+        let router = Arc::new(AgentRouter::new());
+        let sender = ChannelUser {
+            platform_id: "user1".to_string(),
+            display_name: "Test".to_string(),
+            librefang_user: None,
+        };
+
+        let usage = handle_command(
+            "goal",
+            &[],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+            None,
+            &sender.platform_id,
+        )
+        .await;
+        assert!(
+            usage.contains("Usage: /goal"),
+            "expected the /goal usage string, got: {usage}"
+        );
+
+        let dispatched = handle_command(
+            "goal",
+            &["ship".to_string(), "the report".to_string()],
+            &handle,
+            &router,
+            &sender,
+            &ChannelType::CLI,
+            None,
+            None,
+            &sender.platform_id,
+        )
+        .await;
+        assert!(
+            !dispatched.contains("Unknown command"),
+            "/goal fell through to the unknown-command arm: {dispatched}"
+        );
     }
 
     #[tokio::test]
@@ -7668,6 +8625,7 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("Now talking to agent: coder"));
@@ -8047,6 +9005,7 @@ mod tests {
             &ChannelType::Telegram,
             Some("bot-b"),
             None,
+            &sender.platform_id,
         )
         .await;
         // `/model` issued in bot-c must dispatch to agent-C.
@@ -8059,6 +9018,7 @@ mod tests {
             &ChannelType::Telegram,
             Some("bot-c"),
             None,
+            &sender.platform_id,
         )
         .await;
 
@@ -8069,6 +9029,175 @@ mod tests {
             "/model must route per-account; got {:?}",
             calls,
         );
+    }
+
+    /// Regression for #7140: `/think` acks say "for this chat", so the command path must hand `set_thinking` the conversation it was typed in. One agent commonly serves many Telegram chats; passing the bare agent id is what made one user's toggle rewrite everybody else's turns.
+    #[tokio::test]
+    async fn think_command_carries_the_conversation_scope() {
+        let agent = AgentId::new();
+        let recorder = Arc::new(ThinkRecorderHandle::new(vec![(
+            agent,
+            "shared-agent".to_string(),
+        )]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = Arc::new(AgentRouter::new());
+        router.set_channel_default("telegram:bot-a".to_string(), agent);
+
+        // Two distinct chats served by the same agent through the same bot.
+        let chat_one = ChannelUser {
+            platform_id: "chat-1".to_string(),
+            display_name: "Group One".to_string(),
+            librefang_user: None,
+        };
+        let chat_two = ChannelUser {
+            platform_id: "chat-2".to_string(),
+            display_name: "Group Two".to_string(),
+            librefang_user: None,
+        };
+
+        let on = handle_command(
+            "think",
+            &["on".to_string()],
+            &handle,
+            &router,
+            &chat_one,
+            &ChannelType::Telegram,
+            Some("bot-a"),
+            None,
+            "member-1",
+        )
+        .await;
+        assert_eq!(on, "ok");
+
+        let off = handle_command(
+            "think",
+            &["off".to_string()],
+            &handle,
+            &router,
+            &chat_two,
+            &ChannelType::Telegram,
+            Some("bot-a"),
+            None,
+            "member-2",
+        )
+        .await;
+        assert_eq!(off, "ok");
+
+        let calls = recorder.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 2, "both toggles must reach the handle");
+        assert_eq!(calls[0].0, agent);
+        assert_eq!(calls[1].0, agent, "same agent serves both chats");
+        assert!(calls[0].1, "/think on");
+        assert!(!calls[1].1, "/think off");
+        assert_ne!(
+            calls[0].2, calls[1].2,
+            "two chats on one agent must produce different scopes, or the \
+             second toggle overwrites the first"
+        );
+
+        // The scope is the same (channel, chat_id) pair `/new` resets, plus
+        // the account — so `set_thinking` and the message path agree on the key.
+        let (channel, chat) =
+            session_scope(&ChannelType::Telegram, &chat_one.platform_id, "member-1");
+        assert_eq!(
+            calls[0].2,
+            crate::types::ConversationScope::new(channel, Some("bot-a"), chat.as_deref()),
+        );
+    }
+
+    /// The same chat reached through two different bot accounts is two conversations, so `/think` in one must not carry into the other (#7140).
+    #[tokio::test]
+    async fn think_command_scope_separates_bot_accounts() {
+        let agent = AgentId::new();
+        let recorder = Arc::new(ThinkRecorderHandle::new(vec![(
+            agent,
+            "shared-agent".to_string(),
+        )]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = Arc::new(AgentRouter::new());
+        router.set_channel_default("telegram:bot-a".to_string(), agent);
+        router.set_channel_default("telegram:bot-b".to_string(), agent);
+
+        let chat = ChannelUser {
+            platform_id: "chat-1".to_string(),
+            display_name: "Group One".to_string(),
+            librefang_user: None,
+        };
+
+        for account in ["bot-a", "bot-b"] {
+            handle_command(
+                "think",
+                &["on".to_string()],
+                &handle,
+                &router,
+                &chat,
+                &ChannelType::Telegram,
+                Some(account),
+                None,
+                "member-1",
+            )
+            .await;
+        }
+
+        let calls = recorder.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 2);
+        assert_ne!(
+            calls[0].2, calls[1].2,
+            "one chat id under two bot accounts must not collapse to one scope"
+        );
+    }
+
+    /// `/think of` is a typo, not "off". Reading an unrecognised argument as `false` disabled thinking while acking success — the confirmation-without-action class this issue is about (#7140).
+    #[tokio::test]
+    async fn think_command_rejects_an_unknown_argument() {
+        let agent = AgentId::new();
+        let recorder = Arc::new(ThinkRecorderHandle::new(vec![(
+            agent,
+            "shared-agent".to_string(),
+        )]));
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = Arc::new(AgentRouter::new());
+        router.set_channel_default("telegram:bot-a".to_string(), agent);
+
+        let chat = ChannelUser {
+            platform_id: "chat-1".to_string(),
+            display_name: "Group One".to_string(),
+            librefang_user: None,
+        };
+
+        let result = handle_command(
+            "think",
+            &["of".to_string()],
+            &handle,
+            &router,
+            &chat,
+            &ChannelType::Telegram,
+            Some("bot-a"),
+            None,
+            "member-1",
+        )
+        .await;
+        assert!(result.contains("Usage: /think [on|off]"), "got: {result}");
+        assert!(
+            recorder.calls.lock().unwrap().is_empty(),
+            "a typo must not silently toggle anything"
+        );
+
+        // Bare `/think` still means "on".
+        let result = handle_command(
+            "think",
+            &[],
+            &handle,
+            &router,
+            &chat,
+            &ChannelType::Telegram,
+            Some("bot-a"),
+            None,
+            "member-1",
+        )
+        .await;
+        assert_eq!(result, "ok");
+        assert!(recorder.calls.lock().unwrap()[0].1);
     }
 
     /// Regression test for #5672 Layer B: `/agent` in bot-a must NOT
@@ -8106,6 +9235,7 @@ mod tests {
             &ChannelType::Telegram,
             Some("bot-a"),
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("Now talking to agent: agent-C"));
@@ -8383,6 +9513,104 @@ mod tests {
                 "telegram", &overrides, &message
             ));
         });
+    }
+
+    /// Pins the #6732 diagnosis: a TOML basic string `"(?i)\bvivi\b"` reaches the kernel as `(?i)<U+0008>vivi<U+0008>` because `\b` is TOML's backspace escape, and the regex crate accepts a bare control character as a verbatim literal.
+    /// So the pattern compiles — the `error!` in `compile_group_trigger_patterns` never fires — and then never matches, which is exactly the silent degradation the reporter hit.
+    /// If regex-syntax ever starts rejecting control characters this test fails loudly and `validate_group_trigger_patterns` can drop its control-character arm.
+    #[test]
+    fn group_trigger_pattern_with_backspace_compiles_but_never_matches_6732() {
+        let backspaced = "(?i)\u{8}vivi\u{8}".to_string();
+        assert!(
+            regex::Regex::new(&backspaced).is_ok(),
+            "regex crate is expected to accept a bare U+0008 as a verbatim literal"
+        );
+        let compiled = compile_group_trigger_patterns(std::slice::from_ref(&backspaced));
+        assert!(
+            compiled.regex_set.is_some(),
+            "the backspace pattern must compile into the RegexSet — that is why the existing error! log never fires"
+        );
+
+        with_guard_off_locked(|| {
+            let message = group_text_message("hey vivi");
+            assert!(
+                !matches_group_trigger_pattern(
+                    "slack",
+                    &message,
+                    std::slice::from_ref(&backspaced)
+                ),
+                "the compiled backspace pattern must never match real text"
+            );
+            // And the intended, correctly-escaped form does match, proving the text itself is fine.
+            assert!(matches_group_trigger_pattern(
+                "slack",
+                &message,
+                &[r"(?i)\bvivi\b".to_string()]
+            ));
+        });
+    }
+
+    #[test]
+    fn validate_group_trigger_patterns_flags_control_chars_and_bad_regex_6732() {
+        // The correctly-escaped form a TOML literal string produces — no diagnostic.
+        assert!(validate_group_trigger_patterns(&[r"(?i)\bvivi\b".to_string()]).is_empty());
+
+        // An unparseable regex gets exactly one diagnostic naming the regex error.
+        let bad_regex = validate_group_trigger_patterns(&["(".to_string()]);
+        assert_eq!(bad_regex.len(), 1, "got {bad_regex:?}");
+        assert!(
+            bad_regex[0].contains("not a valid regex"),
+            "{}",
+            bad_regex[0]
+        );
+
+        // The #6732 footgun: compiles fine, so the only signal is the control-char arm.
+        // Both `\b` anchors are reported so the operator sees the pattern is broken at both ends.
+        let backspaced = validate_group_trigger_patterns(&["(?i)\u{8}vivi\u{8}".to_string()]);
+        assert_eq!(backspaced.len(), 2, "got {backspaced:?}");
+        for d in &backspaced {
+            assert!(d.contains("U+0008"), "{d}");
+            assert!(d.contains("backspace"), "{d}");
+            // The message must prescribe the fix, not just name the problem.
+            assert!(d.contains("literal (single-quoted) string"), "{d}");
+        }
+
+        // Backspace cannot appear in a chat message, so "never matches" is accurate there.
+        assert!(backspaced[0].contains("never matches"), "{}", backspaced[0]);
+
+        // Tab, newline and CR are different: they DO occur in chat text, so such a pattern can still fire — on literal whitespace rather than on the anchor the operator meant.
+        // Telling them it never matches would send them looking for the wrong failure, and a wrong match is the harder of the two to spot.
+        for (c, name) in [
+            ('\t', "tab"),
+            ('\n', "line feed"),
+            ('\r', "carriage return"),
+        ] {
+            let d = validate_group_trigger_patterns(&[format!("(?i){c}vivi{c}")]);
+            assert_eq!(d.len(), 2, "got {d:?}");
+            assert!(d[0].contains(name), "{}", d[0]);
+            assert!(
+                !d[0].contains("never matches"),
+                "a control character that occurs in real messages must not be \
+                 described as unmatchable: {}",
+                d[0]
+            );
+            assert!(d[0].contains("can still fire"), "{}", d[0]);
+        }
+
+        // A pattern that fails to compile is reported once, not also for its control chars — it is dropped outright, so the escaping hint would be noise.
+        let both = validate_group_trigger_patterns(&["(\u{8}".to_string()]);
+        assert_eq!(both.len(), 1, "got {both:?}");
+        assert!(both[0].contains("not a valid regex"), "{}", both[0]);
+
+        // The index is the operator's array position, so a long list stays actionable.
+        let second =
+            validate_group_trigger_patterns(&[r"(?i)\bok\b".to_string(), "\u{8}nope".to_string()]);
+        assert_eq!(second.len(), 1, "got {second:?}");
+        assert!(
+            second[0].starts_with("group_trigger_patterns[1]"),
+            "{}",
+            second[0]
+        );
     }
 
     #[test]
@@ -8962,6 +10190,7 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("Usage:"));
@@ -8990,6 +10219,7 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("No agent selected"));
@@ -9016,6 +10246,7 @@ mod tests {
             &ChannelType::CLI,
             None,
             None,
+            &sender.platform_id,
         )
         .await;
         assert!(result.contains("/btw"));
@@ -9150,6 +10381,17 @@ mod tests {
             message_text: Some("Approved".to_string()),
         };
         assert_eq!(content_to_text(&cb), "[Button: approve]");
+    }
+
+    #[test]
+    fn test_content_to_text_button_callback_slash_action_is_command_text() {
+        // A slash-prefixed action is a command line, not a button label: `content_to_text` must return it bare so debounce coalescing (which merges via these placeholders) still hands the dispatcher dispatchable command text.
+        let cb = ChannelContent::ButtonCallback {
+            action: "/agent foo".to_string(),
+            message_text: Some("Switched".to_string()),
+        };
+        assert_eq!(content_to_text(&cb), "/agent foo");
+        assert_ne!(content_to_text(&cb), "[Button: /agent foo]");
     }
 
     #[test]
@@ -9410,6 +10652,78 @@ mod tests {
         fn assert_content_eq(actual: &ChannelContent, expected: &str) {
             let actual_text = content_to_text(actual);
             assert_eq!(actual_text, expected);
+        }
+
+        fn make_test_button_callback(action: &str) -> ChannelMessage {
+            ChannelMessage {
+                channel: ChannelType::Discord,
+                platform_message_id: "msg1".to_string(),
+                sender: ChannelUser {
+                    platform_id: "user123".to_string(),
+                    display_name: "TestUser".to_string(),
+                    librefang_user: None,
+                },
+                content: ChannelContent::ButtonCallback {
+                    action: action.to_string(),
+                    message_text: Some("Clicked".to_string()),
+                },
+                target_agent: None,
+                timestamp: chrono::Utc::now(),
+                is_group: false,
+                thread_id: None,
+                metadata: HashMap::new(),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_debouncer_button_callback_slash_actions_coalesce_as_command_text() {
+            // A slash-prefixed ButtonCallback caught in a debounce window drains as command text ("/agent foo"), not the "[Button: …]" placeholder, so the dispatcher still sees a command after coalescing.
+            let (debouncer, _rx) = MessageDebouncer::new(100, 5000, 10);
+            let mut buffers: HashMap<String, SenderBuffer> = HashMap::new();
+
+            debouncer.push(
+                "discord:user123",
+                PendingMessage {
+                    message: make_test_button_callback("/agent foo"),
+                    media: None,
+                },
+                &mut buffers,
+            );
+            debouncer.push(
+                "discord:user123",
+                PendingMessage {
+                    message: make_test_button_callback("/agent bar"),
+                    media: None,
+                },
+                &mut buffers,
+            );
+
+            let result = debouncer.drain("discord:user123", &mut buffers);
+            assert!(result.is_some());
+            let (drained_msg, _) = result.unwrap();
+            assert_content_eq(&drained_msg.content, "/agent foo\n/agent bar");
+        }
+
+        #[tokio::test]
+        async fn test_debouncer_single_button_callback_slash_action_survives_drain_unchanged() {
+            // A lone slash-action ButtonCallback in the buffer drains with its content untouched (drain's single-message fast path), so `dispatch_message` still sees the `ButtonCallback` arm and routes `/agent foo` through the slash-command dispatcher.
+            let (debouncer, _rx) = MessageDebouncer::new(100, 5000, 10);
+            let mut buffers: HashMap<String, SenderBuffer> = HashMap::new();
+
+            debouncer.push(
+                "discord:user123",
+                PendingMessage {
+                    message: make_test_button_callback("/agent foo"),
+                    media: None,
+                },
+                &mut buffers,
+            );
+
+            let result = debouncer.drain("discord:user123", &mut buffers);
+            assert!(result.is_some());
+            let (drained_msg, media) = result.unwrap();
+            assert!(media.is_empty());
+            assert_content_eq(&drained_msg.content, "/agent foo");
         }
 
         #[tokio::test]
@@ -11521,6 +12835,50 @@ mod tests {
         drop(shared);
     }
 
+    #[tokio::test]
+    async fn bridge_abort_handles_recover_after_held_lock_panic() {
+        let handle: Arc<dyn ChannelBridgeHandle> = Arc::new(MockHandle {
+            agents: Mutex::new(vec![]),
+        });
+        let router = Arc::new(AgentRouter::new());
+        let mut mgr = BridgeManager::new(handle, router);
+
+        let first = tokio::spawn(std::future::pending::<()>());
+        let first_probe = first.abort_handle();
+        mgr.track_task(first);
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = mgr.abort_handles.lock().unwrap();
+            panic!("poison channel bridge abort-handle lock");
+        }));
+        assert!(mgr.abort_handles.is_poisoned());
+
+        let second = tokio::spawn(std::future::pending::<()>());
+        let second_probe = second.abort_handle();
+        mgr.track_task(second);
+        assert!(!mgr.abort_handles.is_poisoned());
+        assert_eq!(mgr.abort_handles.lock().unwrap().len(), 2);
+
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = mgr.abort_handles.lock().unwrap();
+            panic!("re-poison channel bridge abort-handle lock");
+        }));
+        assert!(mgr.abort_handles.is_poisoned());
+
+        mgr.abort();
+
+        assert!(!mgr.abort_handles.is_poisoned());
+        assert!(mgr.abort_handles.lock().unwrap().is_empty());
+        for _ in 0..50 {
+            if first_probe.is_finished() && second_probe.is_finished() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(first_probe.is_finished());
+        assert!(second_probe.is_finished());
+    }
+
     /// Audit: cron-channel-name-not-reserved. Operator-supplied
     /// `ChannelType::Custom("cron")` MUST NOT derive the same
     /// SessionId as the kernel-internal cron-fire path. The
@@ -11607,12 +12965,12 @@ mod tests {
     fn build_thread_key_falls_back_to_chat_id_without_topic() {
         let mut msg = group_thread_message("topic-1", false);
         let k = build_thread_key(&msg).expect("key");
-        assert_eq!(k.thread, "topic-1");
-        assert_eq!(k.chat_id.as_deref(), Some("u1"));
+        assert_eq!(k.thread(), "topic-1");
+        assert_eq!(k.chat_id(), Some("u1"));
         // A topic-less group still gets a stable claim keyed by chat id.
         msg.thread_id = None;
         let k2 = build_thread_key(&msg).expect("key");
-        assert_eq!(k2.thread, "u1");
+        assert_eq!(k2.thread(), "u1");
     }
 
     #[test]
@@ -11623,8 +12981,8 @@ mod tests {
         msg.metadata
             .insert(SENDER_USER_ID_KEY.into(), serde_json::json!("peer-9"));
         let k = build_thread_key(&msg).expect("key");
-        assert_eq!(k.account_id.as_deref(), Some("acct-1"));
-        assert_eq!(k.peer_id.as_deref(), Some("peer-9"));
+        assert_eq!(k.account_id(), Some("acct-1"));
+        assert_eq!(k.peer_id(), Some("peer-9"));
     }
 
     #[tokio::test]
@@ -11816,6 +13174,336 @@ mod tests {
                 lifecycle_reaction_emoji(&AgentPhase::Error, true),
                 default_phase_emoji(&AgentPhase::Error)
             );
+        }
+    }
+
+    /// The roster write path, which is what makes `channel_members` (#7865) and Slack display-name resolution (#7874) visible to an agent.
+    ///
+    /// `upsert_sender_into_roster` is the only `roster_upsert` call site in the tree, and until now nothing exercised it.
+    /// Every way it can go wrong looks like a working feature from the outside: drop the display name and `channel_members` goes back to listing opaque `U09…` ids, roster the conversation's own `platform_id` instead of the speaker and `channel_dm` will accept the group id as a "member", skip a message that should have been recorded and the person who spoke is simply never addressable.
+    mod roster_write_path {
+        use super::*;
+
+        /// One recorded `roster_upsert`, in the argument order the trait declares.
+        type RosterCall = (String, String, String, String, Option<String>);
+
+        /// Records every `roster_upsert` and `roster_upsert_enumerated` with the exact arguments each arrived with.
+        ///
+        /// The two land in separate vectors on purpose: which write a message produced is the whole assertion for #7086, and a recorder that merged them could not tell a rostered speaker from a rostered stranger.
+        #[derive(Default)]
+        struct RosterRecorder {
+            calls: Mutex<Vec<RosterCall>>,
+            enumerated: Mutex<Vec<RosterCall>>,
+        }
+
+        #[async_trait]
+        impl ChannelBridgeHandle for RosterRecorder {
+            async fn send_message(
+                &self,
+                _agent_id: AgentId,
+                _message: &str,
+            ) -> Result<String, String> {
+                Ok(String::new())
+            }
+            async fn find_agent_by_name(&self, _name: &str) -> Result<Option<AgentId>, String> {
+                Ok(None)
+            }
+            async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+                Ok(Vec::new())
+            }
+            async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+                Err("spawn not implemented in mock".to_string())
+            }
+            async fn roster_upsert(
+                &self,
+                channel: &str,
+                chat_id: &str,
+                user_id: &str,
+                display_name: &str,
+                username: Option<&str>,
+            ) -> Result<(), String> {
+                self.calls.lock().unwrap().push((
+                    channel.to_string(),
+                    chat_id.to_string(),
+                    user_id.to_string(),
+                    display_name.to_string(),
+                    username.map(str::to_string),
+                ));
+                Ok(())
+            }
+            async fn roster_upsert_enumerated(
+                &self,
+                channel: &str,
+                chat_id: &str,
+                user_id: &str,
+                display_name: &str,
+                username: Option<&str>,
+            ) -> Result<(), String> {
+                self.enumerated.lock().unwrap().push((
+                    channel.to_string(),
+                    chat_id.to_string(),
+                    user_id.to_string(),
+                    display_name.to_string(),
+                    username.map(str::to_string),
+                ));
+                Ok(())
+            }
+            fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+                // Test mock: no event bus to forward to.
+            }
+        }
+
+        /// A Slack message shaped the way the sidecar emits one: `platform_id` is the conversation, the individual speaker lives under `SENDER_USER_ID_KEY`, and `display_name` carries whatever the adapter resolved for them.
+        fn slack_message(
+            is_group: bool,
+            sender_user_id: Option<&str>,
+            display_name: &str,
+            username: Option<&str>,
+        ) -> ChannelMessage {
+            let mut metadata = std::collections::HashMap::new();
+            if let Some(uid) = sender_user_id {
+                metadata.insert(SENDER_USER_ID_KEY.to_string(), serde_json::json!(uid));
+            }
+            if let Some(handle) = username {
+                metadata.insert("sender_username".to_string(), serde_json::json!(handle));
+            }
+            ChannelMessage {
+                channel: ChannelType::Slack,
+                platform_message_id: "1700000000.000100".to_string(),
+                sender: ChannelUser {
+                    platform_id: "C0DESIGN".to_string(),
+                    display_name: display_name.to_string(),
+                    librefang_user: None,
+                },
+                content: ChannelContent::Text("ship it".to_string()),
+                target_agent: None,
+                timestamp: chrono::Utc::now(),
+                is_group,
+                thread_id: None,
+                metadata,
+            }
+        }
+
+        async fn record(message: &ChannelMessage) -> Vec<RosterCall> {
+            let recorder = Arc::new(RosterRecorder::default());
+            let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+            upsert_sender_into_roster(&handle, message).await;
+            let calls = recorder.calls.lock().unwrap().clone();
+            calls
+        }
+
+        /// Run both roster writes over one message, the way the inbound paths do, and return `(observed, enumerated)`.
+        async fn record_both(message: &ChannelMessage) -> (Vec<RosterCall>, Vec<RosterCall>) {
+            let recorder = Arc::new(RosterRecorder::default());
+            let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+            upsert_sender_into_roster(&handle, message).await;
+            upsert_enumerated_members_into_roster(&handle, message).await;
+            let observed = recorder.calls.lock().unwrap().clone();
+            let enumerated = recorder.enumerated.lock().unwrap().clone();
+            (observed, enumerated)
+        }
+
+        /// Attach a platform member list to a message the way the Slack sidecar does with `SLACK_ENUMERATE_MEMBERS` on.
+        fn with_group_members(
+            mut message: ChannelMessage,
+            members: serde_json::Value,
+        ) -> ChannelMessage {
+            message
+                .metadata
+                .insert("group_members".to_string(), members);
+            message
+        }
+
+        /// The #7086 payoff: a name the Slack adapter resolved through `users.info` has to survive the bridge to reach `group_roster.display_name`, because that column is verbatim what `channel_members` hands the model.
+        #[tokio::test]
+        async fn a_resolved_display_name_and_handle_reach_the_roster() {
+            let calls = record(&slack_message(
+                true,
+                Some("U09ABC"),
+                "Ada Lovelace",
+                Some("ada"),
+            ))
+            .await;
+
+            assert_eq!(
+                calls,
+                vec![(
+                    "slack".to_string(),
+                    "C0DESIGN".to_string(),
+                    "U09ABC".to_string(),
+                    "Ada Lovelace".to_string(),
+                    Some("ada".to_string()),
+                )],
+                "the roster is keyed on (bare channel type, conversation id, speaker id) and stores the resolved name and handle"
+            );
+        }
+
+        /// `SLACK_RESOLVE_DISPLAY_NAMES` defaults to off, and every failure path in the adapter falls back to the raw id.
+        /// Turning resolution off must degrade the *label*, never the membership record — otherwise `channel_dm` would refuse to reach anyone on a default install.
+        #[tokio::test]
+        async fn an_unresolved_raw_id_is_still_rostered() {
+            let calls = record(&slack_message(true, Some("U09ABC"), "U09ABC", None)).await;
+
+            assert_eq!(calls.len(), 1, "membership does not depend on resolution");
+            assert_eq!(calls[0].2, "U09ABC");
+            assert_eq!(calls[0].3, "U09ABC");
+            assert_eq!(calls[0].4, None, "no handle resolved, no handle stored");
+        }
+
+        /// A DM has no roster: `platform_id` is the peer rather than a conversation with members, and recording it would invent a one-person group.
+        #[tokio::test]
+        async fn a_direct_message_is_not_rostered() {
+            let calls = record(&slack_message(false, Some("U09ABC"), "Ada Lovelace", None)).await;
+            assert!(calls.is_empty(), "DMs must not write roster rows");
+        }
+
+        /// Without `SENDER_USER_ID_KEY` the only id available is the conversation's own `platform_id`.
+        /// Storing that would make the group a member of itself, and `channel_dm`'s membership check would then authorize the group id as a private recipient — the broadcast the tool exists to avoid.
+        #[tokio::test]
+        async fn a_group_message_with_no_sender_user_id_is_not_rostered() {
+            let calls = record(&slack_message(true, None, "Ada Lovelace", None)).await;
+            assert!(
+                calls.is_empty(),
+                "a message with no individual speaker id must not fall back to the conversation id"
+            );
+        }
+
+        /// An empty id is the same hazard as a missing one, and an empty conversation id would key a row nothing can ever read back.
+        #[tokio::test]
+        async fn empty_ids_are_not_rostered() {
+            assert!(record(&slack_message(true, Some(""), "Ada Lovelace", None))
+                .await
+                .is_empty());
+
+            let mut blank_conversation = slack_message(true, Some("U09ABC"), "Ada Lovelace", None);
+            blank_conversation.sender.platform_id = String::new();
+            assert!(record(&blank_conversation).await.is_empty());
+        }
+
+        /// The WhatsApp gateway stamps its channel as `whatsapp:<jid>` (#5227), but the roster is keyed on the bare channel *type* that `channel_type_str` produces.
+        /// `channel_members` and `channel_dm` both strip the suffix before reading, so the write side has to agree or every WhatsApp lookup misses.
+        #[tokio::test]
+        async fn the_roster_key_is_the_bare_channel_type() {
+            let mut msg = slack_message(true, Some("44@s.whatsapp.net"), "Ada", None);
+            msg.channel = ChannelType::WhatsApp;
+            msg.sender.platform_id = "123@g.us".to_string();
+
+            let calls = record(&msg).await;
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].0, "whatsapp");
+            assert_eq!(calls[0].1, "123@g.us");
+        }
+
+        // --- bulk enumeration (#7086) -------------------------------------
+
+        /// The two writes must stay distinguishable all the way through the bridge.
+        /// The speaker earns an observed row and therefore `channel_dm` reachability; everyone the platform merely listed earns an enumerated one and does not.
+        /// If both ended up on the same call, bulk enumeration would have silently widened the DM authorization set — the escalation the whole `source` split exists to prevent.
+        #[tokio::test]
+        async fn a_platform_member_list_writes_enumerated_rows_and_the_speaker_writes_an_observed_one(
+        ) {
+            let message = with_group_members(
+                slack_message(true, Some("U09ABC"), "Ada Lovelace", Some("ada")),
+                serde_json::json!([
+                    {"user_id": "U09ABC", "display_name": "Ada Lovelace", "username": "ada"},
+                    {"user_id": "U0SILENT", "display_name": "Never Spoken"},
+                ]),
+            );
+
+            let (observed, enumerated) = record_both(&message).await;
+
+            assert_eq!(observed.len(), 1, "only the speaker is observed");
+            assert_eq!(observed[0].2, "U09ABC");
+
+            assert_eq!(
+                enumerated,
+                vec![
+                    (
+                        "slack".to_string(),
+                        "C0DESIGN".to_string(),
+                        "U09ABC".to_string(),
+                        "Ada Lovelace".to_string(),
+                        Some("ada".to_string()),
+                    ),
+                    (
+                        "slack".to_string(),
+                        "C0DESIGN".to_string(),
+                        "U0SILENT".to_string(),
+                        "Never Spoken".to_string(),
+                        None,
+                    ),
+                ],
+                "every listed member is enumerated, including the speaker — the store refuses to demote the observed row it already has"
+            );
+        }
+
+        /// Every adapter that has not opted in sends no `group_members` key, and that must cost nothing.
+        #[tokio::test]
+        async fn a_message_without_a_member_list_enumerates_nothing() {
+            let (_, enumerated) =
+                record_both(&slack_message(true, Some("U09ABC"), "Ada", None)).await;
+            assert!(enumerated.is_empty());
+        }
+
+        /// A DM has no membership to enumerate, and a one-to-one `platform_id` is the peer rather than a conversation.
+        #[tokio::test]
+        async fn a_direct_message_enumerates_nothing() {
+            let message = with_group_members(
+                slack_message(false, Some("U09ABC"), "Ada", None),
+                serde_json::json!([{"user_id": "U0SILENT", "display_name": "Never Spoken"}]),
+            );
+            let (_, enumerated) = record_both(&message).await;
+            assert!(enumerated.is_empty());
+        }
+
+        /// A member with no name renders as a blank line in `channel_members`, which reads as a broken tool rather than as an unresolved id.
+        /// An empty user id is not a member at all and is skipped outright.
+        #[tokio::test]
+        async fn a_nameless_member_falls_back_to_its_id_and_an_idless_one_is_skipped() {
+            let message = with_group_members(
+                slack_message(true, Some("U09ABC"), "Ada", None),
+                serde_json::json!([
+                    {"user_id": "U0SILENT", "display_name": ""},
+                    {"user_id": "", "display_name": "no id at all"},
+                ]),
+            );
+
+            let (_, enumerated) = record_both(&message).await;
+            assert_eq!(enumerated.len(), 1);
+            assert_eq!(enumerated[0].2, "U0SILENT");
+            assert_eq!(enumerated[0].3, "U0SILENT");
+        }
+
+        /// The sidecar wire is not a trusted source of list lengths.
+        /// A workspace channel can list tens of thousands of people, and one message must not turn into an unbounded run of SQLite transactions and stored identities.
+        #[tokio::test]
+        async fn an_oversized_member_list_is_truncated_at_the_cap() {
+            let members: Vec<serde_json::Value> = (0..MAX_ENUMERATED_MEMBERS_PER_MESSAGE + 25)
+                .map(|i| serde_json::json!({"user_id": format!("U{i:05}"), "display_name": "x"}))
+                .collect();
+            let message = with_group_members(
+                slack_message(true, Some("U09ABC"), "Ada", None),
+                serde_json::Value::Array(members),
+            );
+
+            let (_, enumerated) = record_both(&message).await;
+            assert_eq!(enumerated.len(), MAX_ENUMERATED_MEMBERS_PER_MESSAGE);
+        }
+
+        /// Same key agreement the observed write needs: the roster is keyed on the bare channel type, and the WhatsApp gateway stamps `whatsapp:<jid>` (#5227).
+        #[tokio::test]
+        async fn enumerated_rows_use_the_bare_channel_type() {
+            let mut msg = with_group_members(
+                slack_message(true, Some("44@s.whatsapp.net"), "Ada", None),
+                serde_json::json!([{"user_id": "55@s.whatsapp.net", "display_name": "Bo"}]),
+            );
+            msg.channel = ChannelType::WhatsApp;
+            msg.sender.platform_id = "123@g.us".to_string();
+
+            let (_, enumerated) = record_both(&msg).await;
+            assert_eq!(enumerated.len(), 1);
+            assert_eq!(enumerated[0].0, "whatsapp");
+            assert_eq!(enumerated[0].1, "123@g.us");
         }
     }
 }

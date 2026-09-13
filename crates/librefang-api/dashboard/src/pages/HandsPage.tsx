@@ -73,6 +73,64 @@ import { DrawerPanel } from "../components/ui/DrawerPanel";
 import { useCronJobs } from "../lib/queries/runtime";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 
+const EMPTY_HAND_SETTINGS: HandSettingsResponse = Object.freeze({});
+const CODEBERG_HOST = "https://codeberg.org";
+type RegistrySource = "github" | "codeberg" | "custom";
+
+function getHeroIconClass(
+  isActive: boolean,
+  isPaused: boolean,
+  requirementsMet: boolean,
+): string {
+  if (isActive && isPaused) return "bg-warning/15 text-warning";
+  if (isActive) return "bg-success/15 text-success";
+  if (requirementsMet) return "bg-brand/10 text-brand";
+  return "bg-warning/10 text-warning";
+}
+
+function getHandCardClasses(
+  isActive: boolean,
+  isWarning: boolean,
+  blocked: boolean,
+): { state: string; icon: string } {
+  if (isActive && isWarning) {
+    return {
+      state: "border-warning/40 bg-warning/[0.04] hover:border-warning/60 hover:shadow-sm",
+      icon: "bg-warning/15 text-warning",
+    };
+  }
+  if (isActive) {
+    return {
+      state: "border-success/40 bg-success/[0.04] hover:border-success/60 hover:shadow-sm",
+      icon: "bg-success/15 text-success",
+    };
+  }
+  if (blocked) {
+    return {
+      state: "border-border-subtle bg-surface opacity-80 hover:border-warning/30",
+      icon: "bg-warning/10 text-warning/70",
+    };
+  }
+  return {
+    state: "border-border-subtle bg-surface hover:border-brand/40 hover:shadow-md",
+    icon: "bg-brand/10 text-brand",
+  };
+}
+
+function getRegistrySource(normalizedHost: string): RegistrySource {
+  if (normalizedHost === "" || normalizedHost === "https://github.com") return "github";
+  if (normalizedHost === CODEBERG_HOST) return "codeberg";
+  return "custom";
+}
+
+export function findLatestHand(
+  selected: HandDefinitionItem | null,
+  hands: HandDefinitionItem[],
+): HandDefinitionItem | null {
+  if (!selected) return null;
+  return hands.find((hand) => hand.id === selected.id) ?? null;
+}
+
 
 
 /* ── Inline metrics for active hand cards ─────────────────── */
@@ -135,7 +193,7 @@ function HandDetailPanel({
 
   const statsQuery = useHandStats(instance?.instance_id ?? "");
 
-  const settings: HandSettingsResponse = settingsQuery.data ?? {};
+  const settings = settingsQuery.data ?? EMPTY_HAND_SETTINGS;
   const stats: HandStatsResponse = statsQuery.data ?? {};
 
   // Primary metric keys to pull out for the hero strip (best-effort — falls back to any available)
@@ -145,13 +203,7 @@ function HandDetailPanel({
         .slice(0, 4)
     : [];
 
-  const heroIconClass = isActive
-    ? isPaused
-      ? "bg-warning/15 text-warning"
-      : "bg-success/15 text-success"
-    : hand.requirements_met
-      ? "bg-primary/10 text-primary"
-      : "bg-warning/10 text-warning";
+  const heroIconClass = getHeroIconClass(isActive, isPaused, hand.requirements_met === true);
 
   return (
     <>
@@ -346,17 +398,14 @@ function HandDetailPanel({
 
 /* ── Detail tabs content ─────────────────────────────────── */
 
-function RequirementsForm({ handId, requirements }: { handId: string; requirements: HandDefinitionItem["requirements"] }) {
+export function RequirementsForm({ handId, requirements }: { handId: string; requirements: HandDefinitionItem["requirements"] }) {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
   const setSecret = useSetHandSecret();
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const r of requirements ?? []) {
-      if (r.key && r.current_value) init[r.key] = r.current_value;
-    }
-    return init;
-  });
+  // The API never returns the value of a satisfied requirement (redacted for
+  // secret safety), so this form always starts empty — there is nothing to
+  // pre-fill from `requirements`.
+  const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   if (!requirements || requirements.length === 0) return null;
@@ -391,19 +440,19 @@ function RequirementsForm({ handId, requirements }: { handId: string; requiremen
           {r.key && (
             <div className="flex gap-2">
               <input
-                type="text"
+                type="password"
                 autoComplete="off"
                 placeholder={r.satisfied ? "••••••••" : r.key}
                 value={values[r.key!] ?? ""}
                 onChange={(e) => { setValues(prev => ({ ...prev, [r.key!]: e.target.value })); }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(r.key!); } }}
-                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-mono outline-none focus:border-primary placeholder:text-text-dim/30 transition-colors ${
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleSave(r.key!); } }}
+                className={`flex-1 px-3 py-2 rounded-lg border text-xs font-mono outline-none focus:border-brand placeholder:text-text-dim/30 transition-colors ${
                   r.satisfied ? "border-success/30 bg-success/5 focus:border-success/60" : "border-border-subtle bg-surface"
                 }`}
               />
               <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSave(r.key!); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleSave(r.key!); }}
                 disabled={!values[r.key!]?.trim() || saving === r.key}
                 className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:brightness-110 shadow-sm shadow-brand/20 transition-all disabled:opacity-40 disabled:shadow-none"
               >
@@ -497,6 +546,11 @@ function HandAgentConfigTab({
   );
 }
 
+/// Order-sensitive equality for a tool list — the editor treats reordering as an edit.
+function sameTools(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((t, i) => t === b[i]);
+}
+
 function HandAgentEditor({
   agent,
   agentId,
@@ -528,8 +582,24 @@ function HandAgentEditor({
   const [tools, setTools] = useState<string[]>(currentTools);
   const [newTool, setNewTool] = useState("");
 
-  useEffect(() => { setPrompt(currentPrompt); }, [currentPrompt]);
-  useEffect(() => { setTools(currentTools); }, [currentTools]);
+  // Adopt a new saved value only while the draft is untouched.
+  //
+  // `currentPrompt` starts as the HAND.toml baseline and switches to the live value the moment `useAgentDetail` resolves — which for a hand agent always differs, since the live prompt carries the rendered `## User Configuration` / `## Reference Knowledge` / `## Your Team` tails.
+  // A bare `useEffect(() => setPrompt(currentPrompt), [currentPrompt])` therefore wipes whatever the operator typed in the window between opening the tab and the query landing.
+  // Comparing against the last value we applied distinguishes "the server moved" from "the user typed", and only the former wins.
+  //
+  // Switching agent or hand is not handled here: `HandAgentEditor` is keyed by role and `HandDetailPanel` by hand id, so both remount and reset every draft outright.
+  const appliedPrompt = useRef(currentPrompt);
+  useEffect(() => {
+    setPrompt((draft) => (draft === appliedPrompt.current ? currentPrompt : draft));
+    appliedPrompt.current = currentPrompt;
+  }, [currentPrompt]);
+
+  const appliedTools = useRef(currentTools);
+  useEffect(() => {
+    setTools((draft) => (sameTools(draft, appliedTools.current) ? currentTools : draft));
+    appliedTools.current = currentTools;
+  }, [currentTools]);
 
   const patchAgent = usePatchAgent();
   const updateTools = useUpdateAgentTools();
@@ -538,7 +608,7 @@ function HandAgentEditor({
   const promptDirty = prompt !== currentPrompt;
   // Dirty = draft differs from the live/current value (what's saved).
   const toolsDirty = useMemo(
-    () => tools.length !== currentTools.length || tools.some((tt, i) => tt !== currentTools[i]),
+    () => !sameTools(tools, currentTools),
     [tools, currentTools],
   );
   // Whether the draft already matches the manifest default (disables reset).
@@ -727,7 +797,7 @@ function DetailTabs({ hand, instance, isActive, settings, settingsQuery }: {
 
   // Fetch cron jobs for this hand's agent
   const agentId = instance?.agent_id;
-  const cronJobsQuery = useCronJobs(isActive ? agentId : undefined);
+  const cronJobsQuery = useCronJobs(agentId, { enabled: isActive && !!agentId });
   const cronJobs = cronJobsQuery.data ?? [];
 
   type Tab = "agents" | "agent_config" | "settings" | "requirements" | "tools" | "schedules";
@@ -863,7 +933,7 @@ function DetailTabs({ hand, instance, isActive, settings, settingsQuery }: {
 
 /* ── Settings tab content for a hand — editable form ─────── */
 
-function HandSettingsEditor({
+export function HandSettingsEditor({
   handId,
   settings,
   isLoading,
@@ -880,15 +950,29 @@ function HandSettingsEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const saveOkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsKey = JSON.stringify({
+    definitions: settings.settings ?? [],
+    currentValues: settings.current_values ?? {},
+  });
+  const lastSettingsKeyRef = useRef(settingsKey);
 
   useEffect(() => {
-    setDraft({});
+    if (lastSettingsKeyRef.current === settingsKey) return;
+    lastSettingsKeyRef.current = settingsKey;
+    if (Object.keys(draft).length > 0) return;
+    if (saveOkTimerRef.current) {
+      clearTimeout(saveOkTimerRef.current);
+      saveOkTimerRef.current = null;
+    }
     setSaveOk(false);
     setSaveError(null);
+  }, [settingsKey, draft]);
+
+  useEffect(() => {
     return () => {
       if (saveOkTimerRef.current) clearTimeout(saveOkTimerRef.current);
     };
-  }, [settings]);
+  }, []);
 
   const saveMutation = useUpdateHandSettings();
 
@@ -1229,18 +1313,18 @@ function HandSchedulesTab({ cronJobs, isLoading, onRefresh, agentId, handName }:
                 </button>
               </div>
               <button
-                onClick={() => handleToggle(job)}
+                onClick={() => void handleToggle(job)}
                 className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide transition-colors ${isEnabled ? "bg-success/15 text-success hover:bg-success/25" : "bg-main text-text-dim/50 hover:text-text-dim"}`}
               >
                 {isEnabled ? "ON" : "OFF"}
               </button>
               {confirmDeleteId === job.id ? (
                 <div className="flex items-center gap-1">
-                  <button onClick={() => handleDelete(job.id!)} className="px-2 py-1 rounded-md bg-error text-white text-[10px] font-bold">{t("common.confirm")}</button>
+                  <button onClick={() => void handleDelete(job.id!)} className="px-2 py-1 rounded-md bg-error text-white text-[10px] font-bold">{t("common.confirm")}</button>
                   <button onClick={() => setConfirmDeleteId(null)} className="px-2 py-1 rounded-md bg-main text-text-dim text-[10px] font-bold">{t("common.cancel")}</button>
                 </div>
               ) : (
-                <button onClick={() => handleDelete(job.id!)} className="p-1.5 rounded-lg text-text-dim/40 hover:text-error hover:bg-error/10 transition-colors" title={t("hands.delete_schedule", { defaultValue: "Delete schedule" })}>
+                <button onClick={() => void handleDelete(job.id!)} className="p-1.5 rounded-lg text-text-dim/40 hover:text-error hover:bg-error/10 transition-colors" title={t("hands.delete_schedule", { defaultValue: "Delete schedule" })}>
                   <XCircle className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -1413,21 +1497,11 @@ const HandCard = React.memo(function HandCard({
 
   // State-driven styling: color-coded border, background, and icon tint.
   // Degraded promotes to warning tint even though the hand is technically running.
-  const stateClasses = isActive
-    ? isPaused || isDegraded
-      ? "border-warning/40 bg-warning/[0.04] hover:border-warning/60 hover:shadow-sm"
-      : "border-success/40 bg-success/[0.04] hover:border-success/60 hover:shadow-sm"
-    : blocked
-      ? "border-border-subtle bg-surface opacity-80 hover:border-warning/30"
-      : "border-border-subtle bg-surface hover:border-primary/40 hover:shadow-md";
-
-  const iconClasses = isActive
-    ? isPaused || isDegraded
-      ? "bg-warning/15 text-warning"
-      : "bg-success/15 text-success"
-    : blocked
-      ? "bg-warning/10 text-warning/70"
-      : "bg-primary/10 text-primary";
+  const { state: stateClasses, icon: iconClasses } = getHandCardClasses(
+    isActive,
+    isPaused || isDegraded,
+    blocked,
+  );
 
   return (
     <div
@@ -1563,8 +1637,6 @@ const HandCard = React.memo(function HandCard({
 /* ── Main page ────────────────────────────────────────────── */
 
 /** Codeberg base URL stored in `registry.registry_host` when that source is picked. */
-const CODEBERG_HOST = "https://codeberg.org";
-
 function RegistrySourceSelector() {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
@@ -1598,12 +1670,7 @@ function RegistrySourceSelector() {
   // github.com both mean GitHub; codeberg.org (any case / trailing slash) means
   // Codeberg; anything else is a custom forge.
   const normalized = host.replace(/\/+$/, "").toLowerCase();
-  const current: "github" | "codeberg" | "custom" =
-    normalized === "" || normalized === "https://github.com"
-      ? "github"
-      : normalized === CODEBERG_HOST
-        ? "codeberg"
-        : "custom";
+  const current = getRegistrySource(normalized);
 
   const options = [
     { value: "github", label: t("hands.registry_source_github") },
@@ -1675,7 +1742,7 @@ export function HandsPage() {
   const [confirmDialog, setConfirmDialog] = useState<{
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     tone?: "destructive";
   } | null>(null);
   const navigate = useNavigate();
@@ -1692,8 +1759,8 @@ export function HandsPage() {
   const resumeMutation = useResumeHand();
   const uninstallMutation = useUninstallHand();
 
-  const hands = handsQuery.data ?? [];
-  const instances = activeQuery.data ?? [];
+  const hands = useMemo(() => handsQuery.data ?? [], [handsQuery.data]);
+  const instances = useMemo(() => activeQuery.data ?? [], [activeQuery.data]);
 
   const handleChat = useCallback((instanceId: string, handName?: string) => {
     const inst = instances.find((i) => i.instance_id === instanceId);
@@ -1859,9 +1926,7 @@ export function HandsPage() {
 
   // Always read the latest hand data from the query cache so the modal
   // reflects changes (e.g. requirement satisfaction) after saving secrets.
-  const detailHandLatest = detailHand
-    ? hands.find((h) => h.id === detailHand.id) ?? detailHand
-    : null;
+  const detailHandLatest = findLatestHand(detailHand, hands);
   const detailInstance = detailHandLatest
     ? instances.find((i) => i.hand_id === detailHandLatest.id)
     : undefined;

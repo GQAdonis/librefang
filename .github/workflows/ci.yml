@@ -32,6 +32,45 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  # The registry signing key is duplicated across the daemon and three worker
+  # surfaces. Keep this build-free guard unconditional: a worker-only config
+  # change does not enter the Rust quality lane, but must still prove lockstep.
+  pubkey-lockstep:
+    name: Registry Pubkey Lockstep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check registry public keys
+        run: bash scripts/check-pubkey-lockstep.sh
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Verify toolchain versions agree
+        id: msrv
+        run: |
+          set -euo pipefail
+          version=$(scripts/check-toolchain-versions.sh --print)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
+      - name: Install workspace system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            patchelf
+      - name: Check workspace libraries at MSRV
+        run: cargo check --workspace --lib
+
   # ── Detect changes + compute affected crate subset ─────────────────────────────
   # PR lane: Linux only. Selective by default (test just the crates the PR
   #   touches — no downstream fan-out, main catches cross-crate breakage on
@@ -46,6 +85,7 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       rust: ${{ steps.diff.outputs.rust }}
       docs: ${{ steps.diff.outputs.docs }}
@@ -56,6 +96,7 @@ jobs:
       crates: ${{ steps.diff.outputs.crates }}
       skill_sdk: ${{ steps.diff.outputs.skill_sdk }}
       sidecar_rust: ${{ steps.diff.outputs.sidecar_rust }}
+      sdk_python: ${{ steps.diff.outputs.sdk_python }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -79,6 +120,7 @@ jobs:
               echo "rust=true"; echo "docs=true"; echo "ci=true"; echo "install=true"
               echo "full_run=true"; echo "full_test=true"
               echo "skill_sdk=true"; echo "sidecar_rust=true"
+              echo "sdk_python=true"
               echo "crates="
             } >> "$GITHUB_OUTPUT"
             echo "merge_group: forcing full run on all platforms"
@@ -107,7 +149,7 @@ jobs:
           # `openapi-drift` job still gates direct edits.
           RUST=false;    has '^(crates/|Cargo\.(toml|lock)$|xtask/|openapi\.json$|sdk/)' && RUST=true
           DOCS=false;    has '^(docs/|.*\.md$)'                                       && DOCS=true
-          CI=false;      has '^\.github/workflows/'                                   && CI=true
+          CI=false;      has '^(\.github/workflows/|\.devcontainer/|scripts/check-no-empty-string-sentinels\.sh$|scripts/tests/check-no-empty-string-sentinels\.sh$|scripts/tests/test_release_tag_workflow_safety\.py$|scripts/tests/test_issue_labels_workflow\.py$|scripts/run-xtask\.sh$|scripts/tests/run-xtask\.sh$|scripts/workers/|scripts/tests/install-redirect-workers\.mjs$|scripts/check-error-shape\.sh$|scripts/tests/check-error-shape\.sh$|scripts/codegen-sdks\.py$|scripts/tests/test_codegen_sdks\.py$|scripts/tests/test_pr_status_labels_workflow\.py$|scripts/tests/test_pr_review_label_workflows\.py$|scripts/tests/test_workflow_report_hardening\.py$)' && CI=true
           INSTALL=false; has '^web/public/install\.(sh|ps1)$|^scripts/tests/install_sh_test\.sh$' && INSTALL=true
           # The WASM-skill guest SDK and its example are independent
           # workspaces (own `[workspace]` roots), so the main RUST lane —
@@ -126,6 +168,10 @@ jobs:
           # pipeline relies on, catching cross / sibling-path-dep breakage at
           # PR time. See #5936.
           SIDECAR_RUST=false; has '^(sdk/rust/librefang-sidecar/|sdk/rust/librefang-sidecar-telegram/|\.github/workflows/release(-cli)?\.yml$)' && SIDECAR_RUST=true
+          # The Python SDK carries the sidecar channel adapters (slack, discord, telegram, …) and ~1900 pytest cases that no lane ran before #6741.
+          # `sdk/` is folded into RUST above only as an openapi/codegen drift guard — that lane runs cargo, never pytest — so a Python-only regression shipped green.
+          # Route `sdk/python/**` to its own job.
+          SDK_PYTHON=false; has '^sdk/python/' && SDK_PYTHON=true
           # Workspace-level Cargo manifest ≠ xtask source. A workspace
           # `Cargo.toml` change can shift dep versions, profile flags,
           # workspace lints, or membership — anything in the tree may
@@ -185,12 +231,13 @@ jobs:
             echo "full_test=$FULL_TEST"
             echo "skill_sdk=$SKILL_SDK"
             echo "sidecar_rust=$SIDECAR_RUST"
+            echo "sdk_python=$SDK_PYTHON"
           } >> "$GITHUB_OUTPUT"
           echo "Route: full_run=$FULL ($REASON), full_test=$FULL_TEST ($TREASON)"
 
           # Directly-touched crates (no downstream fan-out — on purpose).
           DIRECT=$(printf '%s\n' "$CHANGED" \
-            | sed -n 's|^crates/\([^/]*\)/.*|\1|p' \
+            | sed -n 's|^crates/\([A-Za-z0-9_-][A-Za-z0-9_-]*\)/.*|\1|p' \
             | sort -u | tr '\n' ' ')
 
           # xtask isn't under `crates/`, so the regex above misses it.
@@ -223,14 +270,17 @@ jobs:
     name: No Build Artifacts
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Reject static/react/ in PR
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           # Only flag added or modified files (not deletions — cleanup PRs are OK)
-          ADDED=$(git diff --diff-filter=AM --name-only origin/${{ github.base_ref }}...HEAD -- 'crates/librefang-api/static/react/' || true)
+          ADDED=$(git diff --diff-filter=AM --name-only "origin/${BASE_REF}...HEAD" -- 'crates/librefang-api/static/react/' || true)
           if [ -n "$ADDED" ]; then
             echo "::error::PR adds/modifies dashboard build artifacts (static/react/). These are auto-built by CI — remove them from your commits."
             echo "Fix: git rm --cached crates/librefang-api/static/react/ && git commit --amend"
@@ -248,23 +298,74 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
       - name: Install Tauri system deps
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
+      # A workflow file that fails to parse cannot report that it failed to parse: GitHub records a run with no jobs, it never appears in a PR's check rollup, and nothing goes red.
+      # `kubernetes.yml` shipped that way — a backslash continuation inside a `run: |` block put the next line at column 0, ending the block scalar — and was merged to main having never executed a single step.
+      # Parsing every workflow from a job that does run is the only thing that catches this class.
+      - name: Validate workflow YAML parses
+        run: |
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = []
+          for path in sorted(glob.glob('.github/workflows/*.yml')):
+              try:
+                  doc = yaml.safe_load(open(path))
+              except Exception as exc:
+                  bad.append(f'{path}: {type(exc).__name__}: {exc}')
+                  continue
+              # `on` is truthy-keyed by YAML 1.1, so it can land under `True`.
+              if not (doc.get('on') or doc.get(True)):
+                  bad.append(f'{path}: parsed but declares no triggers')
+              if not doc.get('jobs'):
+                  bad.append(f'{path}: parsed but declares no jobs')
+          if bad:
+              print('::error::invalid workflow definitions:')
+              for line in bad:
+                  print(f'  {line}')
+              sys.exit(1)
+          print(f'{len(glob.glob(".github/workflows/*.yml"))} workflow files parse and declare triggers + jobs')
+          PY
+      - name: Check release workflow input safety
+        run: python3 scripts/tests/test_release_tag_workflow_safety.py
+      - name: Test SDK generator contracts
+        run: |
+          python3 scripts/tests/test_codegen_sdks.py
+          python3 -O scripts/tests/test_codegen_sdks.py
+      - name: Check PR status-label reconciliation
+        run: python3 scripts/tests/test_pr_status_labels_workflow.py
+      - name: Check PR review-label pipeline
+        run: python3 scripts/tests/test_pr_review_label_workflows.py
+      - name: Test Docker xtask wrapper
+        run: bash scripts/tests/run-xtask.sh
+      - name: Test installer redirect workers
+        run: node scripts/tests/install-redirect-workers.mjs
+      - name: Install actionlint
+        run: |
+          mkdir -p "$RUNNER_TEMP/actionlint-bin"
+          GOBIN="$RUNNER_TEMP/actionlint-bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
+      - name: Check report workflow hardening
+        run: python3 scripts/tests/test_workflow_report_hardening.py
+      - name: Check issue-label reconciliation
+        run: python3 scripts/tests/test_issue_labels_workflow.py
       - name: Check formatting
         run: cargo xtask fmt
+      - name: Test API error response scanner
+        run: bash scripts/tests/check-error-shape.sh
       - name: Check API error response shape (issue #3505)
         # Pure text scan, ~milliseconds. Rejects new `{"detail": …}` or
         # `{"status": "error", …}` constructions in `routes/`. Files
@@ -283,12 +384,13 @@ jobs:
       - name: Ensure dashboard build dir exists
         run: mkdir -p crates/librefang-api/static/react
       - name: Build + clippy
+        env:
+          CRATES: ${{ needs.changes.outputs.crates }}
         run: |
           if [ "${{ needs.changes.outputs.full_run }}" = "true" ]; then
             echo "Full build + clippy (workspace)…"
             cargo xtask ci --no-test --no-web
           else
-            CRATES="${{ needs.changes.outputs.crates }}"
             if [ -z "$CRATES" ]; then
               echo "No crates affected — skipping build + clippy."
               exit 0
@@ -296,9 +398,9 @@ jobs:
             PFLAGS=""
             for c in $CRATES; do PFLAGS="$PFLAGS -p $c"; done
             echo "Selective build for:  $CRATES"
-            # No --lib: binary-only crates (librefang-cli, librefang-desktop)
-            # error with "no library targets found" otherwise. Default targets
-            # (lib + bins) are what we want anyway.
+            # No --lib: binary-only crates (librefang-cli) error with "no
+            # library targets found" otherwise. Default targets (lib + bins)
+            # are what we want anyway.
             cargo build $PFLAGS
             echo "Selective clippy for: $CRATES"
             cargo clippy $PFLAGS --all-targets --all-features -- -D warnings
@@ -307,6 +409,8 @@ jobs:
       # in API response code (refs #3302). Runs in warn mode — never fails
       # the build until the existing inventory is cleared and the script is
       # flipped to --strict. See docs/architecture/api-conventions.md.
+      - name: Test sentinel-pattern lint
+        run: bash scripts/tests/check-no-empty-string-sentinels.sh
       - name: Sentinel-pattern lint (warn-only)
         run: scripts/check-no-empty-string-sentinels.sh
 
@@ -322,13 +426,18 @@ jobs:
     needs: changes
     if: needs.changes.outputs.skill_sdk == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy, rustfmt
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # The pinned toolchain needs the target too — see the note in release.yml's `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           workspaces: |
             sdk/rust/librefang-skill
@@ -356,13 +465,18 @@ jobs:
     needs: changes
     if: needs.changes.outputs.sidecar_rust == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy, rustfmt
           targets: aarch64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # The pinned toolchain needs the target too — see the note in release.yml's `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           # Both workspaces — the adapter and the sibling SDK it depends on.
           workspaces: |
@@ -432,15 +546,139 @@ jobs:
           cargo check -p librefang-llm-drivers --features uar-driver
           cargo clippy -p librefang-llm-drivers --features uar-driver -- -D warnings
 
+  # ── Python SDK + sidecar adapter test suite ────────────────────────────────────
+  # `sdk/python/tests/` holds ~1900 pytest cases covering the HTTP client and every stdlib-only sidecar channel adapter (slack, discord, telegram, mastodon, …), and until #6741 no workflow ran a single one of them — `grep -rn pytest .github/workflows/` came back empty.
+  # The adapters are the production code path for every sidecar channel, so a regression there reached users with CI fully green.
+  # The suite is hermetic (urllib and the WebSocket client are monkeypatched, no network) and finishes in well under a minute, so it runs on any `sdk/python/**` change with no path-filter subtlety beyond that one prefix.
+  sdk-python:
+    name: Python SDK Tests
+    needs: changes
+    if: needs.changes.outputs.sdk_python == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      # `pyproject.toml` declares `dependencies = []` with pytest / pytest-asyncio under `[project.optional-dependencies] dev`, so the editable install with the `dev` extra is the whole environment.
+      # Installing (rather than setting PYTHONPATH) is what makes `import librefang` resolve — running pytest from the repo root against an uninstalled tree fails with `ModuleNotFoundError: No module named 'librefang'`.
+      - name: Install the SDK with dev extras
+        run: python -m pip install -e './sdk/python[dev]'
+      # `working-directory` puts pytest's rootdir on `sdk/python`, so `[tool.pytest.ini_options]` — and with it `asyncio_mode = "auto"`, which the async adapter tests need — is picked up without relying on rootdir discovery walking up from an argument path.
+      - name: pytest
+        working-directory: sdk/python
+        run: python -m pytest tests -q
+
+  # ── PR commit attribution ──────────────────────────────────────────────────────
+  # `scripts/hooks/commit-msg` encodes the rules and `githook-tests` proves the predicates work, but neither ever runs on the commits that actually reach `main`. Two gaps put them there:
+  #
+  #   1. `core.hooksPath` is opt-in per clone (`just setup`), so a fresh clone — or an agent worktree nobody ran setup in — pushes with no git-side enforcement at all.
+  #   2. GitHub composes the squash-merge commit server-side, appending `Co-authored-by:` for every non-primary author in the branch. One Claude-authored commit anywhere therefore stamps `main` with attribution no local hook can see.
+  #
+  # This runs on `pull_request` rather than on `push` to `main` deliberately: once the trailer exists the history is public and the only remedy is a force-push to a protected branch. The PR is the last point where the fix is a rebase.
+  #
+  # `if:` restricts it to pull requests; the gate treats a legitimate skip as green, so a push to `main` is unaffected.
+  pr-commit-attribution:
+    name: PR Commit Attribution
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # fetch-depth: 0 — the check walks `merge-base..head`, which needs both sides' history rather than the single merge commit a shallow clone gets.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Reject Claude / Anthropic attribution in this PR's commits
+        run: |
+          bash scripts/check-pr-commit-attribution.sh \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+
+  # ── git-side hook corpus tests ─────────────────────────────────────────────────
+  # `scripts/hooks/*` run inside git, so nothing in the Rust or dashboard test suites covers them, and their corpus tests under `scripts/tests/` existed without ever being wired into CI — the same gap #3400 closed for the changelog validator's own unit tests, one directory over.
+  # A regression in the attribution predicates could therefore only be caught by running these by hand, which is exactly what nobody does before pushing a hook edit.
+  githook-tests:
+    name: Git Hook Corpus Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Message text and author identity, rejected and accepted corpora.
+      - name: commit-msg attribution corpus
+        run: bash scripts/tests/commit-msg-attribution.sh
+      # The driver around that hook: right commit range, author field, committer field, and the accepted cases (a contributor named Claudia, a branch merely behind base) that a widened match would break.
+      - name: pr-commit-attribution corpus
+        run: bash scripts/tests/pr-commit-attribution.sh
+      # The same gap one layer up: `.claude/hooks/lib/check-bash-rules.py` decides every PreToolUse verdict and had no test at all, which is how a regex spelling "Generated with" sat in front of a footer reading "Generated by" long enough to stamp 285 PRs and issues.
+      # Also asserts each rule is registered in guard-bash-safety.sh's `rules=` list, since a rule present in the library but absent from that string is dead code that reads as coverage.
+      - name: check-bash-rules attribution corpus
+        run: python3 scripts/tests/test_check_bash_rules_attribution.py
+      # Staged-path handling: filenames with spaces must still be checked.
+      - name: pre-commit space-in-filename handling
+        run: bash scripts/tests/pre-commit-spaces.sh
+      # The openapi baseline refresh must work on a box with sha256sum but no shasum.
+      # Self-skips when sha256sum is absent, so it is safe anywhere.
+      - name: pre-commit sha256sum fallback
+        run: bash scripts/tests/pre-commit-sha-fallback.sh
+      - name: pre-commit channel path policy
+        run: bash scripts/tests/pre-commit-channel-paths.sh
+      - name: pre-push protected branch policy
+        run: bash scripts/tests/pre-push-protected-branches.sh
+      - name: commit wrapper index transaction
+        run: bash scripts/tests/commit-wrapper-index.sh
+
+  # ── Container vulnerability gate self-test ─────────────────────────────────────
+  # `scripts/check-image-vulns.py` decides whether a release digest is allowed to be promoted to the :latest / :VERSION tags (#6694).
+  # Its decision function is only exercised in CI against whatever the vulnerability database happens to say that day, so a regression that made the gate permanently green would look exactly like a clean image.
+  # The embedded fixture corpus pins the behaviour instead: fixable CRITICAL fails at `critical`, an unfixed CRITICAL does not, a truncated report is an infrastructure failure rather than a pass, and the report-only default never fails on findings.
+  #
+  # Unconditional and ~5s, matching githook-tests: the script is small, and a path filter here would be another thing to keep in sync with the gate.
+  image-vuln-gate:
+    name: Image Vulnerability Gate Self-Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Fixture corpus — the gate fails at the configured threshold
+        run: python3 scripts/check-image-vulns.py --self-test
+      - name: Docker startup probe helper corpus
+        run: sh .github/scripts/tests/docker-smoke.test.sh
+
+  # ── Memory retrieval eval harness self-test ───────────────────────────────────
+  # `scripts/memory-retrieval-eval.py` compares memory retrieval strategies on a real corpus using an LLM judge (#7756).
+  # The judging half needs a live judge model and a live embedding endpoint, so it is not hermetic, not deterministic, and never runs here — PR runners are deliberately never given a provider key.
+  # Its arithmetic is the opposite: nDCG@10, the paired bootstrap, pool construction and the judge-response parse rule are pure functions, and a subtle error in any of them produces numbers that look exactly like correct ones.
+  # That is the half worth pinning, so `--self-test` runs the synthetic-input suite with no network and no secret.
+  #
+  # Unconditional, stdlib-only and ~1s, matching image-vuln-gate: a path filter here would be another thing to keep in sync.
+  memory-eval-self-test:
+    name: Memory Eval Harness Self-Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Synthetic corpus — nDCG, the paired bootstrap and the pool hold their contracts
+        run: python3 scripts/memory-retrieval-eval.py --self-test
+
   # ── CHANGELOG attribution check ────────────────────────────────────────────────
   # Enforces the `(@username)` suffix on bullets *added* to the [Unreleased]
-  # section in this PR. Historical entries (1,800+ bullets, many predating
-  # any attribution convention) are NOT retroactively flagged — the validator
-  # only looks at lines this diff introduces. See #3400.
+  # section in this PR, and on `changelog.d/` fragments this PR introduces —
+  # a fragment is an [Unreleased] bullet with a delay on it. Historical
+  # entries (1,800+ bullets, many predating any attribution convention) are
+  # NOT retroactively flagged — the validator only looks at lines this diff
+  # introduces. See #3400.
   changelog-attribution:
     name: CHANGELOG Attribution
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -448,11 +686,34 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
-      - name: Validate (@user) attribution on new [Unreleased] bullets
+      - name: Validate (@user) attribution on new [Unreleased] bullets and changelog.d fragments
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/check-changelog-attribution.py
+
+  # ── Workflow job timeout coverage ─────────────────────────────────────────────
+  # A job with no `timeout-minutes` inherits GitHub's 360-minute default, which is
+  # long enough for a wedged job to hold one of the repository's few concurrent
+  # execution slots for six hours. That is not hypothetical: two `main` CI runs hung
+  # `in_progress` and starved more than eighty queued runs behind them. On `main` the
+  # concurrency group is per-sha with `cancel-in-progress: false` by design, so nothing
+  # supersedes a hung run and only the timeout can end it.
+  # Coverage regresses silently — every new job inherits the default unless its author
+  # remembers the key — so it is guarded rather than left to review.
+  workflow-timeouts:
+    name: Workflow Job Timeouts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+      - name: Every workflow job declares timeout-minutes
+        run: python3 scripts/check-workflow-timeouts.py
 
   # ── CHANGELOG attribution release gate (#3307) ────────────────────────────────
   # Complements the per-PR diff check above by scanning the ENTIRE [Unreleased]
@@ -461,15 +722,24 @@ jobs:
   # to a release without attribution. Runs on PR + push to main.
   # Lines exempted with `# pragma: no-attribution` (added before the convention
   # was enforced and no longer attributable) are not flagged.
+  # This mode also scans every pending `changelog.d/` fragment, so an
+  # unattributed fragment — or one in a section directory assembly has no
+  # heading for — cannot sit in the tree until release day.
   changelog-attribution-full:
     name: CHANGELOG Attribution (full [Unreleased])
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
-      - name: Validate (@user) attribution on all [Unreleased] bullets
+      # The validator's own unit tests. They existed but were never wired into
+      # CI, so a regression in the attribution predicate or the fragment rules
+      # could only be caught by running them by hand.
+      - name: Unit-test the attribution validator
+        run: python3 scripts/tests/test_check_changelog_attribution.py
+      - name: Validate (@user) attribution on all [Unreleased] bullets and changelog.d fragments
         run: python3 scripts/check-changelog-attribution.py --all-unreleased
 
   # ── OpenAPI / SDK drift check ──────────────────────────────────────────────────
@@ -515,7 +785,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           shared-key: openapi-drift
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -599,16 +869,17 @@ jobs:
     needs: changes
     if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           cache-dependency-path: |
             web/pnpm-lock.yaml
@@ -641,13 +912,14 @@ jobs:
   secrets:
     name: Secrets Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Install trufflehog
         run: |
-          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin v3.88.23
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/690e5c7aff8347c3885096f3962a0633d9129607/scripts/install.sh | sh -s -- -b /usr/local/bin v3.88.23
       - name: Scan for secrets
         run: |
           trufflehog filesystem . \
@@ -662,6 +934,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.install == 'true' || needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Syntax-check shell installer
@@ -699,7 +972,7 @@ jobs:
       # job shares its target/ with the rest of the Rust jobs. A per-job
       # `live-smoke-${hashFiles}` key forced a cold compile (~15-20 min debug)
       # on every first run, eating most of the 25-min timeout.
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
       - name: Install system deps for keyring/secret-service
         # `librefang-cli` pulls `librefang-extensions`, which on Linux pulls
         # `keyring` → `secret-service` → `libdbus-sys`; the latter's build
@@ -749,6 +1022,7 @@ jobs:
   agents-claude-pair:
     name: AGENTS.md ↔ CLAUDE.md pair
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify sibling CLAUDE.md symlink
@@ -764,7 +1038,7 @@ jobs:
   #
   # Filter via nextest's expression language (`-E`) instead of `--lib --bins`:
   # the latter errors with "no library targets found" when a `-p <crate>`
-  # selector targets a binary-only crate (librefang-cli, librefang-desktop).
+  # selector targets a binary-only crate (librefang-cli).
   # The `-E 'kind(lib) | kind(bin)'` form matches whichever target kinds the
   # selected crates actually contain — silently skipping the missing kind for
   # bin-only crates — so the selective lane no longer breaks when a PR (or a
@@ -777,7 +1051,13 @@ jobs:
     env:
       # Registry fetches in test-booted kernels are non-hermetic (network-dependent test outcomes, one git clone per kernel boot) — see #6404 and the PR #6384 CI failure this switch prevents.
       LIBREFANG_REGISTRY_OFFLINE: "1"
-    timeout-minutes: 20
+    # 35, not 20: this lane outgrew a 20-minute budget and was being killed at the cap on most runs.
+    # Measured across four consecutive `main` commits — 18.7min pass, 19.7min pass, 20.1min killed, 20.1min killed, 20.3min killed — so it was running at 94-102% of budget and passing or failing by a coin flip, with the outcome unrelated to the diff under test.
+    # A timeout-killed job reports as `cancelled`, and `CI Gate` fails on `cancelled` without re-evaluating, so each of those became a red gate that a re-run could not clear — the re-run hits the same wall.
+    # That reads as flaky infrastructure, and it was diagnosed as merge-sweep collateral more than once before anyone measured the durations.
+    # The sibling `Test / Ubuntu (shard N/4)` lane already carries 45 minutes for strictly more work, so this lane was under-budgeted relative to its own family rather than newly slow.
+    # Keep a real ceiling rather than removing it: the `workflow-timeouts` guard exists because a hung job holds a runner slot for six hours and starves the queue behind it, and on `main` the per-sha concurrency group sets `cancel-in-progress: false`, so nothing but the timeout ends a hung run.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # ubuntu-latest leaves only ~14 GB free; a full-workspace `cargo nextest run --workspace` debug-compiles every lib+bin target (librefang-desktop's static archive alone is large) and overruns it — the linker dies with "No space left on device".
@@ -798,7 +1078,7 @@ jobs:
           sudo docker image prune --all --force
           df -h /
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           shared-key: test-unit
       - name: Install nextest
@@ -811,17 +1091,17 @@ jobs:
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
             libdbus-1-dev libsecret-1-dev pkg-config
       - name: Run unit tests (lib + bin)
+        env:
+          CRATES: ${{ needs.changes.outputs.crates }}
         run: |
           if [ "${{ needs.changes.outputs.full_test }}" = "true" ]; then
             echo "Running workspace unit tests (lib+bin, full run)…"
-            cargo nextest run --workspace -E 'kind(lib) | kind(bin)' --no-fail-fast --no-tests=pass
+            cargo nextest run --profile ci --workspace -E 'kind(lib) | kind(bin)' --no-fail-fast --no-tests=pass
           else
-            CRATES="${{ needs.changes.outputs.crates }}"
             if [ -z "$CRATES" ]; then
               echo "No crates affected — nothing to run."
               exit 0
@@ -829,7 +1109,7 @@ jobs:
             echo "Running unit tests for: $CRATES"
             PFLAGS=""
             for c in $CRATES; do PFLAGS="$PFLAGS -p $c"; done
-            cargo nextest run $PFLAGS -E 'kind(lib) | kind(bin)' --no-fail-fast --no-tests=pass
+            cargo nextest run --profile ci $PFLAGS -E 'kind(lib) | kind(bin)' --no-fail-fast --no-tests=pass
           fi
 
   # ── Ubuntu tests: selective on PR, full on main ────────────────────────────────
@@ -882,7 +1162,7 @@ jobs:
           df -h /
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         if: steps.gate.outputs.skip != 'true'
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         if: steps.gate.outputs.skip != 'true'
         with:
           shared-key: test-ubuntu
@@ -899,17 +1179,17 @@ jobs:
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
       - name: Build tests
         if: steps.gate.outputs.skip != 'true'
+        env:
+          CRATES: ${{ needs.changes.outputs.crates }}
         run: |
           if [ "${{ needs.changes.outputs.full_test }}" = "true" ]; then
             echo "Building workspace tests (full run, shard ${{ matrix.shard }}/4)…"
             cargo test --workspace --no-run -j 2
           else
-            CRATES="${{ needs.changes.outputs.crates }}"
             if [ -z "$CRATES" ]; then
               echo "No crates affected — skipping build."
               exit 0
@@ -922,6 +1202,7 @@ jobs:
       - name: Run tests
         if: steps.gate.outputs.skip != 'true'
         env:
+          CRATES: ${{ needs.changes.outputs.crates }}
           RUST_TEST_THREADS: "1"
         run: |
           if [ "${{ needs.changes.outputs.full_test }}" = "true" ]; then
@@ -930,10 +1211,9 @@ jobs:
             # one of M shards by the hash of its name. Adding tests doesn't
             # reshuffle the others; deleting tests doesn't either. Stable
             # buckets are critical for cache hit rates across runs.
-            cargo nextest run --workspace --no-fail-fast \
+            cargo nextest run --profile ci --workspace --no-fail-fast \
               --partition hash:${{ matrix.shard }}/4
           else
-            CRATES="${{ needs.changes.outputs.crates }}"
             if [ -z "$CRATES" ]; then
               echo "No crates affected — nothing to run."
               exit 0
@@ -942,9 +1222,9 @@ jobs:
             PFLAGS=""
             for c in $CRATES; do PFLAGS="$PFLAGS -p $c"; done
             # `--no-tests=pass` keeps PRs that only touch a crate without
-            # tests (e.g. librefang-desktop) from failing the selective lane
-            # — nextest defaults to exit-4 when -p X resolves to zero tests.
-            cargo nextest run $PFLAGS --no-fail-fast --no-tests=pass
+            # tests from failing the selective lane — nextest defaults to
+            # exit-4 when -p X resolves to zero tests.
+            cargo nextest run --profile ci $PFLAGS --no-fail-fast --no-tests=pass
           fi
 
   # ── Windows tests: main-push only, 2-way shard ─────────────────────────────────
@@ -979,7 +1259,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           shared-key: test-windows
       - name: Install nextest
@@ -998,8 +1278,24 @@ jobs:
           # one of M shards by the hash of its name. Adding tests doesn't
           # reshuffle the others; deleting tests doesn't either. Stable
           # buckets are critical for cache hit rates across runs.
-          cargo nextest run --workspace --no-fail-fast \
+          #
+          # `--exclude librefang-desktop`: its test binary builds and links on Windows but cannot be *loaded* — the process aborts at start with 0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND, "the specified procedure could not be found"), so nextest cannot even run `--list` against it and the whole lane aborts before a single test executes (#6729).
+          # A nextest filter expression (`-E 'not binary_id(…)'`) would not help: nextest still executes the binary during the list phase.
+          # Cargo's package-level `--exclude` is what keeps it out of the selected set entirely, and since nothing in the workspace depends on librefang-desktop (it is a leaf) it is then never built here.
+          # Its 11 tests are platform-independent URL/scheme logic and still run on the Ubuntu shards, the unit-fast lane and macOS; the separate link-only step below keeps the Windows compile+link coverage.
+          # Remove both once the missing DLL export is identified.
+          cargo nextest run --profile ci --workspace --exclude librefang-desktop --no-fail-fast \
             --partition hash:${{ matrix.shard }}/2
+      # Restores the Windows compile+link coverage that `--exclude` above drops.
+      # This is the only Windows build of librefang-desktop in CI (release-desktop.yml is workflow_dispatch-only, mobile-smoke.yml is ubuntu/macOS), so without this a Windows-only break in the crate would reach a release tag unseen.
+      # `--no-run` rather than `cargo check` because only the former exercises the link step, which is where such a regression shows up.
+      # Its own step — not a trailing line in `Run tests` — so a failure elsewhere in the workspace does not skip it (`shell: bash` runs with `-e`), and so the alert workflow can name it as the failing step.
+      - name: Build librefang-desktop test targets (link-only)
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          OPENSSL_SRC_PERL: C:/Strawberry/perl/bin/perl.exe
+        run: cargo test -p librefang-desktop --all-targets --no-run
 
   # ── macOS tests: main-push only ────────────────────────────────────────────────
   # See test-windows above — macOS does not run on PRs (the PR test lane is
@@ -1012,11 +1308,14 @@ jobs:
     env:
       # Registry fetches in test-booted kernels are non-hermetic (network-dependent test outcomes, one git clone per kernel boot) — see #6404 and the PR #6384 CI failure this switch prevents.
       LIBREFANG_REGISTRY_OFFLINE: "1"
-    timeout-minutes: 60
+    # 90 minutes, matching `test-windows`. The lane runs 43-57 minutes in practice, so a 60-minute cap left 3-17 minutes of headroom and a slow runner spends it outright.
+    # `f7130c1` stopped at 60:28, `efa84ea` at 60:41 and `2b871dd` at 60:23 — three of the last ten pushes to main, every other lane green in each.
+    # GitHub reports a timeout as `cancelled`, and `CI Gate` fails on `cancelled` without re-evaluating, so each one files a `[main red]` issue against a tree that is fine and no re-run of the merged commit can clear it.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           shared-key: test-macos
       - name: Install nextest
@@ -1030,8 +1329,26 @@ jobs:
           # GitHub-hosted macOS runners resolve crates.io but consistently fail to resolve github.com for this clone ("Could not resolve host: github.com" -> "expected at least 15 hands, got 0"), so the set fails deterministically on macOS while passing on Linux/Windows where the clone succeeds.
           # The logic under test is platform-independent and fully covered by those lanes, so skip just this network-dependent module on macOS rather than red-flagging every main push (#6240).
           # The deeper fix — offline fixtures so the tests don't live-clone — is tracked as a follow-up.
-          cargo nextest run --workspace --no-fail-fast \
+          cargo nextest run --profile ci --workspace --no-fail-fast \
             -E 'not (package(librefang-hands) and test(/registry::tests::/))'
+      # Mach-port abort guard — deliberately `cargo test`, not nextest.
+      #
+      # Wasmtime's macOS default parks a handler thread in a blocking `mach_msg`
+      # receive that aborts the process when a signal interrupts it, so any child
+      # process exiting while the WASM sandbox is live could kill the daemon
+      # (`macos_use_mach_ports(false)` in `runtime::sandbox::make_engine_config`
+      # is the fix). Nextest cannot observe that regression: it runs each test in
+      # its own process, so no single test accumulates the subprocess churn and
+      # thread count needed to land a signal on that one thread. `cargo test`
+      # runs all ~1300 kernel unit tests as threads in ONE process, which
+      # reproduces it reliably — verified by re-enabling mach ports locally
+      # (SIGABRT) and disabling them again (1335 passed).
+      #
+      # Scoped to librefang-kernel's lib target: it is the crate that both spawns
+      # subprocesses and constructs sandbox engines, and it keeps this step at
+      # ~2.5 min rather than a second full workspace run.
+      - name: Mach-port regression guard (single-process kernel unit tests)
+        run: cargo test -p librefang-kernel --lib
 
   # ── Linux aarch64 compile check: runs on PRs ───────────────────────────────────
   # The x86 Ubuntu shards never exercise aarch64-gated code paths, so an
@@ -1050,7 +1367,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           shared-key: build-aarch64
       - name: Ensure dashboard build dir exists
@@ -1064,7 +1381,7 @@ jobs:
           sudo apt-get install -y \
             libdbus-1-dev libsecret-1-dev pkg-config \
             libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libayatana-appindicator3-dev librsvg2-dev patchelf
+            librsvg2-dev patchelf
       - name: Cargo check (aarch64-native)
         run: cargo check --workspace --all-targets
 
@@ -1082,12 +1399,19 @@ jobs:
     name: CI Gate
     if: always()
     needs:
+      - pubkey-lockstep
       - changes
       - no-build-artifacts
       - quality
       - skills-wasm-sdk
       - rust-telegram-sidecar
       - uar-driver
+
+      - sdk-python
+      - githook-tests
+      - pr-commit-attribution
+      - image-vuln-gate
+      - memory-eval-self-test
       - changelog-attribution
       - changelog-attribution-full
       - openapi-drift
@@ -1096,12 +1420,14 @@ jobs:
       - install-smoke
       - live-integration-smoke
       - agents-claude-pair
+      - workflow-timeouts
       - test-unit
       - test-ubuntu
       - test-aarch64-build
       - test-windows
       - test-macos
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Fail if any lane failed or was cancelled
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

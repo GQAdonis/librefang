@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { createClientId } from "../../lib/store";
@@ -13,7 +13,12 @@ import { createClientId } from "../../lib/store";
 // upward only contains rows whose key trims to non-empty; duplicates
 // resolve last-write-wins (matches Object.fromEntries semantics).
 
-type Row = { id: string; key: string; value: string | number };
+type Row = {
+  id: string;
+  key: string;
+  value: string | number;
+  committedValue: string | number;
+};
 
 type Props = {
   value: Record<string, string | number> | null | undefined;
@@ -33,14 +38,19 @@ function newRowId(): string {
 
 function rowsFromValue(value: Props["value"]): Row[] {
   if (!value || typeof value !== "object") return [];
-  return Object.entries(value).map(([k, v]) => ({ id: newRowId(), key: k, value: v }));
+  return Object.entries(value).map(([k, v]) => ({
+    id: newRowId(),
+    key: k,
+    value: v,
+    committedValue: v,
+  }));
 }
 
 function commitRows(rows: Row[]): Record<string, string | number> {
   const out: Record<string, string | number> = {};
   for (const r of rows) {
     const trimmed = r.key.trim();
-    if (trimmed) out[trimmed] = r.value;
+    if (trimmed) out[trimmed] = r.committedValue;
   }
   return out;
 }
@@ -66,9 +76,22 @@ export function StringMapEditor({
 
   // Initial seed from props; further updates come from local mutation.
   const [rows, setRows] = useState<Row[]>(() => rowsFromValue(value));
+  const duplicateKeys = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      const key = row.key.trim();
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return new Set(
+      [...counts.entries()].filter(([, count]) => count > 1).map(([key]) => key),
+    );
+  }, [rows]);
   // Track what we last emitted so we can ignore "incoming" prop updates
   // that are just our own commit echoing back through the parent.
   const lastEmittedRef = useRef<Record<string, string | number> | null>(null);
+  // State updaters must remain pure: React may replay them in StrictMode.
+  // This flag transfers the commit notification to the post-commit effect.
+  const shouldEmitRef = useRef(false);
 
   // Re-seed from incoming value ONLY when the parent state diverged from
   // our last emitted commit (e.g. another tab edited config, or the user
@@ -87,43 +110,74 @@ export function StringMapEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
+  useEffect(() => {
+    if (!shouldEmitRef.current) return;
+    shouldEmitRef.current = false;
+    const obj = commitRows(rows);
+    lastEmittedRef.current = obj;
+    onChange(obj);
+  }, [onChange, rows]);
+
   const emit = useCallback((updater: (prev: Row[]) => Row[]) => {
-    setRows((prev) => {
-      const next = updater(prev);
-      const obj = commitRows(next);
-      lastEmittedRef.current = obj;
-      onChange(obj);
-      return next;
-    });
-  }, [onChange]);
+    shouldEmitRef.current = true;
+    setRows(updater);
+  }, []);
 
   const updateKey = useCallback((id: string, key: string) => {
     emit((prev) => prev.map((r) => r.id === id ? { ...r, key } : r));
   }, [emit]);
 
   const updateValue = useCallback((id: string, raw: string) => {
-    let parsed: string | number = raw;
     if (valueType === "number") {
-      if (raw === "") {
-        parsed = 0;
-      } else {
-        const n = Number(raw);
-        parsed = Number.isNaN(n) ? 0 : n;
+      const parsed = raw.trim() === "" ? null : Number(raw);
+      if (parsed === null || !Number.isFinite(parsed)) {
+        setRows((prev) => prev.map((r) => r.id === id ? { ...r, value: raw } : r));
+        return;
       }
+      emit((prev) => prev.map((r) =>
+        r.id === id ? { ...r, value: raw, committedValue: parsed } : r,
+      ));
+      return;
     }
-    emit((prev) => prev.map((r) => r.id === id ? { ...r, value: parsed } : r));
+    emit((prev) => prev.map((r) =>
+      r.id === id ? { ...r, value: raw, committedValue: raw } : r,
+    ));
   }, [emit, valueType]);
+
+  const finishValueEdit = useCallback((id: string) => {
+    if (valueType !== "number") return;
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== id || typeof r.value !== "string") return r;
+      const parsed = r.value.trim() === "" ? null : Number(r.value);
+      return parsed === null || !Number.isFinite(parsed)
+        ? { ...r, value: r.committedValue }
+        : r;
+    }));
+  }, [valueType]);
 
   const removeRow = useCallback((id: string) => {
     emit((prev) => prev.filter((r) => r.id !== id));
   }, [emit]);
 
   const addRow = useCallback(() => {
-    emit((prev) => [...prev, { id: newRowId(), key: "", value: valueType === "number" ? 0 : "" }]);
+    const initialValue = valueType === "number" ? 0 : "";
+    emit((prev) => [...prev, {
+      id: newRowId(),
+      key: "",
+      value: initialValue,
+      committedValue: initialValue,
+    }]);
   }, [emit, valueType]);
 
+  // Border color is applied per-input below rather than baked in here: the
+  // key input swaps to `border-danger` on a duplicate, and appending that
+  // alongside an always-on `border-border-subtle` would leave two
+  // conflicting border-color utilities on the same element with no
+  // guaranteed winner (see the exclusive ternary used for the same case in
+  // StructListEditor.tsx and ConfigPage.tsx).
   const inputClass =
-    "px-2.5 py-1.5 rounded-lg border border-border-subtle bg-main text-xs font-mono outline-none focus:border-brand transition-colors";
+    "px-2.5 py-1.5 rounded-lg border bg-main text-xs font-mono outline-none transition-colors";
+  const defaultBorderClass = "border-border-subtle focus:border-brand";
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -132,41 +186,53 @@ export function StringMapEditor({
           {t("config.map_empty", "No entries — click Add to create one")}
         </p>
       )}
-      {rows.map((r) => (
-        <div key={r.id} className="flex items-center gap-1.5">
-          <input
-            type="text"
-            value={r.key}
-            onChange={(e) => updateKey(r.id, e.target.value)}
-            placeholder={keyPlaceholder ?? t("config.map_key", "key")}
-            className={`${inputClass} flex-1 min-w-0`}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <span className="text-[10px] text-text-dim shrink-0">=</span>
-          <input
-            type={valueType === "number" ? "number" : "text"}
-            value={String(r.value ?? "")}
-            onChange={(e) => updateValue(r.id, e.target.value)}
-            placeholder={valuePlaceholder ?? t("config.map_value", "value")}
-            min={valueType === "number" ? min : undefined}
-            max={valueType === "number" ? max : undefined}
-            step={valueType === "number" ? step : undefined}
-            className={`${inputClass} flex-1 min-w-0`}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button
-            type="button"
-            onClick={() => removeRow(r.id)}
-            className="p-1 rounded-md text-text-dim hover:text-danger hover:bg-surface-hover transition-colors shrink-0"
-            title={t("config.remove_row", "Remove")}
-            aria-label={t("config.remove_row", "Remove")}
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      ))}
+      {rows.map((r) => {
+        const isDuplicate = duplicateKeys.has(r.key.trim());
+        return (
+          <div key={r.id} className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={r.key}
+                onChange={(e) => updateKey(r.id, e.target.value)}
+                placeholder={keyPlaceholder ?? t("config.map_key", "key")}
+                aria-invalid={isDuplicate || undefined}
+                className={`${inputClass} flex-1 min-w-0 ${isDuplicate ? "border-danger" : defaultBorderClass}`}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <span className="text-[10px] text-text-dim shrink-0">=</span>
+              <input
+                type={valueType === "number" ? "number" : "text"}
+                value={String(r.value ?? "")}
+                onChange={(e) => updateValue(r.id, e.target.value)}
+                onBlur={() => finishValueEdit(r.id)}
+                placeholder={valuePlaceholder ?? t("config.map_value", "value")}
+                min={valueType === "number" ? min : undefined}
+                max={valueType === "number" ? max : undefined}
+                step={valueType === "number" ? step : undefined}
+                className={`${inputClass} flex-1 min-w-0 ${defaultBorderClass}`}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                onClick={() => removeRow(r.id)}
+                className="p-1 rounded-md text-text-dim hover:text-danger hover:bg-surface-hover transition-colors shrink-0"
+                title={t("config.remove_row", "Remove")}
+                aria-label={t("config.remove_row", "Remove")}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            {isDuplicate && (
+              <p className="text-[10px] text-danger">
+                {t("config.duplicate_key", "Duplicate key")}
+              </p>
+            )}
+          </div>
+        );
+      })}
       <button
         type="button"
         onClick={addRow}

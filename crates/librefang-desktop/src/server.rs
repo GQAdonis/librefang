@@ -86,8 +86,13 @@ pub fn start_server() -> Result<ServerHandle, Box<dyn std::error::Error>> {
 
     let server_thread = std::thread::Builder::new()
         .name("librefang-server".into())
+        // This thread runs `block_on`, so the outermost turn is polled on *its* stack — which `Builder::thread_stack_size` below does not cover, that setting applies to the runtime's worker/blocking threads.
+        // Size both (refs #6659): the desktop app embeds the same kernel as the daemon, so it stacks the same agent-turn chain and aborts the same way.
+        .stack_size(8 * 1024 * 1024)
         .spawn(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
+                // Same 2 MiB -> 8 MiB worker stack rationale as the daemon (`librefang-cli/src/commands/daemon.rs`): an `agent_send` or workflow step runs the callee's whole turn inline on the worker, restacking a chain of very large futures.
+                .thread_stack_size(8 * 1024 * 1024)
                 .enable_all()
                 .build()
                 .expect("Failed to create tokio runtime for embedded server");
@@ -125,13 +130,15 @@ async fn run_embedded_server(
     // Desktop embeds the router directly, so it must start the same task here or live provider catalogs (notably OpenRouter) never refresh.
     kernel.clone().spawn_key_validation();
 
-    // Sync dashboard assets in background (downloads from release if outdated)
-    {
+    // Sync dashboard assets in background (downloads from release if outdated).
+    // Keep the handle so shutdown does not destroy the embedded runtime while
+    // the one-shot install is still updating the dashboard directory.
+    let dashboard_sync = {
         let home = kernel.home_dir().to_path_buf();
         tokio::spawn(async move {
             librefang_api::webchat::sync_dashboard(&home).await;
-        });
-    }
+        })
+    };
 
     // Convert std TcpListener → tokio TcpListener
     std_listener
@@ -153,6 +160,10 @@ async fn run_embedded_server(
 
     if let Err(e) = server.await {
         error!("Embedded server error: {e}");
+    }
+
+    if let Err(e) = dashboard_sync.await {
+        error!("Dashboard sync task failed: {e}");
     }
 
     // Clean up channel bridges. Swap out atomically then stop with owned access.

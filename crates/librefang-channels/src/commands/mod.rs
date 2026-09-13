@@ -2,8 +2,9 @@
 //!
 //! Single source of truth for every `/cmd` LibreFang understands. Every
 //! consumer (channel bridge dispatch / `/help` text, Telegram BotCommands menu,
-//! TUI chat runner, future Dashboard command palette) derives from
-//! [`COMMAND_REGISTRY`] instead of maintaining its own copy.
+//! TUI chat runner, and the dashboard chat catalog served by
+//! `GET /api/commands`) derives from [`COMMAND_REGISTRY`] instead of
+//! maintaining its own copy.
 //!
 //! See `.plans/slash-command-registry.md` for the design rationale and
 //! migration plan.
@@ -55,6 +56,31 @@ impl Category {
     }
 }
 
+/// How the dashboard chat runs a command that carries [`Scope::DASHBOARD`].
+///
+/// The SPA needs this to decide, per command, between answering locally and
+/// opening a `{"type":"command"}` frame on the chat WebSocket.
+/// Keeping the answer in the registry is what stops the dashboard from
+/// re-deriving its own hand-written command list (upstream #3355).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardExec {
+    /// Resolved entirely inside the SPA — no round-trip to the daemon.
+    Client,
+    /// Dispatched over the chat WebSocket and answered by
+    /// `librefang_api::ws::handle_command`.
+    Backend,
+}
+
+impl DashboardExec {
+    /// Stable wire token used by `GET /api/commands`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Client => "client",
+            Self::Backend => "backend",
+        }
+    }
+}
+
 /// One sub-form of a multi-action command (e.g. `/trigger add …` vs
 /// `/trigger del …`). Renders as its own `/help` line.
 #[derive(Debug, Clone, Copy)]
@@ -89,6 +115,13 @@ pub struct CommandDef {
     /// Whether to include this command in the Telegram BotCommands menu
     /// (the popup shown when the user types `/`). Telegram limits to 100.
     pub telegram_menu: bool,
+    /// How the dashboard chat executes this command.
+    ///
+    /// `None` means the command is listed in the `GET /api/commands` catalog
+    /// but is not offered in the chat slash menu, because no dashboard
+    /// execution path exists for it yet. Only meaningful together with
+    /// [`Scope::DASHBOARD`].
+    pub dashboard_exec: Option<DashboardExec>,
 }
 
 // Sub-command tables for multi-form commands.
@@ -133,11 +166,12 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         name: "agents",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "List running agents",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Client),
     },
     CommandDef {
         name: "agent",
@@ -148,80 +182,132 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "<name>",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "new",
         aliases: &[],
         category: Category::Session,
-        // Also reachable from CLI/TUI chat surfaces; both reset the agent session the same way.
-        scope: Scope::CHANNEL.union(Scope::CLI),
+        // Also reachable from CLI/TUI chat surfaces, but the two do not reset
+        // the same way: dashboard `/new` mints a brand-new session id, while
+        // TUI `/new` clears history at the same session id (that distinction
+        // is what the sibling `/reset` comment below draws).
+        scope: Scope::CHANNEL.union(Scope::CLI).union(Scope::DASHBOARD),
         description: "Reset session (clear messages)",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
+    },
+    CommandDef {
+        name: "reset",
+        aliases: &[],
+        category: Category::Session,
+        // Dashboard-only: channels spell the same action `/new`, which resets
+        // the channel-derived session instead of minting a new session id.
+        scope: Scope::DASHBOARD,
+        description: "Reset current session (clear history, same session id)",
+        args_hint: "",
+        subcommands: &[],
+        telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "reboot",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Hard reset session (full context clear, no summary)",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "compact",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Trigger LLM session compaction",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "model",
         aliases: &[],
         category: Category::Session,
         // TUI uses /model for direct switch / picker; channels use it for show/switch.
-        scope: Scope::CHANNEL.union(Scope::CLI),
+        scope: Scope::CHANNEL.union(Scope::CLI).union(Scope::DASHBOARD),
         description: "Show or switch agent model",
         args_hint: "[name]",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "stop",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Cancel current agent run",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "usage",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Show session token usage and cost",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "think",
         aliases: &[],
         category: Category::Session,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Toggle extended thinking",
         args_hint: "[on|off]",
         subcommands: &[],
         telegram_menu: true,
+        // The dashboard has no "think" arm in `ws.rs::handle_command` — it
+        // toggles extended thinking through the `thinking` field on the
+        // message frame, not a slash command. `None` keeps it out of the
+        // slash menu, same state as `/status`.
+        dashboard_exec: None,
+    },
+    CommandDef {
+        name: "verbose",
+        aliases: &[],
+        category: Category::Session,
+        // Tool-detail verbosity is a per-connection dashboard chat setting;
+        // channel adapters render tool output on their own terms.
+        scope: Scope::DASHBOARD,
+        description: "Cycle tool detail level",
+        args_hint: "[off|on|full]",
+        subcommands: &[],
+        telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     // ---- Info ----
+    CommandDef {
+        name: "info",
+        aliases: &[],
+        category: Category::Info,
+        scope: Scope::DASHBOARD,
+        description: "Show current agent info",
+        args_hint: "",
+        subcommands: &[],
+        telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Client),
+    },
     CommandDef {
         name: "models",
         aliases: &[],
@@ -231,6 +317,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "providers",
@@ -241,6 +328,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "skills",
@@ -251,6 +339,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "hands",
@@ -261,17 +350,19 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "status",
         aliases: &[],
         category: Category::Info,
         // Channels show system status; TUI shows connection / agent info.
-        scope: Scope::CHANNEL.union(Scope::CLI),
+        scope: Scope::CHANNEL.union(Scope::CLI).union(Scope::DASHBOARD),
         description: "Show system status",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     // ---- Automation ----
     CommandDef {
@@ -283,6 +374,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "workflow",
@@ -293,6 +385,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "run <name> [input]",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "triggers",
@@ -303,6 +396,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "trigger",
@@ -313,6 +407,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: TRIGGER_SUBCOMMANDS,
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "schedules",
@@ -323,6 +418,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "schedule",
@@ -333,6 +429,18 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: SCHEDULE_SUBCOMMANDS,
         telegram_menu: false,
+        dashboard_exec: None,
+    },
+    CommandDef {
+        name: "goal",
+        aliases: &[],
+        category: Category::Automation,
+        scope: Scope::CHANNEL.union(Scope::CLI).union(Scope::DASHBOARD),
+        description: "Create an autonomous goal and start driving it",
+        args_hint: "<description> [--loop-engineering]",
+        subcommands: &[],
+        telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "approvals",
@@ -343,6 +451,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "approve",
@@ -353,6 +462,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "<id>",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "reject",
@@ -363,37 +473,63 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "<id>",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     // ---- Monitoring ----
     CommandDef {
         name: "budget",
         aliases: &[],
         category: Category::Monitoring,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Show spending limits and current costs",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Backend),
+    },
+    CommandDef {
+        name: "context",
+        aliases: &[],
+        category: Category::Monitoring,
+        scope: Scope::DASHBOARD,
+        description: "Show context window usage and pressure",
+        args_hint: "",
+        subcommands: &[],
+        telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
+    },
+    CommandDef {
+        name: "queue",
+        aliases: &[],
+        category: Category::Monitoring,
+        scope: Scope::DASHBOARD,
+        description: "Check if the agent is processing",
+        args_hint: "",
+        subcommands: &[],
+        telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "peers",
         aliases: &[],
         category: Category::Monitoring,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "Show OFP peer network status",
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     CommandDef {
         name: "a2a",
         aliases: &[],
         category: Category::Monitoring,
-        scope: Scope::CHANNEL,
+        scope: Scope::CHANNEL.union(Scope::DASHBOARD),
         description: "List discovered external A2A agents",
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Backend),
     },
     // ---- Misc (no header in /help) ----
     CommandDef {
@@ -405,6 +541,7 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "<question>",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "start",
@@ -415,27 +552,30 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "help",
         aliases: &[],
         category: Category::Misc,
-        scope: Scope::CHANNEL.union(Scope::CLI),
+        scope: Scope::CHANNEL.union(Scope::CLI).union(Scope::DASHBOARD),
         description: "Show this help",
         args_hint: "",
         subcommands: &[],
         telegram_menu: true,
+        dashboard_exec: Some(DashboardExec::Client),
     },
     // ---- TUI-only control commands (Scope::CLI) ----
     CommandDef {
         name: "clear",
         aliases: &[],
         category: Category::Misc,
-        scope: Scope::CLI,
+        scope: Scope::CLI.union(Scope::DASHBOARD),
         description: "Clear chat history",
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: Some(DashboardExec::Client),
     },
     CommandDef {
         name: "kill",
@@ -446,18 +586,35 @@ pub const COMMAND_REGISTRY: &[CommandDef] = &[
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        dashboard_exec: None,
     },
     CommandDef {
         name: "exit",
         aliases: &["quit"],
         category: Category::Misc,
-        scope: Scope::CLI,
+        scope: Scope::CLI.union(Scope::DASHBOARD),
         description: "End chat session",
         args_hint: "",
         subcommands: &[],
         telegram_menu: false,
+        // The SPA has no client-side "/exit" branch — it would fall through
+        // to the ordinary send path and spend an LLM turn on the literal
+        // text "/exit". `None` keeps it out of the slash menu, same state as
+        // `/status`, until a real disconnect/navigate-away handler exists.
+        dashboard_exec: None,
     },
 ];
+
+impl CommandDef {
+    /// One-line usage hint, e.g. `Usage: /goal <description> [--loop-engineering]`.
+    pub fn usage(&self) -> String {
+        if self.args_hint.is_empty() {
+            format!("Usage: /{}", self.name)
+        } else {
+            format!("Usage: /{} {}", self.name, self.args_hint)
+        }
+    }
+}
 
 /// Look up a command by its bare name or any alias. The leading `/` is
 /// optional and stripped if present.
@@ -489,9 +646,9 @@ pub fn is_channel_command(name: &str) -> bool {
 /// `blocked_commands` (blacklist). When no overrides are configured,
 /// everything is allowed.
 ///
-/// Config entries may be written with or without a leading `/`
-/// (`"agent"` and `"/agent"` both match the dispatcher's bare token).
+/// Command names and config entries may be written with or without a leading `/`.
 pub fn is_command_allowed(cmd: &str, overrides: Option<&ChannelOverrides>) -> bool {
+    let cmd = cmd.strip_prefix('/').unwrap_or(cmd);
     let Some(ov) = overrides else { return true };
     if ov.disable_commands {
         return false;
@@ -550,8 +707,7 @@ pub fn channel_help_text(overrides: Option<&ChannelOverrides>) -> String {
                 out.push_str(&format!("/{} {} - {}", c.name, sub.args, sub.description));
                 first_in_section = false;
             }
-            // Defer setting first_in_section=false to common path below
-            // — already handled inside loop.
+            // The loop already updated `first_in_section`, so intentionally skip the common assignment below.
             continue;
         }
 
@@ -655,6 +811,7 @@ mod tests {
             "btw",
             "workflows",
             "workflow",
+            "goal",
             "triggers",
             "trigger",
             "schedules",
@@ -749,8 +906,11 @@ mod tests {
         };
         // Whitelist wins over blacklist.
         assert!(is_command_allowed("help", Some(&ov)));
+        assert!(is_command_allowed("/help", Some(&ov)));
         assert!(is_command_allowed("start", Some(&ov)));
+        assert!(is_command_allowed("/start", Some(&ov)));
         assert!(!is_command_allowed("agent", Some(&ov)));
+        assert!(!is_command_allowed("/agent", Some(&ov)));
     }
 
     #[test]
@@ -760,8 +920,11 @@ mod tests {
             ..Default::default()
         };
         assert!(!is_command_allowed("agent", Some(&ov)));
+        assert!(!is_command_allowed("/agent", Some(&ov)));
         assert!(!is_command_allowed("new", Some(&ov)));
+        assert!(!is_command_allowed("/new", Some(&ov)));
         assert!(is_command_allowed("help", Some(&ov)));
+        assert!(is_command_allowed("/help", Some(&ov)));
     }
 
     #[test]
@@ -836,22 +999,33 @@ mod tests {
 
     /// Adding `Scope::CLI` to existing channel commands must not change the
     /// channel-visible set (golden assertion guard).
+    ///
+    /// Compares against a hardcoded golden list rather than re-deriving
+    /// `is_channel_command(name)` from the very `c.scope.contains(Scope::CHANNEL)`
+    /// field the filter just selected on — that re-check is true by
+    /// construction for every element and cannot catch a command silently
+    /// gaining (or losing) `Scope::CHANNEL`. `channel_command_names_match_historical_set`
+    /// pins the golden set for the CHANNEL side; this is its complement.
     #[test]
     fn cli_scope_does_not_leak_into_channel_set() {
-        // Running this alongside `channel_command_names_match_historical_set`
-        // catches any future drift where someone adds a CLI-only command but
-        // accidentally tags it `Scope::CHANNEL`.
-        let cli_only: Vec<&str> = COMMAND_REGISTRY
+        let golden_non_channel: std::collections::BTreeSet<&str> = [
+            "reset", "verbose", "info", "context", "queue", "clear", "kill", "exit",
+        ]
+        .into_iter()
+        .collect();
+        // Matches on "not channel-scoped" rather than "exactly Scope::CLI" so
+        // the guard keeps covering commands that also gained
+        // `Scope::DASHBOARD` (`/clear`, `/exit`).
+        let actual: std::collections::BTreeSet<&str> = COMMAND_REGISTRY
             .iter()
-            .filter(|c| c.scope == Scope::CLI)
+            .filter(|c| !c.scope.contains(Scope::CHANNEL))
             .map(|c| c.name)
             .collect();
-        for name in &cli_only {
-            assert!(
-                !is_channel_command(name),
-                "CLI-only command `{name}` must not appear as channel command"
-            );
-        }
+        assert_eq!(
+            actual, golden_non_channel,
+            "the non-channel command set drifted — a command gained or lost \
+             Scope::CHANNEL; update this golden list if the change is intentional"
+        );
     }
 
     #[test]
@@ -877,5 +1051,124 @@ mod tests {
         // Reachable from both the CLI/TUI slash gate and channels, not just one.
         assert!(def.scope.contains(Scope::CLI));
         assert!(def.scope.contains(Scope::CHANNEL));
+    }
+
+    /// `/goal` must resolve on every chat surface, not just channels.
+    #[test]
+    fn goal_is_reachable_from_every_chat_surface() {
+        let def = lookup("goal").expect("/goal must be registered");
+        assert!(
+            def.scope.contains(Scope::CHANNEL),
+            "/goal must stay reachable from channels"
+        );
+        assert!(
+            def.scope.contains(Scope::CLI),
+            "/goal must be reachable from the TUI chat runner"
+        );
+        assert!(
+            def.scope.contains(Scope::DASHBOARD),
+            "/goal must be reachable from the dashboard chat"
+        );
+    }
+
+    #[test]
+    fn dashboard_scope_covers_the_historical_builtin_catalog() {
+        let historical: &[&str] = &[
+            "help", "new", "reset", "reboot", "compact", "model", "stop", "usage", "think",
+            "context", "verbose", "queue", "status", "clear", "exit",
+        ];
+        let actual: std::collections::BTreeSet<&str> =
+            iter_for(Scope::DASHBOARD).map(|c| c.name).collect();
+        for name in historical {
+            assert!(
+                actual.contains(name),
+                "`/{name}` disappeared from the dashboard catalog"
+            );
+        }
+    }
+
+    #[test]
+    fn dashboard_exec_matches_the_historical_chat_menu() {
+        // `think` and `exit` are deliberately absent from both lists: neither
+        // was in the hand-written menu this registry replaces (`git show
+        // c33876f36^:.../ChatPage.tsx` had `help`/`clear`/`agents`/`info`
+        // client-side and 13 others backend-side, not these two), and neither
+        // has a real execution path today — both are `dashboard_exec: None`.
+        let client: &[&str] = &["help", "clear", "agents", "info"];
+        let backend: &[&str] = &[
+            "new", "compact", "reset", "reboot", "stop", "model", "usage", "context", "verbose",
+            "budget", "peers", "a2a", "queue",
+        ];
+        for name in client {
+            let def = lookup(name).unwrap_or_else(|| panic!("`/{name}` must be registered"));
+            assert_eq!(
+                def.dashboard_exec,
+                Some(DashboardExec::Client),
+                "`/{name}` must stay client-resolved in the dashboard chat"
+            );
+        }
+        for name in backend {
+            let def = lookup(name).unwrap_or_else(|| panic!("`/{name}` must be registered"));
+            assert_eq!(
+                def.dashboard_exec,
+                Some(DashboardExec::Backend),
+                "`/{name}` must stay dispatched over the chat WebSocket"
+            );
+        }
+    }
+
+    #[test]
+    fn dashboard_exec_implies_dashboard_scope() {
+        for c in COMMAND_REGISTRY {
+            if c.dashboard_exec.is_some() {
+                assert!(
+                    c.scope.contains(Scope::DASHBOARD),
+                    "`/{}` sets dashboard_exec without Scope::DASHBOARD",
+                    c.name
+                );
+            }
+        }
+    }
+
+    /// The converse of `dashboard_exec_implies_dashboard_scope`, and the direction
+    /// that catches a silent regression: a command whose `Scope::DASHBOARD` survives
+    /// an edit while its `dashboard_exec` does not is still catalogued by the SPA, so
+    /// nothing fails loudly — it just stops appearing in the slash menu.
+    ///
+    /// Pinned as a set rather than a blanket `is_some()`, because the implication does
+    /// not actually hold and asserting it would assert something that was never true.
+    /// `dashboard_exec: None` on a `Scope::DASHBOARD` command is a meaningful state:
+    /// `chatCommands.ts` documents it as "catalogued but no dashboard execution path",
+    /// which keeps the command out of the slash menu and lets it fall through to the
+    /// agent as ordinary text. `/status` is deliberately in that state, and `/think`
+    /// and `/exit` joined it (#7996 review) once it turned out neither had a real
+    /// dashboard execution path — `/think` toggles via a message-frame field, not a
+    /// slash command, and `/exit` has no client-side handler in the SPA.
+    ///
+    /// Pinning the set is also strictly stronger than skipping the exceptions: it fails
+    /// both when a command silently loses its exec and when one silently acquires a
+    /// `None`, so neither direction of the drift can land unnoticed.
+    #[test]
+    fn dashboard_scope_without_exec_is_limited_to_known_catalogue_only_commands() {
+        let catalogue_only: std::collections::BTreeSet<&str> = iter_for(Scope::DASHBOARD)
+            .filter(|c| c.dashboard_exec.is_none())
+            .map(|c| c.name)
+            .collect();
+
+        assert_eq!(
+            catalogue_only,
+            std::collections::BTreeSet::from(["exit", "status", "think"]),
+            "a Scope::DASHBOARD command without dashboard_exec is catalogued by the SPA \
+             and hidden from the slash menu; if this set grew, that command silently \
+             dropped out of the dashboard menu, and if it shrank, update this test"
+        );
+    }
+
+    #[test]
+    fn dashboard_scope_is_not_a_dead_flag() {
+        assert!(
+            iter_for(Scope::DASHBOARD).count() > 0,
+            "no command carries Scope::DASHBOARD"
+        );
     }
 }

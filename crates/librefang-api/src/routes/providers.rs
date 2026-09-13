@@ -52,6 +52,11 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
             "/providers/{name}/url",
             axum::routing::put(set_provider_url),
         )
+        // Opt a custom OpenAI-compatible provider into live model discovery (#6702).
+        .route(
+            "/providers/{name}/discovery",
+            axum::routing::put(set_provider_discovery),
+        )
         .route("/providers/{name}", axum::routing::get(get_provider))
         .route(
             "/providers/{name}/default",
@@ -77,6 +82,17 @@ use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use crate::types::ApiErrorResponse;
+
+fn scrubbed_provider_error(
+    operation: &'static str,
+    error: impl std::fmt::Display,
+) -> (StatusCode, Json<serde_json::Value>) {
+    tracing::error!(%error, operation, "provider operation failed");
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({"error": "Internal server error"})),
+    )
+}
 
 pub(crate) fn parse_codex_configured_model(body: &str) -> Option<String> {
     let value: toml::Value = toml::from_str(body).ok()?;
@@ -178,7 +194,7 @@ fn claude_code_profile_config_dir(
 }
 
 /// Detect, for every CLI passthrough provider, the model it is configured to run (read live from the tool's own config), as `(provider_id, label, model)`. `claude_profile_dir` is the resolved first profile dir from active claude-code rotation so detection reads the same `settings.json` the spawned CLI uses.
-fn detect_cli_configured_models(
+fn detect_cli_configured_models_blocking(
     claude_profile_dir: Option<&std::path::Path>,
 ) -> Vec<(&'static str, &'static str, String)> {
     let mut out = Vec::new();
@@ -195,6 +211,22 @@ fn detect_cli_configured_models(
         out.push(("qwen-code", "Qwen Code", m));
     }
     out
+}
+
+async fn detect_cli_configured_models(
+    claude_profile_dir: Option<std::path::PathBuf>,
+) -> Vec<(&'static str, &'static str, String)> {
+    match tokio::task::spawn_blocking(move || {
+        detect_cli_configured_models_blocking(claude_profile_dir.as_deref())
+    })
+    .await
+    {
+        Ok(models) => models,
+        Err(error) => {
+            tracing::warn!(%error, "CLI model config detection task failed");
+            Vec::new()
+        }
+    }
 }
 
 /// Synthesized catalog row for a CLI provider's live-detected model, or `None` when the id is already a catalog model (`id_already_known`) or filtered out by `available_only`. Dedup is against the *whole* catalog, not the (possibly tier-filtered) response slice, so a `?tier=custom` query can't re-surface a catalog default as a sentinel-0 row. Pure (no FS/env) so dedup/filter/shape stay unit-testable.
@@ -223,6 +255,8 @@ fn synthesized_cli_model_row(
         "input_cost_per_m": 0.0,
         "output_cost_per_m": 0.0,
         "pricing_known": true,
+        // The zeroes above are unknown, not inapplicable — this row is built from a CLI config file that states no capacity at all.
+        "limits_known": false,
         // Text CLI models have no per-image pricing, but emit the keys (null) so
         // the row's shape matches every catalog row in the same response.
         "image_input_cost_per_m": serde_json::Value::Null,
@@ -236,6 +270,13 @@ fn synthesized_cli_model_row(
             "supports_vision": false,
             "supports_streaming": true,
             "supports_thinking": false,
+        },
+        // Emit the key so this row's shape matches every catalog row in the
+        // same response (#7774). Both sides are the "unknown" sentinel: there
+        // is no catalog entry behind a synthesized CLI row to revert to.
+        "limits_catalog": {
+            "context_window": 0,
+            "max_output_tokens": 0,
         },
         "aliases": [],
         "available": available,
@@ -282,6 +323,20 @@ pub async fn list_models(
             tracing::warn!(%error, "EveryAPI live catalog unavailable; using registered snapshot");
         }
     }
+    // Every other provider used to be served from the checked-in catalogue alone, which has nothing to show for a self-hosted OpenAI-compatible gateway: the model ids there are the operator's own, so no snapshot can ship them (#7775).
+    // The probe below is the same `/models` listing the periodic loop and `GET /api/providers` already query — this handler previously only *read* `provider_probe_cache` for the #3191 filter and never filled it, so a `/api/models` call that arrived before either of those had run reported the gateway as having no models at all.
+    refresh_discovered_models(&state, provider_filter.as_deref()).await;
+    let cli_tier_ok = tier_filter
+        .as_deref()
+        .map(|t| t == "custom")
+        .unwrap_or(true);
+    let cli_configured_models = if cli_tier_ok {
+        let claude_profile_dir =
+            claude_code_profile_config_dir(&state.kernel.config_ref().default_model);
+        detect_cli_configured_models(claude_profile_dir).await
+    } else {
+        Vec::new()
+    };
     let catalog = state.kernel.model_catalog_ref().load();
 
     // Pre-compute the live-discovered model ID set per local provider so we
@@ -309,7 +364,7 @@ pub async fn list_models(
     let live_models_per_provider: std::collections::HashMap<String, HashSet<String>> = catalog
         .list_providers()
         .iter()
-        .filter(|p| librefang_kernel::provider_health::is_local_provider(&p.id))
+        .filter(|p| librefang_kernel::provider_health::discovers_models(p))
         .filter_map(|p| {
             let probe = state.provider_probe_cache.get(&p.id)?;
             if !probe.reachable || probe.discovered_models.is_empty() {
@@ -367,17 +422,28 @@ pub async fn list_models(
                 .unwrap_or(m.tier == librefang_types::model_catalog::ModelTier::Custom);
             // Effective `supports_*` reflects user overrides; `capabilities_catalog` ships the raw default for revert-target UIs. Refs #4745.
             let eff = catalog.effective_capabilities(m);
+            // Same shape for the capacity limits: `context_window` /
+            // `max_output_tokens` carry the effective value and `limits_catalog`
+            // the raw registry-or-probe one, so the dashboard can render both
+            // the value in force and the value a revert would restore. Refs #7774.
+            let lim = catalog.effective_limits(m);
             serde_json::json!({
                 "id": m.id,
                 "display_name": m.display_name,
                 "provider": m.provider,
                 "tier": m.tier,
                 "modality": m.modality,
-                "context_window": m.context_window,
-                "max_output_tokens": m.max_output_tokens,
+                "context_window": lim.context_window.unwrap_or(0),
+                "max_output_tokens": lim.max_output_tokens.unwrap_or(0),
                 "input_cost_per_m": m.input_cost_per_m,
                 "output_cost_per_m": m.output_cost_per_m,
                 "pricing_known": m.pricing_known,
+                "limits_known": m.limits_known,
+                // The provenance of `supports_vision`, resolved through any operator override (refs #7957).
+                // `"unknown"` means the flag above was inferred from the model's name and nothing acted on it —
+                // the request-build gate keeps sending images. A dashboard can prompt for a declaration
+                // instead of presenting a guess as a capability.
+                "vision_support": catalog.vision_support(m).as_str(),
                 "image_input_cost_per_m": m.image_input_cost_per_m,
                 "image_output_cost_per_m": m.image_output_cost_per_m,
                 "supports_tools": eff.supports_tools,
@@ -390,6 +456,10 @@ pub async fn list_models(
                     "supports_streaming": m.supports_streaming,
                     "supports_thinking": m.supports_thinking,
                 },
+                "limits_catalog": {
+                    "context_window": m.context_window,
+                    "max_output_tokens": m.max_output_tokens,
+                },
                 "aliases": m.aliases,
                 "available": available,
             })
@@ -397,16 +467,8 @@ pub async fn list_models(
         .collect();
 
     // Surface the model each CLI passthrough provider is configured to run, read live from its own config (DeepSeek via Codex's config.toml, a Kimi id via Claude Code's ANTHROPIC_MODEL / settings.json, a Gemini preview via GEMINI_MODEL, an OpenAI-compatible id via Qwen Code) since the static catalog only ships the tool's defaults. Synthesized rows are `custom` tier, so honour an explicit tier filter.
-    let cli_tier_ok = tier_filter
-        .as_deref()
-        .map(|t| t == "custom")
-        .unwrap_or(true);
     if cli_tier_ok {
-        let claude_profile_dir =
-            claude_code_profile_config_dir(&state.kernel.config_ref().default_model);
-        for (provider, label, configured) in
-            detect_cli_configured_models(claude_profile_dir.as_deref())
-        {
+        for (provider, label, configured) in cli_configured_models {
             let in_scope = provider_filter
                 .as_deref()
                 .map(|p| p == provider)
@@ -605,6 +667,9 @@ pub async fn get_model(
             let overrides = catalog.get_overrides(&override_key);
             // Effective `supports_*` reflects user overrides; `capabilities_catalog` ships the raw default for revert-target UIs. Refs #4745.
             let eff = catalog.effective_capabilities(m);
+            // Effective capacity limits, with the raw catalog values under
+            // `limits_catalog`. Refs #7774.
+            let lim = catalog.effective_limits(m);
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -613,11 +678,17 @@ pub async fn get_model(
                     "provider": m.provider,
                     "tier": m.tier,
                     "modality": m.modality,
-                    "context_window": m.context_window,
-                    "max_output_tokens": m.max_output_tokens,
+                    "context_window": lim.context_window.unwrap_or(0),
+                    "max_output_tokens": lim.max_output_tokens.unwrap_or(0),
                     "input_cost_per_m": m.input_cost_per_m,
                     "output_cost_per_m": m.output_cost_per_m,
                     "pricing_known": m.pricing_known,
+                    "limits_known": m.limits_known,
+                    // The provenance of `supports_vision`, resolved through any operator override (refs #7957).
+                    // `"unknown"` means the flag above was inferred from the model's name and nothing acted on it —
+                    // the request-build gate keeps sending images. A dashboard can prompt for a declaration
+                    // instead of presenting a guess as a capability.
+                    "vision_support": catalog.vision_support(m).as_str(),
                     "image_input_cost_per_m": m.image_input_cost_per_m,
                     "image_output_cost_per_m": m.image_output_cost_per_m,
                     "supports_tools": eff.supports_tools,
@@ -630,6 +701,10 @@ pub async fn get_model(
                         "supports_streaming": m.supports_streaming,
                         "supports_thinking": m.supports_thinking,
                     },
+                    "limits_catalog": {
+                        "context_window": m.context_window,
+                        "max_output_tokens": m.max_output_tokens,
+                    },
                     "aliases": m.aliases,
                     "available": available,
                     "overrides": overrides,
@@ -641,11 +716,12 @@ pub async fn get_model(
             // codex-cli/deepseek-chat) is not in the catalog, so find_model
             // misses it. Resolve it the same way list_models does so the list
             // and detail endpoints agree on the ids the API advertises.
+            drop(catalog);
             let claude_dir =
                 claude_code_profile_config_dir(&state.kernel.config_ref().default_model);
-            for (provider, label, configured) in detect_cli_configured_models(claude_dir.as_deref())
-            {
+            for (provider, label, configured) in detect_cli_configured_models(claude_dir).await {
                 if format!("{provider}/{configured}").eq_ignore_ascii_case(&id) {
+                    let catalog = state.kernel.model_catalog_ref().load();
                     let available = catalog
                         .get_provider(provider)
                         .map(|p| p.auth_status.is_available())
@@ -672,6 +748,13 @@ pub async fn get_model(
 // ── Per-model overrides ─────────────────────────────────────────────────────
 
 /// GET /api/models/overrides/{id} — Get inference parameter overrides for a model.
+#[utoipa::path(
+    get,
+    path = "/api/models/overrides/{id}",
+    tag = "models",
+    params(("id" = String, Path, description = "Override key, `provider:model_id`")),
+    responses((status = 200, description = "The model's stored overrides, or `{}` when none are set", body = crate::types::JsonObject))
+)]
 pub async fn get_model_overrides(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -684,6 +767,24 @@ pub async fn get_model_overrides(
 }
 
 /// PUT /api/models/overrides/{id} — Set inference parameter overrides for a model.
+///
+/// The body is a whole `ModelOverrides` document, not a patch: a field omitted
+/// from the body is cleared. Alongside the inference parameters it carries the
+/// operator's capacity-limit corrections, `context_window` and
+/// `max_output_tokens` (#7774) — both editable at any time, and both surviving a
+/// registry sync because they live in `model_overrides.json` rather than on the
+/// catalog entry the sync rewrites.
+#[utoipa::path(
+    put,
+    path = "/api/models/overrides/{id}",
+    tag = "models",
+    params(("id" = String, Path, description = "Override key, `provider:model_id`")),
+    request_body = crate::types::JsonObject,
+    responses(
+        (status = 200, description = "The persisted overrides", body = crate::types::JsonObject),
+        (status = 500, description = "Overrides could not be persisted")
+    )
+)]
 pub async fn set_model_overrides(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -735,6 +836,13 @@ pub async fn set_model_overrides(
 }
 
 /// DELETE /api/models/overrides/{id} — Remove inference parameter overrides for a model.
+#[utoipa::path(
+    delete,
+    path = "/api/models/overrides/{id}",
+    tag = "models",
+    params(("id" = String, Path, description = "Override key, `provider:model_id`")),
+    responses((status = 204, description = "Overrides removed"))
+)]
 pub async fn delete_model_overrides(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
@@ -760,42 +868,110 @@ pub async fn delete_model_overrides(
 
 /// Attach local-provider probe results to a JSON entry and optionally merge
 /// discovered models into the catalog.
+/// Whether a failed probe should downgrade the reported `auth_status` to `missing`.
+///
+/// For a built-in local provider, reachability is the whole availability story: it needs no key, so a daemon that is not answering is the only way it can be unusable, and showing "needs setup" is right.
+/// An opted-in custom provider (#6702) goes through the same probe, but its `/models` listing is a discovery convenience rather than proof that its key works — a gateway that proxies `/chat/completions` without serving `/models` is an ordinary shape, and #6702's own use case.
+/// Downgrading it would report a working, correctly keyed provider as unconfigured purely because the operator turned discovery on, so the probe's `reachable` / `error_message` fields carry that signal instead.
+fn probe_failure_downgrades_auth(provider_id: &str) -> bool {
+    librefang_kernel::provider_health::is_local_provider(provider_id)
+}
+
+/// Merge a probe's live `/models` listing into the catalog so the discovered ids become selectable models rather than a count in a probe response.
+///
+/// Does nothing when the probe found no models, so an unreachable gateway or one that does not serve a listing leaves the checked-in catalogue alone.
+fn merge_probe_into_catalog(
+    probe: &librefang_kernel::provider_health::ProbeResult,
+    provider_id: &str,
+    kernel: &dyn librefang_kernel::KernelApi,
+) {
+    if probe.discovered_models.is_empty() {
+        return;
+    }
+    // Pre-compute the merged info outside the RCU closure: the closure
+    // may re-run on CAS retry (#3384) so all allocation happens here once.
+    let info: Vec<librefang_kernel::provider_health::DiscoveredModelInfo> =
+        if probe.discovered_model_info.is_empty() {
+            probe
+                .discovered_models
+                .iter()
+                .map(librefang_kernel::provider_health::DiscoveredModelInfo::bare)
+                .collect()
+        } else {
+            probe.discovered_model_info.clone()
+        };
+    kernel.model_catalog_update(&mut |cat| {
+        cat.merge_discovered_models(provider_id, &info);
+    });
+}
+
+/// Query the live `/models` listing of every provider that participates in model discovery and merge what it serves into the catalog, so `/api/models` reflects a self-hosted gateway's own model ids instead of only the checked-in snapshot (#7775).
+///
+/// `provider_filter` is the already-lowercased `?provider=` query value; only that provider is probed when one is given, matching how the OpenRouter and EveryAPI refreshers scope themselves.
+///
+/// Failures are non-fatal by construction: `probe_provider_cached` reports an unreachable result instead of erroring, the merge is skipped, and the response falls back to the checked-in catalogue.
+/// The 60-second [`ProbeCache`](librefang_kernel::provider_health::ProbeCache) TTL is what keeps a dashboard that polls the Models page from turning every poll into a round-trip to the operator's own infrastructure, and it is the same cache `GET /api/providers` already fills on every dashboard load.
+async fn refresh_discovered_models(state: &AppState, provider_filter: Option<&str>) {
+    // `local_provider_probe_targets` is the single definition of "participates in discovery" — built-in local ids plus `discover_models` opt-ins, with an empty base URL and user-suppressed providers excluded.
+    // Going through it keeps this handler from drifting away from the periodic probe loop.
+    let targets: Vec<(String, String, Option<String>)> = {
+        let catalog = state.kernel.model_catalog_ref().load();
+        catalog
+            .local_provider_probe_targets()
+            .into_iter()
+            .filter(|(id, _)| provider_filter.is_none_or(|f| f == id.to_lowercase()))
+            .map(|(id, base_url)| {
+                let api_key = catalog.get_provider(&id).and_then(provider_api_key);
+                (id, base_url, api_key)
+            })
+            .collect()
+    };
+    if targets.is_empty() {
+        return;
+    }
+    let probes = futures::future::join_all(targets.iter().map(|(id, base_url, api_key)| {
+        librefang_kernel::provider_health::probe_provider_cached(
+            id,
+            base_url,
+            api_key.as_deref(),
+            &state.provider_probe_cache,
+        )
+    }))
+    .await;
+    for ((id, _, _), probe) in targets.iter().zip(probes) {
+        if probe.discovered_models.is_empty() {
+            // `debug!`, not `warn!`: a built-in local id that is simply not running is the expected steady state and this handler can be called on every dashboard poll, so warning here would be a line per request forever.
+            // The operator-facing report lives on `GET /api/providers` (`reachable` / `error_message`) and the periodic probe loop already warns for the providers the default/fallback chain actually depends on.
+            tracing::debug!(
+                provider = %id,
+                error = probe.error.as_deref().unwrap_or("no models listed"),
+                "live model discovery returned nothing; using checked-in catalog"
+            );
+            continue;
+        }
+        merge_probe_into_catalog(&probe, id, &*state.kernel);
+    }
+}
+
 fn attach_probe_result(
     entry: &mut serde_json::Value,
     probe: &librefang_kernel::provider_health::ProbeResult,
     provider_id: &str,
     kernel: &dyn librefang_kernel::KernelApi,
 ) {
-    entry["is_local"] = serde_json::json!(true);
+    // `is_local` is a claim about WHERE the provider runs, not about whether it
+    // was probed. A custom provider that opted into discovery (#6702) is probed
+    // through the same helper but may well be a remote GPU box, so only the
+    // built-in local ids get the label — the probe results below are attached
+    // either way.
+    if librefang_kernel::provider_health::is_local_provider(provider_id) {
+        entry["is_local"] = serde_json::json!(true);
+    }
     entry["reachable"] = serde_json::json!(probe.reachable);
     entry["latency_ms"] = serde_json::json!(probe.latency_ms);
     if !probe.discovered_models.is_empty() {
         entry["discovered_models"] = serde_json::json!(&probe.discovered_models);
-        // Pre-compute the merged info outside the RCU closure: the closure
-        // may re-run on CAS retry (#3384) so all allocation happens here once.
-        let info: Vec<librefang_kernel::provider_health::DiscoveredModelInfo> =
-            if probe.discovered_model_info.is_empty() {
-                probe
-                    .discovered_models
-                    .iter()
-                    .map(
-                        |name| librefang_kernel::provider_health::DiscoveredModelInfo {
-                            name: name.clone(),
-                            parameter_size: None,
-                            quantization_level: None,
-                            family: None,
-                            families: None,
-                            size: None,
-                            capabilities: vec![],
-                        },
-                    )
-                    .collect()
-            } else {
-                probe.discovered_model_info.clone()
-            };
-        kernel.model_catalog_update(&mut |cat| {
-            cat.merge_discovered_models(provider_id, &info);
-        });
+        merge_probe_into_catalog(probe, provider_id, kernel);
     }
     if !probe.discovered_model_info.is_empty() {
         entry["discovered_model_info"] = serde_json::json!(&probe.discovered_model_info);
@@ -806,10 +982,48 @@ fn attach_probe_result(
     entry["last_tested"] = serde_json::json!(&probe.probed_at);
 }
 
+/// Resolve the environment variable that holds a provider's API key: the
+/// catalog-declared `api_key_env` when it is non-empty, else the
+/// `{PROVIDER}_API_KEY` convention that `set_provider_key` derives for
+/// entries that declare none.
+fn provider_api_key_env(provider: &librefang_types::model_catalog::ProviderInfo) -> String {
+    if provider.api_key_env.trim().is_empty() {
+        format!("{}_API_KEY", provider.id.to_uppercase().replace('-', "_"))
+    } else {
+        provider.api_key_env.clone()
+    }
+}
+
+/// The API key currently set for a provider in the process environment, or
+/// `None` when unset / empty.
+fn provider_api_key(provider: &librefang_types::model_catalog::ProviderInfo) -> Option<String> {
+    std::env::var(provider_api_key_env(provider))
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+}
+
+/// Whether a non-empty API key is present for this provider (#6703).
+///
+/// `auth_status` cannot answer this for a `key_required = false` provider:
+/// `detect_auth` short-circuits those to `NotRequired` / `LocalOffline`
+/// regardless of whether a key is set, so a self-hosted vLLM behind auth looked
+/// identical to a bare localhost one and the dashboard could not offer to
+/// replace or remove the key it was already sending. Reports presence only —
+/// never the value.
+fn provider_key_present(provider: &librefang_types::model_catalog::ProviderInfo) -> bool {
+    provider_api_key(provider).is_some()
+}
+
 /// Resolve the effective max-output-token limit shown for a provider on the
 /// dashboard (issue #6209). The headline value is the provider's
 /// representative model's per-request output cap: the user's `max_tokens`
-/// override when set, otherwise the model's catalog `max_output_tokens`.
+/// override when set, then the operator's `max_output_tokens` override
+/// (#7774), otherwise the model's catalog `max_output_tokens`.
+///
+/// `max_tokens` stays ahead of `max_output_tokens` because it is the cap the
+/// operator asked to be *sent on the wire*; `max_output_tokens` corrects what
+/// the model is *capable* of, which is the better fallback than the catalog but
+/// not a substitute for an explicit per-request choice.
 ///
 /// "Representative model" is the provider's default model
 /// (`default_model_for_provider`) when one exists, falling back to the first
@@ -834,8 +1048,9 @@ fn provider_max_output_tokens(
         .get_overrides(&key)
         .and_then(|o| o.max_tokens)
         .map(u64::from);
-    let catalog_max = (model.max_output_tokens > 0).then_some(model.max_output_tokens);
-    override_max.or(catalog_max)
+    // `effective_limits` already ranks the `max_output_tokens` override above
+    // the catalog entry and filters both sides' zeros.
+    override_max.or(catalog.effective_limits(model).max_output_tokens)
 }
 
 /// GET /api/providers — List all providers with auth status.
@@ -889,24 +1104,14 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> impl IntoResp
         .iter()
         .enumerate()
         .filter(|(_, p)| {
-            librefang_kernel::provider_health::is_local_provider(&p.id) && !p.base_url.is_empty()
+            librefang_kernel::provider_health::discovers_models(p) && !p.base_url.is_empty()
         })
         .map(|(i, p)| {
-            // Resolve the provider's api_key env var (catalog field, falling
-            // back to the {PROVIDER}_API_KEY convention) and read its value
-            // for the probe. Local providers fronted by an authenticating
-            // reverse proxy (Open WebUI, LiteLLM, etc.) need this Bearer
-            // token forwarded; bare-localhost setups have nothing in the
-            // env so the probe runs unauthenticated as before.
-            let env_var = if p.api_key_env.trim().is_empty() {
-                format!("{}_API_KEY", p.id.to_uppercase().replace('-', "_"))
-            } else {
-                p.api_key_env.clone()
-            };
-            let api_key = std::env::var(&env_var)
-                .ok()
-                .filter(|v| !v.trim().is_empty());
-            (i, p.id.clone(), p.base_url.clone(), api_key)
+            // Read the provider's api_key for the probe. Local providers fronted
+            // by an authenticating reverse proxy (Open WebUI, LiteLLM, etc.) need
+            // this Bearer token forwarded; bare-localhost setups have nothing in
+            // the env so the probe runs unauthenticated as before.
+            (i, p.id.clone(), p.base_url.clone(), provider_api_key(p))
         })
         .collect();
 
@@ -949,6 +1154,8 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> impl IntoResp
             "suppressed": suppressed_ids.contains(&p.id),
             "is_coding_agent": librefang_kernel::drivers::is_coding_agent_provider(&p.id),
             "max_output_tokens": max_output_tokens_by_provider.get(&p.id),
+            "discover_models": p.discover_models,
+            "key_present": provider_key_present(p),
         });
 
         // Attach region map so the dashboard can show available regions
@@ -974,12 +1181,12 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> impl IntoResp
             }
         }
 
-        // For local providers, attach the probe result and downgrade
-        // auth_status when the service is not reachable so the dashboard
-        // shows "needs setup" instead of "configured".
+        // Attach the probe result, and for a built-in local provider downgrade
+        // auth_status when the service is not reachable so the dashboard shows
+        // "needs setup" instead of "configured".
         if let Some(probe) = probe_map.remove(&i) {
             attach_probe_result(&mut entry, &probe, &p.id, &*state.kernel);
-            if !probe.reachable {
+            if !probe.reachable && probe_failure_downgrades_auth(&p.id) {
                 entry["auth_status"] = serde_json::json!("missing");
             }
         } else if librefang_kernel::provider_health::is_local_provider(&p.id) {
@@ -990,13 +1197,13 @@ pub async fn list_providers(State(state): State<Arc<AppState>>) -> impl IntoResp
         // Attach cached manual test result if no probe already set it.
         // TTL: 10 minutes — stale results are ignored.
         if let Some(ref_entry) = state.provider_test_cache.get(&p.id) {
-            let (tested_at, ms, tested_rfc3339, reachable) = ref_entry.value();
-            if tested_at.elapsed() < std::time::Duration::from_secs(600) {
+            let result = ref_entry.value();
+            if result.is_fresh() {
                 if entry.get("latency_ms").is_none() || entry["latency_ms"].is_null() {
-                    entry["latency_ms"] = serde_json::json!(ms);
+                    entry["latency_ms"] = serde_json::json!(result.latency_ms);
                 }
-                entry["last_tested"] = serde_json::json!(tested_rfc3339);
-                entry["reachable"] = serde_json::json!(reachable);
+                entry["last_tested"] = serde_json::json!(result.tested_rfc3339);
+                entry["reachable"] = serde_json::json!(result.reachable);
             }
         }
 
@@ -1040,20 +1247,12 @@ pub(crate) async fn providers_snapshot(state: &Arc<AppState>) -> Vec<serde_json:
         .iter()
         .enumerate()
         .filter(|(_, p)| {
-            librefang_kernel::provider_health::is_local_provider(&p.id) && !p.base_url.is_empty()
+            librefang_kernel::provider_health::discovers_models(p) && !p.base_url.is_empty()
         })
         .map(|(i, p)| {
             // See sibling site above — same env-var resolution so Open WebUI
             // / LiteLLM-fronted local providers get a Bearer token attached.
-            let env_var = if p.api_key_env.trim().is_empty() {
-                format!("{}_API_KEY", p.id.to_uppercase().replace('-', "_"))
-            } else {
-                p.api_key_env.clone()
-            };
-            let api_key = std::env::var(&env_var)
-                .ok()
-                .filter(|v| !v.trim().is_empty());
-            (i, p.id.clone(), p.base_url.clone(), api_key)
+            (i, p.id.clone(), p.base_url.clone(), provider_api_key(p))
         })
         .collect();
 
@@ -1093,10 +1292,12 @@ pub(crate) async fn providers_snapshot(state: &Arc<AppState>) -> Vec<serde_json:
             "suppressed": suppressed_ids.contains(&p.id),
             "is_coding_agent": librefang_kernel::drivers::is_coding_agent_provider(&p.id),
             "max_output_tokens": max_output_tokens_by_provider.get(&p.id),
+            "discover_models": p.discover_models,
+            "key_present": provider_key_present(p),
         });
         if let Some(probe) = probe_map.remove(&i) {
             attach_probe_result(&mut entry, &probe, &p.id, &*state.kernel);
-            if !probe.reachable {
+            if !probe.reachable && probe_failure_downgrades_auth(&p.id) {
                 entry["auth_status"] = serde_json::json!("missing");
             }
         } else if librefang_kernel::provider_health::is_local_provider(&p.id) {
@@ -1140,16 +1341,24 @@ pub async fn get_provider(
                     .map(|m| {
                         // Effective `supports_*` reflects user overrides; `capabilities_catalog` ships the raw default for revert-target UIs. Refs #4745.
                         let eff = catalog.effective_capabilities(m);
+                        // Effective capacity limits, raw values under `limits_catalog`. Refs #7774.
+                        let lim = catalog.effective_limits(m);
                         serde_json::json!({
                             "id": m.id,
                             "display_name": m.display_name,
                             "tier": m.tier,
                             "modality": m.modality,
-                            "context_window": m.context_window,
-                            "max_output_tokens": m.max_output_tokens,
+                            "context_window": lim.context_window.unwrap_or(0),
+                            "max_output_tokens": lim.max_output_tokens.unwrap_or(0),
                             "input_cost_per_m": m.input_cost_per_m,
                             "output_cost_per_m": m.output_cost_per_m,
                             "pricing_known": m.pricing_known,
+                            "limits_known": m.limits_known,
+                            // The provenance of `supports_vision`, resolved through any operator override (refs #7957).
+                            // `"unknown"` means the flag above was inferred from the model's name and nothing acted on it —
+                            // the request-build gate keeps sending images. A dashboard can prompt for a declaration
+                            // instead of presenting a guess as a capability.
+                            "vision_support": catalog.vision_support(m).as_str(),
                             "image_input_cost_per_m": m.image_input_cost_per_m,
                             "image_output_cost_per_m": m.image_output_cost_per_m,
                             "supports_tools": eff.supports_tools,
@@ -1161,6 +1370,10 @@ pub async fn get_provider(
                                 "supports_vision": m.supports_vision,
                                 "supports_streaming": m.supports_streaming,
                                 "supports_thinking": m.supports_thinking,
+                            },
+                            "limits_catalog": {
+                                "context_window": m.context_window,
+                                "max_output_tokens": m.max_output_tokens,
                             },
                         })
                     })
@@ -1185,23 +1398,18 @@ pub async fn get_provider(
         "proxy_url": provider.proxy_url,
         "models": models,
         "max_output_tokens": max_output_tokens,
+        "discover_models": provider.discover_models,
+        "key_present": provider_key_present(&provider),
     });
 
-    // For local providers, run a probe and attach the result
-    if librefang_kernel::provider_health::is_local_provider(&provider.id)
+    // For discovery-participating providers, run a probe and attach the result
+    if librefang_kernel::provider_health::discovers_models(&provider)
         && !provider.base_url.is_empty()
     {
         let cache = &state.provider_probe_cache;
         // Forward the api_key when present so reverse-proxy-fronted local
         // providers (Open WebUI, LiteLLM) get a valid Bearer token.
-        let env_var = if provider.api_key_env.trim().is_empty() {
-            format!("{}_API_KEY", provider.id.to_uppercase().replace('-', "_"))
-        } else {
-            provider.api_key_env.clone()
-        };
-        let api_key = std::env::var(&env_var)
-            .ok()
-            .filter(|v| !v.trim().is_empty());
+        let api_key = provider_api_key(&provider);
         let probe = librefang_kernel::provider_health::probe_provider_cached(
             &provider.id,
             &provider.base_url,
@@ -1211,7 +1419,7 @@ pub async fn get_provider(
         .await;
 
         attach_probe_result(&mut entry, &probe, &provider.id, &*state.kernel);
-        if !probe.reachable {
+        if !probe.reachable && probe_failure_downgrades_auth(&provider.id) {
             entry["auth_status"] = serde_json::json!("missing");
         }
     } else if librefang_kernel::provider_health::is_local_provider(&provider.id) {
@@ -1285,6 +1493,8 @@ pub async fn add_custom_model(
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0),
         pricing_known: true,
+        // A custom model is a hand-entered declaration: the operator states the limits, and `validate()` below rejects a text entry that omits them.
+        limits_known: true,
         image_input_cost_per_m: body.get("image_input_cost_per_m").and_then(|v| v.as_f64()),
         image_output_cost_per_m: body.get("image_output_cost_per_m").and_then(|v| v.as_f64()),
         supports_tools: body
@@ -1295,6 +1505,15 @@ pub async fn add_custom_model(
             .get("supports_vision")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        // A custom model is a hand-entered declaration, but only about the fields the operator
+        // actually filled in. An omitted `supports_vision` is silence, not a declaration of
+        // blindness, so it is recorded as unknown and the request-build gate keeps sending images
+        // (refs #7957). Recording the `unwrap_or(false)` above as a fact would strip a vision
+        // model's images with no error the moment someone added it without ticking the box.
+        vision_known: body
+            .get("supports_vision")
+            .and_then(|v| v.as_bool())
+            .is_some(),
         supports_streaming: body
             .get("supports_streaming")
             .and_then(|v| v.as_bool())
@@ -1420,6 +1639,14 @@ pub async fn set_provider_key(
     Path(name): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
+    // Managed mode (#6695) refuses the whole request, not just the config write.
+    // This handler writes `secrets.env` at the top and only *conditionally* reaches `persist_default_model` further down — the auto-switch branches depend on whether the current default already has a working key, which the caller cannot predict.
+    // A guard at the config write would therefore refuse a request that had already rewritten `secrets.env` and mutated the process environment, and would return 200 or 423 for the identical request depending on daemon state.
+    // Refusing first keeps the request atomic and the contract documentable: in a managed deployment provider credentials come from the environment or secret manifest, not from this route.
+    if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+        return locked;
+    }
+
     // Shape-check the path-supplied provider name BEFORE we derive an env
     // var from it. See `docs/issues/set-provider-key-arbitrary-names.md`.
     if let Err(msg) = crate::validation::check_provider_name_shape(&name) {
@@ -1901,16 +2128,160 @@ pub async fn enable_provider(
     )
 }
 
+/// PUT /api/providers/{name}/discovery — Toggle live model discovery (#6702).
+///
+/// Body: `{ "discover_models": true }`.
+///
+/// Model discovery used to be reachable only through the hard-coded local
+/// provider ids, so a custom OpenAI-compatible endpoint registered under its
+/// own id stayed at `model_count: 0` forever with no UI action to change that.
+/// Flipping the flag here puts the provider on exactly the same probe path as
+/// a built-in local one: the periodic probe loop, `POST .../test`, and the
+/// live-model filter applied to `/api/models`.
+///
+/// The flag is persisted into the provider's own `providers/{name}.toml`
+/// `[provider]` table, which is where the catalog reads it back from on the
+/// next boot. Registry-managed files are rewritten by the boot-time registry
+/// sync when their content drifts from the upstream copy, so the flag is
+/// durable for the custom providers this endpoint exists to serve and
+/// intentionally best-effort for built-in ids — whose discovery behaviour is
+/// decided by the id branch of the predicate anyway.
+#[utoipa::path(
+    put,
+    path = "/api/providers/{name}/discovery",
+    tag = "models",
+    params(("name" = String, Path, description = "Provider identifier")),
+    request_body = crate::types::JsonObject,
+    responses(
+        (status = 200, description = "Discovery setting updated", body = crate::types::JsonObject),
+        (status = 400, description = "Invalid provider name or request body"),
+        (status = 404, description = "Provider not found")
+    )
+)]
+pub async fn set_provider_discovery(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    // The name is joined into `providers/{name}.toml`, so gate its shape
+    // before it reaches `Path::join` — same boundary as `set_provider_key`.
+    if let Err(msg) = crate::validation::check_provider_name_shape(&name) {
+        return ApiErrorResponse::bad_request(msg).into_json_tuple();
+    }
+
+    let discover = match body.get("discover_models").and_then(|v| v.as_bool()) {
+        Some(v) => v,
+        None => {
+            return ApiErrorResponse::bad_request("Missing or non-boolean 'discover_models' field")
+                .into_json_tuple();
+        }
+    };
+
+    // Capture the updated record, not just a success flag: the file written
+    // below has to carry the provider's identity fields or the catalog loader
+    // cannot read it back (#7776).
+    let mut applied: Option<librefang_types::model_catalog::ProviderInfo> = None;
+    let sink = &mut applied;
+    let name_for_closure = name.clone();
+    state.kernel.model_catalog_update(&mut move |catalog| {
+        if catalog.set_provider_discover_models(&name_for_closure, discover) {
+            *sink = catalog.get_provider(&name_for_closure).cloned();
+        }
+    });
+    let Some(provider) = applied else {
+        return ApiErrorResponse::not_found(format!("Provider '{}' not found", name))
+            .into_json_tuple();
+    };
+
+    let providers_dir = state.kernel.home_dir().join("providers");
+    if let Err(e) = upsert_provider_discover_models(&providers_dir, &provider, discover) {
+        // The in-memory flip already happened; report the failure rather than
+        // letting the setting silently revert on the next daemon boot.
+        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "ok",
+            "provider": name,
+            "discover_models": discover,
+        })),
+    )
+}
+
+/// Persist `discover_models` into `providers/{name}.toml`'s `[provider]` table.
+///
+/// Uses `toml_edit` so the rest of the file — the `[[models]]` array a custom
+/// provider carries, comments, key order — survives byte-for-byte. Creates a
+/// file only when none exists, which happens for entries that live solely in
+/// memory (a `[provider_urls]`-only custom provider).
+///
+/// The record written has to be one the catalog loader can read back. Writing
+/// `id` and the flag alone produced a file that failed to deserialize, so the
+/// loader discarded it whole and the setting silently reverted on every boot
+/// (#7776). Identity fields therefore come from the live `ProviderInfo` the
+/// caller just confirmed exists, and any of them already present in the file
+/// is left untouched — the operator's own value wins over the in-memory one,
+/// and an unrelated toggle never rewrites a hand-maintained catalog file.
+fn upsert_provider_discover_models(
+    providers_dir: &std::path::Path,
+    provider: &librefang_types::model_catalog::ProviderInfo,
+    discover: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let name = provider.id.as_str();
+    let path = providers_dir.join(format!("{name}.toml"));
+    let mut doc: toml_edit::DocumentMut = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw.parse()?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => toml_edit::DocumentMut::new(),
+        Err(e) => return Err(e.into()),
+    };
+
+    // A file that somehow lacks the `[provider]` table (models-only catalog
+    // fragment) gets one, so the flag lands where `ProviderCatalogToml` reads it.
+    if !doc.get("provider").is_some_and(|item| item.is_table()) {
+        doc["provider"] = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+    let table = &mut doc["provider"];
+    if !table.get("id").is_some_and(|v| v.is_str()) {
+        table["id"] = toml_edit::value(name);
+    }
+    if !table.get("display_name").is_some_and(|v| v.is_str()) {
+        table["display_name"] = toml_edit::value(provider.display_name.as_str());
+    }
+    if !table.get("api_key_env").is_some_and(|v| v.is_str()) {
+        table["api_key_env"] = toml_edit::value(provider.api_key_env.as_str());
+    }
+    if !table.get("base_url").is_some_and(|v| v.is_str()) {
+        table["base_url"] = toml_edit::value(provider.base_url.as_str());
+    }
+    // `key_required` deserializes to `true` when absent, so only a provider
+    // that genuinely needs no key has to say so.
+    if !provider.key_required && !table.get("key_required").is_some_and(|v| v.is_bool()) {
+        table["key_required"] = toml_edit::value(false);
+    }
+    table["discover_models"] = toml_edit::value(discover);
+
+    std::fs::create_dir_all(providers_dir)?;
+    crate::atomic_write(&path, doc.to_string().as_bytes())?;
+    Ok(())
+}
+
 /// POST /api/providers/{name}/test — Test a provider's connectivity.
 #[utoipa::path(post, path = "/api/providers/{name}/test", tag = "models", params(("name" = String, Path, description = "Provider name")), responses((status = 200, description = "Provider test result", body = crate::types::JsonObject)))]
 pub async fn test_provider(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    let (env_var, base_url, key_required) = {
+    let (env_var, base_url, key_required, discovers) = {
         let catalog = state.kernel.model_catalog_ref().load();
         match catalog.get_provider(&name) {
-            Some(p) => (p.api_key_env.clone(), p.base_url.clone(), p.key_required),
+            Some(p) => (
+                p.api_key_env.clone(),
+                p.base_url.clone(),
+                p.key_required,
+                librefang_kernel::provider_health::discovers_models(p),
+            ),
             None => {
                 return ApiErrorResponse::not_found(format!("Unknown provider '{}'", name))
                     .into_json_tuple();
@@ -1928,12 +2299,7 @@ pub async fn test_provider(
         let cli_latency = cli_start.elapsed().as_millis();
         state.provider_test_cache.insert(
             name.clone(),
-            (
-                Instant::now(),
-                cli_latency,
-                chrono::Utc::now().to_rfc3339(),
-                cli_ok,
-            ),
+            super::ProviderTestResult::new(cli_latency, cli_ok),
         );
         return if cli_ok {
             (
@@ -1950,13 +2316,21 @@ pub async fn test_provider(
         };
     }
 
-    // ── Local providers (Ollama / vLLM / LM Studio / lemonade) ──
+    // ── Discovery providers (Ollama / vLLM / LM Studio / lemonade, plus any
+    // provider that opted in via `discover_models`) ──
     // Delegate to the kernel's shared probe helper so the on-demand test
     // updates `auth_status` in the catalog (NotRequired on success,
-    // LocalOffline on failure). Before this, the endpoint only refreshed an
-    // in-memory cache — users could start Ollama after LibreFang booted and
-    // the dashboard would stay stuck on `local_offline` forever.
-    if librefang_kernel::provider_health::is_local_provider(&name) {
+    // LocalOffline on failure) and merges the discovered model list. Before
+    // this, the endpoint only refreshed an in-memory cache — users could start
+    // Ollama after LibreFang booted and the dashboard would stay stuck on
+    // `local_offline` forever.
+    // An opted-in provider without a base URL falls through to the
+    // "Provider base URL not configured" branch below rather than probing an
+    // empty URL; the built-in local ids keep their historical path verbatim so
+    // an existing install sees no change.
+    if discovers
+        && (!base_url.is_empty() || librefang_kernel::provider_health::is_local_provider(&name))
+    {
         let result = state
             .kernel
             .clone()
@@ -1967,12 +2341,7 @@ pub async fn test_provider(
         let latency = result.latency_ms as u128;
         state.provider_test_cache.insert(
             name.clone(),
-            (
-                Instant::now(),
-                latency,
-                chrono::Utc::now().to_rfc3339(),
-                result.reachable,
-            ),
+            super::ProviderTestResult::new(latency, result.reachable),
         );
         return if result.reachable {
             (
@@ -2045,12 +2414,7 @@ pub async fn test_provider(
         });
         state.provider_test_cache.insert(
             name.clone(),
-            (
-                Instant::now(),
-                latency_ms,
-                chrono::Utc::now().to_rfc3339(),
-                key_valid.is_some() || model_list_fetched,
-            ),
+            super::ProviderTestResult::new(latency_ms, key_valid.is_some() || model_list_fetched),
         );
 
         return match key_valid {
@@ -2096,10 +2460,9 @@ pub async fn test_provider(
 
     // ── Bedrock: AWS Signature auth — can't test with simple HTTP ──
     if name == "bedrock" || name == "aws-bedrock" {
-        state.provider_test_cache.insert(
-            name.clone(),
-            (Instant::now(), 0, chrono::Utc::now().to_rfc3339(), true),
-        );
+        state
+            .provider_test_cache
+            .insert(name.clone(), super::ProviderTestResult::new(0, true));
         return (
             StatusCode::OK,
             Json(serde_json::json!({
@@ -2204,12 +2567,7 @@ pub async fn test_provider(
     // Cache test result so GET /api/providers can show latency for all providers.
     state.provider_test_cache.insert(
         name.clone(),
-        (
-            Instant::now(),
-            latency_ms,
-            chrono::Utc::now().to_rfc3339(),
-            true,
-        ),
+        super::ProviderTestResult::new(latency_ms, true),
     );
 
     // For Anthropic-protocol providers, 401/403/404 on /v1/models is a
@@ -2252,6 +2610,12 @@ pub async fn set_provider_url(
     Path(name): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
+    // Managed mode (#6695): `[provider_urls]` and `[provider_proxy_urls]` are deployment configuration, persisted below at `upsert_provider_url` / `upsert_provider_proxy_url`.
+    // Refuse before the in-memory catalog is mutated, so a refused request leaves neither the file nor the live catalog moved — otherwise the running daemon would drift from the manifest with nothing on disk to show for it.
+    if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+        return locked;
+    }
+
     // Accept any provider name — custom providers are supported via OpenAI-compatible format.
     let base_url_raw = match body["base_url"].as_str() {
         Some(u) if !u.trim().is_empty() => u.trim().to_string(),
@@ -2305,11 +2669,41 @@ pub async fn set_provider_url(
         }
     }
 
-    // Update catalog in memory. Reconfiguring the URL is an explicit signal
-    // that the user wants this provider active, so undo any suppression set
-    // by a prior `delete_provider_key` (#4803) and refresh auth status —
-    // otherwise a suppressed local provider stays Missing even after the
-    // user re-points it at a reachable host.
+    // Persist both sections as one read-modify-write transaction. The shared
+    // lock prevents another config endpoint from committing a stale snapshot,
+    // while spawn_blocking keeps config parsing and the fsync-backed atomic
+    // replacement off the Tokio worker.
+    let config_path = state.kernel.config_path().to_path_buf();
+    let _config_guard = state.config_write_lock.lock().await;
+    let persist_name = name.clone();
+    let persist_base_url = base_url.clone();
+    let persist_proxy_url = proxy_url.clone();
+    let persist_result = tokio::task::spawn_blocking(move || {
+        upsert_provider_urls(
+            &config_path,
+            &persist_name,
+            &persist_base_url,
+            persist_proxy_url.as_deref(),
+        )
+        .map_err(|error| error.to_string())
+    })
+    .await;
+    match persist_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return ApiErrorResponse::internal_scrub(error).into_json_tuple(),
+        Err(error) => {
+            return ApiErrorResponse::internal_scrub(format!(
+                "provider URL persistence task failed: {error}"
+            ))
+            .into_json_tuple();
+        }
+    }
+    drop(_config_guard);
+
+    // Commit the live catalog only after config.toml is durable. A failed
+    // write therefore leaves both disk and runtime on the previous URL.
+    // Reconfiguring the URL is also an explicit signal that the user wants
+    // this provider active, so undo suppression from a prior key deletion.
     {
         let name_for_closure = name.clone();
         let base_url_for_closure = base_url.clone();
@@ -2334,17 +2728,6 @@ pub async fn set_provider_url(
             }
             catalog.detect_auth();
         });
-    }
-
-    // Persist to config.toml [provider_urls] section
-    let config_path = state.kernel.home_dir().join("config.toml");
-    if let Err(e) = upsert_provider_url(&config_path, &name, &base_url) {
-        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
-    }
-    if let Some(ref pu) = proxy_url {
-        if let Err(e) = upsert_provider_proxy_url(&config_path, &name, pu) {
-            tracing::warn!("Failed to persist proxy_url: {e}");
-        }
     }
 
     // Probe reachability at the new URL. Forward the configured api_key so
@@ -2377,15 +2760,7 @@ pub async fn set_provider_url(
                 probe
                     .discovered_models
                     .iter()
-                    .map(|n| librefang_kernel::provider_health::DiscoveredModelInfo {
-                        name: n.clone(),
-                        parameter_size: None,
-                        quantization_level: None,
-                        family: None,
-                        families: None,
-                        size: None,
-                        capabilities: vec![],
-                    })
+                    .map(librefang_kernel::provider_health::DiscoveredModelInfo::bare)
                     .collect()
             } else {
                 probe.discovered_model_info.clone()
@@ -2434,6 +2809,13 @@ pub async fn set_default_provider(
     Path(name): Path<String>,
     body: Option<axum::Json<serde_json::Value>>,
 ) -> impl IntoResponse {
+    // Managed mode (#6695): the whole point of this route is to persist `[default_model]` into config.toml (`persist_default_model` below), which a managed deployment owns.
+    // The guard runs before the catalog refreshes because those issue outbound HTTP to OpenRouter / EveryAPI — a refused request should cost nothing, and refreshing a catalog we are about to refuse to act on is pure waste.
+    // Refusing here also keeps the in-memory `default_model_override` aligned with the file: the persist failure below is only a `warn!`, so without the guard a managed deployment would answer 200 and hot-switch the live default while the manifest kept saying otherwise — the exact silent drift managed mode exists to prevent.
+    if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+        return locked;
+    }
+
     if name == "openrouter" {
         let _ = crate::openrouter_catalog::refresh_if_stale(&state.kernel).await;
     }
@@ -2844,11 +3226,12 @@ fn normalize_base_url_trims_whitespace() {
     );
 }
 
-/// Upsert a provider URL in the `[provider_urls]` section of config.toml.
-fn upsert_provider_url(
+/// Upsert a provider URL and optional proxy URL in one config.toml replacement.
+fn upsert_provider_urls(
     config_path: &std::path::Path,
     provider: &str,
     url: &str,
+    proxy_url: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if config_path.file_name().and_then(|n| n.to_str()) != Some("config.toml") {
         return Err(std::io::Error::new(
@@ -2896,55 +3279,31 @@ fn upsert_provider_url(
 
     urls_table.insert(provider.to_string(), toml::Value::String(url.to_string()));
 
+    if let Some(proxy_url) = proxy_url {
+        if !root.contains_key("provider_proxy_urls") {
+            root.insert(
+                "provider_proxy_urls".to_string(),
+                toml::Value::Table(toml::map::Map::new()),
+            );
+        }
+        let table = root
+            .get_mut("provider_proxy_urls")
+            .and_then(|v| v.as_table_mut())
+            .ok_or("provider_proxy_urls is not a table")?;
+
+        if proxy_url.is_empty() {
+            table.remove(provider);
+        } else {
+            table.insert(
+                provider.to_string(),
+                toml::Value::String(proxy_url.to_string()),
+            );
+        }
+    }
+
     if let Some(parent) = config_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-
-    let toml_str = toml::to_string_pretty(&doc)?;
-    crate::atomic_write(config_path, toml_str.as_bytes())?;
-    Ok(())
-}
-
-/// Persist a per-provider proxy URL to `[provider_proxy_urls]` in config.toml.
-fn upsert_provider_proxy_url(
-    config_path: &std::path::Path,
-    provider: &str,
-    proxy_url: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let content = if config_path.exists() {
-        std::fs::read_to_string(config_path)?
-    } else {
-        String::new()
-    };
-
-    let mut doc: toml::Value = if content.trim().is_empty() {
-        toml::Value::Table(toml::map::Map::new())
-    } else {
-        toml::from_str(&content)?
-    };
-
-    let root = doc.as_table_mut().ok_or("Config is not a TOML table")?;
-
-    if !root.contains_key("provider_proxy_urls") {
-        root.insert(
-            "provider_proxy_urls".to_string(),
-            toml::Value::Table(toml::map::Map::new()),
-        );
-    }
-    let table = root
-        .get_mut("provider_proxy_urls")
-        .and_then(|v| v.as_table_mut())
-        .ok_or("provider_proxy_urls is not a table")?;
-
-    if proxy_url.is_empty() {
-        table.remove(provider);
-    } else {
-        table.insert(
-            provider.to_string(),
-            toml::Value::String(proxy_url.to_string()),
-        );
-    }
-
     let toml_str = toml::to_string_pretty(&doc)?;
     crate::atomic_write(config_path, toml_str.as_bytes())?;
     Ok(())
@@ -2997,10 +3356,7 @@ pub async fn copilot_oauth_start() -> impl IntoResponse {
                 })),
             )
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": e })),
-        ),
+        Err(e) => scrubbed_provider_error("copilot_oauth_start", e),
     }
 }
 
@@ -3045,12 +3401,9 @@ pub async fn copilot_oauth_poll(
             // Save to secrets.env
             let secrets_path = state.kernel.home_dir().join("secrets.env");
             if let Err(e) = write_secret_env(&secrets_path, "GITHUB_TOKEN", &access_token) {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(
-                        serde_json::json!({"status": "error", "error": format!("Failed to save token: {e}")}),
-                    ),
-                );
+                let (status, Json(mut body)) = scrubbed_provider_error("copilot_token_persist", e);
+                body["status"] = serde_json::Value::String("error".to_string());
+                return (status, Json(body));
             }
 
             // Set in current process. Serialized through the process-global
@@ -3113,13 +3466,14 @@ pub async fn copilot_oauth_poll(
 #[utoipa::path(post, path = "/api/catalog/update", tag = "models", responses((status = 200, description = "Catalog updated", body = crate::types::JsonObject)))]
 pub async fn catalog_update(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let cfg = state.kernel.config_ref();
-    let mirror = cfg.registry.registry_mirror.clone();
-    let host = cfg.registry.registry_host.clone();
-    drop(cfg);
+    let mirror = &cfg.registry.registry_mirror;
+    let host = cfg.registry.registry_host.as_deref();
+    // `true`, not `cfg.registry.auto_sync`: this handler is an explicit operator request to fetch, and `auto_sync` gates only the automatic paths.
     match librefang_kernel::catalog_sync::sync_catalog_to(
         state.kernel.home_dir(),
-        &mirror,
-        host.as_deref(),
+        mirror,
+        host,
+        true,
     )
     .await
     {
@@ -3156,14 +3510,13 @@ pub async fn catalog_update(State(state): State<Arc<AppState>>) -> impl IntoResp
             )
                 .into_response()
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": e,
-            })),
-        )
-            .into_response(),
+        Err(e) => {
+            let (status, Json(mut body)) = scrubbed_provider_error("catalog_update", e);
+            body["status"] = serde_json::Value::String("error".to_string());
+            body["message"] = body["error"].take();
+            body.as_object_mut().expect("JSON object").remove("error");
+            (status, Json(body)).into_response()
+        }
     }
 }
 
@@ -3215,14 +3568,206 @@ pub async fn detect_ollama() -> impl IntoResponse {
 mod tests {
     use super::{
         parse_claude_code_settings_model, parse_codex_configured_model,
-        parse_gemini_style_settings_model, synthesized_cli_model_row,
+        parse_gemini_style_settings_model, scrubbed_provider_error, synthesized_cli_model_row,
+        upsert_provider_discover_models, upsert_provider_urls,
     };
     use crate::routes::agent_templates::{get_profile, list_profiles};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::routing::get;
-    use axum::Router;
+    use axum::{Json, Router};
     use tower::ServiceExt;
+
+    /// Build the live catalog record the discovery handler passes to the writer.
+    fn live_provider(id: &str) -> librefang_types::model_catalog::ProviderInfo {
+        librefang_types::model_catalog::ProviderInfo {
+            id: id.to_string(),
+            display_name: "LiteLLM Gateway".to_string(),
+            api_key_env: "LITELLM_API_KEY".to_string(),
+            base_url: "https://gateway.internal/v1".to_string(),
+            key_required: true,
+            ..Default::default()
+        }
+    }
+
+    /// #7776: the file created for a provider that lived only in memory has to
+    /// be one the catalog loader can read back. It used to carry `id` and the
+    /// flag alone, which failed deserialization, so the loader dropped the file
+    /// and the operator's opt-in reverted on the next boot.
+    #[test]
+    fn a_freshly_created_provider_file_round_trips_through_the_catalog_loader() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers = dir.path().join("providers");
+        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
+
+        let written = std::fs::read_to_string(providers.join("litellm.toml")).unwrap();
+        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
+        let provider = catalog
+            .get_provider("litellm")
+            .unwrap_or_else(|| panic!("written file must load back; content:\n{written}"));
+
+        assert!(provider.discover_models, "content:\n{written}");
+        assert_eq!(provider.display_name, "LiteLLM Gateway");
+        assert_eq!(provider.api_key_env, "LITELLM_API_KEY");
+        assert_eq!(provider.base_url, "https://gateway.internal/v1");
+        assert!(provider.key_required);
+    }
+
+    /// A provider that needs no key has to say so explicitly, because
+    /// `key_required` deserializes to `true` when the key is absent.
+    #[test]
+    fn a_keyless_provider_records_key_required_false() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers = dir.path().join("providers");
+        let mut info = live_provider("local-gateway");
+        info.key_required = false;
+        upsert_provider_discover_models(&providers, &info, true).unwrap();
+
+        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
+        assert!(!catalog.get_provider("local-gateway").unwrap().key_required);
+    }
+
+    /// The writer's doc-comment promises the rest of the file survives
+    /// byte-for-byte. Adding the flag must not reflow the `[[models]]` array,
+    /// drop comments, or rewrite values the operator maintains by hand.
+    #[test]
+    fn upserting_the_flag_leaves_the_rest_of_the_file_byte_identical() {
+        let original = concat!(
+            "# Hand-maintained gateway catalog — do not regenerate.\n",
+            "[provider]\n",
+            "id = \"litellm\"\n",
+            "display_name = \"Operator's Own Name\"\n",
+            "api_key_env = \"OPS_TOKEN\"\n",
+            "base_url = \"https://ops.internal/v1\"\n",
+            "\n",
+            "# The five models this gateway actually fronts.\n",
+            "[[models]]\n",
+            "id = \"gpt-4o\"\n",
+            "display_name = \"GPT-4o\"\n",
+            "tier = \"smart\"\n",
+            "context_window = 128000\n",
+            "max_output_tokens = 16384\n",
+            "input_cost_per_m = 2.5\n",
+            "output_cost_per_m = 10.0\n",
+            "supports_tools = true\n",
+            "supports_vision = true\n",
+            "supports_streaming = true\n",
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let providers = dir.path().join("providers");
+        std::fs::create_dir_all(&providers).unwrap();
+        let path = providers.join("litellm.toml");
+        std::fs::write(&path, original).unwrap();
+
+        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
+        let persisted = std::fs::read_to_string(&path).unwrap();
+
+        assert_eq!(
+            persisted.replace("discover_models = true\n", ""),
+            original,
+            "adding the flag is the only edit; got:\n{persisted}"
+        );
+
+        // And the operator's values win over the live in-memory record.
+        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
+        let provider = catalog.get_provider("litellm").unwrap();
+        assert_eq!(provider.display_name, "Operator's Own Name");
+        assert_eq!(provider.api_key_env, "OPS_TOKEN");
+        assert_eq!(provider.base_url, "https://ops.internal/v1");
+        assert!(provider.discover_models);
+        assert_eq!(provider.model_count, 1, "the models array is still parsed");
+    }
+
+    /// A file written by an older build carries the broken partial shape. The
+    /// next toggle has to heal it rather than rewrite the same unreadable file.
+    #[test]
+    fn upserting_over_a_legacy_partial_file_completes_the_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let providers = dir.path().join("providers");
+        std::fs::create_dir_all(&providers).unwrap();
+        let path = providers.join("litellm.toml");
+        std::fs::write(
+            &path,
+            "[provider]\nid = \"litellm\"\ndiscover_models = true\n",
+        )
+        .unwrap();
+
+        upsert_provider_discover_models(&providers, &live_provider("litellm"), true).unwrap();
+
+        let catalog = librefang_runtime::model_catalog::ModelCatalog::new_from_dir(&providers);
+        let provider = catalog.get_provider("litellm").unwrap();
+        assert_eq!(provider.base_url, "https://gateway.internal/v1");
+        assert_eq!(provider.api_key_env, "LITELLM_API_KEY");
+        assert!(provider.discover_models);
+    }
+
+    #[test]
+    fn provider_internal_errors_do_not_expose_source_details() {
+        let secret = "/private/home/secrets.env: permission denied; upstream body=token-value";
+        let (status, Json(body)) = scrubbed_provider_error("test", secret);
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["error"], "Internal server error");
+        assert!(!body.to_string().contains(secret));
+        assert!(!body.to_string().contains("secrets.env"));
+        assert!(!body.to_string().contains("token-value"));
+    }
+
+    #[test]
+    fn provider_urls_persist_together_without_clobbering_other_sections() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            "[auth]\nmode = \"required\"\n\n[provider_urls]\nexisting = \"https://old.example/v1\"\n",
+        )
+        .unwrap();
+
+        upsert_provider_urls(
+            &config_path,
+            "custom",
+            "https://api.example/v1",
+            Some("socks5://127.0.0.1:1080"),
+        )
+        .unwrap();
+
+        let config: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert_eq!(config["auth"]["mode"].as_str(), Some("required"));
+        assert_eq!(
+            config["provider_urls"]["existing"].as_str(),
+            Some("https://old.example/v1")
+        );
+        assert_eq!(
+            config["provider_urls"]["custom"].as_str(),
+            Some("https://api.example/v1")
+        );
+        assert_eq!(
+            config["provider_proxy_urls"]["custom"].as_str(),
+            Some("socks5://127.0.0.1:1080")
+        );
+    }
+
+    #[test]
+    fn empty_provider_proxy_removes_only_that_provider() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("config.toml");
+        std::fs::write(
+            &config_path,
+            "[provider_proxy_urls]\ncustom = \"http://old.example\"\nother = \"http://keep.example\"\n",
+        )
+        .unwrap();
+
+        upsert_provider_urls(&config_path, "custom", "https://api.example/v1", Some("")).unwrap();
+
+        let config: toml::Value =
+            toml::from_str(&std::fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert!(config["provider_proxy_urls"].get("custom").is_none());
+        assert_eq!(
+            config["provider_proxy_urls"]["other"].as_str(),
+            Some("http://keep.example")
+        );
+    }
 
     #[test]
     fn codex_config_extracts_top_level_model_past_provider_blocks() {

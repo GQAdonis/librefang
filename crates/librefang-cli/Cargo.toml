@@ -3,6 +3,8 @@ name = "librefang-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "CLI tool for the LibreFang Agent OS"
 readme = "README.md"
 
@@ -99,6 +101,9 @@ tracing-opentelemetry = { workspace = true, optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = { version = "0.7", features = ["disable_initial_exec_tls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
 
 [build-dependencies]
 # `build.rs` uses `chrono::Utc::now()` to stamp `BUILD_DATE` instead of

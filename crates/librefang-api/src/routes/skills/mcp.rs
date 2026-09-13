@@ -91,6 +91,112 @@ pub(super) async fn apply_mcp_mutation(
     Ok(())
 }
 
+/// Strip values out of an MCP `env` list, leaving only variable names (#6630).
+///
+/// `McpServerConfigEntry::env` is documented as "variables to pass through" (`["GITHUB_PERSONAL_ACCESS_TOKEN"]`) but the supported representation also accepts an inline `KEY=VALUE`, so an operator can put a live credential in there.
+/// Every response that serialized the raw list therefore handed those credentials to the caller — and `GET /api/mcp/servers` is in `PUBLIC_ROUTES_DASHBOARD_READS`, so in open mode (`require_auth_for_reads` unset, the default) that caller does not even need a token.
+/// The reported Viewer-role exposure is the authenticated case of the same hole.
+///
+/// Names are kept because they are the useful, non-secret half: the dashboard renders them, and an operator needs to know which variables a server expects.
+/// The shape stays `Vec<String>` rather than becoming a list of objects so the dashboard's read-edit-write round-trip keeps working — see `merge_env_preserving_inline_values` for the other half of that contract.
+fn mcp_env_names(env: &[String]) -> Vec<String> {
+    env.iter()
+        .map(|entry| match entry.split_once('=') {
+            Some((name, _value)) => name.trim().to_string(),
+            None => entry.trim().to_string(),
+        })
+        .collect()
+}
+
+/// Merge a submitted `env` list with what is already persisted, keeping inline values the caller could not have seen (#6630).
+///
+/// Redacting the read side alone would have been a data-loss bug worse than the disclosure.
+/// `McpServersPage` hydrates its edit form from `GET /api/mcp/servers` and submits every field back on save, so a caller who changed only, say, `timeout_secs` would round-trip the name-only `env` list and silently wipe the inline values out of the stored config — and the server would then fail to connect for a reason nothing in the UI explains.
+///
+/// So a submitted bare `NAME` is treated as "unchanged" when the stored entry for that name carries an inline value: the stored form wins.
+/// A submitted `NAME=value` is always taken as an explicit new value, and a name absent from the submission is dropped as an explicit removal.
+///
+/// Known limitation: because a bare `NAME` means "keep", an inline value cannot be *cleared* by editing it down to the bare name — remove the entry and add it back instead.
+/// That is the deliberate trade for never silently destroying a credential the caller was not shown.
+fn merge_env_preserving_inline_values(incoming: &[String], existing: &[String]) -> Vec<String> {
+    // name → the stored entry in full (`NAME=value`).
+    // Only entries that actually carry an inline value are candidates for restoration.
+    let stored_inline: std::collections::HashMap<&str, &String> = existing
+        .iter()
+        .filter_map(|entry| entry.split_once('=').map(|(name, _)| (name.trim(), entry)))
+        .collect();
+
+    incoming
+        .iter()
+        .map(|entry| match entry.split_once('=') {
+            // Explicit value supplied — take it verbatim.
+            Some(_) => entry.clone(),
+            // Bare name: restore the stored inline form if there was one.
+            None => stored_inline
+                .get(entry.trim())
+                .map(|stored| (*stored).clone())
+                .unwrap_or_else(|| entry.clone()),
+        })
+        .collect()
+}
+
+/// The `http_compat` counterpart of [`merge_env_preserving_inline_values`]: restore static header values the caller was never shown (#6612).
+///
+/// A `[[mcp_servers.transport.headers]]` entry may carry its value inline as `value`, which makes it a credential, so `http_compat_header_summary` omits it for the same reason `env` is reduced to names (#6630).
+/// That leaves the same asymmetry on the write side: a client that reads the `transport` object, edits `base_url`, and submits it back would blank every static header value in the stored config, and the transport would then fail with `Missing environment variable` or send an empty header.
+///
+/// Semantics mirror the `env` merge exactly, keyed by header name: a submitted header carrying a `value` is an explicit new value and wins; a submitted header without a `value` restores the stored `value` for that name if there was one; a header absent from the submission is an explicit removal.
+/// A submitted `value_env` is never modified — it names a variable rather than holding a secret, so it round-trips verbatim.
+/// Its *presence* does not suppress the restore, though: a header may legitimately carry both, `apply_http_compat_headers` reads `value` first, and skipping on `value_env` would silently demote such a header from "send this secret" to "resolve this variable" on any read-modify-write, with nothing logged.
+/// A header that only ever had a `value_env` is unaffected either way, because the stored-value lookup has no entry for a name that never carried a `value`.
+///
+/// The merge applies only when the submitted and stored transports are *both* `http_compat`.
+/// An operator switching a server from `http_compat` to `stdio` and back must not have the old credentials silently resurrected into the new transport.
+/// Under the current implementation that guard is belt-and-braces — the stored-value lookup is built from the stored `http_compat` headers, so a non-`http_compat` stored transport has nothing to restore from regardless — but it keeps the invariant explicit for any future version that sourced values from elsewhere.
+///
+/// Known limitation, inherited from the `env` merge: because a value-less header means "keep", a static value cannot be *cleared* in a single write.
+/// Clearing takes two: one `PUT` omitting the header, which removes it and with it the stored value, then one adding it back.
+/// That applies equally to clearing the `value` off a header that carries both, leaving it purely env-sourced.
+/// It is the deliberate trade for never silently destroying a credential the caller was not shown.
+fn merge_http_compat_secrets(
+    incoming: &mut librefang_types::config::McpTransportEntry,
+    existing: &librefang_types::config::McpTransportEntry,
+) {
+    use librefang_types::config::McpTransportEntry::HttpCompat;
+
+    // Both sides must be `http_compat`; a transport-type change carries nothing forward.
+    let (
+        HttpCompat {
+            headers: incoming_headers,
+            ..
+        },
+        HttpCompat {
+            headers: existing_headers,
+            ..
+        },
+    ) = (incoming, existing)
+    else {
+        return;
+    };
+
+    let stored_static: std::collections::HashMap<&str, &String> = existing_headers
+        .iter()
+        .filter_map(|h| h.value.as_ref().map(|v| (h.name.trim(), v)))
+        .collect();
+
+    for header in incoming_headers.iter_mut() {
+        // An explicitly submitted value is taken as-is; only an absent one is restored.
+        // The presence of `value_env` must NOT suppress the restore: a header may carry both, and `value` wins at request time, so skipping on `value_env` would silently demote a "send this secret" header to a "resolve this variable" one on any read-modify-write.
+        // A purely env-sourced header is unaffected either way, because `stored_static` only has entries for names that had a stored `value`.
+        if header.value.is_some() {
+            continue;
+        }
+        if let Some(stored) = stored_static.get(header.name.trim()) {
+            header.value = Some((*stored).clone());
+        }
+    }
+}
+
 /// Persist an MCP server upsert according to `config.mcp_runtime_store`, then
 /// make it effective without a restart. `File` (default) rewrites
 /// `config.toml` and runs a full config reload — byte-for-byte the pre-#6113
@@ -103,6 +209,11 @@ pub(super) async fn apply_mcp_mutation(
 /// Only compiled for non-surreal (legacy SQLite) builds — under the default
 /// `surreal-backend`, [`apply_mcp_mutation`] writes the SurrealDB config store
 /// directly and this dispatch is never reached.
+///
+/// Managed mode (#6695) is enforced **per branch, not per route**.
+/// The `File` branch is refused because it rewrites `config.toml`; the `Db` branch is left writable because it never opens the file, which is exactly what `mcp_runtime_store = "db"` was introduced for in #6021.
+/// Locking the route outright would take the dashboard's whole MCP install surface away from a managed deployment even when that deployment has already moved the persistence off the managed file — over-locking a configuration that is not actually being written.
+/// The refusal therefore doubles as the fix: an operator who hits `423` here sets `mcp_runtime_store = "db"` in the manifest and gets the surface back.
 #[cfg(not(feature = "surreal-backend"))]
 async fn persist_mcp_upsert(
     state: &Arc<AppState>,
@@ -110,7 +221,10 @@ async fn persist_mcp_upsert(
 ) -> Result<&'static str, (StatusCode, Json<serde_json::Value>)> {
     match state.kernel.config_ref().mcp_runtime_store {
         librefang_types::config::McpRuntimeStore::File => {
-            let config_path = state.kernel.home_dir().join("config.toml");
+            if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+                return Err(locked);
+            }
+            let config_path = state.kernel.config_path().to_path_buf();
             if let Err(e) = upsert_mcp_server_config(&config_path, entry) {
                 return Err(ApiErrorResponse::internal_scrub(e).into_json_tuple());
             }
@@ -129,6 +243,8 @@ async fn persist_mcp_upsert(
 
 /// Delete counterpart of [`persist_mcp_upsert`] — removes the entry from the
 /// configured store and re-applies the effective set.
+///
+/// Carries the same per-branch managed-mode split, and for the stronger reason: without it a `DELETE` would strip a `[[mcp_servers]]` entry the manifest declares, and the next rollout would silently bring it back.
 #[cfg(not(feature = "surreal-backend"))]
 async fn persist_mcp_delete(
     state: &Arc<AppState>,
@@ -136,7 +252,10 @@ async fn persist_mcp_delete(
 ) -> Result<&'static str, (StatusCode, Json<serde_json::Value>)> {
     match state.kernel.config_ref().mcp_runtime_store {
         librefang_types::config::McpRuntimeStore::File => {
-            let config_path = state.kernel.home_dir().join("config.toml");
+            if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+                return Err(locked);
+            }
+            let config_path = state.kernel.config_path().to_path_buf();
             if let Err(e) = remove_mcp_server_config(&config_path, name) {
                 return Err(ApiErrorResponse::internal_scrub(e).into_json_tuple());
             }
@@ -252,7 +371,9 @@ pub async fn list_mcp_servers(State(state): State<Arc<AppState>>) -> impl IntoRe
                 "template_id": s.template_id,
                 "transport": transport,
                 "timeout_secs": s.timeout_secs,
-                "env": s.env,
+                // Names only — an inline `KEY=VALUE` must never reach a caller (#6630).
+                // This route is in PUBLIC_ROUTES_DASHBOARD_READS, so in open mode that caller can be unauthenticated.
+                "env": mcp_env_names(&s.env),
                 "auth_state": auth_state,
                 // Issue #3050: surface taint config so the dashboard tree
                 // editor can hydrate without a separate fetch.
@@ -351,7 +472,8 @@ pub async fn get_mcp_server(
         "template_id": entry.template_id,
         "transport": transport,
         "timeout_secs": entry.timeout_secs,
-        "env": entry.env,
+        // Names only, same contract as the list route (#6630).
+        "env": mcp_env_names(&entry.env),
         "connected": false,
         // Issue #3050: surface taint config so the dashboard tree editor
         // can hydrate without a separate fetch.
@@ -570,15 +692,31 @@ pub async fn update_mcp_server(
     }
 
     // Validate by deserializing
-    let entry: librefang_types::config::McpServerConfigEntry = match serde_json::from_value(body) {
-        Ok(e) => e,
-        Err(e) => {
-            return ApiErrorResponse::bad_request(
-                t.t_args("api-error-mcp-invalid-config", &[("error", &e.to_string())]),
-            )
-            .into_json_tuple();
+    let mut entry: librefang_types::config::McpServerConfigEntry =
+        match serde_json::from_value(body) {
+            Ok(e) => e,
+            Err(e) => {
+                return ApiErrorResponse::bad_request(
+                    t.t_args("api-error-mcp-invalid-config", &[("error", &e.to_string())]),
+                )
+                .into_json_tuple();
+            }
+        };
+
+    // Reads return `env` as names only (#6630), so a client that hydrated its form from GET and submitted every field back would otherwise wipe the inline values it was never shown.
+    // Restore them for any bare name.
+    // Static `http_compat` header values are redacted on read for the same reason and get the same treatment (#6612).
+    if let Some(existing) = effective_mcp_servers_snapshot(&state)
+        .into_iter()
+        .find(|s| s.name == name)
+    {
+        entry.env = merge_env_preserving_inline_values(&entry.env, &existing.env);
+        if let (Some(incoming_transport), Some(existing_transport)) =
+            (entry.transport.as_mut(), existing.transport.as_ref())
+        {
+            merge_http_compat_secrets(incoming_transport, existing_transport);
         }
-    };
+    }
 
     // Drop ErrorTranslator before .await — FluentBundle is !Send and cannot
     // be held across an async suspension point.
@@ -769,12 +907,7 @@ pub async fn delete_mcp_server(
         .lock()
         .await
         .remove(&name);
-    state
-        .kernel
-        .mcp_connections_ref()
-        .lock()
-        .await
-        .retain(|c| c.name() != name);
+    state.kernel.disconnect_mcp_server(&name).await;
 
     // Remove from the store + sync into the kernel (config.toml untouched).
     if let Err(resp) = apply_mcp_mutation(&state, McpMutation::Remove(name.clone())).await {
@@ -959,7 +1092,7 @@ pub async fn reload_mcp_handler(State(state): State<Arc<AppState>>) -> impl Into
     // add/remove` does this, then POSTs /api/mcp/reload) the reload would
     // otherwise run against the stale snapshot and miss the change.
     if let Err(e) = state.kernel.reload_config().await {
-        tracing::warn!("Failed to reload config before MCP reload: {e}");
+        return ApiErrorResponse::internal_scrub(e).into_json_tuple();
     }
 
     match state.kernel.clone().reload_mcp_servers().await {
@@ -970,6 +1103,6 @@ pub async fn reload_mcp_handler(State(state): State<Arc<AppState>>) -> impl Into
                 "new_connections": connected,
             })),
         ),
-        Err(e) => ApiErrorResponse::internal(e).into_json_tuple(),
+        Err(e) => ApiErrorResponse::internal_scrub(e).into_json_tuple(),
     }
 }

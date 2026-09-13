@@ -1180,7 +1180,9 @@ struct ReactionRecordingAdapter {
     name: String,
     channel_type: ChannelType,
     rx: Mutex<Option<mpsc::Receiver<ChannelMessage>>>,
-    reactions: Arc<Mutex<Vec<LifecycleReaction>>>,
+    /// Every reaction, paired with the `message_id` it targeted.
+    /// The id is what the Slack sidecar keys its receipt on (#6731), so a test that asserts "this message got no reaction" needs it recorded.
+    reactions: Arc<Mutex<Vec<(String, LifecycleReaction)>>>,
     shutdown_tx: watch::Sender<bool>,
 }
 
@@ -1199,7 +1201,23 @@ impl ReactionRecordingAdapter {
     }
 
     fn get_reactions(&self) -> Vec<LifecycleReaction> {
-        self.reactions.lock().unwrap().clone()
+        self.reactions
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(_, r)| r.clone())
+            .collect()
+    }
+
+    /// Phases recorded for one `message_id`, in arrival order.
+    fn phases_for(&self, message_id: &str) -> Vec<AgentPhase> {
+        self.reactions
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(id, _)| id == message_id)
+            .map(|(_, r)| r.phase.clone())
+            .collect()
     }
 }
 
@@ -1235,10 +1253,13 @@ impl ChannelAdapter for ReactionRecordingAdapter {
     async fn send_reaction(
         &self,
         _user: &ChannelUser,
-        _message_id: &str,
+        message_id: &str,
         reaction: &LifecycleReaction,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.reactions.lock().unwrap().push(reaction.clone());
+        self.reactions
+            .lock()
+            .unwrap()
+            .push((message_id.to_string(), reaction.clone()));
         Ok(())
     }
     async fn stop(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -1373,6 +1394,191 @@ async fn test_non_streaming_adapter_receives_tool_use_reaction() {
             .any(|r| matches!(&r.phase, AgentPhase::Done))
     })
     .await;
+
+    manager.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// Group gating emits NO lifecycle reaction (#6731)
+// ---------------------------------------------------------------------------
+//
+// The Slack sidecar's eyes/check receipt keys off the `Queued` lifecycle phase rather than off receiving a message, which is only correct if a message the bridge declines to answer produces no lifecycle signal at all.
+// Mention-only group gating is the path #6731 was reported on: `dispatch_message` returns at the `!should_process_group_message` arm, well before the first `send_lifecycle_reaction(Queued)` call.
+// This test pins that contract so a future refactor that moved the reaction above the gate would resurrect the permanently-stuck eyes on the Slack side.
+
+/// Handle that reports `group_policy = mention_only` as a per-agent override, the way an `agent.toml` `[channel_overrides]` block does.
+/// The trait default returns `None`, so without this the bridge sees no policy and processes every group message.
+struct MockMentionOnlyHandle {
+    agents: Mutex<Vec<(AgentId, String)>>,
+}
+
+impl MockMentionOnlyHandle {
+    fn new(agents: Vec<(AgentId, String)>) -> Self {
+        Self {
+            agents: Mutex::new(agents),
+        }
+    }
+}
+
+#[async_trait]
+impl ChannelBridgeHandle for MockMentionOnlyHandle {
+    async fn send_message(&self, _agent_id: AgentId, message: &str) -> Result<String, String> {
+        Ok(format!("Echo: {message}"))
+    }
+
+    async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+        let agents = self.agents.lock().unwrap();
+        Ok(agents.iter().find(|(_, n)| n == name).map(|(id, _)| *id))
+    }
+
+    async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+        Ok(self.agents.lock().unwrap().clone())
+    }
+
+    async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+        Err("mock: spawn not implemented".to_string())
+    }
+
+    async fn agent_channel_overrides(&self, _agent_id: AgentId) -> Option<ChannelOverrides> {
+        Some(ChannelOverrides {
+            group_policy: Some(librefang_types::config::GroupPolicy::MentionOnly),
+            ..Default::default()
+        })
+    }
+
+    fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {}
+}
+
+/// Build a group message with an explicit platform message id, so a test can tell one message's reactions from another's.
+fn make_group_msg(
+    channel: ChannelType,
+    group_id: &str,
+    message_id: &str,
+    text: &str,
+    was_mentioned: bool,
+) -> ChannelMessage {
+    let mut metadata = HashMap::new();
+    if was_mentioned {
+        metadata.insert("was_mentioned".to_string(), serde_json::json!(true));
+    }
+    ChannelMessage {
+        channel,
+        platform_message_id: message_id.to_string(),
+        sender: ChannelUser {
+            platform_id: group_id.to_string(),
+            display_name: "GroupUser".to_string(),
+            librefang_user: None,
+        },
+        content: ChannelContent::Text(text.to_string()),
+        target_agent: None,
+        timestamp: chrono::Utc::now(),
+        is_group: true,
+        thread_id: None,
+        metadata,
+    }
+}
+
+#[tokio::test]
+async fn test_group_gating_skip_emits_no_lifecycle_reaction_6731() {
+    let agent_id = AgentId::new();
+    let handle: Arc<dyn ChannelBridgeHandle> = Arc::new(MockMentionOnlyHandle::new(vec![(
+        agent_id,
+        "gated".to_string(),
+    )]));
+    let router = Arc::new(AgentRouter::new());
+    // Group messages resolve on `sender.platform_id`, which for a group is the chat id (see `resolve_or_fallback`'s binding-keys comment).
+    router.set_user_default("G01".to_string(), agent_id);
+
+    let (adapter, tx) = ReactionRecordingAdapter::new("slack-mock", ChannelType::Slack);
+    let adapter_ref = adapter.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter.clone()).await.unwrap();
+
+    // Unaddressed first, then an addressed one.
+    // Both are dispatched on the same serialized adapter stream, so once the addressed message has reached its terminal phase the unaddressed one has had its full turn to produce a reaction — no sleeps needed to prove the absence.
+    tx.send(make_group_msg(
+        ChannelType::Slack,
+        "G01",
+        "skip-1",
+        "just chatting among ourselves",
+        false,
+    ))
+    .await
+    .unwrap();
+    tx.send(make_group_msg(
+        ChannelType::Slack,
+        "G01",
+        "pass-1",
+        "hey bot, do the thing",
+        true,
+    ))
+    .await
+    .unwrap();
+
+    // Positive control: the addressed message really did run a turn, so the harness and the override are both wired correctly.
+    wait_until("done reaction for the addressed message", || {
+        adapter_ref
+            .phases_for("pass-1")
+            .iter()
+            .any(|p| matches!(p, AgentPhase::Done))
+    })
+    .await;
+
+    // The gated-out message never got a lifecycle signal, so the Slack sidecar never adds an eyes it would have no way to clear.
+    assert!(
+        adapter_ref.phases_for("skip-1").is_empty(),
+        "a mention-only-gated group message must produce no lifecycle reaction, got {:?}",
+        adapter_ref.phases_for("skip-1")
+    );
+
+    manager.stop().await;
+}
+
+#[tokio::test]
+async fn test_group_gating_pass_emits_queued_then_done_6731() {
+    let agent_id = AgentId::new();
+    let handle: Arc<dyn ChannelBridgeHandle> = Arc::new(MockMentionOnlyHandle::new(vec![(
+        agent_id,
+        "gated".to_string(),
+    )]));
+    let router = Arc::new(AgentRouter::new());
+    router.set_user_default("G01".to_string(), agent_id);
+
+    let (adapter, tx) = ReactionRecordingAdapter::new("slack-mock", ChannelType::Slack);
+    let adapter_ref = adapter.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter.clone()).await.unwrap();
+
+    tx.send(make_group_msg(
+        ChannelType::Slack,
+        "G01",
+        "pass-1",
+        "hey bot, do the thing",
+        true,
+    ))
+    .await
+    .unwrap();
+
+    wait_until("done reaction", || {
+        adapter_ref
+            .phases_for("pass-1")
+            .iter()
+            .any(|p| matches!(p, AgentPhase::Done))
+    })
+    .await;
+
+    // Queued must arrive, and arrive first: it is what the Slack sidecar hangs the eyes on, and a Done without a preceding Queued would leave a turn with a check and no in-progress marker.
+    let phases = adapter_ref.phases_for("pass-1");
+    assert!(
+        matches!(phases.first(), Some(AgentPhase::Queued)),
+        "the first lifecycle phase of a dispatched turn must be Queued, got {phases:?}"
+    );
+    assert!(
+        matches!(phases.last(), Some(AgentPhase::Done)),
+        "a successful turn must end on Done, got {phases:?}"
+    );
 
     manager.stop().await;
 }
@@ -1810,6 +2016,11 @@ struct NotifyingAdapter {
     sent: Arc<Mutex<Vec<(String, String)>>>,
     account_id: Option<String>,
     channel_type: ChannelType,
+    /// Every `send` fails, the way a Telegram bot that is not a member of the
+    /// target chat fails. The attempt is still recorded, so a test can assert
+    /// both that the adapter tried and that the listener did not count the
+    /// attempt as coverage (#8228).
+    fail_sends: bool,
 }
 
 impl NotifyingAdapter {
@@ -1820,6 +2031,7 @@ impl NotifyingAdapter {
             sent: Arc::new(Mutex::new(Vec::new())),
             account_id: None,
             channel_type: ChannelType::Telegram,
+            fail_sends: false,
         })
     }
 
@@ -1830,6 +2042,19 @@ impl NotifyingAdapter {
             sent: Arc::new(Mutex::new(Vec::new())),
             account_id: Some(account_id.to_string()),
             channel_type: ChannelType::Telegram,
+            fail_sends: false,
+        })
+    }
+
+    /// Like `with_account`, but every send fails.
+    fn failing_with_account(name: &str, account_id: &str) -> Arc<Self> {
+        Arc::new(Self {
+            name: name.to_string(),
+            recipients: Vec::new(),
+            sent: Arc::new(Mutex::new(Vec::new())),
+            account_id: Some(account_id.to_string()),
+            channel_type: ChannelType::Telegram,
+            fail_sends: true,
         })
     }
 
@@ -1848,6 +2073,7 @@ impl NotifyingAdapter {
             sent: Arc::new(Mutex::new(Vec::new())),
             account_id: Some(account_id.to_string()),
             channel_type,
+            fail_sends: false,
         })
     }
 
@@ -1890,6 +2116,9 @@ impl ChannelAdapter for NotifyingAdapter {
                 .lock()
                 .unwrap()
                 .push((user.platform_id.clone(), t));
+        }
+        if self.fail_sends {
+            return Err("simulated transport failure".into());
         }
         Ok(())
     }
@@ -2870,6 +3099,728 @@ async fn test_approval_listener_binding_respects_account_id_scope() {
     assert!(
         sent_b.is_empty(),
         "bot-b has no matching binding (account_id mismatch); approval must not leak there, got: {sent_b:?}"
+    );
+
+    manager.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// #8227: "approval reached nobody" is a verdict on the whole fan-out
+// ---------------------------------------------------------------------------
+//
+// The #5002 `WARN` sat inside `for adapter in &adapters`, so it described one
+// adapter's turn while being phrased as a verdict on the approval. On a host
+// running one sidecar per agent — a supported configuration — every approval
+// logged N-1 lines claiming it had been dropped, while the Nth adapter
+// delivered it. The guarantee #5002 wanted (a genuinely undeliverable approval
+// is never silently swallowed) is preserved by evaluating the same condition
+// once, after the loop.
+
+thread_local! {
+    static WARN_SINK: std::cell::RefCell<Option<Arc<Mutex<Vec<String>>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Process-global subscriber that forwards `WARN`/`ERROR` events to the sink of
+/// whichever thread raised them, if that thread registered one.
+///
+/// The obvious shape — a subscriber per test via
+/// `tracing::subscriber::set_default` — is thread-local, but `tracing` caches
+/// callsite interest *globally*: a sibling test dropping its guard can leave a
+/// callsite cached as "never", after which the event never reaches the
+/// thread-local subscriber at all. That is not hypothetical; it made these two
+/// tests pass under `--test-threads=1` and time out in the parallel run.
+/// Answering `enabled` from a permanent global keeps interest at "sometimes",
+/// so the decision is taken per event, and the thread-local sink still keeps
+/// concurrent tests from seeing each other's warnings.
+struct WarnRouter;
+
+struct WarnVisitor(String);
+
+impl tracing::field::Visit for WarnVisitor {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.push_str(&format!(" {}={:?}", field.name(), value));
+    }
+}
+
+impl tracing::Subscriber for WarnRouter {
+    fn enabled(&self, meta: &tracing::Metadata<'_>) -> bool {
+        *meta.level() <= tracing::Level::WARN
+    }
+    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+    fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+    fn event(&self, event: &tracing::Event<'_>) {
+        WARN_SINK.with(|sink| {
+            if let Some(events) = sink.borrow().as_ref() {
+                let mut visitor = WarnVisitor(format!("[{}]", event.metadata().level()));
+                event.record(&mut visitor);
+                events.lock().unwrap().push(visitor.0);
+            }
+        });
+    }
+    fn enter(&self, _: &tracing::span::Id) {}
+    fn exit(&self, _: &tracing::span::Id) {}
+}
+
+/// Captures `WARN`/`ERROR` events raised on this thread for as long as it lives.
+///
+/// `#[tokio::test]` runs a current-thread runtime, so the listener task spawned
+/// by `start_approval_listener` is polled on the test's own thread and its
+/// events land in this spy.
+struct WarnSpy(Arc<Mutex<Vec<String>>>);
+
+impl WarnSpy {
+    fn install() -> Self {
+        static INIT: std::sync::Once = std::sync::Once::new();
+        INIT.call_once(|| {
+            tracing::subscriber::set_global_default(WarnRouter)
+                .expect("nothing else installs a global subscriber in this test binary");
+        });
+        let events = Arc::new(Mutex::new(Vec::new()));
+        WARN_SINK.with(|sink| *sink.borrow_mut() = Some(events.clone()));
+        Self(events)
+    }
+
+    fn seen(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl Drop for WarnSpy {
+    fn drop(&mut self) {
+        WARN_SINK.with(|sink| *sink.borrow_mut() = None);
+    }
+}
+
+/// Two adapters, only the second covering the requesting agent: the approval is
+/// delivered, so the fan-out must produce no warning at all.
+#[tokio::test]
+async fn test_approval_fanout_is_silent_when_a_later_adapter_covers_the_agent() {
+    use librefang_types::event::{ApprovalRequestedEvent, Event, EventPayload, EventTarget};
+
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_x = AgentId::new();
+
+    // No `channel_default` anywhere: both adapters route purely via bindings,
+    // and only `bot-b` has one covering agent X. `bot-a` is iterated first, so
+    // pre-fix it warns before `bot-b` gets its turn.
+    let router = AgentRouter::new();
+    router.register_agent("binder-x".to_string(), agent_x);
+    router.load_bindings(&[librefang_types::config::AgentBinding {
+        agent: "binder-x".to_string(),
+        match_rule: librefang_types::config::BindingMatchRule {
+            channel: Some("telegram".to_string()),
+            account_id: Some("bot-b".to_string()),
+            peer_id: Some("chat-z".to_string()),
+            ..Default::default()
+        },
+    }]);
+    let router = Arc::new(router);
+
+    let adapter_a = NotifyingAdapter::with_account("telegram-a", "bot-a", Vec::new());
+    let adapter_b = NotifyingAdapter::with_account("telegram-b", "bot-b", Vec::new());
+    let adapter_b_ref = adapter_b.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter_a).await.unwrap();
+    manager.start_adapter(adapter_b).await.unwrap();
+
+    // Installed only now: adapter startup warns about the test double having
+    // no webhook routes, which has nothing to do with the fan-out. Scoping the
+    // spy to the listener keeps the assertion literally "zero warnings" rather
+    // than a substring filter that could hide a second, differently-worded one.
+    let spy = WarnSpy::install();
+
+    manager.start_approval_listener().await;
+
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(Event::new(
+            agent_x,
+            EventTarget::System,
+            EventPayload::ApprovalRequested(ApprovalRequestedEvent {
+                request_id: "8227aaaa00001111".to_string(),
+                agent_id: agent_x.0.to_string(),
+                tool_name: "shell_exec".to_string(),
+                description: "rm".to_string(),
+                risk_level: "high".to_string(),
+                ..Default::default()
+            }),
+        )))
+        .expect("broadcast send");
+
+    wait_until("approval delivered to bot-b", || {
+        !adapter_b_ref.get_sent().is_empty()
+    })
+    .await;
+    // The uncovered adapter's turn is over by the time the covered one has
+    // sent, but give the listener room in case iteration order ever changes.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let seen = spy.seen();
+    assert!(
+        seen.is_empty(),
+        "#8227: a delivered approval must not warn about the adapters that did not cover it, got: {seen:#?}"
+    );
+
+    manager.stop().await;
+}
+
+/// No adapter covers the requesting agent: the #5002 guarantee still holds, but
+/// the operator gets exactly one warning naming the approval, not one per
+/// adapter.
+#[tokio::test]
+async fn test_approval_fanout_warns_exactly_once_when_no_adapter_covers_the_agent() {
+    use librefang_types::event::{ApprovalRequestedEvent, Event, EventPayload, EventTarget};
+
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_x = AgentId::new();
+    let agent_other = AgentId::new();
+
+    // The only binding covers a different agent, so neither adapter has a
+    // delivery target for agent X's approval.
+    let router = AgentRouter::new();
+    router.register_agent("binder-other".to_string(), agent_other);
+    router.load_bindings(&[librefang_types::config::AgentBinding {
+        agent: "binder-other".to_string(),
+        match_rule: librefang_types::config::BindingMatchRule {
+            channel: Some("telegram".to_string()),
+            peer_id: Some("chat-other".to_string()),
+            ..Default::default()
+        },
+    }]);
+    let router = Arc::new(router);
+
+    let adapter_a = NotifyingAdapter::with_account("telegram-a", "bot-a", Vec::new());
+    let adapter_b = NotifyingAdapter::with_account("telegram-b", "bot-b", Vec::new());
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter_a).await.unwrap();
+    manager.start_adapter(adapter_b).await.unwrap();
+
+    // See the sibling test: the spy goes in after adapter startup so the count
+    // is the fan-out's own warnings and nothing else.
+    let spy = WarnSpy::install();
+
+    manager.start_approval_listener().await;
+
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(Event::new(
+            agent_x,
+            EventTarget::System,
+            EventPayload::ApprovalRequested(ApprovalRequestedEvent {
+                request_id: "8227bbbb22223333".to_string(),
+                agent_id: agent_x.0.to_string(),
+                tool_name: "shell_exec".to_string(),
+                description: "rm".to_string(),
+                risk_level: "high".to_string(),
+                ..Default::default()
+            }),
+        )))
+        .expect("broadcast send");
+
+    wait_until("undeliverable approval warned", || !spy.seen().is_empty()).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let seen = spy.seen();
+    assert_eq!(
+        seen.len(),
+        1,
+        "#8227: an undeliverable approval must warn once for the whole fan-out, got: {seen:#?}"
+    );
+    assert!(
+        seen[0].contains("8227bbbb22223333") && seen[0].contains(&agent_x.0.to_string()),
+        "the warning must stay actionable — request id and requesting agent, got: {}",
+        seen[0]
+    );
+
+    manager.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// Approval fan-out: direct-route scoping and remedy wording (#8228)
+// ---------------------------------------------------------------------------
+
+/// Build the `ApprovalRequested` event the direct-route tests below send.
+fn approval_event_from_chat(
+    request_id: &str,
+    agent: AgentId,
+    sender_id: Option<&str>,
+    channel: Option<&str>,
+) -> librefang_types::event::Event {
+    use librefang_types::event::{ApprovalRequestedEvent, Event, EventPayload, EventTarget};
+
+    Event::new(
+        agent,
+        EventTarget::System,
+        EventPayload::ApprovalRequested(ApprovalRequestedEvent {
+            request_id: request_id.to_string(),
+            agent_id: agent.0.to_string(),
+            tool_name: "shell_exec".to_string(),
+            description: "rm".to_string(),
+            risk_level: "high".to_string(),
+            sender_id: sender_id.map(str::to_string),
+            channel: channel.map(str::to_string),
+            ..Default::default()
+        }),
+    )
+}
+
+/// Three Telegram sidecars, one per agent — the deployment #8227 was reported
+/// on. An approval carrying `sender_id` + `channel` must be delivered by the
+/// sidecar that routes the requesting agent and attempted by no other.
+///
+/// Pre-#8228 the direct-route guard tested only `src_channel == ct_str`, so all
+/// three bots sent the keyboard to the same `chat_id`: the two that are not in
+/// that chat each failed and logged a WARN — the N-1-warnings-per-approval
+/// symptom #8227 is about, under a different message — and a sibling bot that
+/// *is* in the chat delivered a duplicate approval keyboard.
+#[tokio::test]
+async fn test_approval_direct_route_is_scoped_to_the_adapter_routing_the_agent() {
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_1 = AgentId::new();
+    let agent_2 = AgentId::new();
+    let agent_3 = AgentId::new();
+
+    // One account-qualified `channel_default` per sidecar, which is what
+    // `[[sidecar_channels]] default_agent` produces at bridge boot.
+    let router = AgentRouter::new();
+    router.set_channel_default("telegram:bot-1".to_string(), agent_1);
+    router.set_channel_default("telegram:bot-2".to_string(), agent_2);
+    router.set_channel_default("telegram:bot-3".to_string(), agent_3);
+    let router = Arc::new(router);
+
+    let adapter_1 = NotifyingAdapter::with_account("telegram-1", "bot-1", Vec::new());
+    let adapter_2 = NotifyingAdapter::with_account("telegram-2", "bot-2", Vec::new());
+    let adapter_3 = NotifyingAdapter::with_account("telegram-3", "bot-3", Vec::new());
+    let (ref_1, ref_2, ref_3) = (adapter_1.clone(), adapter_2.clone(), adapter_3.clone());
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter_1).await.unwrap();
+    manager.start_adapter(adapter_2).await.unwrap();
+    manager.start_adapter(adapter_3).await.unwrap();
+
+    let spy = WarnSpy::install();
+    manager.start_approval_listener().await;
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(approval_event_from_chat(
+            "8228aaaa00001111",
+            agent_1,
+            Some("chat-1"),
+            Some("telegram"),
+        )))
+        .expect("broadcast send");
+
+    wait_until("approval delivered to bot-1", || {
+        !ref_1.get_sent().is_empty()
+    })
+    .await;
+    // The siblings' turns are over by now, but give the listener room in case
+    // iteration order ever changes.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    assert_eq!(
+        ref_1.get_sent().len(),
+        1,
+        "the sidecar routing agent-1 must deliver the approval to the originating chat"
+    );
+    assert_eq!(
+        ref_1.get_sent()[0].0,
+        "chat-1",
+        "the direct route must target the originating chat"
+    );
+    assert!(
+        ref_2.get_sent().is_empty() && ref_3.get_sent().is_empty(),
+        "#8228: sidecars that do not route the requesting agent must not send to its chat, got bot-2={:?} bot-3={:?}",
+        ref_2.get_sent(),
+        ref_3.get_sent()
+    );
+    assert!(
+        spy.seen().is_empty(),
+        "a delivered approval must not warn, got: {:#?}",
+        spy.seen()
+    );
+
+    manager.stop().await;
+}
+
+/// A binding with no `peer_id` matches every peer, so it routes inbound
+/// messages to its agent while `bound_recipients_for_agent` — which requires a
+/// `peer_id` to have a delivery target — returns nothing for it. Broadcast
+/// routes have the same shape.
+///
+/// So "this adapter has a `channel_default` or a `peer_id` binding for the
+/// agent" is evidence of routing but not a precondition for it, and the
+/// direct route must not be made conditional on it: `ApprovalRequestedEvent`
+/// documents `sender_id` as needing "no `notification_recipients` /
+/// `AgentBinding` configuration". Scoping is applied only when some adapter on
+/// the originating channel does show that evidence; here none does, so the
+/// pre-#8228 fast path stands and the approval is delivered rather than
+/// dropped with a warning.
+#[tokio::test]
+async fn test_approval_direct_route_survives_a_binding_without_peer_id() {
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_x = AgentId::new();
+
+    let router = AgentRouter::new();
+    router.register_agent("binder-x".to_string(), agent_x);
+    // No `channel_default`, and the binding gates on the channel only — every
+    // Telegram peer routes to agent X, and no peer is named as a target.
+    router.load_bindings(&[librefang_types::config::AgentBinding {
+        agent: "binder-x".to_string(),
+        match_rule: librefang_types::config::BindingMatchRule {
+            channel: Some("telegram".to_string()),
+            ..Default::default()
+        },
+    }]);
+    let router = Arc::new(router);
+
+    let adapter = NotifyingAdapter::with_account("telegram-a", "bot-a", Vec::new());
+    let adapter_ref = adapter.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter).await.unwrap();
+
+    let spy = WarnSpy::install();
+    manager.start_approval_listener().await;
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(approval_event_from_chat(
+            "8228cccc44445555",
+            agent_x,
+            Some("chat-x"),
+            Some("telegram"),
+        )))
+        .expect("broadcast send");
+
+    wait_until("approval delivered via the direct route", || {
+        !adapter_ref.get_sent().is_empty()
+    })
+    .await;
+
+    assert_eq!(
+        adapter_ref.get_sent()[0].0,
+        "chat-x",
+        "the approval must reach the originating chat"
+    );
+    assert!(
+        spy.seen().is_empty(),
+        "a delivered approval must not warn, got: {:#?}",
+        spy.seen()
+    );
+
+    manager.stop().await;
+}
+
+/// Claiming coverage on an *attempted* direct send rather than a delivered one
+/// lets a run where every send failed suppress the #5002 guarantee entirely.
+/// The aggregate warning must still fire, and must say delivery failed instead
+/// of blaming routing config that is present and correct.
+#[tokio::test]
+async fn test_approval_direct_route_failure_does_not_claim_coverage() {
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_x = AgentId::new();
+
+    let router = AgentRouter::new();
+    router.set_channel_default("telegram:bot-a".to_string(), agent_x);
+    let router = Arc::new(router);
+
+    let adapter = NotifyingAdapter::failing_with_account("telegram-a", "bot-a");
+    let adapter_ref = adapter.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter).await.unwrap();
+
+    let spy = WarnSpy::install();
+    manager.start_approval_listener().await;
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(approval_event_from_chat(
+            "8228dddd66667777",
+            agent_x,
+            Some("chat-x"),
+            Some("telegram"),
+        )))
+        .expect("broadcast send");
+
+    wait_until("direct send attempted", || {
+        !adapter_ref.get_sent().is_empty()
+    })
+    .await;
+    wait_until("undeliverable approval warned", || {
+        spy.seen()
+            .iter()
+            .any(|w| w.contains("Approval reached no channel"))
+    })
+    .await;
+
+    let aggregate = spy
+        .seen()
+        .into_iter()
+        .find(|w| w.contains("Approval reached no channel"))
+        .expect("checked by wait_until above");
+    assert!(
+        aggregate.contains("delivery failed") || aggregate.contains("every send failed"),
+        "#8228: a failed send must not be reported as missing routing config, got: {aggregate}"
+    );
+    assert!(
+        !aggregate.contains("no adapter has a channel_default"),
+        "routing is configured here — the operator must not be sent to channel_default, got: {aggregate}"
+    );
+
+    manager.stop().await;
+}
+
+/// `notification_recipients()` defaulting to empty is documented as correct for
+/// adapters with no stable operator inbox, so an approval that reaches an
+/// adapter routing the requesting agent but exposing no recipients is *not* a
+/// routing misconfiguration. The pre-#8228 aggregate asserted the routing
+/// remedy unconditionally and sent the operator to the one part of the config
+/// that needs no change.
+///
+/// The warning must also name the adapter, `account_id` and channel that the
+/// #5002 per-adapter WARN carried: `adapters=N` alone gives no way to tell
+/// which channels were even considered.
+#[tokio::test]
+async fn test_approval_warning_blames_recipients_not_routing_and_names_adapters() {
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_x = AgentId::new();
+
+    // Routing is present and correct on both sidecars; neither exposes an
+    // operator inbox.
+    let router = AgentRouter::new();
+    router.set_channel_default("telegram:bot-a".to_string(), agent_x);
+    router.set_channel_default("telegram:bot-b".to_string(), agent_x);
+    let router = Arc::new(router);
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager
+        .start_adapter(NotifyingAdapter::with_account(
+            "telegram-a",
+            "bot-a",
+            Vec::new(),
+        ))
+        .await
+        .unwrap();
+    manager
+        .start_adapter(NotifyingAdapter::with_account(
+            "telegram-b",
+            "bot-b",
+            Vec::new(),
+        ))
+        .await
+        .unwrap();
+
+    let spy = WarnSpy::install();
+    manager.start_approval_listener().await;
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    // No `sender_id` / `channel`: a cron- or trigger-raised approval, which is
+    // the path the aggregate's wording was wrong on.
+    event_tx
+        .send(Arc::new(approval_event_from_chat(
+            "8228eeee88889999",
+            agent_x,
+            None,
+            None,
+        )))
+        .expect("broadcast send");
+
+    wait_until("undeliverable approval warned", || !spy.seen().is_empty()).await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let seen = spy.seen();
+    assert_eq!(
+        seen.len(),
+        1,
+        "still exactly one warning for the whole fan-out, got: {seen:#?}"
+    );
+    assert!(
+        seen[0].contains("notification_recipients"),
+        "#8228: routing is correct here — the remedy is the adapter's recipients list, got: {}",
+        seen[0]
+    );
+    assert!(
+        !seen[0].contains("no adapter has a channel_default"),
+        "the operator must not be sent to channel_default config that needs no change, got: {}",
+        seen[0]
+    );
+    for expected in ["telegram-a", "bot-a", "telegram-b", "bot-b", "telegram"] {
+        assert!(
+            seen[0].contains(expected),
+            "#8228: the warning must name the adapters it considered — missing {expected:?} in: {}",
+            seen[0]
+        );
+    }
+
+    manager.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast dispatch session scope (#7140)
+// ---------------------------------------------------------------------------
+
+/// Records, per agent, the sender scope each dispatched turn carried.
+///
+/// `None` means the turn reached the kernel without a `SenderContext` at all,
+/// which is what makes the difference visible: the kernel's session resolver
+/// only derives the per-chat `SessionId::for_sender_scope` when a sender
+/// context is present, and otherwise falls back to the agent's canonical
+/// `entry.session_id` — the session the dashboard chat writes to, and one no
+/// channel command can address.
+struct ScopeRecordingHandle {
+    agents: Mutex<Vec<(AgentId, String)>>,
+    #[allow(clippy::type_complexity)]
+    scopes: Arc<Mutex<Vec<(AgentId, Option<(String, Option<String>)>)>>>,
+}
+
+impl ScopeRecordingHandle {
+    fn new(agents: Vec<(AgentId, String)>) -> Self {
+        Self {
+            agents: Mutex::new(agents),
+            scopes: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+#[async_trait]
+impl ChannelBridgeHandle for ScopeRecordingHandle {
+    async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String> {
+        self.scopes.lock().unwrap().push((agent_id, None));
+        Ok(format!("Echo: {message}"))
+    }
+
+    async fn send_message_with_sender(
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        sender: &librefang_channels::types::SenderContext,
+    ) -> Result<String, String> {
+        self.scopes.lock().unwrap().push((
+            agent_id,
+            Some((sender.channel.clone(), sender.chat_id.clone())),
+        ));
+        Ok(format!("Echo: {message}"))
+    }
+
+    async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+        let agents = self.agents.lock().unwrap();
+        Ok(agents.iter().find(|(_, n)| n == name).map(|(id, _)| *id))
+    }
+
+    async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+        Ok(self.agents.lock().unwrap().clone())
+    }
+
+    async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+        Err("mock: spawn not implemented".to_string())
+    }
+
+    fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+        // Test mock: no event bus to forward to.
+    }
+}
+
+/// A broadcast turn must be session-scoped like every other channel turn.
+///
+/// Before #7140 the broadcast fan-out was the one channel dispatch that sent
+/// without a `SenderContext`, so every turn landed on the agent's canonical
+/// session while `/new` cleared the per-chat one: the reset acked success on
+/// an empty session and the visible conversation kept its history.
+#[tokio::test]
+async fn broadcast_dispatch_carries_the_per_chat_session_scope() {
+    let alice = AgentId::new();
+    let bob = AgentId::new();
+    let handle = Arc::new(ScopeRecordingHandle::new(vec![
+        (alice, "alice".to_string()),
+        (bob, "bob".to_string()),
+    ]));
+    let scopes = handle.scopes.clone();
+
+    let router = Arc::new(AgentRouter::new());
+    router.register_agent("alice".to_string(), alice);
+    router.register_agent("bob".to_string(), bob);
+    let mut routes = HashMap::new();
+    routes.insert(
+        "vip_user".to_string(),
+        vec!["alice".to_string(), "bob".to_string()],
+    );
+    router.load_broadcast(librefang_types::config::BroadcastConfig {
+        strategy: librefang_types::config::BroadcastStrategy::Sequential,
+        routes,
+    });
+
+    let (adapter, tx) = MockAdapter::new("test-adapter", ChannelType::Telegram);
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter.clone()).await.unwrap();
+
+    tx.send(make_text_msg(
+        ChannelType::Telegram,
+        "vip_user",
+        "Hello both",
+    ))
+    .await
+    .unwrap();
+
+    wait_until("broadcast dispatch", || scopes.lock().unwrap().len() == 2).await;
+
+    let recorded = scopes.lock().unwrap().clone();
+    for (agent_id, scope) in &recorded {
+        assert_eq!(
+            scope
+                .as_ref()
+                .map(|(c, chat)| (c.as_str(), chat.as_deref())),
+            Some(("telegram", Some("vip_user"))),
+            "broadcast target {agent_id} was dispatched without the per-chat sender scope",
+        );
+    }
+    let mut reached: Vec<AgentId> = recorded.iter().map(|(id, _)| *id).collect();
+    reached.sort_by_key(|a| a.to_string());
+    let mut expected = vec![alice, bob];
+    expected.sort_by_key(|a| a.to_string());
+    assert_eq!(
+        reached, expected,
+        "both broadcast targets must receive the turn"
     );
 
     manager.stop().await;

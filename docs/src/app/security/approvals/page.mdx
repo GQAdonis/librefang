@@ -66,7 +66,7 @@ When an approval times out, the action falls through to `timeout_fallback`:
 
 Because RBAC runs first, a "needs approval" verdict from it wins before the `trusted_senders` bypass is ever consulted.
 So when `[[users]]` is configured and a sender is **not** a registered user on the `api` channel — the channel REST `POST /api/agents/{id}/message` requests arrive on — that sender falls to the built-in guest gate (`guest_gate`).
-The guest gate allows only a small read-only set (file reads, search, `web_fetch`, …) and returns "needs approval" for everything else — including `memory_store` / `memory_recall`, which are otherwise low-risk.
+The guest gate allows only a small read-only set (file reads, search, `list_agents` / `list_skills`, …) and returns "needs approval" for everything else — including `memory_store` / `memory_recall`, which are otherwise low-risk, and including `web_search` / `web_fetch` / `tool_load` / `tool_search`, which are gated as network access and capability discovery (#6908).
 The surprising consequence: an ID listed in `trusted_senders` that is not *also* a registered `[[users]]` on the `api` channel still has its `memory_*` calls gated, because the guest gate forced approval before `trusted_senders` could waive it.
 
 **Fix — register the operator as a user bound to the `api` channel**, with a tool policy covering the tools it drives:
@@ -88,6 +88,11 @@ allowed_tools = ["memory_*"]
 ```
 
 With this in place the RBAC gate returns `Allow` for `memory_*`, so approval is no longer forced and the `trusted_senders` bypass applies on top exactly as designed.
+
+The binding is now **enforced**, not merely consulted (#7744).
+An authenticated caller below `Admin` may only assert a `sender_id` that resolves back to themselves through their own `channel_bindings`; anything else is silently replaced with their authenticated identity on the `api` channel, and the request still succeeds.
+So the `ops-bot` recipe above keeps working, while a `User`-role bearer can no longer put another user's platform id in the request body and inherit that user's role, tool policy and peer memory.
+`Admin` and above are exempt, because an operator impersonating a user for support, or a gateway relaying real platform users, is a legitimate use of the field.
 
 If no `[[users]]` are configured at all, RBAC is inactive — the per-user gate returns `Allow` for every sender — and `trusted_senders` works standalone with no extra setup.
 

@@ -3,6 +3,7 @@
 //! The AuthManager maps platform user identities (Telegram ID, Discord ID, etc.)
 //! to LibreFang users with roles, then enforces permission checks on actions.
 
+use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use librefang_channels::types::{ChannelRoleQuery, SenderContext};
 use librefang_types::agent::UserId;
@@ -16,6 +17,7 @@ use librefang_types::user_policy::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 /// User roles with hierarchical permissions.
@@ -229,23 +231,25 @@ impl RoleCacheKey {
     }
 }
 
-/// RBAC authentication and authorization manager.
-pub struct AuthManager {
+/// Coherent generation of every config-derived authorization index.
+struct AuthSnapshot {
     /// Known users by their LibreFang user ID.
-    users: DashMap<UserId, UserIdentity>,
+    users: HashMap<UserId, UserIdentity>,
     /// Channel binding index: "channel_type:platform_id" → UserId.
-    channel_index: DashMap<String, UserId>,
+    channel_index: HashMap<String, UserId>,
     /// Resolved channel-role cache: `(channel, account, chat, user) → UserRole`.
-    /// Populated lazily by [`AuthManager::resolve_role_for_sender`]; the
-    /// design contract is that the cache lives for the session's lifetime
-    /// and is invalidated on session restart via [`AuthManager::invalidate_role_cache`].
+    /// Kept inside the generation so an in-flight lookup from an old config can never repopulate the cache used by the new config.
     role_cache: DashMap<RoleCacheKey, UserRole>,
     /// Tool groups (categories) referenced by per-user policies. Cloned
     /// from `KernelConfig.tool_policy.groups` at construction.
-    /// `RwLock<Arc<…>>` so `config_reload` can swap the snapshot in
-    /// place while resolution-path readers (`tool_groups()`) only pay
-    /// for an `Arc::clone` instead of a per-call `Vec` clone.
-    tool_groups: std::sync::RwLock<std::sync::Arc<Vec<ToolGroup>>>,
+    tool_groups: Arc<Vec<ToolGroup>>,
+}
+
+/// RBAC authentication and authorization manager.
+pub struct AuthManager {
+    /// Config reload builds a complete replacement off to the side, then publishes it with one atomic pointer swap.
+    /// Readers retain their loaded generation for the duration of a decision, so they cannot observe a cleared user table, mismatched channel index, or mismatched tool groups.
+    snapshot: ArcSwap<AuthSnapshot>,
 }
 
 impl AuthManager {
@@ -261,17 +265,14 @@ impl AuthManager {
     /// `ToolPolicy.groups` so per-user `tool_categories` can resolve
     /// group names to their tool patterns.
     pub fn with_tool_groups(user_configs: &[UserConfig], tool_groups: &[ToolGroup]) -> Self {
-        let manager = Self {
-            users: DashMap::new(),
-            channel_index: DashMap::new(),
-            role_cache: DashMap::new(),
-            tool_groups: std::sync::RwLock::new(std::sync::Arc::new(tool_groups.to_vec())),
-        };
-        manager.populate(user_configs);
-        manager
+        Self {
+            snapshot: ArcSwap::from_pointee(Self::build_snapshot(user_configs, tool_groups)),
+        }
     }
 
-    fn populate(&self, user_configs: &[UserConfig]) {
+    fn build_snapshot(user_configs: &[UserConfig], tool_groups: &[ToolGroup]) -> AuthSnapshot {
+        let mut users = HashMap::with_capacity(user_configs.len());
+        let mut channel_index = HashMap::new();
         for config in user_configs {
             let user_id = UserId::from_name(&config.name);
             let role = UserRole::from_str_role(&config.role);
@@ -304,7 +305,7 @@ impl AuthManager {
                 raw_memory_access: config.memory_access.clone(),
             };
 
-            self.users.insert(user_id, identity);
+            users.insert(user_id, identity);
 
             // Index channel bindings. Only the explicit (channel_type,
             // platform_id) tuple is registered — there is **no** bare
@@ -315,7 +316,7 @@ impl AuthManager {
             // rights to an unrelated inbound on a third channel.
             for (channel_type, platform_id) in &config.channel_bindings {
                 let key = format!("{channel_type}:{platform_id}");
-                self.channel_index.insert(key, user_id);
+                channel_index.insert(key, user_id);
             }
 
             info!(
@@ -325,6 +326,12 @@ impl AuthManager {
                 "Registered user"
             );
         }
+        AuthSnapshot {
+            users,
+            channel_index,
+            role_cache: DashMap::new(),
+            tool_groups: Arc::new(tool_groups.to_vec()),
+        }
     }
 
     /// Replace the in-memory user/channel indexes from a fresh
@@ -333,40 +340,14 @@ impl AuthManager {
     /// `[users.tool_policy]`, and `[tool_policy.groups]` take effect
     /// without a daemon restart.
     ///
-    /// This is intentionally a "stop-the-world" replace inside the
-    /// `config_reload_lock` write guard — concurrent `identify`/
-    /// `resolve_user_tool_decision` calls will observe a clean snapshot
-    /// either before or after the swap, never a torn one.
+    /// The replacement is built before publication.
+    /// Concurrent readers retain either the complete old generation or the complete new generation.
     pub fn reload(&self, user_configs: &[UserConfig], tool_groups: &[ToolGroup]) {
-        self.users.clear();
-        self.channel_index.clear();
-        // Drop every cached channel-derived role. Without this, an
-        // operator who edits `[[users]]` channel bindings or
-        // `[channel_role_mapping]` and reloads still sees the OLD
-        // resolved role for any sender whose role was already cached
-        // this session — the new policy is applied for fresh senders
-        // but cached ones effectively keep stale (possibly elevated)
-        // privileges until the daemon restarts. Clearing here is the
-        // counterpart to `invalidate_role_cache()` for the hot-reload
-        // path. `DashMap::clear` takes the per-shard locks internally;
-        // no external coordination needed even though concurrent
-        // `resolve_role_for_sender` calls may race the swap — they'll
-        // observe either the pre-clear or post-clear state, never a
-        // torn one, and a missed entry just means one extra platform
-        // lookup, not stale privileges.
-        self.role_cache.clear();
-        // Panic on a poisoned lock: silently keeping the stale snapshot
-        // would mean `/api/config/reload` reports success while the new
-        // `[tool_policy.groups]` are never enforced — exactly the
-        // failure mode `HotAction::ReloadAuth` exists to prevent.
-        *self
-            .tool_groups
-            .write()
-            .expect("AuthManager.tool_groups RwLock poisoned during reload") =
-            std::sync::Arc::new(tool_groups.to_vec());
-        self.populate(user_configs);
+        let snapshot = Self::build_snapshot(user_configs, tool_groups);
+        let registered_users = snapshot.users.len();
+        self.snapshot.store(Arc::new(snapshot));
         info!(
-            users = self.users.len(),
+            users = registered_users,
             tool_groups = tool_groups.len(),
             "AuthManager reloaded from config"
         );
@@ -378,19 +359,20 @@ impl AuthManager {
     /// or None for unrecognized users.
     pub fn identify(&self, channel_type: &str, platform_id: &str) -> Option<UserId> {
         let key = format!("{channel_type}:{platform_id}");
-        self.channel_index.get(&key).map(|r| *r.value())
+        self.snapshot.load().channel_index.get(&key).copied()
     }
 
     /// Get a user's identity by their UserId.
     pub fn get_user(&self, user_id: UserId) -> Option<UserIdentity> {
-        self.users.get(&user_id).map(|r| r.value().clone())
+        self.snapshot.load().users.get(&user_id).cloned()
     }
 
     /// Authorize a user for an action.
     ///
     /// Returns Ok(()) if the user has sufficient permissions, or AuthDenied error.
     pub fn authorize(&self, user_id: UserId, action: &Action) -> LibreFangResult<()> {
-        let identity = self
+        let snapshot = self.snapshot.load();
+        let identity = snapshot
             .users
             .get(&user_id)
             .ok_or_else(|| LibreFangError::AuthDenied("Unknown user".to_string()))?;
@@ -408,17 +390,17 @@ impl AuthManager {
 
     /// Check if RBAC is configured (any users registered).
     pub fn is_enabled(&self) -> bool {
-        !self.users.is_empty()
+        !self.snapshot.load().users.is_empty()
     }
 
     /// Get the count of registered users.
     pub fn user_count(&self) -> usize {
-        self.users.len()
+        self.snapshot.load().users.len()
     }
 
     /// List all registered users.
     pub fn list_users(&self) -> Vec<UserIdentity> {
-        self.users.iter().map(|r| r.value().clone()).collect()
+        self.snapshot.load().users.values().cloned().collect()
     }
 
     /// Resolve the effective LibreFang role for a sender.
@@ -455,11 +437,13 @@ impl AuthManager {
         mapping: &ChannelRoleMapping,
         role_query: Option<&dyn ChannelRoleQuery>,
     ) -> UserRole {
+        let snapshot = self.snapshot.load_full();
         // 1. Explicit UserConfig.role wins. Look up by channel binding
         //    *before* hitting the cache so explicit-role changes during
         //    config reload take effect immediately.
-        if let Some(user_id) = self.identify(&sender.channel, &sender.user_id) {
-            if let Some(identity) = self.get_user(user_id) {
+        let binding_key = format!("{}:{}", sender.channel, sender.user_id);
+        if let Some(user_id) = snapshot.channel_index.get(&binding_key) {
+            if let Some(identity) = snapshot.users.get(user_id) {
                 debug!(
                     user = %identity.name,
                     role = %identity.role,
@@ -471,7 +455,7 @@ impl AuthManager {
 
         // 2. Cache lookup for the channel-derived path.
         let cache_key = RoleCacheKey::from_sender(sender);
-        if let Some(cached) = self.role_cache.get(&cache_key) {
+        if let Some(cached) = snapshot.role_cache.get(&cache_key) {
             return *cached.value();
         }
 
@@ -535,7 +519,7 @@ impl AuthManager {
 
         let role = resolved.unwrap_or(UserRole::Viewer);
         if !transient {
-            self.role_cache.insert(cache_key, role);
+            snapshot.role_cache.insert(cache_key, role);
         }
         role
     }
@@ -544,13 +528,26 @@ impl AuthManager {
     /// restarts so a user whose platform role changed mid-session sees the
     /// updated permissions on next interaction.
     pub fn invalidate_role_cache(&self) {
-        self.role_cache.clear();
+        loop {
+            let snapshot = self.snapshot.load_full();
+            snapshot.role_cache.clear();
+            if Arc::ptr_eq(&snapshot, &self.snapshot.load_full()) {
+                break;
+            }
+        }
     }
 
     /// Drop only the cache entries for a single sender — used when a
     /// targeted invalidation suffices (e.g. an admin tooling hook).
     pub fn invalidate_role_cache_for(&self, sender: &SenderContext) {
-        self.role_cache.remove(&RoleCacheKey::from_sender(sender));
+        let key = RoleCacheKey::from_sender(sender);
+        loop {
+            let snapshot = self.snapshot.load_full();
+            snapshot.role_cache.remove(&key);
+            if Arc::ptr_eq(&snapshot, &self.snapshot.load_full()) {
+                break;
+            }
+        }
     }
     /// Resolve a `sender_id` and `channel` pair to a known user, if any.
     ///
@@ -566,25 +563,23 @@ impl AuthManager {
             return None;
         };
         let key = format!("{ch}:{sid}");
-        self.channel_index.get(&key).map(|r| *r.value())
+        self.snapshot.load().channel_index.get(&key).copied()
     }
 
-    /// Cheap snapshot of the kernel's tool groups (used for per-user
-    /// category evaluation). Returns an `Arc::clone` of the live
-    /// snapshot so the resolution hot path doesn't pay a `Vec` clone
-    /// per tool call. Config reload swaps the inner `Arc` in place
-    /// (`reload()`); existing `Arc` clones held by in-flight evaluations
-    /// keep pointing at the pre-swap snapshot for their lifetime.
-    pub fn tool_groups(&self) -> std::sync::Arc<Vec<ToolGroup>> {
-        self.tool_groups
-            .read()
-            .expect("AuthManager.tool_groups RwLock poisoned")
-            .clone()
+    /// Cheap snapshot of the kernel's tool groups (used for per-user category evaluation).
+    /// Returns an `Arc::clone` of the live snapshot so the resolution hot path doesn't pay a `Vec` clone per tool call.
+    /// Existing clones keep their generation alive across config reload.
+    pub fn tool_groups(&self) -> Arc<Vec<ToolGroup>> {
+        Arc::clone(&self.snapshot.load().tool_groups)
     }
 
     /// Get the resolved per-user RBAC policy for a user, if registered.
     pub fn user_policy(&self, user_id: UserId) -> Option<ResolvedUserPolicy> {
-        self.users.get(&user_id).map(|r| r.value().policy.clone())
+        self.snapshot
+            .load()
+            .users
+            .get(&user_id)
+            .map(|identity| identity.policy.clone())
     }
 
     /// Get the per-user spending budget (RBAC M5) for a user, if
@@ -593,7 +588,7 @@ impl AuthManager {
     /// — in both cases the metering layer falls back to the global /
     /// per-agent / per-provider budgets only.
     pub fn budget_for(&self, user_id: UserId) -> Option<librefang_types::config::UserBudgetConfig> {
-        self.users.get(&user_id)?.value().budget.clone()
+        self.snapshot.load().users.get(&user_id)?.budget.clone()
     }
 
     /// Read-only diagnostic snapshot of every RBAC input that contributes
@@ -618,10 +613,11 @@ impl AuthManager {
     /// `ToolPolicy::check_tool` + global `ApprovalPolicy.channel_rules`)
     /// and is intentionally not duplicated here.
     pub fn effective_permissions(&self, user_id: UserId) -> Option<EffectivePermissions> {
-        let identity = self.users.get(&user_id)?.value().clone();
+        let snapshot = self.snapshot.load();
+        let identity = snapshot.users.get(&user_id)?.clone();
 
         // Read the raw `Option<...>` slices preserved on `UserIdentity`
-        // by `populate`. This is the only way to faithfully report
+        // by `build_snapshot`. This is the only way to faithfully report
         // "not declared" vs "configured-but-empty": the resolved
         // policy on `identity.policy.*` was default-filled at boot, so
         // those two cases would be indistinguishable from there.
@@ -635,9 +631,9 @@ impl AuthManager {
         // users * 3-4 platforms — cheap and avoids carrying a parallel
         // copy on `UserIdentity`.
         let mut channel_bindings: HashMap<String, String> = HashMap::new();
-        for entry in self.channel_index.iter() {
-            if *entry.value() == user_id {
-                if let Some((channel, platform_id)) = entry.key().split_once(':') {
+        for (key, bound_user_id) in &snapshot.channel_index {
+            if *bound_user_id == user_id {
+                if let Some((channel, platform_id)) = key.split_once(':') {
                     channel_bindings.insert(channel.to_string(), platform_id.to_string());
                 }
             }
@@ -660,10 +656,11 @@ impl AuthManager {
     /// with the role default. Returns the role-default ACL when the user
     /// has no registered customisation (`is_unconfigured`).
     pub fn memory_acl_for(&self, user_id: UserId) -> Option<UserMemoryAccess> {
-        let identity = self.users.get(&user_id)?;
-        let acl = &identity.value().policy.memory_access;
+        let snapshot = self.snapshot.load();
+        let identity = snapshot.users.get(&user_id)?;
+        let acl = &identity.policy.memory_access;
         if acl.is_unconfigured() {
-            Some(default_memory_acl(identity.value().role))
+            Some(default_memory_acl(identity.role))
         } else {
             Some(acl.clone())
         }
@@ -690,10 +687,11 @@ impl AuthManager {
         channel: Option<&str>,
         system_call: bool,
     ) -> UserToolGate {
+        let snapshot = self.snapshot.load_full();
         // No registered users → guest mode (default-allow with minimal
         // perms — design decision #2). The runtime keeps its existing
         // approval/capability gates.
-        if self.users.is_empty() {
+        if snapshot.users.is_empty() {
             return UserToolGate::Allow;
         }
 
@@ -708,7 +706,11 @@ impl AuthManager {
             return UserToolGate::Allow;
         }
 
-        let Some(user_id) = self.resolve_user(sender_id, channel) else {
+        let (Some(channel), Some(sender_id)) = (channel, sender_id) else {
+            return guest_gate(tool_name);
+        };
+        let binding_key = format!("{channel}:{sender_id}");
+        let Some(user_id) = snapshot.channel_index.get(&binding_key).copied() else {
             // RBAC is enabled but the sender isn't recognised. Default-deny
             // for tools that don't appear on the read-only safe list, route
             // everything else through an admin approval. We no longer
@@ -718,7 +720,7 @@ impl AuthManager {
             return guest_gate(tool_name);
         };
 
-        self.resolve_decision_for_user(user_id, tool_name, channel)
+        Self::resolve_decision_for_snapshot(&snapshot, user_id, tool_name, Some(channel))
     }
 
     /// Evaluate the per-user RBAC gate for an already-resolved [`UserId`].
@@ -739,15 +741,25 @@ impl AuthManager {
         tool_name: &str,
         channel: Option<&str>,
     ) -> UserToolGate {
-        let groups = self.tool_groups();
-        let Some(identity) = self.get_user(user_id) else {
+        let snapshot = self.snapshot.load();
+        Self::resolve_decision_for_snapshot(&snapshot, user_id, tool_name, channel)
+    }
+
+    fn resolve_decision_for_snapshot(
+        snapshot: &AuthSnapshot,
+        user_id: UserId,
+        tool_name: &str,
+        channel: Option<&str>,
+    ) -> UserToolGate {
+        let Some(identity) = snapshot.users.get(&user_id) else {
             return UserToolGate::Allow;
         };
 
         // Layer A — apply the user's own policy.
-        let user_decision = identity
-            .policy
-            .evaluate(tool_name, channel, groups.as_slice());
+        let user_decision =
+            identity
+                .policy
+                .evaluate(tool_name, channel, snapshot.tool_groups.as_slice());
 
         match user_decision {
             UserToolDecision::Allow => UserToolGate::Allow,
@@ -945,6 +957,134 @@ fn translate_slack_role(
     mapped.and_then(UserRole::try_from_str_role)
 }
 
+/// Translate the `roles` claim of a validated OIDC ID token into a LibreFang [`UserRole`] using `[external_auth.role_map]` (#7744).
+///
+/// This is the same vocabulary as [`Action::required_role`] — `Viewer` < `User` < `Admin` < `Owner` — and deliberately not the free-form `BindingContext.roles` strings the channel router matches agent bindings on.
+/// Those two look alike and mean different things: the router's roles decide *which agent* answers a message, this one decides *what the caller may do*.
+/// Feeding IdP claims into the router's vocabulary would give an identity provider a say in agent routing and still leave authorization unanswered, so the claims are translated here, at the boundary, and only the resulting `UserRole` travels onward.
+///
+/// Returns `None` — meaning "no grant", not "least privilege" — when:
+/// - the operator declared no `role_map` (the default, so an OIDC bearer authorizes exactly nothing until an operator opts in),
+/// - none of the caller's claim values appear in the map, or
+/// - every matching entry names an unrecognised LibreFang role.
+///
+/// A caller holding several mapped roles gets the **highest-privilege** match, mirroring [`translate_discord_role`].
+/// Claim ordering is the IdP's business; letting it decide the effective LibreFang role would move privilege outside operator control.
+///
+/// A typo'd target (`"admn"`) is skipped rather than resolving to `User`, so an unrecognised role can never escalate — the caller keeps whatever the rest of the map granted them, and nothing at all if that was empty.
+pub fn translate_oidc_roles(
+    role_map: &std::collections::BTreeMap<String, String>,
+    claim_roles: &[String],
+) -> Option<UserRole> {
+    if role_map.is_empty() {
+        return None;
+    }
+    let mut best: Option<UserRole> = None;
+    for claim in claim_roles {
+        if let Some(mapped_str) = role_map.get(claim) {
+            if let Some(candidate) = UserRole::try_from_str_role(mapped_str) {
+                best = Some(match best {
+                    Some(prev) => prev.max(candidate),
+                    None => candidate,
+                });
+            }
+        }
+    }
+    best
+}
+
+/// Translate an OIDC caller's identity-attribute claim values into the set of local `[[groups]]` they are a member of for this request, using `[external_auth.group_map]` (#7746).
+///
+/// # Mapped, not name-matched
+///
+/// A claim value confers membership only when an operator wrote it into `group_map`, and only in the group that entry names.
+/// Matching an IdP group *by name* against `[[groups]]` would hand the identity provider the ability to mint a grant by inventing a claim value — in a tenant where creating a group is self-service, that is every employee — and it is the same property [`translate_oidc_roles`] protects for the role ladder.
+/// The claim values themselves are whatever `[external_auth] claim_paths` resolved: `roles` and `groups` by default, `scope` and Keycloak's nested `realm_access.roles` on request.
+///
+/// # A target that names no declared group is skipped
+///
+/// `declared` is consulted so a typo'd or stale target (`"platform" = "oncal"`) contributes nothing rather than minting a group that exists only inside this map.
+/// Such a group would be a live [`librefang_types::principal::Principal`] — it could own artifacts and appear in an audit entry — while being invisible in `[[groups]]` and therefore unmanageable and unauditable by the operator who is nominally responsible for it.
+/// The same reasoning makes `translate_oidc_roles` skip an unrecognised role string rather than defaulting it, and [`validate_oidc_group_map`] reports the condition at boot so it is a log line rather than a mystery.
+///
+/// # Returns a set, not a best match
+///
+/// Unlike [`translate_oidc_roles`], which picks the highest-privilege match because a privilege ladder is ordinal, membership has no ordering and every match counts.
+/// `BTreeSet` so two claim orderings — the IdP's business, and not stable between logins — produce a byte-identical result wherever this is stringified (#3298).
+///
+/// An empty `group_map` returns an empty set: the feature is off until an operator opts in, exactly as `role_map` is.
+pub fn translate_oidc_groups(
+    group_map: &std::collections::BTreeMap<String, String>,
+    declared: &[librefang_types::config::GroupConfig],
+    claim_values: &[String],
+) -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    if group_map.is_empty() {
+        return out;
+    }
+    for claim in claim_values {
+        let Some(target) = group_map.get(claim) else {
+            continue;
+        };
+        if declared.iter().any(|g| &g.name == target) {
+            out.insert(target.clone());
+        } else {
+            debug!(
+                claim = claim.as_str(),
+                target = target.as_str(),
+                "external_auth.group_map names a group that is not declared in [[groups]]; \
+                 the claim confers no membership"
+            );
+        }
+    }
+    out
+}
+
+/// Validate every target in `[external_auth.group_map]` against the declared `[[groups]]` and emit a `tracing::warn!` per target that names none, returning the count.
+///
+/// Same rationale as [`validate_oidc_role_map`]: [`translate_oidc_groups`] already fails closed on a dangling target, so this exists purely so an operator who renames a group and forgets the map — or writes `"platform" = "oncal"` — learns at boot instead of wondering why their SSO users belong to nothing.
+///
+/// Ordering of the warnings follows the `BTreeMap`, so a boot log is comparable across restarts.
+pub fn validate_oidc_group_map(
+    group_map: &std::collections::BTreeMap<String, String>,
+    declared: &[librefang_types::config::GroupConfig],
+) -> usize {
+    let mut dangling = 0usize;
+    for (claim, target) in group_map {
+        if !declared.iter().any(|g| &g.name == target) {
+            warn!(
+                claim = claim.as_str(),
+                target = target.as_str(),
+                "external_auth.group_map points at a group that does not exist in [[groups]] \
+                 — callers holding this claim will be granted no membership by this entry"
+            );
+            dangling += 1;
+        }
+    }
+    dangling
+}
+
+/// Validate every target role string in `[external_auth.role_map]` and emit
+/// a `tracing::warn!` for each value that won't parse, returning the count.
+///
+/// Same rationale as [`validate_channel_role_mapping`]: the runtime already fails closed on a typo, so this exists purely so an operator who writes `"librefang-admins" = "admn"` learns about it at boot instead of wondering why SSO logins keep getting 401.
+pub fn validate_oidc_role_map(role_map: &std::collections::BTreeMap<String, String>) -> usize {
+    let mut typos = 0usize;
+    for (claim, mapped) in role_map {
+        if UserRole::try_from_str_role(mapped).is_none() {
+            warn!(
+                claim = claim.as_str(),
+                value = mapped.as_str(),
+                "external_auth.role_map has an unrecognized LibreFang role string \
+                 — callers holding this claim will be granted nothing by this entry. \
+                 Valid values: owner, admin, user, viewer, guest"
+            );
+            typos += 1;
+        }
+    }
+    typos
+}
+
 /// Validate every configured role string in `[channel_role_mapping]`
 /// against [`UserRole::try_from_str_role`] and emit a `tracing::warn!`
 /// for each value that won't parse.
@@ -1048,9 +1188,8 @@ fn default_memory_acl(role: UserRole) -> UserMemoryAccess {
     }
 }
 
-/// Gate decision for an unrecognised sender. Mirrors design decision #2
-/// (default-allow with minimal perms): allow well-known read-only tools,
-/// require approval for anything else.
+/// Gate decision for an unrecognised sender.
+/// Mirrors design decision #2 (default-allow with minimal perms): allow only passive local inspection, and require approval for network access or capability discovery.
 fn guest_gate(tool_name: &str) -> UserToolGate {
     const READ_ONLY_TOOLS: &[&str] = &[
         "file_read",
@@ -1058,12 +1197,8 @@ fn guest_gate(tool_name: &str) -> UserToolGate {
         "code_search",
         "glob",
         "grep",
-        "web_search",
-        "web_fetch",
         "list_agents",
         "list_skills",
-        "tool_load",
-        "tool_search",
     ];
     if READ_ONLY_TOOLS.contains(&tool_name) {
         UserToolGate::Allow
@@ -1078,6 +1213,8 @@ fn guest_gate(tool_name: &str) -> UserToolGate {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier};
 
     fn test_configs() -> Vec<UserConfig> {
         vec![
@@ -1317,6 +1454,64 @@ mod tests {
     }
 
     #[test]
+    fn reload_never_exposes_guest_mode_to_concurrent_authorization() {
+        let users: Vec<UserConfig> = (0..512)
+            .map(|index| {
+                user_with_policy(
+                    &format!("User {index}"),
+                    "user",
+                    &index.to_string(),
+                    Some(UserToolPolicy {
+                        allowed_tools: vec![],
+                        denied_tools: vec!["shell_exec".into()],
+                    }),
+                    None,
+                    None,
+                    HashMap::new(),
+                )
+            })
+            .collect();
+        let manager = Arc::new(AuthManager::new(&users));
+        let stop = Arc::new(AtomicBool::new(false));
+        let observed_allow = Arc::new(AtomicBool::new(false));
+        let start = Arc::new(Barrier::new(2));
+
+        let reader = {
+            let manager = Arc::clone(&manager);
+            let stop = Arc::clone(&stop);
+            let observed_allow = Arc::clone(&observed_allow);
+            let start = Arc::clone(&start);
+            std::thread::spawn(move || {
+                start.wait();
+                while !stop.load(Ordering::Acquire) {
+                    if manager.resolve_user_tool_decision(
+                        "shell_exec",
+                        Some("0"),
+                        Some("telegram"),
+                        false,
+                    ) == UserToolGate::Allow
+                    {
+                        observed_allow.store(true, Ordering::Release);
+                        break;
+                    }
+                }
+            })
+        };
+
+        start.wait();
+        for _ in 0..32 {
+            manager.reload(&users, &[]);
+        }
+        stop.store(true, Ordering::Release);
+        reader.join().expect("authorization reader panicked");
+
+        assert!(
+            !observed_allow.load(Ordering::Acquire),
+            "reload temporarily exposed guest mode and allowed shell_exec"
+        );
+    }
+
+    #[test]
     fn rbac_m3_user_role_no_policy_escalates_unknown_tools_to_approval() {
         // A regular user with no per-user policy. Tool isn't in allow-list,
         // so layer 1 yields NeedsRoleEscalation; user role < admin →
@@ -1414,6 +1609,31 @@ mod tests {
         let unsafe_ =
             mgr.resolve_user_tool_decision("shell_exec", Some("guest42"), Some("telegram"), false);
         assert!(matches!(unsafe_, UserToolGate::NeedsApproval { .. }));
+    }
+
+    #[test]
+    fn rbac_unknown_sender_requires_approval_for_network_and_tool_discovery() {
+        let mgr = AuthManager::with_tool_groups(
+            &[user_with_policy(
+                "Alice",
+                "owner",
+                "1",
+                None,
+                None,
+                None,
+                HashMap::new(),
+            )],
+            &[],
+        );
+
+        for tool in ["web_search", "web_fetch", "tool_load", "tool_search"] {
+            let gate =
+                mgr.resolve_user_tool_decision(tool, Some("unrecognized"), Some("telegram"), false);
+            assert!(
+                matches!(gate, UserToolGate::NeedsApproval { .. }),
+                "unrecognized sender must not invoke {tool} without approval: {gate:?}"
+            );
+        }
     }
 
     /// H6 regression: two users sharing the same platform-id on
@@ -1561,6 +1781,8 @@ mod channel_role_tests {
     use librefang_types::config::{
         ChannelRoleMapping, DiscordRoleMapping, SlackRoleMapping, TelegramRoleMapping,
     };
+    use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -1691,6 +1913,215 @@ mod channel_role_tests {
             )
             .await;
         assert_eq!(role, UserRole::User);
+    }
+
+    /// `[external_auth.role_map]` uses the same `UserRole` vocabulary as
+    /// `Action::required_role`, with the same highest-wins rule as the Discord
+    /// mapping above — claim ordering is the identity provider's business and
+    /// must not decide LibreFang privilege (#7744).
+    #[test]
+    fn oidc_role_map_picks_highest_privilege_match() {
+        let map = BTreeMap::from([
+            ("everyone".to_string(), "viewer".to_string()),
+            ("librefang-operators".to_string(), "admin".to_string()),
+        ]);
+        assert_eq!(
+            translate_oidc_roles(
+                &map,
+                &["everyone".to_string(), "librefang-operators".to_string()],
+            ),
+            Some(UserRole::Admin),
+        );
+        // Reversed claim order must produce the identical answer.
+        assert_eq!(
+            translate_oidc_roles(
+                &map,
+                &["librefang-operators".to_string(), "everyone".to_string()],
+            ),
+            Some(UserRole::Admin),
+        );
+    }
+
+    /// An unrecognised target role is skipped rather than resolving to `User`
+    /// the way the lenient `UserRole::from_str_role` would, so a typo can
+    /// neither escalate nor quietly authenticate anyone.
+    #[test]
+    fn oidc_role_map_skips_unrecognised_target_roles() {
+        let typo_only = BTreeMap::from([("librefang-owners".to_string(), "ownr".to_string())]);
+        assert_eq!(
+            translate_oidc_roles(&typo_only, &["librefang-owners".to_string()]),
+            None,
+            "a typo'd target must grant nothing, not `User`"
+        );
+        assert_eq!(validate_oidc_role_map(&typo_only), 1);
+
+        // A typo alongside a good entry leaves the good entry intact.
+        let mixed = BTreeMap::from([
+            ("librefang-owners".to_string(), "ownr".to_string()),
+            ("librefang-readers".to_string(), "viewer".to_string()),
+        ]);
+        assert_eq!(
+            translate_oidc_roles(
+                &mixed,
+                &[
+                    "librefang-owners".to_string(),
+                    "librefang-readers".to_string()
+                ],
+            ),
+            Some(UserRole::Viewer),
+        );
+    }
+
+    /// The default — no map declared — grants nothing no matter what the
+    /// identity provider claims, and neither does a claim nobody mapped.
+    #[test]
+    fn oidc_role_map_grants_nothing_by_default() {
+        let empty = BTreeMap::new();
+        assert_eq!(
+            translate_oidc_roles(&empty, &["librefang-owners".to_string()]),
+            None,
+        );
+        assert_eq!(validate_oidc_role_map(&empty), 0);
+
+        let map = BTreeMap::from([("librefang-owners".to_string(), "owner".to_string())]);
+        assert_eq!(
+            translate_oidc_roles(&map, &["some-other-corporate-group".to_string()]),
+            None,
+        );
+        assert_eq!(translate_oidc_roles(&map, &[]), None);
+    }
+
+    // ── `[external_auth.group_map]` (#7746) ─────────────────────────────
+
+    fn declared(names: &[&str]) -> Vec<librefang_types::config::GroupConfig> {
+        names
+            .iter()
+            .map(|n| librefang_types::config::GroupConfig {
+                name: (*n).to_string(),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn oidc_group_map_grants_only_what_an_operator_wrote_down() {
+        let groups = declared(&["oncall", "compliance"]);
+        let map = BTreeMap::from([("platform-oncall".to_string(), "oncall".to_string())]);
+
+        assert_eq!(
+            translate_oidc_groups(&map, &groups, &["platform-oncall".to_string()]),
+            BTreeSet::from(["oncall".to_string()]),
+        );
+
+        // SECURITY: the whole point of the map. A caller whose IdP group happens
+        // to be *named* `compliance` gets nothing, because no operator wrote a
+        // `compliance` entry — otherwise anyone who can create a group in the
+        // identity provider could mint a LibreFang grant by choosing its name.
+        assert_eq!(
+            translate_oidc_groups(&map, &groups, &["compliance".to_string()]),
+            BTreeSet::new(),
+        );
+    }
+
+    #[test]
+    fn oidc_group_map_is_off_until_an_operator_opts_in() {
+        let groups = declared(&["oncall"]);
+        let empty = BTreeMap::new();
+        assert_eq!(
+            translate_oidc_groups(&empty, &groups, &["oncall".to_string()]),
+            BTreeSet::new(),
+        );
+        assert_eq!(validate_oidc_group_map(&empty, &groups), 0);
+    }
+
+    #[test]
+    fn oidc_group_map_skips_targets_that_name_no_declared_group() {
+        // A typo'd or stale target must contribute nothing rather than minting a
+        // group that exists only inside the map — such a group would be a live
+        // `Principal` that no operator can see in `[[groups]]`.
+        let groups = declared(&["oncall"]);
+        let typo = BTreeMap::from([("platform-oncall".to_string(), "oncal".to_string())]);
+        assert_eq!(
+            translate_oidc_groups(&typo, &groups, &["platform-oncall".to_string()]),
+            BTreeSet::new(),
+        );
+        assert_eq!(validate_oidc_group_map(&typo, &groups), 1);
+
+        // …and the good half of a half-broken map still works.
+        let mixed = BTreeMap::from([
+            ("platform-oncall".to_string(), "oncall".to_string()),
+            ("platform-billing".to_string(), "billin".to_string()),
+        ]);
+        assert_eq!(
+            translate_oidc_groups(
+                &mixed,
+                &groups,
+                &[
+                    "platform-oncall".to_string(),
+                    "platform-billing".to_string()
+                ],
+            ),
+            BTreeSet::from(["oncall".to_string()]),
+        );
+        assert_eq!(validate_oidc_group_map(&mixed, &groups), 1);
+    }
+
+    #[test]
+    fn oidc_group_map_accumulates_every_match_and_is_claim_order_independent() {
+        // Unlike the role ladder, membership has no ordering: every match counts,
+        // and two claim orderings must produce a byte-identical set (#3298).
+        let groups = declared(&["oncall", "compliance"]);
+        let map = BTreeMap::from([
+            ("platform-oncall".to_string(), "oncall".to_string()),
+            ("sox-reviewers".to_string(), "compliance".to_string()),
+            // Two IdP groups collapsing onto one local group is legitimate —
+            // regional shards of the same rota — and must not double-count.
+            ("platform-oncall-emea".to_string(), "oncall".to_string()),
+        ]);
+        let forward = translate_oidc_groups(
+            &map,
+            &groups,
+            &[
+                "platform-oncall".to_string(),
+                "sox-reviewers".to_string(),
+                "platform-oncall-emea".to_string(),
+            ],
+        );
+        let reversed = translate_oidc_groups(
+            &map,
+            &groups,
+            &[
+                "platform-oncall-emea".to_string(),
+                "sox-reviewers".to_string(),
+                "platform-oncall".to_string(),
+            ],
+        );
+        assert_eq!(
+            forward,
+            BTreeSet::from(["compliance".to_string(), "oncall".to_string()]),
+        );
+        assert_eq!(forward, reversed);
+        assert_eq!(
+            forward.iter().cloned().collect::<Vec<_>>(),
+            reversed.iter().cloned().collect::<Vec<_>>(),
+        );
+    }
+
+    #[test]
+    fn oidc_group_membership_confers_no_rbac_privilege() {
+        // SECURITY: the two ladders stay separate. A group called `owner`,
+        // mapped from a claim called `owner`, is a group called `owner` — the
+        // privilege ladder is only reachable through `role_map`, which is a
+        // different entry an operator has to write deliberately.
+        let groups = declared(&["owner"]);
+        let group_map = BTreeMap::from([("librefang-owners".to_string(), "owner".to_string())]);
+        let claims = ["librefang-owners".to_string()];
+        assert_eq!(
+            translate_oidc_groups(&group_map, &groups, &claims),
+            BTreeSet::from(["owner".to_string()]),
+        );
+        // Same claim value, empty `role_map`: no privilege at all.
+        assert_eq!(translate_oidc_roles(&BTreeMap::new(), &claims), None);
     }
 
     #[tokio::test]

@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearch } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import type { ChannelItem } from "../api";
+import type { ChannelItem, QrState } from "../api";
 import { useChannels, useChannelQr } from "../lib/queries/channels";
+import { useAgents } from "../lib/queries/agents";
 import {
   useReloadChannels,
   useSaveSidecarConfig,
@@ -11,9 +12,16 @@ import {
 import QRCode from "qrcode";
 import { useUIStore } from "../lib/store";
 import { toastErr } from "../lib/errors";
+import { formatDateTime } from "../lib/datetime";
+import {
+  channelLiveness,
+  livenessLabel,
+  type TFunc,
+} from "../lib/channelLiveness";
 import { PageHeader } from "../components/ui/PageHeader";
 import { CardSkeleton } from "../components/ui/Skeleton";
 import { EmptyState } from "../components/ui/EmptyState";
+import { ErrorState } from "../components/ui/ErrorState";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
@@ -52,6 +60,25 @@ type ViewMode = "grid" | "list";
 
 type Channel = ChannelItem;
 
+function qrStatusMessage(qr: QrState, channelName: string, t: TFunc): string {
+  if (qr.message) return qr.message;
+  switch (qr.status) {
+    case "confirmed":
+      return t("channels.login_success", { defaultValue: "Login successful" });
+    case "expired":
+      return t("channels.qr_expired_restart", {
+        defaultValue: "QR code expired — restart the sidecar to try again",
+      });
+    case "failed":
+      return t("channels.qr_failed", { defaultValue: "QR login failed" });
+    default:
+      return t("channels.qr_scan_with_app", {
+        defaultValue: "Scan with your {{channel}} app",
+        channel: channelName,
+      });
+  }
+}
+
 interface ChannelCardProps {
   channel: Channel;
   isSelected: boolean;
@@ -60,7 +87,7 @@ interface ChannelCardProps {
   onConfigure: (channel: Channel) => void;
   onRemove: (channel: Channel) => void;
   onViewDetails: (channel: Channel) => void;
-  t: (key: string, opts?: { defaultValue?: string }) => string;
+  t: TFunc;
 }
 
 const ChannelCard = memo(function ChannelCard({ channel: c, isSelected, viewMode, onSelect, onConfigure, onRemove, onViewDetails, t }: ChannelCardProps) {
@@ -78,21 +105,36 @@ const ChannelCard = memo(function ChannelCard({ channel: c, isSelected, viewMode
       openDetails();
     }
   };
+
+  // Compact card matching the design canvas: 30×30 accent icon, mono
+  // name, mono `type · N in / N out` sub-line, status badge. Both list and
+  // grid views use the same shape now since the page only shows
+  // configured channels (configure-flow chips moved to the picker
+  // drawer where they actually help selection).
+  //
+  // The sub-line reports the supervisor's per-instance counters.
+  // The old `N msgs/24h` figure it replaces was a per-channel-type aggregate, so six Telegram bots all showed the same number (#6606); the correctly-scoped per-type figure now lives in the details drawer where it can be labelled.
+  // The counters are since-adapter-start, which the card has no room to spell out, so the scope rides on a `title` — an operator used to reading a 24h number in that exact position would otherwise carry the old scope over to the new figure.
+  const liveness = channelLiveness(c);
+  const statusLabel = livenessLabel(liveness.state, t);
+  const received = c.messages_received ?? 0;
+  const sent = c.messages_sent ?? 0;
+  const kind = c.channel_type || c.category || c.name;
+
+  // The card's own aria-label overrides its inner text for screen readers, so
+  // the status has to be part of it — otherwise the indicator would be
+  // colour-only for assistive tech.
   const cardA11y = {
     onClick: openDetails,
     onKeyDown: cardKeyDown,
     role: "button" as const,
     tabIndex: 0,
-    "aria-label": c.display_name || c.name,
+    "aria-label": t("channels.card_aria", {
+      defaultValue: "{{name}} — status: {{status}}",
+      name: c.display_name || c.name,
+      status: statusLabel,
+    }),
   };
-
-  // Compact card matching the design canvas: 30×30 accent icon, mono
-  // name, mono `kind · N msgs/24h` sub-line, status dot. Both list and
-  // grid views use the same shape now since the page only shows
-  // configured channels (configure-flow chips moved to the picker
-  // drawer where they actually help selection).
-  const msgs = typeof c.msgs_24h === "number" ? c.msgs_24h : 0;
-  const kind = c.category || c.name;
   return (
     <Card
       hover
@@ -114,32 +156,49 @@ const ChannelCard = memo(function ChannelCard({ channel: c, isSelected, viewMode
         <div className="font-mono text-[13px] truncate text-text-main">
           {c.display_name || c.name}
         </div>
-        <div className="font-mono text-[11px] text-text-dim mt-0.5 truncate">
-          {kind} · {msgs} {t("channels.msgs_24h", { defaultValue: "msgs/24h" })}
+        <div
+          className="font-mono text-[11px] text-text-dim mt-0.5 truncate"
+          title={t("channels.traffic_since_start", {
+            defaultValue: "Messages since adapter start",
+          })}
+        >
+          {kind} ·{" "}
+          {t("channels.traffic_in_out", {
+            defaultValue: "{{received}} in / {{sent}} out",
+            received,
+            sent,
+          })}
         </div>
       </div>
-      {/* Status dot — running when there's recent activity, idle otherwise.
-          Matches the design's `status: 'running' | 'idle'` field. */}
-      <Badge variant={msgs > 0 ? "success" : "default"} dot className="shrink-0">
-        <span className="sr-only">
-          {msgs > 0 ? t("common.running") : t("common.idle")}
-        </span>
+      {/* Status badge — the supervisor's real liveness for THIS instance, not
+          a traffic proxy. Label is visible (not sr-only) so the colour is
+          never the only carrier of meaning; the sticky error text, when
+          present, rides on the tooltip and is spelled out in the drawer. */}
+      <Badge
+        variant={liveness.variant}
+        dot
+        className="shrink-0"
+        title={liveness.error ?? undefined}
+      >
+        {statusLabel}
       </Badge>
-      {/* Sidecar channels are config.toml-managed (no /api/channels
-          configure endpoint — it would 404), so suppress the inline
-          Configure affordance; the whole-card click still opens the
-          read-only details drawer. */}
-      {c.category !== "sidecar" && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onConfigure(c); }}
-          className="shrink-0 p-1.5 rounded-md text-text-dim hover:text-text-main hover:bg-main/40 transition-colors"
-          aria-label={t("channels.config")}
-          title={t("channels.config")}
-        >
-          <Settings className="w-3.5 h-3.5" />
-        </button>
-      )}
+      {/* The gear used to be gated on `category !== "sidecar"`, from when sidecars
+          were config.toml-only and a configure POST would have 404'd.
+          `POST /api/channels/sidecar/{name}/configure` shipped in #5252 and every
+          channel reports `category: "sidecar"` since the in-process registry was
+          removed — so that test was never true and the gear never rendered, leaving
+          the endpoint unreachable from the UI for an already-configured sidecar (#7892).
+          `onConfigure` opens the schema-driven SidecarForm drawer, which is the one
+          configure path there is now. */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onConfigure(c); }}
+        className="shrink-0 p-1.5 rounded-md text-text-dim hover:text-text-main hover:bg-main/40 transition-colors"
+        aria-label={t("channels.config")}
+        title={t("channels.config")}
+      >
+        <Settings className="w-3.5 h-3.5" />
+      </button>
       {c.configured && (
         <button
           type="button"
@@ -184,8 +243,14 @@ function ChannelQrSection({ channelName, t }: { channelName: string; t: (key: st
   // value in hammering the daemon at 2s while we wait for the
   // operator to react.
   const [terminal, setTerminal] = useState(false);
+  const [noQrSession, setNoQrSession] = useState(false);
+  useEffect(() => {
+    setTerminal(false);
+    setNoQrSession(false);
+    renderedQrRef.current = null;
+  }, [channelName]);
   const qrQuery = useChannelQr(channelName, {
-    enabled: true,
+    enabled: !noQrSession,
     refetchInterval: terminal ? false : undefined,
   });
   useEffect(() => {
@@ -194,6 +259,9 @@ function ChannelQrSection({ channelName, t }: { channelName: string; t: (key: st
       setTerminal(true);
     }
   }, [qrQuery.data?.status]);
+  useEffect(() => {
+    if (qrQuery.isError || qrQuery.data === null) setNoQrSession(true);
+  }, [qrQuery.data, qrQuery.isError]);
 
   useEffect(() => {
     const qr = qrQuery.data;
@@ -254,19 +322,7 @@ function ChannelQrSection({ channelName, t }: { channelName: string; t: (key: st
           </div>
         )}
         <p className="text-xs text-text-dim text-center max-w-xs">
-          {qr.message ||
-            (qr.status === "confirmed"
-              ? t("channels.login_success", { defaultValue: "Login successful" })
-              : qr.status === "expired"
-              ? t("channels.qr_expired_restart", {
-                  defaultValue: "QR code expired — restart the sidecar to try again",
-                })
-              : qr.status === "failed"
-              ? t("channels.qr_failed", { defaultValue: "QR login failed" })
-              : t("channels.qr_scan_with_app", {
-                  defaultValue: "Scan with your {{channel}} app",
-                  channel: channelName,
-                }))}
+          {qrStatusMessage(qr, channelName, t)}
         </p>
         {terminal && qr.status !== "confirmed" && (
           <Button
@@ -280,7 +336,7 @@ function ChannelQrSection({ channelName, t }: { channelName: string; t: (key: st
               qrQuery.refetch();
             }}
           >
-            {t("common.retry") || "Retry"}
+            {t("common.retry", { defaultValue: "Retry" })}
           </Button>
         )}
       </div>
@@ -295,8 +351,9 @@ function ChannelQrSection({ channelName, t }: { channelName: string; t: (key: st
 function DetailsModal({ channel, onClose, t }: {
   channel: Channel;
   onClose: () => void;
-  t: (key: string) => string
+  t: TFunc;
 }) {
+  const liveness = channelLiveness(channel);
   return (
     <DrawerPanel isOpen onClose={onClose} size="lg" hideCloseButton>
         {/* Coloured strip + custom header are kept inline so the
@@ -328,11 +385,32 @@ function DetailsModal({ channel, onClose, t }: {
           <div className="space-y-3">
             <h3 className="text-xs font-black uppercase tracking-wider text-text-dim">{t("common.properties")}</h3>
             <div className="space-y-2">
+              {/* Liveness, not config presence. This row used to report
+                  `configured ? online : setup`, which said only "a
+                  [[sidecar_channels]] block exists" while looking like a
+                  health verdict (#6606). Config presence now has its own row
+                  below so both facts stay visible. */}
               <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
                 <span className="text-xs font-bold text-text-dim">{t("common.status")}</span>
-                <Badge variant={channel.configured ? "success" : "warning"}>
-                  {channel.configured ? t("common.online") : t("common.setup")}
+                <Badge variant={liveness.variant} dot>
+                  {livenessLabel(liveness.state, t)}
                 </Badge>
+              </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.configured_label", { defaultValue: "Configured" })}
+                </span>
+                <span className={`text-xs font-bold ${channel.configured ? "text-success" : "text-warning"}`}>
+                  {channel.configured ? t("common.yes") : t("common.no")}
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.default_agent_label", { defaultValue: "Default agent" })}
+                </span>
+                <span className="text-xs font-mono text-text-main">
+                  {channel.agent || t("channels.default_agent_none_short", { defaultValue: "None" })}
+                </span>
               </div>
               <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
                 <span className="text-xs font-bold text-text-dim">{t("channels.has_token")}</span>
@@ -340,7 +418,79 @@ function DetailsModal({ channel, onClose, t }: {
                   {channel.has_token ? t("common.yes") : t("common.no")}
                 </span>
               </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.started_at", { defaultValue: "Up since" })}
+                </span>
+                <span className="text-xs font-mono text-text-main">
+                  {channel.started_at ? formatDateTime(channel.started_at) : t("common.never")}
+                </span>
+              </div>
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.last_message_at", { defaultValue: "Last message" })}
+                </span>
+                <span className="text-xs font-mono text-text-main">
+                  {channel.last_message_at ? formatDateTime(channel.last_message_at) : t("common.never")}
+                </span>
+              </div>
+              {/* Since the adapter was created, NOT since `started_at` — the
+                  counters live on the adapter and survive supervised restarts. */}
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.traffic_since_start", {
+                    defaultValue: "Messages since adapter start",
+                  })}
+                </span>
+                <span className="text-xs font-mono text-text-main">
+                  {t("channels.traffic_in_out", {
+                    defaultValue: "{{received}} in / {{sent}} out",
+                    received: channel.messages_received ?? 0,
+                    sent: channel.messages_sent ?? 0,
+                  })}
+                </span>
+              </div>
+              {/* Explicitly scoped: this number covers every channel of the
+                  same type on this daemon, because `usage_events.channel`
+                  records the type and not the instance name. */}
+              <div className="flex justify-between items-center p-3 rounded-lg bg-main/20">
+                <span className="text-xs font-bold text-text-dim">
+                  {t("channels.msgs_24h_by_type", {
+                    defaultValue: "24h messages (all {{type}} channels)",
+                    type: channel.channel_type || channel.name,
+                  })}
+                </span>
+                <span className="text-xs font-mono text-text-main">
+                  {channel.msgs_24h_channel_type ?? 0}
+                </span>
+              </div>
             </div>
+            {liveness.state === "not_supervised" && channel.configured && (
+              <div className="p-3 rounded-lg border border-warning/30 bg-warning/5">
+                <p className="text-[11px] text-text-dim leading-relaxed">
+                  {t("channels.not_supervised_hint", {
+                    defaultValue:
+                      "No live adapter is registered for this channel. Reload channels to start it, or check the daemon log for a failed sidecar start.",
+                  })}
+                </p>
+              </div>
+            )}
+            {liveness.error && (
+              <div className="p-3 rounded-lg border border-error/30 bg-error/5 space-y-1">
+                <p className="text-[11px] font-bold text-error">
+                  {t("channels.last_error", { defaultValue: "Last error" })}
+                </p>
+                <p className="text-[11px] font-mono text-text-dim leading-relaxed break-words">
+                  {liveness.error}
+                </p>
+                <p className="text-[10px] text-text-dim/80 leading-relaxed">
+                  {t("channels.last_error_sticky_hint", {
+                    defaultValue:
+                      "Recorded when the supervisor last saw a failure. It is not cleared on recovery, so a connected channel can still show one.",
+                  })}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Fields */}
@@ -407,23 +557,51 @@ function DetailsModal({ channel, onClose, t }: {
 // (everything else) — see `useSaveSidecarConfig` for the wire shape.
 function SidecarForm({
   channel,
+  create,
+  existingInstanceCount,
   onClose,
   t,
 }: {
   channel: Channel;
+  /** Explicit create-vs-edit mode, passed by the only two entry points that
+   *  open this drawer: the Add picker (always create, even for a type that
+   *  already has instances) and a card's configure gear (always edit).
+   *  Inferring it from `channel.configured` breaks as soon as the picker
+   *  lists an already-configured type, whose representative row may be a
+   *  configured instance (#8091). */
+  create: boolean;
+  /** How many configured instances of this channel's type already exist.
+   *  Drives the instance-name default below — see the field's own comment. */
+  existingInstanceCount: number;
   onClose: () => void;
-  t: (key: string, opts?: { defaultValue?: string; keys?: string }) => string;
+  t: (key: string, opts?: { defaultValue?: string; keys?: string; count?: number }) => string;
 }) {
   const addToast = useUIStore((s) => s.addToast);
   const saveMut = useSaveSidecarConfig();
+  // Create-vs-edit is a property of the entry point (picker → create, card
+  // gear → edit), not of the row — see the `create` prop doc above.
+  const isCreate = create;
+  const channelType = channel.channel_type ?? channel.name;
+  const { data: agents } = useAgents();
+  // Instance-name default: safe to prefill with the catalog type only when
+  // this would be the type's first instance (matches the pre-multi-instance
+  // UX exactly, zero risk of collision). Once a first instance exists, an
+  // empty default forces the operator to type a distinct name rather than
+  // silently overwriting it — a blank field also disables Save below.
+  const [instanceName, setInstanceName] = useState(() =>
+    isCreate ? (existingInstanceCount === 0 ? channelType : "") : channel.name,
+  );
+  const [agent, setAgent] = useState(channel.agent ?? "");
+  const instanceNameTrimmed = instanceName.trim();
   const allFields = channel.fields ?? [];
   const fields = allFields.filter((f) => !f.advanced);
   const advanced = allFields.filter((f) => f.advanced);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const visible = showAdvanced ? [...fields, ...advanced] : fields;
-  // `--describe` failed at boot and there's no static fallback, so the schema is empty.
-  // Show the actionable reason (typically: install the Python sidecar SDK) instead of a blank drawer + dead Save button.
-  const schemaUnavailable = allFields.length === 0 && !!channel.schema_error;
+  // No schema reached this row, so the drawer has nothing to edit and Save has nothing to submit.
+  // `POST /api/channels/sidecar/{adapter}/configure` needs the daemon's cached `--describe` schema to validate required fields and split secrets from non-secrets, so it answers 503 when there is none — an enabled Save here can only ever fail.
+  // Gate it on the absence of fields alone, not on `channel.schema_error` too (#8063): the reason is best-effort — a daemon predating the fix omits it on configured rows, and it is absent whenever `--describe` failed only after a schema had already been cached — so requiring it let the exact case the guard exists for fall through to a live button, which is what the issue reported as an inert Save.
+  const noEditableFields = allFields.length === 0;
 
   // Pre-populate from the schema:
   //  - non-secret fields with a `value` get their value
@@ -452,32 +630,30 @@ function SidecarForm({
       if (v) payload[f.key] = v;
     }
     saveMut.mutate(
-      { name: channel.name, values: payload },
+      {
+        name: channelType,
+        values: payload,
+        instanceName: instanceNameTrimmed,
+        agent: agent.trim() || null,
+      },
       {
         onSuccess: (res) => {
-          addToast(
-            res.restart_required
-              ? t("channels.saved_restart_required", {
-                  defaultValue: "Saved — restart daemon to apply",
-                })
-              : t("channels.saved", { defaultValue: "Saved" }),
-            "success",
-          );
-          // Plan Risk #5: surface shell-environment shadowing of secret
-          // fields. `addToast` has no "warning" variant (success | error
-          // | info), so fall back to "error" with an explicit prefix —
-          // visually distinct from the "Saved" success toast above, and
-          // tells the operator the save *did* happen but the new value
-          // is being shadowed until they unset the shell export.
+          const savedMessage = res.restart_required
+            ? t("channels.saved_restart_required", {
+                defaultValue: "Saved — restart daemon to apply",
+              })
+            : t("channels.saved", { defaultValue: "Saved" });
           if (res.shadowed_secrets && res.shadowed_secrets.length > 0) {
             addToast(
-              t("channels.shadowed_secrets_warning", {
+              `${savedMessage} — ${t("channels.shadowed_secrets_warning", {
                 defaultValue:
                   "Warning: these tokens are shadowed by shell environment variables and won't take effect until you unset them and restart: {{keys}}",
                 keys: res.shadowed_secrets.join(", "),
-              }),
-              "error",
+              })}`,
+              "info",
             );
+          } else {
+            addToast(savedMessage, "success");
           }
           onClose();
         },
@@ -497,7 +673,60 @@ function SidecarForm({
         </button>
       </div>
       <div className="p-6 space-y-3">
-        {schemaUnavailable && (
+        <div className="space-y-1">
+          <label className="text-xs font-bold">
+            {t("channels.instance_name_label", { defaultValue: "Instance name" })}
+          </label>
+          <Input
+            aria-label={t("channels.instance_name_label", { defaultValue: "Instance name" })}
+            value={instanceName}
+            disabled={!isCreate}
+            onChange={(e) => setInstanceName(e.target.value)}
+            placeholder={t("channels.instance_name_placeholder", {
+              defaultValue: "e.g. telegram-support",
+            })}
+          />
+          <p className="text-[11px] text-text-dim leading-relaxed">
+            {isCreate
+              ? existingInstanceCount === 0
+                ? t("channels.instance_name_hint_first", {
+                    defaultValue: "Unique name for this instance. Defaults to the channel type since none is configured yet.",
+                  })
+                : t("channels.instance_name_hint_next", {
+                    defaultValue: "This channel type already has {{count}} configured instance(s). Pick a unique name so this becomes a new one instead of overwriting an existing bot.",
+                    count: existingInstanceCount,
+                  })
+              : t("channels.instance_name_hint_edit", {
+                  defaultValue: "The instance name cannot be changed here — remove and re-add to rename.",
+                })}
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold">
+            {t("channels.default_agent_label", { defaultValue: "Default agent" })}
+          </label>
+          <Select
+            aria-label={t("channels.default_agent_label", { defaultValue: "Default agent" })}
+            options={[
+              { value: "", label: t("channels.default_agent_none", { defaultValue: "No default (first available agent)" }) },
+              ...(agents ?? []).map((a) => ({ value: a.name, label: a.name })),
+            ]}
+            value={agent}
+            onChange={(e) => setAgent(e.target.value)}
+          />
+          <p className="text-[11px] text-text-dim leading-relaxed">
+            {t("channels.default_agent_hint", {
+              defaultValue: "Inbound messages on this instance with no more specific binding route to this agent.",
+            })}
+          </p>
+        </div>
+        {/* Explain the empty form whenever there is one, not only when the daemon
+            attached a reason. `schema_error` is populated per *catalog* adapter, so
+            a `[[sidecar_channels]]` entry whose `channel_type` is not a catalog
+            entry at all — any third-party or custom adapter — has no schema and no
+            reason, and gating the panel on the reason left that operator with a
+            greyed-out Save and nothing at all to read (#8063). */}
+        {noEditableFields && (
           <div className="flex gap-2 p-3 rounded-lg border border-warning/30 bg-warning/5">
             <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -507,16 +736,34 @@ function SidecarForm({
                 })}
               </p>
               <p className="text-[11px] text-text-dim leading-relaxed">
-                {t("channels.schema_unavailable_hint", {
-                  defaultValue:
-                    "This channel runs as an out-of-process sidecar and its setup form could not be loaded. Review the error below. If the SDK is missing, install it; otherwise fix the reported problem. Restart the daemon to retry schema discovery.",
-                })}
+                {channel.schema_error
+                  ? t("channels.schema_unavailable_hint", {
+                      defaultValue:
+                        "This channel runs as an out-of-process sidecar and its setup form could not be loaded. Review the error below. If the SDK is missing, install it; otherwise fix the reported problem. Restart the daemon to retry schema discovery.",
+                    })
+                  : t("channels.schema_unavailable_hint_no_reason", {
+                      defaultValue:
+                        "This channel runs as an out-of-process sidecar and the daemon has no setup form for its adapter type, so there is nothing to edit here. Configure this instance directly in config.toml, then restart the daemon to retry schema discovery.",
+                    })}
               </p>
-              <p className="text-[11px] font-mono text-text-dim/90 leading-relaxed break-words">
-                {channel.schema_error}
-              </p>
+              {channel.schema_error && (
+                <p className="text-[11px] font-mono text-text-dim/90 leading-relaxed break-words">
+                  {channel.schema_error}
+                </p>
+              )}
             </div>
           </div>
+        )}
+        {channel.sdk_version && (
+          <p
+            data-testid="sidecar-sdk-version"
+            className="text-[11px] font-mono text-text-dim/80"
+          >
+            {t("channels.sidecar_sdk_version", {
+              defaultValue: "Adapter SDK",
+            })}{" "}
+            {channel.sdk_version}
+          </p>
         )}
         {visible.map((f) => (
           <div key={f.key} className="space-y-1">
@@ -531,6 +778,7 @@ function SidecarForm({
             </label>
             {f.type === "select" && f.options && f.options.length > 0 ? (
               <Select
+                aria-label={f.label || f.key}
                 options={f.options.map((o) => ({ value: o, label: o }))}
                 value={values[f.key] ?? ""}
                 placeholder={f.placeholder ?? undefined}
@@ -587,7 +835,7 @@ function SidecarForm({
         <Button
           variant="primary"
           onClick={handleSubmit}
-          disabled={saveMut.isPending || schemaUnavailable}
+          disabled={saveMut.isPending || noEditableFields || !instanceNameTrimmed}
         >
           {saveMut.isPending
             ? t("common.saving", { defaultValue: "Saving..." })
@@ -610,7 +858,13 @@ export function ChannelsPage() {
   const [detailsChannel, setDetailsChannel] = useState<Channel | null>(null);
   // Every channel is sidecar now (the in-process registry was removed),
   // so configure always lands on the schema-driven SidecarForm drawer.
-  const [sidecarFormChannel, setSidecarFormChannel] = useState<Channel | null>(null);
+  // Whether the drawer opens in create mode belongs to the entry point, not
+  // the row: the Add picker always creates (even for a type that already has
+  // instances), while a card's configure gear always edits. Passed explicitly
+  // rather than inferred from `channel.configured`, because a picker row may
+  // be represented by a configured instance (#8091).
+  const [sidecarForm, setSidecarForm] =
+    useState<{ channel: Channel; create: boolean } | null>(null);
   // The picker drawer holds the catalog of unconfigured channel types
   // (slack / discord / email / …). Default view shows only configured
   // channels so the page stays focused on what's actually wired up.
@@ -632,15 +886,15 @@ export function ChannelsPage() {
     });
   };
   const handleCardConfigure = useCallback((ch: Channel) => {
-    setSidecarFormChannel(ch);
+    setSidecarForm({ channel: ch, create: false });
   }, []);
   const handleCardRemove = useCallback((ch: Channel) => {
     setRemoveChannel(ch);
   }, []);
-  const confirmRemove = () => {
+  const confirmRemove = async () => {
     if (!removeChannel) return;
     const name = removeChannel.name;
-    removeMut.mutate(name, {
+    await removeMut.mutateAsync(name, {
       onSuccess: () => {
         setRemoveChannel(null);
         addToast(t("channels.remove_success", { defaultValue: "Channel removed" }), "success");
@@ -649,9 +903,8 @@ export function ChannelsPage() {
     });
   };
 
-  const channels = channelsQuery.data ?? [];
+  const channels = useMemo(() => channelsQuery.data ?? [], [channelsQuery.data]);
   const configuredCount = useMemo(() => channels.filter(c => c.configured).length, [channels]);
-  const unconfiguredCount = channels.length - configuredCount;
 
   // When navigated from CommsPage with ?channel=<name>, open that channel's
   // details panel once the channel list has loaded.
@@ -680,16 +933,64 @@ export function ChannelsPage() {
     [channels, search, sortField, sortOrder],
   );
 
-  // Catalog of unconfigured channel types, surfaced in the Add picker.
-  const pickerChannels = useMemo(
-    () => [...channels]
-      .filter(c => !c.configured)
+  // Catalog of channel types, surfaced in the Add picker. One row per type,
+  // taken from the unconfigured discovery row: its `name` IS the type and it
+  // carries the cached schema, and `list_channels` emits one for every
+  // `SIDECAR_CATALOG` entry whether or not instances of it exist — so an
+  // already-configured type is still listed here, which is what gives a
+  // second instance somewhere to be added from (#8091).
+  //
+  // Seeding from the discovery rows only is also what keeps the picker to
+  // types this page can actually create. A `[[sidecar_channels]]` entry whose
+  // `channel_type` is not a catalog name (a third-party adapter) has no
+  // discovery row, no cached schema, and no `configure_sidecar_channel`
+  // catalog entry to save against — electing its configured instance as the
+  // type's representative would add a row that opens the "setup form
+  // unavailable" panel and could never be saved. `instanceCountByType` below
+  // already accounts for configured rows.
+  const pickerChannels = useMemo(() => {
+    const byType = new Map<string, Channel>();
+    for (const c of channels) {
+      const type = c.channel_type ?? c.name;
+      if (!c.configured) byType.set(type, c);
+    }
+    return [...byType.values()]
       .filter(c => !pickerSearch
         || (c.display_name || c.name).toLowerCase().includes(pickerSearch.toLowerCase())
         || c.category?.toLowerCase().includes(pickerSearch.toLowerCase()))
-      .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name)),
-    [channels, pickerSearch],
-  );
+      .sort((a, b) => (a.display_name || a.name).localeCompare(b.display_name || b.name));
+  }, [channels, pickerSearch]);
+
+  // How many configured instances each catalog type already has — feeds
+  // the picker's "N configured" hint and, more importantly, tells
+  // `SidecarForm` whether it's safe to default the instance-name field to
+  // the catalog type (only when this would be the first instance) or must
+  // force the operator to type a distinct name (a second+ instance): a
+  // blank name silently editing the *existing* default instance in place
+  // is exactly the footgun multi-instance support must not introduce.
+  const instanceCountByType = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of channels) {
+      if (!c.configured) continue;
+      const type = c.channel_type || c.name;
+      counts.set(type, (counts.get(type) ?? 0) + 1);
+    }
+    return counts;
+  }, [channels]);
+
+  // Configured channels grouped by type so multiple instances of the same
+  // adapter (several Telegram bots, several Slack workspaces, …) render
+  // together under one heading instead of scattered through a flat list.
+  const groupedChannels = useMemo(() => {
+    const groups = new Map<string, Channel[]>();
+    for (const c of filteredChannels) {
+      const key = c.channel_type || c.category || c.name;
+      const list = groups.get(key);
+      if (list) list.push(c);
+      else groups.set(key, [c]);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredChannels]);
 
   const openPicker = () => {
     setPickerSearch("");
@@ -697,10 +998,12 @@ export function ChannelsPage() {
   };
   const handlePick = (ch: Channel) => {
     setPickerOpen(false);
-    // Schema-driven save endpoint
-    // (`POST /api/channels/sidecar/{name}/configure`) is the only
-    // configure path now — every channel runs as a sidecar.
-    setSidecarFormChannel(ch);
+    // `POST /api/channels/sidecar/{name}/configure` is the only configure
+    // path now — every channel runs as a sidecar. The picker always opens
+    // create mode, even when the picked type already has instances
+    // (#8091): the row is a catalog entry, not an existing instance to
+    // edit — an instance is edited from its card's gear instead.
+    setSidecarForm({ channel: ch, create: true });
   };
 
   const handleSort = (field: SortField) => {
@@ -721,15 +1024,27 @@ export function ChannelsPage() {
     });
   }, []);
 
-  const handleSelectAll = () => {
-    if (selectedIds.size === filteredChannels.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredChannels.map(c => c.name)));
-    }
-  };
+  useEffect(() => {
+    const liveNames = new Set(channels.map((channel) => channel.name));
+    setSelectedIds((previous) => {
+      const next = new Set([...previous].filter((name) => liveNames.has(name)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [channels]);
 
-  const allSelected = filteredChannels.length > 0 && selectedIds.size === filteredChannels.length;
+  const allSelected = filteredChannels.length > 0
+    && filteredChannels.every((channel) => selectedIds.has(channel.name));
+
+  const handleSelectAll = () => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      for (const channel of filteredChannels) {
+        if (allSelected) next.delete(channel.name);
+        else next.add(channel.name);
+      }
+      return next;
+    });
+  };
 
   return (
     <div className="flex flex-col gap-6 transition-colors duration-300">
@@ -746,15 +1061,23 @@ export function ChannelsPage() {
             <Button variant="secondary" size="sm" onClick={handleReload} disabled={reloadMut.isPending}>
               {t("channels.reload", { defaultValue: "Reload" })}
             </Button>
+            {/* `PageHeader` renders above the loading / error / empty
+                branches below, so this button is on screen before the query
+                resolves and with the daemon unreachable. Gate it on the
+                catalog having actually arrived: opening the picker on an
+                empty `channels` would show its "nothing to add" panel, which
+                would be a statement about the catalog rather than about the
+                fetch that has not happened. Not gated on
+                `unconfiguredCount === 0` any more — a configured type still
+                belongs in the picker so a second instance can be added
+                (#8091). */}
             <Button
               variant="primary"
               size="sm"
               onClick={openPicker}
+              disabled={!channelsQuery.data}
               leftIcon={<Plus className="h-3.5 w-3.5" />}
-              disabled={unconfiguredCount === 0}
-              title={unconfiguredCount === 0
-                ? t("channels.all_configured", { defaultValue: "All channels configured" })
-                : t("channels.add_channel", { defaultValue: "Add channel" })}
+              title={t("channels.add_channel", { defaultValue: "Add channel" })}
             >
               {t("channels.add", { defaultValue: "Add" })}
             </Button>
@@ -770,7 +1093,7 @@ export function ChannelsPage() {
         <div className="flex-1">
           <Input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setSelectedIds(new Set()); }}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder={t("common.search")}
             leftIcon={<Search className="w-4 h-4" />}
             rightIcon={search && (
@@ -821,6 +1144,23 @@ export function ChannelsPage() {
         <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6" : "flex flex-col gap-2"}>
           {[1, 2, 3].map((i) => <CardSkeleton key={i} />)}
         </div>
+      ) : channelsQuery.isError && channels.length === 0 ? (
+        // A failed fetch must not fall through to the "no channels yet" card
+        // below: `channels` is `[]` on error, so an unreachable daemon would
+        // render as a clean install, on the page whose whole job (#6606) is
+        // telling an operator whether their channels are alive.
+        //
+        // Gated on an empty list rather than `isError` alone: the query polls
+        // every 30s and keeps its last successful `data` across a failed
+        // refetch, so the bare flag would blank a working list on one
+        // transient blip. The header's refresh spinner already covers that
+        // case; this branch is only for having nothing to show.
+        <ErrorState
+          message={t("channels.load_error", {
+            defaultValue: "Could not load channels",
+          })}
+          onRetry={() => void channelsQuery.refetch()}
+        />
       ) : configuredCount === 0 ? (
         // No channels configured yet — surface the picker as a primary
         // CTA instead of a tab buried below. Mirrors the design canvas
@@ -865,19 +1205,39 @@ export function ChannelsPage() {
             )}
           </div>
 
-          <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6" : "flex flex-col gap-2"}>
-            {filteredChannels.map((c) => (
-              <ChannelCard
-                key={c.name}
-                channel={c}
-                isSelected={selectedIds.has(c.name)}
-                viewMode={viewMode}
-                onSelect={handleSelect}
-                onConfigure={handleCardConfigure}
-                onRemove={handleCardRemove}
-                onViewDetails={setDetailsChannel}
-                t={t}
-              />
+          {/* One section per channel TYPE so several instances of the same
+              adapter (multiple Telegram bots, multiple Slack workspaces, …)
+              render together instead of scattered through a flat list. */}
+          <div className="flex flex-col gap-6">
+            {groupedChannels.map(([type, instances]) => (
+              <div key={type} className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-accent/10 border border-accent/30 text-accent grid place-items-center shrink-0">
+                    {getChannelIcon(type)}
+                  </div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-text-dim">
+                    {type}
+                  </h3>
+                  <span className="text-[10px] font-bold text-text-dim/70">
+                    {t("channels.instance_count", { count: instances.length })}
+                  </span>
+                </div>
+                <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 4xl:grid-cols-6" : "flex flex-col gap-2"}>
+                  {instances.map((c) => (
+                    <ChannelCard
+                      key={c.name}
+                      channel={c}
+                      isSelected={selectedIds.has(c.name)}
+                      viewMode={viewMode}
+                      onSelect={handleSelect}
+                      onConfigure={handleCardConfigure}
+                      onRemove={handleCardRemove}
+                      onViewDetails={setDetailsChannel}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </>
@@ -907,10 +1267,16 @@ export function ChannelsPage() {
 
       {/* Sidecar configure form — schema-driven, hits
           `POST /api/channels/sidecar/{name}/configure`. */}
-      {sidecarFormChannel && (
+      {sidecarForm && (
         <SidecarForm
-          channel={sidecarFormChannel}
-          onClose={() => setSidecarFormChannel(null)}
+          channel={sidecarForm.channel}
+          create={sidecarForm.create}
+          existingInstanceCount={
+            instanceCountByType.get(
+              sidecarForm.channel.channel_type ?? sidecarForm.channel.name,
+            ) ?? 0
+          }
+          onClose={() => setSidecarForm(null)}
           t={t}
         />
       )}
@@ -941,33 +1307,51 @@ export function ChannelsPage() {
           />
           {pickerChannels.length === 0 ? (
             <div className="rounded-md border border-border-subtle bg-main/40 p-4 text-[12px] text-text-dim italic">
+              {/* "Everything is already configured" is no longer a state the
+                  picker can be in: every catalog type is listed whether or not
+                  it has instances. With the Add button gated on loaded data,
+                  the one remaining way to get here without a search term is a
+                  daemon that reported no catalog at all. */}
               {pickerSearch
                 ? t("channels.no_results")
-                : t("channels.all_configured_desc", { defaultValue: "All available channel types are already configured." })}
+                : t("channels.picker_empty_catalog", { defaultValue: "No channel types are available to add." })}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {pickerChannels.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => handlePick(c)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border-subtle bg-main/40 hover:border-brand/40 hover:bg-main/60 transition-colors text-left"
-                >
-                  <div className="w-9 h-9 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center text-brand shrink-0">
-                    {getChannelIcon(c.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-mono text-[13px] font-medium text-text-main truncate">
-                      {c.display_name || c.name}
+              {pickerChannels.map((c) => {
+                const instanceCount = instanceCountByType.get(c.channel_type ?? c.name) ?? 0;
+                return (
+                  <button
+                    key={c.channel_type ?? c.name}
+                    type="button"
+                    onClick={() => handlePick(c)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border-subtle bg-main/40 hover:border-brand/40 hover:bg-main/60 transition-colors text-left"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-brand/10 border border-brand/20 grid place-items-center text-brand shrink-0">
+                      {getChannelIcon(c.name)}
                     </div>
-                    <div className="font-mono text-[10.5px] text-text-dim/80 truncate">
-                      {c.category || c.name}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-mono text-[13px] font-medium text-text-main truncate">
+                        {c.display_name || c.name}
+                      </div>
+                      <div className="font-mono text-[10.5px] text-text-dim/80 truncate">
+                        {c.category || c.name}
+                      </div>
                     </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-text-dim shrink-0" />
-                </button>
-              ))}
+                    {instanceCount > 0 && (
+                      <span
+                        className="shrink-0 font-mono text-[10px] text-text-dim"
+                        title={t("channels.picker_instances_configured_hint", {
+                          defaultValue: "Instances of this channel type that are already configured",
+                        })}
+                      >
+                        {t("channels.picker_instances_configured", { instances: instanceCount })}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-text-dim shrink-0" />
+                  </button>
+                  );
+                })}
             </div>
           )}
         </div>

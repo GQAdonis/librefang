@@ -14,38 +14,43 @@ It manages AI agents (LLM-backed), their tools, memory, messaging channels, and 
 
 ## Workspace Structure
 
-The workspace contains 31 crates under `crates/` plus an `xtask` crate:
+There are 31 crate directories under `crates/` plus an `xtask` crate.
+29 are `[workspace] members`; `librefang-storage` and `librefang-uar-spec` are BossFang path dependencies, not members, so `--workspace` does not select them — use `-p` explicitly.
 
 | Crate | Purpose |
 |---|---|
-| `librefang-types` | Core types, traits, and data models shared across all crates |
-| `librefang-http` | Shared HTTP utilities |
-| `librefang-wire` | OFP (Open Fang Protocol): agent-to-agent P2P networking |
-| `librefang-telemetry` | OpenTelemetry + Prometheus metrics instrumentation |
-| `librefang-testing` | Test infrastructure: mock kernel, mock LLM driver, API route test utilities |
-| `librefang-import` | Import engine: import agents/memory/sessions/skills/channel configs from other frameworks (OpenClaw, OpenFang, LangChain, AutoGPT) |
-| `librefang-kernel` | Central kernel: agent registry, scheduling, orchestration, event bus, metering |
-| `librefang-kernel-handle` | KernelHandle trait — breaks runtime↔kernel circular dependency |
-| `librefang-kernel-router` | Kernel model routing layer |
-| `librefang-kernel-metering` | Token/cost metering |
-| `librefang-runtime` | Agent execution: LLM drivers, tool runner, MCP client, context engine, A2A protocol |
-| `librefang-runtime-mcp` | MCP client implementation |
-| `librefang-runtime-oauth` | OAuth2 PKCE runtime integration |
-| `librefang-runtime-wasm` | WASM sandbox runtime |
-| `librefang-llm-driver` | LlmDriver trait + error types (interface only) |
-| `librefang-llm-drivers` | Concrete provider impls (anthropic, openai, gemini, uar, …) |
+| `librefang-types` | Core types, traits, shared data models |
+| `librefang-http` | Shared HTTP client plumbing |
+| `librefang-kernel` | Agent registry, scheduling, orchestration, event bus |
+| `librefang-kernel-handle` | `KernelHandle` trait — lets runtime call kernel without a circular dep |
+| `librefang-kernel-router` | Model / provider routing |
+| `librefang-kernel-metering` | Token accounting and budget metering |
+| `librefang-runtime` | Agent loop, tools, plugins, OAuth, WASM sandbox, context engine, A2A |
+| `librefang-runtime-mcp` | MCP client |
+| `librefang-runtime-audit` | Runtime audit trail |
+| `librefang-runtime-media` | Media handling |
+| `librefang-runtime-sandbox-docker` | Docker-backed tool sandbox |
+| `librefang-llm-driver` | LLM driver trait + error types (interface only) |
+| `librefang-llm-drivers` | Concrete provider impls: anthropic, openai, gemini, uar, … |
+| `librefang-api` | HTTP/WebSocket server, routes, middleware, dashboard |
+| `librefang-channels` | Channel-bridge infra: sidecar trampoline + shared bridge types (per-channel adapters live as Python sidecars under `sdk/python/librefang/sidecar/adapters/`) |
+| `librefang-subprocess` | Persistent JSON-over-stdio transport shared by the sidecar bridges |
 | `librefang-memory` | Memory substrate: SurrealDB backends + SQLite fallback, conversation history, vector search |
-| `librefang-memory-wiki` | Durable file-based knowledge vault (markdown pages, backlinks, frontmatter) |
+| `librefang-memory-wiki` | Durable markdown knowledge vault (provenance frontmatter, Obsidian export) |
 | `librefang-storage` | **BossFang** — SurrealDB storage abstraction layer + 24 SurrealQL migrations |
-| `librefang-api` | HTTP/WebSocket API server, route handlers, middleware, dashboard |
-| `librefang-cli` | CLI binary (interactive TUI with ratatui) |
+| `librefang-wire` | OFP — agent-to-agent P2P |
+| `librefang-skills` | Skill registry, loader, marketplace, WASM sandbox |
+| `librefang-hands` | Curated autonomous capability packages |
+| `librefang-extensions` | MCP server setup, credential vault, OAuth2 PKCE |
+| `librefang-cli` | CLI binary (ratatui TUI) |
 | `librefang-desktop` | Native desktop app (Tauri 2.0) |
-| `librefang-skills` | Skill system: registry, loader, marketplace, WASM sandbox |
-| `librefang-hands` | Hands system: curated autonomous capability packages |
-| `librefang-extensions` | Extension system: MCP server setup, credential vault, OAuth2 PKCE |
-| `librefang-channels` | Channel bridge layer: 40+ messaging integrations (Discord, Slack, Telegram, WeCom, etc.) |
+| `librefang-acp` | Agent Client Protocol adapter — embeds agents in Zed / VSCode / JetBrains over stdio JSON-RPC |
 | `librefang-uar-spec` | **BossFang** — UAR-AGENT-MD spec types and AgentManifest translator |
-| `xtask` | Development task runner |
+| `librefang-import` | Import from other agent frameworks |
+| `librefang-rl-export` | Long-horizon RL rollout trajectory exporter |
+| `librefang-telemetry` | OpenTelemetry + Prometheus |
+| `librefang-testing` | Mock kernel, mock LLM, route test utilities |
+| `xtask` | Dev task runner |
 
 ## Build Commands
 

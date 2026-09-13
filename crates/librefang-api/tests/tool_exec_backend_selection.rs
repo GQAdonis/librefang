@@ -12,7 +12,7 @@
 //! from a downstream consumer's perspective (the API crate is the
 //! highest-level workspace consumer of the kernel + runtime).
 
-use librefang_runtime::tool_exec_backend::build_backend;
+use librefang_runtime::tool_exec_backend::{build_backend, ExecError, LOCAL_DEFAULT_TIMEOUT_SECS};
 use librefang_types::agent::AgentManifest;
 use librefang_types::config::KernelConfig;
 use librefang_types::tool_exec::{resolve_backend_kind, BackendKind, ToolExecConfig};
@@ -45,6 +45,28 @@ fn config_toml_kind_docker_is_loaded() {
     "#;
     let cfg: KernelConfig = toml::from_str(toml_str).unwrap();
     assert_eq!(cfg.tool_exec.kind, BackendKind::Docker);
+}
+
+#[test]
+fn config_toml_rejects_unknown_backend_kind() {
+    let err = toml::from_str::<KernelConfig>(
+        r#"
+        [tool_exec]
+        kind = "kubernetes"
+    "#,
+    )
+    .expect_err("an unknown tool_exec.kind must fail deserialization");
+    let message = err.to_string();
+    assert!(
+        message.contains("unknown variant `kubernetes`"),
+        "{message}"
+    );
+    for expected in ["local", "docker", "ssh", "daytona"] {
+        assert!(
+            message.contains(expected),
+            "error must list supported kind {expected}: {message}"
+        );
+    }
 }
 
 #[test]
@@ -86,6 +108,29 @@ fn config_toml_with_daytona_subtable_round_trips() {
 }
 
 #[test]
+fn tool_exec_validation_rejects_kind_subtable_mismatches() {
+    let ssh_with_daytona = ToolExecConfig {
+        kind: BackendKind::Ssh,
+        daytona: Some(Default::default()),
+        ..Default::default()
+    };
+    assert_eq!(
+        ssh_with_daytona.validate().unwrap_err(),
+        "tool_exec.kind = \"ssh\" but [tool_exec.ssh] subtable is missing"
+    );
+
+    let daytona_with_ssh = ToolExecConfig {
+        kind: BackendKind::Daytona,
+        ssh: Some(Default::default()),
+        ..Default::default()
+    };
+    assert_eq!(
+        daytona_with_ssh.validate().unwrap_err(),
+        "tool_exec.kind = \"daytona\" but [tool_exec.daytona] subtable is missing"
+    );
+}
+
+#[test]
 fn agent_manifest_tool_exec_backend_field_round_trips() {
     let toml_str = r#"
         name = "alice"
@@ -124,6 +169,7 @@ fn agent_manifest_no_field_resolves_to_global() {
 #[test]
 fn agent_manifest_override_wins_over_global() {
     let manifest = AgentManifest {
+        source_template: None,
         tool_exec_backend: Some(BackendKind::Ssh),
         ..Default::default()
     };
@@ -146,6 +192,7 @@ fn build_backend_local_dispatches_to_local_impl() {
         std::env::temp_dir(),
         vec![],
         vec![],
+        LOCAL_DEFAULT_TIMEOUT_SECS,
     )
     .expect("local backend always builds");
     assert_eq!(backend.kind(), BackendKind::Local);
@@ -163,14 +210,15 @@ fn build_backend_docker_dispatches_to_docker_impl() {
         std::env::temp_dir(),
         vec![],
         vec![],
+        LOCAL_DEFAULT_TIMEOUT_SECS,
     )
     .expect("docker backend builds even when daemon absent");
     assert_eq!(backend.kind(), BackendKind::Docker);
 }
 
 #[test]
-fn build_backend_ssh_without_subtable_returns_not_configured() {
-    let cfg = ToolExecConfig::default(); // ssh subtable missing
+fn build_backend_ssh_without_feature_returns_not_configured() {
+    let cfg = ToolExecConfig::default();
     let docker_cfg = librefang_types::config::DockerSandboxConfig::default();
     let result = build_backend(
         BackendKind::Ssh,
@@ -180,13 +228,21 @@ fn build_backend_ssh_without_subtable_returns_not_configured() {
         std::env::temp_dir(),
         vec![],
         vec![],
+        LOCAL_DEFAULT_TIMEOUT_SECS,
     );
-    assert!(result.is_err(), "ssh without [tool_exec.ssh] must error");
+    match result {
+        Err(ExecError::NotConfigured(message)) => {
+            assert!(message.contains("ssh-backend"), "{message}");
+            assert!(message.contains("feature"), "{message}");
+        }
+        Err(other) => panic!("expected NotConfigured, got {other}"),
+        Ok(_) => panic!("SSH must not build without the ssh-backend feature"),
+    }
 }
 
 #[test]
-fn build_backend_daytona_without_subtable_returns_not_configured() {
-    let cfg = ToolExecConfig::default(); // daytona subtable missing
+fn build_backend_daytona_without_feature_returns_not_configured() {
+    let cfg = ToolExecConfig::default();
     let docker_cfg = librefang_types::config::DockerSandboxConfig::default();
     let result = build_backend(
         BackendKind::Daytona,
@@ -196,11 +252,16 @@ fn build_backend_daytona_without_subtable_returns_not_configured() {
         std::env::temp_dir(),
         vec![],
         vec![],
+        LOCAL_DEFAULT_TIMEOUT_SECS,
     );
-    assert!(
-        result.is_err(),
-        "daytona without [tool_exec.daytona] must error"
-    );
+    match result {
+        Err(ExecError::NotConfigured(message)) => {
+            assert!(message.contains("daytona-backend"), "{message}");
+            assert!(message.contains("feature"), "{message}");
+        }
+        Err(other) => panic!("expected NotConfigured, got {other}"),
+        Ok(_) => panic!("Daytona must not build without the daytona-backend feature"),
+    }
 }
 
 /// End-to-end resolution: config.toml → manifest.toml → resolver →
@@ -232,6 +293,7 @@ async fn end_to_end_resolution_local_runs_command() {
         std::env::temp_dir(),
         vec![],
         vec![],
+        LOCAL_DEFAULT_TIMEOUT_SECS,
     )
     .expect("local backend always builds");
 
@@ -257,4 +319,73 @@ async fn end_to_end_resolution_local_runs_command() {
     // exercised on Windows CI even when the dispatch step is gated.
     #[cfg(not(unix))]
     let _ = backend;
+}
+
+/// Mirror of `librefang-runtime/tests/tool_exec_backend_selection.rs`'s
+/// timeout coverage, which this file's header promises but which landed only
+/// in the runtime crate.
+///
+/// `tool_exec.default_timeout_secs` has to reach the executed command, not
+/// merely parse. A default that is never overridden compiles and behaves
+/// plausibly, which is how #8171 survived: the parameter was threaded through
+/// `build_backend` and filled with the same constant on every path.
+#[tokio::test]
+#[cfg(unix)]
+async fn configured_default_timeout_reaches_the_executed_command() {
+    let cfg: KernelConfig =
+        toml::from_str("[tool_exec]\nkind = \"local\"\ndefault_timeout_secs = 1").unwrap();
+    let backend = build_backend(
+        BackendKind::Local,
+        &cfg.tool_exec,
+        &librefang_types::config::DockerSandboxConfig::default(),
+        "agent-1",
+        std::env::temp_dir(),
+        vec![],
+        vec![],
+        cfg.tool_timeout_secs,
+    )
+    .expect("local backend always builds");
+
+    let err = backend
+        .run_command(librefang_runtime::tool_exec_backend::ExecSpec::new(
+            "sleep 30",
+        ))
+        .await
+        .expect_err("the 1s default timeout fires before the 30s sleep returns");
+    assert!(
+        matches!(&err, ExecError::Timeout(msg) if msg.contains("after 1s")),
+        "expected the configured 1s timeout, got: {err:?}"
+    );
+}
+
+/// An unset `tool_exec.default_timeout_secs` inherits the global
+/// `tool_timeout_secs` rather than a private constant, so the two tool-timeout
+/// paths agree instead of merely both being configurable.
+#[tokio::test]
+#[cfg(unix)]
+async fn unset_default_timeout_inherits_the_global_tool_timeout() {
+    let cfg: KernelConfig = toml::from_str("tool_timeout_secs = 1").unwrap();
+    assert!(cfg.tool_exec.default_timeout_secs.is_none());
+    let backend = build_backend(
+        BackendKind::Local,
+        &cfg.tool_exec,
+        &librefang_types::config::DockerSandboxConfig::default(),
+        "agent-1",
+        std::env::temp_dir(),
+        vec![],
+        vec![],
+        cfg.tool_timeout_secs,
+    )
+    .expect("local backend always builds");
+
+    let err = backend
+        .run_command(librefang_runtime::tool_exec_backend::ExecSpec::new(
+            "sleep 30",
+        ))
+        .await
+        .expect_err("the inherited 1s timeout fires before the 30s sleep returns");
+    assert!(
+        matches!(&err, ExecError::Timeout(msg) if msg.contains("after 1s")),
+        "expected the inherited 1s timeout, got: {err:?}"
+    );
 }

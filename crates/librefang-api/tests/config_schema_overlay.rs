@@ -202,6 +202,7 @@ fn every_kernel_config_struct_field_is_exposed_via_overlay() {
         "mcp_servers",          // /mcp-servers
         "mcp_runtime_store",    // /mcp-servers (MCP write-target selector, #6113)
         "users",                // /users
+        "groups",               // /groups (#7745)
         "bindings",             // /agents
         "provider_api_keys",    // /providers (sensitive too)
         "auth_profiles",        // /users (sensitive structure)
@@ -217,6 +218,10 @@ fn every_kernel_config_struct_field_is_exposed_via_overlay() {
         "log_level",
         "api_listen",
         "api_key",
+        // Password hash of the master api_key (#6613). Like `dashboard_pass_hash`
+        // below, it is written by hand into config.toml (or copied from the
+        // upgrade-hint file), never edited through a dashboard row.
+        "api_key_hash",
         "cors_origin",
         "trusted_hosts",
         "trusted_proxies",
@@ -225,6 +230,12 @@ fn every_kernel_config_struct_field_is_exposed_via_overlay() {
         "network_enabled",
         "agent_max_iterations",
         "max_history_messages",
+        // Root-level prompt-shaping scalar like the line above: rendered as a
+        // `general` root_level entry, not as its own section (#7920).
+        "memory_fact_budget_percent",
+        // Same shape again: a root-level scalar on the synthetic "general"
+        // section, not its own descriptor (#7744).
+        "default_owner",
         "default_routing",
         "require_auth_for_reads",
         // auth-posture scalar gating require_auth_for_reads=false (#5357);

@@ -1,20 +1,21 @@
 //! Execution approval manager — gates dangerous operations behind human approval.
 
 use chrono::Utc;
-use dashmap::DashMap;
+use dashmap::{mapref::entry::Entry, DashMap};
 use librefang_types::approval::{
     ApprovalAuditEntry, ApprovalDecision, ApprovalEvent, ApprovalPolicy, ApprovalRequest,
     ApprovalResponse, RiskLevel, SecondFactor, TimeoutFallback,
 };
 use librefang_types::capability::glob_matches;
+use librefang_types::error::{LibreFangError, LibreFangResult};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
-use std::sync::Mutex as StdMutex;
+use std::sync::{Mutex as StdMutex, MutexGuard, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Instant;
 use tokio::sync::broadcast;
-use totp_rs::{Algorithm, Secret, TOTP};
+use totp_rs::{Algorithm, Builder as TotpBuilder, Secret};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -57,6 +58,14 @@ pub struct ApprovalManager {
     /// SurrealDB-backed TOTP replay-prevention storage (surreal-backend).
     /// When present, `is_totp_code_used` / `record_totp_code_used` delegate
     /// to this backend instead of `audit_db`.
+    ///
+    /// `allow(dead_code)`: upstream gated both readers behind `#[cfg(test)]`
+    /// (they have no non-test callers anywhere in the workspace — verified by
+    /// grep across `crates/`). The constructor wiring below stays live so the
+    /// SurrealDB backend is still injected and the delegation works the moment
+    /// a non-test caller returns. Gating the field instead would cascade into
+    /// all three constructors and change the surreal constructor's signature.
+    #[allow(dead_code)]
     used_codes_store: Option<Box<dyn crate::storage_backends::TotpUsedCodesBackend>>,
     /// TOTP grace period cache: sender_id → last successful verification time.
     totp_grace: StdMutex<HashMap<String, Instant>>,
@@ -118,7 +127,43 @@ pub struct ApprovalRecord {
     pub decided_by: Option<String>,
 }
 
+/// Result of atomically claiming a verified TOTP code in the replay table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TotpCodeClaim {
+    /// This caller inserted or refreshed an expired code record and owns the single permitted use.
+    Claimed,
+    /// A still-live replay-window record already owns this code.
+    AlreadyUsed,
+}
+
 impl ApprovalManager {
+    fn read_policy(&self) -> RwLockReadGuard<'_, ApprovalPolicy> {
+        self.policy.read().unwrap_or_else(|poisoned| {
+            warn!("approval policy read lock poisoned; recovering inner state");
+            self.policy.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
+    fn write_policy(&self) -> RwLockWriteGuard<'_, ApprovalPolicy> {
+        self.policy.write().unwrap_or_else(|poisoned| {
+            warn!("approval policy write lock poisoned; recovering inner state");
+            self.policy.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
+    fn lock_state<'a, T>(mutex: &'a StdMutex<T>, state: &'static str) -> MutexGuard<'a, T> {
+        mutex.lock().unwrap_or_else(|poisoned| {
+            warn!(
+                state,
+                "approval state lock poisoned; recovering inner state"
+            );
+            mutex.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
     fn pending_count_for_agent(&self, agent_id: &str) -> usize {
         self.pending
             .iter()
@@ -690,7 +735,7 @@ impl ApprovalManager {
     /// Entries in the `require_approval` list support wildcard patterns
     /// (e.g. `"file_*"` matches `"file_read"`, `"file_write"`, etc.).
     pub fn requires_approval(&self, tool_name: &str) -> bool {
-        let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+        let policy = self.read_policy();
         policy
             .require_approval
             .iter()
@@ -728,7 +773,7 @@ impl ApprovalManager {
         sender_id: Option<&str>,
         channel: Option<&str>,
     ) -> bool {
-        let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+        let policy = self.read_policy();
 
         // Trusted senders bypass channel deny rules ONLY for non-high-risk
         // tools. A channel deny on a Critical/High tool (shell_exec,
@@ -796,7 +841,7 @@ impl ApprovalManager {
         sender_id: Option<&str>,
         channel: Option<&str>,
     ) -> bool {
-        let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+        let policy = self.read_policy();
 
         // Trusted sender bypass: auto-approve low-risk tools only. High-risk
         // tools (Critical/High per `classify_risk` — shell_exec, file_write,
@@ -843,12 +888,7 @@ impl ApprovalManager {
     /// a timeout re-inserts the request with bumped `escalation_count` so the caller
     /// can re-notify and re-call this method.
     pub async fn request_approval(&self, req: ApprovalRequest) -> ApprovalDecision {
-        let fallback = self
-            .policy
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .timeout_fallback
-            .clone();
+        let fallback = self.read_policy().timeout_fallback.clone();
         let mut current_req = req;
 
         loop {
@@ -944,6 +984,20 @@ impl ApprovalManager {
             return Err("Duplicate approval request already pending".to_string());
         }
 
+        self.insert_pending_request(req, Some(deferred))
+    }
+
+    /// Register a manually-created approval without blocking for its eventual decision.
+    /// Unlike [`Self::request_approval`], successful return means the request is already visible in the pending queue.
+    pub fn submit_manual_request(&self, req: ApprovalRequest) -> Result<uuid::Uuid, String> {
+        self.insert_pending_request(req, None)
+    }
+
+    fn insert_pending_request(
+        &self,
+        req: ApprovalRequest,
+        deferred: Option<DeferredToolExecution>,
+    ) -> Result<uuid::Uuid, String> {
         // Per-agent pending limit
         let agent_pending_count = self.pending_count_for_agent(&req.agent_id);
         if agent_pending_count >= MAX_PENDING_PER_AGENT {
@@ -952,14 +1006,14 @@ impl ApprovalManager {
 
         let id = req.id;
         // Persist before inserting so the entry survives a daemon restart (issue #3611).
-        self.db_insert_pending(&req, Some(&deferred));
+        self.db_insert_pending(&req, deferred.as_ref());
         let req_for_event = req.clone();
         self.pending.insert(
             id,
             PendingRequest {
                 request: req,
                 sender: None,
-                deferred: Some(deferred),
+                deferred,
                 submitted_at: chrono::Utc::now(),
             },
         );
@@ -984,7 +1038,7 @@ impl ApprovalManager {
         let mut escalated = Vec::new();
         let mut expired = Vec::new();
         let fallback = {
-            let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+            let policy = self.read_policy();
             policy.timeout_fallback.clone()
         };
 
@@ -1072,15 +1126,15 @@ impl ApprovalManager {
     ///   next success or on lockout expiry inside `record_totp_failure`.
     fn gc_expired_totp_entries(&self) {
         let grace_secs = {
-            let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+            let policy = self.read_policy();
             policy.totp_grace_period_secs
         };
         {
-            let mut grace = self.totp_grace.lock().unwrap_or_else(|e| e.into_inner());
+            let mut grace = Self::lock_state(&self.totp_grace, "totp_grace");
             grace.retain(|_, last| grace_secs > 0 && last.elapsed().as_secs() < grace_secs);
         }
         {
-            let mut failures = self.totp_failures.lock().unwrap_or_else(|e| e.into_inner());
+            let mut failures = Self::lock_state(&self.totp_failures, "totp_failures");
             failures.retain(|_, (_, lockout_start)| match lockout_start {
                 Some(started) => started.elapsed().as_secs() < TOTP_LOCKOUT_SECS,
                 None => true,
@@ -1108,10 +1162,55 @@ impl ApprovalManager {
         totp_verified: bool,
         user_id: Option<&str>,
     ) -> Result<(ApprovalResponse, Option<DeferredToolExecution>), String> {
+        let (response, deferred) = self.resolve_inner(
+            request_id,
+            decision,
+            decided_by,
+            totp_verified,
+            user_id,
+            || Ok(()),
+        )?;
+        Ok((response, deferred.map(|(deferred, ())| deferred)))
+    }
+
+    /// Resolve a request after acquiring the resource required to resume deferred work.
+    ///
+    /// `preflight` runs only for a pending request with a deferred payload. It runs
+    /// while that pending entry is still locked and before it is removed, so a
+    /// failed preflight leaves the approval retryable. The acquired resource is
+    /// returned alongside the deferred payload.
+    pub(crate) fn resolve_with_deferred_preflight<T>(
+        &self,
+        request_id: Uuid,
+        decision: ApprovalDecision,
+        decided_by: Option<String>,
+        totp_verified: bool,
+        user_id: Option<&str>,
+        preflight: impl FnOnce() -> Result<T, String>,
+    ) -> Result<(ApprovalResponse, Option<(DeferredToolExecution, T)>), String> {
+        self.resolve_inner(
+            request_id,
+            decision,
+            decided_by,
+            totp_verified,
+            user_id,
+            preflight,
+        )
+    }
+
+    fn resolve_inner<T>(
+        &self,
+        request_id: Uuid,
+        decision: ApprovalDecision,
+        decided_by: Option<String>,
+        totp_verified: bool,
+        user_id: Option<&str>,
+        preflight: impl FnOnce() -> Result<T, String>,
+    ) -> Result<(ApprovalResponse, Option<(DeferredToolExecution, T)>), String> {
         // Read policy once and hold the snapshot for both the gate check and
         // the grace-period recording below, avoiding a hot-reload race between
         // two separate lock acquisitions.
-        let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+        let policy = self.read_policy();
 
         // TOTP gate: only enforced on Approved decisions.
         // Peek at the pending request to get the tool_name for per-tool checks.
@@ -1129,8 +1228,14 @@ impl ApprovalManager {
             }
         }
 
-        match self.pending.remove(&request_id) {
-            Some((_, pending)) => {
+        match self.pending.entry(request_id) {
+            Entry::Occupied(entry) => {
+                let deferred_resource = if entry.get().deferred.is_some() {
+                    Some(preflight()?)
+                } else {
+                    None
+                };
+                let pending = entry.remove();
                 // Remove from persistent store now that it is resolved (issue #3611).
                 self.db_delete_pending(request_id);
 
@@ -1197,12 +1302,12 @@ impl ApprovalManager {
                 if let Some(sender) = pending.sender {
                     let _ = sender.send(decision);
                 }
-                Ok((response, pending.deferred))
+                Ok((response, pending.deferred.zip(deferred_resource)))
             }
-            None => {
+            Entry::Vacant(_) => {
                 // Not pending. Distinguish "already resolved" (→ 409 at the api boundary) from "never existed / long expired" (→ 404).
                 // Check the in-memory `recent` ring first for the fast path, then fall back to the durable audit log so the answer stays stable after `recent` evicts the entry or the daemon restarts (issue #6492 Bug 3).
-                let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+                let recent = Self::lock_state(&self.recent, "recent");
                 let handler_info = recent.iter().find(|r| r.request.id == request_id).map(|r| {
                     let who = r.decided_by.as_deref().unwrap_or("unknown");
                     let decision = r.decision.as_str();
@@ -1242,19 +1347,14 @@ impl ApprovalManager {
 
     /// Resolve all pending requests belonging to a specific session.
     ///
-    /// This mirrors Hermes-Agent's `resolve_gateway_approval(session_key,
-    /// choice, resolve_all=True)`: every request whose `session_id` matches
-    /// is resolved atomically with the given decision.
+    /// This mirrors Hermes-Agent's `resolve_gateway_approval(session_key, choice, resolve_all=True)`: every request whose `session_id` matches is attempted with the given decision.
+    /// Resolution is best-effort rather than transactional; concurrent changes and per-item errors are skipped.
     ///
-    /// Returns the number of requests resolved (0 if the session had nothing
-    /// pending).  This method does NOT spawn handle_approval_resolution for
-    /// deferred payloads — callers that need deferred execution handling should
-    /// use resolve_tool_approval (kernel) in a loop instead.
+    /// Returns the number of requests resolved (0 if the session had nothing pending).
+    /// This method does NOT spawn handle_approval_resolution for deferred payloads — callers that need deferred execution handling should use resolve_tool_approval (kernel) in a loop instead.
     ///
-    /// TOTP is not enforced here: resolve() is called with totp_verified=false,
-    /// so TOTP-required requests will return Err and not be counted.  Callers
-    /// who want TOTP pre-enforcement should check policy.tool_requires_totp()
-    /// before calling this method.
+    /// TOTP is not enforced here: resolve() is called with totp_verified=false, so TOTP-required requests will return Err and not be counted.
+    /// Callers who want TOTP pre-enforcement should check policy.tool_requires_totp() before calling this method.
     pub fn resolve_all_for_session(
         &self,
         session_id: &str,
@@ -1335,7 +1435,7 @@ impl ApprovalManager {
 
     /// List recent non-pending approvals, newest first.
     pub fn list_recent(&self, limit: usize) -> Vec<ApprovalRecord> {
-        let recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+        let recent = Self::lock_state(&self.recent, "recent");
         recent.iter().take(limit).cloned().collect()
     }
 
@@ -1356,13 +1456,11 @@ impl ApprovalManager {
         offset: usize,
         agent_id: Option<&str>,
         tool_name: Option<&str>,
-    ) -> Vec<ApprovalAuditEntry> {
+    ) -> LibreFangResult<Vec<ApprovalAuditEntry>> {
         let Some(db) = &self.audit_db else {
-            return Vec::new();
+            return Ok(Vec::new());
         };
-        let Ok(conn) = db.get() else {
-            return Vec::new();
-        };
+        let conn = db.get().map_err(LibreFangError::memory)?;
 
         let mut sql = String::from(
             "SELECT id, request_id, agent_id, tool_name, description, action_summary, risk_level, decision, decided_by, decided_at, requested_at, feedback, COALESCE(second_factor_used, 0) FROM approval_audit WHERE 1=1",
@@ -1384,9 +1482,7 @@ impl ApprovalManager {
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
 
-        let Ok(mut stmt) = conn.prepare(&sql) else {
-            return Vec::new();
-        };
+        let mut stmt = conn.prepare(&sql).map_err(LibreFangError::memory)?;
         let rows = stmt.query_map(param_refs.as_slice(), |row| {
             Ok(ApprovalAuditEntry {
                 id: row.get(0)?,
@@ -1404,20 +1500,21 @@ impl ApprovalManager {
                 second_factor_used: row.get::<_, bool>(12).unwrap_or(false),
             })
         });
-        match rows {
-            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
-            Err(_) => Vec::new(),
-        }
+        let rows = rows.map_err(LibreFangError::memory)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(LibreFangError::memory)
     }
 
     /// Count total audit entries (with optional filters).
-    pub fn audit_count(&self, agent_id: Option<&str>, tool_name: Option<&str>) -> usize {
+    pub fn audit_count(
+        &self,
+        agent_id: Option<&str>,
+        tool_name: Option<&str>,
+    ) -> LibreFangResult<usize> {
         let Some(db) = &self.audit_db else {
-            return 0;
+            return Ok(0);
         };
-        let Ok(conn) = db.get() else {
-            return 0;
-        };
+        let conn = db.get().map_err(LibreFangError::memory)?;
 
         let mut sql = String::from("SELECT COUNT(*) FROM approval_audit WHERE 1=1");
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -1434,8 +1531,12 @@ impl ApprovalManager {
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
 
-        conn.query_row(&sql, param_refs.as_slice(), |row| row.get::<_, i64>(0))
-            .unwrap_or(0) as usize
+        let count = conn
+            .query_row(&sql, param_refs.as_slice(), |row| row.get::<_, i64>(0))
+            .map_err(LibreFangError::memory)?;
+        usize::try_from(count).map_err(|_| {
+            LibreFangError::memory_msg(format!("invalid approval audit count: {count}"))
+        })
     }
 
     /// Hard-delete `approval_audit` rows whose `decided_at` is older than
@@ -1477,15 +1578,12 @@ impl ApprovalManager {
     pub fn update_policy(&self, mut policy: ApprovalPolicy) {
         // Apply the `auto_approve` shorthand on the reload path too (#6492 Bug 1) so a `POST /api/config/reload` that flips `auto_approve = true` takes effect, mirroring the boot-time normalization in `new_with_db`.
         policy.apply_shorthands();
-        *self.policy.write().unwrap_or_else(|e| e.into_inner()) = policy;
+        *self.write_policy() = policy;
     }
 
     /// Get a copy of the current policy.
     pub fn policy(&self) -> ApprovalPolicy {
-        self.policy
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.read_policy().clone()
     }
 
     /// Classify the risk level of a tool invocation.
@@ -1532,7 +1630,7 @@ impl ApprovalManager {
 
     /// Check whether the current policy requires TOTP verification.
     pub fn requires_totp(&self) -> bool {
-        let policy = self.policy.read().unwrap_or_else(|e| e.into_inner());
+        let policy = self.read_policy();
         policy.second_factor == SecondFactor::Totp
     }
 
@@ -1567,21 +1665,18 @@ impl ApprovalManager {
         code: &str,
         issuer: &str,
     ) -> Result<bool, String> {
-        let secret = Secret::Encoded(secret_base32.to_string());
-        let raw = secret
-            .to_bytes()
+        let secret = Secret::try_from_base32(secret_base32)
             .map_err(|e| format!("Invalid TOTP secret: {e}"))?;
-        let totp = TOTP::new(
-            Algorithm::SHA1,
-            6,
-            TOTP_SKEW_STEPS,
-            TOTP_STEP_SECS,
-            raw,
-            Some(issuer.to_string()),
-            String::new(),
-        )
-        .map_err(|e| format!("TOTP init error: {e}"))?;
-        Ok(totp.check_current(code).unwrap_or(false))
+        let totp = TotpBuilder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_skew(TOTP_SKEW_STEPS as u16)
+            .with_step_duration(TOTP_STEP_SECS)
+            .with_secret(secret)
+            .with_issuer(Some(issuer.to_string()))
+            .build()
+            .map_err(|e| format!("TOTP init error: {e}"))?;
+        // `check_current` now returns the matched skew step (`Option<u64>`) instead of a bare bool (totp-rs 6.0 changed this so callers can enforce single-use-per-step themselves); this call site only needs pass/fail, and single-use enforcement already lives in the replay-claim table (see `claim_totp_code_used_for`).
+        Ok(totp.check_current(code).is_some())
     }
 
     /// Instance wrapper around [`Self::verify_totp_code_with_issuer`].
@@ -1627,24 +1722,20 @@ impl ApprovalManager {
         issuer: &str,
         account: &str,
     ) -> Result<(String, String, String), String> {
-        let secret = Secret::generate_secret();
-        let base32 = secret.to_encoded().to_string();
-        let raw = secret
-            .to_bytes()
-            .map_err(|e| format!("Secret encoding error: {e}"))?;
-        let totp = TOTP::new(
-            Algorithm::SHA1,
-            6,
-            1,
-            30,
-            raw,
-            Some(issuer.to_string()),
-            account.to_string(),
-        )
-        .map_err(|e| format!("TOTP init error: {e}"))?;
-        let uri = totp.get_url();
+        let secret = Secret::generate();
+        let base32 = secret.to_base32();
+        let totp = TotpBuilder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_skew(1)
+            .with_step_duration(30)
+            .with_secret(secret)
+            .with_issuer(Some(issuer.to_string()))
+            .with_account_name(account.to_string())
+            .build()
+            .map_err(|e| format!("TOTP init error: {e}"))?;
+        let uri = totp.to_url().map_err(|e| format!("TOTP URL error: {e}"))?;
         let qr_b64 = totp
-            .get_qr_base64()
+            .to_qr_base64()
             .map_err(|e| format!("QR generation error: {e}"))?;
         Ok((base32, uri, qr_b64))
     }
@@ -1767,7 +1858,7 @@ impl ApprovalManager {
         if policy.totp_grace_period_secs == 0 {
             return false;
         }
-        let grace = self.totp_grace.lock().unwrap_or_else(|e| e.into_inner());
+        let grace = Self::lock_state(&self.totp_grace, "totp_grace");
         grace
             .get(sender_id)
             .is_some_and(|last| last.elapsed().as_secs() < policy.totp_grace_period_secs)
@@ -1775,10 +1866,10 @@ impl ApprovalManager {
 
     /// Record a successful TOTP verification for grace period tracking.
     fn record_totp_grace(&self, sender_id: &str) {
-        let mut grace = self.totp_grace.lock().unwrap_or_else(|e| e.into_inner());
+        let mut grace = Self::lock_state(&self.totp_grace, "totp_grace");
         grace.insert(sender_id.to_string(), Instant::now());
         // Clear failure counter on success
-        let mut failures = self.totp_failures.lock().unwrap_or_else(|e| e.into_inner());
+        let mut failures = Self::lock_state(&self.totp_failures, "totp_failures");
         failures.remove(sender_id);
         drop(failures);
         self.persist_totp_lockout_clear(sender_id);
@@ -1786,7 +1877,7 @@ impl ApprovalManager {
 
     /// Check if a sender is locked out due to too many TOTP failures.
     pub fn is_totp_locked_out(&self, sender_id: &str) -> bool {
-        let failures = self.totp_failures.lock().unwrap_or_else(|e| e.into_inner());
+        let failures = Self::lock_state(&self.totp_failures, "totp_failures");
         if let Some((count, lockout_start)) = failures.get(sender_id) {
             if *count >= TOTP_MAX_FAILURES {
                 // Locked out if within lockout window (measured from when threshold was reached)
@@ -1807,7 +1898,7 @@ impl ApprovalManager {
     /// course is to deny the request (fail-secure, fix for #3372 / #3584).
     #[allow(clippy::result_unit_err)]
     pub fn record_totp_failure(&self, sender_id: &str) -> Result<(), ()> {
-        let mut failures = self.totp_failures.lock().unwrap_or_else(|e| e.into_inner());
+        let mut failures = Self::lock_state(&self.totp_failures, "totp_failures");
         let entry = failures.entry(sender_id.to_string()).or_insert((0, None));
         // Reset counter if lockout window expired
         if entry
@@ -1855,14 +1946,11 @@ impl ApprovalManager {
     pub fn check_and_record_totp_failure(&self, sender_id: &str) -> Result<(), bool> {
         // Hold failure_rw_mutex across check+record to prevent concurrent requests
         // from both passing the lockout check when the counter is at threshold-1.
-        let _guard = self
-            .failure_rw_mutex
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let _guard = Self::lock_state(&self.failure_rw_mutex, "failure_rw_mutex");
 
         // Check lockout under the guard.
         {
-            let failures = self.totp_failures.lock().unwrap_or_else(|e| e.into_inner());
+            let failures = Self::lock_state(&self.totp_failures, "totp_failures");
             if let Some((count, lockout_start)) = failures.get(sender_id) {
                 if *count >= TOTP_MAX_FAILURES {
                     // Defense in depth: if the counter is already at threshold
@@ -1993,7 +2081,8 @@ impl ApprovalManager {
     /// server) cannot be replayed after the record has aged out but while the
     /// code still verifies. Derived as `TOTP_STEP_SECS * (2 * TOTP_SKEW_STEPS + 1)`
     /// so a future skew change stays consistent with `verify_totp_code_with_issuer`.
-    pub fn is_totp_code_used(&self, code: &str) -> bool {
+    #[cfg(test)]
+    fn is_totp_code_used(&self, code: &str) -> bool {
         let hash = Self::totp_code_hash(code);
         let now_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -2026,7 +2115,8 @@ impl ApprovalManager {
     /// Also prunes entries older than the replay window plus one extra step
     /// (120 seconds at the current step/skew) from the table to keep it small,
     /// staying strictly wider than `is_totp_code_used`'s lookup window.
-    pub fn record_totp_code_used(&self, code: &str) {
+    #[cfg(test)]
+    fn record_totp_code_used(&self, code: &str) {
         // Ignore errors for non-action callers (enrollment confirm, revoke) —
         // those flows don't have a structured error path to return a 500.
         let _ = self.record_totp_code_used_for(code, None);
@@ -2045,7 +2135,8 @@ impl ApprovalManager {
     /// Returns `Err` if the DB write fails. Callers that can propagate an HTTP
     /// response MUST treat this as a 500 — a failed write leaves the code out
     /// of the replay-detection table, allowing reuse.
-    pub fn record_totp_code_used_for(
+    #[cfg(test)]
+    fn record_totp_code_used_for(
         &self,
         code: &str,
         bound_to: Option<&str>,
@@ -2086,6 +2177,54 @@ impl ApprovalManager {
             rusqlite::params![prune_before],
         );
         Ok(())
+    }
+
+    /// Atomically claim a verified TOTP code for one action.
+    ///
+    /// The conditional UPSERT is the serialization point: a live row is left unchanged (zero affected rows), while a missing or expired row is written (one affected row).
+    /// This remains correct across async tasks and multiple daemon processes sharing the same SQLite database, unlike a process-local check-then-record mutex.
+    pub fn claim_totp_code_used_for(
+        &self,
+        code: &str,
+        bound_to: Option<&str>,
+    ) -> Result<TotpCodeClaim, String> {
+        let Some(db) = &self.audit_db else {
+            return Ok(TotpCodeClaim::Claimed);
+        };
+        let conn = db
+            .get()
+            .map_err(|error| format!("failed to acquire TOTP replay database: {error}"))?;
+        let hash = Self::totp_code_hash(code);
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let replay_window_secs = TOTP_STEP_SECS as i64 * (2 * TOTP_SKEW_STEPS as i64 + 1);
+        let window_start = now_unix - replay_window_secs;
+        let changed = conn
+            .execute(
+                "INSERT INTO totp_used_codes (code_hash, used_at, bound_to)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(code_hash) DO UPDATE SET
+                     used_at  = excluded.used_at,
+                     bound_to = excluded.bound_to
+                 WHERE totp_used_codes.used_at < ?4",
+                rusqlite::params![hash, now_unix, bound_to, window_start],
+            )
+            .map_err(|error| format!("failed to persist TOTP used-code record: {error}"))?;
+
+        if changed == 0 {
+            return Ok(TotpCodeClaim::AlreadyUsed);
+        }
+
+        let prune_before = now_unix - (replay_window_secs + TOTP_STEP_SECS as i64);
+        if let Err(error) = conn.execute(
+            "DELETE FROM totp_used_codes WHERE used_at < ?1",
+            rusqlite::params![prune_before],
+        ) {
+            warn!(error = %error, "Failed to prune expired TOTP replay records");
+        }
+        Ok(TotpCodeClaim::Claimed)
     }
 
     /// SHA-256 hex of an OIDC state nonce.  We only persist the hash so
@@ -2213,7 +2352,7 @@ impl ApprovalManager {
         };
         self.audit_log_write(&entry);
 
-        let mut recent = self.recent.lock().unwrap_or_else(|e| e.into_inner());
+        let mut recent = Self::lock_state(&self.recent, "recent");
         recent.push_front(ApprovalRecord {
             request,
             decision,
@@ -2263,6 +2402,53 @@ mod tests {
 
     fn default_manager() -> ApprovalManager {
         ApprovalManager::new(ApprovalPolicy::default())
+    }
+
+    #[test]
+    fn poisoned_approval_state_locks_recover_and_remain_usable() {
+        let manager = ApprovalManager::new(ApprovalPolicy::default());
+
+        let policy_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut policy = manager.policy.write().unwrap();
+                    policy.require_approval.clear();
+                    panic!("poison approval policy lock");
+                })
+                .join()
+        });
+        assert!(policy_poison.is_err());
+        assert!(manager.policy.is_poisoned());
+        assert!(manager.policy().require_approval.is_empty());
+        assert!(!manager.policy.is_poisoned());
+
+        let policy_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _policy = manager.policy.write().unwrap();
+                    panic!("poison approval policy before write recovery");
+                })
+                .join()
+        });
+        assert!(policy_poison.is_err());
+        assert!(manager.policy.is_poisoned());
+
+        manager.update_policy(ApprovalPolicy::default());
+        assert!(!manager.policy.is_poisoned());
+        assert!(!manager.policy().require_approval.is_empty());
+
+        let recent_poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _recent = manager.recent.lock().unwrap();
+                    panic!("poison recent approvals lock");
+                })
+                .join()
+        });
+        assert!(recent_poison.is_err());
+        assert!(manager.recent.is_poisoned());
+        assert!(manager.list_recent(1).is_empty());
+        assert!(!manager.recent.is_poisoned());
     }
 
     fn make_deferred(agent_id: &str) -> DeferredToolExecution {
@@ -3700,19 +3886,17 @@ mod tests {
         assert!(uri.contains("LibreFang"));
 
         // 2. Generate a valid code from the secret
-        let totp_secret = Secret::Encoded(secret.clone());
-        let raw = totp_secret.to_bytes().unwrap();
-        let totp = TOTP::new(
-            Algorithm::SHA1,
-            6,
-            1,
-            30,
-            raw,
-            Some("LibreFang".to_string()),
-            "test".to_string(),
-        )
-        .unwrap();
-        let valid_code = totp.generate_current().unwrap();
+        let totp_secret = Secret::try_from_base32(&secret).unwrap();
+        let totp = TotpBuilder::new()
+            .with_algorithm(Algorithm::SHA1)
+            .with_skew(1)
+            .with_step_duration(30)
+            .with_secret(totp_secret)
+            .with_issuer(Some("LibreFang".to_string()))
+            .with_account_name("test".to_string())
+            .build()
+            .unwrap();
+        let valid_code = totp.generate_current().to_string();
 
         // 3. Verify the code against our verify function
         assert!(ApprovalManager::verify_totp_code(&secret, &valid_code).unwrap());
@@ -3863,6 +4047,43 @@ mod tests {
         ApprovalManager::new_with_db(ApprovalPolicy::default(), pool)
     }
 
+    #[test]
+    fn approval_audit_queries_surface_storage_errors() {
+        let manager = make_manager_with_db();
+        manager
+            .audit_db
+            .as_ref()
+            .unwrap()
+            .get()
+            .unwrap()
+            .execute("DROP TABLE approval_audit", [])
+            .unwrap();
+
+        assert!(manager.query_audit(50, 0, None, None).is_err());
+        assert!(manager.audit_count(None, None).is_err());
+    }
+
+    #[test]
+    fn approval_audit_query_does_not_silently_drop_corrupt_rows() {
+        let manager = make_manager_with_db();
+        manager
+            .audit_db
+            .as_ref()
+            .unwrap()
+            .get()
+            .unwrap()
+            .execute(
+                "INSERT INTO approval_audit \
+                 (id, request_id, agent_id, tool_name, decision, decided_at, requested_at) \
+                 VALUES ('audit-corrupt', 'request-corrupt', X'00', 'shell_exec', \
+                         'approved', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                [],
+            )
+            .unwrap();
+
+        assert!(manager.query_audit(50, 0, None, None).is_err());
+    }
+
     // -----------------------------------------------------------------------
     // #6492 Bug 1 — `auto_approve` shorthand is applied when a policy is installed (not just in a unit test that manually calls apply_shorthands)
     // -----------------------------------------------------------------------
@@ -3978,7 +4199,7 @@ mod tests {
         )
         .expect("first resolve succeeds");
         // Simulate the 100-slot ring buffer aging the entry out.
-        mgr.recent.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        ApprovalManager::lock_state(&mgr.recent, "recent").clear();
         let err = mgr
             .resolve(
                 id,
@@ -4047,6 +4268,89 @@ mod tests {
         mgr.record_totp_code_used("123456");
         // A different code must not be blocked.
         assert!(!mgr.is_totp_code_used("654321"));
+    }
+
+    /// The replay table is the cross-task/process serialization point: even when many workers race with the same valid code, exactly one claim may authorize an action.
+    #[test]
+    fn concurrent_totp_claim_has_exactly_one_winner() {
+        use std::sync::Barrier;
+        use std::thread;
+
+        let workers = 16;
+        let manager = Arc::new(make_manager_with_db());
+        let barrier = Arc::new(Barrier::new(workers));
+        let handles: Vec<_> = (0..workers)
+            .map(|index| {
+                let manager = Arc::clone(&manager);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    manager
+                        .claim_totp_code_used_for("246810", Some(&format!("approval:{index}")))
+                        .expect("claim query")
+                })
+            })
+            .collect();
+
+        let outcomes: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("claim worker"))
+            .collect();
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|outcome| matches!(outcome, TotpCodeClaim::Claimed))
+                .count(),
+            1
+        );
+        assert_eq!(
+            outcomes
+                .iter()
+                .filter(|outcome| matches!(outcome, TotpCodeClaim::AlreadyUsed))
+                .count(),
+            workers - 1
+        );
+    }
+
+    #[test]
+    fn totp_claim_rejects_live_record_and_refreshes_expired_record() {
+        let manager = make_manager_with_db();
+        let now_unix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let insert_record = |code: &str, age_secs: i64| {
+            manager
+                .audit_db
+                .as_ref()
+                .unwrap()
+                .get()
+                .unwrap()
+                .execute(
+                    "INSERT INTO totp_used_codes (code_hash, used_at, bound_to)
+                     VALUES (?1, ?2, NULL)",
+                    rusqlite::params![ApprovalManager::totp_code_hash(code), now_unix - age_secs],
+                )
+                .unwrap();
+        };
+
+        insert_record("111222", 75);
+        assert_eq!(
+            manager
+                .claim_totp_code_used_for("111222", Some("live"))
+                .unwrap(),
+            TotpCodeClaim::AlreadyUsed,
+            "75 seconds remains inside the 90-second skew-aware replay window"
+        );
+
+        insert_record("333444", 100);
+        assert_eq!(
+            manager
+                .claim_totp_code_used_for("333444", Some("refreshed"))
+                .unwrap(),
+            TotpCodeClaim::Claimed,
+            "an expired hash must not permanently ban a future repeated code value"
+        );
     }
 
     #[test]
@@ -4156,13 +4460,13 @@ mod tests {
         );
     }
 
-    /// `record_totp_code_used_for` MUST surface a DB write failure as `Err`,
+    /// The atomic claim MUST surface a DB write failure as `Err`,
     /// not swallow it as `Ok`. A silent failure leaves the code out of the
     /// replay-detection table, letting an attacker reuse the same code
     /// immediately. Simulate the failure by dropping the underlying table
     /// out from under the manager (e.g. a corrupted/mis-migrated audit DB).
     #[test]
-    fn record_totp_code_used_for_surfaces_db_failure() {
+    fn atomic_totp_claim_surfaces_db_failure() {
         let pool = Pool::builder()
             .max_size(1)
             .build(SqliteConnectionManager::memory())
@@ -4178,7 +4482,7 @@ mod tests {
             .execute("DROP TABLE totp_used_codes", [])
             .unwrap();
 
-        mgr.record_totp_code_used_for("999111", Some("approval:abc"))
+        mgr.claim_totp_code_used_for("999111", Some("approval:abc"))
             .expect_err("DB write must surface as Err so the caller can return 500");
     }
 
@@ -4468,7 +4772,7 @@ mod tests {
         let request_id = mgr.submit_request(req, deferred).unwrap();
 
         // Audit row exists with `pending` decision before any resolve.
-        let audit = mgr.query_audit(50, 0, Some("agent-3611"), None);
+        let audit = mgr.query_audit(50, 0, Some("agent-3611"), None).unwrap();
         assert!(
             audit
                 .iter()

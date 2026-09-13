@@ -68,6 +68,13 @@ export interface Translation {
     reqItems: string[]
     incItems: string[]
   }
+  downloads?: {
+    title: string
+    desc: string
+    onlineDeploy: string
+    allReleases: string
+    sdk: string
+  }
   faq: {
     label: string
     title: string
@@ -96,6 +103,14 @@ export interface Translation {
     desc: string
     categories: { title: string; desc: string }[]
     viewAll: string
+  }
+  partner?: {
+    eyebrow: string
+    title: string
+    desc: string
+    capabilityRuntime: string
+    capabilityGateway: string
+    cta: string
   }
   githubStats?: {
     label: string
@@ -308,7 +323,7 @@ export interface Translation {
     releaseTypes: Record<'stable' | 'rc' | 'beta', string>
     changeTypes: Record<'feature' | 'fix' | 'breaking' | 'performance' | 'other', string>
   }
-  footer: { docs: string; license: string; privacy: string; changelog: string }
+  footer: { docs: string; license: string; privacy: string; changelog: string; everyapi?: string }
 }
 
 export const languages: Language[] = [
@@ -327,6 +342,13 @@ export const rawTranslations: Record<string, Translation> = {
 
   pl: {
     nav: { architecture: 'Architektura', hands: 'Ręce', performance: 'Wydajność', install: 'Instalacja', downloads: 'Pobieranie', docs: 'Dokumentacja', features: 'Rynek', evolution: 'Samodoskonalenie Umiejętności', workflows: 'Przepływy Pracy', registry: 'Rejestr', learnMore: 'Funkcje' },
+    downloads: {
+      title: 'Pobieranie',
+      desc: 'Aplikacja komputerowa, pliki binarne CLI i opcje wdrażania.',
+      onlineDeploy: 'Wdrożenie jednym kliknięciem',
+      allReleases: 'Wszystkie wydania',
+      sdk: 'SDK i pakiety',
+    },
     hero: {
       badge: 'Open Source',
       title1: 'Agentowy',
@@ -834,6 +856,13 @@ export const rawTranslations: Record<string, Translation> = {
   },
   en: {
     nav: { architecture: 'Architecture', hands: 'Hands', performance: 'Performance', install: 'Install', downloads: 'Downloads', docs: 'Docs', features: 'Marketplace', evolution: 'Skills Self-Evolution', workflows: 'Workflows', registry: 'Registry', learnMore: 'Features' },
+    downloads: {
+      title: 'Downloads',
+      desc: 'Desktop app, CLI binaries, and deployment options.',
+      onlineDeploy: 'One-Click Deploy',
+      allReleases: 'All Releases',
+      sdk: 'SDK & Packages',
+    },
     hero: {
       badge: 'Open Source',
       title1: 'The Agent',
@@ -1264,11 +1293,26 @@ export const rawTranslations: Record<string, Translation> = {
         other: 'Other',
       },
     },
-    footer: { docs: 'Docs', license: 'License', privacy: 'Privacy', changelog: 'Changelog' },
+    partner: {
+      eyebrow: 'Official integration partner',
+      title: 'LibreFang × EveryAPI',
+      desc: 'LibreFang runs the agents. EveryAPI connects them to a managed model gateway, live catalog, pricing, and account tools.',
+      capabilityRuntime: 'Agent OS',
+      capabilityGateway: 'Unified AI infrastructure',
+      cta: 'Explore the integration',
+    },
+    footer: { docs: 'Docs', license: 'License', privacy: 'Privacy', changelog: 'Changelog', everyapi: 'EveryAPI partner' },
   },
 
   zh: {
     nav: { architecture: '架构', hands: '能力单元', performance: '性能', install: '安装', downloads: '下载', docs: '文档', features: '市场', evolution: '技能自我进化', workflows: '工作流', registry: '注册表', learnMore: '功能' },
+    downloads: {
+      title: '下载',
+      desc: '桌面应用、CLI 二进制文件和部署选项。',
+      onlineDeploy: '一键部署',
+      allReleases: '所有版本',
+      sdk: 'SDK 和包',
+    },
     hero: {
       badge: '开源',
       title1: 'Agent',
@@ -1746,11 +1790,26 @@ export const rawTranslations: Record<string, Translation> = {
         other: '其他',
       },
     },
-    footer: { docs: '文档', license: '许可证', privacy: '隐私', changelog: '更新日志' },
+    partner: {
+      eyebrow: '官方集成伙伴',
+      title: 'LibreFang × EveryAPI',
+      desc: 'LibreFang 负责运行 Agent；EveryAPI 提供托管模型网关、实时目录、价格与账户工具。',
+      capabilityRuntime: 'Agent OS',
+      capabilityGateway: '统一 AI 基础设施',
+      cta: '查看联合集成',
+    },
+    footer: { docs: '文档', license: '许可证', privacy: '隐私', changelog: '更新日志', everyapi: 'EveryAPI 合作伙伴' },
   },
 
   'zh-TW': {
     nav: { architecture: '架構', hands: '能力單元', performance: '效能', install: '安裝', downloads: '下載', docs: '文件', features: '市場', evolution: '技能自我進化', workflows: '工作流', registry: '註冊表', learnMore: '功能' },
+    downloads: {
+      title: '下載',
+      desc: '桌面應用、CLI 二進位檔和部署選項。',
+      onlineDeploy: '一鍵部署',
+      allReleases: '所有版本',
+      sdk: 'SDK 和套件',
+    },
     hero: {
       badge: '開源',
       title1: 'Agent',
@@ -2233,6 +2292,13 @@ export const rawTranslations: Record<string, Translation> = {
 
   ja: {
     nav: { architecture: 'アーキテクチャ', hands: 'Hands', performance: 'パフォーマンス', install: 'インストール', downloads: 'ダウンロード', docs: 'ドキュメント', features: 'マーケットプレイス', evolution: 'スキル自己進化', workflows: 'ワークフロー', registry: 'レジストリ', learnMore: '機能' },
+    downloads: {
+      title: 'ダウンロード',
+      desc: 'デスクトップアプリ、CLIバイナリ、デプロイオプション。',
+      onlineDeploy: 'ワンクリックデプロイ',
+      allReleases: '全リリース',
+      sdk: 'SDK & パッケージ',
+    },
     hero: {
       badge: 'オープンソース',
       title1: 'Agent',
@@ -2715,6 +2781,13 @@ export const rawTranslations: Record<string, Translation> = {
 
   ko: {
     nav: { architecture: '아키텍처', hands: 'Hands', performance: '성능', install: '설치', downloads: '다운로드', docs: '문서', features: '마켓플레이스', evolution: '스킬 자가 진화', workflows: '워크플로우', registry: '레지스트리', learnMore: '기능' },
+    downloads: {
+      title: '다운로드',
+      desc: '데스크톱 앱, CLI 바이너리, 배포 옵션.',
+      onlineDeploy: '원클릭 배포',
+      allReleases: '모든 릴리스',
+      sdk: 'SDK & 패키지',
+    },
     hero: {
       badge: '오픈소스',
       title1: 'Agent',
@@ -3197,6 +3270,13 @@ export const rawTranslations: Record<string, Translation> = {
 
   de: {
     nav: { architecture: 'Architektur', hands: 'Hands', performance: 'Leistung', install: 'Installation', downloads: 'Downloads', docs: 'Dokumentation', features: 'Marktplatz', evolution: 'Skill-Selbstentwicklung', workflows: 'Workflows', registry: 'Registry', learnMore: 'Funktionen' },
+    downloads: {
+      title: 'Downloads',
+      desc: 'Desktop-App, CLI-Binaries und Deployment-Optionen.',
+      onlineDeploy: 'Ein-Klick-Deploy',
+      allReleases: 'Alle Releases',
+      sdk: 'SDK & Pakete',
+    },
     hero: {
       badge: 'Open Source',
       title1: 'Der Agent',
@@ -3679,6 +3759,13 @@ export const rawTranslations: Record<string, Translation> = {
 
   es: {
     nav: { architecture: 'Arquitectura', hands: 'Hands', performance: 'Rendimiento', install: 'Instalar', downloads: 'Descargas', docs: 'Documentación', features: 'Marketplace', evolution: 'Autoevolución de Skills', workflows: 'Flujos de trabajo', registry: 'Registry', learnMore: 'Funciones' },
+    downloads: {
+      title: 'Descargas',
+      desc: 'App de escritorio, binarios CLI y opciones de despliegue.',
+      onlineDeploy: 'Despliegue en un clic',
+      allReleases: 'Todas las versiones',
+      sdk: 'SDK y paquetes',
+    },
     hero: {
       badge: 'Código Abierto',
       title1: 'El Agente',
@@ -4162,6 +4249,13 @@ export const rawTranslations: Record<string, Translation> = {
 
 rawTranslations.uk = {
   nav: { architecture: 'Архітектура', hands: 'Hands', performance: 'Продуктивність', install: 'Встановлення', downloads: 'Завантаження', docs: 'Документація', features: 'Маркетплейс', evolution: 'Саморозвиток навичок', workflows: 'Робочі процеси', registry: 'Реєстр', learnMore: 'Можливості' },
+  downloads: {
+    title: 'Завантаження',
+    desc: 'Десктопний застосунок, CLI-бінарні файли та варіанти розгортання.',
+    onlineDeploy: 'Розгортання в один клік',
+    allReleases: 'Усі релізи',
+    sdk: 'SDK і пакети',
+  },
   hero: {
     badge: 'Open Source',
     title1: 'Агентна',

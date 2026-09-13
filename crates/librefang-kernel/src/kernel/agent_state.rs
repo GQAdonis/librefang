@@ -11,9 +11,129 @@
 //! `LibreFangKernel`'s private fields and inherent methods without any
 //! visibility surgery.
 
+use super::subsystems::McpSubsystemApi;
 use super::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct McpServersDocument {
+    #[serde(default)]
+    mcp_servers: Option<toml::Spanned<Vec<String>>>,
+}
+
+#[derive(Serialize)]
+struct McpServersValue<'a> {
+    mcp_servers: &'a [String],
+}
+
+fn patch_mcp_servers(source: &str, servers: &[String]) -> Result<String, String> {
+    toml::from_str::<AgentManifest>(source)
+        .map_err(|error| format!("existing agent.toml is invalid: {error}"))?;
+    let document: McpServersDocument = toml::from_str(source)
+        .map_err(|error| format!("failed to locate mcp_servers in agent.toml: {error}"))?;
+    let replacement = toml::to_string(&McpServersValue {
+        mcp_servers: servers,
+    })
+    .map_err(|error| format!("failed to serialize mcp_servers: {error}"))?;
+    let replacement_document: McpServersDocument = toml::from_str(&replacement)
+        .map_err(|error| format!("failed to locate serialized mcp_servers: {error}"))?;
+    let replacement_span = replacement_document
+        .mcp_servers
+        .ok_or_else(|| "serialized mcp_servers field is missing".to_string())?
+        .span();
+    let replacement_value = &replacement[replacement_span];
+
+    let patched = if let Some(current) = document.mcp_servers {
+        let mut patched = source.to_string();
+        patched.replace_range(current.span(), replacement_value);
+        patched
+    } else {
+        format!("mcp_servers = {replacement_value}\n{source}")
+    };
+
+    toml::from_str::<AgentManifest>(&patched)
+        .map_err(|error| format!("patched agent.toml is invalid: {error}"))?;
+    Ok(patched)
+}
+
+/// Carry a resolved `exec_policy` from the running registry entry onto a replacement manifest that leaves it unset.
+///
+/// `exec_policy` is normally absent from `agent.toml`.
+/// It is materialized once, when the agent enters the registry, by `spawn_agent_inner`, the boot restore loop, or hand activation — each of which stamps the global `[exec_policy]` when the manifest carries `None`.
+/// Every consumer downstream reads `None` as "no policy declared", not as "deny": `available_tools` strips `shell_exec` only when the mode is explicitly `Deny`, and the runtime's `shell_exec` dispatch runs the deny / allowlist check inside an `if let Some(policy)`.
+/// A manifest replacement that dropped the resolved policy back to `None` therefore handed a `Deny` agent the `shell_exec` tool definition again and skipped the allowlist on every command it ran, self-healing only at the next daemon restart.
+///
+/// Preserving the previous value rather than re-stamping the global config is deliberate.
+/// The three materialization sites disagree on purpose — hand activation inherits the global mode and raises the exec timeouts to their hand floors, where `spawn_agent_inner` promotes to `Full` for an agent that declares `shell_exec` — so recomputing from the global config here would rewrite a hand agent's policy on an unrelated reload.
+/// An operator who wants a different policy writes `[exec_policy]` into `agent.toml`, which wins because it arrives as `Some`.
+fn preserve_resolved_exec_policy(incoming: &mut AgentManifest, current: &AgentManifest) {
+    if incoming.exec_policy.is_none() {
+        incoming.exec_policy = current.exec_policy.clone();
+    }
+}
 
 impl LibreFangKernel {
+    fn agent_manifest_path(
+        &self,
+        entry: &librefang_types::agent::AgentEntry,
+        agent_id: AgentId,
+    ) -> std::path::PathBuf {
+        entry.source_toml_path.clone().unwrap_or_else(|| {
+            // Match `resolve_workspace_dir` by using the agent UUID when the name has no safe path component; the old literal fallback made distinct non-ASCII names overwrite the same manifest (#6442).
+            let safe_name = safe_path_component(&entry.name, &agent_id.to_string());
+            self.config
+                .load()
+                .effective_agent_workspaces_dir()
+                .join(safe_name)
+                .join("agent.toml")
+        })
+    }
+
+    fn manifest_write_lock(&self, path: &std::path::Path) -> std::sync::Arc<std::sync::Mutex<()>> {
+        self.agents
+            .manifest_write_locks
+            .entry(path.to_path_buf())
+            .or_insert_with(|| std::sync::Arc::new(std::sync::Mutex::new(())))
+            .clone()
+    }
+
+    fn persist_full_manifest_at(
+        &self,
+        entry: &librefang_types::agent::AgentEntry,
+        toml_path: &std::path::Path,
+    ) {
+        let Some(dir) = toml_path.parent() else {
+            warn!(agent = %entry.name, "Failed to derive parent dir for manifest persist");
+            return;
+        };
+        match toml::to_string_pretty(&entry.manifest) {
+            Ok(toml_str) => {
+                if let Err(error) = std::fs::create_dir_all(dir) {
+                    warn!(agent = %entry.name, "Failed to create agent dir for manifest persist: {error}");
+                    return;
+                }
+                if let Err(error) = atomic_write_toml(toml_path, &toml_str) {
+                    warn!(agent = %entry.name, "Failed to persist manifest to disk: {error}");
+                } else {
+                    debug!(agent = %entry.name, path = %toml_path.display(), "Persisted manifest to disk");
+                }
+            }
+            // Not a cosmetic warning: boot reconciliation re-syncs each agent from its on-disk
+            // `agent.toml` and overwrites the SQLite projection when the two differ, so a manifest
+            // that cannot be serialized freezes the file while the in-memory copy keeps accepting
+            // edits — and the next restart restores the frozen file over every one of them.
+            // Refs #7742.
+            Err(error) => {
+                error!(
+                    agent = %entry.name,
+                    path = %toml_path.display(),
+                    "Failed to serialize manifest to TOML: {error}. \
+                     agent.toml is now stale; manifest edits will be lost on the next restart"
+                );
+            }
+        }
+    }
+
     /// Switch an agent's model.
     ///
     /// When `explicit_provider` is `Some`, that provider name is used as-is
@@ -36,48 +156,47 @@ impl LibreFangKernel {
         let Some(entry) = self.agents.registry.get(agent_id) else {
             return;
         };
-        let toml_path = match entry.source_toml_path.clone() {
-            Some(p) => p,
-            None => {
-                // Fall back to the agent's UUID, not the literal "agent" (#6442):
-                // `resolve_workspace_dir` spawns the workspace at
-                // `<workspaces>/<safe_path_component(name, agent_id)>`, so the
-                // fallback here must use the same UUID fallback string. The old
-                // `"agent"` literal made every agent whose name sanitizes to an
-                // empty string (fully Cyrillic / CJK / accented-Latin) collapse
-                // to the shared path `<workspaces>/agent/agent.toml` — distinct
-                // agents overwrote each other and the loader never matched the
-                // real `<workspaces>/<uuid>/` directory.
-                let safe_name = safe_path_component(&entry.name, &agent_id.to_string());
-                self.config
-                    .load()
-                    .effective_agent_workspaces_dir()
-                    .join(safe_name)
-                    .join("agent.toml")
-            }
+        let toml_path = self.agent_manifest_path(&entry, agent_id);
+        let write_lock = self.manifest_write_lock(&toml_path);
+        let _write_guard = write_lock.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(current_entry) = self.agents.registry.get(agent_id) else {
+            return;
         };
-        let dir = match toml_path.parent() {
-            Some(d) => d.to_path_buf(),
-            None => {
-                warn!(agent = %entry.name, "Failed to derive parent dir for manifest persist");
+        self.persist_full_manifest_at(&current_entry, &toml_path);
+    }
+
+    fn persist_mcp_servers_to_disk(&self, agent_id: AgentId) {
+        let Some(entry) = self.agents.registry.get(agent_id) else {
+            return;
+        };
+        let toml_path = self.agent_manifest_path(&entry, agent_id);
+        let write_lock = self.manifest_write_lock(&toml_path);
+        let _write_guard = write_lock.lock().unwrap_or_else(|error| error.into_inner());
+        let Some(current_entry) = self.agents.registry.get(agent_id) else {
+            return;
+        };
+        let source = match std::fs::read_to_string(&toml_path) {
+            Ok(source) => source,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.persist_full_manifest_at(&current_entry, &toml_path);
+                return;
+            }
+            Err(error) => {
+                warn!(agent = %entry.name, "Failed to read agent manifest before MCP server persist: {error}");
                 return;
             }
         };
-        match toml::to_string_pretty(&entry.manifest) {
-            Ok(toml_str) => {
-                if let Err(e) = std::fs::create_dir_all(&dir) {
-                    warn!(agent = %entry.name, "Failed to create agent dir for manifest persist: {e}");
-                    return;
-                }
-                if let Err(e) = atomic_write_toml(&toml_path, &toml_str) {
-                    warn!(agent = %entry.name, "Failed to persist manifest to disk: {e}");
-                } else {
-                    debug!(agent = %entry.name, path = %toml_path.display(), "Persisted manifest to disk");
-                }
+        let patched = match patch_mcp_servers(&source, &current_entry.manifest.mcp_servers) {
+            Ok(patched) => patched,
+            Err(error) => {
+                warn!(agent = %entry.name, "Refusing to overwrite agent manifest during MCP server persist: {error}");
+                return;
             }
-            Err(e) => {
-                warn!(agent = %entry.name, "Failed to serialize manifest to TOML: {e}");
-            }
+        };
+        if let Err(error) = atomic_write_toml(&toml_path, &patched) {
+            warn!(agent = %entry.name, "Failed to persist MCP servers to agent manifest: {error}");
+        } else {
+            debug!(agent = %entry.name, path = %toml_path.display(), "Persisted MCP servers to agent manifest");
         }
     }
 
@@ -220,13 +339,8 @@ impl LibreFangKernel {
 
     /// Reload an agent's manifest from its source agent.toml on disk.
     ///
-    /// At boot the kernel reads agent.toml and syncs it into the in-memory
-    /// registry, but runtime edits to the file are otherwise invisible until
-    /// the next restart. This method re-reads the file, preserves
-    /// runtime-only fields that TOML doesn't carry (workspace path, tags,
-    /// current enabled state), replaces the in-memory manifest, persists it
-    /// to the DB, and invalidates the tool cache so the updated skill / MCP
-    /// allowlists take effect on the next message.
+    /// At boot the kernel reads agent.toml and syncs it into the in-memory registry, but runtime edits to the file are otherwise invisible until the next restart.
+    /// This method re-reads the file, preserves the runtime-only fields that TOML doesn't carry (workspace path, tags, current enabled state, resolved `exec_policy`), replaces the in-memory manifest, persists it to the DB, and invalidates the tool cache so the updated skill / MCP allowlists take effect on the next message.
     pub fn reload_agent_from_disk(&self, agent_id: AgentId) -> KernelResult<()> {
         let entry = self.agents.registry.get(agent_id).ok_or_else(|| {
             KernelError::LibreFang(LibreFangError::AgentNotFound(agent_id.to_string()))
@@ -290,26 +404,29 @@ impl LibreFangKernel {
         // the previous (validated) manifest stays in effect.
         validate_manifest_module_path(&disk_manifest, &entry.name)?;
 
+        // #6732: hot-reload is how an operator iterates on a broken alias, so it is the path where the diagnostic is most useful.
+        // Report-only — a bad pattern must not reject the reload and strand the agent on its previous manifest.
+        warn_invalid_group_trigger_patterns(&disk_manifest, &entry.name);
+
         // Preserve workspace if TOML leaves it unset — workspace is
         // populated at spawn time with the real directory path.
         if disk_manifest.workspace.is_none() {
             disk_manifest.workspace = entry.manifest.workspace.clone();
         }
+        preserve_resolved_exec_policy(&mut disk_manifest, &entry.manifest);
         // Always preserve the name. Renaming would also need to update
         // `entry.name` and the registry's `name_index`, which reload does
         // not touch — a renamed manifest without those updates would
         // silently break `find_by_name` lookups. Use the rename API.
         disk_manifest.name = entry.manifest.name.clone();
-        // Always preserve tags for the same reason: there is no runtime
-        // API to update `entry.tags` or the registry's `tag_index`, both
-        // of which are a snapshot taken at spawn time. Letting reload
-        // change `manifest.tags` would desync manifest tags from the
-        // tag index used by `find_by_tag()`.
-        disk_manifest.tags = entry.manifest.tags.clone();
+        // Tags used to be pinned here too, on the grounds that nothing could re-project them onto `entry.tags` and the registry's `tag_index`.
+        // `replace_manifest_and_retag` now does exactly that, so an operator editing `tags` in agent.toml and reloading gets what they wrote (#7742).
+        // The system-owned `hand:*` tags stay pinned to the live entry, because they route the workspace and gate approvals.
+        disk_manifest.tags = merge_agent_tags(&entry.tags, &disk_manifest.tags);
 
         self.agents
             .registry
-            .replace_manifest(agent_id, disk_manifest)
+            .replace_manifest_and_retag(agent_id, disk_manifest)
             .map_err(KernelError::LibreFang)?;
 
         if let Some(refreshed) = self.agents.registry.get(agent_id) {
@@ -386,9 +503,12 @@ impl LibreFangKernel {
     /// `agent.toml` so the change survives a restart.
     ///
     /// The same invariants as `reload_agent_from_disk` are enforced:
-    /// - `name` and `tags` are locked to the current values (use the rename /
-    ///   tag APIs to change them)
+    /// - `name` is locked to the current value (use the rename API to change it)
+    /// - `tags` are merged by [`merge_agent_tags`]: the operator half is taken
+    ///   from the incoming manifest, the system-owned `hand:*` half stays
+    ///   pinned to the running agent (#7742)
     /// - `workspace` is preserved when the incoming manifest leaves it unset
+    /// - `exec_policy` is preserved on the same terms — see `preserve_resolved_exec_policy`
     pub fn update_manifest(
         &self,
         agent_id: AgentId,
@@ -403,16 +523,23 @@ impl LibreFangKernel {
         // swap a running agent's `module` to an arbitrary host script.
         validate_manifest_module_path(&new_manifest, &entry.name)?;
 
+        // #6732: same report-only diagnostic as spawn and hot-reload, so an alias pushed through the API surface is checked too rather than only one written to disk.
+        warn_invalid_group_trigger_patterns(&new_manifest, &entry.name);
+
         // Preserve invariants that the registry indices depend on.
         if new_manifest.workspace.is_none() {
             new_manifest.workspace = entry.manifest.workspace.clone();
         }
+        preserve_resolved_exec_policy(&mut new_manifest, &entry.manifest);
         new_manifest.name = entry.manifest.name.clone();
-        new_manifest.tags = entry.manifest.tags.clone();
+        // Before #7742 this was an unconditional `= entry.manifest.tags`, which made `tags` the one manifest field no API route could reach.
+        // The dashboard, `PATCH /api/agents/{id}` with `manifest_toml` and the CLI all funnel here, so every one of them reported a successful save and changed nothing.
+        // System-owned `hand:*` tags stay pinned.
+        new_manifest.tags = merge_agent_tags(&entry.tags, &new_manifest.tags);
 
         self.agents
             .registry
-            .replace_manifest(agent_id, new_manifest)
+            .replace_manifest_and_retag(agent_id, new_manifest)
             .map_err(KernelError::LibreFang)?;
 
         if let Some(refreshed) = self.agents.registry.get(agent_id) {
@@ -436,6 +563,18 @@ impl LibreFangKernel {
     }
 
     /// Update an agent's skill allowlist. Empty = all skills (backward compat).
+    ///
+    /// A name is accepted when it is loaded in the skill registry, or when it is the `[skill].name` of a directory that exists under the skills directory but has not been loaded (#7772).
+    /// The second case is a *pending declaration*, which the read side already treats as a normal state rather than an error: `pending_skill_and_mcp_declarations` reports it, the dashboard badges it, and `spawn` accepts a manifest carrying it without any equivalent check.
+    /// Rejecting it only here made the edit path stricter than the path that created the agent, so an agent could exist in a state its own editor refused to save — and because the dashboard PUTs the whole array, one inherited name took every unrelated edit down with it.
+    /// Accepting it persists the allowlist entry and nothing else: no skill is loaded or activated as a side effect.
+    ///
+    /// The pending set comes from [`SkillRegistry::unloaded_on_disk_manifest_names`], not from `unloaded_on_disk_dirs`.
+    /// Those two return different kinds of identifier — the registry is keyed by `manifest.skill.name`, while the directory report is keyed by `path.file_name()` — so for `skills/package-dir/skill.toml` declaring `name = "actual-skill"`, validating against directory names would reject `actual-skill`, the only value that can ever match, and accept `package-dir`, which matches nothing once the skill loads.
+    ///
+    /// Unlike the MCP check below, skills have no locally cached catalog of everything installable: skill content is not part of `registry_sync`'s copy set, so on-disk-but-unloaded is the only additional source available, and the criterion is narrower on purpose.
+    /// `"*"` is likewise not special here, again unlike `mcp_servers`: the skill path has no wildcard, and `skills = ["*"]` grants no skill tools at all, so it is just a name that matches nothing.
+    /// A name that is neither loaded nor on disk is rejected as `InvalidInput` — it is a typo in user input, not an internal fault, and the old `Internal` variant is why the dashboard rendered "Internal error" for it.
     pub fn set_agent_skills(&self, agent_id: AgentId, skills: Vec<String>) -> KernelResult<()> {
         // Validate skill names if allowlist is non-empty
         if !skills.is_empty() {
@@ -444,13 +583,17 @@ impl LibreFangKernel {
                 .skill_registry
                 .read()
                 .unwrap_or_else(|e| e.into_inner());
-            let known = registry.skill_names();
+            let loaded = registry.skill_names();
+            let pending = registry.unloaded_on_disk_manifest_names();
             for name in &skills {
-                if !known.contains(name) {
-                    return Err(KernelError::LibreFang(LibreFangError::Internal(format!(
-                        "Unknown skill: {name}"
-                    ))));
+                if loaded.iter().any(|n| n == name) || pending.iter().any(|n| n == name) {
+                    continue;
                 }
+                return Err(KernelError::LibreFang(LibreFangError::InvalidInput(
+                    format!(
+                        "Unknown skill '{name}': not loaded, and no skill under the skills directory declares that name. Check the spelling, or install the skill first."
+                    ),
+                )));
             }
         }
 
@@ -500,39 +643,102 @@ impl LibreFangKernel {
         Ok(())
     }
 
-    /// Update an agent's MCP server allowlist. Empty = all servers (backward compat).
+    /// Update an agent's MCP server allowlist.
+    /// Empty disables MCP servers; `["*"]` enables all connected servers.
+    ///
+    /// A name is accepted when it is configured in `config.toml` (`effective_mcp_servers`, which answers "did somebody write this down" — so a configured server that has not connected yet counts), or when it is present in the locally cached MCP catalog synced from the registry (`~/.librefang/mcp/catalog/`) (#7772).
+    /// The previous check built its accept-set by walking the MCP tools connected at that instant and resolving each back to a server, which is a strict subset of what is configured, never mind what is installed: it rejected a configured-but-not-yet-connected server and a catalog entry that is installed but not configured.
+    /// Since agent types are shared artefacts that declare what the agent *wants*, and `spawn` performs no equivalent check, a declaration this instance has not installed is a legitimate pending state — the same one `pending_skill_and_mcp_declarations` surfaces on the read side.
+    /// Accepting it persists the allowlist entry and nothing else: it does not install, connect, or touch `config.toml`.
+    ///
+    /// A name the agent already stores is also accepted (#8095): once a declaration is persisted it is a fact about this agent rather than a claim being made now, and refusing it only means an operator who uninstalls a server can no longer edit — or even repair — any agent that still names it.
+    ///
+    /// Only a name absent from all three is rejected, as `InvalidInput` rather than `Internal`, so a typo stops being reported as a server fault.
+    /// Dropping the tool walk also removes the old lock guard: the whole check used to sit inside `if let Ok(mcp_tools) = self.mcp.mcp_tools.lock()`, so a poisoned lock skipped validation entirely instead of failing.
     pub fn set_agent_mcp_servers(
         &self,
         agent_id: AgentId,
         servers: Vec<String>,
     ) -> KernelResult<()> {
+        if self
+            .agents
+            .registry
+            .get(agent_id)
+            .is_some_and(|entry| entry.is_hand)
+        {
+            return Err(KernelError::LibreFang(LibreFangError::InvalidInput(
+                "Hand-derived agent MCP servers are controlled by the Hand definition".to_string(),
+            )));
+        }
+
         // Validate server names if allowlist is non-empty
         if !servers.is_empty() {
-            if let Ok(mcp_tools) = self.mcp.mcp_tools.lock() {
-                let mut known_servers: std::collections::HashSet<String> =
-                    std::collections::HashSet::new();
-                let configured_servers: Vec<String> = self
-                    .mcp
-                    .effective_mcp_servers
-                    .read()
-                    .map(|servers| servers.iter().map(|s| s.name.clone()).collect())
-                    .unwrap_or_default();
-                for tool in mcp_tools.iter() {
-                    if let Some(s) = librefang_runtime::mcp::resolve_mcp_server_from_known(
-                        &tool.name,
-                        configured_servers.iter().map(String::as_str),
-                    ) {
-                        known_servers.insert(librefang_runtime::mcp::normalize_name(s));
-                    }
+            let configured: std::collections::HashSet<String> = self
+                .mcp
+                .effective_mcp_servers
+                .read()
+                .map(|configured| {
+                    configured
+                        .iter()
+                        .map(|s| librefang_runtime::mcp::normalize_name(&s.name))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let catalog = self.mcp_catalog_load();
+            // Catalog entries carry an `id` from their manifest and are keyed by their file / directory name, and upstream does not guarantee the two agree. Accept either.
+            let catalog_ids: std::collections::HashSet<String> = catalog
+                .list()
+                .iter()
+                .map(|e| librefang_runtime::mcp::normalize_name(&e.id))
+                .collect();
+            // Names this agent is *already* storing are grandfathered (#8095).
+            //
+            // Widening the accept-set to configured-or-catalog fixed the agent
+            // whose agent type shipped a declaration this instance never
+            // installed. It did not fix the agent whose declaration was valid
+            // once and is not any more: uninstall an MCP server and every agent
+            // still naming it becomes uneditable, because the editor round-trips
+            // the current allowlist and the stale name comes back in on every
+            // save — including the save that would have removed it.
+            //
+            // A name that is already persisted is a fact about this agent, not a
+            // claim being made now, so rejecting it protects nothing that is not
+            // already true on disk. A typo is by definition a name that was not
+            // there a moment ago, so it is still refused, which is the case this
+            // check exists for. The read side already reports a name in this
+            // state as pending rather than broken
+            // (`unconnected_mcp_declarations`).
+            let already_declared: std::collections::HashSet<String> = self
+                .agents
+                .registry
+                .get(agent_id)
+                .map(|entry| {
+                    entry
+                        .manifest
+                        .mcp_servers
+                        .iter()
+                        .map(|s| librefang_runtime::mcp::normalize_name(s))
+                        .collect()
+                })
+                .unwrap_or_default();
+            for name in &servers {
+                // `["*"]` is a documented value meaning "all connected servers" (`AgentManifest::mcp_servers`, and `available_tools` step 3 honours it), but it is not the name of anything, so the old accept-set never contained it and saving a wildcard allowlist failed with `Unknown MCP server: *`.
+                if name == "*" {
+                    continue;
                 }
-                for name in &servers {
-                    let normalized = librefang_runtime::mcp::normalize_name(name);
-                    if !known_servers.contains(&normalized) {
-                        return Err(KernelError::LibreFang(LibreFangError::Internal(format!(
-                            "Unknown MCP server: {name}"
-                        ))));
-                    }
+                let normalized = librefang_runtime::mcp::normalize_name(name);
+                if configured.contains(&normalized)
+                    || catalog_ids.contains(&normalized)
+                    || catalog.get(name).is_some()
+                    || already_declared.contains(&normalized)
+                {
+                    continue;
                 }
+                return Err(KernelError::LibreFang(LibreFangError::InvalidInput(
+                    format!(
+                        "Unknown MCP server '{name}': not configured in config.toml and not present in the installed MCP catalog. Check the spelling, or add the server from the MCP settings surface first."
+                    ),
+                )));
             }
         }
 
@@ -564,7 +770,7 @@ impl LibreFangKernel {
         // reason as set_agent_skills: boot reconciliation overwrites DB-only
         // fields from the on-disk manifest, so an MCP allowlist set via the
         // dashboard would otherwise be wiped on the next restart.
-        self.persist_manifest_to_disk(agent_id);
+        self.persist_mcp_servers_to_disk(agent_id);
 
         info!(agent_id = %agent_id, servers = ?servers, "Agent MCP servers updated");
         Ok(())
@@ -690,15 +896,23 @@ impl LibreFangKernel {
         Ok(())
     }
 
-    /// Update an agent's tool allowlist and/or blocklist.
+    /// Update an agent's declared tools, allowlist / blocklist and/or the `tools_disabled` master switch.
+    ///
+    /// Every argument is a tri-state: `None` leaves the stored value alone, `Some(_)` writes exactly what it carries.
+    /// `disabled` joins the other three in that contract as of #7742 — it was previously forced to `false` on every write, which made it readable through `GET /api/agents/{id}/tools` but unsettable, and let a blocklist edit silently re-enable every tool on an agent whose operator had switched them off.
     pub fn set_agent_tool_filters(
         &self,
         agent_id: AgentId,
         capabilities_tools: Option<Vec<String>>,
         allowlist: Option<Vec<String>>,
         blocklist: Option<Vec<String>>,
+        disabled: Option<bool>,
     ) -> KernelResult<()> {
-        if capabilities_tools.is_none() && allowlist.is_none() && blocklist.is_none() {
+        if capabilities_tools.is_none()
+            && allowlist.is_none()
+            && blocklist.is_none()
+            && disabled.is_none()
+        {
             return Ok(());
         }
 
@@ -707,14 +921,12 @@ impl LibreFangKernel {
             capabilities_tools = ?capabilities_tools,
             allowlist = ?allowlist,
             blocklist = ?blocklist,
+            disabled = ?disabled,
             "Agent tool filters updated"
         );
 
-        // Snapshot previous tool config + tools_disabled flag for rollback on
-        // DB persist failure (#3499). Capture all four fields because
-        // `update_tool_config` always sets `tools_disabled = false`, so a
-        // rollback that only restored the lists would silently leave the
-        // disabled flag flipped on persist failure.
+        // Snapshot previous tool config + tools_disabled flag for rollback on DB persist failure (#3499).
+        // Capture all four fields because a request may carry `disabled`, so a rollback that only restored the lists would silently leave the flag flipped on persist failure.
         let prev_tool_state = self.agents.registry.get(agent_id).map(|e| {
             (
                 e.manifest.capabilities.tools.clone(),
@@ -726,7 +938,7 @@ impl LibreFangKernel {
 
         self.agents
             .registry
-            .update_tool_config(agent_id, capabilities_tools, allowlist, blocklist)
+            .update_tool_config(agent_id, capabilities_tools, allowlist, blocklist, disabled)
             .map_err(KernelError::LibreFang)?;
 
         if let Some(entry) = self.agents.registry.get(agent_id) {
@@ -747,5 +959,57 @@ impl LibreFangKernel {
         self.prompt_metadata_cache.tools.remove(&agent_id);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mcp_manifest_patch_tests {
+    use super::*;
+
+    fn manifest_source() -> String {
+        toml::to_string_pretty(&AgentManifest {
+            name: "format-test".to_string(),
+            source_template: None,
+            ..Default::default()
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn replaces_multiline_value_and_preserves_surrounding_comments() {
+        let source = manifest_source().replace(
+            "mcp_servers = []",
+            "mcp_servers = [\n    \"old-server\",\n] # keep assignment note",
+        );
+        let patched = patch_mcp_servers(&source, &["new-server".to_string()]).unwrap();
+
+        assert!(patched.contains("mcp_servers = [\"new-server\"] # keep assignment note"));
+        assert!(!patched.contains("old-server"));
+        assert_eq!(
+            toml::from_str::<AgentManifest>(&patched)
+                .unwrap()
+                .mcp_servers,
+            vec!["new-server"]
+        );
+    }
+
+    #[test]
+    fn inserts_missing_root_field_without_reserializing_document() {
+        let source = manifest_source()
+            .lines()
+            .filter(|line| !line.starts_with("mcp_servers ="))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let source = format!("# operator note\n{source}\n");
+        let patched = patch_mcp_servers(&source, &["new-server".to_string()]).unwrap();
+
+        assert!(patched.starts_with("mcp_servers = [\"new-server\"]\n# operator note\n"));
+        assert!(patched.ends_with(&source));
+    }
+
+    #[test]
+    fn invalid_document_is_rejected_before_any_write() {
+        let error = patch_mcp_servers("name = [", &[]).unwrap_err();
+        assert!(error.starts_with("existing agent.toml is invalid:"));
     }
 }

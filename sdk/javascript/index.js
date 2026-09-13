@@ -38,6 +38,7 @@ class LibreFang {
     this.channels = new ChannelsResource(this);
     this.extensions = new ExtensionsResource(this);
     this.goals = new GoalsResource(this);
+    this.groups = new GroupsResource(this);
     this.hands = new HandsResource(this);
     this.inbox = new InboxResource(this);
     this.mcp = new McpResource(this);
@@ -53,6 +54,7 @@ class LibreFang {
     this.tools = new ToolsResource(this);
     this.uar = new UarResource(this);
     this.users = new UsersResource(this);
+    this.vault = new VaultResource(this);
     this.webhooks = new WebhooksResource(this);
     this.workflows = new WorkflowsResource(this);
   }
@@ -104,6 +106,15 @@ class LibreFang {
         if (!trimmed.startsWith("data: ")) continue;
         const data = trimmed.slice(6);
         if (data === "[DONE]") return;
+        try { yield JSON.parse(data); } catch { yield { raw: data }; }
+      }
+    }
+    // A clean EOF can arrive without a trailing newline, leaving the last event in the buffer.
+    // Parse it here rather than dropping it; the loop above only fires on a newline.
+    const trailing = buffer.trim();
+    if (trailing.startsWith("data: ")) {
+      const data = trailing.slice(6);
+      if (data !== "[DONE]") {
         try { yield JSON.parse(data); } catch { yield { raw: data }; }
       }
     }
@@ -177,6 +188,10 @@ class AgentsResource {
     return this._c._request("POST", `/api/agents/identities/${name}/reset`, undefined, query);
   }
 
+  async spawnEphemeralAgent(data) {
+    return this._c._request("POST", "/api/agents/spawn-ephemeral", data, undefined);
+  }
+
   async getAgent(id) {
     return this._c._request("GET", `/api/agents/${id}`);
   }
@@ -207,6 +222,10 @@ class AgentsResource {
 
   async getAgentDeliveries(id) {
     return this._c._request("GET", `/api/agents/${id}/deliveries`);
+  }
+
+  async listAgentEphemeralRuns(id, query) {
+    return this._c._request("GET", `/api/agents/${id}/ephemeral-runs`, undefined, query);
   }
 
   async listAgentEvents(id, query) {
@@ -593,24 +612,28 @@ class BudgetResource {
     return this._c._request("DELETE", `/api/budget/users/${user_id}`);
   }
 
-  async usageStats() {
-    return this._c._request("GET", "/api/usage");
+  async usageStats(query) {
+    return this._c._request("GET", "/api/usage", undefined, query);
   }
 
-  async usageByModel() {
-    return this._c._request("GET", "/api/usage/by-model");
+  async usageByModel(query) {
+    return this._c._request("GET", "/api/usage/by-model", undefined, query);
   }
 
-  async usageByModelPerformance() {
-    return this._c._request("GET", "/api/usage/by-model/performance");
+  async usageByModelPerformance(query) {
+    return this._c._request("GET", "/api/usage/by-model/performance", undefined, query);
   }
 
-  async usageDaily() {
-    return this._c._request("GET", "/api/usage/daily");
+  async usageDaily(query) {
+    return this._c._request("GET", "/api/usage/daily", undefined, query);
   }
 
-  async usageSummary() {
-    return this._c._request("GET", "/api/usage/summary");
+  async usageExport(query) {
+    return this._c._request("GET", "/api/usage/export", undefined, query);
+  }
+
+  async usageSummary(query) {
+    return this._c._request("GET", "/api/usage/summary", undefined, query);
   }
 }
 
@@ -673,6 +696,44 @@ class GoalsResource {
 
   async listGoalTemplates() {
     return this._c._request("GET", "/api/goals/templates");
+  }
+}
+
+// ── Groups Resource
+
+class GroupsResource {
+  constructor(client) { this._c = client; }
+
+  async listGroups() {
+    return this._c._request("GET", "/api/groups");
+  }
+
+  async createGroup(data) {
+    return this._c._request("POST", "/api/groups", data, undefined);
+  }
+
+  async getGroup(name) {
+    return this._c._request("GET", `/api/groups/${name}`);
+  }
+
+  async updateGroup(name, data) {
+    return this._c._request("PUT", `/api/groups/${name}`, data, undefined);
+  }
+
+  async deleteGroup(name) {
+    return this._c._request("DELETE", `/api/groups/${name}`);
+  }
+
+  async addGroupMember(name, user) {
+    return this._c._request("PUT", `/api/groups/${name}/members/${user}`);
+  }
+
+  async removeGroupMember(name, user) {
+    return this._c._request("DELETE", `/api/groups/${name}/members/${user}`);
+  }
+
+  async userGroups(name) {
+    return this._c._request("GET", `/api/users/${name}/groups`);
   }
 }
 
@@ -917,6 +978,18 @@ class ModelsResource {
     return this._c._request("DELETE", `/api/models/custom/${id}`);
   }
 
+  async getModelOverrides(id) {
+    return this._c._request("GET", `/api/models/overrides/${id}`);
+  }
+
+  async setModelOverrides(id, data) {
+    return this._c._request("PUT", `/api/models/overrides/${id}`, data, undefined);
+  }
+
+  async deleteModelOverrides(id) {
+    return this._c._request("DELETE", `/api/models/overrides/${id}`);
+  }
+
   async getModel(id) {
     return this._c._request("GET", `/api/models/${id}`);
   }
@@ -939,6 +1012,10 @@ class ModelsResource {
 
   async setDefaultProvider(name, data) {
     return this._c._request("POST", `/api/providers/${name}/default`, data, undefined);
+  }
+
+  async setProviderDiscovery(name, data) {
+    return this._c._request("PUT", `/api/providers/${name}/discovery`, data, undefined);
   }
 
   async enableProvider(name) {
@@ -1419,6 +1496,10 @@ class SystemResource {
     return this._c._request("GET", `/api/authz/effective/${user_id}`);
   }
 
+  async whoami() {
+    return this._c._request("GET", "/api/authz/whoami");
+  }
+
   async createBackup() {
     return this._c._request("POST", "/api/backup");
   }
@@ -1471,6 +1552,10 @@ class SystemResource {
     return this._c._request("POST", "/api/config/set", data, undefined);
   }
 
+  async configStatus() {
+    return this._c._request("GET", "/api/config/status");
+  }
+
   async health() {
     return this._c._request("GET", "/api/health");
   }
@@ -1511,8 +1596,16 @@ class SystemResource {
     return this._c._request("GET", `/api/profiles/${name}`);
   }
 
+  async provisioningStatus() {
+    return this._c._request("GET", "/api/provisioning/status");
+  }
+
   async queueStatus() {
     return this._c._request("GET", "/api/queue/status");
+  }
+
+  async ready() {
+    return this._c._request("GET", "/api/ready");
   }
 
   async restoreBackup(data) {
@@ -1535,8 +1628,32 @@ class SystemResource {
     return this._c._request("GET", "/api/templates");
   }
 
+  async createAgentType(data) {
+    return this._c._request("POST", "/api/templates", data, undefined);
+  }
+
   async getAgentTemplate(name) {
     return this._c._request("GET", `/api/templates/${name}`);
+  }
+
+  async updateAgentType(name, data) {
+    return this._c._request("PUT", `/api/templates/${name}`, data, undefined);
+  }
+
+  async deleteAgentType(name) {
+    return this._c._request("DELETE", `/api/templates/${name}`);
+  }
+
+  async listTemplateHistory(name, query) {
+    return this._c._request("GET", `/api/templates/${name}/history`, undefined, query);
+  }
+
+  async restoreTemplateVersion(name, version_id) {
+    return this._c._request("POST", `/api/templates/${name}/history/${version_id}/restore`);
+  }
+
+  async promoteAgentType(name) {
+    return this._c._request("POST", `/api/templates/${name}/promote`);
   }
 
   async getAgentTemplateToml(name) {
@@ -1643,6 +1760,24 @@ class UsersResource {
 
   async rotateUserKey(name) {
     return this._c._request("POST", `/api/users/${name}/rotate-key`);
+  }
+}
+
+// ── Vault Resource
+
+class VaultResource {
+  constructor(client) { this._c = client; }
+
+  async vaultListKeys() {
+    return this._c._request("GET", "/api/vault/keys");
+  }
+
+  async vaultPutKey(key, data) {
+    return this._c._request("PUT", `/api/vault/keys/${key}`, data, undefined);
+  }
+
+  async vaultDeleteKey(key) {
+    return this._c._request("DELETE", `/api/vault/keys/${key}`);
   }
 }
 

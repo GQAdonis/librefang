@@ -4,7 +4,9 @@
 use super::agent::{build_agent_manifest_toml, tools_to_parent_capabilities};
 use super::channel::parse_poll_options;
 use super::image::{detect_image_format, extract_image_dimensions, format_file_size};
-use super::media::{audio_mime_from_ext, SUPPORTED_AUDIO_EXTS_DOC};
+use super::media::{
+    audio_mime_from_ext, video_mime_from_ext, SUPPORTED_AUDIO_EXTS_DOC, SUPPORTED_VIDEO_EXTS_DOC,
+};
 use super::schedule::parse_schedule_to_cron;
 use super::*;
 use librefang_skills::registry::SkillRegistry;
@@ -49,6 +51,67 @@ fn supported_audio_exts_doc_lists_every_implemented_extension() {
         assert!(
             audio_mime_from_ext(ext).is_some(),
             "SUPPORTED_AUDIO_EXTS_DOC lists '{ext}' but audio_mime_from_ext does not map it"
+        );
+    }
+}
+
+// ── video_mime_from_ext (#6679) ──────────────────────────────────────────
+
+#[test]
+fn video_mime_from_ext_maps_known_video_containers() {
+    assert_eq!(video_mime_from_ext("mp4"), Some("video/mp4"));
+    assert_eq!(video_mime_from_ext("mov"), Some("video/quicktime"));
+    assert_eq!(video_mime_from_ext("mkv"), Some("video/x-matroska"));
+    assert_eq!(video_mime_from_ext("avi"), Some("video/x-msvideo"));
+}
+
+#[test]
+fn video_mime_from_ext_excludes_webm() {
+    // `.webm` is a dual-purpose container: it already reaches the provider
+    // via `audio_mime_from_ext` unchanged, and must not also be claimed here
+    // — routing it through both mappings would be ambiguous about which
+    // path a caller takes.
+    assert_eq!(video_mime_from_ext("webm"), None);
+    assert!(audio_mime_from_ext("webm").is_some());
+}
+
+#[test]
+fn video_and_audio_ext_maps_are_disjoint() {
+    let audio_exts: Vec<&str> = SUPPORTED_AUDIO_EXTS_DOC
+        .split(", ")
+        .map(str::trim)
+        .collect();
+    let video_exts: Vec<&str> = SUPPORTED_VIDEO_EXTS_DOC
+        .split(", ")
+        .map(str::trim)
+        .collect();
+    for ext in &video_exts {
+        assert!(
+            audio_mime_from_ext(ext).is_none(),
+            "'{ext}' is claimed by both the audio and video ext maps — \
+             build_transcription_attachment's video-first branch would silently \
+             shadow the audio mapping"
+        );
+    }
+    for ext in &audio_exts {
+        assert!(
+            !video_exts.contains(ext),
+            "'{ext}' is listed in both SUPPORTED_AUDIO_EXTS_DOC and SUPPORTED_VIDEO_EXTS_DOC"
+        );
+    }
+}
+
+#[test]
+fn supported_video_exts_doc_lists_every_implemented_extension() {
+    let exts: Vec<&str> = SUPPORTED_VIDEO_EXTS_DOC
+        .split(", ")
+        .map(|s| s.trim())
+        .collect();
+    assert!(!exts.is_empty(), "const must list at least one extension");
+    for ext in &exts {
+        assert!(
+            video_mime_from_ext(ext).is_some(),
+            "SUPPORTED_VIDEO_EXTS_DOC lists '{ext}' but video_mime_from_ext does not map it"
         );
     }
 }
@@ -218,6 +281,7 @@ fn test_taint_outbound_text_allows_short_identifiers() {
 #[tokio::test]
 async fn test_tool_a2a_send_blocks_secret_in_message() {
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -238,6 +302,7 @@ async fn test_tool_a2a_send_blocks_secret_in_message() {
 #[tokio::test]
 async fn test_tool_channel_send_blocks_secret_in_text_message() {
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -268,6 +333,7 @@ async fn test_tool_channel_send_blocks_secret_in_text_message() {
 #[tokio::test]
 async fn test_tool_channel_send_blocks_secret_in_image_caption() {
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -299,6 +365,7 @@ async fn test_tool_channel_send_blocks_secret_in_image_caption() {
 #[tokio::test]
 async fn test_tool_channel_send_blocks_secret_in_poll_question() {
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -331,6 +398,7 @@ async fn test_tool_channel_send_blocks_secret_in_poll_question() {
 async fn test_tool_channel_send_auto_fills_recipient_from_sender_id() {
     // Test that channel_send uses sender_id when recipient is omitted
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -366,6 +434,7 @@ async fn test_tool_channel_send_auto_fills_recipient_from_sender_id() {
 async fn test_tool_channel_send_requires_recipient_without_sender_id() {
     // Test that channel_send still requires recipient when sender_id is None
     let kernel: Arc<dyn KernelHandle> = Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     });
@@ -405,6 +474,7 @@ const GUARD_MSG: &str = "Cross-chat dispatch is forbidden";
 
 fn guard_kernel() -> Arc<dyn KernelHandle> {
     Arc::new(ApprovalKernel {
+        requires_approval_override: None,
         approval_requests: Arc::new(AtomicUsize::new(0)),
         user_gate_override: None,
     })
@@ -806,6 +876,9 @@ async fn channel_send_cross_account_blocked_on_embedded_channel() {
 #[derive(Default)]
 struct DispatchCapture {
     calls: std::sync::Mutex<Vec<String>>,
+    /// When set, `run_workflow` answers with the nesting-depth refusal the kernel raises past `max_agent_call_depth` (refs #6659) instead of the trait's default "workflow engine unavailable".
+    /// Lets a test drive `tool_workflow_run`'s error mapping without a real kernel.
+    deny_workflow_run: bool,
 }
 
 #[async_trait::async_trait]
@@ -872,14 +945,21 @@ impl AgentControl for DispatchCapture {
         caller_session_id: Option<&str>,
         _conversation_key: Option<&str>,
         _chat_id: Option<&str>,
-    ) -> Result<String, librefang_kernel_handle::KernelOpError> {
+    ) -> Result<librefang_kernel_handle::AsyncSendOutcome, librefang_kernel_handle::KernelOpError>
+    {
         // Record that the async path was taken and echo back whether a caller
         // session was threaded through (the tool must forward it).
         self.calls.lock().unwrap().push(format!(
             "async_tracked:session={}",
             caller_session_id.unwrap_or("none")
         ));
-        Ok("task-fake-1234".into())
+        // Mirror the kernel's own discrimination (#6650): a caller session is what makes tracking possible, so its absence yields `Inline` here exactly as it does in the real impl.
+        Ok(match caller_session_id {
+            Some(_) => librefang_kernel_handle::AsyncSendOutcome::Tracked("task-fake-1234".into()),
+            None => {
+                librefang_kernel_handle::AsyncSendOutcome::Inline("inline-fallback-response".into())
+            }
+        })
     }
 
     fn list_agents(&self) -> Vec<AgentInfo> {
@@ -1042,7 +1122,25 @@ impl HandsControl for DispatchCapture {}
 impl A2ARegistry for DispatchCapture {}
 impl ChannelSender for DispatchCapture {}
 impl PromptStore for DispatchCapture {}
-impl WorkflowRunner for DispatchCapture {}
+#[async_trait::async_trait]
+impl WorkflowRunner for DispatchCapture {
+    async fn run_workflow(
+        &self,
+        _workflow_id: &str,
+        _input: &str,
+    ) -> Result<(String, String), librefang_kernel_handle::KernelOpError> {
+        if self.deny_workflow_run {
+            return Err(librefang_kernel_handle::KernelOpError::CapabilityDenied(
+                "Nested workflow run depth exceeded (max 5); this run is already 5 agent turns \
+                 deep."
+                    .to_string(),
+            ));
+        }
+        Err(librefang_kernel_handle::KernelOpError::unavailable(
+            "Workflow engine",
+        ))
+    }
+}
 impl GoalControl for DispatchCapture {}
 impl ToolPolicy for DispatchCapture {}
 impl librefang_kernel_handle::CatalogQuery for DispatchCapture {}
@@ -1084,7 +1182,9 @@ async fn agent_send_no_key_no_caller_routes_to_send_to_agent() {
 async fn agent_send_no_key_with_caller_routes_to_send_to_agent_as() {
     let cap = Arc::new(DispatchCapture::default());
     let kernel: Arc<dyn KernelHandle> = cap.clone();
-    let input = serde_json::json!({ "agent_id": "target", "message": "hi" });
+    // `"async": false` is explicit because non-blocking is now the default when a caller is known.
+    // This test covers the blocking path's caller-aware routing, which still exists and is still reachable — see `agent_send_defaults_to_async_when_caller_is_known` for the new default.
+    let input = serde_json::json!({ "agent_id": "target", "message": "hi", "async": false });
 
     let result =
         super::agent::tool_agent_send(&input, Some(&kernel), Some("parent-agent"), None, None)
@@ -1102,10 +1202,12 @@ async fn agent_send_no_key_with_caller_routes_to_send_to_agent_as() {
 async fn agent_send_same_key_routes_to_as_with_key_both_calls() {
     let cap = Arc::new(DispatchCapture::default());
     let kernel: Arc<dyn KernelHandle> = cap.clone();
+    // `"async": false` throughout: this test pins the keyed BLOCKING dispatch, which non-blocking delegation does not go through.
     let input = serde_json::json!({
         "agent_id": "target",
         "message": "turn one",
         "conversation_key": "thread-abc",
+        "async": false,
     });
 
     super::agent::tool_agent_send(&input, Some(&kernel), Some("parent-agent"), None, None)
@@ -1116,6 +1218,7 @@ async fn agent_send_same_key_routes_to_as_with_key_both_calls() {
         "agent_id": "target",
         "message": "turn two",
         "conversation_key": "thread-abc",
+        "async": false,
     });
     super::agent::tool_agent_send(&input2, Some(&kernel), Some("parent-agent"), None, None)
         .await
@@ -1139,10 +1242,12 @@ async fn agent_send_distinct_keys_produce_isolated_dispatch() {
     let call = |key: &'static str| {
         let kernel = kernel.clone();
         async move {
+            // `"async": false`: distinct-key isolation is a property of the blocking keyed dispatch.
             let input = serde_json::json!({
                 "agent_id": "target",
                 "message": "msg",
                 "conversation_key": key,
+                "async": false,
             });
             super::agent::tool_agent_send(&input, Some(&kernel), Some("parent-agent"), None, None)
                 .await
@@ -1198,6 +1303,111 @@ async fn agent_send_async_routes_to_tracked_path_and_returns_task_id() {
         &[format!("async_tracked:session={}", session.0)],
         "async=true must hit the tracker path and forward the caller session, \
          not the blocking send_to_agent_as"
+    );
+}
+
+/// Omitting `async` delegates non-blockingly when a caller agent is known.
+///
+/// The blocking default made every unannotated delegation a timeout risk: the model had to predict in advance that the callee would be slow and opt in to `async`, and a wrong guess spent the turn waiting until `tool_timeout_secs` fired.
+/// Non-blocking is the safe default because an unnecessary `task_id` costs one extra turn to collect, while an unnecessary block can lose the turn entirely.
+#[tokio::test]
+async fn agent_send_defaults_to_async_when_caller_is_known() {
+    use librefang_types::agent::SessionId;
+
+    let cap = Arc::new(DispatchCapture::default());
+    let kernel: Arc<dyn KernelHandle> = cap.clone();
+    // No "async" key at all — this is what a model emits when it does not think
+    // about blocking, which is the common case.
+    let input = serde_json::json!({ "agent_id": "target", "message": "research this" });
+    let session = SessionId(uuid::Uuid::new_v4());
+
+    let out = super::agent::tool_agent_send(
+        &input,
+        Some(&kernel),
+        Some("parent-agent"),
+        Some(session),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["status"], "delegated");
+    assert_eq!(v["task_id"], "task-fake-1234");
+
+    let calls = cap.calls.lock().unwrap();
+    assert_eq!(
+        &*calls,
+        &[format!("async_tracked:session={}", session.0)],
+        "an omitted async flag with a known caller must take the tracker path, \
+         not the blocking send_to_agent_as"
+    );
+}
+
+/// Omitting `async` WITHOUT a caller agent still dispatches blocking, because the async path cannot serve a callerless send at all.
+///
+/// `tool_agent_send` rejects `async` with `InvalidParameter` when `caller_agent_id` is `None` — the tracker has nowhere to route the completion — while the blocking path has explicit `(None, Some(key))` and `(None, None)` arms for system-initiated sends.
+/// So an unconditional non-blocking default would convert every kernel-initiated `agent_send` into an error.
+/// This test is the guard against "simplifying" the conditional default into `unwrap_or(true)`.
+#[tokio::test]
+async fn agent_send_without_caller_still_defaults_to_blocking() {
+    let cap = Arc::new(DispatchCapture::default());
+    let kernel: Arc<dyn KernelHandle> = cap.clone();
+    let input = serde_json::json!({ "agent_id": "target", "message": "system notice" });
+
+    // caller_agent_id = None: a system-initiated send.
+    let out = super::agent::tool_agent_send(&input, Some(&kernel), None, None, None)
+        .await
+        .expect("a callerless send must not be rejected as an invalid async request");
+
+    assert_eq!(out, "no-key-no-parent");
+    let calls = cap.calls.lock().unwrap();
+    assert_eq!(
+        &*calls,
+        &["send_to_agent"],
+        "without a caller the tool must stay on the blocking path"
+    );
+}
+
+/// An untrackable `async: true` call returns the callee's reply as the tool result, NOT a `task_id` payload telling the model to wait (#6650).
+///
+/// The kernel falls back to a blocking send when it cannot parse a caller session, which is every `agent_send` issued over the MCP HTTP bridge (`routes/network.rs`) or the REST `/api/tools/{name}` bridge (`routes/tools_sessions.rs`) — both pass `session_id: None` by construction.
+/// Before the `AsyncSendOutcome` split, the fallback's response body came back through the same `Ok(String)` slot as a task id, so the tool emitted `{"task_id": "<the entire reply text>", "status": "delegated"}` and instructed the model to end its turn and wait for a completion event that no registered task would ever produce.
+/// The answer was in hand and thrown away.
+#[tokio::test]
+async fn agent_send_async_without_session_returns_the_reply_not_a_fake_task_id_6650() {
+    let cap = Arc::new(DispatchCapture::default());
+    let kernel: Arc<dyn KernelHandle> = cap.clone();
+    let input = serde_json::json!({
+        "agent_id": "target",
+        "message": "do a long research task",
+        "async": true,
+    });
+
+    // Known caller, no session — the shape both HTTP bridges produce.
+    let out =
+        super::agent::tool_agent_send(&input, Some(&kernel), Some("parent-agent"), None, None)
+            .await
+            .unwrap();
+
+    assert_eq!(
+        out, "inline-fallback-response",
+        "an untrackable async delegation must return the callee's reply verbatim"
+    );
+    // Specifically: the misleading delegated-payload shape must be gone.
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&out) {
+        assert!(
+            v.get("task_id").is_none() && v.get("status").is_none(),
+            "no task was registered, so no task_id / delegated status may be reported: {v:?}"
+        );
+    }
+
+    let calls = cap.calls.lock().unwrap();
+    assert_eq!(
+        &*calls,
+        &["async_tracked:session=none".to_string()],
+        "the tool must still route through the tracked entry point — the kernel \
+         owns the fallback decision, not the tool"
     );
 }
 
@@ -1276,6 +1486,125 @@ async fn agent_send_depth_exceeded_is_permission_denied() {
     assert!(
         calls.is_empty(),
         "depth-exceeded must short-circuit before any send_to_agent_* arm, got: {calls:?}"
+    );
+}
+
+/// `with_agent_call_depth` is the single definition of "one level deeper" in the synchronous inter-agent call chain, shared by `agent_send` and the kernel's workflow-step dispatch (refs #6659).
+/// Each nesting level must add exactly one, and must not leak its level to the frame that resumes after it — otherwise a fan-out of sibling delegations would accumulate depth as if it were nesting and start refusing legal chains.
+#[tokio::test]
+async fn with_agent_call_depth_adds_exactly_one_level_per_nesting() {
+    use super::{current_agent_depth, with_agent_call_depth};
+
+    assert_eq!(
+        current_agent_depth(),
+        0,
+        "outside any scope the depth must read 0, not panic on the missing task-local"
+    );
+
+    with_agent_call_depth(async {
+        assert_eq!(current_agent_depth(), 1);
+        with_agent_call_depth(async {
+            assert_eq!(current_agent_depth(), 2);
+        })
+        .await;
+        assert_eq!(
+            current_agent_depth(),
+            1,
+            "an inner level must not leak into the frame that resumes after it"
+        );
+        // Sibling scope at the same nesting level, not a third level.
+        with_agent_call_depth(async {
+            assert_eq!(current_agent_depth(), 2);
+        })
+        .await;
+        assert_eq!(current_agent_depth(), 1);
+    })
+    .await;
+
+    assert_eq!(current_agent_depth(), 0, "the outermost scope must unwind");
+}
+
+/// The helper and `agent_send`'s quota read the *same* counter: a depth established by `with_agent_call_depth` (which is how a workflow step's agent turn gets its level) must be visible to the `agent_send` guard, so a workflow step's agent cannot regain a full delegation budget by hopping through the workflow path.
+#[tokio::test]
+async fn agent_send_quota_sees_depth_established_by_with_agent_call_depth() {
+    use super::error::ToolError;
+    use super::{with_agent_call_depth, AGENT_CALL_DEPTH};
+
+    let cap = Arc::new(DispatchCapture::default());
+    let kernel: Arc<dyn KernelHandle> = cap.clone();
+    let input = serde_json::json!({ "agent_id": "target", "message": "hi" });
+
+    // DispatchCapture::max_agent_call_depth() returns 10.
+    // Seed 9 directly and let the helper supply the tenth level, so the assertion fails if the helper writes to some other counter than the one the guard reads.
+    let result = AGENT_CALL_DEPTH
+        .scope(
+            std::cell::Cell::new(9),
+            with_agent_call_depth(super::agent::tool_agent_send(
+                &input,
+                Some(&kernel),
+                Some("parent-agent"),
+                None,
+                None,
+            )),
+        )
+        .await;
+
+    match result.expect_err("depth 9 + one helper level must reach the quota") {
+        ToolError::PermissionDenied(msg) => assert!(
+            msg.contains("Inter-agent call depth exceeded"),
+            "expected the depth refusal, got: {msg}"
+        ),
+        other => panic!("expected PermissionDenied from the shared depth counter, got {other:?}"),
+    }
+    assert!(
+        cap.calls.lock().unwrap().is_empty(),
+        "the refusal must short-circuit before dispatch"
+    );
+}
+
+/// The nesting-depth refusal must reach the model as a policy error, the same way `agent_send`'s does (refs #6659).
+///
+/// `tool_workflow_run` used to map *every* kernel failure through `ToolError::upstream`, which lifts to a 5xx-class `ToolExecution` that retry logic reads as a downstream crash.
+/// It also matters for turn survival: `PermissionDenied` classifies as `ToolExecutionStatus::Denied` — a soft failure — so an agent that keeps hitting the cap does not burn through `MAX_CONSECUTIVE_ALL_FAILED` and lose the whole turn to an abort.
+#[tokio::test]
+async fn workflow_run_depth_refusal_is_permission_denied_not_upstream() {
+    use super::error::ToolError;
+
+    let denying = Arc::new(DispatchCapture {
+        deny_workflow_run: true,
+        ..Default::default()
+    });
+    let kernel: Arc<dyn KernelHandle> = denying;
+    let input = serde_json::json!({ "workflow_id": "some-workflow" });
+
+    let err = super::workflow::tool_workflow_run(&input, Some(&kernel), None)
+        .await
+        .expect_err("a CapabilityDenied from the kernel must surface as an error");
+    match &err {
+        ToolError::PermissionDenied(msg) => assert!(
+            msg.contains("Nested workflow run depth exceeded"),
+            "the refusal text must survive so the model learns why, got: {msg}"
+        ),
+        other => panic!(
+            "expected PermissionDenied (soft Denied, 403-class); Upstream would map to 5xx and \
+             count as a hard failure toward MAX_CONSECUTIVE_ALL_FAILED. Got {other:?}"
+        ),
+    }
+    assert_eq!(
+        err.execution_status(),
+        librefang_types::tool::ToolExecutionStatus::Denied,
+        "the refusal must classify as a soft Denied, not a hard Error"
+    );
+
+    // Any other kernel failure still goes through `upstream` — the mapping is a narrow special case, not a blanket reclassification.
+    let plain = Arc::new(DispatchCapture::default());
+    let kernel: Arc<dyn KernelHandle> = plain;
+    let err = super::workflow::tool_workflow_run(&input, Some(&kernel), None)
+        .await
+        .expect_err("the default stub reports the engine unavailable");
+    assert!(
+        matches!(err, ToolError::Upstream { .. }),
+        "non-policy kernel failures must stay Upstream, got {err:?}"
     );
 }
 
@@ -1653,6 +1982,9 @@ struct ApprovalKernel {
     /// for every call. `None` keeps the default-impl behaviour
     /// (`UserToolGate::Allow`) so pre-RBAC tests are unaffected.
     user_gate_override: Option<librefang_types::user_policy::UserToolGate>,
+    /// #6594 — overrides what `requires_approval` returns for every tool, modelling an operator whose global `approval.require_approval` list does not name the tool being called.
+    /// `None` keeps the default mock behaviour (`tool_name == "shell_exec"`), so pre-existing tests are unaffected.
+    requires_approval_override: Option<bool>,
 }
 
 /// Captures the `DeferredToolExecution.force_human` flag so tests
@@ -1836,7 +2168,8 @@ impl KnowledgeGraph for ApprovalKernel {
 #[async_trait::async_trait]
 impl ApprovalGate for ApprovalKernel {
     fn requires_approval(&self, tool_name: &str) -> bool {
-        tool_name == "shell_exec"
+        self.requires_approval_override
+            .unwrap_or(tool_name == "shell_exec")
     }
 
     async fn request_approval(

@@ -1,11 +1,16 @@
 [workspace]
 
+[features]
+default = ["default-tls"]
+default-tls = ["reqwest/default-tls"]
+rustls-tls = ["reqwest/rustls-tls"]
+
 [package]
 # BossFang fork: SDK crate renamed to bossfang-sdk on crates.io to keep
 # the upstream `librefang` name available for legitimate library uses
 # and to avoid confusion between the two builds.
 name = "bossfang-sdk"
-version = "2026.7.27"
+version = "2026.8.30"
 edition = "2021"
 description = "Official Rust client for BossFang Agent OS"
 license = "MIT"
@@ -14,8 +19,11 @@ keywords = ["bossfang", "agent", "ai"]
 authors = ["BossFang Maintainers"]
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "charset", "http2", "system-proxy"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
-thiserror = "1"
+tokio = { version = "1", features = ["rt", "sync", "macros"] }
+thiserror = "2"
 futures = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }

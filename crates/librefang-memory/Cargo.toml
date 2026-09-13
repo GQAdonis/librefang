@@ -3,6 +3,8 @@ name = "librefang-memory"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Memory substrate for the LibreFang Agent OS"
 readme = "README.md"
 
@@ -49,6 +51,7 @@ surreal-memory = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+rusqlite = { workspace = true, features = ["hooks"] }
 
 [lints]
 workspace = true

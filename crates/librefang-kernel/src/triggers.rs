@@ -113,10 +113,12 @@ pub enum TriggerPattern {
     ///
     /// `assignee_match` narrows the match to tasks assigned to a specific
     /// agent:
-    /// - `Some("self")` — only fire for tasks assigned to the trigger-owning
-    ///   agent. Accepts both the agent's UUID and its display name.
-    /// - `Some("<uuid>"|"<name>")` — only fire for tasks assigned to that
-    ///   specific agent.
+    /// - `Some("self")` — only fire for tasks assigned to the trigger-owning agent.
+    ///   Accepts both the agent's UUID and its display name.
+    /// - `Some("unassigned")` — only fire for tasks no agent owns.
+    ///   Matches both an absent `assigned_to` and the empty string, because the stuck-task sweeper releases a claim by writing `assigned_to = ''` rather than NULL.
+    /// - `Some("<uuid>"|"<name>")` — only fire for tasks assigned to that specific agent.
+    ///   `"self"` and `"unassigned"` are keywords, so an agent named either must be addressed by UUID.
     /// - `None` — fire for every `TaskPosted` event (legacy behavior).
     ///
     /// The field is `#[serde(default)]` so legacy triggers persisted or
@@ -130,10 +132,12 @@ pub enum TriggerPattern {
     ///
     /// `creator_match` narrows the match to tasks originally posted by a
     /// specific agent (mirror of `TaskPosted`'s `assignee_match`):
-    /// - `Some("self")` — only fire for tasks posted by the trigger-owning
-    ///   agent. Accepts both the agent's UUID and its display name.
-    /// - `Some("<uuid>"|"<name>")` — only fire for tasks posted by that
-    ///   specific agent.
+    /// - `Some("self")` — only fire for tasks posted by the trigger-owning agent.
+    ///   Accepts both the agent's UUID and its display name.
+    /// - `Some("unassigned")` — accepted because the identity filter is shared with `assignee_match`, and here means "no recorded creator" (absent or empty `created_by`).
+    ///   Unlike `assigned_to`, nothing in the system currently writes an empty `created_by`, so this is a consequence of the shared helper rather than a designed filter — treat it as reserved.
+    /// - `Some("<uuid>"|"<name>")` — only fire for tasks posted by that specific agent.
+    ///   `"self"` and `"unassigned"` are keywords.
     /// - `None` — fire for every `TaskClaimed` event (legacy behavior).
     ///
     /// The field is `#[serde(default)]` so legacy triggers persisted or
@@ -147,10 +151,12 @@ pub enum TriggerPattern {
     ///
     /// `creator_match` narrows the match to tasks originally posted by a
     /// specific agent (mirror of `TaskPosted`'s `assignee_match`):
-    /// - `Some("self")` — only fire for tasks posted by the trigger-owning
-    ///   agent. Accepts both the agent's UUID and its display name.
-    /// - `Some("<uuid>"|"<name>")` — only fire for tasks posted by that
-    ///   specific agent.
+    /// - `Some("self")` — only fire for tasks posted by the trigger-owning agent.
+    ///   Accepts both the agent's UUID and its display name.
+    /// - `Some("unassigned")` — accepted because the identity filter is shared with `assignee_match`, and here means "no recorded creator" (absent or empty `created_by`).
+    ///   Unlike `assigned_to`, nothing in the system currently writes an empty `created_by`, so this is a consequence of the shared helper rather than a designed filter — treat it as reserved.
+    /// - `Some("<uuid>"|"<name>")` — only fire for tasks posted by that specific agent.
+    ///   `"self"` and `"unassigned"` are keywords.
     /// - `None` — fire for every `TaskCompleted` event (legacy behavior).
     ///
     /// The field is `#[serde(default)]` so legacy triggers persisted or
@@ -185,7 +191,13 @@ pub struct Trigger {
     /// Enables cross-session wake: one agent's trigger can wake a different agent.
     #[serde(default)]
     pub target_agent: Option<AgentId>,
-    /// Cooldown duration in seconds after this trigger fires before it can fire again.
+    /// Cooldown duration in seconds after this trigger fires before the same window may fire again.
+    ///
+    /// For patterns that name a subject — the task-board, memory-key and agent-lifecycle kinds, see `cooldown_subject` — the window is `(trigger, subject)`, so the trigger can fire again immediately for a *different* subject and this bound applies per subject rather than per trigger (#6756).
+    /// Every other pattern keeps a single trigger-wide window.
+    ///
+    /// Worth pairing carefully with `max_fires`: a subject-scoped trigger fires once per subject, so a burst of distinct subjects consumes the fire budget as fast as they arrive rather than at one per window.
+    ///
     /// `None` means use the default cooldown (`DEFAULT_COOLDOWN_SECS`).
     /// Set to `Some(0)` to disable cooldown for this trigger.
     #[serde(default)]
@@ -218,6 +230,42 @@ pub struct Trigger {
     pub workflow_id: Option<String>,
 }
 
+/// Whether a stored trigger already delivers `TaskPosted` events to a given assignee — the precedence input for the built-in assignee wake.
+///
+/// The three states are distinct on purpose: `Dormant` is a wake that an operator once configured and that can no longer fire, which is worth saying out loud when the built-in path takes over from it, while `None` is an installation that never declared one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskPostedCoverage {
+    /// A stored trigger can currently fire for this assignee.
+    /// The built-in wake stands down and the operator's trigger owns delivery.
+    Covered(TriggerId),
+    /// Triggers address this assignee but none can fire — each is disabled or has exhausted `max_fires`.
+    /// The built-in wake fires and names these, since a dead record is a gap, not a decision to stay silent.
+    Dormant(Vec<TriggerId>),
+    /// No stored trigger addresses this assignee at all.
+    None,
+}
+
+/// What produced a [`TriggerMatch`].
+///
+/// Dispatch is uniform across the variants — the dispatcher consumes one list — but the two differ in what they can be keyed on for diagnostics and for `SessionMode::New` session derivation, and a log line that says only "trigger fired" cannot answer "which trigger?" for a match that has no trigger behind it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TriggerMatchSource {
+    /// A stored trigger record matched the event.
+    Registered(TriggerId),
+    /// The kernel synthesized this match for the assignee of a `TaskPosted` event that no stored trigger currently covers (issue #6728).
+    /// Carries the task id so the wake is traceable to the task that caused it, and so `SessionId::for_task_wake` has a stable key.
+    TaskBoardAssigneeWake { task_id: String },
+}
+
+impl std::fmt::Display for TriggerMatchSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Registered(id) => write!(f, "trigger:{id}"),
+            Self::TaskBoardAssigneeWake { task_id } => write!(f, "assignee_wake:{task_id}"),
+        }
+    }
+}
+
 /// A trigger match result with optional session mode override.
 #[derive(Debug, Clone)]
 pub struct TriggerMatch {
@@ -229,8 +277,8 @@ pub struct TriggerMatch {
     pub session_mode_override: Option<librefang_types::agent::SessionMode>,
     /// If set, dispatch fires a workflow run instead of `send_message_full`.
     pub workflow_id: Option<String>,
-    /// The trigger ID that produced this match, for telemetry.
-    pub trigger_id: TriggerId,
+    /// What produced this match, for telemetry and session derivation.
+    pub source: TriggerMatchSource,
 }
 
 /// Patch payload for updating an existing trigger.
@@ -262,12 +310,16 @@ pub struct TriggerEngine {
     triggers: DashMap<TriggerId, Trigger>,
     /// Index: agent_id → list of trigger IDs belonging to that agent.
     agent_triggers: DashMap<AgentId, Vec<TriggerId>>,
-    /// Per-trigger last fire wall-clock timestamp for cooldown enforcement.
+    /// Last fire wall-clock timestamp per cooldown window (issue #6756).
     ///
-    /// Uses `DateTime<Utc>` rather than `std::time::Instant` so that the state
-    /// can be round-tripped through the `Trigger.last_fired_at` field on disk,
-    /// surviving daemon restarts without resetting all cooldown windows.
-    last_fired: DashMap<TriggerId, DateTime<Utc>>,
+    /// Keyed on `(trigger, subject)` rather than on the trigger alone, where the subject is what the event is *about* — a task id, a memory key — for the patterns that name one.
+    /// A window keyed on the trigger cannot tell "the same thing fired twice" from "two different things happened a second apart", and silently discarded the second, which for a task board means the work is never announced again.
+    ///
+    /// Entries with `None` are the trigger-wide window used by patterns that identify no subject (`All`, `System`, `ContentMatch`, …), so a catch-all keeps exactly the rate cap it has today.
+    ///
+    /// Uses `DateTime<Utc>` rather than `std::time::Instant` so the trigger-wide entry can be round-tripped through `Trigger.last_fired_at` on disk, surviving daemon restarts without resetting all cooldown windows.
+    /// Per-subject entries stay in memory: a restart then costs at most one extra fire per subject, which is the safe direction, and it keeps the persisted field meaning what it says.
+    last_fired: DashMap<(TriggerId, Option<String>), DateTime<Utc>>,
     /// Maximum number of triggers that can fire from a single event.
     max_triggers_per_event: usize,
     /// Default cooldown duration (seconds) applied when a trigger has no override.
@@ -280,6 +332,14 @@ pub struct TriggerEngine {
     /// don't `O_TRUNC` the same `.tmp.{pid}` path and produce a torn
     /// file before rename.  Mirrors `CronScheduler::persist_lock`.
     persist_lock: std::sync::Mutex<()>,
+}
+
+fn lock_trigger_persistence(lock: &std::sync::Mutex<()>) -> std::sync::MutexGuard<'_, ()> {
+    lock.lock().unwrap_or_else(|poisoned| {
+        warn!("trigger persistence lock poisoned; recovering write serialization");
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
 }
 
 impl TriggerEngine {
@@ -328,8 +388,11 @@ impl TriggerEngine {
 
     /// Load persisted triggers from disk and rebuild the agent index.
     ///
-    /// Restores `last_fired` state from `Trigger.last_fired_at` so that
-    /// cooldown windows survive daemon restarts.
+    /// Restores `last_fired` state from `Trigger.last_fired_at` so that the trigger-wide cooldown window survives daemon restarts.
+    ///
+    /// This covers the trigger-wide window only (#6756).
+    /// Per-subject windows — the task-board, memory-key and agent-lifecycle pattern kinds, see `cooldown_subject` — are in-memory and do not survive a restart: such a trigger comes back with no suppression for any subject, including one it fired on moments earlier.
+    /// The trade is deliberate, since persisting a window per subject would grow the file without bound and the failure direction is an extra delivery rather than a lost one.
     ///
     /// Returns the number of triggers loaded. Returns `Ok(0)` if the
     /// persistence file does not exist or no path is configured.
@@ -364,11 +427,14 @@ impl TriggerEngine {
         for trigger in triggers {
             let id = trigger.id;
             let agent_id = trigger.agent_id;
-            // Restore cooldown state from the persisted last_fired_at timestamp.
-            // This ensures that a trigger which fired shortly before a restart
-            // still honours its cooldown window after the daemon comes back up.
+            // Restore cooldown state from the persisted last_fired_at timestamp, so a trigger that fired shortly before a restart still honours its window afterwards.
+            //
+            // This covers the trigger-wide window only.
+            // Per-subject windows (#6756) are in-memory, so a subject-scoped pattern starts a restart with no suppression at all — including for a subject it fired on moments earlier.
+            // The trade is deliberate: persisting one entry per subject would grow `trigger_jobs.json` without bound, and the failure direction here is an extra delivery rather than a lost one.
+            // `subject_scoped_cooldown_does_not_survive_restart` pins the behaviour so the cost stays visible.
             if let Some(last_fired_at) = trigger.last_fired_at {
-                self.last_fired.insert(id, last_fired_at);
+                self.last_fired.insert((id, None), last_fired_at);
             }
             self.triggers.insert(id, trigger);
             // Guard against duplicate IDs in a corrupted file: only add to the
@@ -390,7 +456,7 @@ impl TriggerEngine {
     ///
     /// Does nothing when no persistence path is configured.
     pub fn persist(&self) -> LibreFangResult<()> {
-        let _guard = self.persist_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = lock_trigger_persistence(&self.persist_lock);
         let path = match &self.persist_path {
             Some(p) => p,
             None => return Ok(()),
@@ -402,7 +468,7 @@ impl TriggerEngine {
             .iter()
             .map(|e| {
                 let mut t = e.value().clone();
-                if let Some(ts) = self.last_fired.get(&t.id) {
+                if let Some(ts) = self.last_fired.get(&(t.id, None)) {
                     t.last_fired_at = Some(*ts);
                 }
                 t
@@ -431,9 +497,17 @@ impl TriggerEngine {
         Ok(())
     }
 
-    /// Register a new trigger.
-    /// Returns `true` if `agent_id` already has an enabled trigger with this exact pattern.
-    /// Used to skip duplicate registration of proactive triggers on restart.
+    /// Returns `true` if `agent_id` owns a trigger with this exact pattern,
+    /// **whatever its `enabled` state**. Used to skip duplicate registration
+    /// of proactive triggers on restart.
+    ///
+    /// Ignoring `enabled` is deliberate, and differs from the coverage rule used by the Task Board assignee wake ([`Self::task_posted_coverage_for`]), which treats a disabled record as no coverage.
+    /// The two questions are not the same one:
+    ///
+    /// - Proactive triggers are auto-registered from `ScheduleMode::Proactive` conditions with `max_fires = 0` (`kernel/spawn.rs`, `kernel/background_lifecycle.rs`), so they can never become disabled by exhausting a budget — `enabled = false` there means exactly one thing, that an operator turned the trigger off.
+    ///   Disabling it is also the *only* off switch: the condition would otherwise be re-registered on the next spawn.
+    ///   Skipping on pattern alone is what makes that switch stick.
+    /// - The assignee wake has an explicit off switch of its own (`[task_board] assignee_wake`, or the per-agent manifest override), so it can afford to treat a dead record as a gap to fill rather than as a decision to stay silent.
     pub fn agent_has_pattern(&self, agent_id: AgentId, pattern: &TriggerPattern) -> bool {
         let Some(ids) = self.agent_triggers.get(&agent_id) else {
             return false;
@@ -446,6 +520,7 @@ impl TriggerEngine {
         })
     }
 
+    /// Register a new trigger.
     pub fn register(
         &self,
         agent_id: AgentId,
@@ -596,7 +671,7 @@ impl TriggerEngine {
             if let Some(mut list) = self.agent_triggers.get_mut(&trigger.agent_id) {
                 list.retain(|id| *id != trigger_id);
             }
-            self.last_fired.remove(&trigger_id);
+            self.forget_cooldowns(trigger_id);
             true
         } else {
             false
@@ -608,7 +683,7 @@ impl TriggerEngine {
         if let Some((_, trigger_ids)) = self.agent_triggers.remove(&agent_id) {
             for id in trigger_ids {
                 self.triggers.remove(&id);
-                self.last_fired.remove(&id);
+                self.forget_cooldowns(id);
             }
         }
     }
@@ -628,7 +703,7 @@ impl TriggerEngine {
         let mut taken = Vec::with_capacity(trigger_ids.len());
         for id in trigger_ids {
             if let Some((_, t)) = self.triggers.remove(&id) {
-                self.last_fired.remove(&id);
+                self.forget_cooldowns(id);
                 taken.push(t);
             }
         }
@@ -762,9 +837,9 @@ impl TriggerEngine {
         }
         let id = t.id;
         drop(entry);
-        // Pattern change means the trigger is logically new — clear any stale cooldown timer.
+        // Pattern change means the trigger is logically new — clear any stale cooldown timer, including per-subject windows the old pattern opened whose subjects the new one may not even have (#6756).
         if pattern_changed {
-            self.last_fired.remove(&id);
+            self.forget_cooldowns(id);
         }
         self.triggers.get(&id).map(|t| t.clone())
     }
@@ -795,9 +870,9 @@ impl TriggerEngine {
     /// (agent_id, message_to_send) pairs for matching triggers.
     ///
     /// Applies two layers of storm prevention:
-    /// 1. **Per-trigger cooldown** — after firing, a trigger is suppressed for
-    ///    `cooldown_secs` (default `DEFAULT_COOLDOWN_SECS`). Set `cooldown_secs = Some(0)`
-    ///    on a trigger to disable its cooldown.
+    /// 1. **Cooldown** — after firing, the window it fired in is suppressed for `cooldown_secs` (default `DEFAULT_COOLDOWN_SECS`).
+    ///    For most patterns that window is the trigger itself; for patterns that name a subject it is `(trigger, subject)`, so a second task or memory key is a separate window rather than a suppressed repeat (#6756, see `cooldown_subject`).
+    ///    Set `cooldown_secs = Some(0)` on a trigger to disable its cooldown.
     /// 2. **Per-event budget** — at most `max_triggers_per_event` triggers may fire
     ///    from a single event evaluation. Excess matches are dropped with a warning.
     pub fn evaluate(&self, event: &Event) -> (Vec<TriggerMatch>, bool) {
@@ -844,6 +919,8 @@ impl TriggerEngine {
         // first time the per-event budget is exhausted (it lands in the `warn!`
         // branch below). `ids.len()` is the same total, taken lock-free.
         let total_registered = ids.len();
+        // Set when a fire stamps a cooldown window, so the prune below runs only when there is something new to prune.
+        let mut inserted_cooldown = false;
         for id in ids {
             let Some(mut entry) = self.triggers.get_mut(&id) else {
                 continue;
@@ -862,22 +939,20 @@ impl TriggerEngine {
                 continue;
             }
 
-            // Check per-trigger cooldown using wall-clock timestamps so that
-            // cooldown windows survive daemon restarts.
+            // Check the cooldown window using wall-clock timestamps so that windows survive daemon restarts.
+            // The window is scoped to the event's subject where the pattern names one (#6756), so a second task completing a second after the first is a distinct window rather than a suppressed repeat.
+            let subject = cooldown_subject(&trigger.pattern, event);
             let cooldown =
                 Duration::from_secs(trigger.cooldown_secs.unwrap_or(self.default_cooldown_secs));
             if !cooldown.is_zero() {
-                if let Some(last) = self.last_fired.get(&trigger.id) {
+                if let Some(last) = self.last_fired.get(&(trigger.id, subject.clone())) {
                     // `now - *last` is negative when `*last > now`, which can happen
                     // if the wall clock stepped backwards (NTP correction, manual
                     // adjustment, VM snapshot restore) or if the persisted
                     // `last_fired_at` was imported from a future-dated state.
                     // `to_std()` then errors; the old `unwrap_or(Duration::ZERO)`
-                    // collapsed elapsed to 0 and wedged the trigger off until the
-                    // wall clock caught up (#5115). Treat the anomaly as
-                    // elapsed-exceeded so the trigger fires once: the subsequent
-                    // `self.last_fired.insert(trigger.id, now)` below stamps a
-                    // sane timestamp and self-heals the entry.
+                    // collapsed elapsed to 0 and wedged the trigger off until the wall clock caught up (#5115).
+                    // Treat the anomaly as elapsed-exceeded so the trigger fires once: the subsequent `self.last_fired.insert((trigger.id, subject), now)` below stamps a sane timestamp and self-heals the entry.
                     let elapsed = match (now - *last).to_std() {
                         Ok(e) => e,
                         Err(_) => {
@@ -942,11 +1017,18 @@ impl TriggerEngine {
                     message,
                     session_mode_override: trigger.session_mode,
                     workflow_id: trigger.workflow_id.clone(),
-                    trigger_id: trigger.id,
+                    source: TriggerMatchSource::Registered(trigger.id),
                 });
                 trigger.fire_count += 1;
                 state_mutated = true;
-                self.last_fired.insert(trigger.id, now);
+                // Stamp the window that was actually consulted, and the trigger-wide entry alongside it so `last_fired_at` on disk keeps meaning "when this trigger last fired" for operators and for restart recovery.
+                self.last_fired.insert((trigger.id, subject.clone()), now);
+                if subject.is_some() {
+                    self.last_fired.insert((trigger.id, None), now);
+                }
+                // Pruning is deferred to after the loop on purpose: `entry` is a live `RefMut` on this trigger's shard, and the prune has to read `self.triggers` to learn the longest window in use.
+                // Same-thread write-then-read on one shard is the self-deadlock this function already documents for `DashMap::len()` above.
+                inserted_cooldown = true;
 
                 debug!(
                     trigger_id = %trigger.id,
@@ -958,7 +1040,114 @@ impl TriggerEngine {
             }
         }
 
+        // Safe here and not inside the loop: every `RefMut` taken above has been dropped, so reading `self.triggers` cannot meet a write guard this thread is still holding.
+        if inserted_cooldown {
+            self.prune_expired_cooldowns(now);
+        }
+
         (matches, state_mutated)
+    }
+
+    /// Whether a stored trigger already delivers `TaskPosted` events to
+    /// `assignee_id`, for the built-in assignee wake (issue #6728).
+    ///
+    /// A record covers the assignee when **both** hold:
+    /// 1. its pattern would match a `TaskPosted` addressed to that assignee — evaluated through [`agent_identity_filter_matches`], the same helper [`matches_pattern`] uses, against both identity forms the substrate accepts in `assigned_to` (UUID and display name); and
+    /// 2. it dispatches *to* that assignee — owner, or `target_agent` when set.
+    ///    An orchestrator's `assignee_match = "self"` trigger that happens to target the assignee fails (1) and is correctly not coverage: it fires for tasks addressed to the orchestrator.
+    ///
+    /// Scans all triggers rather than the `agent_triggers` index because that index is owner-keyed, so a trigger owned by one agent and targeted at another would be missed.
+    /// The scan is O(triggers in the installation) — not O(one agent's triggers) — and runs once per `TaskPosted`, inside `publish_event_inner` and therefore ahead of dispatch.
+    /// That is accepted rather than overlooked: the alternative is a second, assignee-keyed index that has to stay consistent across register / update / remove / re-key, and the ceiling here is `MAX_TRIGGERS_PER_AGENT` × agent count with a cheap per-entry test (a pattern discriminant and an id comparison reject almost everything before any string work).
+    /// If an installation ever makes that product large enough to matter, the index is the fix, and it can be added without changing this function's contract.
+    ///
+    /// Cooldown state is deliberately not consulted: a cooldown-suppressed trigger is still coverage.
+    /// Cooldown is transient dispatch state, and treating it as a gap would re-introduce the double wake that a per-event check causes.
+    /// Only `enabled` and fire-exhaustion count.
+    pub fn task_posted_coverage_for(
+        &self,
+        assignee_id: AgentId,
+        assignee_name: Option<&str>,
+        resolve_name: impl Fn(AgentId) -> Option<String>,
+    ) -> TaskPostedCoverage {
+        let assignee_uuid = assignee_id.to_string();
+
+        // Filter during the walk so only records that actually address this assignee are materialised.
+        // Collecting and sorting every id first, then looking each one up again, paid an O(n log n) sort and n shard lookups on every `TaskPosted` for a candidate set that is almost always empty or a single entry.
+        let mut candidates: Vec<(TriggerId, bool)> = Vec::new();
+        for entry in self.triggers.iter() {
+            let trigger = entry.value();
+            let TriggerPattern::TaskPosted { assignee_match } = &trigger.pattern else {
+                continue;
+            };
+            // (2) dispatch target
+            if trigger.target_agent.unwrap_or(trigger.agent_id) != assignee_id {
+                continue;
+            }
+            // (1) would the filter accept a task addressed to this assignee,
+            // in either of the two identity forms `task_claim` matches on?
+            let owner = Some((trigger.agent_id, resolve_name(trigger.agent_id)));
+            let addressable =
+                agent_identity_filter_matches(assignee_match, Some(assignee_uuid.as_str()), &owner)
+                    || assignee_name.is_some_and(|n| {
+                        agent_identity_filter_matches(assignee_match, Some(n), &owner)
+                    });
+            if !addressable {
+                continue;
+            }
+
+            let exhausted = trigger.max_fires > 0 && trigger.fire_count >= trigger.max_fires;
+            candidates.push((trigger.id, trigger.enabled && !exhausted));
+        }
+
+        // `DashMap` iterates by shard and hash, so which record gets reported must not depend on iteration order.
+        // Ordering the handful that address one assignee gives the same guarantee the whole-store sort used to, without paying for the whole store.
+        candidates.sort_by_key(|(id, _)| *id);
+        if let Some((id, _)) = candidates.iter().find(|(_, can_fire)| *can_fire) {
+            return TaskPostedCoverage::Covered(*id);
+        }
+        let dormant: Vec<TriggerId> = candidates.into_iter().map(|(id, _)| id).collect();
+
+        if dormant.is_empty() {
+            TaskPostedCoverage::None
+        } else {
+            TaskPostedCoverage::Dormant(dormant)
+        }
+    }
+
+    /// Drop cooldown entries that can no longer suppress anything.
+    ///
+    /// Per-subject windows are unbounded in principle — one entry per task id a trigger ever saw — so without this a long-lived daemon on a busy board would accumulate them for the life of the process.
+    /// An entry older than the longest window any trigger could be using is dead weight: the check that consults it can only ever conclude "elapsed", so removing it is invisible.
+    ///
+    /// Runs only once the map is larger than a fire could plausibly need, so the common path pays a length check rather than a scan.
+    fn prune_expired_cooldowns(&self, now: DateTime<Utc>) {
+        const PRUNE_THRESHOLD: usize = 4096;
+        if self.last_fired.len() < PRUNE_THRESHOLD {
+            return;
+        }
+        let longest = self
+            .triggers
+            .iter()
+            .map(|t| t.cooldown_secs.unwrap_or(self.default_cooldown_secs))
+            .max()
+            .unwrap_or(self.default_cooldown_secs);
+        // `cooldown_secs` is a `u64` that arrives from the API unvalidated (`routes/workflows/triggers.rs` reads it with `as_u64` and neither clamps nor bounds it), so this arithmetic has to survive values no sane operator would type.
+        // `Duration::seconds` panics past roughly 9.2e15, and a bare `as i64` on something larger wraps negative — a negative horizon makes the retain below drop every window including the live ones, silently disabling same-subject suppression installation-wide.
+        // Saturating keeps "absurdly large" meaning "effectively never expires", which is what the operator asked for.
+        let horizon = i64::try_from(longest)
+            .ok()
+            .and_then(chrono::Duration::try_seconds)
+            .unwrap_or(chrono::Duration::MAX);
+        // Keep the trigger-wide entries regardless: they are bounded by the trigger count and back `last_fired_at` on disk.
+        self.last_fired
+            .retain(|(_, subject), last| subject.is_none() || now - *last < horizon);
+    }
+
+    /// Drop every cooldown window belonging to a trigger — the trigger-wide entry and each per-subject one (#6756).
+    /// A trigger that is gone or whose pattern changed must not leave windows behind that would suppress its successor.
+    fn forget_cooldowns(&self, trigger_id: TriggerId) {
+        self.last_fired.retain(|(id, _), _| *id != trigger_id);
     }
 
     /// Get a trigger by ID.
@@ -1362,13 +1551,20 @@ fn matches_pattern(
 /// `creator_match` (`TaskClaimed` / `TaskCompleted`) have byte-identical
 /// semantics:
 /// - `filter == None` → always matches (legacy fire-for-all).
-/// - `candidate == None` → never matches a non-`None` filter (the task field
-///   isn't set, so any identity predicate is definitionally false).
-/// - `filter == Some("self")` → matches when `candidate` equals the
-///   trigger-owner's UUID **or** display name (via the resolver-supplied
-///   `owner` tuple).
-/// - `filter == Some("<uuid>"|"<name>")` → exact string match against
-///   `candidate`.
+/// - `filter == Some("unassigned")` → matches exactly the tasks no agent owns, which is both the `None` candidate and the empty string.
+///   Both spellings reach the event because neither entry point normalises `assigned_to`: `tool_task_post` reads `input["assigned_to"].as_str()` (`librefang_runtime::tool_runner::task`) and `POST /api/tasks` reads `body["assigned_to"].as_str()` (`librefang_api::routes::task_queue`), and both hand the result straight to `task_post`, which copies it into `SystemEvent::TaskPosted` verbatim.
+///   `title` and `description` are checked for emptiness at both entry points; `assigned_to` is not.
+///   So a model or an API client that sends `"assigned_to": ""` — semantically "nobody", literally not `None` — produces `Some("")`, and a filter that only understood `None` would miss it.
+///   This arm must be tested BEFORE the `candidate == None` early-exit below, or it is unreachable for the `None` half.
+///
+///   Note this is about what the *event* carries, not about what is in the database.
+///   The stuck-task sweeper does write `assigned_to = ''` when it releases a claim, but it publishes no event at all — its only caller (`spawn_task_board_sweep_task`) logs the reset ids and stops — so a task it releases never reaches this predicate.
+///   Releasing a stuck claim therefore does not wake an `assignee_match = "unassigned"` trigger, which is a real gap, but a separate one; see #6728.
+/// - `candidate == None` → never matches any other non-`None` filter (the task field isn't set, so any identity predicate is definitionally false).
+/// - `filter == Some("self")` → matches when `candidate` equals the trigger-owner's UUID **or** display name (via the resolver-supplied `owner` tuple).
+/// - `filter == Some("<uuid>"|"<name>")` → exact string match against `candidate`.
+///
+/// `"self"` and `"unassigned"` are keywords, so an agent whose display name is one of those two cannot be addressed by name here — use its UUID.
 fn agent_identity_filter_matches(
     filter: &Option<String>,
     candidate: Option<&str>,
@@ -1377,6 +1573,10 @@ fn agent_identity_filter_matches(
     let Some(filter) = filter else {
         return true;
     };
+    // Before the `candidate == None` early-exit: "unassigned" is the one filter for which an absent candidate is a MATCH, not a miss.
+    if filter == "unassigned" {
+        return candidate.is_none_or(|c| c.is_empty());
+    }
     let Some(candidate) = candidate else {
         return false;
     };
@@ -1386,6 +1586,79 @@ fn agent_identity_filter_matches(
             None => false,
         },
         other => candidate == other,
+    }
+}
+
+/// Build a `TaskPosted` event for tests in sibling modules.
+///
+/// Lives here rather than in the test module that uses it because
+/// `EventPayload::System` construction is otherwise repeated verbatim in three
+/// files, and a drift in the shape should break one place, not three.
+#[cfg(test)]
+pub(crate) fn tests_support_task_posted_event(task_id: &str, assigned_to: &str) -> Event {
+    Event::new(
+        AgentId::new(),
+        librefang_types::event::EventTarget::Broadcast,
+        EventPayload::System(SystemEvent::TaskPosted {
+            task_id: task_id.to_string(),
+            title: "test task".to_string(),
+            assigned_to: Some(assigned_to.to_string()),
+            created_by: None,
+        }),
+    )
+}
+
+/// What a matching event is *about*, for the cooldown window (issue #6756).
+///
+/// `Some(subject)` narrows the window to that subject, so two distinct subjects arriving inside one window no longer suppress each other; `None` keeps the trigger-wide window.
+///
+/// Deliberately driven by the **pattern**, not by whatever the event happens to carry, and the line is this: a pattern that names *what happened* to an identifiable subject is scoped; a pattern that names a *category* of events keeps the trigger-wide window.
+///
+/// Scoped, because two subjects are definitionally two units of work and nothing re-announces the second: the three task-board patterns (the task), `MemoryUpdate` and `MemoryKeyPattern` (the key), `AgentSpawned` and `AgentTerminated` (the agent).
+///
+/// Trigger-wide, because the operator asked for a bounded firehose rather than per-subject delivery: `All`, `System`, `SystemKeyword`, `Lifecycle`, `ContentMatch`.
+/// Keying those on the subject would turn "at most once per window" into "once per event", which is the opposite of what setting a cooldown on a catch-all is for.
+///
+/// `MemoryUpdate` sits on the scoped side even though it carries no filter of its own, because it matches exactly the events `MemoryKeyPattern { key_pattern: "*" }` matches; leaving it trigger-wide would give two triggers with identical match sets opposite semantics, which is a sharper edge than either rule alone.
+fn cooldown_subject(pattern: &TriggerPattern, event: &Event) -> Option<String> {
+    match pattern {
+        TriggerPattern::TaskPosted { .. }
+        | TriggerPattern::TaskClaimed { .. }
+        | TriggerPattern::TaskCompleted { .. } => match &event.payload {
+            EventPayload::System(SystemEvent::TaskPosted { task_id, .. })
+            | EventPayload::System(SystemEvent::TaskClaimed { task_id, .. })
+            | EventPayload::System(SystemEvent::TaskCompleted { task_id, .. }) => {
+                Some(task_id.clone())
+            }
+            _ => None,
+        },
+        // `MemoryUpdate` matches exactly the same events as `MemoryKeyPattern { key_pattern: "*" }`, so scoping one and not the other would give two triggers with identical match sets opposite delivery semantics — the asymmetry an operator would hit first.
+        TriggerPattern::MemoryUpdate | TriggerPattern::MemoryKeyPattern { .. } => {
+            match &event.payload {
+                EventPayload::MemoryUpdate(delta) => Some(delta.key.clone()),
+                _ => None,
+            }
+        }
+        // Structurally identical to `MemoryKeyPattern`: a substring/wildcard filter over a per-event identifier, which can match two distinct subjects inside one window.
+        // Two workers spawning a second apart is the same "a different thing happened" case a second task is.
+        //
+        // Keyed on the spawned agent's id rather than its name: the pattern filters on the name, but two agents may share one, and the subject here is the agent that appeared, not the label it appeared under.
+        TriggerPattern::AgentSpawned { .. } => match &event.payload {
+            EventPayload::Lifecycle(LifecycleEvent::Spawned { agent_id, .. }) => {
+                Some(agent_id.to_string())
+            }
+            _ => None,
+        },
+        // Names a transition rather than a category, and both variants it matches are that transition happening to one identifiable agent.
+        // Two agents crashing a second apart are two incidents.
+        TriggerPattern::AgentTerminated => match &event.payload {
+            EventPayload::Lifecycle(LifecycleEvent::Terminated { agent_id, .. })
+            | EventPayload::Lifecycle(LifecycleEvent::Crashed { agent_id, .. }) => {
+                Some(agent_id.to_string())
+            }
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -1534,6 +1807,28 @@ fn describe_event(event: &Event) -> String {
 mod tests {
     use super::*;
     use librefang_types::event::*;
+
+    #[test]
+    fn poisoned_trigger_persistence_lock_recovers_and_remains_exclusive() {
+        let lock = std::sync::Mutex::new(());
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _guard = lock.lock().unwrap();
+                    panic!("poison trigger persistence lock");
+                })
+                .join()
+        });
+
+        assert!(poison.is_err());
+        assert!(lock.is_poisoned());
+        let recovered = lock_trigger_persistence(&lock);
+        assert!(!lock.is_poisoned());
+        assert!(lock.try_lock().is_err());
+        drop(recovered);
+        let ordinary_guard = lock.lock().unwrap();
+        drop(ordinary_guard);
+    }
 
     #[test]
     fn test_register_trigger() {
@@ -2024,7 +2319,7 @@ mod tests {
         // the bug's `unwrap_or(Duration::ZERO)` path would suppress every
         // fire for the next hour.
         let future = Utc::now() + chrono::Duration::hours(1);
-        engine.last_fired.insert(tid, future);
+        engine.last_fired.insert((tid, None), future);
 
         let event = Event::new(
             AgentId::new(),
@@ -2044,7 +2339,7 @@ mod tests {
         // After firing, `last_fired` is rewritten to `now` (≤ Utc::now() at
         // the assertion point) — the anomaly has self-healed and normal
         // cooldown behaviour resumes.
-        let stamped = *engine.last_fired.get(&tid).unwrap();
+        let stamped = *engine.last_fired.get(&(tid, None)).unwrap();
         assert!(
             stamped <= Utc::now(),
             "last_fired must be reset to a non-future timestamp after firing"
@@ -2137,11 +2432,11 @@ mod tests {
 
         // Fire to create a last_fired entry
         engine.evaluate(&event);
-        assert!(engine.last_fired.contains_key(&tid));
+        assert!(engine.last_fired.contains_key(&(tid, None)));
 
         // Remove should clean up
         engine.remove(tid);
-        assert!(!engine.last_fired.contains_key(&tid));
+        assert!(!engine.last_fired.contains_key(&(tid, None)));
     }
 
     #[test]
@@ -2418,6 +2713,88 @@ mod tests {
     }
 
     #[test]
+    fn task_posted_assignee_match_unassigned_matches_none_and_empty_string() {
+        // `assignee_match = "unassigned"` is the "pick up unowned work" filter, so it must match BOTH spellings of unowned that the system actually produces: `None` (task_post never set the field) and `""` (the stuck-task sweeper releases a claim with `SET assigned_to = ''`).
+        // Missing the empty-string half would make the trigger go permanently quiet for any task that had ever been claimed.
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        let delegator = AgentId::new();
+
+        engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("unassigned".to_string()),
+                },
+                "claim {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let resolver = |id: AgentId| {
+            if id == worker {
+                Some("worker".to_string())
+            } else {
+                None
+            }
+        };
+        let posted = |task_id: &str, assigned_to: Option<String>| {
+            Event::new(
+                delegator,
+                EventTarget::Broadcast,
+                EventPayload::System(SystemEvent::TaskPosted {
+                    task_id: task_id.to_string(),
+                    title: "Open work".to_string(),
+                    assigned_to,
+                    created_by: Some(delegator.to_string()),
+                }),
+            )
+        };
+        // Each `evaluate_with_resolver` below needs the cooldown cleared, since a previous match would otherwise suppress the next one.
+        let reset_cooldown = || {
+            for mut entry in engine.triggers.iter_mut() {
+                entry.cooldown_secs = Some(0);
+            }
+        };
+
+        // `None` — no assignee field at all.
+        let (matches, _) = engine.evaluate_with_resolver(&posted("t-1", None), resolver);
+        assert_eq!(
+            matches.len(),
+            1,
+            "unassigned must fire when assigned_to is absent"
+        );
+
+        // `Some("")` — the sweeper-released form.
+        // This is the case that requires the `unassigned` arm to sit BEFORE the `candidate == None` early-exit AND to treat the empty string as unowned.
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&posted("t-2", Some(String::new())), resolver);
+        assert_eq!(
+            matches.len(),
+            1,
+            "unassigned must fire when assigned_to is the empty string the sweeper writes"
+        );
+
+        // An addressed task must NOT match, whether addressed to the trigger owner or anyone else — "unassigned" is not a wildcard.
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&posted("t-3", Some(worker.to_string())), resolver);
+        assert!(
+            matches.is_empty(),
+            "unassigned must reject a task addressed to the trigger owner"
+        );
+
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&posted("t-4", Some(delegator.to_string())), resolver);
+        assert!(
+            matches.is_empty(),
+            "unassigned must reject a task addressed to another agent"
+        );
+    }
+
+    #[test]
     fn task_claimed_creator_match_self_filters_by_uuid_and_name() {
         // #5960 — `{"task_claimed":{"creator_match":"self"}}` must only fire for
         // claims of tasks the trigger-owning (orchestrator) agent originally
@@ -2506,6 +2883,133 @@ mod tests {
             matches.len(),
             1,
             "creator_match:self must accept the owner's display name too"
+        );
+    }
+
+    #[test]
+    fn task_claimed_creator_match_unassigned_matches_none_and_empty_string() {
+        // `creator_match = "unassigned"` is accepted on `TaskClaimed` because the identity
+        // filter is shared with `TaskPosted`'s `assignee_match`, and here means "no recorded
+        // creator" — either an absent `created_by` or the empty string a legacy writer left behind.
+        // This mirrors `task_posted_assignee_match_unassigned_matches_none_and_empty_string`
+        // but exercises the `TaskClaimed` variant directly, since the shared helper being
+        // correct for `TaskPosted` does not prove it is wired correctly for this variant too.
+        let engine = TriggerEngine::new();
+        let owner = AgentId::new();
+        let other = AgentId::new();
+
+        engine
+            .register(
+                owner,
+                TriggerPattern::TaskClaimed {
+                    creator_match: Some("unassigned".to_string()),
+                },
+                "notify {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let claimed = |task_id: &str, created_by: Option<String>| {
+            Event::new(
+                other,
+                EventTarget::Broadcast,
+                EventPayload::System(SystemEvent::TaskClaimed {
+                    task_id: task_id.to_string(),
+                    claimed_by: other.to_string(),
+                    created_by,
+                }),
+            )
+        };
+        let reset_cooldown = || {
+            for mut entry in engine.triggers.iter_mut() {
+                entry.cooldown_secs = Some(0);
+            }
+        };
+
+        let (matches, _) = engine.evaluate_with_resolver(&claimed("t-1", None), |_| None);
+        assert_eq!(
+            matches.len(),
+            1,
+            "creator_match:unassigned must fire when created_by is absent"
+        );
+
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&claimed("t-2", Some(String::new())), |_| None);
+        assert_eq!(
+            matches.len(),
+            1,
+            "creator_match:unassigned must fire when created_by is the empty string"
+        );
+
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&claimed("t-3", Some(owner.to_string())), |_| None);
+        assert!(
+            matches.is_empty(),
+            "creator_match:unassigned must reject a claim whose task has a recorded creator"
+        );
+    }
+
+    #[test]
+    fn task_completed_creator_match_unassigned_matches_none_and_empty_string() {
+        // Same gap as `TaskClaimed` above: `creator_match = "unassigned"` reaches
+        // `TaskCompleted` through the same shared helper and needs its own direct coverage.
+        let engine = TriggerEngine::new();
+        let owner = AgentId::new();
+        let other = AgentId::new();
+
+        engine
+            .register(
+                owner,
+                TriggerPattern::TaskCompleted {
+                    creator_match: Some("unassigned".to_string()),
+                },
+                "notify {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let completed = |task_id: &str, created_by: Option<String>| {
+            Event::new(
+                other,
+                EventTarget::Broadcast,
+                EventPayload::System(SystemEvent::TaskCompleted {
+                    task_id: task_id.to_string(),
+                    completed_by: other.to_string(),
+                    result: "done".to_string(),
+                    created_by,
+                }),
+            )
+        };
+        let reset_cooldown = || {
+            for mut entry in engine.triggers.iter_mut() {
+                entry.cooldown_secs = Some(0);
+            }
+        };
+
+        let (matches, _) = engine.evaluate_with_resolver(&completed("t-1", None), |_| None);
+        assert_eq!(
+            matches.len(),
+            1,
+            "creator_match:unassigned must fire when created_by is absent"
+        );
+
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&completed("t-2", Some(String::new())), |_| None);
+        assert_eq!(
+            matches.len(),
+            1,
+            "creator_match:unassigned must fire when created_by is the empty string"
+        );
+
+        reset_cooldown();
+        let (matches, _) =
+            engine.evaluate_with_resolver(&completed("t-3", Some(owner.to_string())), |_| None);
+        assert!(
+            matches.is_empty(),
+            "creator_match:unassigned must reject a completion whose task has a recorded creator"
         );
     }
 
@@ -2881,7 +3385,7 @@ mod tests {
         // Fire once to set last_fired
         let (matches, _) = engine1.evaluate(&event);
         assert_eq!(matches.len(), 1, "First fire must succeed");
-        assert!(engine1.last_fired.contains_key(&tid));
+        assert!(engine1.last_fired.contains_key(&(tid, None)));
 
         // Persist (stamps last_fired_at into the trigger JSON)
         engine1.persist().unwrap();
@@ -3341,6 +3845,829 @@ mod tests {
             engine.list_agent_triggers(agent).len(),
             MAX_TRIGGERS_PER_AGENT,
             "cap-refused entries must not bump the agent's trigger count",
+        );
+    }
+
+    // -- task_posted_coverage_for (#6728) ---------------------------------------
+
+    /// Naming the assignee by UUID or by display name has to reach the same
+    /// verdict: the substrate stores `assigned_to` in either form and
+    /// `task_claim` matches both, so a coverage rule that only understood one
+    /// would wake an agent that already has a trigger (double wake) or stay
+    /// silent for one that does not.
+    #[test]
+    fn coverage_accepts_the_assignee_by_uuid_and_by_name() {
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        let by_uuid = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some(worker.to_string()),
+                },
+                "claim".to_string(),
+                0,
+            )
+            .unwrap();
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Covered(by_uuid),
+        );
+
+        let engine = TriggerEngine::new();
+        let by_name = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("worker".to_string()),
+                },
+                "claim".to_string(),
+                0,
+            )
+            .unwrap();
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Covered(by_name),
+        );
+    }
+
+    /// `"self"` resolves against the trigger owner, so it covers the owner and
+    /// nobody else.
+    #[test]
+    fn coverage_resolves_self_against_the_owner() {
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        let bystander = AgentId::new();
+        let id = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("self".to_string()),
+                },
+                "claim".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let resolver = |id: AgentId| {
+            if id == worker {
+                Some("worker".to_string())
+            } else {
+                None
+            }
+        };
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), resolver),
+            TaskPostedCoverage::Covered(id),
+        );
+        assert_eq!(
+            engine.task_posted_coverage_for(bystander, Some("bystander"), resolver),
+            TaskPostedCoverage::None,
+            "another agent's self-trigger must not count as coverage",
+        );
+    }
+
+    /// An orchestrator watching the whole board is not a wake path for the
+    /// worker: the match fires, but it dispatches to the orchestrator's own
+    /// session. Counting it would leave the assignee exactly as unreachable
+    /// as before while looking covered.
+    #[test]
+    fn coverage_ignores_an_observer_that_dispatches_elsewhere() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        let worker = AgentId::new();
+        engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskPosted {
+                    assignee_match: None,
+                },
+                "notify the human about {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::None,
+        );
+        assert_eq!(
+            engine.task_posted_coverage_for(orchestrator, Some("orchestrator"), |_| None),
+            TaskPostedCoverage::Covered(engine.list_all()[0].id),
+            "the unfiltered observer does cover its own owner",
+        );
+    }
+
+    /// The owner-keyed `agent_triggers` index cannot answer this: an
+    /// orchestrator-owned trigger that routes to the worker via `target_agent`
+    /// is real coverage, and missing it would double-wake the worker on every
+    /// post.
+    #[test]
+    fn coverage_finds_a_trigger_targeted_at_the_assignee() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        let worker = AgentId::new();
+        let id = engine
+            .register_with_target(
+                orchestrator,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some(worker.to_string()),
+                },
+                "wake the worker".to_string(),
+                0,
+                Some(worker),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Covered(id),
+        );
+    }
+
+    /// A trigger that cannot fire is a gap to fill, not a decision to stay
+    /// silent — the 14h outage in #6728 is what "any record counts" produces.
+    /// Both ways a trigger stops firing must report `Dormant` so the built-in
+    /// wake takes over and says which record it took over from.
+    #[test]
+    fn coverage_reports_disabled_and_exhausted_triggers_as_dormant() {
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        let id = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("self".to_string()),
+                },
+                "claim".to_string(),
+                0,
+            )
+            .unwrap();
+        engine.set_enabled(id, false);
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Dormant(vec![id]),
+        );
+
+        // Fire-exhaustion: max_fires = 1, then burn it.
+        let engine = TriggerEngine::new();
+        let id = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("self".to_string()),
+                },
+                "claim".to_string(),
+                1,
+            )
+            .unwrap();
+        let event = Event::new(
+            AgentId::new(),
+            EventTarget::Broadcast,
+            EventPayload::System(SystemEvent::TaskPosted {
+                task_id: "t-1".to_string(),
+                title: "burn the budget".to_string(),
+                assigned_to: Some(worker.to_string()),
+                created_by: None,
+            }),
+        );
+        let (matches, _) = engine.evaluate_with_resolver(&event, |_| None);
+        assert_eq!(matches.len(), 1, "the trigger fires once");
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Dormant(vec![id]),
+            "a spent max_fires budget leaves the assignee uncovered",
+        );
+    }
+
+    /// Cooldown is transient dispatch state, not configuration. Treating it as
+    /// a gap would make the built-in wake fire alongside a trigger that is
+    /// about to fire anyway, which is the double wake the declarative check
+    /// exists to avoid.
+    #[test]
+    fn coverage_holds_while_a_trigger_is_cooling_down() {
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        let id = engine
+            .register(
+                worker,
+                TriggerPattern::TaskPosted {
+                    assignee_match: Some("self".to_string()),
+                },
+                "claim".to_string(),
+                0,
+            )
+            .unwrap();
+        let event = Event::new(
+            AgentId::new(),
+            EventTarget::Broadcast,
+            EventPayload::System(SystemEvent::TaskPosted {
+                task_id: "t-1".to_string(),
+                title: "first".to_string(),
+                assigned_to: Some(worker.to_string()),
+                created_by: None,
+            }),
+        );
+        let (matches, _) = engine.evaluate_with_resolver(&event, |_| None);
+        assert_eq!(matches.len(), 1);
+        // Second evaluation inside the cooldown window produces no match...
+        let (matches, _) = engine.evaluate_with_resolver(&event, |_| None);
+        assert!(matches.is_empty(), "cooldown suppresses the second fire");
+        // ...but the trigger is still coverage.
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::Covered(id),
+        );
+    }
+
+    /// Only `TaskPosted` records answer this question — a `TaskClaimed` /
+    /// `TaskCompleted` subscription is a notification path, not a wake path.
+    #[test]
+    fn coverage_ignores_other_task_board_patterns() {
+        let engine = TriggerEngine::new();
+        let worker = AgentId::new();
+        engine
+            .register(
+                worker,
+                TriggerPattern::TaskClaimed {
+                    creator_match: None,
+                },
+                "notify".to_string(),
+                0,
+            )
+            .unwrap();
+        engine
+            .register(
+                worker,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify".to_string(),
+                0,
+            )
+            .unwrap();
+
+        assert_eq!(
+            engine.task_posted_coverage_for(worker, Some("worker"), |_| None),
+            TaskPostedCoverage::None,
+        );
+    }
+
+    // -- subject-scoped cooldown (#6756) ---------------------------------------
+
+    fn completion_of(task_id: &str, creator: AgentId) -> Event {
+        Event::new(
+            AgentId::new(),
+            EventTarget::Broadcast,
+            EventPayload::System(SystemEvent::TaskCompleted {
+                task_id: task_id.to_string(),
+                completed_by: "worker".to_string(),
+                result: format!("result of {task_id}"),
+                created_by: Some(creator.to_string()),
+            }),
+        )
+    }
+
+    /// The reported defect, verbatim from the issue: two distinct tasks finishing back to back — what any drain loop produces — must notify twice.
+    /// Before this change the second event was discarded, not delayed, and nothing re-announced it.
+    #[test]
+    fn distinct_task_completions_inside_one_window_both_fire() {
+        let engine = TriggerEngine::new(); // default cooldown_secs = 5
+        let orchestrator = AgentId::new();
+        engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify the human: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let (first, _) =
+            engine.evaluate_with_resolver(&completion_of("task-1", orchestrator), |_| None);
+        let (second, _) =
+            engine.evaluate_with_resolver(&completion_of("task-2", orchestrator), |_| None);
+
+        assert_eq!(first.len(), 1, "first completion notifies");
+        assert_eq!(
+            second.len(),
+            1,
+            "a distinct task's completion is a distinct window, not a repeat"
+        );
+    }
+
+    /// The storm protection the knob exists for still works: the *same* subject arriving twice inside the window is a repeat and is suppressed.
+    #[test]
+    fn a_repeat_of_the_same_subject_is_still_suppressed() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let event = completion_of("task-1", orchestrator);
+        let (first, _) = engine.evaluate_with_resolver(&event, |_| None);
+        let (again, _) = engine.evaluate_with_resolver(&event, |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert!(
+            again.is_empty(),
+            "the same subject inside the window is exactly what cooldown is for"
+        );
+    }
+
+    /// A catch-all keeps the rate cap it has today.
+    /// Keying its window on the subject would turn "at most once per window" into "once per event" for a trigger whose whole point is a bounded firehose.
+    #[test]
+    fn a_catch_all_trigger_keeps_its_trigger_wide_window() {
+        let engine = TriggerEngine::new();
+        let watcher = AgentId::new();
+        engine
+            .register(
+                watcher,
+                TriggerPattern::All,
+                "saw: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let (first, _) = engine.evaluate_with_resolver(&completion_of("task-1", watcher), |_| None);
+        let (second, _) =
+            engine.evaluate_with_resolver(&completion_of("task-2", watcher), |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert!(
+            second.is_empty(),
+            "distinct subjects must not widen a catch-all's window"
+        );
+    }
+
+    /// Memory updates get the same treatment as task-board events: two keys changing inside one window are two facts, not one repeated.
+    #[test]
+    fn distinct_memory_keys_inside_one_window_both_fire() {
+        let engine = TriggerEngine::new();
+        let agent = AgentId::new();
+        engine
+            .register(
+                agent,
+                TriggerPattern::MemoryKeyPattern {
+                    key_pattern: "project/".to_string(),
+                },
+                "memory changed: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let update = |key: &str| {
+            Event::new(
+                agent,
+                EventTarget::Broadcast,
+                EventPayload::MemoryUpdate(librefang_types::event::MemoryDelta {
+                    agent_id: agent,
+                    key: key.to_string(),
+                    operation: librefang_types::event::MemoryOperation::Updated,
+                }),
+            )
+        };
+
+        let (first, _) = engine.evaluate_with_resolver(&update("project/alpha"), |_| None);
+        let (second, _) = engine.evaluate_with_resolver(&update("project/beta"), |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1, "a different key is a different subject");
+    }
+
+    /// `last_fired_at` on disk keeps meaning "when this trigger last fired", so restart recovery and the operator-facing field are unaffected by the window being subject-scoped in memory.
+    #[test]
+    fn firing_on_a_subject_still_stamps_the_trigger_wide_entry() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        let tid = engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let (fired, _) =
+            engine.evaluate_with_resolver(&completion_of("task-1", orchestrator), |_| None);
+        assert_eq!(fired.len(), 1);
+
+        assert!(
+            engine
+                .last_fired
+                .contains_key(&(tid, Some("task-1".to_string()))),
+            "the subject window is what the next check consults"
+        );
+        assert!(
+            engine.last_fired.contains_key(&(tid, None)),
+            "the trigger-wide entry backs last_fired_at on disk"
+        );
+    }
+
+    /// Removing a trigger must take its per-subject windows with it, or a successor registered with the same id space would inherit suppression it never earned.
+    #[test]
+    fn removing_a_trigger_forgets_every_subject_window() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        let tid = engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+        engine.evaluate_with_resolver(&completion_of("task-1", orchestrator), |_| None);
+        engine.evaluate_with_resolver(&completion_of("task-2", orchestrator), |_| None);
+        assert!(engine.last_fired.iter().count() >= 2);
+
+        assert!(engine.remove(tid));
+
+        assert_eq!(
+            engine
+                .last_fired
+                .iter()
+                .filter(|e| e.key().0 == tid)
+                .count(),
+            0,
+            "no window of a removed trigger may survive"
+        );
+    }
+
+    /// Two agents appearing a second apart are two events, not one repeated — the same shape as two tasks or two memory keys, since the pattern is a substring filter over a per-event identifier.
+    #[test]
+    fn distinct_agent_spawns_inside_one_window_both_fire() {
+        let engine = TriggerEngine::new();
+        let watcher = AgentId::new();
+        engine
+            .register(
+                watcher,
+                TriggerPattern::AgentSpawned {
+                    name_pattern: "worker".to_string(),
+                },
+                "a worker appeared: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let spawned = |name: &str| {
+            Event::new(
+                AgentId::new(),
+                EventTarget::Broadcast,
+                EventPayload::Lifecycle(LifecycleEvent::Spawned {
+                    agent_id: AgentId::new(),
+                    name: name.to_string(),
+                }),
+            )
+        };
+
+        let (first, _) = engine.evaluate_with_resolver(&spawned("worker-1"), |_| None);
+        let (second, _) = engine.evaluate_with_resolver(&spawned("worker-2"), |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(
+            second.len(),
+            1,
+            "a second worker spawning is a distinct subject, not a repeat"
+        );
+    }
+
+    /// Evaluation must survive crossing the prune threshold.
+    ///
+    /// The prune reads `self.triggers` to find the longest window in use, and the evaluation loop holds a `RefMut` on a trigger's shard while it fires; doing both at once is a same-thread write-then-read on one DashMap shard, which hangs rather than fails.
+    /// This walks past the threshold on real evaluations — if the prune ever moves back inside the loop, this test stops returning.
+    #[test]
+    fn crossing_the_prune_threshold_does_not_wedge_the_evaluator() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        // Each distinct task id opens its own window, so this grows `last_fired` past PRUNE_THRESHOLD (4096).
+        let mut fired = 0usize;
+        for i in 0..4_200 {
+            let (matches, _) = engine
+                .evaluate_with_resolver(&completion_of(&format!("task-{i}"), orchestrator), |_| {
+                    None
+                });
+            fired += matches.len();
+        }
+
+        assert_eq!(fired, 4_200, "every distinct subject fires exactly once");
+    }
+
+    /// A window older than the longest cooldown any trigger could use can only ever report "elapsed", so keeping it is pure growth.
+    /// The trigger-wide entry is exempt: it is bounded by the trigger count and backs `last_fired_at` on disk.
+    #[test]
+    fn pruning_drops_stale_subject_windows_and_keeps_the_trigger_wide_one() {
+        let engine = TriggerEngine::new();
+        let orchestrator = AgentId::new();
+        let tid = engine
+            .register(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        // Seed enough stale subject windows to cross the threshold.
+        let stale = Utc::now() - chrono::Duration::seconds(3_600);
+        for i in 0..4_200 {
+            engine
+                .last_fired
+                .insert((tid, Some(format!("ancient-{i}"))), stale);
+        }
+        engine.last_fired.insert((tid, None), stale);
+
+        // One real fire triggers the prune after the loop.
+        let (matches, _) =
+            engine.evaluate_with_resolver(&completion_of("fresh", orchestrator), |_| None);
+        assert_eq!(matches.len(), 1);
+
+        assert!(
+            engine
+                .last_fired
+                .iter()
+                .filter(|e| e
+                    .key()
+                    .1
+                    .as_deref()
+                    .is_some_and(|s| s.starts_with("ancient-")))
+                .count()
+                == 0,
+            "windows that can no longer suppress anything must not accumulate"
+        );
+        assert!(
+            engine.last_fired.contains_key(&(tid, None)),
+            "the trigger-wide entry backs last_fired_at and is never pruned"
+        );
+        assert!(
+            engine
+                .last_fired
+                .contains_key(&(tid, Some("fresh".to_string()))),
+            "a window that can still suppress must survive the prune"
+        );
+    }
+
+    /// `MemoryUpdate` matches exactly what `MemoryKeyPattern { "*" }` matches, so the two must deliver identically.
+    /// Scoping one and not the other gave two triggers with the same match set opposite semantics.
+    #[test]
+    fn bare_memory_update_is_scoped_like_its_filtered_sibling() {
+        let engine = TriggerEngine::new();
+        let agent = AgentId::new();
+        engine
+            .register(
+                agent,
+                TriggerPattern::MemoryUpdate,
+                "memory changed: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let update = |key: &str| {
+            Event::new(
+                agent,
+                EventTarget::Broadcast,
+                EventPayload::MemoryUpdate(librefang_types::event::MemoryDelta {
+                    agent_id: agent,
+                    key: key.to_string(),
+                    operation: librefang_types::event::MemoryOperation::Updated,
+                }),
+            )
+        };
+
+        let (first, _) = engine.evaluate_with_resolver(&update("project/alpha"), |_| None);
+        let (second, _) = engine.evaluate_with_resolver(&update("project/beta"), |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(
+            second.len(),
+            1,
+            "a batch of memory writes must not collapse into one delivery"
+        );
+    }
+
+    /// Two agents dying a second apart are two incidents, not one repeated.
+    #[test]
+    fn distinct_agent_terminations_inside_one_window_both_fire() {
+        let engine = TriggerEngine::new();
+        let watcher = AgentId::new();
+        engine
+            .register(
+                watcher,
+                TriggerPattern::AgentTerminated,
+                "an agent died: {{event}}".to_string(),
+                0,
+            )
+            .unwrap();
+
+        let died = || {
+            Event::new(
+                AgentId::new(),
+                EventTarget::Broadcast,
+                EventPayload::Lifecycle(LifecycleEvent::Crashed {
+                    agent_id: AgentId::new(),
+                    error: "boom".to_string(),
+                }),
+            )
+        };
+
+        let (first, _) = engine.evaluate_with_resolver(&died(), |_| None);
+        let (second, _) = engine.evaluate_with_resolver(&died(), |_| None);
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1, "a second crash is a second incident");
+    }
+
+    /// A `cooldown_secs` large enough to overflow `chrono` must not take the evaluator with it.
+    /// The API accepts an unbounded `u64` (`routes/workflows/triggers.rs` neither clamps nor validates it), so the arithmetic is the only thing standing between an operator's typo and a panic on the event-dispatch thread — or, past `i64::MAX`, a negative horizon that prunes every live window and silently disables suppression.
+    #[test]
+    fn an_absurd_cooldown_neither_panics_nor_wipes_live_windows() {
+        for absurd in [u64::MAX, i64::MAX as u64, 10_000_000_000_000_000] {
+            let engine = TriggerEngine::new();
+            let orchestrator = AgentId::new();
+            let tid = engine
+                .register_with_target(
+                    orchestrator,
+                    TriggerPattern::TaskCompleted {
+                        creator_match: None,
+                    },
+                    "notify: {{event}}".to_string(),
+                    0,
+                    None,
+                    Some(absurd),
+                    None,
+                    None,
+                )
+                .unwrap();
+
+            // Cross the prune threshold so the horizon arithmetic runs.
+            let stale = Utc::now() - chrono::Duration::seconds(3_600);
+            for i in 0..4_200 {
+                engine
+                    .last_fired
+                    .insert((tid, Some(format!("seed-{i}"))), stale);
+            }
+
+            let (matches, _) =
+                engine.evaluate_with_resolver(&completion_of("fresh", orchestrator), |_| None);
+            assert_eq!(matches.len(), 1, "cooldown_secs = {absurd} must still fire");
+            assert!(
+                engine
+                    .last_fired
+                    .contains_key(&(tid, Some("fresh".to_string()))),
+                "cooldown_secs = {absurd} must not prune a window that just opened"
+            );
+        }
+    }
+
+    /// The prune horizon has to be the longest window in use, not any window: a short-cooldown trigger must not evict a long-cooldown trigger's live entries.
+    /// Without this, one trigger at 5s would cut another's hour-long window down to five seconds.
+    #[test]
+    fn the_prune_horizon_respects_the_longest_window_in_use() {
+        let engine = TriggerEngine::new();
+        let owner = AgentId::new();
+        let brief = engine
+            .register_with_target(
+                owner,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "brief: {{event}}".to_string(),
+                0,
+                None,
+                Some(5),
+                None,
+                None,
+            )
+            .unwrap();
+        let patient = engine
+            .register_with_target(
+                owner,
+                TriggerPattern::TaskClaimed {
+                    creator_match: None,
+                },
+                "patient: {{event}}".to_string(),
+                0,
+                None,
+                Some(3_600),
+                None,
+                None,
+            )
+            .unwrap();
+
+        // A window that is stale for the 5s trigger but live for the 3600s one.
+        let middling = Utc::now() - chrono::Duration::seconds(600);
+        engine
+            .last_fired
+            .insert((patient, Some("kept".to_string())), middling);
+        for i in 0..4_200 {
+            engine.last_fired.insert(
+                (brief, Some(format!("ancient-{i}"))),
+                Utc::now() - chrono::Duration::seconds(7_200),
+            );
+        }
+
+        engine.evaluate_with_resolver(&completion_of("trigger-a-prune", owner), |_| None);
+
+        assert!(
+            engine
+                .last_fired
+                .contains_key(&(patient, Some("kept".to_string()))),
+            "a window still inside its own trigger's cooldown must survive"
+        );
+    }
+
+    /// Per-subject windows are in-memory, so a subject-scoped pattern starts a restart with no suppression — including for a subject it fired on moments earlier.
+    /// That is a deliberate trade against unbounded growth in `trigger_jobs.json`, and the failure direction is an extra delivery, but it is a real change from the trigger-wide behaviour and is pinned here rather than left to be discovered.
+    #[test]
+    fn subject_scoped_cooldown_does_not_survive_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("trigger_jobs.json");
+
+        let engine = TriggerEngine {
+            triggers: DashMap::new(),
+            agent_triggers: DashMap::new(),
+            last_fired: DashMap::new(),
+            max_triggers_per_event: DEFAULT_MAX_TRIGGERS_PER_EVENT,
+            default_cooldown_secs: DEFAULT_COOLDOWN_SECS,
+            persist_path: Some(path.clone()),
+            persist_lock: std::sync::Mutex::new(()),
+        };
+        let orchestrator = AgentId::new();
+        engine
+            .register_with_target(
+                orchestrator,
+                TriggerPattern::TaskCompleted {
+                    creator_match: None,
+                },
+                "notify: {{event}}".to_string(),
+                0,
+                None,
+                Some(3_600),
+                None,
+                None,
+            )
+            .unwrap();
+
+        let event = completion_of("task-1", orchestrator);
+        let (fired, _) = engine.evaluate_with_resolver(&event, |_| None);
+        assert_eq!(fired.len(), 1);
+        let (suppressed, _) = engine.evaluate_with_resolver(&event, |_| None);
+        assert!(
+            suppressed.is_empty(),
+            "same subject is suppressed in-process"
+        );
+
+        engine.persist().unwrap();
+
+        let restarted = TriggerEngine {
+            triggers: DashMap::new(),
+            agent_triggers: DashMap::new(),
+            last_fired: DashMap::new(),
+            max_triggers_per_event: DEFAULT_MAX_TRIGGERS_PER_EVENT,
+            default_cooldown_secs: DEFAULT_COOLDOWN_SECS,
+            persist_path: Some(path),
+            persist_lock: std::sync::Mutex::new(()),
+        };
+        restarted.load().unwrap();
+        let (after_restart, _) = restarted.evaluate_with_resolver(&event, |_| None);
+
+        assert_eq!(
+            after_restart.len(),
+            1,
+            "documented trade: the per-subject window is not persisted, so the \
+             same subject fires again after a restart"
         );
     }
 }

@@ -56,10 +56,25 @@ import {
  * ignores them on the standalone `/config` route.
  */
 export type AgentConfigPatch = {
-  max_tokens?: number;
+  // Tri-state: omit to leave unchanged, `null` to hand the field back to
+  // inherit, a number to pin it for this agent. A pinned value wins over the
+  // per-model override.
+  //
+  // `null` is only honoured on the standalone `/config` route. The
+  // hand-runtime override has no per-field clear of its own — `DELETE
+  // /hand-runtime-config` drops the whole override — so it reads `null` as
+  // "leave unchanged" rather than inventing a third meaning for it.
+  max_tokens?: number | null;
   model?: string;
   provider?: string;
-  temperature?: number;
+  temperature?: number | null;
+  top_p?: number | null;
+  frequency_penalty?: number | null;
+  presence_penalty?: number | null;
+  // Endpoint limits, not sampling preferences: an over-limit request is
+  // reported in the response's `warnings` and stored as sent, never clamped.
+  context_window?: number | null;
+  max_output_tokens?: number | null;
   api_key_env?: string;
   base_url?: string;
   web_search_augmentation?: "off" | "auto" | "always";
@@ -125,6 +140,28 @@ export function useDeleteAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: deleteAgent,
+    // Stop every in-flight read of this agent before the DELETE goes out, so a
+    // response that was already on the wire cannot repopulate the cache after
+    // `onSuccess` has removed it.
+    //
+    // `agentKeys.detail(id)` is not enough, and is in fact the one key in this
+    // family that never polls: `agentQueries.detail` declares only a staleTime.
+    // The queries that do poll — `stats` (30 s), `events` (15 s) and
+    // `sessionContext` (15 s) — sit on sibling branches under `agentKeys.all`
+    // (`["agents","stats",id]`, not `["agents","detail",id,…]`), so a prefix
+    // match on the detail key misses all three. There is no single prefix for
+    // "everything about agent X", hence the predicate.
+    //
+    // This lives in `onMutate` rather than at a call site because TanStack
+    // awaits `onMutate` before `mutationFn`: that is what actually closes the
+    // window, and it keeps the cancel next to the `onSuccess` removal instead
+    // of splitting one cache protocol across two files.
+    onMutate: async (agentId) => {
+      await qc.cancelQueries({
+        predicate: (query) =>
+          query.queryKey[0] === "agents" && query.queryKey.includes(agentId),
+      });
+    },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: agentKeys.lists() });
       qc.removeQueries({ queryKey: agentKeys.detail(variables) });
@@ -146,8 +183,8 @@ export function useResumeAgent() {
 
 /**
  * Manifest-level partial update: name, description, system_prompt,
- * mcp_servers, model. Distinct from `usePatchAgentConfig` which targets
- * `/agents/{id}/config` (model-tuning only).
+ * mcp_servers, model. Distinct from `usePatchAgentRuntimeConfig`, which
+ * targets the role-appropriate model-tuning endpoint.
  */
 export function usePatchAgent() {
   const qc = useQueryClient();
@@ -175,62 +212,27 @@ export function usePatchAgent() {
   });
 }
 
-/**
- * PATCH /agents/{id}/config — model-tuning update for a **non-hand** agent.
- *
- * Hand-role agents MUST use `usePatchHandAgentRuntimeConfig` instead; the
- * two backends write to different config slots and invalidation fan-out
- * differs (hand overrides also dirty `handKeys.details()`). Branching on
- * `is_hand` is the caller's job because only the caller knows — from the
- * cached agent detail — whether this id refers to a hand role.
- */
-export function usePatchAgentConfig() {
+/** Route model-tuning updates through the config slot selected by agent role. */
+export function usePatchAgentRuntimeConfig() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
       agentId,
       config,
+      isHand,
     }: {
       agentId: string;
       config: AgentConfigPatch;
-    }) => patchAgentConfig(agentId, config),
+      isHand: boolean;
+    }) => isHand
+      ? patchHandAgentRuntimeConfig(agentId, config)
+      : patchAgentConfig(agentId, config),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: agentKeys.lists() });
       qc.invalidateQueries({ queryKey: agentKeys.detail(variables.agentId) });
-    },
-  });
-}
-
-/**
- * PATCH /agents/{id}/hand-runtime-config — per-agent hand runtime override.
- *
- * Accepts the same model-tuning subset as `usePatchAgentConfig` plus
- * `api_key_env` / `base_url` (tri-state; empty string clears).
- *
- * Invalidates:
- * - `agentKeys.lists()` — the model/provider badge in the agent list row
- *   reads from the live manifest which is what this override feeds into.
- * - `agentKeys.detail(id)` — the config panel bound to this hook reads
- *   the same manifest fields.
- * - `handKeys.details()` — the hand-detail view shows per-role runtime
- *   override state, so any cached hand detail referencing this agent's
- *   role must refetch to stay consistent with
- *   `useClearHandAgentRuntimeConfig`.
- */
-export function usePatchHandAgentRuntimeConfig() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      agentId,
-      config,
-    }: {
-      agentId: string;
-      config: AgentConfigPatch;
-    }) => patchHandAgentRuntimeConfig(agentId, config),
-    onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: agentKeys.lists() });
-      qc.invalidateQueries({ queryKey: agentKeys.detail(variables.agentId) });
-      qc.invalidateQueries({ queryKey: handKeys.details() });
+      if (variables.isHand) {
+        qc.invalidateQueries({ queryKey: handKeys.details() });
+      }
     },
   });
 }
@@ -345,8 +347,9 @@ export function useActivatePromptVersion() {
                 : { ...v, is_active: false },
             ),
         );
+      } else {
+        qc.invalidateQueries({ queryKey: agentKeys.promptVersions(variables.agentId) });
       }
-      qc.invalidateQueries({ queryKey: agentKeys.promptVersions(variables.agentId) });
       // Active version may be surfaced on the agent detail view.
       qc.invalidateQueries({ queryKey: agentKeys.detail(variables.agentId) });
     },
@@ -385,11 +388,9 @@ export function useCreateExperiment() {
   });
 }
 
-// After #3832, the start/pause/complete endpoints return the post-mutation
-// `PromptExperiment`, so we patch the experiments-list cache for `agentId`
-// directly via `setQueryData` (eliminates a stale-read window before the
-// invalidate-driven refetch lands). The `invalidateQueries` calls remain as
-// a belt-and-suspenders guard for any concurrent server-side mutation.
+// The status endpoints return the post-mutation `PromptExperiment`, so patch
+// the list directly. Metrics still refetch because status transitions can
+// affect their server-derived values.
 function patchExperimentInCache(
   qc: ReturnType<typeof useQueryClient>,
   agentId: string,
@@ -401,15 +402,22 @@ function patchExperimentInCache(
   );
 }
 
+function onExperimentStatusSuccess(
+  qc: ReturnType<typeof useQueryClient>,
+  updated: PromptExperiment,
+  variables: { experimentId: string; agentId: string },
+) {
+  patchExperimentInCache(qc, variables.agentId, updated);
+  qc.invalidateQueries({ queryKey: agentKeys.experimentMetrics(variables.experimentId) });
+}
+
 export function useStartExperiment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ experimentId, agentId: _agentId }: { experimentId: string; agentId: string }) =>
       startExperiment(experimentId),
     onSuccess: (data, variables) => {
-      patchExperimentInCache(qc, variables.agentId, data);
-      qc.invalidateQueries({ queryKey: agentKeys.experiments(variables.agentId) });
-      qc.invalidateQueries({ queryKey: agentKeys.experimentMetrics(variables.experimentId) });
+      onExperimentStatusSuccess(qc, data, variables);
     },
   });
 }
@@ -420,9 +428,7 @@ export function usePauseExperiment() {
     mutationFn: ({ experimentId, agentId: _agentId }: { experimentId: string; agentId: string }) =>
       pauseExperiment(experimentId),
     onSuccess: (data, variables) => {
-      patchExperimentInCache(qc, variables.agentId, data);
-      qc.invalidateQueries({ queryKey: agentKeys.experiments(variables.agentId) });
-      qc.invalidateQueries({ queryKey: agentKeys.experimentMetrics(variables.experimentId) });
+      onExperimentStatusSuccess(qc, data, variables);
     },
   });
 }
@@ -433,9 +439,7 @@ export function useCompleteExperiment() {
     mutationFn: ({ experimentId, agentId: _agentId }: { experimentId: string; agentId: string }) =>
       completeExperiment(experimentId),
     onSuccess: (data, variables) => {
-      patchExperimentInCache(qc, variables.agentId, data);
-      qc.invalidateQueries({ queryKey: agentKeys.experiments(variables.agentId) });
-      qc.invalidateQueries({ queryKey: agentKeys.experimentMetrics(variables.experimentId) });
+      onExperimentStatusSuccess(qc, data, variables);
     },
   });
 }

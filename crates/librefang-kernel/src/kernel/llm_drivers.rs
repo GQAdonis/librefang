@@ -14,6 +14,20 @@
 use super::*;
 use librefang_types::error::LibreFangError;
 
+fn should_use_managed_everyapi(
+    provider: &str,
+    api_key_present: bool,
+    explicit_key: bool,
+    explicit_url: bool,
+    managed_available: bool,
+) -> bool {
+    provider == "everyapi"
+        && !api_key_present
+        && !explicit_key
+        && !explicit_url
+        && managed_available
+}
+
 impl LibreFangKernel {
     /// Resolve the LLM driver for an agent.
     ///
@@ -71,6 +85,22 @@ impl LibreFangKernel {
             } else {
                 Some(p.api_key_env.clone())
             }
+        })
+    }
+
+    fn is_managed_everyapi(&self, provider: &str) -> bool {
+        if provider != "everyapi" {
+            return false;
+        }
+        let catalog = self.llm.model_catalog.load();
+        catalog.get_provider(provider).is_some_and(|entry| {
+            !entry.is_custom
+                && !catalog.is_suppressed(provider)
+                && matches!(
+                    entry.auth_status,
+                    librefang_types::model_catalog::AuthStatus::AutoDetected
+                        | librefang_types::model_catalog::AuthStatus::Missing
+                )
         })
     }
 
@@ -139,11 +169,8 @@ impl LibreFangKernel {
         // over the boot-time config. This ensures that when a user saves a new
         // API key via the dashboard and the default provider is switched,
         // resolve_driver sees the updated provider/model/api_key_env.
-        let override_guard = self
-            .llm
-            .default_model_override
-            .read()
-            .unwrap_or_else(|e: std::sync::PoisonError<_>| e.into_inner());
+        let override_guard =
+            read_config_override(&self.llm.default_model_override, "default_model_override");
         let effective_default = override_guard.as_ref().unwrap_or(&cfg.default_model);
         let default_provider = &effective_default.provider;
 
@@ -157,6 +184,13 @@ impl LibreFangKernel {
             } else {
                 manifest.model.provider.clone()
             };
+        // #7743: an explicitly driverless provider resolves to the stub and nothing else.
+        // This gate sits ahead of the allowlist check, the credential lookups and the fallback chain on purpose: `provider = "none"` is not a vendor to govern or find a key for, it is the declared absence of one.
+        // A fresh `StubDriver` rather than `self.llm.default_driver`, because the default driver is only the stub when the *kernel* booted driverless — an agent that pins `"none"` on a kernel with a live default must not inherit that live driver.
+        // Without this the sentinel would fall through to `create_driver`, fail as an unknown provider, and land on the boot-default fallback below, which is the stub only by luck of what boot happened to detect on the host.
+        if resolved_provider_str == librefang_types::config::NO_LLM_PROVIDER {
+            return Ok(Arc::new(StubDriver) as Arc<dyn LlmDriver>);
+        }
         let agent_provider = &resolved_provider_str;
 
         // Governance: org-wide provider allowlist (issue #6459). Fail-closed —
@@ -176,9 +210,25 @@ impl LibreFangKernel {
             let reason = cfg.providers.rejection_reason(agent_provider);
             return Err(LibreFangError::CapabilityDenied(reason).into());
         }
+        if agent_provider == "everyapi"
+            && self.llm.model_catalog.load().is_suppressed(agent_provider)
+        {
+            return Err(LibreFangError::CapabilityDenied(
+                "EveryAPI provider is suppressed".to_string(),
+            )
+            .into());
+        }
 
         let has_custom_key = manifest.model.api_key_env.is_some();
         let has_custom_url = manifest.model.base_url.is_some();
+        let has_explicit_key = has_custom_key
+            || cfg.provider_api_keys.contains_key(agent_provider)
+            || cfg.auth_profiles.contains_key(agent_provider)
+            || (agent_provider == default_provider
+                && !effective_default.api_key_env.trim().is_empty());
+        let has_explicit_url = has_custom_url
+            || cfg.provider_urls.contains_key(agent_provider)
+            || (agent_provider == default_provider && effective_default.base_url.is_some());
 
         // CLI profile rotation: when the agent uses the default provider
         // and CLI profiles are configured, use the boot-time
@@ -309,22 +359,35 @@ impl LibreFangKernel {
             );
 
             let driver_config = make_driver_config(api_key);
-
-            match self.llm.driver_cache.get_or_create(&driver_config) {
-                Ok(d) => d,
-                Err(e) => {
-                    if agent_provider == default_provider && !has_custom_key && !has_custom_url {
-                        debug!(
-                            provider = %agent_provider,
-                            error = %e,
-                            "Fresh driver creation failed, falling back to boot-time default"
-                        );
-                        Arc::clone(&self.llm.default_driver)
-                    } else {
-                        return Err(LibreFangError::BootFailed(format!(
-                            "Agent LLM driver init failed: {e}"
-                        ))
-                        .into());
+            if should_use_managed_everyapi(
+                agent_provider,
+                driver_config.api_key.is_some(),
+                has_explicit_key,
+                has_explicit_url,
+                self.is_managed_everyapi(agent_provider),
+            ) {
+                Arc::new(crate::everyapi_driver::ManagedEveryApiDriver::new(
+                    driver_config,
+                    Arc::clone(&self.llm.driver_cache),
+                ))
+            } else {
+                match self.llm.driver_cache.get_or_create(&driver_config) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        if agent_provider == default_provider && !has_custom_key && !has_custom_url
+                        {
+                            debug!(
+                                provider = %agent_provider,
+                                error = %e,
+                                "Fresh driver creation failed, falling back to boot-time default"
+                            );
+                            Arc::clone(&self.llm.default_driver)
+                        } else {
+                            return Err(LibreFangError::BootFailed(format!(
+                                "Agent LLM driver init failed: {e}"
+                            ))
+                            .into());
+                        }
                     }
                 }
             }
@@ -343,7 +406,7 @@ impl LibreFangKernel {
             // store-aware `FallbackDriver` can pre-skip a budget-exhausted
             // slot (#5980): the gate flags the provider in the shared
             // `ProviderExhaustionStore`, and this driver reads that SAME
-            // store via `is_slot_exhausted`. Mirrors boot.rs:698-714.
+            // store via `slot_exhaustion`. Mirrors boot.rs:698-714.
             let mut chain: Vec<(
                 std::sync::Arc<dyn librefang_runtime::llm_driver::LlmDriver>,
                 String,
@@ -359,15 +422,19 @@ impl LibreFangKernel {
                 agent_provider.clone(),
             )];
             for fb in &effective_fallbacks {
-                // Resolve "default" to the actual default provider, but if the
-                // model name implies a specific provider (e.g. "gemini-2.0-flash"
-                // → "gemini"), use that instead of blindly falling back to the
-                // default provider which may be a completely different service.
-                let fb_provider = if fb.provider.is_empty() || fb.provider == "default" {
-                    infer_provider_from_model(&fb.model).unwrap_or_else(|| default_provider.clone())
-                } else {
-                    fb.provider.clone()
-                };
+                // A sentinel model inherits the authoritative default provider/model pair; an explicit fallback model may infer its provider. This uses the same hot-reloadable default snapshot as the primary slot.
+                let (fb_provider, fb_model) = resolve_fallback_target(
+                    &fb.provider,
+                    &fb.model,
+                    default_provider,
+                    &effective_default.model,
+                );
+                if fb_provider == "everyapi"
+                    && self.llm.model_catalog.load().is_suppressed(&fb_provider)
+                {
+                    warn!("EveryAPI fallback provider is suppressed; skipping slot");
+                    continue;
+                }
                 // Governance allowlist (issue #6459): never add a disallowed
                 // provider to the fallback chain. Fail-closed skip + WARN,
                 // mirroring the init-failure skip below.
@@ -437,12 +504,24 @@ impl LibreFangKernel {
                         .copied()
                         .unwrap_or_else(|| DriverConfig::default().max_retries),
                 };
-                match self.llm.driver_cache.get_or_create(&config) {
-                    Ok(d) => chain.push((
-                        d,
-                        strip_provider_prefix(&fb.model, &fb_provider),
-                        fb_provider.clone(),
-                    )),
+                let fallback_driver = if should_use_managed_everyapi(
+                    &fb_provider,
+                    config.api_key.is_some(),
+                    fb.api_key_env.is_some()
+                        || cfg.provider_api_keys.contains_key(&fb_provider)
+                        || cfg.auth_profiles.contains_key(&fb_provider),
+                    fb.base_url.is_some() || cfg.provider_urls.contains_key(&fb_provider),
+                    self.is_managed_everyapi(&fb_provider),
+                ) {
+                    Ok(Arc::new(crate::everyapi_driver::ManagedEveryApiDriver::new(
+                        config,
+                        Arc::clone(&self.llm.driver_cache),
+                    )) as Arc<dyn LlmDriver>)
+                } else {
+                    self.llm.driver_cache.get_or_create(&config)
+                };
+                match fallback_driver {
+                    Ok(d) => chain.push((d, fb_model, fb_provider.clone())),
                     Err(e) => {
                         warn!("Fallback driver '{}' failed to init: {e}", fb_provider);
                     }
@@ -467,6 +546,74 @@ impl LibreFangKernel {
         }
 
         Ok(primary)
+    }
+
+    /// The driver a side task should run on for `manifest`.
+    ///
+    /// An explicitly configured `[llm.auxiliary]` chain wins, so operators who
+    /// asked for cheap-tier side tasks keep getting them. When no chain is
+    /// configured the task falls back to the **agent's own** driver, not to
+    /// `AuxClient`'s primary (#8093).
+    ///
+    /// That distinction is the whole point. `AuxClient::primary` is the kernel's
+    /// process-wide `default_driver`, and every caller pairs the driver it gets
+    /// back with the *agent's* model. For an agent that overrides `provider` /
+    /// `model` in its manifest the two disagree, and the request goes to the
+    /// default provider carrying a model only the agent's provider can serve —
+    /// observed as a LiteLLM `403 team_model_access_denied` naming the agent's
+    /// model, after which the side task silently degrades to its fallback stub.
+    ///
+    /// `AuxResolution::used_primary` is exactly this signal. `ContextCompressor`
+    /// has always branched on it; this puts the same rule behind the kernel's
+    /// own call sites, in one place rather than copied per site.
+    ///
+    /// Infallible by design: a side task must not abort a turn because the
+    /// agent's chain could not be built, so a `resolve_driver` failure logs and
+    /// yields the aux primary — the historical behaviour, and better than no
+    /// compaction at all.
+    pub(crate) fn side_task_driver(
+        &self,
+        manifest: &AgentManifest,
+        task: librefang_types::config::AuxTask,
+    ) -> Arc<dyn LlmDriver> {
+        let resolution = self.llm.aux_client.load().resolve(task);
+        if !resolution.used_primary {
+            return resolution.driver;
+        }
+        match self.resolve_driver(manifest) {
+            Ok(driver) => driver,
+            Err(e) => {
+                tracing::warn!(
+                    agent = %manifest.name,
+                    %task,
+                    error = %e,
+                    "side task: could not resolve the agent's own driver; \
+                     falling back to the kernel default chain"
+                );
+                resolution.driver
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod managed_everyapi_tests {
+    use super::should_use_managed_everyapi;
+
+    #[test]
+    fn explicit_credentials_and_urls_override_managed_everyapi() {
+        assert!(!should_use_managed_everyapi(
+            "everyapi", true, false, false, true
+        ));
+        assert!(!should_use_managed_everyapi(
+            "everyapi", false, true, false, true
+        ));
+        assert!(!should_use_managed_everyapi(
+            "everyapi", false, false, true, true
+        ));
+        assert!(should_use_managed_everyapi(
+            "everyapi", false, false, false, true
+        ));
     }
 }
 
@@ -504,7 +651,9 @@ mod tests {
     use super::*;
     use librefang_types::{
         agent::FallbackModel,
-        config::{FallbackProviderConfig, KernelConfig, MemoryConfig},
+        config::{
+            DefaultModelConfig, FallbackProviderConfig, KernelConfig, MemoryConfig, NO_LLM_PROVIDER,
+        },
     };
 
     fn make_global(provider: &str, model: &str) -> FallbackProviderConfig {
@@ -571,6 +720,42 @@ mod tests {
             result[0].model, "gpt-4o-mini",
             "model must match agent chain"
         );
+    }
+
+    #[test]
+    fn fallback_target_inherits_defaults_and_infers_explicit_models() {
+        let (provider, model) =
+            resolve_fallback_target("default", "gemini/gemini-2.0-flash", "openai", "gpt-4.1");
+
+        assert_eq!(provider, "gemini");
+        assert_eq!(model, "gemini-2.0-flash");
+
+        let (provider, model) =
+            resolve_fallback_target("", "", "anthropic", "anthropic/claude-sonnet-4-5");
+        assert_eq!(provider, "anthropic");
+        assert_eq!(model, "claude-sonnet-4-5");
+
+        let (provider, model) =
+            resolve_fallback_target("openai", "default", "openai", "openai/gpt-4.1");
+        assert_eq!(provider, "openai");
+        assert_eq!(model, "gpt-4.1");
+    }
+
+    #[test]
+    fn fallback_target_preserves_aggregated_default_provider_pair() {
+        let (provider, model) =
+            resolve_fallback_target("default", "default", "everyapi", "claude-sonnet-5");
+        assert_eq!(provider, "everyapi");
+        assert_eq!(model, "claude-sonnet-5");
+
+        let (provider, model) = resolve_fallback_target(
+            "default",
+            "default",
+            "openrouter",
+            "anthropic/claude-sonnet-4-5",
+        );
+        assert_eq!(provider, "openrouter");
+        assert_eq!(model, "anthropic/claude-sonnet-4-5");
     }
 
     /// Regression test for #5755: a custom provider whose `api_key_env` doesn't
@@ -782,6 +967,95 @@ key_required = true
         );
     }
 
+    /// #7743 — an explicitly driverless kernel resolves no LLM driver, and boot never goes looking for one on the host.
+    ///
+    /// Two distinct failure modes are pinned here, because "no driver configured" used to be expressible only by accident:
+    ///
+    /// 1. The sentinel must not be classified as a *misconfigured* provider.
+    ///    Pre-fix, boot handed `"none"` to `create_driver`, got "unknown provider" back, read that as "primary driver init failed", and ran its recovery path — `detect_available_provider()`, which scans provider API-key env vars and then coding-agent CLIs on `PATH`.
+    ///    On any machine with the Anthropic `claude` CLI installed that recovery wires a live `claude-code` driver *and rewrites* `config.default_model.provider` to match, so a kernel the test believed was driverless spawns the real CLI against the checkout and bills the contributor's account.
+    ///    That is exactly the observed failure in #7743, and the post-boot provider name is its fingerprint.
+    /// 2. A stray `base_url` must not resurrect a driver.
+    ///    This leg fails deterministically on every machine, credentials or not: with `base_url` set, `create_driver` accepts *any* unrecognised provider name as a custom OpenAI-compatible endpoint, so pre-fix the sentinel produced a fully live HTTP driver rather than the stub.
+    #[test]
+    fn driverless_kernel_resolves_no_driver_and_never_probes_the_host() {
+        // Anti-regression guard suggested on the issue: the sentinel only means
+        // "no driver" for as long as it is not also a provider name. If `none`
+        // ever lands in `PROVIDER_REGISTRY`, every driverless test kernel
+        // quietly starts resolving a real driver again — fail loudly here
+        // instead of billing someone for the discovery.
+        assert!(
+            !drivers::known_providers().contains(&NO_LLM_PROVIDER),
+            "`{NO_LLM_PROVIDER}` must never be a registered provider name — it is the sentinel for the absence of one"
+        );
+
+        for stray_base_url in [None, Some("http://127.0.0.1:9/v1".to_string())] {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let home = tmp.path().to_path_buf();
+            let data_dir = home.join("data");
+            std::fs::create_dir_all(&data_dir).unwrap();
+            std::fs::create_dir_all(home.join("skills")).unwrap();
+            std::fs::create_dir_all(home.join("workspaces").join("agents")).unwrap();
+            std::fs::create_dir_all(home.join("workspaces").join("hands")).unwrap();
+            let registry_dir = home.join("registry");
+            std::fs::create_dir_all(&registry_dir).unwrap();
+            std::fs::write(registry_dir.join(".sync_marker"), "").unwrap();
+
+            let config = KernelConfig {
+                home_dir: home.clone(),
+                data_dir: data_dir.clone(),
+                network_enabled: false,
+                memory: MemoryConfig {
+                    sqlite_path: Some(data_dir.join("test.db")),
+                    ..Default::default()
+                },
+                default_model: DefaultModelConfig {
+                    base_url: stray_base_url.clone(),
+                    ..DefaultModelConfig::driverless()
+                },
+                ..KernelConfig::default()
+            };
+            let kernel = LibreFangKernel::boot_with_config(config).expect("kernel boot");
+
+            assert_eq!(
+                kernel.config_ref().default_model.provider,
+                NO_LLM_PROVIDER,
+                "boot rewrote an explicitly driverless provider, which only happens when the \
+                 host probe ran and won (stray base_url: {stray_base_url:?})"
+            );
+
+            // Both spellings an agent can use to mean "whatever the kernel's
+            // default is": an unset provider, and the literal `"default"`.
+            let mut named_default = AgentManifest::default();
+            named_default.model.provider = "default".to_string();
+            for manifest in [AgentManifest::default(), named_default] {
+                let driver = match kernel.resolve_driver(&manifest) {
+                    Ok(d) => d,
+                    // `Arc<dyn LlmDriver>` is not `Debug`, so `expect` on the
+                    // Result will not compile — match the error out instead.
+                    Err(e) => {
+                        panic!("driverless resolution must yield the stub, not an error: {e}")
+                    }
+                };
+                assert!(
+                    !driver.is_configured(),
+                    "a driverless kernel must resolve an unconfigured stub driver \
+                     (provider {:?}, stray base_url: {stray_base_url:?})",
+                    manifest.model.provider
+                );
+                assert!(
+                    !driver.is_coding_agent(),
+                    "a driverless kernel must never resolve a coding-agent CLI driver — that is \
+                     the driver that spawns a real subprocess against the checkout \
+                     (provider {:?}, stray base_url: {stray_base_url:?})",
+                    manifest.model.provider
+                );
+            }
+
+            kernel.shutdown();
+        }
+    }
+
     /// #6459 — `resolve_driver` enforces the org-wide provider allowlist
     /// fail-closed at driver resolution time: an empty allowlist allows any
     /// provider, a non-empty allowlist rejects a disallowed provider with a
@@ -808,6 +1082,9 @@ key_required = true
                 sqlite_path: Some(data_dir.join("test.db")),
                 ..Default::default()
             },
+            // #7743: the allowlist is the subject here, so the default provider must not be
+            // whatever this machine happens to have credentials for.
+            default_model: DefaultModelConfig::driverless(),
             ..KernelConfig::default()
         };
         let kernel = LibreFangKernel::boot_with_config(config).expect("kernel boot");
@@ -820,10 +1097,17 @@ key_required = true
             kernel.config.store(std::sync::Arc::new(cfg));
         };
 
-        // Empty allowlist → no restriction: a default agent resolves.
+        // Empty allowlist → no restriction: a named provider resolves.
+        // A *default* manifest would not exercise the gate at all now that the
+        // kernel's default is the driverless sentinel — resolution
+        // short-circuits to the stub before the allowlist is consulted (#7743)
+        // — so name a provider that reaches the gate. `ollama` is local and
+        // needs no API key, so it builds regardless of the test environment.
         set_allowlist(&[]);
+        let mut unrestricted = AgentManifest::default();
+        unrestricted.model.provider = "ollama".to_string();
         assert!(
-            kernel.resolve_driver(&AgentManifest::default()).is_ok(),
+            kernel.resolve_driver(&unrestricted).is_ok(),
             "empty allowlist must allow everything"
         );
 
@@ -891,7 +1175,7 @@ key_required = true
         let loop_start = boot
             .find("for fb in &config.fallback_providers {")
             .expect("boot.rs must build the default_driver fallback chain");
-        let window = 800.min(boot.len() - loop_start);
+        let window = 1400.min(boot.len() - loop_start);
         assert!(
             boot[loop_start..loop_start + window].contains("is_provider_allowed"),
             "the boot default_driver fallback loop must gate each slot via \

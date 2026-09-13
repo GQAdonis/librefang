@@ -5,10 +5,13 @@
 //! `ALWAYS_NATIVE_TOOLS` shortlist used in lazy-load mode (#3044).
 
 #[cfg(feature = "media")]
-use super::media::SUPPORTED_AUDIO_EXTS_DOC;
+use super::media::{SUPPORTED_AUDIO_EXTS_DOC, SUPPORTED_VIDEO_EXTS_DOC};
 #[cfg(not(feature = "media"))]
 #[allow(dead_code)]
 const SUPPORTED_AUDIO_EXTS_DOC: &str = "(media feature disabled)";
+#[cfg(not(feature = "media"))]
+#[allow(dead_code)]
+const SUPPORTED_VIDEO_EXTS_DOC: &str = "(media feature disabled)";
 use librefang_types::tool::ToolDefinition;
 use std::sync::OnceLock;
 
@@ -31,6 +34,12 @@ pub(crate) mod tool_name {
     pub const MEMORY_STORE: &str = "memory_store";
     pub const MEMORY_RECALL: &str = "memory_recall";
     pub const MEMORY_LIST: &str = "memory_list";
+    pub const MEMORY_SEMANTIC_SEARCH: &str = "memory_semantic_search";
+    pub const MEMORY_SEMANTIC_ADD: &str = "memory_semantic_add";
+    pub const MEMORY_SEMANTIC_FORGET: &str = "memory_semantic_forget";
+    pub const MEMORY_SEMANTIC_STATS: &str = "memory_semantic_stats";
+    pub const MEMORY_SEMANTIC_DUPLICATES: &str = "memory_semantic_duplicates";
+    pub const MEMORY_SEMANTIC_CONSOLIDATE: &str = "memory_semantic_consolidate";
     pub const WIKI_GET: &str = "wiki_get";
     pub const WIKI_SEARCH: &str = "wiki_search";
     pub const WIKI_WRITE: &str = "wiki_write";
@@ -72,6 +81,8 @@ pub(crate) mod tool_name {
     pub const CRON_CANCEL: &str = "cron_cancel";
     pub const CRON_ENABLE: &str = "cron_enable";
     pub const CHANNEL_SEND: &str = "channel_send";
+    pub const CHANNEL_DM: &str = "channel_dm";
+    pub const CHANNEL_MEMBERS: &str = "channel_members";
     pub const HAND_LIST: &str = "hand_list";
     pub const HAND_ACTIVATE: &str = "hand_activate";
     pub const HAND_STATUS: &str = "hand_status";
@@ -93,6 +104,8 @@ pub(crate) mod tool_name {
     pub const WORKFLOW_STATUS: &str = "workflow_status";
     pub const WORKFLOW_START: &str = "workflow_start";
     pub const WORKFLOW_CANCEL: &str = "workflow_cancel";
+    pub const WORKFLOW_CREATE: &str = "workflow_create";
+    pub const AGENT_TYPE_CREATE: &str = "agent_type_create";
     pub const SYSTEM_TIME: &str = "system_time";
     pub const CANVAS_PRESENT: &str = "canvas_present";
     pub const READ_ARTIFACT: &str = "read_artifact";
@@ -128,6 +141,14 @@ pub const ALWAYS_NATIVE_TOOLS: &[&str] = &[
     tool_name::MEMORY_STORE,
     tool_name::MEMORY_RECALL,
     tool_name::MEMORY_LIST,
+    // #7808: the semantic store is the one an agent is most likely to need and
+    // least likely to find. `memory_recall` sits in this list looking
+    // authoritative while only ever doing an exact-key KV lookup, so a model in
+    // lazy-load mode reaches for it and concludes the memory is gone. Paying
+    // this one schema keeps the honest alternative visible on the same turn.
+    // `memory_semantic_add` / `_forget` / `_stats` stay lazy behind
+    // `tool_search` / `tool_load` — a model that found `_search` can find them.
+    tool_name::MEMORY_SEMANTIC_SEARCH,
     tool_name::WEB_SEARCH,
     tool_name::WEB_FETCH,
     tool_name::FILE_READ,
@@ -162,11 +183,38 @@ pub fn select_native_tools(all: &[ToolDefinition]) -> Vec<ToolDefinition> {
     let found_names: std::collections::HashSet<&str> =
         found.iter().map(|t| t.name.as_str()).collect();
     for &name in ALWAYS_NATIVE_TOOLS.iter() {
-        if !found_names.contains(name) {
-            tracing::warn!("native tool {name:?} missing from definitions");
+        if found_names.contains(name) {
+            continue;
+        }
+        // `all` is the set granted to one agent, not the global registry, so a
+        // name can be absent here for two very different reasons. Saying
+        // "missing from definitions" for both sent a production investigation
+        // after the tool registry when the real answer was an agent type that
+        // simply does not declare the tool (#8225).
+        if builtin_tool_names().contains(name) {
+            tracing::debug!(
+                "native tool {name:?} is not in this agent's granted set, so lazy mode will not ship it"
+            );
+        } else {
+            tracing::warn!("native tool {name:?} has no entry in builtin_tool_definitions()");
         }
     }
     found
+}
+
+/// Names of every built-in tool, memoized.
+///
+/// Only the names are kept: `builtin_tool_definitions()` hands back a clone of
+/// the whole catalog, schemas included, which is far too much to rebuild just
+/// to answer whether one name exists.
+fn builtin_tool_names() -> &'static std::collections::HashSet<String> {
+    static NAMES: OnceLock<std::collections::HashSet<String>> = OnceLock::new();
+    NAMES.get_or_init(|| {
+        builtin_tool_definitions()
+            .into_iter()
+            .map(|t| t.name)
+            .collect()
+    })
 }
 
 /// Get definitions for all built-in tools.
@@ -317,7 +365,7 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::AGENT_SEND.to_string(),
-                description: "Send a message to another agent. By default this BLOCKS until the agent replies and returns their response — only use the blocking mode for quick sub-questions whose answer you need within this turn. For any delegation that may take a while (research, multi-step work), set \"async\": true so you are not blocked and don't hit the tool timeout. Accepts UUID or agent name. Use agent_find first to discover agents.".to_string(),
+                description: "Send a message to another agent. By default this is NON-BLOCKING: you get back a task_id immediately and the target's reply is delivered to your session when it finishes, so a long delegation cannot burn your turn on the tool timeout. Set \"async\": false for a quick sub-question whose answer you need within this same turn — that blocks until the agent replies and returns their response directly. Accepts UUID or agent name. Use agent_find first to discover agents.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
@@ -329,7 +377,7 @@ use instead of web_fetch + file_write (which round-trips the entire body through
                         },
                         "async": {
                             "type": "boolean",
-                            "description": "When true, returns immediately with a task_id instead of blocking for the reply. The target agent's response is delivered back to your session automatically when it finishes, so you can continue or end your turn. Use this for any delegation that might take longer than a few seconds (it avoids the tool-execution timeout). Defaults to false (blocking)."
+                            "description": "Controls blocking. Omit it to get the default non-blocking delegation: you receive a task_id and the target agent's response is delivered to your session automatically when it finishes, so you can continue or end your turn. Set it to false to block until the target replies and get their response directly — appropriate only for a quick sub-question you need answered inside this turn. Async tracking needs a live caller session: on surfaces that have none (the MCP HTTP bridge, the REST tool endpoint) the delegation runs inline and you get the target's reply itself rather than a task_id — read what you receive rather than assuming a task is pending."
                         }
                     },
                     "required": ["agent_id", "message"]
@@ -337,34 +385,50 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::AGENT_SPAWN.to_string(),
-                description: "Spawn a new agent from settings. Returns the new agent's ID and name.".to_string(),
+                description: "Create an agent. Two shapes: the default creates a PERMANENT agent (workspace, database record, its own lifetime) and returns its ID and name — use it when the agent should still exist tomorrow. Set ephemeral to true instead to run a WORKER: it performs one task with the tools you give it, hands back the answer in this same tool result, and then vanishes leaving no agent, no workspace and no record. Prefer the worker for anything task-shaped — research a question, process a file, draft something — and reach for a permanent agent only when you need a durable collaborator.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "Unique name for the new agent. Ensure it does not conflict with existing agents."
+                            "description": "Permanent: unique name for the new agent — ensure it does not conflict with existing agents. Ephemeral: a short label for the mission (e.g. \"research\"); it does not have to be unique and a uid suffix is appended for you."
                         },
                         "system_prompt": {
                             "type": "string",
-                            "description": "The system prompt for the new agent"
+                            "description": "The system prompt. Required for a permanent agent. Optional for a worker: omit it to inherit your own persona, or to take the prompt from agent_type."
+                        },
+                        "ephemeral": {
+                            "type": "boolean",
+                            "description": "Run a throwaway worker instead of creating a permanent agent. Requires message. Returns the worker's answer directly, not an agent ID."
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Ephemeral only, and required for it: the task the worker should perform."
+                        },
+                        "agent_type": {
+                            "type": "string",
+                            "description": "Ephemeral only: name of an existing agent type whose template supplies the worker's prompt, model and tools."
+                        },
+                        "max_iterations": {
+                            "type": "integer",
+                            "description": "Ephemeral only: cap the worker's reasoning turns. Values above the operator's configured ceiling are clamped down to it."
                         },
                         "tools": {
                             "type": "array",
                             "items": { "type": "string" },
-                            "description": "Select from all available tools, including MCP tools. Use the full tool names only"
+                            "description": "Select from all available tools, including MCP tools. Use the full tool names only. A worker can only be given tools you can call yourself, and naming one you cannot is an error rather than a silent omission."
                         },
                         "network": {
                             "type": "boolean",
-                            "description": "Whether to enable network access for the new agent (required to be true when web_fetch is in tools)"
+                            "description": "Permanent only: whether to enable network access for the new agent (required to be true when web_fetch is in tools)"
                         },
                         "shell": {
                             "type": "array",
                             "items": { "type": "string" },
-                            "description": "Preset necessary shell commands based on the agent's task (e.g., [\"uv *\", \"pnpm *\"]). "
+                            "description": "Permanent only: preset necessary shell commands based on the agent's task (e.g., [\"uv *\", \"pnpm *\"]). "
                         }
                     },
-                    "required": ["name", "system_prompt"]
+                    "required": ["name"]
                 }),
             },
             ToolDefinition {
@@ -388,7 +452,7 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::MEMORY_STORE.to_string(),
-                description: "Store a value in the agent's memory. Each agent has its own isolated memory namespace. Use for persisting data across sessions.".to_string(),
+                description: "Store a value under an exact key in the agent's key/value store. Each agent has its own isolated namespace. This is a keyed store, not semantic memory: the value is retrievable only by passing the same key back to memory_recall. To record a fact you want found later by meaning, use memory_semantic_add.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
@@ -399,25 +463,93 @@ use instead of web_fetch + file_write (which round-trips the entire body through
                 }),
             },
             ToolDefinition {
+                // #7808: the old description was "Recall a value from the
+                // agent's memory by key." — technically true and read by
+                // models as "this is how you look things up in memory". It is
+                // an exact-key hashmap lookup: it never touches the semantic
+                // store, never reads an embedding, and returns "not found" for
+                // anything that was not stored under precisely that key. The
+                // description now says what it does NOT do, and points at the
+                // tool that does.
                 name: tool_name::MEMORY_RECALL.to_string(),
-                description: "Recall a value from the agent's memory by key.".to_string(),
+                description: "Look up one value by its EXACT key in the agent's key/value store. This is not a search: it does no fuzzy, semantic, or substring matching, and returns 'not found' unless the key matches character for character. To search remembered facts by meaning, use memory_semantic_search instead.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
-                        "key": { "type": "string", "description": "The storage key to recall" }
+                        "key": { "type": "string", "description": "The exact storage key to look up (as previously passed to memory_store)" }
                     },
                     "required": ["key"]
                 }),
             },
             ToolDefinition {
                 name: tool_name::MEMORY_LIST.to_string(),
-                description: "List keys in the agent's memory with pagination.".to_string(),
+                description: "List the keys in the agent's key/value store, with pagination. Returns key names only, not values, and does not cover semantic memory — use memory_semantic_stats for that store.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
                         "limit": { "type": "integer", "description": "Max keys to return (default 100)" },
                         "offset": { "type": "integer", "description": "Number of keys to skip" }
                     },
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_SEARCH.to_string(),
+                description: "Search this agent's semantic memory by meaning and return the matching fragments with their ids. This is the store the system recalls from automatically before each turn — use this tool to ask it a question yourself: \"what do I know about X?\". Ranked by embedding similarity when embeddings are configured. Each result carries an id you can pass to memory_semantic_forget to retract a memory that is now wrong.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "query": { "type": "string", "description": "What to look for, in natural language" },
+                        "limit": { "type": "integer", "description": "Max fragments to return (default 5, max 50)" },
+                        "min_confidence": { "type": "number", "description": "Drop fragments whose confidence has decayed below this floor, 0.0-1.0. Use it to ask for nothing rather than stale noise." },
+                        "min_similarity": { "type": "number", "description": "Drop fragments whose similarity to the query falls below this floor, -1.0-1.0. Different from min_confidence: confidence is how much the memory is still trusted, similarity is how well it answers THIS query. Set it when an empty answer is better than an unrelated one; around 0.3 is a reasonable starting point. Ignored when no embedding provider is configured, because then nothing is scored." }
+                    },
+                    "required": ["query"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_ADD.to_string(),
+                description: "Deliberately record a durable fact in this agent's semantic memory, so it can be recalled later by meaning rather than by key. The content is passed through the memory extractor, which may distil it, merge it into an existing memory, or decline it as redundant — the result says exactly what was stored, and reports storing nothing when nothing was stored. For an exact key/value entry you control, use memory_store.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "content": { "type": "string", "description": "The fact to remember, phrased so it stands on its own without the surrounding conversation" }
+                    },
+                    "required": ["content"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_FORGET.to_string(),
+                description: "Retract one semantic memory by id, so it stops being recalled into future turns. Use this when a memory has gone stale and keeps contradicting what you can observe directly. Get ids from memory_semantic_search. Only memories belonging to this agent can be forgotten.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "memory_id": { "type": "string", "description": "The id of the memory to forget, as returned by memory_semantic_search" }
+                    },
+                    "required": ["memory_id"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_STATS.to_string(),
+                description: "Report how much this agent remembers semantically: total fragments, counts per level, counts per category, and whether automatic memorize/recall and LLM extraction are switched on. Use it to check whether semantic memory is actually enabled before concluding that a search found nothing because nothing was stored.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_DUPLICATES.to_string(),
+                description: "Group this agent's near-duplicate semantic memories and report the groups, changing nothing. Use it when the same claim keeps resurfacing in recall and you suspect several copies are reinforcing each other — the groups tell you which ids say the same thing. Each group lists two or more memories the store considers the same fact; you can retract the ones you disagree with individually via memory_semantic_forget, or merge a whole group with memory_semantic_consolidate where that tool is available.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::MEMORY_SEMANTIC_CONSOLIDATE.to_string(),
+                description: "Merge every near-duplicate group in this agent's semantic memory, keeping the newest memory of each group and permanently retracting the rest. This deletes memories you did not name, across the whole store, in one call, and cannot be undone from here — run memory_semantic_duplicates first and read what it reports. Returns how many memories were retracted. Only available when this agent's manifest sets `[proactive_memory] allow_self_consolidation = true`; if it is not, use memory_semantic_duplicates and report what you found instead.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {},
                 }),
             },
             ToolDefinition {
@@ -680,11 +812,11 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::BROWSER_CLICK.to_string(),
-                description: "Click an element on the current browser page by CSS selector or visible text. Returns the resulting page state.".to_string(),
+                description: "Click an element on the current browser page by link marker, CSS selector, or visible text. Returns the resulting page state. Prefer the ⟨n⟩ marker from the page's link table: it identifies one exact link, where matching on visible text picks the first element merely containing it. A marker describes the page as it was last read, so re-read the page before clicking one if the page may have changed since.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
-                        "selector": { "type": "string", "description": "CSS selector (e.g., '#submit-btn', '.add-to-cart') or visible text to click" }
+                        "selector": { "type": "string", "description": "A link marker from the page's link table (e.g., '⟨12⟩'), a CSS selector (e.g., '#submit-btn', '.add-to-cart'), or visible text to click" }
                     },
                     "required": ["selector"]
                 }),
@@ -785,12 +917,16 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::MEDIA_TRANSCRIBE.to_string(),
-                description: "Transcribe audio to text using speech-to-text. Auto-selects the best available provider (Groq Whisper or OpenAI Whisper). Returns the transcript.".to_string(),
+                description: "Transcribe audio to text using speech-to-text. Auto-selects the best available provider (Groq Whisper or OpenAI Whisper). Also accepts video containers — the audio track is extracted server-side and the video is discarded. Returns the transcript.\n\nFor a recording longer than a few minutes, transcribe it in windows and write to a file: pass `max_secs` (and `out_path`), then repeat with `start_sec` = the `next_start_sec` from the response while `has_more` is true. A whole long recording returned in one result is too large to reach you intact.".to_string(),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": format!("Path to the audio file (relative to workspace). Supported: {SUPPORTED_AUDIO_EXTS_DOC}.") },
-                        "language": { "type": "string", "description": "Optional ISO-639-1 language code (e.g., 'en', 'es', 'ja')" }
+                        "path": { "type": "string", "description": format!("Path to the audio or video file (relative to workspace). Audio: {SUPPORTED_AUDIO_EXTS_DOC}. Video (audio track extracted, video discarded): {SUPPORTED_VIDEO_EXTS_DOC}.") },
+                        "language": { "type": "string", "description": "Optional ISO-639-1 language code (e.g., 'en', 'es', 'ja'). Improves accuracy when known; the provider auto-detects when omitted." },
+                        "prompt": { "type": "string", "description": "Optional context to guide transcription — domain vocabulary, proper nouns, or acronyms likely to appear. Also improves punctuation and casing on long recordings." },
+                        "start_sec": { "type": "number", "description": "Start of the window to transcribe, in seconds from the beginning of the recording. Defaults to 0. Continue a walk by passing the previous response's `next_start_sec` — do NOT guess an offset. A `start_sec` more than ~10 seconds past the end of the recording does not come back empty: it returns the BEGINNING of the recording instead, which you would then be reading as though it were the part you asked for." },
+                        "max_secs": { "type": "number", "description": "Length of the window to transcribe, in seconds of media. Defaults to 600 (10 minutes) when either window field is given. Setting only this transcribes the first window. Lower it if transcription times out — the request is bounded by wall-clock, and how much media fits depends on provider speed." },
+                        "out_path": { "type": "string", "description": "Workspace-relative path to write the transcript to as UTF-8. The transcript then does NOT appear in the result — instead you get `written_to`, `file_bytes` and `file_sha256` (the whole file as it now stands, across every window so far) plus `window_chars` and `window_preview` (this call only). Windows append to the same file separated by a newline; a window starting at 0 begins a new one, so repeated calls assemble one transcript. Use this for anything long: an inline transcript above ~16 KB does not reach you intact." }
                     },
                     "required": ["path"]
                 }),
@@ -940,6 +1076,29 @@ use instead of web_fetch + file_write (which round-trips the entire body through
                 }),
             },
             ToolDefinition {
+                name: tool_name::CHANNEL_DM.to_string(),
+                description: "Deliver a message privately to ONE member of the group conversation you are currently in, instead of posting where everyone can read it. Use it to tell a single person their task is done, or to return a result only they asked for. The recipient must be someone the daemon has seen speak in this conversation — call channel_members and pick a member whose source is \"observed\"; a member listed as \"enumerated\" is known to the platform but has never addressed you, and this tool will refuse them. Only available while handling an inbound channel message; the channel, the conversation and the bot account all come from that message and cannot be overridden. Platform limits: Slack opens a DM with any workspace member, but Telegram and Discord bots cannot message a user who has never started a chat with them, and that send fails rather than falling back to the group.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "message": { "type": "string", "description": "The text to deliver privately to that one member." },
+                        "user_id": { "type": "string", "description": "Platform user id of the member to reach (Slack 'U…', Telegram numeric id, WhatsApp participant JID), as returned by channel_members. Not the conversation id." }
+                    },
+                    "required": ["message", "user_id"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::CHANNEL_MEMBERS.to_string(),
+                description: "List the known members of a group conversation on a channel: the platform user_id, display_name, username, and source of each. Use it to answer \"who is in this channel?\", to attribute a request to the person who made it when handing work to an external system, and to obtain the platform user id needed to address one member individually. Each member's source is either \"observed\" (they have spoken here, so channel_dm can reach them) or \"enumerated\" (the platform lists them as a member but they have never addressed you, so channel_dm will refuse them); the reply also carries observed_count and enumerated_count. Both arguments default to the conversation the current message arrived on, so during message handling this can be called with no arguments; a direct message has no roster. Read-only.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "channel": { "type": "string", "description": "Channel type to read the roster of (e.g. 'slack', 'telegram', 'discord', 'whatsapp'). Omit while handling an inbound message to use the channel it arrived on." },
+                        "chat_id": { "type": "string", "description": "Platform conversation id (Slack channel id, Telegram chat_id, WhatsApp group JID). Omit while handling an inbound message to use the current conversation — naming a different conversation on that same channel is refused." }
+                    }
+                }),
+            },
+            ToolDefinition {
                 name: tool_name::HAND_LIST.to_string(),
                 description: "List available Hands (curated autonomous packages) and their activation status.".to_string(),
                 input_schema: serde_json::json!({
@@ -1033,12 +1192,13 @@ use instead of web_fetch + file_write (which round-trips the entire body through
             },
             ToolDefinition {
                 name: tool_name::SPEECH_TO_TEXT.to_string(),
-                description: format!("Transcribe audio to text using speech-to-text. Auto-selects Groq Whisper or OpenAI Whisper. Supported formats: {SUPPORTED_AUDIO_EXTS_DOC}."),
+                description: format!("Transcribe audio to text using speech-to-text. Auto-selects Groq Whisper or OpenAI Whisper. Supported audio formats: {SUPPORTED_AUDIO_EXTS_DOC}. Also accepts video containers ({SUPPORTED_VIDEO_EXTS_DOC}) — the audio track is extracted server-side and the video is discarded."),
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
-                        "path": { "type": "string", "description": "Path to the audio file (relative to workspace)" },
-                        "language": { "type": "string", "description": "Optional ISO-639-1 language code (e.g., 'en', 'es', 'ja')" }
+                        "path": { "type": "string", "description": "Path to the audio or video file (relative to workspace)" },
+                        "language": { "type": "string", "description": "Optional ISO-639-1 language code (e.g., 'en', 'es', 'ja'). Improves accuracy when known; the provider auto-detects when omitted." },
+                        "prompt": { "type": "string", "description": "Optional context to guide transcription — domain vocabulary, proper nouns, or acronyms likely to appear. Also improves punctuation and casing on long recordings." }
                     },
                     "required": ["path"]
                 }),
@@ -1196,6 +1356,75 @@ use instead of web_fetch + file_write (which round-trips the entire body through
                         "run_id": { "type": "string", "description": "The workflow run UUID to cancel" }
                     },
                     "required": ["run_id"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::WORKFLOW_CREATE.to_string(),
+                description: "Define and register a new multi-step workflow so it can be run later with workflow_run / workflow_start. Use this when the same multi-agent sequence is worth repeating; for a one-off, send the agents messages directly instead. The workflow becomes available immediately and outlives the conversation. Names are unique across the daemon: a name already in use is rejected rather than overwritten, so call workflow_list first if you are unsure. Returns {id, name, description, step_count, has_input_schema}.".to_string(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "description": "Unique name, 1-64 characters of letters, digits, '_' and '-'. This is how the workflow is addressed afterwards (e.g. 'nightly-report')." },
+                        "description": { "type": "string", "description": "What the workflow does, for whoever reads workflow_list later" },
+                        "steps": {
+                            "type": "array",
+                            "minItems": 1,
+                            "maxItems": 50,
+                            "description": "The steps, in execution order. Sequential by default; declare depends_on to run them as a DAG instead.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string", "description": "Step name, unique within the workflow. Other steps reference it in depends_on." },
+                                    "agent": { "description": "Which agent runs this step. A bare string is the agent's name (agent_list shows what exists). The object forms carry exactly one routing key: {\"name\": \"researcher\"} by name, {\"id\": \"<uuid>\"} by instance UUID, or {\"type\": \"researcher\"} by agent type — find-or-spawn, which reuses a registered agent of that name and otherwise spawns the template of that name, so the workflow stands on its own on an instance where nothing is pre-registered." },
+                                    "prompt_template": { "type": "string", "description": "Prompt for this step. {{input}} interpolates the previous step's output; {{var}} interpolates a workflow input parameter or an earlier step's output_var." },
+                                    "depends_on": { "type": "array", "items": { "type": "string" }, "description": "Names of steps that must finish first. Any step may be named, including one declared later. Omit for straight-line execution." },
+                                    "output_var": { "type": "string", "description": "Store this step's output under this name so later steps can reference it as {{name}}" },
+                                    "mode": { "description": "Sequencing for this step: the string \"sequential\" (default), \"fan_out\" to run in parallel with the following fan_out steps, or \"collect\" to gather them. Richer nodes take a tagged object, e.g. {\"conditional\": {\"condition\": \"APPROVED\"}}." },
+                                    "error_mode": { "description": "What to do when this step fails: \"fail\" (default, abort the run), \"skip\" (continue without it), or {\"retry\": {\"max_retries\": 3}}." },
+                                    "timeout_secs": { "type": "integer", "minimum": 1, "maximum": 3600, "description": "Wall-clock limit for this step (default 120, ceiling 3600)" },
+                                    "required_skills": { "type": "array", "items": { "type": "string" }, "description": "Skills the resolved agent must actually be able to use. Checked right after agent resolution and before the prompt is built, so an unmet requirement fails the run with an error naming the skill and the fix, and bills no LLM call. Omit unless the step cannot work without them." },
+                                    "session_mode": { "type": "string", "enum": ["persistent", "new"], "description": "Session this step's invocation uses: \"persistent\" reuses the target agent's long-running session, \"new\" mints a fresh one. Omit to defer to the agent's own setting." },
+                                    "inherit_context": { "type": "boolean", "description": "Set false to suppress parent-workflow context injection for this step regardless of the agent's setting. Omit to defer to the agent." }
+                                },
+                                "required": ["name", "agent", "prompt_template"]
+                            }
+                        },
+                        "input_schema": {
+                            "type": "array",
+                            "description": "Parameters callers pass to workflow_run. Each becomes a {{name}} placeholder available to every step's prompt_template.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string", "description": "Parameter name, as referenced by {{name}} in a prompt_template" },
+                                    "param_type": { "type": "string", "enum": ["string", "number", "boolean", "file", "image", "agent_id"], "description": "Value type (default 'string'). Note the key is param_type, not type — this is the same spelling workflow_describe reports back." },
+                                    "required": { "type": "boolean", "description": "Whether callers must supply it (default true)" },
+                                    "description": { "type": "string", "description": "What the parameter means, shown by workflow_describe" }
+                                },
+                                "required": ["name"]
+                            }
+                        },
+                        "total_timeout_secs": { "type": "integer", "minimum": 1, "maximum": 86400, "description": "Wall-clock limit for the whole run (ceiling 86400 = 24h). Omit to use the daemon default." }
+                    },
+                    "required": ["name", "steps"]
+                }),
+            },
+            ToolDefinition {
+                name: tool_name::AGENT_TYPE_CREATE.to_string(),
+                description: "Author a new agent type — a reusable agent manifest stored on the daemon that agent_spawn, the dashboard and the TUI can all spawn agents from afterwards. Use this when a role is worth repeating (\"release-notes writer\", \"triage bot\"); for a one-off helper, spawn from an existing type instead. The type outlives the conversation. Names are unique across the agent-type catalog and across live agent names: a name already in use is rejected rather than overwritten, so pick another name and call again. Only the seven fields below are settable here — everything else in a manifest (triggers, MCP servers, schedules, exec policy) starts at its default and is edited afterwards through the dashboard. Returns {name, description, provider, model, tools, skills} as stored.".to_string(),
+                // The property keys are written in alphabetical order so this schema serializes identically whether serde_json's map is insertion-ordered or sorted (#3298).
+                // A tool definition reaches the LLM prompt on every request that ships it, and a key order that varies between processes invalidates the provider's prompt cache while the content is unchanged.
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "description": { "type": "string", "description": "One line on what this agent type is for, shown in the catalog an operator picks from" },
+                        "model": { "type": "string", "description": "Model id to run this type on, e.g. 'claude-sonnet-4-5'. Omit to inherit the daemon's configured default model." },
+                        "name": { "type": "string", "description": "Unique agent type name, 1-64 characters of letters, digits, '_' and '-' (e.g. 'release-notes-writer'). This is how the type is addressed afterwards, and it is also the file name on disk." },
+                        "provider": { "type": "string", "description": "LLM provider for this type, e.g. 'anthropic' or 'openai'. Omit to inherit the daemon's configured default provider." },
+                        "skills": { "type": "array", "items": { "type": "string" }, "description": "Skills installed on agents spawned from this type" },
+                        "system_prompt": { "type": "string", "description": "The system prompt agents of this type run with. An empty string is stored as an empty prompt, not replaced with canned text." },
+                        "tools": { "type": "array", "items": { "type": "string" }, "description": "Tool names granted to agents spawned from this type (agent_list shows what an existing agent has). Omit for the manifest default." }
+                    },
+                    "required": ["name"]
                 }),
             },
             ToolDefinition {

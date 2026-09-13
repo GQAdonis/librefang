@@ -49,20 +49,14 @@ impl LibreFangKernel {
         self.spawn_agent_inner(manifest, parent, source_toml_path, None)
     }
 
-    /// Pure, side-effect-free spawn pre-checks shared by `spawn_agent_inner`
-    /// and destructive callers that must validate before mutating state.
+    /// Pure, side-effect-free spawn pre-checks shared by `spawn_agent_inner` and destructive callers that must validate before mutating state.
     ///
-    /// Runs the manifest module-path sandbox check (#3533), the reserved
-    /// agent-name namespace check (#4980), and the tool_exec backend
-    /// override check (#3332). None of these create sessions, directories,
-    /// or registry entries. Hand reactivation calls this for every role
-    /// BEFORE killing the existing agents, so a malformed hand definition is
-    /// rejected with the old agents and their cron/triggers still intact
-    /// instead of after `kill_agent` has already wiped them (#5956).
+    /// Runs the manifest module-path sandbox check (#3533), the reserved agent-name namespace check (#4980), and the tool_exec backend override check (#3332).
+    /// None of these create sessions, directories, or registry entries.
+    /// It also emits the report-only `group_trigger_patterns` diagnostic (#6732), which warns and never rejects — see `warn_invalid_group_trigger_patterns`.
+    /// Hand reactivation calls this for every role BEFORE killing the existing agents, so a malformed hand definition is rejected with the old agents and their cron/triggers still intact instead of after `kill_agent` has already wiped them (#5956).
     ///
-    /// `name` is passed separately from `manifest` so a caller can validate a
-    /// derived name (e.g. the `{hand_id}:{role}` prefix) against a manifest
-    /// whose own `name` field has not yet been rewritten.
+    /// `name` is passed separately from `manifest` so a caller can validate a derived name (e.g. the `{hand_id}:{role}` prefix) against a manifest whose own `name` field has not yet been rewritten.
     pub(crate) fn validate_spawnable(
         &self,
         manifest: &AgentManifest,
@@ -74,6 +68,9 @@ impl LibreFangKernel {
             warn!(agent = %name, %reason, "Rejecting manifest — reserved agent-name namespace");
             return Err(KernelError::LibreFang(reason));
         }
+
+        // #6732: report-only, deliberately AFTER the rejecting checks and never `?`-propagated — a mis-escaped group trigger pattern must not block a spawn.
+        warn_invalid_group_trigger_patterns(manifest, name);
 
         if let Some(override_kind) = manifest.tool_exec_backend {
             if let Err(e) = self
@@ -291,19 +288,49 @@ impl LibreFangKernel {
         }
         manifest.workspace = Some(workspace_dir);
 
+        // #7964: Stable mode freezes the skill registry, so this agent's own `<workspace>/skills` can never load.
+        // The per-turn load path reports that at `debug` — a frozen registry is a configured steady state, not a fault, and reporting it per turn produced 39-100 WARN/day of pure noise — so a real workspace skill would otherwise be dropped without anyone being told.
+        // Say it exactly once, here, where the workspace is set up. The `#6540` reload report covers the global `skills_dir` only, not per-agent workspaces.
+        if let Some(ref workspace) = manifest.workspace {
+            let frozen = self
+                .skills
+                .skill_registry
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .is_frozen();
+            if frozen {
+                let ws_skills = workspace.join("skills");
+                let mut pending: Vec<String> = std::fs::read_dir(&ws_skills)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .filter(|entry| entry.path().is_dir())
+                    .map(|entry| entry.file_name().to_string_lossy().to_string())
+                    .collect();
+                pending.sort();
+                if !pending.is_empty() {
+                    warn!(
+                        agent = %name,
+                        ?pending,
+                        dir = %ws_skills.display(),
+                        "Skill registry frozen (Stable mode) — this agent's workspace skills will not be loaded; leaving Stable mode and restarting is required to pick them up"
+                    );
+                }
+            }
+        }
+
         // Register capabilities
         let caps = manifest_to_capabilities(&manifest);
         self.agents.capabilities.grant(agent_id, caps);
 
-        // Register with scheduler — pre-resolve global burst ratio
-        let mut quota = manifest.resources.clone();
-        if quota.burst_ratio.is_none() {
-            let global = self.current_budget().default_burst_ratio;
-            if global > 0.0 {
-                quota.burst_ratio = Some(global);
-            }
-        }
-        self.agents.scheduler.register(agent_id, quota);
+        // Register with scheduler.
+        // `burst_ratio: None` stays `None` on purpose: the scheduler resolves
+        // the global default from `[budget] default_burst_ratio` at check time,
+        // so a config hot-reload reaches every agent without an explicit
+        // per-agent override (#8115).
+        self.agents
+            .scheduler
+            .register(agent_id, manifest.resources.clone());
 
         // Create registry entry
         let tags = manifest.tags.clone();
@@ -331,6 +358,21 @@ impl LibreFangKernel {
             .registry
             .register(entry.clone())
             .map_err(KernelError::LibreFang)?;
+
+        // A template can name skills and MCP servers that nothing on this
+        // instance provides. The declaration is kept verbatim and activates on
+        // the next skills reload / MCP connect, so this is not an error — but
+        // without a line in the log the operator's only clue is a step that
+        // quietly behaves differently than the template promised (#7713).
+        let unresolved = self.unresolved_declarations_at_spawn(&entry.manifest);
+        if !unresolved.skills.is_empty() || !unresolved.mcp_servers.is_empty() {
+            warn!(
+                agent = %name,
+                pending_skills = ?unresolved.skills,
+                pending_mcp_servers = ?unresolved.mcp_servers,
+                "Agent declares skills/MCP servers that are not installed or configured here — the declarations are retained and activate on the next skills reload / MCP connect"
+            );
+        }
 
         // Inject reset/context prompts only after the agent is registered so
         // agent-scoped injections and tag-gated global injections are visible.

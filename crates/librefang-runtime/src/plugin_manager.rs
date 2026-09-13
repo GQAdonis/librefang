@@ -11,6 +11,7 @@
 //! - **Git URL**: clone a git repo into the plugins directory
 
 use librefang_types::config::{PluginManifest, PluginSystemRequirement};
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
@@ -367,17 +368,83 @@ pub struct DoctorReport {
     pub plugins: Vec<PluginDoctorEntry>,
 }
 
-/// Probe the environment and return a diagnostic report.
+/// How long a probed runtime table stays usable before it is re-probed.
 ///
-/// Spawns one subprocess per runtime (`{launcher} --version`) — caller
-/// should wrap in `tokio::task::spawn_blocking` if used from async.
-pub fn run_doctor() -> DoctorReport {
+/// Runtime availability changes when an operator installs an interpreter, which is rare; the installed-plugin list changes whenever someone installs a plugin, which is not.
+/// So only the probe half is cached — [`run_doctor`] always re-reads the plugin list, and a freshly installed plugin still shows up immediately.
+const RUNTIME_PROBE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// A probe table plus the instant it was taken; `None` before the first probe.
+type CachedRuntimeProbe = Option<(
+    std::time::Instant,
+    Vec<crate::plugin_runtime::RuntimeStatus>,
+)>;
+
+/// Cached runtime probe table: when it was taken, and what it found.
+static RUNTIME_PROBE_CACHE: std::sync::OnceLock<std::sync::Mutex<CachedRuntimeProbe>> =
+    std::sync::OnceLock::new();
+
+/// Probe every supported runtime, concurrently, and cache the table for [`RUNTIME_PROBE_TTL`].
+///
+/// `PluginRuntime::all()` is 12 runtimes and Python alone tries three candidates (`python3` / `python` / `py`), each with a 5 s per-probe timeout in `probe_launcher_version`.
+/// Probing them in sequence therefore has a worst case near a minute, which is how `/api/plugins/doctor` became the slowest route in the API by a wide margin and started tripping `route_smoke`'s flat 10 s per-request budget on a loaded runner (#8142).
+///
+/// Fanning the probes out bounds the whole table by the slowest single probe instead of the sum, the same change #8094 made for sidecar schema probes.
+/// `std::thread::scope` rather than tokio because this runs on the blocking pool already and the probes are `std::process::Command`.
+///
+/// Order is preserved: handles are joined in `PluginRuntime::all()` order, so the reported table is byte-stable across calls regardless of which probe finishes first.
+fn probe_runtimes_cached() -> Vec<crate::plugin_runtime::RuntimeStatus> {
     use crate::plugin_runtime::{check_runtime_status, PluginRuntime};
 
-    let runtimes: Vec<_> = PluginRuntime::all()
-        .iter()
-        .map(|r| check_runtime_status(r.clone()))
-        .collect();
+    let cache = RUNTIME_PROBE_CACHE.get_or_init(|| std::sync::Mutex::new(None));
+    // Poison recovery: a panicked prior probe must not permanently disable the
+    // endpoint, and the cached value is plain data.
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((taken_at, table)) = guard.as_ref() {
+        if taken_at.elapsed() < RUNTIME_PROBE_TTL {
+            debug!("Using cached plugin runtime probe table");
+            return table.clone();
+        }
+    }
+
+    let table: Vec<_> = std::thread::scope(|scope| {
+        let handles: Vec<_> = PluginRuntime::all()
+            .iter()
+            .map(|r| scope.spawn(|| check_runtime_status(r.clone())))
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| {
+                // A probe thread panicking is a bug, not an environment
+                // condition — but the endpoint should still answer, so the
+                // runtime is reported unavailable rather than poisoning the
+                // whole report.
+                h.join().unwrap_or_else(|_| {
+                    warn!("A plugin runtime probe thread panicked");
+                    crate::plugin_runtime::RuntimeStatus {
+                        runtime: "unknown".to_string(),
+                        launcher: None,
+                        available: false,
+                        version: None,
+                        install_hint: String::new(),
+                    }
+                })
+            })
+            .collect()
+    });
+
+    *guard = Some((std::time::Instant::now(), table.clone()));
+    table
+}
+
+/// Probe the environment and return a diagnostic report.
+///
+/// Runtime probes are concurrent and cached for [`RUNTIME_PROBE_TTL`]; the installed-plugin list is always re-read.
+/// Caller should still wrap this in `tokio::task::spawn_blocking` if used from async — a cache miss spawns subprocesses.
+pub fn run_doctor() -> DoctorReport {
+    use crate::plugin_runtime::PluginRuntime;
+
+    let runtimes = probe_runtimes_cached();
 
     // Index by runtime tag so per-plugin entries can look up availability
     // without re-probing subprocesses.
@@ -439,105 +506,14 @@ pub fn list_plugins() -> Vec<PluginInfo> {
 
 /// Compute a hex-encoded SHA-256 digest of `bytes`.
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    // NOTE: Rust's `DefaultHasher` is NOT cryptographic. We use a simple
-    // hand-rolled SHA-256 here so we don't pull in a new crate. If the project
-    // adds `sha2` in future, swap this implementation out.
-    //
-    // This is a pure-Rust SHA-256 implementation (RFC 6234).
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-
-    // Pre-processing: padding
-    let bit_len = (bytes.len() as u64).wrapping_mul(8);
-    let mut msg = bytes.to_vec();
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0x00);
-    }
-    msg.extend_from_slice(&bit_len.to_be_bytes());
-
-    // Process each 512-bit (64-byte) block
-    for block in msg.chunks(64) {
-        let mut w = [0u32; 64];
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes([
-                block[i * 4],
-                block[i * 4 + 1],
-                block[i * 4 + 2],
-                block[i * 4 + 3],
-            ]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh] =
-            [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]];
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let temp1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
-    }
-
-    format!(
-        "{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}{:08x}",
-        h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]
-    )
-}
-
-/// Compute the SHA-256 hex digest of a byte slice (delegates to [`sha256_hex`]).
-fn sha256_hex_of_bytes(data: &[u8]) -> String {
-    sha256_hex(data)
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Verify downloaded plugin bytes against an expected SHA-256 checksum.
 ///
 /// Returns `Ok(())` on match, `Err(message)` on mismatch or parse failure.
 fn verify_checksum(data: &[u8], expected: &str) -> Result<(), String> {
-    let actual = sha256_hex_of_bytes(data);
+    let actual = sha256_hex(data);
     if actual.eq_ignore_ascii_case(expected.trim()) {
         Ok(())
     } else {
@@ -1572,11 +1548,16 @@ pub async fn install_plugin_deps(name: &str) -> Result<Vec<String>, String> {
     let cmd_info: Option<(&'static str, Vec<&'static str>, &'static str)> = match runtime.as_str() {
         "python" | "py" => {
             if plugin_dir.join("requirements.txt").exists() {
-                Some((
-                    "pip",
-                    vec!["install", "-r", "requirements.txt"],
-                    "requirements.txt",
-                ))
+                // Share the interpreter/args resolver with the install path
+                // (install_requirements): try python3 then python, and omit
+                // --user / --break-system-packages inside a virtualenv/conda.
+                let (interpreter, mut args) = install::resolve_python_install(
+                    install::interpreter_exists,
+                    install::pip_in_venv(),
+                )
+                .await?;
+                args.extend(["-r", "requirements.txt"]);
+                Some((interpreter, args, "requirements.txt"))
             } else {
                 None
             }

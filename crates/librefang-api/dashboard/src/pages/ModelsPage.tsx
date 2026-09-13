@@ -1,9 +1,22 @@
 import { formatCost as formatCostUtil } from "../lib/format";
-import type { ModelItem, ModelOverrides } from "../api";
+import type {
+  MediaModelEndpoint,
+  MediaModelEndpointDraft,
+  MediaModelKind,
+  ModelEntryKind,
+  ModelItem,
+  ModelOverrides,
+} from "../api";
 import { FormEvent, memo, useCallback, useEffect, useId, useReducer, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModels, useModelOverrides } from "../lib/queries/models";
 import { useAddCustomModel, useRemoveCustomModel, useUpdateModelOverrides, useDeleteModelOverrides } from "../lib/mutations/models";
+import { useConfigStatus, useMediaModelEndpoints } from "../lib/queries/config";
+import { useSaveMediaModelEndpoint } from "../lib/mutations/config";
+import {
+  mediaEndpointDraftFrom,
+  mediaEndpointHasVoiceAndFormat,
+} from "../lib/mediaModelEndpoints";
 import { SliderInput } from "../components/ui/SliderInput";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -16,7 +29,7 @@ import { useCreateShortcut } from "../lib/useCreateShortcut";
 import { useUIStore } from "../lib/store";
 import {
   Cpu, Search, Check, Eye, EyeOff, Wrench, Zap, AlertCircle, Lock, Plus, Trash2, Loader2,
-  Brain, Tag, Settings,
+  Brain, Tag, Settings, Mic, Volume2, Image as ImageIcon, Video, Server,
 } from "lucide-react";
 import { modelKey } from "../lib/hiddenModels";
 
@@ -45,16 +58,78 @@ const formatCtx = (tokens?: number) => {
   return String(tokens);
 };
 
+function formatCost(cost?: number) {
+  if (cost === undefined || cost === null) return "—";
+  if (cost === 0) return "0";
+  return formatCostUtil(cost);
+}
+
+export function modelPricingKind(
+  model: ModelItem,
+): "unknown" | "free" | "paid" {
+  if (
+    model.pricing_known === false ||
+    model.input_cost_per_m == null ||
+    model.output_cost_per_m == null
+  ) {
+    return "unknown";
+  }
+  if (model.input_cost_per_m === 0 && model.output_cost_per_m === 0) {
+    return "free";
+  }
+  return "paid";
+}
+
+function ModelPricing({ model }: { model: ModelItem }) {
+  const { t } = useTranslation();
+  const kind = modelPricingKind(model);
+  if (kind === "unknown") return <span className="font-mono">—</span>;
+  if (kind === "free") {
+    return (
+      <span className="font-mono text-success font-bold">
+        {t("models.free")}
+      </span>
+    );
+  }
+  return (
+    <span className="font-mono">
+      <span className="text-text" title={t("models.col_input")}>
+        ${formatCost(model.input_cost_per_m)}
+      </span>
+      <span className="text-text-dim/50"> / </span>
+      <span className="text-text" title={t("models.col_output")}>
+        ${formatCost(model.output_cost_per_m)}
+      </span>
+      <span className="text-text-dim/40"> / M</span>
+    </span>
+  );
+}
+
+function useMountedRef() {
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  return mountedRef;
+}
+
+export function numberInputValue(raw: string): number | "" {
+  return raw === "" ? "" : Number(raw);
+}
+
 // ── Add-form reducer (MD4) ──────────────────────────────────────
 
 type AddFormState = {
   id: string;
   provider: string;
   displayName: string;
-  contextWindow: number;
-  maxOutput: number;
-  inputCost: number;
-  outputCost: number;
+  contextWindow: number | "";
+  maxOutput: number | "";
+  inputCost: number | "";
+  outputCost: number | "";
   tools: boolean;
   vision: boolean;
   streaming: boolean;
@@ -118,11 +193,15 @@ type SettingsState = {
   visionOverride: CapOverride;
   streamingOverride: CapOverride;
   thinkingOverride: CapOverride;
+  contextWindow: number;
+  contextWindowEnabled: boolean;
+  maxOutputTokens: number;
+  maxOutputTokensEnabled: boolean;
 };
 
 type SettingsAction =
   | { type: "SET_FIELD"; field: keyof SettingsState; value: SettingsState[keyof SettingsState] }
-  | { type: "HYDRATE"; payload: Partial<SettingsState> };
+  | { type: "HYDRATE"; payload: SettingsState };
 
 const settingsInitial: SettingsState = {
   modelType: "chat",
@@ -144,6 +223,10 @@ const settingsInitial: SettingsState = {
   visionOverride: "default",
   streamingOverride: "default",
   thinkingOverride: "default",
+  contextWindow: 128000,
+  contextWindowEnabled: false,
+  maxOutputTokens: 8192,
+  maxOutputTokensEnabled: false,
 };
 
 function boolToOverride(v: boolean | undefined | null): CapOverride {
@@ -158,12 +241,81 @@ function overrideToBool(v: CapOverride): boolean | undefined {
   return undefined;
 }
 
+export function settingsStateFromOverrides(
+  overrides: ModelOverrides,
+): SettingsState {
+  return {
+    ...settingsInitial,
+    ...(overrides.model_type ? { modelType: overrides.model_type } : {}),
+    ...(overrides.temperature != null
+      ? { temperature: overrides.temperature, tempEnabled: true }
+      : {}),
+    ...(overrides.top_p != null
+      ? { topP: overrides.top_p, topPEnabled: true }
+      : {}),
+    ...(overrides.max_tokens != null
+      ? { maxTokens: overrides.max_tokens, maxTokensEnabled: true }
+      : {}),
+    ...(overrides.frequency_penalty != null
+      ? { freqPenalty: overrides.frequency_penalty, freqEnabled: true }
+      : {}),
+    ...(overrides.presence_penalty != null
+      ? { presPenalty: overrides.presence_penalty, presEnabled: true }
+      : {}),
+    reasoningEffort: overrides.reasoning_effort ?? "",
+    useMaxCompletionTokens: overrides.use_max_completion_tokens ?? false,
+    noSystemRole: overrides.no_system_role ?? false,
+    forceMaxTokens: overrides.force_max_tokens ?? false,
+    toolsOverride: boolToOverride(overrides.supports_tools),
+    visionOverride: boolToOverride(overrides.supports_vision),
+    streamingOverride: boolToOverride(overrides.supports_streaming),
+    thinkingOverride: boolToOverride(overrides.supports_thinking),
+    ...(overrides.context_window != null
+      ? { contextWindow: overrides.context_window, contextWindowEnabled: true }
+      : {}),
+    ...(overrides.max_output_tokens != null
+      ? {
+          maxOutputTokens: overrides.max_output_tokens,
+          maxOutputTokensEnabled: true,
+        }
+      : {}),
+  };
+}
+
+export function settingsStateEqual(
+  left: SettingsState,
+  right: SettingsState,
+): boolean {
+  return (Object.keys(settingsInitial) as (keyof SettingsState)[]).every(
+    (key) => left[key] === right[key],
+  );
+}
+
+export function capabilityOverrideLabel(
+  option: CapOverride,
+  catalogDefault: boolean | undefined,
+  labels: {
+    auto: string;
+    on: string;
+    off: string;
+    forceOn: string;
+    forceOff: string;
+  },
+): string {
+  if (option === "default") {
+    const catalogLabel = catalogDefault ? labels.on : labels.off;
+    return `${labels.auto} (${catalogLabel})`;
+  }
+  if (option === "on") return labels.forceOn;
+  return labels.forceOff;
+}
+
 function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
   switch (action.type) {
     case "SET_FIELD":
       return { ...state, [action.field]: action.value };
     case "HYDRATE":
-      return { ...state, ...action.payload };
+      return action.payload;
     default:
       return state;
   }
@@ -187,13 +339,6 @@ const ModelCard = memo(function ModelCard({ m, hidden, onOpen, onSettings, onTog
   // NOT a user-added custom model — it has no persisted custom entry, so its
   // delete button would always 404. Only treat genuine custom models as deletable.
   const isCustom = m.tier === "custom" && m.source !== "cli_config";
-  const free = m.pricing_known !== false && m.input_cost_per_m === 0 && m.output_cost_per_m === 0;
-
-  const formatCost = (cost?: number) => {
-    if (cost === undefined || cost === null) return "—";
-    if (cost === 0) return "0";
-    return formatCostUtil(cost);
-  };
 
   return (
     <div
@@ -222,29 +367,22 @@ const ModelCard = memo(function ModelCard({ m, hidden, onOpen, onSettings, onTog
           </div>
           <div className="text-[10px] font-mono text-text-dim truncate mt-0.5">{m.provider}/{m.id}</div>
         </div>
-        {m.tier && (
-          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide shrink-0 ${tierClass(m.tier)}`}>
-            {t(`models.tier_${m.tier}`, { defaultValue: m.tier })}
-          </span>
-        )}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Type chip — media endpoints carry the same one, so a mixed tab reads uniformly (refs #8038). */}
+          <KindBadge kind="llm" />
+          {m.tier && (
+            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${tierClass(m.tier)}`}>
+              {t(`models.tier_${m.tier}`, { defaultValue: m.tier })}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Middle row: context + cost */}
       <div className="flex items-center gap-3 text-[11px] text-text-dim">
         <span className="font-mono" title={t("models.context_window")}>{formatCtx(m.context_window)}</span>
         <span className="text-border-subtle">·</span>
-        {m.pricing_known === false
-          ? <span className="font-mono">—</span>
-          : free
-          ? <span className="font-mono text-success font-bold">{t("models.free")}</span>
-          : (
-            <span className="font-mono">
-              <span className="text-text" title={t("models.col_input")}>${formatCost(m.input_cost_per_m)}</span>
-              <span className="text-text-dim/50"> / </span>
-              <span className="text-text" title={t("models.col_output")}>${formatCost(m.output_cost_per_m)}</span>
-              <span className="text-text-dim/40"> / M</span>
-            </span>
-          )}
+        <ModelPricing model={m} />
       </div>
 
       {/* Bottom row: capabilities */}
@@ -389,6 +527,307 @@ function ModelDetailBody({
   );
 }
 
+// ── Media endpoints (refs #8038, #8011) ───────────────────────────
+// LLM models come from the model catalogue; the four custom media endpoints
+// come from `[media.custom_*]` / `[tts.custom]` in config.toml. They are
+// rendered in the same tab so an operator pointing a self-hosted Whisper or a
+// local Stable Diffusion at LibreFang does not have to know which config
+// section owns which modality. Nothing is moved out of `[media]` / `[tts]` —
+// this is a surface over the config API, not a config migration.
+
+/** All kinds a Models-tab row can carry, in the order the tab renders them. */
+export const MODEL_ENTRY_KINDS: readonly ModelEntryKind[] = [
+  "llm",
+  "tts",
+  "stt",
+  "image",
+  "video",
+];
+
+export const kindClass = (kind: ModelEntryKind) => {
+  switch (kind) {
+    case "llm": return "bg-brand/10 text-brand";
+    case "tts": return "bg-fuchsia-50 text-fuchsia-600 dark:bg-fuchsia-900/30 dark:text-fuchsia-400";
+    case "stt": return "bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400";
+    case "image": return "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400";
+    case "video": return "bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400";
+  }
+};
+
+const MEDIA_KIND_ICON: Record<MediaModelKind, typeof Mic> = {
+  stt: Mic,
+  tts: Volume2,
+  image: ImageIcon,
+  video: Video,
+};
+
+/** Type chip shown on every row so LLM and media entries read the same way. */
+function KindBadge({ kind }: { kind: ModelEntryKind }) {
+  const { t } = useTranslation();
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide shrink-0 ${kindClass(kind)}`}>
+      {t(`models.kind_${kind}`)}
+    </span>
+  );
+}
+
+function MediaEndpointCard({
+  endpoint,
+  onEdit,
+}: {
+  endpoint: MediaModelEndpoint;
+  onEdit: (endpoint: MediaModelEndpoint) => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = MEDIA_KIND_ICON[endpoint.kind];
+  const model = endpoint.config.model ?? "";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={t(`models.kind_${endpoint.kind}`)}
+      onClick={() => onEdit(endpoint)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onEdit(endpoint);
+        }
+      }}
+      className={`group relative flex flex-col gap-2.5 p-4 rounded-2xl border border-border-subtle bg-surface hover:bg-main/40 hover:border-brand/40 focus-visible:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-brand/30 transition-colors cursor-pointer min-h-[124px] ${
+        endpoint.configured ? "" : "opacity-60"
+      }`}
+    >
+      <div className="flex items-start gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            {endpoint.configured
+              ? <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" title={t("models.media_configured")} />
+              : <Lock className="w-3 h-3 text-text-dim/60 shrink-0" />}
+            <Icon className="w-3.5 h-3.5 text-text-dim shrink-0" />
+            <span className="text-sm font-bold text-text truncate">
+              {endpoint.provider || t("models.media_provider_unset")}
+            </span>
+          </div>
+          <div className="text-[10px] font-mono text-text-dim truncate mt-0.5">{endpoint.config_path}</div>
+        </div>
+        <KindBadge kind={endpoint.kind} />
+      </div>
+
+      {endpoint.configured && !endpoint.modality_enabled && (
+        <div className="flex items-start gap-1 text-[10px] text-warning leading-snug">
+          <AlertCircle className="w-3 h-3 shrink-0 mt-px" />
+          <span>{t("models.media_modality_disabled", { path: endpoint.modality_enabled_path })}</span>
+        </div>
+      )}
+
+      <div className="text-[11px] text-text-dim font-mono truncate" title={endpoint.config.base_url || undefined}>
+        {endpoint.config.base_url || t("models.media_not_configured")}
+      </div>
+
+      <div className="flex items-center gap-1.5 mt-auto text-[11px] text-text-dim">
+        <span className="font-mono truncate">{model || "—"}</span>
+        {endpoint.config.api_key_env && (
+          <span className="inline-flex items-center gap-1 font-mono text-[9px]" title={t("models.media_api_key_env")}>
+            <Lock className="w-2.5 h-2.5" />
+            {endpoint.config.api_key_env}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" title={t("models.media_edit_title")}
+            onClick={(e) => { e.stopPropagation(); onEdit(endpoint); }}
+            className="flex items-center justify-center w-6 h-6 rounded-md text-text-dim hover:bg-main hover:text-text transition-colors">
+            <Settings className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const mediaInputClass = "w-full rounded-xl border border-border-subtle bg-main px-3 py-2 text-sm outline-none focus:border-brand";
+
+/**
+ * Edit one media endpoint.
+ *
+ * `api_key_env` is rendered read-only on purpose. It is an env-var *name*, not
+ * a key — the key itself never enters config.toml, so there is nothing secret
+ * to redact — but the leaf-level write allowlist blocks `*_env` paths precisely
+ * so a post-auth caller cannot repoint a credential variable, and offering the
+ * field here would route around that through the wholesale table write. The
+ * value is carried across the save unchanged.
+ */
+function MediaEndpointEditor({
+  endpoint,
+  managed,
+  onClose,
+  onSaved,
+  onError,
+}: {
+  endpoint: MediaModelEndpoint;
+  /** Managed deployment (#6695) — every config write answers `423`. */
+  managed: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (msg?: string) => void;
+}) {
+  const { t } = useTranslation();
+  const fieldId = useId();
+  const mountedRef = useMountedRef();
+  const saveMut = useSaveMediaModelEndpoint();
+  const [draft, setDraft] = useState<MediaModelEndpointDraft>(() => mediaEndpointDraftFrom(endpoint));
+  const [provider, setProvider] = useState(endpoint.provider);
+  const hasVoice = mediaEndpointHasVoiceAndFormat(endpoint.kind);
+  // `key_required` is only ever consulted inside the `!api_key_env.is_empty()`
+  // branch of every enforcement site (`tts.rs`, `media_understanding.rs`), and
+  // `api_key_env` is read-only here — so with no env var named, the toggle
+  // cannot take effect and must not pretend otherwise.
+  const keyEnv = (endpoint.config.api_key_env ?? "").trim();
+
+  const setField = useCallback(
+    <K extends keyof MediaModelEndpointDraft>(field: K, value: MediaModelEndpointDraft[K]) =>
+      setDraft((prev) => ({ ...prev, [field]: value })),
+    [],
+  );
+
+  const handleSubmit = useCallback(async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      await saveMut.mutateAsync({ endpoint, draft, provider });
+      if (!mountedRef.current) return;
+      onSaved();
+      onClose();
+    } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      onError(err instanceof Error ? err.message : String(err));
+    }
+  }, [saveMut, endpoint, draft, provider, mountedRef, onSaved, onClose, onError]);
+
+  return (
+    <DrawerPanel isOpen onClose={onClose} title={t("models.media_edit_title")} size="lg">
+      <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        {managed && (
+          <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+            <span>{t("config.managed_title")}</span>
+          </div>
+        )}
+        {!endpoint.modality_enabled && (
+          <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+            <span>{t("models.media_modality_disabled", { path: endpoint.modality_enabled_path })}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-3">
+          <Server className="w-5 h-5 text-brand" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-bold">{t(`models.kind_${endpoint.kind}`)}</p>
+              <KindBadge kind={endpoint.kind} />
+            </div>
+            <p className="text-[10px] text-text-dim font-mono truncate">{endpoint.config_path}</p>
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={`${fieldId}-provider`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_provider")}</label>
+          <input id={`${fieldId}-provider`} value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            placeholder={t("models.media_provider_placeholder")}
+            readOnly={managed} disabled={managed}
+            className={mediaInputClass} />
+          <p className="mt-1 text-[11px] text-text-dim leading-snug">
+            {t("models.media_provider_hint", { path: endpoint.provider_path })}
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor={`${fieldId}-base-url`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_base_url")}</label>
+          <input id={`${fieldId}-base-url`} value={draft.base_url}
+            onChange={(e) => setField("base_url", e.target.value)}
+            placeholder="http://localhost:8080/v1/audio/transcriptions"
+            readOnly={managed} disabled={managed}
+            className={mediaInputClass} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className={hasVoice ? "" : "sm:col-span-2"}>
+            <label htmlFor={`${fieldId}-model`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_model")}</label>
+            <input id={`${fieldId}-model`} value={draft.model}
+              onChange={(e) => setField("model", e.target.value)}
+              readOnly={managed} disabled={managed}
+              className={mediaInputClass} />
+            {endpoint.model_override && endpoint.model_override_path && (
+              <p className="mt-1 text-[11px] text-warning leading-snug">
+                {t("models.media_model_overridden", {
+                  path: endpoint.model_override_path,
+                  model: endpoint.model_override,
+                })}
+              </p>
+            )}
+          </div>
+          {hasVoice && (
+            <div>
+              <label htmlFor={`${fieldId}-voice`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_voice")}</label>
+              <input id={`${fieldId}-voice`} value={draft.voice ?? ""}
+                onChange={(e) => setField("voice", e.target.value)}
+                readOnly={managed} disabled={managed}
+                className={mediaInputClass} />
+            </div>
+          )}
+          {hasVoice && (
+            <div className="sm:col-span-2">
+              <label htmlFor={`${fieldId}-format`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_format")}</label>
+              <input id={`${fieldId}-format`} value={draft.format ?? ""}
+                onChange={(e) => setField("format", e.target.value)}
+                readOnly={managed} disabled={managed}
+                className={mediaInputClass} />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor={`${fieldId}-api-key-env`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.media_api_key_env")}</label>
+          <input id={`${fieldId}-api-key-env`} value={endpoint.config.api_key_env ?? ""}
+            readOnly disabled
+            placeholder={t("models.media_api_key_env_unset")}
+            className={`${mediaInputClass} font-mono text-xs opacity-70 cursor-not-allowed`} />
+          <p className="mt-1 text-[11px] text-text-dim leading-snug">{t("models.media_api_key_env_hint")}</p>
+        </div>
+
+        <SettingsToggle
+          value={draft.key_required}
+          onChange={(v) => setField("key_required", v)}
+          label={t("models.media_key_required")}
+          disabled={managed || keyEnv === ""}
+        />
+        {keyEnv === "" && (
+          <p className="-mt-2 text-[11px] text-text-dim leading-snug">
+            {t("models.media_key_required_inert")}
+          </p>
+        )}
+
+        {saveMut.error && (
+          <div className="flex items-center gap-2 text-error text-xs"><AlertCircle className="w-4 h-4" /> {saveMut.error.message}</div>
+        )}
+
+        <div className="flex gap-2 pt-2">
+          {/* Suppressed in managed mode: the write can only answer `423`, so
+              offering the button is the failure #6695 removed elsewhere. */}
+          {!managed && (
+            <Button type="submit" variant="primary" className="flex-1" disabled={saveMut.isPending}>
+              {saveMut.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+              {t("common.save")}
+            </Button>
+          )}
+          <Button type="button" variant="secondary" className={managed ? "flex-1" : ""} onClick={onClose}>
+            {managed ? t("common.close") : t("common.cancel")}
+          </Button>
+        </div>
+      </form>
+    </DrawerPanel>
+  );
+}
+
 // ── ModelsPage ────────────────────────────────────────────────────
 
 export function ModelsPage() {
@@ -397,6 +836,7 @@ export function ModelsPage() {
   // for screen readers / label-click focus (#5140).
   const fieldId = useId();
   const addToast = useUIStore((s) => s.addToast);
+  const mountedRef = useMountedRef();
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("all");
   const [providerFilter, setProviderFilter] = useState<string>("all");
@@ -412,10 +852,20 @@ export function ModelsPage() {
   const pruneHiddenKeys = useUIStore((s) => s.pruneHiddenKeys);
   const [settingsModel, setSettingsModel] = useState<ModelItem | null>(null);
   const [detailModel, setDetailModel] = useState<ModelItem | null>(null);
+  // Which modality the tab is showing. "all" renders the media endpoints and
+  // the LLM catalogue together, which is the point of #8038 / #8011.
+  const [kindFilter, setKindFilter] = useState<ModelEntryKind | "all">("all");
+  const [editEndpoint, setEditEndpoint] = useState<MediaModelEndpoint | null>(null);
 
   const [form, dispatchForm] = useReducer(addFormReducer, addFormInitial);
 
   const modelsQuery = useModels();
+  const mediaEndpointsQuery = useMediaModelEndpoints();
+  // #6695: a managed deployment answers `423 config_managed` to every
+  // `POST /api/config/set`, so the media editor must show its fields as locked
+  // rather than offer a save that cannot succeed.
+  const configStatusQuery = useConfigStatus();
+  const configManaged = configStatusQuery.data?.writable === false;
   const addMut = useAddCustomModel();
   const deleteMut = useRemoveCustomModel();
 
@@ -432,17 +882,27 @@ export function ModelsPage() {
         id: form.id.trim(),
         provider: form.provider.trim(),
         display_name: form.displayName.trim() || undefined,
-        context_window: form.contextWindow,
-        max_output_tokens: form.maxOutput,
-        input_cost_per_m: form.inputCost,
-        output_cost_per_m: form.outputCost,
+        ...(form.contextWindow === ""
+          ? {}
+          : { context_window: form.contextWindow }),
+        ...(form.maxOutput === ""
+          ? {}
+          : { max_output_tokens: form.maxOutput }),
+        ...(form.inputCost === ""
+          ? {}
+          : { input_cost_per_m: form.inputCost }),
+        ...(form.outputCost === ""
+          ? {}
+          : { output_cost_per_m: form.outputCost }),
         supports_tools: form.tools,
         supports_vision: form.vision,
         supports_streaming: form.streaming,
       });
+      if (!mountedRef.current) return;
       addToast(t("models.model_added"), "success");
       resetForm();
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : String(err);
       addToast(msg || t("common.error"), "error");
     }
@@ -472,6 +932,43 @@ export function ModelsPage() {
   }, [allModels]);
 
   const hiddenSet = useMemo(() => new Set(hiddenModelKeys), [hiddenModelKeys]);
+
+  // Media endpoints obey the same search box as the models, matched on the
+  // modality, the selected provider name and the endpoint URL.
+  //
+  // Three of the catalogue filters deliberately do NOT apply:
+  //
+  // - `availableOnly` defaults to `true` and is persisted (`lib/store.ts`), so
+  //   gating on `configured` would hide all four rows on every fresh install —
+  //   exactly the "I could not find where to configure this" gap #8011 filed.
+  //   An unconfigured slot is the thing the operator came here to find.
+  // - `tierFilter` is an LLM-catalogue concept: the tier list is derived from
+  //   `allModels`, so no media endpoint can ever match a specific tier.
+  // - `showHidden` is the hidden-models view, and media endpoints are not
+  //   hideable.
+  //
+  // The last two therefore suppress the media section rather than being
+  // ignored, so a narrowed view does not keep showing rows that do not match
+  // it. `providerFilter` does apply — a media endpoint has a provider name.
+  const mediaEndpoints = useMemo(() => {
+    if (showHidden) return [];
+    if (tierFilter !== "all") return [];
+    const all = mediaEndpointsQuery.data ?? [];
+    const q = search.trim().toLowerCase();
+    return all.filter((endpoint) => {
+      if (kindFilter !== "all" && kindFilter !== endpoint.kind) return false;
+      if (providerFilter !== "all" && endpoint.provider !== providerFilter) return false;
+      if (!q) return true;
+      return (
+        endpoint.kind.includes(q)
+        || endpoint.provider.toLowerCase().includes(q)
+        || (endpoint.config.base_url ?? "").toLowerCase().includes(q)
+        || (endpoint.config.model ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [mediaEndpointsQuery.data, search, kindFilter, providerFilter, tierFilter, showHidden]);
+
+  const showLlmModels = kindFilter === "all" || kindFilter === "llm";
 
   useEffect(() => {
     if (allModels.length === 0) return;
@@ -507,6 +1004,14 @@ export function ModelsPage() {
     return new Map([...map.entries()].sort(([a], [b]) => a.localeCompare(b)));
   }, [filtered]);
 
+  const isLoading = modelsQuery.isLoading || mediaEndpointsQuery.isLoading;
+  // Only an empty catalogue AND no matching media endpoint is an empty tab —
+  // filtering down to just STT must not hide the STT card behind a "no models".
+  const nothingToShow =
+    !isLoading
+    && mediaEndpoints.length === 0
+    && (!showLlmModels || filtered.length === 0);
+
   const toggleHidden = useCallback((m: ModelItem) => {
     const key = modelKey(m);
     if (hiddenSet.has(key)) {
@@ -535,13 +1040,15 @@ export function ModelsPage() {
       const model = allModelsRef.current.find(m => m.id === id);
       const key = model ? modelKey(model) : null;
       await deleteMut.mutateAsync(id);
+      if (!mountedRef.current) return;
       addToast(t("models.model_deleted"), "success");
       if (key && hiddenModelKeysRef.current.includes(key)) unhideModelAction(key);
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const msg = err instanceof Error ? err.message : String(err);
       addToast(msg || t("common.error"), "error");
     }
-  }, [deleteMut, addToast, t, unhideModelAction]);
+  }, [deleteMut, addToast, mountedRef, t, unhideModelAction]);
 
   const detailHidden = detailModel ? hiddenSet.has(modelKey(detailModel)) : false;
 
@@ -585,12 +1092,26 @@ export function ModelsPage() {
             data-shortcut-search />
         </div>
 
-        <select value={providerFilter} onChange={e => setProviderFilter(e.target.value)}
+        <select value={kindFilter}
+          aria-label={t("models.filter_kind")}
+          onChange={e => setKindFilter(e.target.value as ModelEntryKind | "all")}
+          className="rounded-xl border border-border-subtle bg-surface px-3 py-2 text-xs outline-none focus:border-brand cursor-pointer">
+          <option value="all">{t("models.all_kinds")}</option>
+          {MODEL_ENTRY_KINDS.map(kind => (
+            <option key={kind} value={kind}>{t(`models.kind_${kind}`)}</option>
+          ))}
+        </select>
+
+        <select value={providerFilter}
+          aria-label={t("models.filter_provider")}
+          onChange={e => setProviderFilter(e.target.value)}
           className="rounded-xl border border-border-subtle bg-surface px-3 py-2 text-xs outline-none focus:border-brand cursor-pointer">
           {providers.map(p => <option key={p} value={p}>{p === "all" ? t("models.all_providers") : p}</option>)}
         </select>
 
-        <select value={tierFilter} onChange={e => setTierFilter(e.target.value)}
+        <select value={tierFilter}
+          aria-label={t("models.filter_tier")}
+          onChange={e => setTierFilter(e.target.value)}
           className="rounded-xl border border-border-subtle bg-surface px-3 py-2 text-xs outline-none focus:border-brand cursor-pointer">
           {tiers.map(tier => (
             <option key={tier} value={tier}>
@@ -619,20 +1140,45 @@ export function ModelsPage() {
           </button>
         )}
 
-        <span className="text-[11px] text-text-dim ml-auto">{filtered.length} {t("models.results")}</span>
+        {/* Count only what is actually rendered: `filtered` is not narrowed by
+            `kindFilter`, so including it while the LLM sections are suppressed
+            would report ~138 results next to a single visible card. */}
+        <span className="text-[11px] text-text-dim ml-auto">{(showLlmModels ? filtered.length : 0) + mediaEndpoints.length} {t("models.results")}</span>
       </div>
 
-      {/* Model grid — always grouped by provider with sticky headers */}
-      {modelsQuery.isLoading ? (
+      {/* Media endpoints first, then the model catalogue grouped by provider
+          with sticky headers. Both use the same card shape and the same type
+          chip so the tab reads as one list of model endpoints (refs #8038). */}
+      {isLoading ? (
         <ListSkeleton rows={5} />
-      ) : filtered.length === 0 ? (
+      ) : nothingToShow ? (
         <EmptyState
           icon={<Cpu className="w-7 h-7" />}
           title={allModels.length === 0 ? t("models.no_models") : t("models.no_results")}
         />
       ) : (
         <div className="flex flex-col gap-6">
-          {Array.from(grouped.entries()).map(([provider, models]) => {
+          {mediaEndpoints.length > 0 && (
+            <section>
+              <header className="sticky top-0 z-10 flex items-center gap-3 -mx-2 px-2 py-2 mb-2 backdrop-blur-md bg-bg/85 border-b border-border-subtle/40">
+                <span className="text-sm font-bold text-text">{t("models.media_endpoints")}</span>
+                <span className="px-1.5 py-0.5 rounded-md bg-brand/10 text-brand text-[10px] font-bold tabular-nums">{mediaEndpoints.length}</span>
+                <span className="text-[10px] text-text-dim">{t("models.media_endpoints_hint")}</span>
+              </header>
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {mediaEndpoints.map(endpoint => (
+                  <MediaEndpointCard key={endpoint.config_path} endpoint={endpoint} onEdit={setEditEndpoint} />
+                ))}
+              </div>
+            </section>
+          )}
+          {/* The media section can keep the page non-empty while the catalogue
+              filters down to nothing, which would otherwise silently swallow
+              the "no results" signal for the models themselves. */}
+          {showLlmModels && filtered.length === 0 && mediaEndpoints.length > 0 && (
+            <p className="text-xs text-text-dim px-1">{t("models.no_results")}</p>
+          )}
+          {showLlmModels && Array.from(grouped.entries()).map(([provider, models]) => {
             const availCount = models.filter(m => m.available).length;
             return (
               <section key={provider}>
@@ -707,19 +1253,19 @@ export function ModelsPage() {
             </div>
             <div>
               <label htmlFor={`${fieldId}-context-window`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.context_window")}</label>
-              <input id={`${fieldId}-context-window`} type="number" value={form.contextWindow} onChange={e => dispatchForm({ type: "SET_FIELD", field: "contextWindow", value: +e.target.value })} className={inputClass} />
+              <input id={`${fieldId}-context-window`} type="number" value={form.contextWindow} onChange={e => dispatchForm({ type: "SET_FIELD", field: "contextWindow", value: numberInputValue(e.target.value) })} className={inputClass} />
             </div>
             <div>
               <label htmlFor={`${fieldId}-max-output`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.max_output")}</label>
-              <input id={`${fieldId}-max-output`} type="number" value={form.maxOutput} onChange={e => dispatchForm({ type: "SET_FIELD", field: "maxOutput", value: +e.target.value })} className={inputClass} />
+              <input id={`${fieldId}-max-output`} type="number" value={form.maxOutput} onChange={e => dispatchForm({ type: "SET_FIELD", field: "maxOutput", value: numberInputValue(e.target.value) })} className={inputClass} />
             </div>
             <div>
               <label htmlFor={`${fieldId}-input-cost`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.input_cost")}</label>
-              <input id={`${fieldId}-input-cost`} type="number" step="0.01" value={form.inputCost} onChange={e => dispatchForm({ type: "SET_FIELD", field: "inputCost", value: +e.target.value })} className={inputClass} />
+              <input id={`${fieldId}-input-cost`} type="number" step="0.01" value={form.inputCost} onChange={e => dispatchForm({ type: "SET_FIELD", field: "inputCost", value: numberInputValue(e.target.value) })} className={inputClass} />
             </div>
             <div>
               <label htmlFor={`${fieldId}-output-cost`} className="text-[10px] font-bold text-text-dim uppercase">{t("models.output_cost")}</label>
-              <input id={`${fieldId}-output-cost`} type="number" step="0.01" value={form.outputCost} onChange={e => dispatchForm({ type: "SET_FIELD", field: "outputCost", value: +e.target.value })} className={inputClass} />
+              <input id={`${fieldId}-output-cost`} type="number" step="0.01" value={form.outputCost} onChange={e => dispatchForm({ type: "SET_FIELD", field: "outputCost", value: numberInputValue(e.target.value) })} className={inputClass} />
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -750,6 +1296,18 @@ export function ModelsPage() {
         </form>
       </DrawerPanel>
 
+      {/* Media endpoint editor — writes back through POST /api/config/set. */}
+      {editEndpoint && (
+        <MediaEndpointEditor
+          key={editEndpoint.config_path}
+          endpoint={editEndpoint}
+          managed={configManaged}
+          onClose={() => setEditEndpoint(null)}
+          onSaved={() => addToast(t("models.media_saved"), "success")}
+          onError={(msg) => addToast(msg || t("models.media_save_error"), "error")}
+        />
+      )}
+
       {/* Model Settings Modal */}
       {settingsModel && (
         <ModelSettingsModal
@@ -773,12 +1331,12 @@ export function ModelsPage() {
 
 // ── Toggle helper (defined outside render to avoid remount) ──────
 
-function SettingsToggle({ value, onChange, label }: { value: boolean; onChange: (v: boolean) => void; label: string }) {
+function SettingsToggle({ value, onChange, label, disabled = false }: { value: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
-    <label className="flex items-center justify-between gap-2 py-1.5 cursor-pointer">
+    <label className={`flex items-center justify-between gap-2 py-1.5 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
       <span className="text-xs text-text">{label}</span>
-      <button type="button" onClick={() => onChange(!value)}
-        className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${value ? "bg-brand" : "bg-border-subtle"}`}>
+      <button type="button" disabled={disabled} onClick={() => onChange(!value)}
+        className={`relative w-9 h-5 rounded-full transition-colors ${disabled ? "cursor-not-allowed" : "cursor-pointer"} ${value ? "bg-brand" : "bg-border-subtle"}`}>
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${value ? "translate-x-4.5" : "translate-x-0.5"}`} />
       </button>
     </label>
@@ -800,42 +1358,32 @@ function ModelSettingsModal({ model, onClose, onSaved, onReset, onError }: {
   const overridesQuery = useModelOverrides(overrideKey);
   const updateMut = useUpdateModelOverrides();
   const deleteMut = useDeleteModelOverrides();
+  const mountedRef = useMountedRef();
 
   const [saving, setSaving] = useState(false);
 
   const [state, dispatch] = useReducer(settingsReducer, settingsInitial);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const hydratedRef = useRef(false);
+  const lastHydratedRef = useRef<SettingsState | null>(null);
 
   useEffect(() => {
-    if (hydratedRef.current) return;
-    const o = overridesQuery.data;
-    if (!o) return;
-    const payload: Partial<SettingsState> = {};
-    if (o.model_type) payload.modelType = o.model_type;
-    if (o.temperature != null) { payload.temperature = o.temperature; payload.tempEnabled = true; }
-    if (o.top_p != null) { payload.topP = o.top_p; payload.topPEnabled = true; }
-    if (o.max_tokens != null) { payload.maxTokens = o.max_tokens; payload.maxTokensEnabled = true; }
-    if (o.frequency_penalty != null) { payload.freqPenalty = o.frequency_penalty; payload.freqEnabled = true; }
-    if (o.presence_penalty != null) { payload.presPenalty = o.presence_penalty; payload.presEnabled = true; }
-    if (o.reasoning_effort) payload.reasoningEffort = o.reasoning_effort;
-    if (o.use_max_completion_tokens != null) payload.useMaxCompletionTokens = o.use_max_completion_tokens;
-    if (o.no_system_role != null) payload.noSystemRole = o.no_system_role;
-    if (o.force_max_tokens != null) payload.forceMaxTokens = o.force_max_tokens;
-    payload.toolsOverride = boolToOverride(o.supports_tools);
-    payload.visionOverride = boolToOverride(o.supports_vision);
-    payload.streamingOverride = boolToOverride(o.supports_streaming);
-    payload.thinkingOverride = boolToOverride(o.supports_thinking);
-    dispatch({ type: "HYDRATE", payload });
-    hydratedRef.current = true;
-  }, [overridesQuery.data]);
+    if (!overridesQuery.data) return;
+    const next = settingsStateFromOverrides(overridesQuery.data);
+    const lastHydrated = lastHydratedRef.current;
+    if (lastHydrated && !settingsStateEqual(state, lastHydrated)) return;
+    if (lastHydrated && settingsStateEqual(next, lastHydrated)) return;
+    lastHydratedRef.current = next;
+    dispatch({ type: "HYDRATE", payload: next });
+  }, [overridesQuery.data, state]);
 
   const handleSave = useCallback(async () => {
     const s = stateRef.current;
     setSaving(true);
     const overrides: ModelOverrides = {};
     if (s.modelType !== "chat") overrides.model_type = s.modelType;
+    if (s.contextWindowEnabled) overrides.context_window = s.contextWindow;
+    if (s.maxOutputTokensEnabled) overrides.max_output_tokens = s.maxOutputTokens;
     if (s.tempEnabled) overrides.temperature = s.temperature;
     if (s.topPEnabled) overrides.top_p = s.topP;
     if (s.maxTokensEnabled) overrides.max_tokens = s.maxTokens;
@@ -855,26 +1403,30 @@ function ModelSettingsModal({ model, onClose, onSaved, onReset, onError }: {
     if (thinking !== undefined) overrides.supports_thinking = thinking;
     try {
       await updateMut.mutateAsync({ modelKey: overrideKey, overrides });
+      if (!mountedRef.current) return;
       onSaved();
       onClose();
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = e instanceof Error ? e.message : String(e);
       onError(msg);
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
-  }, [overrideKey, updateMut, onSaved, onClose, onError]);
+  }, [mountedRef, overrideKey, updateMut, onSaved, onClose, onError]);
 
   const handleReset = useCallback(async () => {
     try {
       await deleteMut.mutateAsync(overrideKey);
+      if (!mountedRef.current) return;
       onReset();
       onClose();
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = e instanceof Error ? e.message : String(e);
       onError(msg);
     }
-  }, [overrideKey, onReset, onClose, onError, deleteMut]);
+  }, [mountedRef, overrideKey, onReset, onClose, onError, deleteMut]);
 
   if (overridesQuery.isLoading) {
     return (
@@ -939,9 +1491,13 @@ function ModelSettingsModal({ model, onClose, onSaved, onReset, onError }: {
                 </span>
                 <div className="flex flex-1 gap-0.5 rounded-xl border border-border-subtle bg-surface p-0.5">
                   {(["default", "on", "off"] as const).map((opt) => {
-                    const label = opt === "default"
-                      ? `${t("models.cap_auto")} (${catalogDefault ? t("models.cap_on") : t("models.cap_off")})`
-                      : opt === "on" ? t("models.cap_force_on") : t("models.cap_force_off");
+                    const label = capabilityOverrideLabel(opt, catalogDefault, {
+                      auto: t("models.cap_auto"),
+                      on: t("models.cap_on"),
+                      off: t("models.cap_off"),
+                      forceOn: t("models.cap_force_on"),
+                      forceOff: t("models.cap_force_off"),
+                    });
                     return (
                       <button
                         key={opt}
@@ -966,12 +1522,44 @@ function ModelSettingsModal({ model, onClose, onSaved, onReset, onError }: {
 
           <SliderInput
             label={t("models.context_window")}
-            value={model.context_window ?? 128000}
-            onChange={() => {}}
-            min={1024} max={1048576} step={1024}
-            enabled={false}
-            ticks={[32768, 131072, 524288, 1048576]}
-            formatTick={(v) => v >= 1048576 ? "1M" : `${Math.round(v/1024)}K`}
+            value={state.contextWindowEnabled ? state.contextWindow : (model.context_window || 128000)}
+            onChange={(v) => dispatch({ type: "SET_FIELD", field: "contextWindow", value: Math.round(v) })}
+            min={1024} max={2097152} step={1024}
+            enabled={state.contextWindowEnabled}
+            onToggle={(v) => {
+              dispatch({ type: "SET_FIELD", field: "contextWindowEnabled", value: v });
+              if (v && state.contextWindow === settingsInitial.contextWindow) {
+                dispatch({ type: "SET_FIELD", field: "contextWindow", value: model.context_window || 128000 });
+              }
+            }}
+            ticks={[32768, 131072, 524288, 1048576, 2097152]}
+            formatTick={(v) =>
+              v >= 1048576 ? `${Math.round(v / 1048576)}M` : `${Math.round(v / 1024)}K`
+            }
+          />
+
+          <SliderInput
+            label={t("models.max_output")}
+            value={
+              state.maxOutputTokensEnabled
+                ? state.maxOutputTokens
+                : (model.max_output_tokens || 8192)
+            }
+            onChange={(v) =>
+              dispatch({ type: "SET_FIELD", field: "maxOutputTokens", value: Math.round(v) })
+            }
+            min={256} max={131072} step={256}
+            enabled={state.maxOutputTokensEnabled}
+            onToggle={(v) => {
+              dispatch({ type: "SET_FIELD", field: "maxOutputTokensEnabled", value: v });
+              if (v && state.maxOutputTokens === settingsInitial.maxOutputTokens) {
+                dispatch({
+                  type: "SET_FIELD",
+                  field: "maxOutputTokens",
+                  value: model.max_output_tokens || 8192,
+                });
+              }
+            }}
           />
 
           <SliderInput

@@ -186,6 +186,23 @@ pub fn validate_capability_inheritance(
     Ok(())
 }
 
+/// The namespace string the proactive (semantic) memory store is addressed by in the per-user ACL and the REST layer.
+///
+/// Kept next to [`glob_matches`] because every consumer of it is deciding whether a declared `memory_read` / `memory_write` scope reaches this store.
+pub const OWN_MEMORY_NAMESPACE: &str = "proactive";
+
+/// Whether one declared `memory_read` / `memory_write` scope covers the agent's own semantic-memory store.
+///
+/// Three accepting forms, each for a concrete reason:
+///   * `*` — the unrestricted grant.
+///   * `self.*` — what every non-memory `ToolProfile` implies for `memory_write`. Those profiles mean "this agent may write its own memory", not "this agent may not use the semantic store", so matching it literally against `proactive` would strip the write half from every profile-based agent.
+///   * anything glob-matching [`OWN_MEMORY_NAMESPACE`], so an operator can name the store explicitly.
+///
+/// Lives here rather than on the kernel because both the tool gate (#7808) and the automatic memorize / retrieve gate (#7605) have to answer the same question, and they run in different crates.
+pub fn scope_covers_own_memory(scope: &str) -> bool {
+    scope == "*" || scope == "self.*" || glob_matches(scope, OWN_MEMORY_NAMESPACE)
+}
+
 /// Glob pattern matching supporting `*` and `**` wildcards.
 ///
 /// # Pattern rules
@@ -196,6 +213,9 @@ pub fn validate_capability_inheritance(
 ///
 /// **Double-segment wildcard `**`** — matches any characters including `/`,
 /// so `data/**` matches `data/a/b/c/file.txt`.
+///
+/// Any value containing a literal `.` or `..` path segment is rejected up front, before pattern dispatch, regardless of which matcher below would otherwise have handled it.
+/// This closes the traversal bypass for `**` (which can span segments) and for separator-free patterns (which fall through to the legacy matcher).
 ///
 /// **Bare `*`** (the entire pattern is just `"*"`) — matches anything, for
 /// backward compatibility with the universal wildcard grant.
@@ -220,6 +240,11 @@ pub fn glob_matches(pattern: &str, value: &str) -> bool {
     // Exact match is always valid.
     if pattern == value {
         return true;
+    }
+    // Wildcard grants must never manufacture access through filesystem traversal components, even when the pattern itself has no separator and would otherwise take the legacy matcher path.
+    // Bare `*` above is the documented universal grant; an exact grant above remains explicit.
+    if has_path_traversal_segment(value) {
+        return false;
     }
 
     // If the pattern contains a path separator we apply segment-aware
@@ -307,6 +332,13 @@ fn glob_matches_path(pattern: &str, value: &str) -> bool {
     let pat_segs: Vec<&str> = pattern.split(SEPS).collect();
     let val_segs: Vec<&str> = value.split(SEPS).collect();
     glob_match_segments(&pat_segs, &val_segs)
+}
+
+fn has_path_traversal_segment(value: &str) -> bool {
+    const SEPS: &[char] = &['/', '\\'];
+    value
+        .split(SEPS)
+        .any(|segment| matches!(segment, "." | ".."))
 }
 
 /// Recursive segment-by-segment matcher.
@@ -620,6 +652,43 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_path_globs_reject_dot_and_parent_segments() {
+        for (pattern, value) in [
+            ("data/*", "data/.."),
+            ("data/*", "data/."),
+            ("data/**", "data/../../etc/passwd"),
+            ("data/**", "data/./file.txt"),
+            ("C:\\data\\**", "C:\\data\\..\\Windows\\secret"),
+        ] {
+            assert!(
+                !glob_matches(pattern, value),
+                "path glob {pattern:?} must reject traversal value {value:?}"
+            );
+        }
+
+        assert!(
+            glob_matches("data/**", "data/.env"),
+            "ordinary dot-prefixed names are not traversal segments"
+        );
+    }
+
+    #[test]
+    fn test_separator_free_globs_reject_path_traversal_values() {
+        for (pattern, value) in [
+            ("**", ".."),
+            ("**", "data/../../etc/passwd"),
+            ("data*", "data/../secret"),
+            ("*passwd", "data/../etc/passwd"),
+            ("C:*", "C:\\data\\..\\Windows\\secret"),
+        ] {
+            assert!(
+                !glob_matches(pattern, value),
+                "separator-free glob {pattern:?} must reject traversal value {value:?}"
+            );
+        }
+    }
+
     /// URL capability patterns: `*` in the host portion must NOT match an
     /// entirely different domain. The host string is already extracted as
     /// `hostname:port` before this function is called, so the separator to
@@ -676,6 +745,14 @@ mod tests {
         assert!(!capability_matches(
             &Capability::FileRead("/data/*".to_string()),
             &Capability::FileRead("/data/../../etc/passwd".to_string()),
+        ));
+        assert!(!capability_matches(
+            &Capability::FileRead("/data/**".to_string()),
+            &Capability::FileRead("/data/../../etc/passwd".to_string()),
+        ));
+        assert!(!capability_matches(
+            &Capability::FileWrite("/data/*".to_string()),
+            &Capability::FileWrite("/data/..".to_string()),
         ));
     }
 

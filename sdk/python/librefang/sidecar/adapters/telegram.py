@@ -11,14 +11,22 @@ in-process ``crates/librefang-channels/src/telegram.rs`` so that
 in-process adapter can be removed. Every subsystem below is a faithful
 port of the audited Rust (function-by-function, not re-derived):
 
-* DONE — Markdown → Telegram-HTML formatter subsystem: a byte-exact
+* DONE — outbound text prefers Telegram's native Rich Markdown
+  (``sendRichMessage`` / ``editMessageText(rich_message=...)``, Bot API
+  10.1+): Telegram parses the GFM itself, so tables, ``_italic_``,
+  ``~~strikethrough~~`` and nested emphasis work, and the limit is
+  32768 characters instead of 4096. Agent text goes through
+  ``sanitize_rich_markdown`` first — a port of
+  ``format::rich_sanitize`` — so quoted untrusted content cannot inject
+  ``<tg-button>`` and friends.
+* DONE — Markdown → Telegram-HTML formatter subsystem, now the
+  fallback for Bot API servers older than 10.1: a byte-exact
   port of ``formatter::markdown_to_telegram_html`` + the
   ``sanitize_telegram_html`` security pass (tag/scheme allowlist,
   attribute-injection escaping, unclosed-tag balancing) + the
   ``message_truncator`` UTF-16/HTML-entity-aware chunker
-  (``split_to_utf16_chunks``). Outbound text is now formatted and sent
-  with ``parse_mode=HTML`` (was ``Markdown``), with the same
-  plain-text retry on Telegram's "can't parse entities" 400.
+  (``split_to_utf16_chunks``), sent with ``parse_mode=HTML``, with the
+  same plain-text retry on Telegram's "can't parse entities" 400.
 * DONE — full inbound parsing: text/bot-command, photo, document,
   audio, voice, animation, video, video_note, location, sticker;
   ``from`` / ``sender_chat`` sender extraction; ``callback_query`` →
@@ -51,6 +59,7 @@ Configure via ``[[sidecar_channels]]``:
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import os
 import socket
@@ -69,9 +78,21 @@ LONGPOLL_CLIENT_SECS = 35
 SEND_TIMEOUT_SECS = 10
 # Telegram's message limit is 4096 *UTF-16 code units* (not chars).
 TELEGRAM_MSG_LIMIT = 4096
+# Rich message limit: "Up to 32768 UTF-8 characters in the rich message
+# text" (Bot API, Rich Message Limits). Counted in characters, unlike the
+# legacy sendMessage path which counts UTF-16 code units.
+RICH_MSG_LIMIT = 32768
+# Cap on a stream's accumulated buffer, mirroring the Rust adapter's
+# MAX_STREAM_BUFFER_BYTES. Without it a stream grows unbounded while
+# `_sync_stream_messages` re-sanitises the whole buffer on every edit tick.
+MAX_STREAM_BUFFER_BYTES = 1024 * 1024
 # Throttle streamed editMessageText (mirrors the Rust adapter's 1s).
 STREAM_EDIT_INTERVAL = 1.0
 RETRY_AFTER_DEFAULT_SECS = 2
+# Cap how long we will sleep on a 429 retry_after from Telegram.
+# A flood-wait can return hours; sleeping that long would stall the entire produce loop with no cancellation.
+# Anything above this skips the retry and returns the original 429 response, matching telegram.rs's MAX_RETRY_AFTER_SECS.
+MAX_RETRY_AFTER_SECS = 300
 # Backoff cap for the `produce()` reconnect loop on transient network
 # / DNS failures (#5111). Matches the convention every other polling
 # sidecar (bluesky / discord / line / mastodon / mattermost /
@@ -279,7 +300,9 @@ def _render_inline_markdown(text: str) -> str:
             break
         pe = be + 2 + pe_rel
         link_text = result[bs + 1:be]
-        url = result[be + 2:pe]
+        # The source string was escaped before parsing. Restore the URL;
+        # the sanitizer performs the single canonical attribute escape.
+        url = html.unescape(result[be + 2:pe])
         result = (
             result[:bs] + f'<a href="{url}">{link_text}</a>' + result[pe + 1:]
         )
@@ -541,9 +564,14 @@ def _rebuild_safe_tag(tag_name: str, attrs_raw: str, self_closing: bool):
         v = next((v for k, v in attrs if k == "emoji-id"), None)
         if v is not None:
             buf += ' emoji-id="' + _escape_html_text(v) + '"'
-    if self_closing:
-        buf += "/"
     buf += ">"
+    if self_closing:
+        # Telegram's HTML subset has no self-closing-tag syntax: emitting
+        # a literal `<tag/>` would either be rejected by the Bot API's
+        # "Unclosed start tag" check or (if tolerated) leave the tag open
+        # for the rest of the message, matching telegram.rs's fix — close
+        # it immediately instead of leaking the marker into the output.
+        buf += "</" + tag_name + ">"
     return buf
 
 
@@ -579,16 +607,28 @@ def sanitize_telegram_html(text: str) -> str:
                                 pos = k
                                 break
                         if pos is not None:
-                            open_tags.pop(pos)
-                            result.append(text[i:tag_end + 1])
+                            # Close every tag above (and including) the
+                            # match, innermost first, mirroring
+                            # telegram.rs — sanitiser priority is
+                            # "produce valid HTML" not "preserve nesting
+                            # depth" when tags cross.
+                            for unclosed in reversed(open_tags[pos:]):
+                                result.append("</" + unclosed + ">")
+                            del open_tags[pos:]
                         else:
                             result.append("&lt;")
                             result.append(_escape_html_text(tag_content))
                             result.append("&gt;")
                     else:
-                        self_closing = tag_content.endswith("/")
+                        # rstrip before checking for the marker so a
+                        # self-closing tag with trailing whitespace before
+                        # `>` (e.g. `<tag/ >`, valid HTML) is still detected
+                        # — matches sanitize.rs's `attrs.trim_end().ends_with('/')`.
+                        self_closing = tag_content.rstrip().endswith("/")
                         attrs_raw = tag_content[len(name_raw):]
-                        attrs_raw = attrs_raw.rstrip("/").strip()
+                        if self_closing:
+                            attrs_raw = attrs_raw.rstrip()[:-1]
+                        attrs_raw = attrs_raw.strip()
                         rebuilt = _rebuild_safe_tag(
                             name_raw, attrs_raw, self_closing
                         )
@@ -618,6 +658,139 @@ def _format_and_sanitize(text: str) -> str:
     the formatter at the bridge. The sidecar owns it now: format →
     sanitize (defense-in-depth over the safe-tag subset)."""
     return sanitize_telegram_html(markdown_to_telegram_html(text))
+
+
+# ====================================================================
+# Rich Markdown sanitiser
+# (port of format::rich_sanitize::sanitize_rich_markdown)
+# ====================================================================
+
+
+def sanitize_rich_markdown(text: str) -> str:
+    """Neutralise "active" constructs in agent-authored Rich Markdown before
+    it is handed to ``sendRichMessage``.
+
+    Rich Markdown "can contain arbitrary HTML" (Bot API 10.1+). The text we
+    send is model output, and model output routinely *quotes* untrusted
+    content — a fetched web page, an email body, a file the agent read.
+    Without this pass, quoted content could render itself an inline button
+    whose ``callback_data`` comes back to the adapter as a genuine
+    ButtonCallback event.
+
+    Two character-local rules. No lookahead, no scanning, no attempt to
+    locate a Markdown construct or to find where one ends:
+
+    * ``&`` becomes ``&amp;`` and ``<`` becomes ``&lt;``, unconditionally,
+      so the output contains no ``<`` and no tag can be parsed. An earlier
+      version used a backslash and shipped; **Telegram does not treat**
+      ``\\<`` **as an escape** — the backslash is delivered as a character
+      and the tag is parsed anyway, so a quoted ``<tg-button>`` became a
+      real button (#8127). Backslash does work for Markdown syntax, which
+      is why ``\\!`` below is fine and why the mistake was plausible.
+    * ``!`` before ``[`` is backslash-escaped, so ``![](url)`` stays inert
+      text rather than becoming a media block fetched from that URL.
+
+    Author-written backslashes are left alone. An earlier revision doubled
+    every one, which reached the same parity but silently rewrote the text:
+    ``\\*not italic\\*`` came back as emphasis with stray backslashes, and
+    ``[a\\](https://x)`` — not a link at all — turned into one.
+
+    **Link destinations are not filtered.** Earlier revisions checked them
+    against the legacy scheme allowlist, which meant locating Markdown
+    links: a label scanner with a length cap, a per-message budget, a
+    forward cursor, reference-definition and title parsing. Five rounds of
+    adversarial review found a defect in that machinery every time, four of
+    them introduced by the fix for the previous one. The legacy
+    ``sanitize_telegram_html`` can filter schemes because it *constructs*
+    the anchor itself; here we would be guessing at someone else's parse.
+    Telegram renders only schemes it supports, the client confirms before
+    opening a link, and the legacy fallback path still filters.
+
+    The cost: the escapes land inside code spans and fenced blocks too,
+    where Markdown does not process them, and every Rich HTML construct is
+    lost since they all start with ``<``. ``InputRichMessage.blocks``
+    removes both and is tracked separately."""
+    out = []
+    i = 0
+    n = len(text)
+    # Length of the run of backslashes immediately before the current
+    # position. Only the ``!`` rule needs it: an odd run there is already
+    # an escape the author wrote.
+    backslashes = 0
+    while i < n:
+        ch = text[i]
+        if ch == "\\":
+            out.append(ch)
+            backslashes += 1
+            i += 1
+            continue
+        if ch == "&":
+            # First, so an author's literal ``&lt;`` survives as those four
+            # characters rather than decoding into a ``<`` never inspected.
+            out.append("&amp;")
+            backslashes = 0
+            i += 1
+            continue
+        if ch == "<":
+            out.append("&lt;")
+            backslashes = 0
+            i += 1
+            continue
+        if (ch == "!" and i + 1 < n and text[i + 1] == "["
+                and backslashes % 2 == 0):
+            out.append("\\!")
+            backslashes = 0
+            i += 1
+            continue
+        out.append(ch)
+        backslashes = 0
+        i += 1
+    return "".join(out)
+
+
+
+def _is_api_rejection(resp: dict) -> bool:
+    """True when Telegram answered with a definitive refusal, i.e. a 4xx.
+
+    Everything else leaves the outcome unknown and must not be retried with
+    different content: a 5xx can be returned after the message was already
+    created, and re-sending then delivers the same answer twice. (Transport
+    failures raise out of ``_api_post`` rather than reaching here, which has
+    the same effect — no second send.) Mirrors the Rust
+    ``dispatcher::is_api_rejection``."""
+    code = resp.get("_http")
+    if not isinstance(code, int):
+        # Telegram also reports failures with HTTP 200 and ``ok: false``;
+        # ``_api_post`` returns that body verbatim, so the verdict is in
+        # ``error_code``. Rust's ``call_json`` builds ``Error::Api`` from the
+        # same field. A 200 with ``ok: false`` and no ``error_code`` at all is
+        # still a verdict: Telegram answered, in JSON, that it did not
+        # create the message, so it counts as definitive. Reading it as
+        # "unknown"
+        # would silently disable the fallback for any Bot API deployment that
+        # reports failures with a 200, which is exactly the self-hosted
+        # pre-10.1 server the fallback exists for.
+        if resp.get("ok") is False:
+            code = resp.get("error_code")
+            # An explicit `error_code: 0` is the same verdict as no code at
+            # all — Telegram answered that it did not create the message.
+            # Rust reaches `code == 0` either way; treating only the absent
+            # case as definitive made the ports disagree.
+            if not isinstance(code, int) or code == 0:
+                return True
+        else:
+            code = None
+    # 429 is the one 4xx that means "try later", not "not like this". Treating
+    # it as a refusal re-sends the same answer into a chat Telegram has just
+    # asked us to back off from.
+    return isinstance(code, int) and code != 429 and 400 <= code < 500
+
+
+def _prepare_rich_markdown(text: str):
+    """Sanitised text for ``sendRichMessage``, or None when it exceeds the
+    rich limit and the caller should fall back to the chunking pipeline."""
+    sanitized = sanitize_rich_markdown(text)
+    return sanitized if len(sanitized) <= RICH_MSG_LIMIT else None
 
 
 # ====================================================================
@@ -697,6 +870,14 @@ def _is_ogg_opus(data: bytes) -> bool:
 
 
 def _extract_retry_after(body, default: int) -> int:
+    """Resolve a 429 delay: HTTP delta-seconds ``Retry-After`` header first (stashed by ``_api_post`` / ``_multipart`` as ``_retry_after_header``), then Telegram's JSON ``parameters.retry_after``, then ``default``.
+    Mirrors ``telegram.rs``'s ``resolve_retry_after``: a header that isn't a bare non-negative integer (HTTP-date form, a decimal, a stray sign) falls through to the JSON value instead of raising or producing a negative delay."""
+    if isinstance(body, dict):
+        header = body.get("_retry_after_header")
+        if isinstance(header, str):
+            stripped = header.strip()
+            if stripped and stripped.isascii() and stripped.isdigit():
+                return int(stripped)
     try:
         v = body if isinstance(body, dict) else json.loads(body)
         ra = v.get("parameters", {}).get("retry_after")
@@ -728,9 +909,8 @@ def _api_get(url: str, params: dict, timeout: float) -> dict:
 
 
 def _api_post(url: str, payload: dict, timeout: float) -> dict:
-    """POST a JSON body. Returns ``{"_http": code, ...}`` on an HTTP
-    error instead of raising, so callers can implement Telegram's
-    documented 400/429 recovery paths exactly like the Rust adapter."""
+    """POST a JSON body. Returns ``{"_http": code, ...}`` on an HTTP error instead of raising, so callers can implement Telegram's documented 400/429 recovery paths exactly like the Rust adapter.
+    Also stashes any ``Retry-After`` response header as ``_retry_after_header`` (on both the 2xx-but-``ok:false`` path and the non-2xx path) so ``_extract_retry_after`` can honour it ahead of the JSON body's ``parameters.retry_after``, matching ``telegram.rs``'s header-first resolution."""
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -739,7 +919,11 @@ def _api_post(url: str, payload: dict, timeout: float) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            return json.loads(resp.read().decode("utf-8", "replace"))
+            parsed = json.loads(resp.read().decode("utf-8", "replace"))
+            retry_after_header = resp.headers.get("Retry-After")
+            if retry_after_header is not None:
+                parsed["_retry_after_header"] = retry_after_header
+            return parsed
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")
         try:
@@ -747,6 +931,9 @@ def _api_post(url: str, payload: dict, timeout: float) -> dict:
         except ValueError:
             parsed = {"ok": False, "description": body}
         parsed["_http"] = e.code
+        retry_after_header = e.headers.get("Retry-After")
+        if retry_after_header is not None:
+            parsed["_retry_after_header"] = retry_after_header
         return parsed
 
 
@@ -773,7 +960,11 @@ def _multipart(url: str, fields: dict, file_field: str, filename: str,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-            return json.loads(resp.read().decode("utf-8", "replace"))
+            parsed = json.loads(resp.read().decode("utf-8", "replace"))
+            retry_after_header = resp.headers.get("Retry-After")
+            if retry_after_header is not None:
+                parsed["_retry_after_header"] = retry_after_header
+            return parsed
     except urllib.error.HTTPError as e:
         b = e.read().decode("utf-8", "replace")
         try:
@@ -781,6 +972,9 @@ def _multipart(url: str, fields: dict, file_field: str, filename: str,
         except ValueError:
             parsed = {"ok": False, "description": b}
         parsed["_http"] = e.code
+        retry_after_header = e.headers.get("Retry-After")
+        if retry_after_header is not None:
+            parsed["_retry_after_header"] = retry_after_header
         return parsed
 
 
@@ -796,7 +990,10 @@ class TelegramAdapter(SidecarAdapter):
                   required=True,
                   placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"),
             Field("ALLOWED_USERS", "Allowed User IDs", "list",
-                  placeholder="123456789, 987654321",
+                  placeholder=(
+                      "123456789, 987654321 — leave empty to allow ALL users "
+                      "(insecure)"
+                  ),
                   advanced=True),
             Field("TELEGRAM_CLEAR_DONE_REACTION", "Clear done reaction",
                   "bool", advanced=True),
@@ -825,11 +1022,16 @@ class TelegramAdapter(SidecarAdapter):
         )
 
     def _call_retrying(self, method: str, payload: dict) -> dict:
-        """`_call` + a single 429 retry honouring `retry_after`
-        (mirrors api_send_media_request)."""
+        """`_call` + a single 429 retry honouring `retry_after` (mirrors api_send_media_request).
+        A flood-wait above `MAX_RETRY_AFTER_SECS` skips the sleep and returns the original 429 response instead of stalling the caller indefinitely."""
         resp = self._call(method, payload)
         if resp.get("_http") == 429:
             delay = _extract_retry_after(resp, RETRY_AFTER_DEFAULT_SECS)
+            if delay > MAX_RETRY_AFTER_SECS:
+                log.warn("telegram rate limited; retry_after exceeds cap, "
+                         "not retrying",
+                         method=method, delay=delay)
+                return resp
             log.warn("telegram rate limited; retrying",
                      method=method, delay=delay)
             time.sleep(delay)
@@ -845,32 +1047,96 @@ class TelegramAdapter(SidecarAdapter):
             return None
         return f"{self.api_root}/file/bot{self.token}/{fp}"
 
-    # ---- outbound text (formatter + sanitize + chunk + HTML) ---------
+    # ---- outbound text (rich Markdown, HTML pipeline as fallback) ----
 
     def _send_text(self, chat_id, text: str, thread_id=None) -> dict:
-        sanitized = _format_and_sanitize(text)
-        last: dict = {}
-        for chunk in _split_to_utf16_chunks(sanitized, TELEGRAM_MSG_LIMIT):
-            payload = {
-                "chat_id": chat_id,
-                "text": chunk,
-                "parse_mode": PARSE_MODE_HTML,
-            }
-            if thread_id:
-                payload["message_thread_id"] = thread_id
-            resp = self._call_retrying("sendMessage", payload)
-            if (resp.get("_http") == 400
-                    and "can't parse entities" in str(resp.get("description",
-                                                               ""))):
-                plain = {"chat_id": chat_id, "text": chunk}
-                if thread_id:
-                    plain["message_thread_id"] = thread_id
-                resp = self._call("sendMessage", plain)
-            last = resp
-        return last
+        """Send outbound text.
 
-    def _edit_text(self, chat_id, message_id, text: str) -> None:
+        Prefers ``sendRichMessage`` (Bot API 10.1+), which hands the text
+        to Telegram's own GFM-compatible parser. That gets us tables,
+        ``_italic_``, ``~~strikethrough~~`` and nested emphasis — none of
+        which ``markdown_to_telegram_html`` can express — and raises the
+        size limit from 4096 to 32768, so ordinary replies stop being
+        split mid-sentence. The text is sanitised first so quoted
+        untrusted content cannot inject interactive elements.
+
+        A definitive refusal by Telegram (4xx — e.g. ``sendRichMessage``
+        missing on a self-hosted Bot API server older than 10.1) falls
+        back to the legacy HTML pipeline. A 5xx or a transport failure
+        does *not*: Telegram may have created the message already, and
+        re-sending the same answer would deliver it twice."""
+        resp = self._send_rich(chat_id, text, thread_id)
+        if resp is not None:
+            if resp.get("ok") is True:
+                return resp
+            if not _is_api_rejection(resp):
+                # Outcome unknown — do not re-send the same answer.
+                return resp
+        responses = self._send_text_chunks(chat_id, text, thread_id)
+        return responses[0] if responses else {}
+
+    def _send_rich(self, chat_id, text: str, thread_id=None):
+        """Raw ``sendRichMessage`` response for `text`, or None when the
+        text is over the rich limit and the rich path cannot be used at
+        all. Callers decide what a non-``ok`` response means — see
+        ``_is_api_rejection``."""
+        markdown = _prepare_rich_markdown(text)
+        if markdown is None:
+            return None
+        payload = {"chat_id": chat_id, "rich_message": {"markdown": markdown}}
+        if thread_id:
+            payload["message_thread_id"] = thread_id
+        return self._call_retrying("sendRichMessage", payload)
+
+    def _edit_rich(self, chat_id, message_id, text: str) -> bool:
+        """``editMessageText(rich_message=...)`` for `text`. True when the
+        caller must NOT fall back to the legacy HTML edit — either the
+        message now shows `text` (``message is not modified`` counts), or
+        the outcome is unknown (5xx / transport), where a second edit with
+        different content could overwrite one that did land."""
+        markdown = _prepare_rich_markdown(text)
+        if markdown is None:
+            return False
+        resp = self._call("editMessageText", {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "rich_message": {"markdown": markdown},
+        })
+        if resp.get("ok") is True:
+            return True
+        if "message is not modified" in str(resp.get("description", "")):
+            return True
+        return not _is_api_rejection(resp)
+
+    def _send_text_chunks(self, chat_id, text: str, thread_id=None) -> list:
         sanitized = _format_and_sanitize(text)
+        responses = []
+        for chunk in _split_to_utf16_chunks(sanitized, TELEGRAM_MSG_LIMIT):
+            responses.append(
+                self._send_formatted_chunk(chat_id, chunk, thread_id),
+            )
+        return responses
+
+    def _send_formatted_chunk(self, chat_id, chunk: str, thread_id=None) -> dict:
+        payload = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "parse_mode": PARSE_MODE_HTML,
+        }
+        if thread_id:
+            payload["message_thread_id"] = thread_id
+        resp = self._call_retrying("sendMessage", payload)
+        if (resp.get("_http") == 400
+                and "can't parse entities" in str(resp.get("description", ""))):
+            plain = {"chat_id": chat_id, "text": chunk}
+            if thread_id:
+                plain["message_thread_id"] = thread_id
+            resp = self._call("sendMessage", plain)
+        return resp
+
+    def _edit_formatted_chunk(
+        self, chat_id, message_id, sanitized: str, plain_fallback: str,
+    ) -> None:
         resp = self._call("editMessageText", {
             "chat_id": chat_id,
             "message_id": message_id,
@@ -882,7 +1148,7 @@ class TelegramAdapter(SidecarAdapter):
             if resp.get("_http") == 400 and "can't parse entities" in desc:
                 self._call("editMessageText", {
                     "chat_id": chat_id, "message_id": message_id,
-                    "text": text,
+                    "text": plain_fallback,
                 })
 
     def _send_media_request(self, endpoint: str, chat_id, body: dict,
@@ -905,7 +1171,13 @@ class TelegramAdapter(SidecarAdapter):
         resp = _multipart(url, fields, field, filename, mime, data,
                           SEND_TIMEOUT_SECS)
         if resp.get("_http") == 429:
-            time.sleep(_extract_retry_after(resp, RETRY_AFTER_DEFAULT_SECS))
+            delay = _extract_retry_after(resp, RETRY_AFTER_DEFAULT_SECS)
+            if delay > MAX_RETRY_AFTER_SECS:
+                log.warn("telegram rate limited; retry_after exceeds cap, "
+                         "not retrying",
+                         method=endpoint, delay=delay)
+                return resp
+            time.sleep(delay)
             resp = _multipart(url, fields, field, filename, mime, data,
                               SEND_TIMEOUT_SECS)
         return resp
@@ -1013,20 +1285,39 @@ class TelegramAdapter(SidecarAdapter):
                 f"{len(items)}")
         media = []
         for it in items:
+            if not isinstance(it, dict):
+                log.warn(
+                    "telegram media group skipping non-object item",
+                    item_type=type(it).__name__,
+                )
+                continue
             if "Photo" in it:
                 p = it["Photo"]
                 v = {"type": "photo", "media": p.get("url")}
                 if p.get("caption"):
                     v["caption"] = p["caption"]
                     v["parse_mode"] = PARSE_MODE_HTML
-            else:
+            elif "Video" in it:
                 p = it["Video"]
                 v = {"type": "video", "media": p.get("url"),
                      "duration": p.get("duration_seconds", 0)}
                 if p.get("caption"):
                     v["caption"] = p["caption"]
                     v["parse_mode"] = PARSE_MODE_HTML
+            else:
+                log.warn(
+                    "telegram media group skipping unsupported item",
+                    kinds=list(it) if isinstance(it, dict) else [],
+                )
+                continue
             media.append(v)
+        if len(media) < 2:
+            log.warn(
+                "telegram media group has fewer than two supported items; "
+                "not sending",
+                supported_items=len(media),
+            )
+            return {}
         body = {"chat_id": chat_id, "media": media}
         if thread_id:
             body["message_thread_id"] = thread_id
@@ -1069,7 +1360,7 @@ class TelegramAdapter(SidecarAdapter):
     def _send_interactive(self, chat_id, text, buttons, thread_id):
         body = {
             "chat_id": chat_id,
-            "text": sanitize_telegram_html(text),
+            "text": _format_and_sanitize(text),
             "parse_mode": PARSE_MODE_HTML,
             "reply_markup": self._inline_keyboard(buttons),
         }
@@ -1081,7 +1372,7 @@ class TelegramAdapter(SidecarAdapter):
         kb = self._inline_keyboard(buttons)
         resp = self._call("editMessageText", {
             "chat_id": chat_id, "message_id": int(message_id),
-            "text": sanitize_telegram_html(text),
+            "text": _format_and_sanitize(text),
             "parse_mode": PARSE_MODE_HTML,
             "reply_markup": kb,
         })
@@ -1568,22 +1859,87 @@ class TelegramAdapter(SidecarAdapter):
         st = self._streams.get(sid)
         if st is None:
             return
+        # Bytes, not characters: Rust compares `String::len()`, so a CJK or
+        # emoji stream would otherwise be allowed several times the cap. The
+        # running total is kept on the state rather than re-encoding the whole
+        # buffer per delta, which was O(n^2) — 7.6 s of pure encoding to fill
+        # the cap with CJK.
+        incoming = len(chunk.encode("utf-8", "replace"))
+        if st["bytes"] + incoming > MAX_STREAM_BUFFER_BYTES:
+            # Matches the Rust adapter: drop the stream rather than let the
+            # buffer grow without bound, since every edit tick re-sanitises
+            # the whole of it.
+            del self._streams[sid]
+            log.warn("telegram stream exceeded the buffer limit; dropped",
+                     stream_id=sid, limit=MAX_STREAM_BUFFER_BYTES)
+            return
         st["text"] += chunk
-        if st["msg_id"] is None:
-            resp = self._send_text(st["chat_id"], st["text"], st["thread_id"])
-            st["msg_id"] = (resp.get("result") or {}).get("message_id")
+        st["bytes"] += incoming
+        if not st["initial_attempted"]:
+            st["initial_attempted"] = True
+            self._sync_stream_messages(st)
             st["last_edit"] = time.monotonic()
-        elif time.monotonic() - st["last_edit"] >= STREAM_EDIT_INTERVAL:
-            self._edit_text(st["chat_id"], st["msg_id"], st["text"])
+        elif (st["message_ids"]
+              and time.monotonic() - st["last_edit"] >= STREAM_EDIT_INTERVAL):
+            self._sync_stream_messages(st)
             st["last_edit"] = time.monotonic()
+
+    def _sync_stream_messages(self, st: dict) -> None:
+        # Rich path: while the answer still fits one rich message (32768
+        # chars vs 4096), stream it as a single message rather than a
+        # chunked HTML one, so tables and nested emphasis render during
+        # streaming exactly as they will in the finished reply. Once the
+        # answer has already spilled into several messages, stay on the
+        # legacy chunked path rather than restructuring mid-stream.
+        if len(st["message_ids"]) <= 1:
+            if st["message_ids"]:
+                if self._edit_rich(st["chat_id"], st["message_ids"][0],
+                                   st["text"]):
+                    return
+            else:
+                resp = self._send_rich(st["chat_id"], st["text"],
+                                       st["thread_id"])
+                if resp is not None:
+                    message_id = (resp.get("result") or {}).get("message_id")
+                    if message_id is not None:
+                        st["message_ids"].append(message_id)
+                    if not _is_api_rejection(resp):
+                        # Either it worked, or the outcome is unknown (5xx)
+                        # and Telegram may have created the message anyway.
+                        # Sending the chunked HTML version now would deliver
+                        # the answer twice; the next throttled tick retries.
+                        return
+
+        sanitized = _format_and_sanitize(st["text"])
+        chunks = _split_to_utf16_chunks(sanitized, TELEGRAM_MSG_LIMIT)
+        for index, formatted_chunk in enumerate(chunks):
+            if index < len(st["message_ids"]):
+                self._edit_formatted_chunk(
+                    st["chat_id"], st["message_ids"][index],
+                    formatted_chunk, formatted_chunk,
+                )
+                continue
+            resp = self._send_formatted_chunk(
+                st["chat_id"], formatted_chunk, st["thread_id"],
+            )
+            message_id = (resp.get("result") or {}).get("message_id")
+            if message_id is None:
+                break
+            st["message_ids"].append(message_id)
+        if len(st["message_ids"]) > len(chunks):
+            for obsolete_id in st["message_ids"][len(chunks):]:
+                self._delete_message(st["chat_id"], obsolete_id)
+            del st["message_ids"][len(chunks):]
 
     def _stream_end(self, sid: str) -> None:
         st = self._streams.pop(sid, None)
         if st is None or not st["text"]:
             return
-        if st["msg_id"] is not None:
-            self._edit_text(st["chat_id"], st["msg_id"], st["text"])
+        if st["message_ids"]:
+            self._sync_stream_messages(st)
         else:
+            # Retry a failed initial send once at the terminal event, not on
+            # every accumulated delta.
             self._send_text(st["chat_id"], st["text"], st["thread_id"])
 
     # ---- command dispatch -------------------------------------------
@@ -1616,7 +1972,9 @@ class TelegramAdapter(SidecarAdapter):
             self._streams[cmd.stream_id] = {
                 "chat_id": cmd.channel_id,
                 "thread_id": getattr(cmd, "thread_id", None),
-                "text": "", "msg_id": None, "last_edit": 0.0,
+                "text": "", "bytes": 0,
+                "message_ids": [], "initial_attempted": False,
+                "last_edit": 0.0,
             }
         elif isinstance(cmd, protocol.StreamDelta):
             await loop.run_in_executor(

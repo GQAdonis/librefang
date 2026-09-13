@@ -5,11 +5,12 @@ a queue feeds stdin lines, a list captures emitted events.
 """
 
 import asyncio
+import io
 import json
 
 import pytest
 
-from librefang.sidecar import ProducerCrashed, SidecarAdapter, run
+from librefang.sidecar import ProducerCrashed, ReaderCrashed, SidecarAdapter, run
 from librefang.sidecar.protocol import Send
 
 
@@ -76,19 +77,26 @@ async def test_ready_reannounce_is_bounded_without_ack():
     # stdout forever, while the run keeps serving until shutdown.
     adapter = RecordingAdapter()
     emitted = []
+    ready_cap_reached = asyncio.Event()
     delivered = False
+
+    def emit(event):
+        emitted.append(event)
+        if event["method"] == "ready":
+            readies = sum(item["method"] == "ready" for item in emitted)
+            if readies == 3:
+                ready_cap_reached.set()
 
     async def line_source():
         nonlocal delivered
         if not delivered:
             delivered = True
-            # > 3 * ready_interval, so the capped loop has finished.
-            await asyncio.sleep(0.2)
+            await ready_cap_reached.wait()
             return '{"method":"shutdown"}'
         return None
 
     await asyncio.wait_for(
-        run(adapter, line_source=line_source, emit=emitted.append,
+        run(adapter, line_source=line_source, emit=emit,
             ready_interval=0.01, ready_max_attempts=3),
         timeout=2.0,
     )
@@ -99,23 +107,30 @@ async def test_ready_reannounce_is_bounded_without_ack():
     # ready_max_attempts=0 keeps the legacy unbounded behaviour.
     adapter2 = RecordingAdapter()
     emitted2 = []
+    fourth_ready_emitted = asyncio.Event()
     delivered2 = False
+
+    def emit2(event):
+        emitted2.append(event)
+        if event["method"] == "ready":
+            readies = sum(item["method"] == "ready" for item in emitted2)
+            if readies == 4:
+                fourth_ready_emitted.set()
 
     async def line_source2():
         nonlocal delivered2
         if not delivered2:
             delivered2 = True
-            await asyncio.sleep(0.1)
+            await fourth_ready_emitted.wait()
             return '{"method":"shutdown"}'
         return None
 
     await asyncio.wait_for(
-        run(adapter2, line_source=line_source2, emit=emitted2.append,
+        run(adapter2, line_source=line_source2, emit=emit2,
             ready_interval=0.01, ready_max_attempts=0),
         timeout=2.0,
     )
-    # ~0.1s / 0.01s interval ≫ 3: proves it did not self-cap.
-    assert sum(1 for e in emitted2 if e["method"] == "ready") > 3
+    assert sum(1 for e in emitted2 if e["method"] == "ready") >= 4
 
 
 async def test_send_command_dispatched():
@@ -159,6 +174,28 @@ async def test_invalid_json_emits_error_and_continues():
     ])
     assert any(e["method"] == "error" for e in emitted)
     assert any(s.text == "after" for s in adapter.sends)
+
+
+async def test_non_object_command_params_emit_error_and_continue():
+    adapter = RecordingAdapter()
+    emitted = await _drive(adapter, [
+        '{"method":"send","params":["not","an","object"]}',
+        '{"method":"send","params":{"channel_id":"c","text":"after","user":{}}}',
+    ])
+
+    assert any(e["method"] == "error" for e in emitted)
+    assert [send.text for send in adapter.sends] == ["after"]
+
+
+async def test_non_string_command_method_emits_error_and_continues():
+    adapter = RecordingAdapter()
+    emitted = await _drive(adapter, [
+        '{"method":[],"params":{}}',
+        '{"method":"send","params":{"channel_id":"c","text":"after","user":{}}}',
+    ])
+
+    assert any(e["method"] == "error" for e in emitted)
+    assert [send.text for send in adapter.sends] == ["after"]
 
 
 async def test_producer_emits_inbound_messages():
@@ -210,31 +247,127 @@ async def test_producer_crash_exits_nonzero_after_cleanup():
     assert adapter.shutdown_called, "cleanup must run before nonzero exit"
 
 
-def test_run_stdio_translates_producer_crash_to_nonzero_exit():
+async def test_reader_crash_stops_run_after_cleanup():
+    adapter = RecordingAdapter()
+
+    async def broken_line_source():
+        raise RuntimeError("stdin transport failed")
+
+    with pytest.raises(ReaderCrashed) as error:
+        await asyncio.wait_for(
+            run(
+                adapter,
+                line_source=broken_line_source,
+                emit=lambda _event: None,
+                ready_interval=0.01,
+            ),
+            timeout=1.0,
+        )
+
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert "stdin transport failed" in str(error.value.__cause__)
+    assert adapter.shutdown_called, "cleanup must run before reader failure surfaces"
+
+
+async def test_unexpected_parser_error_stops_reader_instead_of_hanging(monkeypatch):
+    adapter = RecordingAdapter()
+    delivered = False
+
+    async def line_source():
+        nonlocal delivered
+        if not delivered:
+            delivered = True
+            return '{"method":"send","params":{}}'
+        return None
+
+    def broken_parser(_line):
+        raise TypeError("unexpected parser failure")
+
+    monkeypatch.setattr("librefang.sidecar.runtime.protocol.parse_command", broken_parser)
+
+    with pytest.raises(ReaderCrashed) as error:
+        await asyncio.wait_for(
+            run(
+                adapter,
+                line_source=line_source,
+                emit=lambda _event: None,
+                ready_interval=0.01,
+            ),
+            timeout=1.0,
+        )
+
+    assert isinstance(error.value.__cause__, TypeError)
+    assert adapter.shutdown_called
+
+
+async def test_reader_emit_failure_stops_run_after_cleanup():
+    adapter = RecordingAdapter()
+    lines = iter(["not-json{", None])
+
+    async def line_source():
+        return next(lines)
+
+    def emit(event):
+        if event["method"] == "error":
+            raise OSError("stdout write failed")
+
+    with pytest.raises(ReaderCrashed) as error:
+        await asyncio.wait_for(
+            run(
+                adapter,
+                line_source=line_source,
+                emit=emit,
+                ready_interval=0.01,
+            ),
+            timeout=1.0,
+        )
+
+    assert isinstance(error.value.__cause__, OSError)
+    assert adapter.shutdown_called
+
+
+async def test_stdio_reader_thread_failure_reaches_async_reader(monkeypatch):
+    from librefang.sidecar.runtime import _run_stdio
+
+    class BrokenStdin:
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            raise OSError("stdin device failed")
+
+    adapter = RecordingAdapter()
+    monkeypatch.setattr("sys.stdin", BrokenStdin())
+    monkeypatch.setattr("sys.stdout", io.StringIO())
+
+    with pytest.raises(ReaderCrashed) as error:
+        await asyncio.wait_for(
+            _run_stdio(
+                adapter,
+                ready_interval=0.01,
+                ready_max_attempts=1,
+            ),
+            timeout=1.0,
+        )
+
+    assert isinstance(error.value.__cause__, OSError)
+    assert "stdin device failed" in str(error.value.__cause__)
+    assert adapter.shutdown_called
+
+
+def test_run_stdio_translates_producer_crash_to_nonzero_exit(monkeypatch):
     # run_stdio is the process entry point: a ProducerCrashed from run()
     # must become SystemExit(1) so the daemon supervisor sees a nonzero
     # exit, distinguishable from a clean shutdown/EOF. Exercised
     # synchronously because run_stdio owns its own event loop.
     from librefang.sidecar import run_stdio
 
-    class Crashing(SidecarAdapter):
-        async def on_send(self, cmd):
-            pass
+    async def crash(*_args, **_kwargs):
+        raise ProducerCrashed("producer failed")
 
-        async def produce(self, emit):
-            raise RuntimeError("transport died unrecoverably")
+    monkeypatch.setattr("librefang.sidecar.runtime._run_stdio", crash)
 
-    # Closed stdin -> reader thread hits EOF immediately; the producer
-    # crash still wins the race because `stop` is set before EOF reaches
-    # the loop. ready_max_attempts=1 caps the ready-loop quickly.
-    import io
-    import sys
-    saved_stdin, saved_stdout = sys.stdin, sys.stdout
-    sys.stdin = io.StringIO("")
-    sys.stdout = io.StringIO()
-    try:
-        with pytest.raises(SystemExit) as ei:
-            run_stdio(Crashing(), ready_interval=0.01, ready_max_attempts=1)
-        assert ei.value.code == 1
-    finally:
-        sys.stdin, sys.stdout = saved_stdin, saved_stdout
+    with pytest.raises(SystemExit) as error:
+        run_stdio(RecordingAdapter(), ready_interval=0.01, ready_max_attempts=1)
+
+    assert error.value.code == 1

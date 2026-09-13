@@ -19,6 +19,10 @@ use librefang_kernel::tool_runner::{builtin_tool_definitions, execute_tool};
 use librefang_types::i18n::ErrorTranslator;
 use std::sync::Arc;
 
+fn session_storage_error(error: impl std::fmt::Display) -> ApiErrorResponse {
+    ApiErrorResponse::internal_scrub(error)
+}
+
 /// Build the tools + sessions sub-router. Mounted via `.merge(...)` from
 /// `system::router()` so all paths remain rooted at `/api/...` exactly as
 /// before.
@@ -48,6 +52,24 @@ pub fn router() -> axum::Router<Arc<AppState>> {
             "/agents/{id}/sessions/by-label/{label}",
             axum::routing::get(find_session_by_label),
         )
+}
+
+#[cfg(test)]
+mod session_storage_error_tests {
+    use super::*;
+
+    #[test]
+    fn internal_session_storage_errors_are_scrubbed() {
+        let response = session_storage_error(
+            "database is locked; UNIQUE constraint failed: sessions.id at /srv/private.db",
+        );
+
+        assert_eq!(response.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response.error, "Internal server error");
+        let body = serde_json::to_string(&response).expect("serialize error response");
+        assert!(!body.contains("sessions.id"));
+        assert!(!body.contains("/srv/private.db"));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -402,20 +424,36 @@ pub async fn list_sessions(
 ) -> impl IntoResponse {
     let offset = pagination.effective_offset();
     let limit = pagination.effective_limit();
-    let substrate = state.kernel.memory_substrate();
-    // Push pagination into SQLite so we don't deserialize every session blob (#3485).
-    let total = substrate.count_sessions().unwrap_or(0);
     // Snapshot of in-flight session IDs from the kernel runtime — the
     // SQLite substrate has no view into liveness, so we merge it in here
     // (#4290). Taken once per request before the SQL call so every row
     // sees a consistent view.
     let running = state.kernel.running_session_ids();
+    let substrate = Arc::clone(state.kernel.memory_substrate());
+    // Both calls use synchronous SQLite connections. Keep them together on
+    // the blocking pool so a large or contended sessions table cannot stall
+    // the Tokio worker serving unrelated requests.
+    let query_result = tokio::task::spawn_blocking(move || {
+        // Push pagination into SQLite so we don't deserialize every session
+        // blob (#3485).
+        let total = substrate.count_sessions()?;
+        substrate
+            .list_sessions_paginated(Some(limit), offset)
+            .map(|items| (items, total, offset, limit))
+    })
+    .await;
     // Canonical paginated envelope (#3842): {items,total,offset,limit}.
-    let (mut items, total, offset_out, limit_out) =
-        match substrate.list_sessions_paginated(Some(limit), offset) {
-            Ok(items) => (items, total, offset, limit),
-            Err(_) => (Vec::new(), 0, 0, PaginationParams::DEFAULT_LIMIT),
-        };
+    let (mut items, total, offset_out, limit_out) = match query_result {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => {
+            tracing::error!(%error, "failed to list sessions");
+            return ApiErrorResponse::internal("Failed to list sessions").into_response();
+        }
+        Err(error) => {
+            tracing::error!(%error, "session list query task failed");
+            return ApiErrorResponse::internal("Session list query task failed").into_response();
+        }
+    };
     annotate_sessions_active(&mut items, &running);
     Json(crate::types::PaginatedResponse {
         items,
@@ -423,6 +461,7 @@ pub async fn list_sessions(
         offset: offset_out,
         limit: Some(limit_out),
     })
+    .into_response()
 }
 
 /// Inject an `"active": bool` field into each session JSON row by looking
@@ -474,6 +513,26 @@ pub async fn get_session(
             // liveness bit (#4290) so single-session fetches don't lie
             // about idle state either.
             let active = state.kernel.running_session_ids().contains(&session.id);
+            // The list endpoint computes `cost_usd` / `total_tokens` from a `usage_events` join, `duration_ms` from the message timestamps, and falls back to a snippet of the first user message when the `label` column is empty.
+            // This handler hand-built its object and carried none of that, so the same session reported different values depending on which endpoint you asked (#6611).
+            // Both now go through the same substrate helpers rather than a second copy of the derivation — a copy is what let the two views diverge in the first place.
+            //
+            // A failed aggregate is surfaced as a 500 rather than coerced to zero: reporting `cost_usd: 0` for a session that actually spent money is the same silent-wrong-value failure this issue is about, and the session load immediately above already 500s on its own error.
+            let usage = match state
+                .kernel
+                .memory_substrate()
+                .session_usage_totals(session.id)
+            {
+                Ok(u) => u,
+                Err(e) => {
+                    return session_storage_error(e).into_json_tuple();
+                }
+            };
+            let duration_ms = librefang_memory::session::session_duration_ms(&session.messages);
+            let label = session
+                .label
+                .clone()
+                .or_else(|| librefang_memory::session::derive_session_label(&session.messages));
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -482,20 +541,20 @@ pub async fn get_session(
                     "message_count": session.messages.len(),
                     "messages": session.messages,
                     "context_window_tokens": session.context_window_tokens,
-                    "label": session.label,
+                    "label": label,
                     "model_override": session.model_override,
                     "created_at": created_at,
                     "active": active,
+                    "duration_ms": duration_ms,
+                    "cost_usd": usage.cost_usd,
+                    "total_tokens": usage.total_tokens,
                 })),
             )
         }
         Ok(None) => {
             ApiErrorResponse::not_found(t.t("api-error-session-not-found")).into_json_tuple()
         }
-        Err(e) => {
-            ApiErrorResponse::internal(t.t_args("api-error-generic", &[("error", &e.to_string())]))
-                .into_json_tuple()
-        }
+        Err(e) => session_storage_error(e).into_json_tuple(),
     }
 }
 
@@ -524,11 +583,7 @@ pub async fn delete_session(
     // dead session.
     match state.kernel.delete_session(session_id) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => {
-            ApiErrorResponse::internal(t.t_args("api-error-generic", &[("error", &e.to_string())]))
-                .into_json_tuple()
-                .into_response()
-        }
+        Err(e) => session_storage_error(e).into_json_tuple().into_response(),
     }
 }
 
@@ -574,10 +629,7 @@ pub async fn set_session_label(
                 "label": label,
             })),
         ),
-        Err(e) => {
-            ApiErrorResponse::internal(t.t_args("api-error-generic", &[("error", &e.to_string())]))
-                .into_json_tuple()
-        }
+        Err(e) => session_storage_error(e).into_json_tuple(),
     }
 }
 
@@ -680,12 +732,7 @@ pub async fn patch_session_model(
             return ApiErrorResponse::not_found(t.t("api-error-session-not-found"))
                 .into_json_tuple();
         }
-        Err(e) => {
-            return ApiErrorResponse::internal(
-                t.t_args("api-error-generic", &[("error", &e.to_string())]),
-            )
-            .into_json_tuple();
-        }
+        Err(e) => return session_storage_error(e).into_json_tuple(),
         Ok(Some(_)) => {}
     }
 
@@ -702,10 +749,7 @@ pub async fn patch_session_model(
                 "model_override": model_override,
             })),
         ),
-        Err(e) => {
-            ApiErrorResponse::internal(t.t_args("api-error-generic", &[("error", &e.to_string())]))
-                .into_json_tuple()
-        }
+        Err(e) => session_storage_error(e).into_json_tuple(),
     }
 }
 
@@ -748,10 +792,7 @@ pub async fn find_session_by_label(
         Ok(None) => {
             ApiErrorResponse::not_found(t.t("api-error-session-no-label")).into_json_tuple()
         }
-        Err(e) => {
-            ApiErrorResponse::internal(t.t_args("api-error-generic", &[("error", &e.to_string())]))
-                .into_json_tuple()
-        }
+        Err(e) => session_storage_error(e).into_json_tuple(),
     }
 }
 
@@ -764,11 +805,7 @@ pub async fn find_session_by_label(
 /// Runs both expired-session and excess-session cleanup using the configured
 /// `[session]` policy. Returns `{"sessions_deleted": N}`.
 #[utoipa::path(post, path = "/api/sessions/cleanup", tag = "sessions", responses((status = 200, description = "Cleanup result", body = crate::types::JsonObject)))]
-pub async fn session_cleanup(
-    State(state): State<Arc<AppState>>,
-    lang: Option<axum::Extension<RequestLanguage>>,
-) -> impl IntoResponse {
-    let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
+pub async fn session_cleanup(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let kcfg = state.kernel.config_ref();
     let cfg = &kcfg.session;
     let mut total: u64 = 0;
@@ -780,13 +817,7 @@ pub async fn session_cleanup(
             .cleanup_expired_sessions(cfg.retention_days)
         {
             Ok(n) => total += n,
-            Err(e) => {
-                return ApiErrorResponse::internal(t.t_args(
-                    "api-error-session-cleanup-expired-failed",
-                    &[("error", &e.to_string())],
-                ))
-                .into_json_tuple();
-            }
+            Err(e) => return session_storage_error(e).into_json_tuple(),
         }
     }
 
@@ -797,13 +828,7 @@ pub async fn session_cleanup(
             .cleanup_excess_sessions(cfg.max_sessions_per_agent)
         {
             Ok(n) => total += n,
-            Err(e) => {
-                return ApiErrorResponse::internal(t.t_args(
-                    "api-error-session-cleanup-excess-failed",
-                    &[("error", &e.to_string())],
-                ))
-                .into_json_tuple();
-            }
+            Err(e) => return session_storage_error(e).into_json_tuple(),
         }
     }
 
@@ -856,13 +881,25 @@ pub async fn search_sessions(
     let limit = pagination.effective_limit();
     let offset = pagination.effective_offset();
 
-    match state.kernel.memory_substrate().search_sessions_paginated(
-        &query,
-        agent_id.as_ref(),
-        Some(limit),
-        offset,
-    ) {
-        Ok(results) => {
+    let substrate = Arc::clone(state.kernel.memory_substrate());
+    // Same rationale as /api/sessions (#6986): this FTS5 query runs a
+    // synchronous SQLite connection, so keep it off the Tokio worker
+    // rather than blocking whichever one happens to serve this request.
+    let search_result = tokio::task::spawn_blocking(move || {
+        substrate.search_sessions_paginated(&query, agent_id.as_ref(), Some(limit), offset)
+    })
+    .await;
+
+    match search_result {
+        Err(error) => {
+            tracing::error!(%error, "session search query task failed");
+            ApiErrorResponse::internal("Session search query task failed").into_json_tuple()
+        }
+        Ok(Err(error)) => {
+            tracing::error!(%error, "failed to search sessions");
+            ApiErrorResponse::internal("Failed to search sessions").into_json_tuple()
+        }
+        Ok(Ok(results)) => {
             // Canonical paginated envelope (#3842): {items,total,offset,limit}.
             // The substrate has no count() for FTS5 search, so `total` is a
             // best-effort lower bound: when the page isn't full it is exact
@@ -897,6 +934,5 @@ pub async fn search_sessions(
                 ),
             )
         }
-        Err(e) => ApiErrorResponse::internal(e.to_string()).into_json_tuple(),
     }
 }

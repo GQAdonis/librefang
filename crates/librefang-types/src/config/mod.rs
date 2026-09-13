@@ -158,6 +158,384 @@ admin_role = "admin"
     }
 
     #[test]
+    fn groups_default_to_empty_and_are_omitted_from_serialized_config() {
+        let cfg = KernelConfig::default();
+        assert!(cfg.groups.is_empty());
+        let serialized = toml::to_string(&cfg).unwrap();
+        assert!(
+            !serialized.contains("[[groups]]"),
+            "an empty group list must not leave a stranded [[groups]] section behind"
+        );
+    }
+
+    #[test]
+    fn groups_round_trip_through_toml() {
+        let toml_str = r#"
+            [[groups]]
+            name = "oncall"
+            description = "Support rota"
+            members = ["alice", "bob"]
+            roles = ["approver"]
+        "#;
+        let cfg: KernelConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.groups.len(), 1);
+        assert_eq!(cfg.groups[0].name, "oncall");
+        assert_eq!(cfg.groups[0].description, "Support rota");
+        assert!(cfg.groups[0].has_member("alice"));
+        assert!(!cfg.groups[0].has_member("carol"));
+    }
+
+    #[test]
+    fn groups_omitted_optional_fields_default_to_empty() {
+        let toml_str = r#"
+            [[groups]]
+            name = "minimal"
+        "#;
+        let cfg: KernelConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.groups[0].description, "");
+        assert!(cfg.groups[0].members.is_empty());
+        assert!(cfg.groups[0].roles.is_empty());
+    }
+
+    #[test]
+    fn groups_for_user_sorts_by_name_regardless_of_declaration_order() {
+        let cfg = KernelConfig {
+            groups: vec![
+                crate::config::GroupConfig {
+                    name: "zulu".to_string(),
+                    members: vec!["alice".to_string()],
+                    ..Default::default()
+                },
+                crate::config::GroupConfig {
+                    name: "alpha".to_string(),
+                    members: vec!["alice".to_string()],
+                    ..Default::default()
+                },
+                crate::config::GroupConfig {
+                    name: "other".to_string(),
+                    members: vec!["bob".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let names: Vec<&str> = cfg
+            .groups_for_user("alice")
+            .into_iter()
+            .map(|g| g.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["alpha", "zulu"]);
+        assert!(cfg.groups_for_user("nobody").is_empty());
+    }
+
+    #[test]
+    fn roles_for_user_unions_group_names_and_declared_roles() {
+        let cfg = KernelConfig {
+            groups: vec![
+                crate::config::GroupConfig {
+                    name: "oncall".to_string(),
+                    members: vec!["alice".to_string()],
+                    roles: vec!["approver".to_string()],
+                    ..Default::default()
+                },
+                crate::config::GroupConfig {
+                    name: "billing".to_string(),
+                    members: vec!["alice".to_string()],
+                    // `approver` is conferred twice; the set collapses it.
+                    roles: vec!["approver".to_string(), "auditor".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let roles: Vec<String> = cfg.roles_for_user("alice").into_iter().collect();
+        assert_eq!(roles, vec!["approver", "auditor", "billing", "oncall"]);
+        assert!(cfg.roles_for_user("bob").is_empty());
+    }
+
+    #[test]
+    fn roles_for_user_does_not_leak_the_rbac_privilege_level() {
+        // `UserConfig.role` is a different ladder. A group named `owner` must
+        // not silently confer owner privilege, and the RBAC role must not show
+        // up in the group-derived set either.
+        //
+        // #7746 UPDATE — kept, and widened rather than relaxed.
+        //
+        // #7745 wrote this test to pin a separation it described as temporary:
+        // "connecting the two ladders is #7746's job, under an operator-defined
+        // mapping". #7746 has landed and the separation still holds, because the
+        // connection it built is not a promotion path from group membership to
+        // privilege. `[external_auth.role_map]` and `[external_auth.group_map]`
+        // are two independent operator-written maps over the same IdP claim
+        // values: the first confers a `UserRole`, the second confers membership,
+        // and an operator who wants one claim to do both writes it into both
+        // maps deliberately. Nothing derives privilege from a group name.
+        //
+        // So the assertion is unchanged and the coverage is extended to the arm
+        // that did not exist when it was written — `effective_roles_for` with an
+        // IdP-derived membership must leak the ladder no more than
+        // `roles_for_user` does, which is the property that would silently
+        // invert if a later change decided a group could carry a `UserRole`.
+        let cfg = KernelConfig {
+            users: vec![UserConfig {
+                name: "alice".to_string(),
+                role: "admin".to_string(),
+                ..Default::default()
+            }],
+            groups: vec![
+                crate::config::GroupConfig {
+                    name: "oncall".to_string(),
+                    members: vec!["alice".to_string()],
+                    ..Default::default()
+                },
+                // Named for a privilege level on purpose: the worst-case group
+                // name an identity provider could hand us.
+                crate::config::GroupConfig {
+                    name: "owner".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let roles = cfg.roles_for_user("alice");
+        assert!(roles.contains("oncall"));
+        assert!(!roles.contains("admin"));
+
+        let idp = std::collections::BTreeSet::from(["owner".to_string()]);
+        let effective = cfg.effective_roles_for("alice", &idp);
+        // The IdP-conferred group is present as a *role string* …
+        assert!(effective.contains("owner"));
+        // … and the caller's RBAC level is still nowhere in the set. The
+        // `owner` here is the name of a team, and the only thing that reads it
+        // is channel-binding resolution; `UserRole` is resolved by
+        // `AuthManager` from `UserConfig.role` and `role_map`, neither of which
+        // this function touches.
+        assert!(!effective.contains("admin"));
+        assert_eq!(cfg.users[0].role, "admin");
+    }
+
+    #[test]
+    fn effective_roles_for_matches_roles_for_user_when_no_claims_are_present() {
+        // Every non-OIDC credential path calls the effective resolvers with an
+        // empty claim set, so the two must agree exactly there — otherwise
+        // #7746 would have quietly changed what a plain API-key caller resolves
+        // to.
+        let cfg = KernelConfig {
+            groups: vec![
+                crate::config::GroupConfig {
+                    name: "oncall".to_string(),
+                    members: vec!["alice".to_string()],
+                    roles: vec!["approver".to_string()],
+                    ..Default::default()
+                },
+                crate::config::GroupConfig {
+                    name: "billing".to_string(),
+                    members: vec!["bob".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let none = std::collections::BTreeSet::new();
+        for user in ["alice", "bob", "nobody"] {
+            assert_eq!(
+                cfg.effective_roles_for(user, &none),
+                cfg.roles_for_user(user),
+                "effective_roles_for({user}) must reduce to roles_for_user with no claims"
+            );
+            let declared: std::collections::BTreeSet<String> = cfg
+                .groups_for_user(user)
+                .into_iter()
+                .map(|g| g.name.clone())
+                .collect();
+            assert_eq!(cfg.effective_groups_for(user, &none), declared);
+        }
+    }
+
+    #[test]
+    fn effective_groups_union_declared_membership_with_idp_claims() {
+        // The precedence decision, pinned: a set has no ladder, so both grants
+        // survive and neither can retract the other. In particular the IdP
+        // dropping `oncall` does not remove alice from a `members` list an
+        // operator typed — see `ExternalAuthConfig::group_map`.
+        let cfg = KernelConfig {
+            groups: vec![
+                crate::config::GroupConfig {
+                    name: "oncall".to_string(),
+                    members: vec!["alice".to_string()],
+                    roles: vec!["approver".to_string()],
+                    ..Default::default()
+                },
+                crate::config::GroupConfig {
+                    name: "compliance".to_string(),
+                    roles: vec!["auditor".to_string()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        // Declared only.
+        let none = std::collections::BTreeSet::new();
+        assert_eq!(
+            cfg.effective_groups_for("alice", &none),
+            std::collections::BTreeSet::from(["oncall".to_string()]),
+        );
+
+        // Declared ∪ claimed, with the claimed half overlapping the declared
+        // half — the union collapses the duplicate rather than double-counting.
+        let claimed =
+            std::collections::BTreeSet::from(["oncall".to_string(), "compliance".to_string()]);
+        assert_eq!(
+            cfg.effective_groups_for("alice", &claimed),
+            std::collections::BTreeSet::from(["compliance".to_string(), "oncall".to_string()]),
+        );
+        assert_eq!(
+            cfg.effective_roles_for("alice", &claimed),
+            std::collections::BTreeSet::from([
+                "approver".to_string(),
+                "auditor".to_string(),
+                "compliance".to_string(),
+                "oncall".to_string(),
+            ]),
+        );
+
+        // Claimed only, for a user with no `[[groups]]` entry at all — the
+        // deployment where every membership comes from the IdP.
+        assert_eq!(
+            cfg.effective_groups_for("carol", &claimed),
+            std::collections::BTreeSet::from(["compliance".to_string(), "oncall".to_string()]),
+        );
+    }
+
+    #[test]
+    fn effective_groups_drop_names_that_match_no_declared_group() {
+        // Belt and braces behind `translate_oidc_groups`: the returned set
+        // promises "names of groups that exist", and a phantom name here would
+        // become a `Principal::group_named` that owns things and that no
+        // operator can see in `[[groups]]`.
+        let cfg = KernelConfig {
+            groups: vec![crate::config::GroupConfig {
+                name: "oncall".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let claimed = std::collections::BTreeSet::from(["oncall".to_string(), "ghost".to_string()]);
+        assert_eq!(
+            cfg.effective_groups_for("alice", &claimed),
+            std::collections::BTreeSet::from(["oncall".to_string()]),
+        );
+        assert!(!cfg.effective_roles_for("alice", &claimed).contains("ghost"));
+    }
+
+    #[test]
+    fn external_auth_group_mapping_defaults_are_off_and_scope_is_not_read() {
+        let cfg = KernelConfig::default();
+        assert!(
+            cfg.external_auth.group_map.is_empty(),
+            "group mapping must be opt-in: an IdP claim grants no membership until an operator writes the map"
+        );
+        assert_eq!(
+            cfg.external_auth.claim_paths,
+            vec!["roles".to_string(), "groups".to_string()],
+            "the default claim paths are the two identity assertions; `scope` describes what a client app was granted and is an explicit opt-in"
+        );
+    }
+
+    #[test]
+    fn external_auth_group_mapping_round_trips_through_toml() {
+        let toml_str = r#"
+            [external_auth]
+            enabled = true
+            claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
+
+            [external_auth.group_map]
+            "platform-oncall" = "oncall"
+
+            [external_auth.role_map]
+            "librefang-owners" = "owner"
+        "#;
+        let cfg: KernelConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(
+            cfg.external_auth.group_map.get("platform-oncall"),
+            Some(&"oncall".to_string())
+        );
+        assert_eq!(
+            cfg.external_auth.claim_paths,
+            vec![
+                "realm_access.roles".to_string(),
+                "resource_access.<client>.roles".to_string(),
+                "groups".to_string(),
+            ]
+        );
+        // The two maps are independent: declaring one must not disturb the other.
+        assert_eq!(
+            cfg.external_auth.role_map.get("librefang-owners"),
+            Some(&"owner".to_string())
+        );
+    }
+
+    #[test]
+    fn default_owner_defaults_to_none_and_is_omitted_from_serialized_config() {
+        let cfg = KernelConfig::default();
+        assert!(cfg.default_owner.is_none());
+        assert!(cfg.default_owner_principal().is_none());
+        let serialized = toml::to_string(&cfg).unwrap();
+        assert!(!serialized.contains("default_owner"));
+    }
+
+    #[test]
+    fn default_owner_parses_a_group_spec() {
+        let cfg: KernelConfig = toml::from_str("default_owner = \"group:platform\"").unwrap();
+        assert_eq!(
+            cfg.default_owner_principal(),
+            Some(crate::principal::Principal::group_named("platform"))
+        );
+    }
+
+    #[test]
+    fn a_malformed_default_owner_resolves_to_none_rather_than_failing_the_load() {
+        // A typo in this key must leave artifacts unowned — recoverable —
+        // rather than refusing to start the daemon.
+        let cfg: KernelConfig = toml::from_str("default_owner = \"role:admin\"").unwrap();
+        assert_eq!(cfg.default_owner, Some("role:admin".to_string()));
+        assert_eq!(cfg.default_owner_principal(), None);
+    }
+
+    #[test]
+    fn principal_name_resolves_both_arms_back_to_their_declared_name() {
+        use crate::principal::Principal;
+        let cfg = KernelConfig {
+            users: vec![UserConfig {
+                name: "alice".to_string(),
+                ..Default::default()
+            }],
+            groups: vec![crate::config::GroupConfig {
+                name: "oncall".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            cfg.principal_name(&Principal::user_named("alice")),
+            Some("alice")
+        );
+        assert_eq!(
+            cfg.principal_name(&Principal::group_named("oncall")),
+            Some("oncall")
+        );
+        // A user and a group sharing a name must not resolve through each
+        // other — the per-kind namespace is what keeps a single owner column
+        // unambiguous.
+        assert_eq!(cfg.principal_name(&Principal::group_named("alice")), None);
+        assert_eq!(cfg.principal_name(&Principal::user_named("oncall")), None);
+        // A principal whose declaration has since been removed is `None`, not
+        // an error: callers render the canonical `kind:uuid` string instead.
+        assert_eq!(cfg.principal_name(&Principal::user_named("carol")), None);
+    }
+
+    #[test]
     fn test_user_config_serde() {
         let uc = UserConfig {
             name: "Alice".to_string(),
@@ -1277,6 +1655,114 @@ admin_role = "admin"
         assert!(!tc.stream_thinking);
     }
 
+    // ── Reasoning mode (#7946) ─────────────────────────────────────────
+
+    /// The global `[thinking]` table must accept `reasoning_mode` from TOML.
+    /// A missing `#[serde(default)]` would make the whole table fail to parse;
+    /// a missing struct field would make the key an unknown-field error or a
+    /// silent drop, depending on the deserializer.
+    #[test]
+    fn test_thinking_config_parses_reasoning_mode_from_toml() {
+        for (literal, expected) in [
+            ("none", ReasoningMode::None),
+            ("low", ReasoningMode::Low),
+            ("high", ReasoningMode::High),
+            ("max", ReasoningMode::Max),
+        ] {
+            let toml_str = format!(
+                r#"
+                log_level = "info"
+                [thinking]
+                budget_tokens = 2048
+                reasoning_mode = "{literal}"
+                "#
+            );
+            let config: KernelConfig = toml::from_str(&toml_str).unwrap();
+            let tc = config.thinking.expect("thinking table parsed");
+            assert_eq!(tc.reasoning_mode, Some(expected), "literal {literal:?}");
+            assert_eq!(tc.budget_tokens, 2048, "literal {literal:?}");
+        }
+    }
+
+    /// A `[thinking]` table that omits `reasoning_mode` still parses, and the
+    /// field defaults to "no explicit mode" — i.e. the pre-#7946 budget-bucket
+    /// behaviour, not a mode of its own.
+    #[test]
+    fn test_thinking_config_reasoning_mode_defaults_to_none() {
+        let toml_str = r#"
+            log_level = "info"
+            [thinking]
+            budget_tokens = 8192
+        "#;
+        let config: KernelConfig = toml::from_str(toml_str).unwrap();
+        let tc = config.thinking.expect("thinking table parsed");
+        assert_eq!(tc.reasoning_mode, None);
+        assert_eq!(ThinkingConfig::default().reasoning_mode, None);
+    }
+
+    /// An unrecognised mode is an error, not a silent fallback to the default.
+    #[test]
+    fn test_thinking_config_rejects_an_unknown_reasoning_mode() {
+        let toml_str = r#"
+            log_level = "info"
+            [thinking]
+            reasoning_mode = "medium"
+        "#;
+        assert!(
+            toml::from_str::<KernelConfig>(toml_str).is_err(),
+            "`medium` is reachable only as the budget-bucket fallback and is not a settable mode",
+        );
+    }
+
+    /// The serde spelling is the documented spelling.
+    #[test]
+    fn test_reasoning_mode_serde_spelling_matches_as_str() {
+        for mode in [
+            ReasoningMode::None,
+            ReasoningMode::Low,
+            ReasoningMode::High,
+            ReasoningMode::Max,
+        ] {
+            let json = serde_json::to_string(&mode).unwrap();
+            assert_eq!(json, format!("\"{}\"", mode.as_str()));
+            let back: ReasoningMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, mode);
+        }
+    }
+
+    /// `ThinkingOverride::resolve` is the per-call rung: the explicit mode wins
+    /// over the legacy boolean whenever both are present.
+    #[test]
+    fn test_thinking_override_resolve_precedence() {
+        assert_eq!(
+            ThinkingOverride::resolve(None, None),
+            ThinkingOverride::Inherit
+        );
+        assert_eq!(
+            ThinkingOverride::resolve(Some(true), None),
+            ThinkingOverride::Enable
+        );
+        assert_eq!(
+            ThinkingOverride::resolve(Some(false), None),
+            ThinkingOverride::Disable
+        );
+        assert_eq!(
+            ThinkingOverride::resolve(None, Some(ReasoningMode::Max)),
+            ThinkingOverride::Mode(ReasoningMode::Max)
+        );
+        for boolean in [None, Some(true), Some(false)] {
+            assert_eq!(
+                ThinkingOverride::resolve(boolean, Some(ReasoningMode::Low)),
+                ThinkingOverride::Mode(ReasoningMode::Low),
+                "reasoning_mode must win over thinking={boolean:?}",
+            );
+        }
+        // The `From<Option<bool>>` shim every pre-#7946 call site goes through.
+        assert_eq!(ThinkingOverride::from(Some(true)), ThinkingOverride::Enable);
+        assert_eq!(ThinkingOverride::from(None), ThinkingOverride::Inherit);
+        assert_eq!(ThinkingOverride::default(), ThinkingOverride::Inherit);
+    }
+
     #[test]
     fn test_thinking_config_absent_is_none() {
         let toml_str = r#"
@@ -1473,6 +1959,238 @@ admin_role = "admin"
         )
         .expect("well-formed repeated tables must still parse with deny_unknown_fields");
         assert_eq!(cfg.mcp_servers.len(), 1);
+    }
+
+    // ---------------------------------------------------------------
+    // #6612 — the parent `McpServerConfigEntry` carried `deny_unknown_fields` but `McpTransportEntry` one level down did not, so an unsupported key inside `[mcp_servers.transport]` was accepted and dropped while the identical typo on the parent failed the load.
+    // These tests pin the guard on the enum and on the two HttpCompat structs below it, and pin the happy path for all four transport variants so the guard cannot regress a working config.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn mcp_transport_rejects_unknown_key_in_transport_table_6612() {
+        // The reporter's exact shape: a valid stdio transport plus a nested `env` table.
+        // The env-passing mechanism that does exist is the parent's `env: Vec<String>` name list, so this table was silently discarded and the subprocess ran on its script's hardcoded fallback defaults.
+        let toml_src = r#"
+            [[mcp_servers]]
+            name = "local-thing"
+            timeout_secs = 30
+
+            [mcp_servers.transport]
+            command = "/usr/bin/python3"
+            args = ["/opt/mcp/server.py"]
+            type = "stdio"
+
+            [mcp_servers.transport.env]
+            MY_API_KEY = "secret"
+            MY_API_URL = "https://example.invalid"
+        "#;
+        let err = toml::from_str::<KernelConfig>(toml_src).expect_err(
+            "an unsupported table under [mcp_servers.transport] must be rejected, not dropped",
+        );
+        let msg = err.to_string();
+        // Match the serde diagnostic, not the bare key name.
+        // `toml`'s Display echoes the offending span of the input, so a `contains("env")` assertion would also be satisfied by the source text and would keep passing if the guard were removed.
+        assert!(
+            msg.contains("unknown field `env`"),
+            "error must name the offending key so the operator can find it, got: {msg}",
+        );
+    }
+
+    #[test]
+    fn mcp_transport_rejects_unknown_scalar_on_url_variants_6612() {
+        // `deny_unknown_fields` on an internally-tagged enum is applied per variant, so the non-stdio variants need their own coverage — a guard that only bound the first variant would still pass the test above.
+        for (variant, url_key) in [("sse", "url"), ("http", "url")] {
+            let toml_src = format!(
+                r#"
+                [[mcp_servers]]
+                name = "remote"
+                transport = {{ type = "{variant}", {url_key} = "https://example.invalid/mcp", timout_secs = 30 }}
+                "#
+            );
+            let err = toml::from_str::<KernelConfig>(&toml_src).unwrap_err();
+            assert!(
+                err.to_string().contains("unknown field `timout_secs`"),
+                "{variant} transport must reject an unknown key, got: {err}",
+            );
+        }
+    }
+
+    #[test]
+    fn http_compat_transport_rejects_keys_outside_its_own_field_set_6612() {
+        // The `HttpCompat` variant's own field set is `{base_url, headers, tools}`, and the two tests below it only reach the nested structs — a guard that bound every variant except this one would still pass all of them.
+        // `command` is the interesting case rather than a nonsense word: it is a real field of the *stdio* variant, so before the guard an operator who changed `type` from `stdio` to `http_compat` and left the old key behind got it silently dropped, with no hint that the line was now inert.
+        let stale_stdio_key = r#"
+            [[mcp_servers]]
+            name = "compat"
+
+            [mcp_servers.transport]
+            type = "http_compat"
+            base_url = "https://example.invalid"
+            command = "/usr/bin/mcp"
+        "#;
+        let err = toml::from_str::<KernelConfig>(stale_stdio_key)
+            .expect_err("a field belonging to a different variant must be rejected, not dropped");
+        assert!(
+            err.to_string().contains("unknown field `command`"),
+            "error must name the stale key, got: {err}",
+        );
+
+        // A misspelled `base_url` is the failure that hurts most: `base_url` is the one required field, so the entry cannot fall back to a default and the error has to name the key rather than reporting a missing field the operator believes they wrote.
+        let misspelled_required = r#"
+            [[mcp_servers]]
+            name = "compat"
+
+            [mcp_servers.transport]
+            type = "http_compat"
+            base_urls = "https://example.invalid"
+        "#;
+        let err = toml::from_str::<KernelConfig>(misspelled_required)
+            .expect_err("a misspelled base_url must be rejected");
+        assert!(
+            err.to_string().contains("unknown field `base_urls`"),
+            "error must name the misspelled key rather than only reporting `base_url` missing, got: {err}",
+        );
+    }
+
+    #[test]
+    fn mcp_transport_rejects_unknown_key_in_http_compat_headers_and_tools_6612() {
+        // `[[mcp_servers.transport.headers]]` and `[[mcp_servers.transport.tools]]` are arrays of tables nested inside an array of tables.
+        // Every field on both structs except `name` / `path` has a `#[serde(default)]`, so an unguarded typo leaves the entry wired to a default rather than the operator's intent.
+        let header_typo = r#"
+            [[mcp_servers]]
+            name = "compat"
+
+            [mcp_servers.transport]
+            type = "http_compat"
+            base_url = "https://example.invalid"
+
+            [[mcp_servers.transport.headers]]
+            name = "Authorization"
+            value_from_env = "TOKEN"
+        "#;
+        let err = toml::from_str::<KernelConfig>(header_typo)
+            .expect_err("a misspelled header field must be rejected");
+        assert!(
+            err.to_string().contains("unknown field `value_from_env`"),
+            "error must name the offending header key, got: {err}",
+        );
+
+        let tool_typo = r#"
+            [[mcp_servers]]
+            name = "compat"
+
+            [mcp_servers.transport]
+            type = "http_compat"
+            base_url = "https://example.invalid"
+
+            [[mcp_servers.transport.tools]]
+            name = "forecast"
+            path = "/forecast"
+            responce_mode = "text"
+        "#;
+        let err = toml::from_str::<KernelConfig>(tool_typo)
+            .expect_err("a misspelled tool field must be rejected");
+        assert!(
+            err.to_string().contains("unknown field `responce_mode`"),
+            "error must name the offending tool key, got: {err}",
+        );
+    }
+
+    #[test]
+    fn every_valid_mcp_transport_variant_still_round_trips_6612() {
+        // Drift sentinel for the guard: all four variants must still parse, and the HttpCompat nested arrays must actually carry their entries.
+        // Asserting only `transport.is_some()` would pass even if `headers` / `tools` silently fell back to their `#[serde(default)]` empty vectors.
+        let cfg: KernelConfig = toml::from_str(
+            r#"
+            [[mcp_servers]]
+            name = "stdio-server"
+            transport = { type = "stdio", command = "/usr/bin/mcp", args = ["--flag"] }
+
+            [[mcp_servers]]
+            name = "sse-server"
+            transport = { type = "sse", url = "https://example.invalid/sse" }
+
+            [[mcp_servers]]
+            name = "http-server"
+            transport = { type = "http", url = "https://example.invalid/mcp" }
+
+            [[mcp_servers]]
+            name = "compat-server"
+
+            [mcp_servers.transport]
+            type = "http_compat"
+            base_url = "https://example.invalid"
+
+            [[mcp_servers.transport.headers]]
+            name = "Authorization"
+            value_env = "COMPAT_TOKEN"
+
+            [[mcp_servers.transport.tools]]
+            name = "forecast"
+            path = "/forecast/{city}"
+            method = "get"
+            request_mode = "query"
+            response_mode = "text"
+
+            # `input_schema` is a free-form `serde_json::Value`, so the guard must not reach into it — a JSON Schema is operator-authored content with arbitrary keys, not a struct with a known field set.
+            [mcp_servers.transport.tools.input_schema]
+            type = "object"
+
+            [mcp_servers.transport.tools.input_schema.properties.city]
+            type = "string"
+            description = "City to forecast"
+            "#,
+        )
+        .expect("every valid transport variant must still parse under deny_unknown_fields");
+        assert_eq!(cfg.mcp_servers.len(), 4);
+
+        match &cfg.mcp_servers[0].transport {
+            Some(McpTransportEntry::Stdio { command, args }) => {
+                assert_eq!(command, "/usr/bin/mcp");
+                assert_eq!(args, &["--flag"]);
+            }
+            other => panic!("expected stdio transport, got {other:?}"),
+        }
+        match &cfg.mcp_servers[1].transport {
+            Some(McpTransportEntry::Sse { url }) => {
+                assert_eq!(url, "https://example.invalid/sse");
+            }
+            other => panic!("expected sse transport, got {other:?}"),
+        }
+        match &cfg.mcp_servers[2].transport {
+            Some(McpTransportEntry::Http { url }) => {
+                assert_eq!(url, "https://example.invalid/mcp");
+            }
+            other => panic!("expected http transport, got {other:?}"),
+        }
+        match &cfg.mcp_servers[3].transport {
+            Some(McpTransportEntry::HttpCompat {
+                base_url,
+                headers,
+                tools,
+            }) => {
+                assert_eq!(base_url, "https://example.invalid");
+                assert_eq!(headers.len(), 1, "nested header array must survive");
+                assert_eq!(headers[0].name, "Authorization");
+                assert_eq!(headers[0].value_env.as_deref(), Some("COMPAT_TOKEN"));
+                assert_eq!(tools.len(), 1, "nested tool array must survive");
+                assert_eq!(tools[0].path, "/forecast/{city}");
+                assert!(matches!(tools[0].method, HttpCompatMethod::Get));
+                assert!(matches!(
+                    tools[0].request_mode,
+                    HttpCompatRequestMode::Query
+                ));
+                assert!(matches!(
+                    tools[0].response_mode,
+                    HttpCompatResponseMode::Text
+                ));
+                assert_eq!(
+                    tools[0].input_schema["properties"]["city"]["description"], "City to forecast",
+                    "free-form input_schema content must pass through untouched",
+                );
+            }
+            other => panic!("expected http_compat transport, got {other:?}"),
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1700,6 +2418,8 @@ admin_role = "admin"
             max_history_messages,
             tool_exec_backend,
             rl_export,
+            // Overrides `[task_board] assignee_wake` (#6728).
+            assignee_wake,
 
             // --- OTHER: not a global-section override. -------------------
             // These are agent-only settings with no matching global
@@ -1713,6 +2433,12 @@ admin_role = "admin"
             version,
             description,
             author,
+            // #7744: `owner` is a per-agent identity, not an override of a
+            // global `KernelConfig` section — `default_owner` is a scalar
+            // fallback, not an `[owner]` table an operator could relocate.
+            owner,
+            // Instance provenance, not a config.toml-facing override.
+            source_template,
             module,
             schedule,
             session_mode,
@@ -1774,6 +2500,7 @@ admin_role = "admin"
             "tool_exec",
             "tool_exec_backend",
             "rl_export",
+            "assignee_wake",
         ]
         .into_iter()
         .collect();

@@ -65,7 +65,7 @@ totp_tools = []                        # 留空表示审批列表内所有工具
 
 由于 RBAC 先运行，它给出的「需要审批」结论会在 `trusted_senders` 免审批被查阅之前就先生效。
 因此，当配置了 `[[users]]` 而某个发送者**不是** `api` 通道上已注册的用户时（REST `POST /api/agents/{id}/message` 请求正是走 `api` 通道），该发送者会落入内置的 guest gate（`guest_gate`）。
-guest gate 只放行一小组只读工具（文件读取、搜索、`web_fetch` 等），对其余一切都返回「需要审批」——包括本属低风险的 `memory_store` / `memory_recall`。
+guest gate 只放行一小组只读工具（文件读取、搜索、`list_agents` / `list_skills` 等），对其余一切都返回「需要审批」——包括本属低风险的 `memory_store` / `memory_recall`，也包括作为网络访问与能力发现而被拦截的 `web_search` / `web_fetch` / `tool_load` / `tool_search`（#6908）。
 由此得出一个反直觉的结果：一个列入 `trusted_senders`、但**未**同时注册为 `api` 通道上 `[[users]]` 的 ID，其 `memory_*` 调用仍会被拦截，因为 guest gate 在 `trusted_senders` 免审批生效之前就已强制审批。
 
 **解决办法——把该操作者注册为绑定到 `api` 通道的用户**，并授予覆盖其所用工具的策略：
@@ -87,6 +87,11 @@ allowed_tools = ["memory_*"]
 ```
 
 如此配置后，RBAC 门禁对 `memory_*` 返回 `Allow`，于是不再强制审批，`trusted_senders` 免审批便如设计般在其之上叠加生效。
+
+该绑定现在是**强制校验**的，而不再只是被查询一次（#7744）。
+低于 `Admin` 的已认证调用方只能声明能通过自己的 `channel_bindings` 解析回自身的 `sender_id`；其它任何取值都会被静默替换为该调用方在 `api` 通道上的已认证身份，同时请求仍然成功。
+因此上面的 `ops-bot` 配方照常工作，而 `User` 角色的持票人再也无法把另一个用户的平台 ID 放进请求体，从而继承对方的角色、工具策略与 peer 记忆。
+`Admin` 及以上不受此限制，因为运维人员为支持工单代入用户身份、或网关转发真实平台用户，都是该字段的正当用途。
 
 如果完全没有配置 `[[users]]`，RBAC 处于未启用状态——按用户门禁对每个发送者都返回 `Allow`——此时 `trusted_senders` 无需额外设置即可独立工作。
 

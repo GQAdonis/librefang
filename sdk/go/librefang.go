@@ -41,6 +41,7 @@ type Client struct {
 	Channels *ChannelsResource
 	Extensions *ExtensionsResource
 	Goals *GoalsResource
+	Groups *GroupsResource
 	Hands *HandsResource
 	Inbox *InboxResource
 	Mcp *McpResource
@@ -56,6 +57,7 @@ type Client struct {
 	Tools *ToolsResource
 	Uar *UarResource
 	Users *UsersResource
+	Vault *VaultResource
 	Webhooks *WebhooksResource
 	Workflows *WorkflowsResource
 }
@@ -77,6 +79,7 @@ func New(baseURL string) *Client {
 		c.Channels = &ChannelsResource{client: c}
 		c.Extensions = &ExtensionsResource{client: c}
 		c.Goals = &GoalsResource{client: c}
+		c.Groups = &GroupsResource{client: c}
 		c.Hands = &HandsResource{client: c}
 		c.Inbox = &InboxResource{client: c}
 		c.Mcp = &McpResource{client: c}
@@ -92,6 +95,7 @@ func New(baseURL string) *Client {
 		c.Tools = &ToolsResource{client: c}
 		c.Uar = &UarResource{client: c}
 		c.Users = &UsersResource{client: c}
+		c.Vault = &VaultResource{client: c}
 		c.Webhooks = &WebhooksResource{client: c}
 		c.Workflows = &WorkflowsResource{client: c}
 	return c
@@ -162,10 +166,18 @@ func (c *Client) stream(method, path string, body interface{}, query map[string]
 		urlStr := c.BaseURL + c.withQuery(path, query)
 		var bodyBytes []byte
 		if body != nil {
-			b, _ := json.Marshal(body)
+			b, err := json.Marshal(body)
+			if err != nil {
+				ch <- map[string]interface{}{"error": fmt.Sprintf("marshal: %v", err), "status": 0}
+				return
+			}
 			bodyBytes = b
 		}
-		req, _ := http.NewRequest(method, urlStr, bytes.NewReader(bodyBytes))
+		req, err := http.NewRequest(method, urlStr, bytes.NewReader(bodyBytes))
+		if err != nil {
+			ch <- map[string]interface{}{"error": fmt.Sprintf("new request: %v", err), "status": 0}
+			return
+		}
 		for k, v := range c.Headers {
 			req.Header.Set(k, v)
 		}
@@ -314,6 +326,10 @@ func (r *AgentsResource) ResetAgentIdentity(name string, query map[string]string
 	return r.client.request("POST", fmt.Sprintf("/api/agents/identities/%s/reset", name), nil, query)
 }
 
+func (r *AgentsResource) SpawnEphemeralAgent(data map[string]interface{}) (interface{}, error) {
+	return r.client.request("POST", "/api/agents/spawn-ephemeral", data, nil)
+}
+
 func (r *AgentsResource) GetAgent(id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/agents/%s", id), nil, nil)
 }
@@ -344,6 +360,10 @@ func (r *AgentsResource) PatchAgentConfig(id string, data map[string]interface{}
 
 func (r *AgentsResource) GetAgentDeliveries(id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/deliveries", id), nil, nil)
+}
+
+func (r *AgentsResource) ListAgentEphemeralRuns(id string, query map[string]string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/agents/%s/ephemeral-runs", id), nil, query)
 }
 
 func (r *AgentsResource) ListAgentEvents(id string, query map[string]string) (interface{}, error) {
@@ -722,24 +742,28 @@ func (r *BudgetResource) DeleteUserBudget(user_id string) (interface{}, error) {
 	return r.client.request("DELETE", fmt.Sprintf("/api/budget/users/%s", user_id), nil, nil)
 }
 
-func (r *BudgetResource) UsageStats() (interface{}, error) {
-	return r.client.request("GET", "/api/usage", nil, nil)
+func (r *BudgetResource) UsageStats(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage", nil, query)
 }
 
-func (r *BudgetResource) UsageByModel() (interface{}, error) {
-	return r.client.request("GET", "/api/usage/by-model", nil, nil)
+func (r *BudgetResource) UsageByModel(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage/by-model", nil, query)
 }
 
-func (r *BudgetResource) UsageByModelPerformance() (interface{}, error) {
-	return r.client.request("GET", "/api/usage/by-model/performance", nil, nil)
+func (r *BudgetResource) UsageByModelPerformance(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage/by-model/performance", nil, query)
 }
 
-func (r *BudgetResource) UsageDaily() (interface{}, error) {
-	return r.client.request("GET", "/api/usage/daily", nil, nil)
+func (r *BudgetResource) UsageDaily(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage/daily", nil, query)
 }
 
-func (r *BudgetResource) UsageSummary() (interface{}, error) {
-	return r.client.request("GET", "/api/usage/summary", nil, nil)
+func (r *BudgetResource) UsageExport(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage/export", nil, query)
+}
+
+func (r *BudgetResource) UsageSummary(query map[string]string) (interface{}, error) {
+	return r.client.request("GET", "/api/usage/summary", nil, query)
 }
 
 // ── Channels Resource
@@ -796,6 +820,42 @@ type GoalsResource struct{ client *Client }
 
 func (r *GoalsResource) ListGoalTemplates() (interface{}, error) {
 	return r.client.request("GET", "/api/goals/templates", nil, nil)
+}
+
+// ── Groups Resource
+
+type GroupsResource struct{ client *Client }
+
+func (r *GroupsResource) ListGroups() (interface{}, error) {
+	return r.client.request("GET", "/api/groups", nil, nil)
+}
+
+func (r *GroupsResource) CreateGroup(data map[string]interface{}) (interface{}, error) {
+	return r.client.request("POST", "/api/groups", data, nil)
+}
+
+func (r *GroupsResource) GetGroup(name string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/groups/%s", name), nil, nil)
+}
+
+func (r *GroupsResource) UpdateGroup(name string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/groups/%s", name), data, nil)
+}
+
+func (r *GroupsResource) DeleteGroup(name string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/groups/%s", name), nil, nil)
+}
+
+func (r *GroupsResource) AddGroupMember(name string, user string) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/groups/%s/members/%s", name, user), nil, nil)
+}
+
+func (r *GroupsResource) RemoveGroupMember(name string, user string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/groups/%s/members/%s", name, user), nil, nil)
+}
+
+func (r *GroupsResource) UserGroups(name string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/users/%s/groups", name), nil, nil)
 }
 
 // ── Hands Resource
@@ -1030,6 +1090,18 @@ func (r *ModelsResource) RemoveCustomModel(id string) (interface{}, error) {
 	return r.client.request("DELETE", fmt.Sprintf("/api/models/custom/%s", id), nil, nil)
 }
 
+func (r *ModelsResource) GetModelOverrides(id string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/models/overrides/%s", id), nil, nil)
+}
+
+func (r *ModelsResource) SetModelOverrides(id string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/models/overrides/%s", id), data, nil)
+}
+
+func (r *ModelsResource) DeleteModelOverrides(id string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/models/overrides/%s", id), nil, nil)
+}
+
 func (r *ModelsResource) GetModel(id string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/models/%s", id), nil, nil)
 }
@@ -1052,6 +1124,10 @@ func (r *ModelsResource) GetProvider(name string) (interface{}, error) {
 
 func (r *ModelsResource) SetDefaultProvider(name string, data map[string]interface{}) (interface{}, error) {
 	return r.client.request("POST", fmt.Sprintf("/api/providers/%s/default", name), data, nil)
+}
+
+func (r *ModelsResource) SetProviderDiscovery(name string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/providers/%s/discovery", name), data, nil)
 }
 
 func (r *ModelsResource) EnableProvider(name string) (interface{}, error) {
@@ -1518,6 +1594,10 @@ func (r *SystemResource) EffectivePermissions(user_id string) (interface{}, erro
 	return r.client.request("GET", fmt.Sprintf("/api/authz/effective/%s", user_id), nil, nil)
 }
 
+func (r *SystemResource) Whoami() (interface{}, error) {
+	return r.client.request("GET", "/api/authz/whoami", nil, nil)
+}
+
 func (r *SystemResource) CreateBackup() (interface{}, error) {
 	return r.client.request("POST", "/api/backup", nil, nil)
 }
@@ -1570,6 +1650,10 @@ func (r *SystemResource) ConfigSet(data map[string]interface{}) (interface{}, er
 	return r.client.request("POST", "/api/config/set", data, nil)
 }
 
+func (r *SystemResource) ConfigStatus() (interface{}, error) {
+	return r.client.request("GET", "/api/config/status", nil, nil)
+}
+
 func (r *SystemResource) Health() (interface{}, error) {
 	return r.client.request("GET", "/api/health", nil, nil)
 }
@@ -1610,8 +1694,16 @@ func (r *SystemResource) GetProfile(name string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/profiles/%s", name), nil, nil)
 }
 
+func (r *SystemResource) ProvisioningStatus() (interface{}, error) {
+	return r.client.request("GET", "/api/provisioning/status", nil, nil)
+}
+
 func (r *SystemResource) QueueStatus() (interface{}, error) {
 	return r.client.request("GET", "/api/queue/status", nil, nil)
+}
+
+func (r *SystemResource) Ready() (interface{}, error) {
+	return r.client.request("GET", "/api/ready", nil, nil)
 }
 
 func (r *SystemResource) RestoreBackup(data map[string]interface{}) (interface{}, error) {
@@ -1634,8 +1726,32 @@ func (r *SystemResource) ListAgentTemplates() (interface{}, error) {
 	return r.client.request("GET", "/api/templates", nil, nil)
 }
 
+func (r *SystemResource) CreateAgentType(data map[string]interface{}) (interface{}, error) {
+	return r.client.request("POST", "/api/templates", data, nil)
+}
+
 func (r *SystemResource) GetAgentTemplate(name string) (interface{}, error) {
 	return r.client.request("GET", fmt.Sprintf("/api/templates/%s", name), nil, nil)
+}
+
+func (r *SystemResource) UpdateAgentType(name string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/templates/%s", name), data, nil)
+}
+
+func (r *SystemResource) DeleteAgentType(name string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/templates/%s", name), nil, nil)
+}
+
+func (r *SystemResource) ListTemplateHistory(name string, query map[string]string) (interface{}, error) {
+	return r.client.request("GET", fmt.Sprintf("/api/templates/%s/history", name), nil, query)
+}
+
+func (r *SystemResource) RestoreTemplateVersion(name string, version_id string) (interface{}, error) {
+	return r.client.request("POST", fmt.Sprintf("/api/templates/%s/history/%s/restore", name, version_id), nil, nil)
+}
+
+func (r *SystemResource) PromoteAgentType(name string) (interface{}, error) {
+	return r.client.request("POST", fmt.Sprintf("/api/templates/%s/promote", name), nil, nil)
 }
 
 func (r *SystemResource) GetAgentTemplateToml(name string) (interface{}, error) {
@@ -1736,6 +1852,22 @@ func (r *UsersResource) DeleteUserProviderKey(name string, provider string) (int
 
 func (r *UsersResource) RotateUserKey(name string) (interface{}, error) {
 	return r.client.request("POST", fmt.Sprintf("/api/users/%s/rotate-key", name), nil, nil)
+}
+
+// ── Vault Resource
+
+type VaultResource struct{ client *Client }
+
+func (r *VaultResource) VaultListKeys() (interface{}, error) {
+	return r.client.request("GET", "/api/vault/keys", nil, nil)
+}
+
+func (r *VaultResource) VaultPutKey(key string, data map[string]interface{}) (interface{}, error) {
+	return r.client.request("PUT", fmt.Sprintf("/api/vault/keys/%s", key), data, nil)
+}
+
+func (r *VaultResource) VaultDeleteKey(key string) (interface{}, error) {
+	return r.client.request("DELETE", fmt.Sprintf("/api/vault/keys/%s", key), nil, nil)
 }
 
 // ── Webhooks Resource

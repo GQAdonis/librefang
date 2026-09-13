@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 const ROUTING_EXCLUDED_TEMPLATES: &[&str] = &["assistant"];
 const GENERIC_ENGLISH_WORDS: &[&str] = &[
@@ -175,19 +175,25 @@ struct HandRouteCacheEntry {
 static HAND_ROUTE_CACHE: OnceLock<Mutex<Option<HandRouteCacheEntry>>> = OnceLock::new();
 static HAND_ROUTE_HOME_DIR: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
+fn lock_router_state<'a, T>(mutex: &'a Mutex<T>, state: &'static str) -> MutexGuard<'a, T> {
+    mutex.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!(state, "router state lock poisoned; recovering inner state");
+        mutex.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
 /// Set the LibreFang home directory used for hand-route candidate loading.
 pub fn set_hand_route_home_dir(home_dir: &Path) {
     let slot = HAND_ROUTE_HOME_DIR.get_or_init(|| Mutex::new(None));
-    let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = lock_router_state(slot, "hand_route_home_dir");
     *guard = Some(home_dir.to_path_buf());
 }
 
 /// Invalidate the hand route cache (call alongside `invalidate_manifest_cache`).
 pub fn invalidate_hand_route_cache() {
     if let Some(cache) = HAND_ROUTE_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-        }
+        *lock_router_state(cache, "hand_route_cache") = None;
     }
 }
 
@@ -195,7 +201,7 @@ fn hand_route_candidates() -> Arc<Vec<HandRouteCandidate>> {
     let home_dir = resolve_hand_route_home_dir();
     let home_dir_key = Some(home_dir.to_string_lossy().to_string());
     let cache = HAND_ROUTE_CACHE.get_or_init(|| Mutex::new(None));
-    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = lock_router_state(cache, "hand_route_cache");
     if let Some(ref cached) = *guard {
         if cached.home_dir == home_dir_key {
             return Arc::clone(&cached.candidates);
@@ -212,7 +218,7 @@ fn hand_route_candidates() -> Arc<Vec<HandRouteCandidate>> {
 
 fn resolve_hand_route_home_dir() -> PathBuf {
     if let Some(slot) = HAND_ROUTE_HOME_DIR.get() {
-        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = lock_router_state(slot, "hand_route_home_dir");
         if let Some(home_dir) = guard.as_ref() {
             return home_dir.clone();
         }
@@ -241,11 +247,23 @@ fn build_hand_route_candidates(home_dir: Option<&Path>) -> Vec<HandRouteCandidat
     candidates
 }
 
+/// Resolve the registry's agent-templates directory for hand `base` resolution.
+///
+/// Delegates to [`librefang_types::registry_paths::resolve_agent_templates_dir`], the single resolver shared with the runtime's fan-out and the hands registry, so a missing directory is reported once at error level instead of quietly dropping every `base = "<template>"` hand out of routing (#7767).
+fn registry_agents_dir(home_dir: &Path) -> Option<PathBuf> {
+    librefang_types::registry_paths::resolve_agent_templates_dir(&home_dir.join("registry"))
+}
+
 fn load_hand_route_candidates(home_dir: &Path) -> Vec<HandRouteCandidate> {
     let mut seen = std::collections::HashSet::new();
     let mut candidates = Vec::new();
 
-    let dirs = [home_dir.join("registry").join("hands")];
+    // Same precedence as `librefang_hands::registry::scan_hands_dir`: an operator override in `<home>/hands/` shadows the registry checkout.
+    // If routing read only the checkout it would resolve against upstream's definition while the hands registry served the edited one, so a renamed or re-scoped hand would route by rules nobody could see in the UI.
+    let dirs = [
+        librefang_hands::registry::hand_override_dir(home_dir),
+        home_dir.join("registry").join("hands"),
+    ];
 
     // Pass the agents registry alongside HAND.toml parsing so hands that
     // declare `base = "<template>"` for their agents can resolve the
@@ -253,12 +271,8 @@ fn load_hand_route_candidates(home_dir: &Path) -> Vec<HandRouteCandidate> {
     // "requires agents registry directory" and emits a WARN on every
     // routing scan — and routing happens on every inbound message dispatch,
     // so the warning floods the log.
-    let agents_dir = home_dir.join("registry").join("agents");
-    let agents_dir_arg: Option<&Path> = if agents_dir.is_dir() {
-        Some(agents_dir.as_path())
-    } else {
-        None
-    };
+    let agents_dir = registry_agents_dir(home_dir);
+    let agents_dir_arg: Option<&Path> = agents_dir.as_deref();
 
     for hands_dir in &dirs {
         let Ok(entries) = fs::read_dir(hands_dir) else {
@@ -274,13 +288,15 @@ fn load_hand_route_candidates(home_dir: &Path) -> Vec<HandRouteCandidate> {
                 .and_then(|n| n.to_str())
                 .unwrap_or_default()
                 .to_string();
-            if !seen.insert(name.clone()) {
+            if seen.contains(&name) {
                 continue;
             }
             let hand_toml = hand_dir.join("HAND.toml");
             let Ok(toml_content) = fs::read_to_string(&hand_toml) else {
                 continue;
             };
+            // Claim the id only once a manifest was actually read, mirroring `scan_hands_dir`: a directory with no readable `HAND.toml` must not shadow the same id in the registry checkout, or a half-written override would drop the hand from routing entirely.
+            seen.insert(name.clone());
             // Surface parse failures at WARN — the previous `let Ok else
             // continue` swallowed the error and the hand was silently
             // dropped from routing, hiding misconfigured HAND.toml files
@@ -347,9 +363,7 @@ static TEMPLATE_RULE_CACHE: OnceLock<Mutex<Option<TemplateRuleCacheEntry>>> = On
 /// [`invalidate_manifest_cache`] / [`invalidate_hand_route_cache`]).
 pub fn invalidate_template_rule_cache() {
     if let Some(cache) = TEMPLATE_RULE_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-        }
+        *lock_router_state(cache, "template_rule_cache") = None;
     }
 }
 
@@ -362,7 +376,7 @@ fn template_rules() -> Arc<Vec<RouteRule>> {
     let home_dir = resolve_hand_route_home_dir();
     let home_dir_key = Some(home_dir.to_string_lossy().to_string());
     let cache = TEMPLATE_RULE_CACHE.get_or_init(|| Mutex::new(None));
-    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = lock_router_state(cache, "template_rule_cache");
     if let Some(ref cached) = *guard {
         if cached.home_dir == home_dir_key {
             return Arc::clone(&cached.rules);
@@ -513,6 +527,20 @@ pub fn auto_select_hand(
     }
 }
 
+fn has_multi_domain_marker(normalized: &str) -> bool {
+    ["同时", "分别", "协作", "多个", "multi", "together"]
+        .iter()
+        .any(|token| {
+            if token.is_ascii() {
+                normalized
+                    .split(|character: char| !character.is_ascii_alphanumeric())
+                    .any(|word| word == *token)
+            } else {
+                normalized.contains(token)
+            }
+        })
+}
+
 pub fn auto_select_template(
     message: &str,
     agents_dir: &Path,
@@ -572,9 +600,7 @@ pub fn auto_select_template(
 
     if scored.len() > 1 {
         let (second_score, second_template, _) = &scored[1];
-        let multi_domain = ["同时", "分别", "协作", "多个", "multi", "together"]
-            .iter()
-            .any(|token| normalized.contains(token));
+        let multi_domain = has_multi_domain_marker(&normalized);
         if *second_score > 0 && best_template != second_template && multi_domain {
             return TemplateSelection {
                 template: "orchestrator".to_string(),
@@ -698,9 +724,7 @@ static MANIFEST_CACHE: OnceLock<Mutex<Option<ManifestCacheEntry>>> = OnceLock::n
 /// next routing call. Call this after config hot-reload or agent changes.
 pub fn invalidate_manifest_cache() {
     if let Some(cache) = MANIFEST_CACHE.get() {
-        if let Ok(mut guard) = cache.lock() {
-            *guard = None;
-        }
+        *lock_router_state(cache, "manifest_cache") = None;
     }
 }
 
@@ -729,7 +753,7 @@ pub fn all_template_descriptions(agents_dir: &Path) -> Vec<(String, String)> {
 
 fn manifest_route_candidates(agents_dir: &Path) -> Arc<Vec<ManifestRouteCandidate>> {
     let cache = MANIFEST_CACHE.get_or_init(|| Mutex::new(None));
-    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = lock_router_state(cache, "manifest_cache");
     if let Some((ref cached_path, ref cached)) = *guard {
         if cached_path == agents_dir {
             return Arc::clone(cached);
@@ -914,18 +938,22 @@ impl RegexCache {
 /// manifest pattern would otherwise live in the cache forever).
 static REGEX_CACHE: OnceLock<Mutex<RegexCache>> = OnceLock::new();
 
+fn cached_regex(cache: &Mutex<RegexCache>, pattern: &str) -> Option<Regex> {
+    let mut guard = lock_router_state(cache, "regex_cache");
+    guard.get_or_compile(pattern).cloned()
+}
+
 fn regex_matches(message: &str, pattern: &str) -> bool {
     let cache = REGEX_CACHE.get_or_init(|| Mutex::new(RegexCache::new()));
-    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
     // None == compile error → never matches. Mirrors the historical
     // "never-match sentinel" branch but without the panic-risk of
     // the previous `Regex::new("(?!x)x").unwrap()` (regex_lite
     // doesn't support look-around, so the sentinel would have
     // panicked the first time any invalid pattern reached this
-    // path).
-    guard
-        .get_or_compile(pattern)
-        .map(|r| r.is_match(message))
+    // path). Clone the compiled regex out of the cache so matching
+    // does not serialize every routing request on the global mutex.
+    cached_regex(cache, pattern)
+        .map(|regex| regex.is_match(message))
         .unwrap_or(false)
 }
 
@@ -1159,6 +1187,56 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    /// Routing must resolve the agent-templates directory through the shared resolver so it cannot drift from the runtime fan-out and the hands registry, and so its absence is reported rather than dropping every `base = "<template>"` hand from routing in silence (#7767).
+    #[test]
+    fn registry_agents_dir_delegates_to_the_shared_resolver() {
+        let tmp = tempdir().unwrap();
+        let home_dir = tmp.path();
+        let registry_root = home_dir.join("registry");
+        std::fs::create_dir_all(registry_root.join("hands")).unwrap();
+
+        assert_eq!(registry_agents_dir(home_dir), None);
+        assert_eq!(
+            registry_agents_dir(home_dir),
+            librefang_types::registry_paths::resolve_agent_templates_dir(&registry_root),
+        );
+
+        std::fs::create_dir_all(registry_root.join("agents")).unwrap();
+
+        assert_eq!(
+            registry_agents_dir(home_dir),
+            Some(registry_root.join("agents"))
+        );
+        assert_eq!(
+            registry_agents_dir(home_dir),
+            librefang_types::registry_paths::resolve_agent_templates_dir(&registry_root),
+        );
+    }
+
+    #[test]
+    fn poisoned_router_state_lock_recovers_and_remains_usable() {
+        let state = Mutex::new(vec!["cached"]);
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut state = state.lock().unwrap();
+                    state.push("stale");
+                    panic!("poison router state lock");
+                })
+                .join()
+        });
+
+        assert!(poison.is_err());
+        assert!(state.is_poisoned());
+        let mut recovered = lock_router_state(&state, "test_cache");
+        assert!(!state.is_poisoned());
+        assert_eq!(&*recovered, &["cached", "stale"]);
+        recovered.clear();
+        assert!(recovered.is_empty());
+        drop(recovered);
+        assert!(state.lock().unwrap().is_empty());
+    }
+
     fn ensure_registry() {
         use std::sync::Once;
         static SYNC_ONCE: Once = Once::new();
@@ -1282,6 +1360,27 @@ weak_aliases = ["changelog"]
         );
         assert_eq!(selection.template, "orchestrator");
         assert!(selection.score > 0);
+    }
+
+    #[test]
+    fn test_auto_select_template_requires_ascii_multi_domain_word_boundaries() {
+        for message in [
+            "Research and code this multimedia parser",
+            "Research and code this multitask parser",
+            "Research and code an altogether different parser",
+            "Research and code a multithreaded parser",
+        ] {
+            let selection = auto_select_template(message, Path::new("/tmp/does-not-exist"), None);
+            assert_eq!(selection.template, "researcher", "{message}");
+        }
+
+        for message in [
+            "Research and code this multi domain task",
+            "Research and code this together",
+        ] {
+            let selection = auto_select_template(message, Path::new("/tmp/does-not-exist"), None);
+            assert_eq!(selection.template, "orchestrator", "{message}");
+        }
     }
 
     #[test]
@@ -1712,6 +1811,20 @@ system_prompt = "override"
             1,
             "exactly one entry for a single distinct pattern"
         );
+    }
+
+    #[test]
+    fn cached_regex_releases_lock_before_matching() {
+        let cache = Mutex::new(RegexCache::new());
+        let regex = cached_regex(&cache, "hello").expect("valid pattern compiles");
+
+        let guard = cache
+            .try_lock()
+            .expect("cache lock must be released after cloning the regex");
+        assert_eq!(guard.entries.len(), 1);
+        drop(guard);
+
+        assert!(regex.is_match("hello world"));
     }
 
     #[test]

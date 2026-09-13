@@ -3,6 +3,8 @@ name = "librefang-rl-export"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Long-horizon RL rollout trajectory exporter (W&B / Tinker / Atropos integration surface)"
 
 [dependencies]
@@ -18,10 +20,12 @@ base64 = { workspace = true }
 urlencoding = { workspace = true }
 regex = { workspace = true }
 url = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 wiremock = "0.6"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { workspace = true }
 
 [lints]
 workspace = true

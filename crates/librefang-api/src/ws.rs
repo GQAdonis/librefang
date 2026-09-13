@@ -24,9 +24,11 @@ use dashmap::DashMap;
 use futures::stream::SplitSink;
 use futures::{SinkExt, StreamExt};
 use librefang_channels::types::SenderContext;
+use librefang_kernel::goal_runner::create_and_start_goal;
 use librefang_kernel::kernel_handle::prelude::*;
 use librefang_kernel::llm_driver::{StreamEvent, PHASE_RESPONSE_COMPLETE};
 use librefang_kernel::llm_errors;
+use librefang_kernel::KernelApi;
 use librefang_types::agent::{AgentId, ResetScope, SessionId};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -36,7 +38,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
-use url::Url;
+use url::{Host, Url};
 
 // ---------------------------------------------------------------------------
 // Verbose Level
@@ -202,8 +204,17 @@ pub fn ws_bearer_protocol(headers: &HeaderMap) -> Option<String> {
 }
 
 /// Validates the WebSocket `Origin` header against allowed origins.
-/// Returns Ok(()) if: (a) no Origin header (non-browser client), or (b) Origin matches.
-/// Returns Err(reason) if Origin is present but doesn't match any allowed origin.
+///
+/// Returns `Ok(())` when any of these hold, in order:
+///
+/// 1. No `Origin` header at all — a non-browser client (curl, a native app), which cannot be driven cross-site.
+/// 2. A loopback origin (`localhost` / `127.0.0.1` / `::1`) on the listen port.
+/// 3. The origin names the same **literal IP address and port** as this request's own `Host` header — see `origin_is_self`.
+///    A hostname never satisfies this rule, however exactly it matches; hostname and TLS-proxy deployments list their public origin in `cors_origin` instead.
+/// 4. `extra_origins` contains `"*"` and `allow_remote` is set.
+/// 5. `extra_origins` contains an entry whose scheme, host and port all match the origin.
+///
+/// Returns `Err(reason)` if an `Origin` is present and none of the above match.
 pub fn validate_ws_origin(
     headers: &HeaderMap,
     listen_port: Option<u16>,
@@ -220,15 +231,16 @@ pub fn validate_ws_origin(
     let origin_host = parsed
         .host_str()
         .ok_or_else(|| format!("Origin missing host: {origin}"))?;
+    let parsed_host = parsed
+        .host()
+        .ok_or_else(|| format!("Origin missing host: {origin}"))?;
     if origin_scheme != "http" && origin_scheme != "https" {
         return Err(format!("Origin {origin} not in allowed list"));
     }
 
-    let origin_port = if origin_scheme == "https" {
-        parsed.port().unwrap_or(443)
-    } else {
-        parsed.port().unwrap_or(80)
-    };
+    let origin_port = parsed
+        .port()
+        .unwrap_or_else(|| default_port_for_scheme(origin_scheme));
 
     // Only loopback hosts (localhost / 127.0.0.1 / ::1) on the same port
     // are auto-allowed. Fail closed when listen_port is unknown — otherwise
@@ -240,6 +252,11 @@ pub fn validate_ws_origin(
                 return Ok(());
             }
         }
+    }
+
+    // The daemon's own non-loopback address, reached directly by IP (#7777).
+    if origin_is_self(headers, &parsed_host, origin_port, origin_scheme) {
+        return Ok(());
     }
 
     // Wildcard "*" means allow all origins — only permitted when allow_remote is true.
@@ -256,11 +273,9 @@ pub fn validate_ws_origin(
         let extra_host = extra_parsed
             .host_str()
             .ok_or_else(|| format!("Origin missing host in allowed origin: {extra}"))?;
-        let extra_port = if extra_scheme == "https" {
-            extra_parsed.port().unwrap_or(443)
-        } else {
-            extra_parsed.port().unwrap_or(80)
-        };
+        let extra_port = extra_parsed
+            .port()
+            .unwrap_or_else(|| default_port_for_scheme(extra_scheme));
 
         let normalized_extra_host = normalize_origin_host(extra_host);
 
@@ -280,6 +295,65 @@ fn normalize_origin_host(host: &str) -> &str {
         "localhost" | "127.0.0.1" | "::1" | "[::1]" => "localhost",
         _ => host,
     }
+}
+
+/// The default port a scheme implies when the URL or `Host` header omits one.
+fn default_port_for_scheme(scheme: &str) -> u16 {
+    if scheme == "https" {
+        443
+    } else {
+        80
+    }
+}
+
+/// Whether the `Origin` names the same **literal IP address** and port that this request was itself addressed to.
+///
+/// This is the rule that lets a daemon on `0.0.0.0:4545`, opened at `http://192.168.1.161:4545`, accept its own dashboard's WebSocket (#7777).
+///
+/// The implicit allow is restricted to IP literals on purpose, and the restriction is the entire security content of this function.
+/// `Host` is not something the daemon asserted — it is derived from whatever URL the page dialled, and the page chooses that URL.
+/// So `Host == Origin` on a *hostname* proves only that the page came from a name that currently resolves to this address, which is precisely what DNS rebinding arranges: an attacker serves a page from `attacker.example`, rebinds that name to the daemon's loopback or LAN address, and the browser then sends `Host: attacker.example:4545` beside `Origin: http://attacker.example:4545` with nothing forged.
+/// Treating that pair as proof of same-origin would hand any such page a WebSocket and defeat the cross-site hijacking guard from #3731.
+///
+/// An IP literal has no name in the middle to rebind.
+/// For the two sides to match, the page must have been served by whatever answers on that address and port — which, since this request arrived there, is this daemon.
+///
+/// Deployments reached through a hostname or a TLS-terminating proxy are therefore not covered here and must list their public origin in `cors_origin`.
+/// The scheme is not compared, because `Host` carries none and behind a TLS terminator the browser's `https` cannot be reconstructed from the plaintext hop; the origin's scheme only supplies the default port when `Host` omits one.
+/// `X-Forwarded-Host` is deliberately ignored — it is attacker-controlled unless the peer is a verified proxy, and this function has no view of the peer.
+fn origin_is_self(
+    headers: &HeaderMap,
+    origin_host: &Host<&str>,
+    origin_port: u16,
+    origin_scheme: &str,
+) -> bool {
+    // A hostname origin is never self-evident, so there is nothing to compare against.
+    if !matches!(origin_host, Host::Ipv4(_) | Host::Ipv6(_)) {
+        return false;
+    }
+
+    let Some(host_header) = headers.get("host").and_then(|value| value.to_str().ok()) else {
+        return false;
+    };
+
+    // `Host` is `host[:port]` with no scheme; borrow the origin's to parse it,
+    // which also normalises `192.168.1.5` / `[fd00::1]` the same way the origin
+    // was normalised so the comparison is on addresses rather than on spelling.
+    let Ok(self_url) = Url::parse(&format!("{origin_scheme}://{host_header}")) else {
+        return false;
+    };
+    let Some(self_host) = self_url.host() else {
+        return false;
+    };
+    if !matches!(self_host, Host::Ipv4(_) | Host::Ipv6(_)) {
+        return false;
+    }
+
+    let self_port = self_url
+        .port()
+        .unwrap_or_else(|| default_port_for_scheme(origin_scheme));
+
+    self_host == *origin_host && self_port == origin_port
 }
 
 // ---------------------------------------------------------------------------
@@ -365,13 +439,37 @@ pub async fn agent_ws(
     uri: axum::http::Uri,
 ) -> impl IntoResponse {
     // SECURITY: Authenticate WebSocket upgrades (bypasses HTTP middleware).
-    // Single snapshot so all three derived flags come from the same hot-reload
-    // generation (#3744 review #2).
+    // Single snapshot for the user-key and dashboard flags, so they come from
+    // the same hot-reload generation (#3744 review #2). The master credential
+    // is read from the live handles instead — those are written from one
+    // snapshot by `refresh_master_credential`, so this is still a coherent
+    // view, not a mix of generations.
     let auth_snap = librefang_kernel::kernel_handle::ApiAuth::auth_snapshot(state.kernel.as_ref());
-    let valid_tokens = crate::server::valid_api_tokens(&auth_snap);
+    // Master credential comes from the live handles on `AppState`, NOT from a
+    // fresh `master_credential(&auth_snap)` (#6613). Resolving it from a
+    // snapshot re-runs the env / `vault:` indirection per upgrade, and for a
+    // `vault:NAME` value that means constructing a `CredentialVault`, reading
+    // the keyring, and AEAD-decrypting the file — twice on this path, since
+    // `valid_api_tokens` resolves it again — on a route reachable before any
+    // credential has been presented. The handles hold the already-resolved
+    // value and are rewritten from one snapshot by
+    // `server::refresh_master_credential` on boot, `POST /api/config/reload`,
+    // the config-file watcher, and a dashboard credential change, so they are
+    // as current as the snapshot without the per-connection cost.
+    let master_tokens = state.api_key_lock.read().await.clone();
+    let master_hash = state.master_key.hash().await;
     let user_api_keys = crate::server::configured_user_api_keys(&auth_snap);
     let dashboard_auth = crate::server::has_dashboard_credentials(&auth_snap);
-    let auth_required = !valid_tokens.is_empty() || !user_api_keys.is_empty() || dashboard_auth;
+    // NOT `!valid_tokens.is_empty()` (#6613): a daemon whose master key is
+    // configured only as `api_key_hash` lists no plaintext token, so that test
+    // would report "no auth configured" and fall into the loopback bypass
+    // below on a daemon that is fully bearer-gated.
+    let auth_required = crate::server::master_auth_required(
+        &master_tokens,
+        &master_hash,
+        &user_api_keys,
+        dashboard_auth,
+    );
 
     // Mirror middleware: when no auth is configured, only allow loopback
     // unless the operator opted in via LIBREFANG_ALLOW_NO_AUTH=1.
@@ -391,6 +489,14 @@ pub async fn agent_ws(
         }
     }
 
+    let root_user = || crate::middleware::AuthenticatedApiUser {
+        name: "root".to_string(),
+        role: crate::middleware::UserRole::Owner,
+        user_id: librefang_types::agent::UserId(crate::middleware::ROOT_API_KEY_USER_ID),
+    };
+    // Mirror the HTTP middleware's no-auth attribution.
+    // Uploads created by the local dashboard in this mode are owned by the synthetic root principal, so the WS path must carry the same identity when attaching them.
+    let mut authenticated_user = (!auth_required).then(root_user);
     if auth_required {
         // SECURITY (#3610): Loud reject if a client still sends `?token=` in
         // the WS URL. The credential leaks into proxy access logs and browser
@@ -405,20 +511,20 @@ pub async fn agent_ws(
             );
             return axum::http::StatusCode::UNAUTHORIZED.into_response();
         }
-        // SECURITY: Use constant-time comparison to prevent timing attacks on auth tokens.
-        let matches_any = |token: &str| -> bool {
-            use subtle::ConstantTimeEq;
-            valid_tokens.iter().any(|key| {
-                token.len() == key.len() && token.as_bytes().ct_eq(key.as_bytes()).into()
-            })
-        };
-
         let provided_token = ws_auth_token(&headers, &uri);
         let mut session_auth = false;
         let mut user_key_auth = false;
         let mut api_auth = false;
         if let Some(token_str) = provided_token.as_deref() {
-            api_auth = matches_any(token_str);
+            // SECURITY: constant-time comparison against the plaintext
+            // composite first (`matches_master_token`, shared with the HTTP
+            // middleware and the terminal upgrade), then the master
+            // `api_key_hash` (#6613) — same order and rationale as the
+            // middleware: a plaintext-configured daemon never pays the hash
+            // verify, and a hash-only daemon has an empty composite so the
+            // hash is the only match it can make.
+            api_auth = crate::server::matches_master_token(&master_tokens, token_str)
+                || crate::server::master_hash_matches(&master_hash, token_str).await;
             let mut sessions = state.active_sessions.write().await;
             sessions.retain(|_, st| {
                 !crate::password_hash::is_token_expired(
@@ -426,14 +532,34 @@ pub async fn agent_ws(
                     crate::password_hash::DEFAULT_SESSION_TTL_SECS,
                 )
             });
-            session_auth = sessions.contains_key(token_str);
+            let session = sessions.get(token_str).cloned();
+            session_auth = session.is_some();
+            if let Some(session) = session {
+                if let (Some(name), Some(role)) = (session.user_name, session.user_role) {
+                    authenticated_user = Some(crate::middleware::AuthenticatedApiUser {
+                        user_id: librefang_types::agent::UserId::from_name(&name),
+                        name,
+                        role: crate::middleware::UserRole::from_str_role(&role),
+                    });
+                }
+            }
             drop(sessions);
 
             // Check per-user API keys (hashed with Argon2).
             if !session_auth {
-                user_key_auth = user_api_keys.iter().any(|user| {
+                if let Some(user) = user_api_keys.iter().find(|user| {
                     crate::password_hash::verify_password(token_str, &user.api_key_hash)
-                });
+                }) {
+                    user_key_auth = true;
+                    authenticated_user = Some(crate::middleware::AuthenticatedApiUser {
+                        name: user.name.clone(),
+                        role: user.role,
+                        user_id: user.user_id,
+                    });
+                }
+            }
+            if api_auth {
+                authenticated_user = Some(root_user());
             }
         }
 
@@ -526,6 +652,22 @@ pub async fn agent_ws(
         }
     }
 
+    // Owner-scoping (#6753), mirroring `routes::agents::messaging::send_message`.
+    // `min_role_for_privileged_get` in `middleware.rs` lowers `/api/agents/{id}/ws` to `User` on the stated theory that the socket is equivalent to `POST /api/agents/{id}/message`, and it is — but the REST twin pairs that role with an explicit ownership check, and this handler had only an existence check.
+    // Without this a non-owner could drive a full LLM turn — tool execution and budget spend included — on another user's agent by guessing/enumerating its UUID, and over a socket that also carries the `/model`, `/new`, `/compact` and `/stop` commands.
+    // The refusal is the same not-found shape the REST twin returns rather than a 403, so a `User` who does not own the agent cannot use the status to confirm that the id exists.
+    {
+        let api_user = authenticated_user.clone().map(axum::Extension);
+        if !crate::routes::can_access_agent(&state, agent_id, api_user.as_ref()) {
+            warn!(
+                agent_id = %id,
+                user = authenticated_user.as_ref().map(|u| u.name.as_str()).unwrap_or("<none>"),
+                "WebSocket upgrade rejected: agent is not accessible to this user"
+            );
+            return axum::http::StatusCode::NOT_FOUND.into_response();
+        }
+    }
+
     // Optional per-connection explicit session_id override (issue #2959).
     // When present, every send on this socket targets the given session —
     // two browser tabs on the same agent with different `?session_id=` values
@@ -564,7 +706,12 @@ pub async fn agent_ws(
     };
     upgrade
         .on_upgrade(move |socket| {
-            handle_agent_ws(socket, state, agent_id, id_str, ip, guard, explicit_session)
+            let client = WsClientContext {
+                client_ip: ip,
+                explicit_session,
+                authenticated_user,
+            };
+            handle_agent_ws(socket, state, agent_id, id_str, guard, client)
         })
         .into_response()
 }
@@ -577,15 +724,22 @@ pub async fn agent_ws(
 ///
 /// The `_guard` is an RAII handle that decrements the per-IP connection
 /// counter when this function returns (connection closes).
+struct WsClientContext {
+    client_ip: IpAddr,
+    explicit_session: Option<SessionId>,
+    authenticated_user: Option<crate::middleware::AuthenticatedApiUser>,
+}
+
 async fn handle_agent_ws(
     socket: WebSocket,
     state: Arc<AppState>,
     agent_id: AgentId,
     id_str: String,
-    client_ip: IpAddr,
     _guard: WsConnectionGuard,
-    explicit_session: Option<SessionId>,
+    client: WsClientContext,
 ) {
+    let client_ip = client.client_ip;
+    let explicit_session = client.explicit_session;
     // Per-connection identity. Lets us distinguish concurrent reconnects
     // (same agent_id, different conn_id) from a single client retrying.
     let conn_id = uuid::Uuid::new_v4().simple().to_string();
@@ -857,17 +1011,9 @@ async fn handle_agent_ws(
                 // from "proxy IP" to "real client IP" on the very first
                 // request after operators flip the flags on. No-op when the
                 // flags are off (defaults).
-                if handle_text_message(
-                    &sender,
-                    &state,
-                    agent_id,
-                    &text,
-                    &verbose,
-                    client_ip,
-                    explicit_session,
-                )
-                .await
-                .is_err()
+                if handle_text_message(&sender, &state, agent_id, &text, &verbose, &client)
+                    .await
+                    .is_err()
                 {
                     // A frame send failed inside the handler; the helper has
                     // already pushed a 1011 close frame, so just tear down the
@@ -944,8 +1090,7 @@ async fn handle_text_message(
     agent_id: AgentId,
     text: &str,
     verbose: &Arc<AtomicU8>,
-    client_ip: IpAddr,
-    explicit_session: Option<SessionId>,
+    client: &WsClientContext,
 ) -> Result<(), WsClosed> {
     // Parse the message
     let parsed: serde_json::Value = match serde_json::from_str(text) {
@@ -1064,12 +1209,32 @@ async fn handle_text_message(
                     .filter_map(|a| serde_json::from_value(a.clone()).ok())
                     .collect();
                 if !refs.is_empty() {
-                    let image_blocks = crate::routes::resolve_attachments(state, &refs);
+                    let image_blocks =
+                        match crate::routes::resolve_attachments(
+                            state,
+                            &refs,
+                            client.authenticated_user.as_ref(),
+                        )
+                        .await
+                        {
+                            Ok(blocks) => blocks,
+                            Err(_) => {
+                                return send_json_or_close(sender, &stamp_message_id(
+                                    serde_json::json!({
+                                        "type": "error",
+                                        "content": "You are not authorized to access this upload",
+                                        "code": "upload_access_denied"
+                                    }),
+                                    message_id.as_deref(),
+                                ))
+                                .await;
+                            }
+                        };
                     if !image_blocks.is_empty() {
                         has_images = true;
                         let webui_sender = librefang_channels::types::SenderContext {
                             channel: librefang_kernel::SYSTEM_CHANNEL_WEBUI.to_string(),
-                            user_id: client_ip.to_string(),
+                            user_id: client.client_ip.to_string(),
                             display_name: "Web UI".to_string(),
                             use_canonical_session: true,
                             ..Default::default()
@@ -1084,7 +1249,7 @@ async fn handle_text_message(
                             state.kernel.as_ref(),
                             agent_id,
                             Some(&webui_sender),
-                            explicit_session,
+                            client.explicit_session,
                             fallback_session_id,
                             image_blocks,
                         );
@@ -1106,14 +1271,19 @@ async fn handle_text_message(
                 // catalog declared it false (because the provider's
                 // `capabilities` field is wrong), we should let the image
                 // request through.
-                let supports_vision = {
-                    let catalog = state.kernel.model_catalog_ref().load();
-                    catalog
-                        .find_model(&model_name)
-                        .map(|m| catalog.effective_capabilities(m).supports_vision)
-                        .unwrap_or(false)
-                };
-                if !supports_vision {
+                //
+                // Refs #7957: warn only when something that *knows* said the model is text-only.
+                // The previous `unwrap_or(false)` warned on a catalog miss and on a flag inferred
+                // from the model's name, so an operator running a vision-capable model behind a
+                // gateway was told it "cannot analyze images" while the request went through and
+                // worked. This warning has to agree with the agent loop's redaction gate, and that
+                // gate fires on `Unsupported` alone.
+                let vision = state
+                    .kernel
+                    .model_catalog_ref()
+                    .load()
+                    .vision_support_for(&model_name);
+                if !vision.allows_images() {
                     send_json_or_close(
                         sender,
                         &serde_json::json!({
@@ -1151,7 +1321,7 @@ async fn handle_text_message(
                 // channel-sender keying, session continuity that keys on it —
                 // re-keys from proxy IP to real client IP the moment the flags
                 // flip on. No-op when the flags are off (defaults).
-                user_id: client_ip.to_string(),
+                user_id: client.client_ip.to_string(),
                 display_name: "Web UI".to_string(),
                 is_group: false,
                 was_mentioned: false,
@@ -1180,7 +1350,7 @@ async fn handle_text_message(
                     Some(kernel_handle),
                     sender_ctx.clone(),
                     thinking_override,
-                    explicit_session,
+                    client.explicit_session,
                 )
                 .await
             {
@@ -1436,7 +1606,7 @@ async fn handle_text_message(
                             // actually used so the frontend can pin ?sessionId=
                             // in the URL — making subsequent navigations and
                             // reloads land on the same conversation.
-                            if explicit_session.is_none() {
+                            if client.explicit_session.is_none() {
                                 if let Some(entry) = state.kernel.agent_registry().get(agent_id) {
                                     resp_json["session_id"] =
                                         serde_json::json!(entry.session_id.to_string());
@@ -1741,7 +1911,16 @@ async fn handle_command(
         }
         "budget" => {
             let budget = state.kernel.budget_config();
-            let status = state.kernel.metering_ref().budget_status(&budget);
+            let status = match state.kernel.metering_ref().budget_status(&budget) {
+                Ok(status) => status,
+                Err(error) => {
+                    tracing::error!(%error, "failed to query budget status");
+                    return serde_json::json!({
+                        "type": "error",
+                        "content": "Budget status is temporarily unavailable.",
+                    });
+                }
+            };
             let fmt = |v: f64| -> String {
                 if v > 0.0 {
                     format!("${v:.2}")
@@ -1783,11 +1962,7 @@ async fn handle_command(
             serde_json::json!({"type": "command_result", "command": cmd, "message": msg})
         }
         "a2a" => {
-            let agents = state
-                .kernel
-                .a2a_agents()
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let agents = crate::lock_a2a_agents(state.kernel.a2a_agents());
             let msg = if agents.is_empty() {
                 "No external A2A agents discovered.".to_string()
             } else {
@@ -1799,7 +1974,35 @@ async fn handle_command(
             };
             serde_json::json!({"type": "command_result", "command": cmd, "message": msg})
         }
+        "goal" => goal_command_response(state.kernel.as_ref(), agent_id, args),
         _ => serde_json::json!({"type": "error", "content": format!("Unknown command: {cmd}")}),
+    }
+}
+
+/// `/goal <description> [--loop-engineering]` — create an autonomous goal and
+/// start driving it.
+fn goal_command_response(
+    kernel: &dyn KernelApi,
+    agent_id: AgentId,
+    args: &str,
+) -> serde_json::Value {
+    let Some((description, loop_engineering)) = librefang_types::goal::parse_goal_args(args) else {
+        return serde_json::json!({
+            "type": "error",
+            "content": librefang_channels::commands::lookup("goal")
+                .map(|def| def.usage())
+                .unwrap_or_default(),
+        });
+    };
+    match create_and_start_goal(kernel, agent_id, &description, loop_engineering) {
+        Ok(launch) => serde_json::json!({
+            "type": "command_result",
+            "command": "goal",
+            "message": launch.message(&description),
+            "goal_id": launch.goal_id.to_string(),
+            "started": launch.started,
+        }),
+        Err(e) => serde_json::json!({"type": "error", "content": e}),
     }
 }
 
@@ -2066,11 +2269,17 @@ fn classify_streaming_error(err: &dyn std::fmt::Display) -> ClassifiedStreamingE
     // provider 429/billing error that merely contains the word "quota". Match the
     // exact thiserror Display prefix so provider strings fall through to the
     // classifier below (RateLimit / Billing), not this branch.
-    if inner.contains("Resource quota exceeded:") {
-        return streaming_error(
-            "Usage budget reached for this window. This is a token, cost, or tool-call cap, not a full context window \u{2014} /compact will NOT help. Wait for the relevant window to reset, or raise the matching agent resource limit in its manifest or the matching [budget] limit in config.toml.",
-            "budget_exceeded",
-        );
+    if let Some(detail_start) = inner.find("Resource quota exceeded:") {
+        // The kernel already computed which cap was breached and by how much — "Agent <id> exceeded hourly cost quota: $0.0123 + $0.0045 / $0.0100", i.e. spent + this call / limit.
+        // Dropping that left the operator with advice to "raise the matching limit" and no way to learn which one or what it is currently set to (#7352).
+        let detail = inner[detail_start + "Resource quota exceeded:".len()..].trim();
+        let guidance = "Usage budget reached for this window. This is a token, cost, or tool-call cap, not a full context window \u{2014} /compact will NOT help. Wait for the relevant window to reset, or raise the matching agent resource limit in its manifest or the matching [budget] limit in config.toml.";
+        let message = if detail.is_empty() {
+            guidance.to_string()
+        } else {
+            format!("{guidance} ({detail})")
+        };
+        return streaming_error(&message, "budget_exceeded");
     }
 
     // Use the LLM error classifier for everything else
@@ -2231,6 +2440,86 @@ mod tests {
         let _ = VerboseLevel::Off;
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn goal_command_creates_and_reports_the_goal() {
+        let app = librefang_testing::TestAppState::with_builder(
+            librefang_testing::MockKernelBuilder::new(),
+        );
+        let kernel = app.state.kernel.clone();
+        let agent_id = AgentId::new();
+
+        let response = goal_command_response(kernel.as_ref(), agent_id, "ship the release");
+        assert_eq!(
+            response["type"], "command_result",
+            "unexpected response: {response}"
+        );
+        assert_eq!(response["command"], "goal");
+        let goal_id = response["goal_id"].as_str().expect("goal_id missing");
+
+        let stored = kernel
+            .memory_substrate()
+            .structured_get(
+                librefang_types::goal::goals_storage_agent_id(),
+                librefang_types::goal::GOALS_STORAGE_KEY,
+            )
+            .expect("goal store unreadable")
+            .expect("no goals persisted");
+        let goals = stored.as_array().expect("goals is not an array");
+        let goal = goals
+            .iter()
+            .find(|g| g["id"].as_str() == Some(goal_id))
+            .expect("created goal not found in the store");
+        assert_eq!(goal["description"], "ship the release");
+        assert_eq!(goal["agent_id"], agent_id.to_string());
+        assert_eq!(goal["loop_engineering"], false);
+        assert_eq!(goal["status"], "pending");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn goal_command_strips_the_loop_engineering_flag() {
+        let app = librefang_testing::TestAppState::with_builder(
+            librefang_testing::MockKernelBuilder::new(),
+        );
+        let kernel = app.state.kernel.clone();
+
+        let response = goal_command_response(
+            kernel.as_ref(),
+            AgentId::new(),
+            "ship the release --loop-engineering",
+        );
+        let goal_id = response["goal_id"].as_str().expect("goal_id missing");
+
+        let stored = kernel
+            .memory_substrate()
+            .structured_get(
+                librefang_types::goal::goals_storage_agent_id(),
+                librefang_types::goal::GOALS_STORAGE_KEY,
+            )
+            .unwrap()
+            .unwrap();
+        let goal = stored
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"].as_str() == Some(goal_id))
+            .expect("created goal not found in the store");
+        assert_eq!(goal["description"], "ship the release");
+        assert_eq!(goal["loop_engineering"], true);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn goal_command_without_a_description_returns_usage() {
+        let app = librefang_testing::TestAppState::with_builder(
+            librefang_testing::MockKernelBuilder::new(),
+        );
+        let response = goal_command_response(app.state.kernel.as_ref(), AgentId::new(), "   ");
+        assert_eq!(response["type"], "error");
+        assert_eq!(
+            response["content"],
+            "Usage: /goal <description> [--loop-engineering]"
+        );
+    }
+
     /// #6390: terminal frames echo the client's `message_id` so the dashboard can bind a late frame to the turn that owns it.
     /// Without an id the frame stays untouched — pre-correlation clients see the old shape.
     #[test]
@@ -2327,6 +2616,33 @@ mod tests {
         let error = classify_streaming_error(&E);
         assert!(error.message.to_lowercase().contains("usage budget"));
         assert_eq!(error.code, "budget_exceeded");
+    }
+
+    /// The kernel names the cap and its value; the surface must not drop that.
+    /// Without it the message tells an operator to raise "the matching limit" while withholding which limit and what it is set to, which is what left #7352 unanswerable from the error alone.
+    #[test]
+    fn test_classify_streaming_error_budget_names_the_cap_that_was_hit() {
+        let error = classify_streaming_error(
+            &"Resource quota exceeded: Agent scout exceeded hourly cost quota: $0.0123 + $0.0045 / $0.0100",
+        );
+        assert_eq!(error.code, "budget_exceeded");
+        assert!(error.message.contains("Usage budget"), "{}", error.message);
+        assert!(
+            error.message.contains("hourly cost quota"),
+            "{}",
+            error.message
+        );
+        assert!(error.message.contains("$0.0100"), "{}", error.message);
+        assert!(error.message.contains("scout"), "{}", error.message);
+    }
+
+    /// A bare prefix with no detail must still produce the guidance alone, never a dangling empty parenthetical.
+    #[test]
+    fn test_classify_streaming_error_budget_without_detail_is_unchanged() {
+        let error = classify_streaming_error(&"Resource quota exceeded:");
+        assert_eq!(error.code, "budget_exceeded");
+        assert!(error.message.contains("Usage budget"));
+        assert!(!error.message.contains("()"), "{}", error.message);
     }
 
     #[test]
@@ -2537,6 +2853,18 @@ mod tests {
         );
     }
 
+    /// The header pair a real browser sends on a WebSocket handshake.
+    ///
+    /// `Origin` is the page's, `Host` is the authority from the URL the page
+    /// dialled. Tests that set only `Origin` cannot exercise the self-origin rule
+    /// at all, because it returns early when `Host` is absent.
+    fn browser_headers(origin: &str, host: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("origin", origin.parse().unwrap());
+        headers.insert("host", host.parse().unwrap());
+        headers
+    }
+
     #[test]
     fn validate_ws_origin_missing_origin_allowed() {
         let headers = HeaderMap::new();
@@ -2578,19 +2906,32 @@ mod tests {
     }
 
     #[test]
-    fn validate_ws_origin_lan_ip_same_port_rejected() {
-        // LAN IP with matching port should be rejected without explicit allowed_origins.
-        let mut headers = HeaderMap::new();
-        headers.insert("origin", "http://192.168.1.5:4545".parse().unwrap());
+    fn validate_ws_origin_lan_ip_addressed_to_a_different_host_rejected() {
+        // A LAN IP origin is not blanket-allowed just because its port matches the
+        // listen port: it is allowed only when the request was itself addressed to
+        // that same address. Here the browser dialled 10.0.0.7 and the page came
+        // from 192.168.1.5, which is a cross-site request.
+        //
+        // The `host` header is what makes this test mean anything. Without it
+        // `origin_is_self` returns early and the assertion passes for a reason no
+        // real browser ever produces, since every browser sends `Host`.
+        let mut headers = browser_headers("http://192.168.1.5:4545", "10.0.0.7:4545");
         let result = validate_ws_origin(&headers, Some(4545), &[], false);
         assert!(result.is_err());
+
+        // Same origin, no `Host` at all: still rejected, so the rule fails closed
+        // rather than treating an absent header as a match.
+        headers.remove("host");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
     }
 
     #[test]
     fn validate_ws_origin_arbitrary_host_same_port_rejected() {
-        // Any hostname with matching port is rejected without explicit allowed_origins.
-        let mut headers = HeaderMap::new();
-        headers.insert("origin", "http://myserver.local:8080".parse().unwrap());
+        // Any hostname with matching port is rejected without explicit allowed_origins,
+        // and it stays rejected when the request's own `Host` header names that same
+        // hostname — which is the pairing a real browser sends and the one an attacker
+        // gets for free from DNS rebinding.
+        let headers = browser_headers("http://myserver.local:8080", "myserver.local:8080");
         let result = validate_ws_origin(&headers, Some(8080), &[], false);
         assert!(result.is_err());
     }
@@ -2688,6 +3029,107 @@ mod tests {
         headers.insert("origin", "not-a-url".parse().unwrap());
         let result = validate_ws_origin(&headers, Some(4545), &["*".to_string()], true);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_ws_origin_accepts_the_servers_own_lan_origin() {
+        // The reported defect from #7777, reduced: a daemon bound to 0.0.0.0:4545
+        // and opened at http://192.168.1.161:4545 must accept its own dashboard's
+        // socket with nothing configured.
+        let headers = browser_headers("http://192.168.1.161:4545", "192.168.1.161:4545");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_matches_ipv6_literal_host() {
+        // Both sides go through `Url`, so the comparison is on the parsed address
+        // and the bracket/zero-compression spelling does not have to agree.
+        let headers = browser_headers("http://[fd00::1]:4545", "[fd00:0:0:0:0:0:0:1]:4545");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_holds_on_a_port_other_than_listen_port() {
+        // Port-mapped or proxied to a different external port: the rule compares the
+        // origin against the request's own `Host`, not against `listen_port`.
+        let headers = browser_headers("http://192.168.1.161:8443", "192.168.1.161:8443");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_bridges_a_portless_host_header() {
+        // `Host` omits the port on the scheme default, so the origin's scheme supplies it.
+        let headers = browser_headers("https://192.168.1.161", "192.168.1.161");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_requires_the_same_port() {
+        let headers = browser_headers("http://192.168.1.161:4545", "192.168.1.161:9999");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
+    }
+
+    #[test]
+    fn validate_ws_origin_rebound_hostname_rejected_unless_explicitly_allowed() {
+        // The DNS-rebinding case, and the reason the implicit allow is restricted to
+        // IP literals. The attacker serves a page from a name they own, rebinds that
+        // name to this daemon's address, and the browser then sends matching `Host`
+        // and `Origin` with nothing forged. Equality here is not evidence that this
+        // daemon served the page, so it must not open the socket.
+        let headers = browser_headers("http://attacker.example:4545", "attacker.example:4545");
+        assert!(
+            validate_ws_origin(&headers, Some(4545), &[], false).is_err(),
+            "matching Host and Origin on a hostname must not imply same-origin"
+        );
+
+        // The escape hatch for a legitimate hostname deployment: list it.
+        assert!(validate_ws_origin(
+            &headers,
+            Some(4545),
+            &["http://attacker.example:4545".to_string()],
+            false,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_tls_proxy_hostname_requires_explicit_cors_origin() {
+        // A dashboard behind a TLS terminator is a hostname deployment and is not
+        // covered by the self rule, however exactly `Host` and `Origin` agree.
+        // Nothing distinguishes it from the rebinding case above at this layer, so
+        // the operator names the origin instead.
+        let headers = browser_headers("https://dash.example.com", "dash.example.com");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
+        assert!(validate_ws_origin(
+            &headers,
+            Some(4545),
+            &["https://dash.example.com".to_string()],
+            false,
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn validate_ws_origin_cross_site_origin_carrying_our_host_rejected() {
+        // The #3731 guard: a cross-site page reaching this daemon sends its own
+        // Origin next to our Host, so the two differ and the self rule declines.
+        let headers = browser_headers("http://evil.example", "192.168.1.161:4545");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_ignores_x_forwarded_host() {
+        // `X-Forwarded-Host` is attacker-controlled unless the peer is a verified
+        // proxy, and this function has no view of the peer.
+        let mut headers = browser_headers("http://192.168.1.161:4545", "10.0.0.7:4545");
+        headers.insert("x-forwarded-host", "192.168.1.161:4545".parse().unwrap());
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
+    }
+
+    #[test]
+    fn validate_ws_origin_self_rule_ignores_a_malformed_host_header() {
+        let headers = browser_headers("http://192.168.1.161:4545", "not a host::");
+        assert!(validate_ws_origin(&headers, Some(4545), &[], false).is_err());
     }
 
     #[test]

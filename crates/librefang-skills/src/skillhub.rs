@@ -21,12 +21,116 @@ use tracing::{info, warn};
 /// Default Skillhub API base URL.
 pub const DEFAULT_SKILLHUB_URL: &str = "https://skillhub.tencent.com/api/v1";
 
-/// Static skills index URL (Tencent COS).
-const SKILLHUB_INDEX_URL: &str =
+/// Default static skills index URL (Tencent COS).
+pub const DEFAULT_SKILLHUB_INDEX_URL: &str =
     "https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/skills.json";
 
-/// COS accelerate base URL for skill zip downloads.
-const SKILLHUB_COS_BASE: &str = "https://skillhub-1388575217.cos.accelerate.myqcloud.com";
+/// Default COS accelerate base URL for skill zip downloads.
+pub const DEFAULT_SKILLHUB_COS_BASE: &str =
+    "https://skillhub-1388575217.cos.accelerate.myqcloud.com";
+
+/// Environment variable for the Skillhub API base — search and skill detail.
+pub const ENV_SKILLHUB_URL: &str = "LIBREFANG_SKILLHUB_URL";
+
+/// Environment variable for the static skills index — browse, and the version lookup that install starts from.
+pub const ENV_SKILLHUB_INDEX_URL: &str = "LIBREFANG_SKILLHUB_INDEX_URL";
+
+/// Environment variable for the object-storage base that skill archives are downloaded from.
+pub const ENV_SKILLHUB_COS_URL: &str = "LIBREFANG_SKILLHUB_COS_URL";
+
+fn atomic_write_manifest(path: &Path, contents: &[u8]) -> Result<(), SkillError> {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let parent = crate::resolve_parent_or_cwd(path);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = parent.join(format!(".skill.toml.tmp.{}.{}", std::process::id(), seq));
+
+    let write_result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        file.write_all(contents)?;
+        file.sync_all()
+    })();
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(SkillError::InvalidManifest(format!(
+            "Skillhub: write skill.toml staging file: {error}"
+        )));
+    }
+
+    if let Err(error) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(SkillError::InvalidManifest(format!(
+            "Skillhub: replace skill.toml: {error}"
+        )));
+    }
+
+    #[cfg(unix)]
+    std::fs::File::open(parent)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|error| {
+            SkillError::InvalidManifest(format!(
+                "Skillhub: sync skill.toml parent directory: {error}"
+            ))
+        })?;
+
+    Ok(())
+}
+
+fn patch_skillhub_provenance(
+    skill_dir: &Path,
+    slug: &str,
+    version: &str,
+) -> Result<(), SkillError> {
+    let manifest_path = skill_dir.join("skill.toml");
+    if !manifest_path.exists() {
+        return Ok(());
+    }
+
+    let toml_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
+        SkillError::InvalidManifest(format!(
+            "Skillhub: read skill.toml for provenance patch: {e}"
+        ))
+    })?;
+    let mut manifest: crate::SkillManifest = toml::from_str(&toml_str).map_err(|e| {
+        SkillError::InvalidManifest(format!(
+            "Skillhub: parse skill.toml for provenance patch: {e}"
+        ))
+    })?;
+    manifest.source = Some(crate::SkillSource::Skillhub {
+        slug: slug.to_string(),
+        version: version.to_string(),
+    });
+    let updated = toml::to_string_pretty(&manifest).map_err(|e| {
+        SkillError::InvalidManifest(format!(
+            "Skillhub: serialize skill.toml for provenance patch: {e}"
+        ))
+    })?;
+    atomic_write_manifest(&manifest_path, updated.as_bytes())
+}
+
+fn patch_or_cleanup_skillhub_install(
+    skill_dir: PathBuf,
+    slug: String,
+    version: String,
+) -> Result<(), SkillError> {
+    if let Err(error) = patch_skillhub_provenance(&skill_dir, &slug, &version) {
+        if let Err(cleanup_err) = std::fs::remove_dir_all(&skill_dir) {
+            warn!(
+                slug = %slug,
+                skill_dir = %skill_dir.display(),
+                error = %cleanup_err,
+                "Skillhub: provenance patch failed AND cleanup failed; skill directory left on disk with wrong source provenance, manual removal needed"
+            );
+        }
+        return Err(error);
+    }
+    Ok(())
+}
 
 // ---------------------------------------------------------------------------
 // Search response types (SkillHub-native format)
@@ -108,6 +212,10 @@ pub struct SkillhubClient {
     http: reqwest::Client,
     /// Base API URL (e.g. `https://skillhub.tencent.com/api/v1`).
     base_url: String,
+    /// Static skills index URL — the source for browse and for the version install resolves.
+    index_url: String,
+    /// Object-storage base that skill archives are downloaded from.
+    cos_base: String,
 }
 
 impl SkillhubClient {
@@ -121,13 +229,24 @@ impl SkillhubClient {
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("HTTP client build"),
-            base_url: base_url.to_string(),
+            base_url: base_url.trim_end_matches('/').to_string(),
+            index_url: crate::clawhub::env_url_or(
+                ENV_SKILLHUB_INDEX_URL,
+                DEFAULT_SKILLHUB_INDEX_URL,
+            ),
+            cos_base: crate::clawhub::env_url_or(ENV_SKILLHUB_COS_URL, DEFAULT_SKILLHUB_COS_BASE),
         }
     }
 
-    /// Create a Skillhub client with the default URL.
+    /// Create a Skillhub client from the configured Skillhub endpoints.
+    ///
+    /// Skillhub is not one host: search and detail come from the API base, browse and install's version lookup come from a static index, and archives come from object storage.
+    /// All three are overridable — `LIBREFANG_SKILLHUB_URL`, `LIBREFANG_SKILLHUB_INDEX_URL`, `LIBREFANG_SKILLHUB_COS_URL` — because pointing only the API base at a mirror would leave browse and install still aimed at the dead host, which is the opposite of the recovery an override is for.
     pub fn with_defaults(cache_dir: PathBuf) -> Self {
-        Self::new(DEFAULT_SKILLHUB_URL, cache_dir)
+        Self::new(
+            &crate::clawhub::env_url_or(ENV_SKILLHUB_URL, DEFAULT_SKILLHUB_URL),
+            cache_dir,
+        )
     }
 
     // -- Delegated to ClawHubClient (compatible APIs) -----------------------
@@ -170,36 +289,7 @@ impl SkillhubClient {
             SkillError::Network(format!("Failed to read Skillhub search response: {e}"))
         })?;
 
-        // Try SkillHub-native format first (snake_case, `skills` or `results` key).
-        // We parse this first because ClawHubSearchResponse with serde(default)
-        // would accept any JSON as empty results, masking the real data.
-        if let Ok(skillhub_resp) = serde_json::from_slice::<SkillhubSearchResponse>(&body) {
-            if !skillhub_resp.results.is_empty() {
-                return Ok(ClawHubSearchResponse {
-                    results: skillhub_resp
-                        .results
-                        .into_iter()
-                        .map(|e| ClawHubSearchEntry {
-                            score: e.score,
-                            slug: e.slug,
-                            display_name: e.name,
-                            summary: e.description,
-                            version: if e.version.is_empty() {
-                                None
-                            } else {
-                                Some(e.version)
-                            },
-                            updated_at: e.updated_at,
-                        })
-                        .collect(),
-                });
-            }
-        }
-
-        // Fall back to ClawHub-compatible format (camelCase, `results` key).
-        serde_json::from_slice::<ClawHubSearchResponse>(&body).map_err(|e| {
-            SkillError::Network(format!("Failed to parse Skillhub search response: {e}"))
-        })
+        parse_skillhub_search_body(&body, &url)
     }
 
     /// Get detailed info about a specific skill.
@@ -221,8 +311,9 @@ impl SkillhubClient {
         // Step 1: Look up the version from the static index
         let index_resp = self
             .http
-            .get(SKILLHUB_INDEX_URL)
+            .get(&self.index_url)
             .header("User-Agent", "BossFang/0.1")
+            .header("Accept", "application/json")
             .send()
             .await
             .map_err(|e| SkillError::Network(format!("Skillhub index fetch failed: {e}")))?;
@@ -232,22 +323,23 @@ impl SkillhubClient {
                 index_resp.status()
             )));
         }
-        let index: SkillhubIndexResponse = index_resp
-            .json()
+        let index_body = index_resp
+            .bytes()
             .await
-            .map_err(|e| SkillError::Network(format!("Skillhub index parse error: {e}")))?;
+            .map_err(|e| SkillError::Network(format!("Failed to read Skillhub index: {e}")))?;
+        let index: SkillhubIndexResponse = parse_skillhub_index_body(&index_body, &self.index_url)?;
 
         let entry = index
             .skills
             .iter()
             .find(|s| s.slug == slug)
             .ok_or_else(|| {
-                SkillError::Network(format!("Skill '{slug}' not found in Skillhub index"))
+                SkillError::NotFound(format!("Skill '{slug}' not found in Skillhub index"))
             })?;
         let version = &entry.version;
 
         // Step 2: Download zip from COS
-        let cos_url = format!("{SKILLHUB_COS_BASE}/skills/{slug}/{version}.zip",);
+        let cos_url = format!("{}/skills/{slug}/{version}.zip", self.cos_base);
         info!(slug, version = %version, "Downloading skill from Skillhub COS");
 
         let dl_resp = self
@@ -283,55 +375,15 @@ impl SkillhubClient {
         // failure we tear down the freshly-extracted skill directory so the
         // installer doesn't leave a manifest with the wrong provenance behind.
         let skill_dir = target_dir.join(slug);
-        let manifest_path = skill_dir.join("skill.toml");
-        if manifest_path.exists() {
-            let patch_result = (|| -> Result<(), SkillError> {
-                let toml_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
-                    SkillError::InvalidManifest(format!(
-                        "Skillhub: read skill.toml for provenance patch: {e}"
-                    ))
-                })?;
-                let mut manifest: crate::SkillManifest =
-                    toml::from_str(&toml_str).map_err(|e| {
-                        SkillError::InvalidManifest(format!(
-                            "Skillhub: parse skill.toml for provenance patch: {e}"
-                        ))
-                    })?;
-                manifest.source = Some(crate::SkillSource::Skillhub {
-                    slug: slug.to_string(),
-                    version: result.version.clone(),
-                });
-                let updated = toml::to_string_pretty(&manifest).map_err(|e| {
-                    SkillError::InvalidManifest(format!(
-                        "Skillhub: serialize skill.toml for provenance patch: {e}"
-                    ))
-                })?;
-                std::fs::write(&manifest_path, updated).map_err(|e| {
-                    SkillError::InvalidManifest(format!(
-                        "Skillhub: write skill.toml for provenance patch: {e}"
-                    ))
-                })?;
-                Ok(())
-            })();
-
-            if let Err(e) = patch_result {
-                // Clean up the half-installed skill: it has the wrong source
-                // provenance recorded and would mislead upgrade/sync logic.
-                // Don't swallow the cleanup failure too — operator needs to
-                // know if a manual `rm -rf` is required.
-                if let Err(cleanup_err) = std::fs::remove_dir_all(&skill_dir) {
-                    warn!(
-                        slug = %slug,
-                        skill_dir = %skill_dir.display(),
-                        error = %cleanup_err,
-                        "Skillhub: provenance patch failed AND cleanup failed; \
-                         skill directory left on disk with wrong source provenance, \
-                         manual rm needed"
-                    );
-                }
-                return Err(e);
-            }
-        }
+        let patch_slug = slug.to_string();
+        let patch_version = result.version.clone();
+        tokio::task::spawn_blocking(move || {
+            patch_or_cleanup_skillhub_install(skill_dir, patch_slug, patch_version)
+        })
+        .await
+        .map_err(|e| {
+            SkillError::InvalidManifest(format!("Skillhub provenance patch task failed: {e}"))
+        })??;
 
         Ok(result)
     }
@@ -354,8 +406,9 @@ impl SkillhubClient {
     ) -> Result<SkillhubIndexResponse, SkillError> {
         let resp = self
             .http
-            .get(SKILLHUB_INDEX_URL)
+            .get(&self.index_url)
             .header("User-Agent", "BossFang/0.1")
+            .header("Accept", "application/json")
             .send()
             .await
             .map_err(|e| SkillError::Network(format!("Skillhub index fetch failed: {e}")))?;
@@ -367,10 +420,11 @@ impl SkillhubClient {
             )));
         }
 
-        let mut data: SkillhubIndexResponse = resp
-            .json()
+        let body = resp
+            .bytes()
             .await
-            .map_err(|e| SkillError::Network(format!("Skillhub index parse error: {e}")))?;
+            .map_err(|e| SkillError::Network(format!("Failed to read Skillhub index: {e}")))?;
+        let mut data: SkillhubIndexResponse = parse_skillhub_index_body(&body, &self.index_url)?;
 
         // Client-side sort
         match sort {
@@ -394,6 +448,76 @@ impl SkillhubClient {
         );
         Ok(data)
     }
+}
+
+/// Parse a Skillhub `/search` response body, degrading gracefully when the
+/// upstream sends back markup instead of JSON.
+///
+/// See #7387: `skillhub.tencent.com` now answers every API path with a
+/// `200 OK` full of its SPA shell instead of JSON. Handing that straight to
+/// `serde_json` produces a cryptic "expected value at line 1 column 1"
+/// failure with no indication of the real cause, so this checks for markup
+/// first and returns a clear, actionable [`SkillError::MarketplaceUnavailable`].
+///
+/// Split out from [`SkillhubClient::search`] so the parsing logic — including
+/// the SkillHub-native vs. ClawHub-compatible format fallback — is testable
+/// without a live network call.
+///
+/// The markup gate is spelled out here rather than delegated to
+/// [`crate::parse_marketplace_json`] because neither of the two parses below is
+/// the single deserialization that helper performs; the message is the same one
+/// it emits, so an operator sees one offline state whichever hub or endpoint
+/// went dark.
+fn parse_skillhub_search_body(body: &[u8], url: &str) -> Result<ClawHubSearchResponse, SkillError> {
+    // Markup first: both parses below fail on an HTML body, and the second one's
+    // `serde_json` complaint is exactly the cryptic "expected value at line 1 column 1"
+    // this check exists to replace (#7387).
+    if crate::looks_like_markup(body) {
+        return Err(SkillError::MarketplaceUnavailable(format!(
+            "Skillhub search at {url} answered with a webpage instead of JSON — the marketplace is unreachable or has moved. Searching, browsing and installing from it are unavailable until it returns; skills already installed locally are unaffected."
+        )));
+    }
+
+    // Try SkillHub-native format first (snake_case, `skills` or `results` key).
+    // We parse this first because ClawHubSearchResponse with serde(default)
+    // would accept any JSON as empty results, masking the real data.
+    if let Ok(skillhub_resp) = serde_json::from_slice::<SkillhubSearchResponse>(body) {
+        if !skillhub_resp.results.is_empty() {
+            return Ok(ClawHubSearchResponse {
+                results: skillhub_resp
+                    .results
+                    .into_iter()
+                    .map(|e| ClawHubSearchEntry {
+                        score: e.score,
+                        slug: e.slug,
+                        display_name: e.name,
+                        summary: e.description,
+                        version: if e.version.is_empty() {
+                            None
+                        } else {
+                            Some(e.version)
+                        },
+                        updated_at: e.updated_at,
+                    })
+                    .collect(),
+            });
+        }
+    }
+
+    // Fall back to ClawHub-compatible format (camelCase, `results` key).
+    serde_json::from_slice::<ClawHubSearchResponse>(body)
+        .map_err(|e| SkillError::Network(format!("Failed to parse Skillhub search response: {e}")))
+}
+
+/// Parse the static Skillhub COS index body, degrading gracefully when the
+/// bucket answers with markup instead of JSON (same #7387 failure mode as
+/// [`parse_skillhub_search_body`], applied to `browse` and `install`'s
+/// version lookup).
+fn parse_skillhub_index_body(
+    body: &[u8],
+    index_url: &str,
+) -> Result<SkillhubIndexResponse, SkillError> {
+    crate::parse_marketplace_json("Skillhub index", index_url, body)
 }
 
 /// URL query parameter encoding (`application/x-www-form-urlencoded`).
@@ -542,5 +666,116 @@ mod tests {
             percent_encode("hello-world_2.0~test"),
             "hello-world_2.0~test"
         );
+    }
+
+    #[test]
+    fn provenance_patch_is_atomic_and_durable() {
+        let dir = tempfile::tempdir().unwrap();
+        let skill_dir = dir.path().join("example");
+        std::fs::create_dir(&skill_dir).unwrap();
+        let manifest_path = skill_dir.join("skill.toml");
+        std::fs::write(
+            &manifest_path,
+            "[skill]\nname = \"example\"\nversion = \"1.0.0\"\ndescription = \"test\"\n",
+        )
+        .unwrap();
+
+        patch_or_cleanup_skillhub_install(
+            skill_dir.clone(),
+            "example-skill".to_string(),
+            "2.0.0".to_string(),
+        )
+        .unwrap();
+
+        let manifest: crate::SkillManifest =
+            toml::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
+        assert!(matches!(
+            manifest.source,
+            Some(crate::SkillSource::Skillhub { slug, version })
+                if slug == "example-skill" && version == "2.0.0"
+        ));
+        assert_eq!(std::fs::read_dir(&skill_dir).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn malformed_manifest_removes_half_installed_skill() {
+        let dir = tempfile::tempdir().unwrap();
+        let skill_dir = dir.path().join("broken");
+        std::fs::create_dir(&skill_dir).unwrap();
+        std::fs::write(skill_dir.join("skill.toml"), "not = [valid").unwrap();
+
+        let result = patch_or_cleanup_skillhub_install(
+            skill_dir.clone(),
+            "broken".to_string(),
+            "1.0.0".to_string(),
+        );
+
+        assert!(matches!(result, Err(SkillError::InvalidManifest(_))));
+        assert!(!skill_dir.exists());
+    }
+
+    // -- #7387: Skillhub API is dead — graceful-degradation regression tests ---
+
+    #[test]
+    fn search_body_html_response_degrades_to_marketplace_unavailable() {
+        let html = b"<!DOCTYPE html><html><head><title>SkillHub</title></head></html>";
+        let result = parse_skillhub_search_body(html, DEFAULT_SKILLHUB_URL);
+        match result {
+            Err(SkillError::MarketplaceUnavailable(msg)) => {
+                assert!(msg.contains(DEFAULT_SKILLHUB_URL), "{msg}");
+                assert!(msg.contains("webpage instead of JSON"), "{msg}");
+            }
+            other => panic!("expected MarketplaceUnavailable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn search_body_valid_json_still_parses() {
+        let json = br#"{"results": [{"slug": "rust-helper", "name": "Rust Helper"}]}"#;
+        let resp = parse_skillhub_search_body(json, DEFAULT_SKILLHUB_URL).unwrap();
+        assert_eq!(resp.results.len(), 1);
+        assert_eq!(resp.results[0].slug, "rust-helper");
+    }
+
+    #[test]
+    fn search_body_genuinely_malformed_json_is_a_network_error_not_marketplace_unavailable() {
+        let garbage = b"{not valid json";
+        let result = parse_skillhub_search_body(garbage, DEFAULT_SKILLHUB_URL);
+        assert!(matches!(result, Err(SkillError::Network(_))));
+    }
+
+    #[test]
+    fn index_body_html_response_degrades_to_marketplace_unavailable() {
+        let html = b"<html><body>not json</body></html>";
+        let result = parse_skillhub_index_body(html, DEFAULT_SKILLHUB_INDEX_URL);
+        assert!(matches!(result, Err(SkillError::MarketplaceUnavailable(_))));
+    }
+
+    #[test]
+    fn index_body_valid_json_still_parses() {
+        let json = br#"{"total": 1, "skills": [{"slug": "rust"}]}"#;
+        let resp = parse_skillhub_index_body(json, DEFAULT_SKILLHUB_INDEX_URL).unwrap();
+        assert_eq!(resp.total, 1);
+        assert_eq!(resp.skills.len(), 1);
+    }
+
+    #[test]
+    #[serial_test::serial(skillhub_env_url)]
+    fn with_defaults_honors_env_var_override() {
+        std::env::set_var(
+            "LIBREFANG_SKILLHUB_URL",
+            "https://mirror.example.test/api/v1",
+        );
+        let client = SkillhubClient::with_defaults(PathBuf::from("/tmp/cache"));
+        assert_eq!(client.base_url, "https://mirror.example.test/api/v1");
+        std::env::remove_var("LIBREFANG_SKILLHUB_URL");
+    }
+
+    #[test]
+    #[serial_test::serial(skillhub_env_url)]
+    fn with_defaults_falls_back_when_env_var_unset() {
+        std::env::remove_var("LIBREFANG_SKILLHUB_URL");
+        let client = SkillhubClient::with_defaults(PathBuf::from("/tmp/cache"));
+        assert_eq!(client.base_url, DEFAULT_SKILLHUB_URL);
     }
 }

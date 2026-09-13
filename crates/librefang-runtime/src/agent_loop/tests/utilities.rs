@@ -498,12 +498,14 @@ async fn test_streaming_repeated_tool_failures_cap_exits() {
 //   (a) pad_missing_results only fills ids that have no result at
 //       all — real error content is never overwritten.
 //   (b) commit is idempotent (safe to call twice).
-//   (c) a StagedToolUseTurn dropped without commit leaves
-//       session.messages untouched (drop-safety via ? propagation).
-//   (d) commit atomically pushes exactly one assistant message plus
+//   (c) commit atomically pushes exactly one assistant message plus
 //       one user{tool_results} message in that order.
-//   (e) the happy path batch case commits once and grows the
+//   (d) the happy path batch case commits once and grows the
 //       session by exactly 2 messages.
+//
+// Drop safety is enforced by ownership, not a runtime test:
+// `StagedToolUseTurn` holds no session reference, and only explicit
+// `commit(&mut Session, ...)` can publish staged messages.
 // -------------------------------------------------------------------
 
 fn fresh_session() -> librefang_memory::session::Session {
@@ -679,35 +681,6 @@ fn staged_commit_is_idempotent() {
     assert_eq!(second, ToolResultOutcomeSummary::default());
     assert_eq!(session.messages.len(), len_after_first);
     assert_eq!(messages.len(), msgs_after_first);
-}
-
-#[test]
-fn staged_drop_without_commit_does_not_touch_session() {
-    // This test simulates the `?`-propagation path: a caller builds
-    // a StagedToolUseTurn, appends some results, then an error
-    // propagates through the caller (in production via `?`) — the
-    // staged turn is dropped without commit. Session state must be
-    // byte-for-byte identical to the pre-stage snapshot; no orphan
-    // ToolUse can have reached disk.
-    let session = fresh_session();
-    let snapshot = session.messages.clone();
-
-    {
-        let mut staged = staged_two_tool_use(session.agent_id.to_string());
-        staged.append_result(ContentBlock::ToolResult {
-            tool_use_id: "tool-a".to_string(),
-            tool_name: "tool_a".to_string(),
-            content: "ok-a".to_string(),
-            is_error: false,
-            status: librefang_types::tool::ToolExecutionStatus::Completed,
-            approval_request_id: None,
-        });
-        // Intentionally drop `staged` here without commit.
-        assert!(!staged.committed);
-    }
-
-    assert_eq!(session.messages.len(), snapshot.len());
-    assert!(session.messages.is_empty());
 }
 
 #[test]
@@ -891,6 +864,7 @@ fn staged_hard_error_mid_batch_preserves_all_real_results() {
 #[test]
 fn test_should_augment_web_search_off() {
     let manifest = AgentManifest {
+        source_template: None,
         web_search_augmentation: librefang_types::agent::WebSearchAugmentationMode::Off,
         ..Default::default()
     };
@@ -900,6 +874,7 @@ fn test_should_augment_web_search_off() {
 #[test]
 fn test_should_augment_web_search_always() {
     let manifest = AgentManifest {
+        source_template: None,
         web_search_augmentation: librefang_types::agent::WebSearchAugmentationMode::Always,
         ..Default::default()
     };
@@ -909,6 +884,7 @@ fn test_should_augment_web_search_always() {
 #[test]
 fn test_should_augment_web_search_auto_with_tools() {
     let mut manifest = AgentManifest {
+        source_template: None,
         web_search_augmentation: librefang_types::agent::WebSearchAugmentationMode::Auto,
         ..Default::default()
     };
@@ -923,6 +899,7 @@ fn test_should_augment_web_search_auto_with_tools() {
 #[test]
 fn test_should_augment_web_search_auto_without_tools() {
     let mut manifest = AgentManifest {
+        source_template: None,
         web_search_augmentation: librefang_types::agent::WebSearchAugmentationMode::Auto,
         ..Default::default()
     };
@@ -937,6 +914,7 @@ fn test_should_augment_web_search_auto_without_tools() {
 #[test]
 fn test_should_augment_web_search_auto_no_metadata() {
     let manifest = AgentManifest {
+        source_template: None,
         web_search_augmentation: librefang_types::agent::WebSearchAugmentationMode::Auto,
         ..Default::default()
     };
@@ -1061,6 +1039,7 @@ fn agent_loop_result_actual_provider_can_be_set() {
 fn resolve_max_history_uses_manifest_when_set() {
     let manifest = AgentManifest {
         name: "agent-a".into(),
+        source_template: None,
         max_history_messages: Some(7),
         ..AgentManifest::default()
     };
@@ -1075,6 +1054,7 @@ fn resolve_max_history_uses_manifest_when_set() {
 fn resolve_max_history_falls_back_to_opts_when_manifest_unset() {
     let manifest = AgentManifest {
         name: "agent-b".into(),
+        source_template: None,
         ..AgentManifest::default()
     };
     let opts = LoopOptions {
@@ -1088,6 +1068,7 @@ fn resolve_max_history_falls_back_to_opts_when_manifest_unset() {
 fn resolve_max_history_falls_back_to_default_when_both_unset() {
     let manifest = AgentManifest {
         name: "agent-c".into(),
+        source_template: None,
         ..AgentManifest::default()
     };
     let opts = LoopOptions::default();
@@ -1101,6 +1082,7 @@ fn resolve_max_history_falls_back_to_default_when_both_unset() {
 fn resolve_max_history_clamps_below_floor() {
     let manifest = AgentManifest {
         name: "agent-d".into(),
+        source_template: None,
         max_history_messages: Some(2),
         ..AgentManifest::default()
     };
@@ -1112,6 +1094,7 @@ fn resolve_max_history_clamps_below_floor() {
 fn resolve_max_history_clamps_zero() {
     let manifest = AgentManifest {
         name: "agent-e".into(),
+        source_template: None,
         max_history_messages: Some(0),
         ..AgentManifest::default()
     };
@@ -1125,6 +1108,7 @@ fn resolve_max_history_passes_through_at_floor_and_above() {
 
     let manifest_at_floor = AgentManifest {
         name: "agent-f".into(),
+        source_template: None,
         max_history_messages: Some(MIN_HISTORY_MESSAGES),
         ..AgentManifest::default()
     };
@@ -1135,6 +1119,7 @@ fn resolve_max_history_passes_through_at_floor_and_above() {
 
     let manifest_above_floor = AgentManifest {
         name: "agent-f".into(),
+        source_template: None,
         max_history_messages: Some(200),
         ..AgentManifest::default()
     };
@@ -1147,6 +1132,7 @@ fn resolve_max_history_clamps_manifest_at_upper_limit() {
 
     let manifest_at_limit = AgentManifest {
         name: "agent-g".into(),
+        source_template: None,
         max_history_messages: Some(500),
         ..AgentManifest::default()
     };
@@ -1154,6 +1140,7 @@ fn resolve_max_history_clamps_manifest_at_upper_limit() {
 
     let manifest_above_limit = AgentManifest {
         name: "agent-g".into(),
+        source_template: None,
         max_history_messages: Some(501),
         ..AgentManifest::default()
     };
@@ -1164,6 +1151,7 @@ fn resolve_max_history_clamps_manifest_at_upper_limit() {
 fn resolve_max_history_clamps_opts_at_upper_limit() {
     let manifest = AgentManifest {
         name: "agent-h".into(),
+        source_template: None,
         ..AgentManifest::default()
     };
 
@@ -1835,6 +1823,84 @@ async fn test_normal_turn_persists_session_as_incognito_control() {
         persisted.messages.len() >= 2,
         "control: normal end-turn must persist user msg + assistant reply, got {} msgs",
         persisted.messages.len(),
+    );
+}
+
+#[tokio::test]
+async fn test_heartbeat_pruning_keeps_new_messages_start_on_current_turn() {
+    let memory = librefang_memory::MemorySubstrate::open_in_memory(0.01).unwrap();
+    let agent_id = librefang_types::agent::AgentId::new();
+    let session_id = librefang_types::agent::SessionId::new();
+    let mut messages = Vec::new();
+    for index in 0..12 {
+        messages.push(Message::user(format!("heartbeat {index}")));
+        messages.push(Message::assistant("[no reply needed]"));
+    }
+    let mut session = librefang_memory::session::Session {
+        id: session_id,
+        agent_id,
+        messages,
+        context_window_tokens: 0,
+        label: None,
+        model_override: None,
+        messages_generation: 0,
+        last_repaired_generation: None,
+        peer_id: None,
+    };
+    let mut manifest = test_manifest();
+    manifest.autonomous = Some(librefang_types::agent::AutonomousConfig {
+        heartbeat_keep_recent: Some(2),
+        ..Default::default()
+    });
+    let driver: Arc<dyn LlmDriver> = Arc::new(NormalDriver);
+
+    let result = run_agent_loop(
+        &manifest,
+        "current turn",
+        &mut session,
+        &memory,
+        driver,
+        &[],
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        &LoopOptions::default(),
+    )
+    .await
+    .expect("loop should complete");
+
+    assert!(
+        result.new_messages_start <= session.messages.len(),
+        "returned message boundary {} exceeds pruned session length {}",
+        result.new_messages_start,
+        session.messages.len(),
+    );
+    let new_messages = &session.messages[result.new_messages_start..];
+    assert_eq!(new_messages.len(), 2);
+    assert_eq!(new_messages[0].role, Role::User);
+    assert_eq!(new_messages[0].content.text_content(), "current turn");
+    assert_eq!(new_messages[1].role, Role::Assistant);
+    assert_eq!(
+        new_messages[1].content.text_content(),
+        "Hello from the agent!"
     );
 }
 
