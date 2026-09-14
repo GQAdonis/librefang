@@ -35,8 +35,7 @@ use crate::types::{
     MemorySection, MetadataSection, SkillRef, SkillsSection, ToolsSection,
 };
 use librefang_types::agent::{
-    AgentManifest, ManifestCapabilities, ModelConfig, ResourceQuota, ScheduleMode,
-};
+    AgentManifest, ManifestCapabilities, ModelConfig, ResourceQuota, ScheduleMode, ModelMode};
 use std::collections::HashMap;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +67,12 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         .unwrap_or_else(|| artifact.identity.persona.clone());
 
     let model = ModelConfig {
+        // Upstream's complexity-based model routing (#7781). `ModelMode::Fixed`
+        // is the documented backward-compatible default — "fully compatible with
+        // manifests written before routing existed" — which is exactly what a
+        // UAR-AGENT-MD artifact is; it expresses no router constraints.
+        mode: ModelMode::default(),
+        router_override: None,
         provider,
         model: model_name,
         // Upstream widened these to `Option`, where `None` means "inherit".

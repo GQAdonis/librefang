@@ -458,6 +458,38 @@ impl App {
                     .collect();
                 self.agents.mcp_cursor = 0;
             }
+            AppEvent::AgentModelRoutingLoaded {
+                mode,
+                allowed_profiles,
+                cost_budget,
+                default_profile,
+                fixed,
+                available,
+            } => {
+                // Populate the routing editor from the agent's real stored
+                // state, not from whatever the previous screen left behind.
+                self.agents.model_mode = mode;
+                self.agents.router_profiles = available
+                    .into_iter()
+                    .map(|name| {
+                        let checked = allowed_profiles.contains(&name);
+                        (name, checked)
+                    })
+                    .collect();
+                self.agents.router_profile_cursor = 0;
+                self.agents.cost_budget_idx = agents::COST_BUDGET_OPTIONS
+                    .iter()
+                    .position(|(_, wire)| *wire == cost_budget.as_deref())
+                    .unwrap_or(0);
+                self.agents.router_default_profile = default_profile;
+                self.agents.router_fixed = fixed;
+                self.agents.routing_loaded = true;
+            }
+            AppEvent::AgentModelRoutingUpdated(id) => {
+                self.agents.status_msg =
+                    crate::i18n::t_args("tui-mod-agent-model-routing-updated", &[("id", &id)]);
+                self.agents.sub = agents::AgentSubScreen::AgentDetail;
+            }
             AppEvent::AgentSkillsUpdated(id) => {
                 self.agents.status_msg =
                     crate::i18n::t_args("tui-mod-agent-skills-updated", &[("id", &id)]);
@@ -512,6 +544,9 @@ impl App {
                     };
                 }
             }
+            AppEvent::AgentTokenUsageLoaded { agent_id, usage } => {
+                self.agents.apply_token_usage(&agent_id, usage);
+            }
             AppEvent::AgentModelParamsLoaded {
                 model,
                 context_cap,
@@ -543,16 +578,26 @@ impl App {
                     Tab::Hands => self.hands.status_msg = err,
                     Tab::Extensions => self.extensions.status_msg = err,
                     Tab::Templates => self.templates.status_msg = err,
+                    // The config editor is the one Settings pane that does not
+                    // share `settings.loading`: it draws its own status line and
+                    // its own spinner, so a refused write or a failed fetch has
+                    // to land there — on `settings.status_msg` it would be
+                    // invisible behind a spinner that never stops. Guarded arm
+                    // first, or the general one below would swallow it.
+                    Tab::Settings if self.settings.sub == settings::SettingsSub::Config => {
+                        self.settings.config.loading = false;
+                        self.settings.config.status_msg = err;
+                    }
                     Tab::Settings => {
-                        // Same reason as `Tab::Channels` below: every Settings
-                        // pane draws its spinner on `state.loading` alone, and
-                        // `loading` is only cleared by a successful *Loaded
-                        // event. A fetch that fails after `refresh_settings_*`
-                        // set the flag would otherwise leave the pane spinning
-                        // forever, with the message underneath it invisible
-                        // behind the spinner (#8059 review). `loading` is shared
-                        // by all four panes, so this belongs here rather than in
-                        // any one fetch helper.
+                        // Same reason as `Tab::Channels` below: every other
+                        // Settings pane draws its spinner on `state.loading`
+                        // alone, and `loading` is only cleared by a successful
+                        // *Loaded event. A fetch that fails after
+                        // `refresh_settings_*` set the flag would otherwise leave
+                        // the pane spinning forever, with the message underneath
+                        // it invisible behind the spinner (#8059 review).
+                        // `loading` is shared by those panes, so this belongs
+                        // here rather than in any one fetch helper.
                         self.settings.loading = false;
                         self.settings.status_msg = err;
                     }
@@ -855,6 +900,31 @@ impl App {
                     self.groups.list_state.select(Some(0));
                 }
                 self.groups.loading = false;
+            }
+            AppEvent::ConfigSectionsLoaded(sections) => {
+                self.settings.config.set_sections(sections);
+            }
+            AppEvent::ConfigValueSaved { path, outcome } => {
+                // "Saved" on its own would be a lie for two of the three outcomes:
+                // the refetch below reads the live kernel config, so a failed reload
+                // redisplays the old value under a success message.
+                self.settings.config.status_msg = match outcome {
+                    event::ConfigSaveOutcome::Applied => {
+                        crate::i18n::t_args("tui-mod-config-value-saved", &[("path", &path)])
+                    }
+                    event::ConfigSaveOutcome::RestartRequired => crate::i18n::t_args(
+                        "tui-mod-config-value-saved-restart",
+                        &[("path", &path)],
+                    ),
+                    event::ConfigSaveOutcome::ReloadFailed(reason) => crate::i18n::t_args(
+                        "tui-mod-config-value-saved-reload-failed",
+                        &[("path", &path), ("error", &reason)],
+                    ),
+                };
+                // Re-read rather than trust the local copy: `POST /api/config/set`
+                // merges into `config.toml`, and the value that comes back is the
+                // one the daemon actually kept.
+                self.refresh_settings_config();
             }
             AppEvent::BackupsLoaded(backups) => {
                 self.settings.backups = backups;
@@ -1638,6 +1708,13 @@ impl App {
         }
     }
 
+    fn refresh_settings_config(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.settings.config.loading = true;
+            event::spawn_fetch_config_sections(backend, self.event_tx.clone());
+        }
+    }
+
     fn refresh_settings_auxiliary(&mut self) {
         if let Some(backend) = self.backend.to_ref() {
             self.settings.loading = true;
@@ -1926,12 +2003,43 @@ impl App {
                     event::spawn_fetch_agent_channels(backend, id, self.event_tx.clone());
                 }
             }
+            agents::AgentAction::FetchAgentTokenUsage(id) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_token_usage(backend, id, self.event_tx.clone());
+                }
+            }
             agents::AgentAction::UpdateChannels { id, channels } => {
                 if let Some(backend) = self.backend.to_ref() {
                     event::spawn_update_agent_channels(
                         backend,
                         id,
                         channels,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
+            agents::AgentAction::FetchAgentModelRouting(id) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_model_routing(backend, id, self.event_tx.clone());
+                }
+            }
+            agents::AgentAction::UpdateModelRouting {
+                id,
+                mode,
+                allowed_profiles,
+                cost_budget,
+                default_profile,
+                fixed,
+            } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_update_agent_model_routing(
+                        backend,
+                        id,
+                        mode,
+                        allowed_profiles,
+                        cost_budget,
+                        default_profile,
+                        fixed,
                         self.event_tx.clone(),
                     );
                 }
@@ -2368,6 +2476,12 @@ impl App {
             settings::SettingsAction::RestoreBackup(body) => {
                 if let Some(backend) = self.backend.to_ref() {
                     event::spawn_restore_backup(backend, body, self.event_tx.clone());
+                }
+            }
+            settings::SettingsAction::RefreshConfig => self.refresh_settings_config(),
+            settings::SettingsAction::SaveConfigValue { path, value } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_set_config_value(backend, path, value, self.event_tx.clone());
                 }
             }
             settings::SettingsAction::SaveAuxChain { task, chain } => {

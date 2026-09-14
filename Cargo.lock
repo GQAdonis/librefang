@@ -102,9 +102,9 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d87bc7769eba641753ba5dc52f73ec3765d51022c6753bf040967125ddc86a8"
+checksum = "6395d81d91fd2ee93f48ea31cfc511356e75b9061ca0389cefd0308507cc11ba"
 dependencies = [
  "agent-client-protocol-derive",
  "agent-client-protocol-schema",
@@ -126,9 +126,9 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol-derive"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3abd4080f51e4f24f5042beb7fb7a66ede29a2dc1c2582c329532e1c27264ddc"
+checksum = "7e8d5f32208cdc11238004bec4e4229d68fb937598f900e153468ca084865fa5"
 dependencies = [
  "quote",
  "syn 3.0.2",
@@ -136,9 +136,9 @@ dependencies = [
 
 [[package]]
 name = "agent-client-protocol-schema"
-version = "1.5.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5c231915b4ab578c722eca2d1bd7df4d300bfd6cac3b8e9f0d1e3ddc95b187c"
+checksum = "ca98360c7bb8cc97d7acd49e2a8a851c3f7bee6b2f0535036d8ab86b5fcd223d"
 dependencies = [
  "anyhow",
  "derive_more 2.1.1",
@@ -1060,18 +1060,18 @@ checksum = "64fa3c856b712db6612c019f14756e64e4bcea13337a6b33b696333a9eaa2d06"
 
 [[package]]
 name = "bytemuck"
-version = "1.25.0"
+version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8efb64bd706a16a1bdde310ae86b351e4d21550d98d056f22f8a7f7a2183fec"
+checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
 dependencies = [
  "bytemuck_derive",
 ]
 
 [[package]]
 name = "bytemuck_derive"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc0e56a716f1e132ff6bf4bdac1c944a3fcdc1cae65f70a4a2a1ac3b401d2d1f"
+checksum = "6a1f896587b6f2c069c73d2f0913e2d590c3990285cd2f0b6aa02b786b4c679c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5255,7 +5255,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-acp"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
@@ -5276,7 +5276,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-api"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -5348,7 +5348,7 @@ dependencies = [
  "toml_edit 0.25.13+spec-1.1.0",
  "totp-rs",
  "tower",
- "tower-http 0.7.0",
+ "tower-http 0.7.1",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -5366,7 +5366,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-channels"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "axum",
@@ -5405,7 +5405,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-cli"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "arc-swap",
  "base64 0.23.1",
@@ -5453,7 +5453,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-desktop"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "axum",
  "clap",
@@ -5486,7 +5486,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-extensions"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "aes-gcm",
  "argon2 0.5.3",
@@ -5520,7 +5520,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-hands"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "dashmap",
@@ -5545,7 +5545,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-http"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "librefang-types",
  "reqwest",
@@ -5557,7 +5557,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-import"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5575,7 +5575,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5632,6 +5632,7 @@ dependencies = [
  "totp-rs",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
  "wiremock",
  "zeroize",
@@ -5639,7 +5640,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-handle"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5652,7 +5653,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-metering"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "librefang-llm-driver",
  "librefang-memory",
@@ -5664,7 +5665,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-kernel-router"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "dirs 6.0.0",
  "librefang-hands",
@@ -5680,7 +5681,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-llm-driver"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "dashmap",
@@ -5694,7 +5695,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-llm-drivers"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5731,7 +5732,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-memory"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5759,7 +5760,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-memory-wiki"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "librefang-kernel-handle",
@@ -5775,7 +5776,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-rl-export"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -5796,7 +5797,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5870,7 +5871,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-audit"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "hex",
@@ -5888,7 +5889,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-mcp"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5917,7 +5918,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-media"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -5937,7 +5938,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-runtime-sandbox-docker"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "dashmap",
@@ -5949,7 +5950,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-skills"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "aho-corasick",
  "base64 0.23.1",
@@ -5973,12 +5974,13 @@ dependencies = [
  "tracing",
  "walkdir",
  "webpki-roots 1.0.9",
+ "wiremock",
  "zip 8.6.0",
 ]
 
 [[package]]
 name = "librefang-storage"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6001,7 +6003,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-subprocess"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "metrics",
  "serde_json",
@@ -6013,7 +6015,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-telemetry"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "librefang-types",
  "metrics",
@@ -6021,7 +6023,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-testing"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -6048,7 +6050,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-types"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6076,7 +6078,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-uar-spec"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "chrono",
  "librefang-types",
@@ -6089,7 +6091,7 @@ dependencies = [
 
 [[package]]
 name = "librefang-wire"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -7168,9 +7170,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "open"
-version = "5.4.2"
+version = "5.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ade3be4664bc1ef537ce133015f04c176b737815c2ba9fd60edf212d6e90dd55"
+checksum = "7c603ab8300cf18bc3b14146b19fe3dfcc4843ae5a400cd0e7a30b95aa366634"
 dependencies = [
  "dunce",
  "is-wsl",
@@ -8428,9 +8430,9 @@ dependencies = [
 
 [[package]]
 name = "psl"
-version = "2.1.226"
+version = "2.1.231"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bc88482eea924ca3a2f56a547454169af58deef35567965eb4fc2392a834841"
+checksum = "62697aa3f75e221e1ecfa35146237f7a3fa7f234b523816734deb198a1b23418"
 dependencies = [
  "psl-types",
 ]
@@ -9249,9 +9251,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.11.4"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dedc5658c6ecb3bdb5ef5f3295bb9253f42dcf3fd1402c03f6b1f7659c3c4a9"
+checksum = "18bd8a37d17a58532776dcdf6041ce64929adca78e8489d5cacbafe99229d3e1"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -9992,9 +9994,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.228"
+version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
+checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
  "serde_derive",
@@ -10024,22 +10026,22 @@ dependencies = [
 
 [[package]]
 name = "serde_core"
-version = "1.0.228"
+version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
+checksum = "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.228"
+version = "1.0.229"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
+checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.117",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -10487,9 +10489,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.15.2"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+checksum = "b9be42f50aa861c555654aa3a37f52f4b1074bacf4e48fe0ef7fa584e80f1f0f"
 dependencies = [
  "serde",
 ]
@@ -11451,9 +11453,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-barcode-scanner"
-version = "2.4.5"
+version = "2.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3b68f0e3782b61a6e16a67380be40226e2b7233f3e36dadf6e5d03f07d2e7b3"
+checksum = "81f76741c77b8213350fd37a5608f0c78f4e61fe33f0334f5dfd0e6cc8d00138"
 dependencies = [
  "log",
  "serde",
@@ -11465,9 +11467,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-dialog"
-version = "2.7.2"
+version = "2.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2d3c1dbe38037e7f590cdf2492594d5ceebe031e7bc7e827509b22a999d2940"
+checksum = "61854a36651aa48381e5e209f69a01273b77f3f9f91f0c430b1b98d33bd47229"
 dependencies = [
  "log",
  "raw-window-handle",
@@ -11483,9 +11485,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-fs"
-version = "2.5.1"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7ecc274121aca0c036a2b42d1cbe83d368d348f54e0bb8a735c2b1548e8f371"
+checksum = "de22eef34fd78c0da050e748710edd50bf127e651d02ea1b2bfada1523cc5c51"
 dependencies = [
  "anyhow",
  "dunce",
@@ -11522,9 +11524,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-notification"
-version = "2.3.3"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01fc2c5ff41105bd1f7242d8201fdf3efd70749b82fa013a17f2126357d194cc"
+checksum = "ad2fd40946aef810c4be9fd33a2d1b9b397cb79042b2d21c81a0a8f204354fd1"
 dependencies = [
  "log",
  "notify-rust",
@@ -11541,9 +11543,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-shell"
-version = "2.3.5"
+version = "2.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8457dbf9e2bab1edd8df22bb2c20857a59a9868e79cb3eac5ed639eec4d0c73b"
+checksum = "8548af174c5516e4f71f142acea4d02e00316296ea9aafa58798851481003e3c"
 dependencies = [
  "encoding_rs",
  "log",
@@ -11562,9 +11564,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-single-instance"
-version = "2.4.3"
+version = "2.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3214becf9ef5783c0ae99a3bb25adf5353a7a16ebf53e74b909e29205735c6c"
+checksum = "5cd0cb5c412a5071b69bab6a6df1583cbb89460d4a83b6a24769b08d15b6b1e1"
 dependencies = [
  "serde",
  "serde_json",
@@ -11578,9 +11580,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-updater"
-version = "2.10.1"
+version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "806d9dac662c2e4594ff03c647a552f2c9bd544e7d0f683ec58f872f952ce4af"
+checksum = "b28d8cabdeb0564f03ae261963de4bc3d98321cd3d213e76a81b7d344e5df606"
 dependencies = [
  "base64 0.22.1",
  "dirs 6.0.0",
@@ -12367,9 +12369,9 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b11f75e912b0c2be01b63d8cf8057b8c3f97cf34abb3d431a3a4c8675498e233"
+checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
 dependencies = [
  "async-compression",
  "bitflags 2.13.1",
@@ -14704,7 +14706,7 @@ checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
 name = "xtask"
-version = "2026.8.30"
+version = "2026.9.14"
 dependencies = [
  "base64 0.23.1",
  "chrono",

@@ -120,7 +120,14 @@ pub struct AutonomousConfig {
     /// when pruning NO_REPLY heartbeat messages from session context.
     #[serde(default)]
     pub heartbeat_keep_recent: Option<usize>,
-    /// Channel to send heartbeat status to (e.g., "telegram", "discord").
+    /// Where this agent's unresponsive alert is delivered — the per-agent shorthand for the `health_check_failed` notification.
+    ///
+    /// Written either as a bare channel (`"telegram"`), whose recipient is taken from the `owner` user's `channel_bindings` entry for that channel, or as `"<channel>:<recipient>"` (`"telegram:123456"`), which addresses a recipient directly.
+    /// It is consulted *after* a `[[notification.agent_rules]]` entry listing `health_check_failed` — that form carries several targets and thread ids, so it stays authoritative — and *before* the global `[notification] alert_channels` fallback.
+    /// A value that cannot be turned into a target is logged and ignored, leaving the `[notification]` routing to deliver the alert.
+    ///
+    /// This is the unresponsive-transition alert only; nothing pushes a periodic "still alive" status anywhere.
+    /// Resolution lives in `librefang_kernel::heartbeat::resolve_heartbeat_channel`.
     pub heartbeat_channel: Option<String>,
     /// After this many consecutive *block-only* iterations (every tool result
     /// a soft loop-guard block, no success, no hard error, no assistant prose)
@@ -603,6 +610,25 @@ pub enum SessionMode {
     New,
 }
 
+/// Model selection mode for an agent.
+///
+/// Like [`SessionMode`] above, this deserializes strictly: there is no
+/// `#[serde(other)]` arm, so `mode = "Flexible"` (capitalised typo) is a hard
+/// parse error rather than a silent downgrade to `Fixed`. A typo that quietly
+/// pinned the agent back to its manifest model would be invisible — the agent
+/// would keep working, just never routed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelMode {
+    /// Always use the provider/model in [`ModelConfig`]. Default, and
+    /// fully backward-compatible with manifests written before routing existed.
+    #[default]
+    Fixed,
+    /// Let the profile router pick the model for each turn.
+    /// Only honoured when `[model_router] enabled = true` in `config.toml`.
+    Flexible,
+}
+
 /// Web search augmentation mode.
 ///
 /// Controls whether the agent loop automatically searches the web using the
@@ -723,7 +749,11 @@ pub struct ResourceQuota {
     /// Clamped to `0.01..=1.0` at enforcement time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub burst_ratio: Option<f32>,
-    /// Maximum network bytes per hour.
+    /// Maximum bytes the agent may pull in over the network per rolling hour. `0` = unlimited, matching `max_tool_calls_per_minute`.
+    ///
+    /// Charged against the response bodies the agent's own outbound tools read: `web_fetch`, `web_fetch_to_file`, the WASM `net_fetch` host call, and MCP tool results.
+    /// Once the rolling hour sits at or above the cap the agent's next `web_fetch` / `web_fetch_to_file` / `web_search` / MCP call is refused; a transfer already in flight finishes and is counted.
+    /// Headless-browser navigation and search-provider JSON responses are outside the meter — `docs/architecture/network-byte-quota.md` enumerates exactly what is counted and what is not.
     pub max_network_bytes_per_hour: u64,
     /// Maximum cost in USD per hour.
     pub max_cost_per_hour_usd: f64,
@@ -896,6 +926,16 @@ pub const DEFAULT_MODEL_TEMPERATURE: f32 = 0.7;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ModelConfig {
+    /// Model selection mode. `"fixed"` (default) always uses the
+    /// provider/model below; `"flexible"` lets the profile router pick per
+    /// turn. Only honoured when `[model_router] enabled = true` in
+    /// `config.toml`.
+    #[serde(default)]
+    pub mode: ModelMode,
+    /// Per-agent router constraints, applied when `mode = "flexible"`.
+    /// Ignored entirely in `"fixed"` mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub router_override: Option<crate::model_profile::AgentRouterOverride>,
     /// LLM provider name.
     pub provider: String,
     /// Model identifier.
@@ -960,6 +1000,8 @@ pub struct ModelConfig {
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
+            mode: ModelMode::default(),
+            router_override: None,
             provider: "default".to_string(),
             model: "default".to_string(),
             max_tokens: None,
@@ -3400,6 +3442,8 @@ model = "llama-3.3-70b-versatile"
         extra.insert("memory_max_window".to_string(), serde_json::json!(50));
 
         let config = ModelConfig {
+            mode: ModelMode::Fixed,
+            router_override: None,
             provider: "qwen".to_string(),
             model: "qwen3.6".to_string(),
             max_tokens: Some(4096),

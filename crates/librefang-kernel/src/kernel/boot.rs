@@ -318,6 +318,22 @@ impl LibreFangKernel {
             );
         }
 
+        // A configured non-local backend does not route tool calls yet, and the operator has no other way to find that out (#8221).
+        //
+        // `docs/architecture/tool-exec-backends.md` states that the kernel warns here, and that warning was the one thing making the deferral visible — it was never implemented.
+        // So an operator who pointed `kind` at an SSH host to keep shell commands off this machine got the exact opposite of what they configured, silently.
+        // `validate()` above only rejects a malformed sub-table, so a well-formed `[tool_exec.ssh]` boots clean and every `shell_exec` still runs locally.
+        //
+        // Deliberately a `warn!` and not a boot failure: refusing to start would break deployments carrying the setting in anticipation, and this is a missing feature rather than a broken config.
+        if !config.tool_exec.kind.is_wired_into_dispatch() {
+            warn!(
+                configured_backend = config.tool_exec.kind.as_str(),
+                "[tool_exec] kind is set to a non-local backend, but tool calls still execute on the daemon host — \
+                 backend routing is not wired into tool dispatch yet (#8221). Shell and process tools ignore this \
+                 setting; it is not a sandbox."
+            );
+        }
+
         // Check TOTP configuration consistency
         if config.approval.second_factor == librefang_types::approval::SecondFactor::Totp {
             let vault_path = config.home_dir.join("vault.enc");
@@ -1085,6 +1101,7 @@ impl LibreFangKernel {
         let goal_runner = crate::goal_runner::GoalRunner::new_with_store(
             supervisor.subscribe(),
             librefang_memory::GoalRunStore::new(memory.pool()),
+            memory.clone(),
         );
 
         // Initialize WASM sandbox engine (shared across all WASM agents)
@@ -1741,6 +1758,8 @@ impl LibreFangKernel {
                 "approval_requested",
                 "task_completed",
                 "task_failed",
+                // Provider-safety refusals, split out of task_failed by #3450 so they can be routed separately — a rule listing this is valid and must not be warned about.
+                "content_filtered",
                 "tool_failure",
                 "health_check_failed",
                 "model_migrated",
@@ -2714,14 +2733,34 @@ impl LibreFangKernel {
                                 })
                                 .unwrap_or(false);
 
-                        if (is_default_provider && is_default_model)
+                        // True when the row is already on the sentinel, so the two assignments
+                        // below restate what is there and no endpoint moves.
+                        let already_on_sentinel = is_default_provider && is_default_model;
+
+                        if already_on_sentinel
                             || toml_says_default
                             || is_legacy_auto_spawned_assistant
                         {
                             restored_entry.manifest.model.provider = "default".to_string();
                             restored_entry.manifest.model.model = "default".to_string();
-                            restored_entry.manifest.model.api_key_env = None;
-                            restored_entry.manifest.model.base_url = None;
+                            // Same repointing as the model picker and the router, so the same
+                            // field list: this restated only the credentials, which left the
+                            // pinned model's context window and output cap attached to whatever
+                            // `default` resolves to (#7781 review).
+                            //
+                            // Gated on an actual repoint, like both sibling sites
+                            // (`agent_execution.rs` on the no-change case, `ephemeral_spawn.rs`
+                            // on `provider_changed || model_changed`). An agent already on the
+                            // sentinel has not moved endpoints, and this branch runs on every
+                            // boot: clearing there would wipe an operator's hand-set
+                            // `context_window`, `max_output_tokens` and `[model.extra_params]`
+                            // on each daemon restart, then persist the loss at the next
+                            // `save_agent`.
+                            if !already_on_sentinel {
+                                crate::registry::clear_stale_provider_overrides(
+                                    &mut restored_entry.manifest.model,
+                                );
+                            }
                         }
                     }
 

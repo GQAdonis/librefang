@@ -172,6 +172,11 @@ pub struct GuestState {
     pub agent_id: String,
     /// Tokio runtime handle for async operations in sync host functions.
     pub tokio_handle: tokio::runtime::Handle,
+    /// The network byte meter of the tool call that dispatched this guest, if there was one.
+    ///
+    /// The guest runs on a blocking-pool thread, where the `crate::network_meter` task-local installed by `tool_runner::dispatch` is not visible, so the counter is carried here by hand and re-installed by `host_net_fetch` around its own `block_on`.
+    /// `None` for a guest that no measured tool call started — a plugin hook, a test — whose egress is charged to nothing, the same as any other primitive running outside a tool call.
+    pub network_meter: Option<Arc<std::sync::atomic::AtomicU64>>,
     /// Memory limiter enforcing `SandboxConfig::max_memory_bytes`.
     limiter: MemoryLimiter,
     /// Wall-clock instant this guest started executing — used by the
@@ -211,6 +216,7 @@ impl GuestState {
             kernel,
             agent_id,
             tokio_handle,
+            network_meter: None,
             limiter: MemoryLimiter {
                 max_bytes: usize::MAX,
             },
@@ -362,6 +368,7 @@ pub(crate) fn new_guest_state(
         kernel,
         agent_id: agent_id.to_string(),
         tokio_handle,
+        network_meter: None,
         limiter: MemoryLimiter {
             max_bytes: config.max_memory_bytes,
         },
@@ -450,6 +457,9 @@ impl WasmSandbox {
         let wasm_bytes = wasm_bytes.to_vec();
         let agent_id = agent_id.to_string();
         let handle = tokio::runtime::Handle::current();
+        // Taken here, on the task the dispatching tool call installed it on: `spawn_blocking` below hands the guest to a thread the task-local cannot reach.
+        // The counter is shared with the tool call's own meter, so a guest's reads are charged as they happen and survive a guest that traps or times out afterwards.
+        let network_meter = crate::network_meter::current();
 
         tokio::task::spawn_blocking(move || {
             Self::execute_sync(
@@ -460,6 +470,7 @@ impl WasmSandbox {
                 kernel,
                 &agent_id,
                 handle,
+                network_meter,
             )
         })
         .await
@@ -467,6 +478,7 @@ impl WasmSandbox {
     }
 
     /// Synchronous inner execution — runs on a blocking thread.
+    #[allow(clippy::too_many_arguments)]
     fn execute_sync(
         engine: &Engine,
         wasm_bytes: &[u8],
@@ -475,6 +487,7 @@ impl WasmSandbox {
         kernel: Option<Arc<dyn KernelHandle>>,
         agent_id: &str,
         tokio_handle: tokio::runtime::Handle,
+        network_meter: Option<Arc<std::sync::atomic::AtomicU64>>,
     ) -> Result<ExecutionResult, SandboxError> {
         // Compile the module (accepts both .wasm binary and .wat text)
         let module = Module::new(engine, wasm_bytes)
@@ -489,6 +502,7 @@ impl WasmSandbox {
                 kernel,
                 agent_id: agent_id.to_string(),
                 tokio_handle,
+                network_meter,
                 limiter: MemoryLimiter {
                     max_bytes: config.max_memory_bytes,
                 },
