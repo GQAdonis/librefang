@@ -11,6 +11,38 @@ const TEXT_TRUNCATION_MARKER: &str =
 /// for the streaming download in `resolve_url_attachments`.
 const MAX_ATTACHMENT_BYTES: usize = 20 * 1024 * 1024;
 
+/// Keep CPU-heavy PDF parsing off Tokio workers and bound how many parser jobs can occupy the blocking pool at once.
+/// Additional requests wait asynchronously without consuming a runtime worker thread.
+const MAX_CONCURRENT_PDF_EXTRACTIONS: usize = 2;
+static PDF_EXTRACTION_PERMITS: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| {
+        std::sync::Arc::new(tokio::sync::Semaphore::new(MAX_CONCURRENT_PDF_EXTRACTIONS))
+    });
+
+async fn run_pdf_job<F, T>(job: F) -> Result<T, String>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let permit = std::sync::Arc::clone(&PDF_EXTRACTION_PERMITS)
+        .acquire_owned()
+        .await
+        .map_err(|_| "PDF extraction queue is unavailable".to_string())?;
+    tokio::task::spawn_blocking(move || {
+        // Keep the permit in the blocking closure so request cancellation cannot release capacity while a detached parser is still running.
+        let _permit = permit;
+        job()
+    })
+    .await
+    .map_err(|error| format!("PDF extraction task failed: {error}"))
+}
+
+async fn extract_pdf_text(data: Vec<u8>) -> Result<String, String> {
+    run_pdf_job(move || librefang_kernel::pdf_text::extract_text_from_pdf(&data))
+        .await
+        .and_then(|result| result)
+}
+
 /// Append `chunk` to `buf` unless doing so would push it past `cap`. Returns
 /// `false` (leaving `buf` unchanged) when the cap would be exceeded, so a
 /// streaming caller can abort before buffering an over-cap body.
@@ -112,10 +144,16 @@ fn file_saved_block(
 ///     inlined (the path block below still points the agent at the bytes).
 ///
 /// In ALL cases a `[File: <name>] saved to <path>` block (see [`file_saved_block`]) is appended so the agent always knows the on-disk path of the raw upload — this is the parity fix that lets the agent attach the file to a vault / transcribe it / read it, for every file type.
-pub fn resolve_attachments(
+#[derive(Debug)]
+pub struct AttachmentAccessDenied {
+    pub file_id: String,
+}
+
+pub async fn resolve_attachments(
     state: &AppState,
     attachments: &[AttachmentRef],
-) -> Vec<librefang_types::message::ContentBlock> {
+    caller: Option<&crate::middleware::AuthenticatedApiUser>,
+) -> Result<Vec<librefang_types::message::ContentBlock>, AttachmentAccessDenied> {
     use base64::Engine;
 
     let upload_dir = state
@@ -126,8 +164,29 @@ pub fn resolve_attachments(
     let mut blocks = Vec::new();
 
     for att in attachments {
-        // Look up metadata from the upload registry
-        let meta = UPLOAD_REGISTRY.get(&att.file_id);
+        // Validate file_id is a UUID to prevent path traversal.
+        if uuid::Uuid::parse_str(&att.file_id).is_err() {
+            continue;
+        }
+
+        // Resolve durable ownership metadata before trusting any client-supplied attachment fields.
+        // The in-memory registry is only a cache and may be empty after restart.
+        let meta = if let Some(meta) = UPLOAD_REGISTRY.get(&att.file_id) {
+            Some(meta.clone())
+        } else {
+            let loaded = load_upload_meta(&upload_dir, &att.file_id).await;
+            if let Some(ref meta) = loaded {
+                UPLOAD_REGISTRY.insert(att.file_id.clone(), meta.clone());
+            }
+            loaded
+        };
+        if !upload_access_allowed(meta.as_ref(), caller) {
+            tracing::warn!(file_id = %att.file_id, "attachment access denied");
+            return Err(AttachmentAccessDenied {
+                file_id: att.file_id.clone(),
+            });
+        }
+
         let (raw_content_type, filename) = if let Some(ref m) = meta {
             (m.content_type.clone(), m.filename.clone())
         } else if !att.content_type.is_empty() {
@@ -142,23 +201,23 @@ pub fn resolve_attachments(
         // and silently drop the attachment.
         let content_type = librefang_types::media::mime_base(&raw_content_type);
 
-        // Validate file_id is a UUID to prevent path traversal
-        if uuid::Uuid::parse_str(&att.file_id).is_err() {
-            continue;
-        }
-
         // Reconstruct the `<uuid>.<ext>` on-disk name written by the producer
         // (#6530), tolerating legacy bare-`<uuid>` files and the `<uuid>.*`
         // probe for generated images. Skip the attachment if nothing is on disk.
-        let Some(file_path) =
-            resolve_existing_upload_path(&upload_dir, &att.file_id, &raw_content_type, &filename)
+        let Some(file_path) = resolve_existing_upload_path_async(
+            &upload_dir,
+            &att.file_id,
+            &raw_content_type,
+            &filename,
+        )
+        .await
         else {
             tracing::debug!(file_id = %att.file_id, "attachment not found on disk; skipping");
             continue;
         };
 
         if content_type.starts_with("image/") {
-            match std::fs::read(&file_path) {
+            match tokio::fs::read(&file_path).await {
                 Ok(data) => {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
                     tracing::info!(
@@ -180,10 +239,11 @@ pub fn resolve_attachments(
                 }
             }
         } else if content_type == "application/pdf" {
-            match std::fs::read(&file_path) {
+            match tokio::fs::read(&file_path).await {
                 Ok(data) => {
                     let header = format!("[Attached PDF: {} ({} bytes)]", filename, data.len());
-                    let body = match librefang_kernel::pdf_text::extract_text_from_pdf(&data) {
+                    let size_bytes = data.len();
+                    let body = match extract_pdf_text(data).await {
                         Ok(text) => text,
                         Err(e) => {
                             tracing::warn!(
@@ -198,7 +258,7 @@ pub fn resolve_attachments(
                     tracing::info!(
                         file_id = %att.file_id,
                         filename = %filename,
-                        size_bytes = data.len(),
+                        size_bytes,
                         extracted_chars = body.chars().count(),
                         "Resolved PDF attachment into Text block"
                     );
@@ -213,7 +273,7 @@ pub fn resolve_attachments(
                 }
             }
         } else if is_text_like_attachment(&content_type, &filename) {
-            match std::fs::read(&file_path) {
+            match tokio::fs::read(&file_path).await {
                 Ok(data) => {
                     let raw = String::from_utf8_lossy(&data);
                     let total_chars = raw.chars().count();
@@ -253,33 +313,23 @@ pub fn resolve_attachments(
         } else {
             // Unsupported/binary type: we can't inline its content, but the file IS on disk and the agent may still want to act on it (attach to a vault, hand to a file-reader tool).
             // Surface a note + the path block instead of silently dropping the attachment.
-            // Guarded on existence so we never advertise a path to a missing file.
-            if file_path.exists() {
-                tracing::info!(
-                    file_id = %att.file_id,
-                    content_type = %content_type,
-                    filename = %filename,
-                    "Attachment type not inlined; surfacing on-disk path only"
-                );
-                blocks.push(librefang_types::message::ContentBlock::Text {
-                    text: format!(
-                        "[Attached file: {filename} ({content_type})] — content not inlined for this type; the raw file is available on disk."
-                    ),
-                    provider_metadata: None,
-                });
-                blocks.push(file_saved_block(&filename, &file_path));
-            } else {
-                tracing::warn!(
-                    file_id = %att.file_id,
-                    content_type = %content_type,
-                    filename = %filename,
-                    "Attachment type not wired into the agent loop and file missing on disk; skipping"
-                );
-            }
+            tracing::info!(
+                file_id = %att.file_id,
+                content_type = %content_type,
+                filename = %filename,
+                "Attachment type not inlined; surfacing on-disk path only"
+            );
+            blocks.push(librefang_types::message::ContentBlock::Text {
+                text: format!(
+                    "[Attached file: {filename} ({content_type})] — content not inlined for this type; the raw file is available on disk."
+                ),
+                provider_metadata: None,
+            });
+            blocks.push(file_saved_block(&filename, &file_path));
         }
     }
 
-    blocks
+    Ok(blocks)
 }
 
 /// Pre-insert attachment content blocks (image / extracted-text-from-PDF /
@@ -332,15 +382,9 @@ pub fn inject_attachments_into_session(
 /// content blocks ready to inject into a session. Non-image attachments
 /// and download failures are skipped with a warning.
 ///
-/// SSRF defence: every URL is run through
-/// [`crate::webhook_store::validate_webhook_url_resolved`] before the
-/// fetch — this rejects loopback, RFC 1918, link-local, IPv6 ULA, the
-/// cloud-metadata literals, and any hostname whose DNS resolves to one
-/// of those families. For domain URLs we then pin reqwest to the
-/// validated `SocketAddr` via `.resolve(host, addr)` so a DNS-rebind
-/// flip between validation and the eventual HTTP connect cannot reroute
-/// the fetch onto an internal IP. Mirrors the webhook fire-time pattern
-/// at `webhooks.rs:738-744` (issue #3701).
+/// SSRF defence: every URL is run through [`crate::webhook_store::validate_webhook_url_resolved`] before the fetch — this rejects loopback, RFC 1918, link-local, IPv6 ULA, the cloud-metadata literals, and any hostname whose DNS resolves to one of those families.
+/// For domain URLs we then pin reqwest to the validated `SocketAddr` on a direct/no-proxy client so a DNS-rebind flip between validation and the eventual HTTP connect cannot reroute the fetch onto an internal IP.
+/// Mirrors the webhook fire-time pattern at `webhooks.rs:798-808` (issue #3701).
 pub async fn resolve_url_attachments(
     attachments: &[librefang_types::comms::Attachment],
 ) -> Vec<librefang_types::message::ContentBlock> {
@@ -380,16 +424,14 @@ pub async fn resolve_url_attachments(
             }
         };
 
-        // Build a per-attachment client and pin DNS to the IP we just
-        // validated. Without the pin, reqwest performs its own
-        // independent lookup before connecting — a low-TTL record can
-        // flip to a private IP between our validation and reqwest's
-        // resolver call (DNS rebind, #3701).
-        let mut builder = librefang_kernel::http_client::proxied_client_builder()
+        // Build a direct per-attachment client and pin DNS to the IP we just validated.
+        // Proxies are disabled because proxy-side DNS would bypass the local override.
+        // Without the pin, reqwest performs its own independent lookup before connecting — a low-TTL record can flip to a private IP between our validation and reqwest's resolver call (DNS rebind, #3701).
+        let mut builder = librefang_kernel::http_client::direct_client_builder()
             .timeout(std::time::Duration::from_secs(30))
             .redirect(reqwest::redirect::Policy::none());
         if let Some((ref host, addr)) = pinned_host {
-            builder = builder.resolve(host, addr);
+            builder = builder.resolve_to_addrs(host, &[addr]);
         }
         let client = match builder.build() {
             Ok(c) => c,
@@ -470,6 +512,35 @@ fn mime_from_url(url: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn pdf_job_does_not_block_async_runtime() {
+        use std::sync::{Arc, Condvar, Mutex};
+
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let worker_gate = Arc::clone(&gate);
+        let job = tokio::spawn(run_pdf_job(move || {
+            let (lock, ready) = &*worker_gate;
+            let mut released = lock.lock().unwrap();
+            while !*released {
+                released = ready.wait(released).unwrap();
+            }
+        }));
+
+        // A blocking closure executed inline would deadlock this single-thread runtime before the async task could release it.
+        tokio::task::yield_now().await;
+        let (lock, ready) = &*gate;
+        *lock.lock().unwrap() = true;
+        ready.notify_one();
+
+        job.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn invalid_pdf_is_reported_from_blocking_worker() {
+        let error = extract_pdf_text(b"not a pdf".to_vec()).await.unwrap_err();
+        assert!(error.contains("PDF parse failed"));
+    }
 
     /// The `[File: <name>] saved to <path>` marker is the contract downstream agents parse to locate an uploaded file on disk.
     /// It must match the channel bridge's `FILE_SAVED_BLOCK_PREFIX` format, so pin the exact shape.

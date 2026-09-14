@@ -1,7 +1,7 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { fadeInScale, pageTransition } from "./lib/motion";
 import {
   Globe,
@@ -41,6 +41,7 @@ import {
   UserCircle,
   X,
   Sparkles,
+  LayoutTemplate,
   ScrollText,
   Terminal,
   Plug,
@@ -56,6 +57,7 @@ import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import { changePassword, checkDashboardAuthMode, clearApiKey, dashboardLogin, dashboardLogout, getDashboardUsername, getStatus, getVersionInfo, isPasskeySupported, loginWithPasskey, setApiKey, setOnUnauthorized, verifyStoredAuth, type AuthMode } from "./api";
 import { NotificationCenter } from "./components/NotificationCenter";
 import { OfflineBanner } from "./components/OfflineBanner";
+import { EveryApiPartnerLink } from "./components/EveryApiPartnerLink";
 
 // Tailwind v4: `before:` requires explicit `content-['']` for the pseudo
 // element to render at all.
@@ -76,6 +78,7 @@ type DashboardRoute =
   | "/media"
   | "/sessions"
   | "/skills"
+  | "/agent-types"
   | "/prompts"
   | "/workflows"
   | "/scheduler"
@@ -93,11 +96,12 @@ type DashboardRoute =
   | "/runtime"
   | "/config"
   | "/users"
+  | "/groups"
   | "/settings";
 type NavItem = { to: DashboardRoute; label: string; icon: NavIcon };
 type NavGroup = { key: string; label: string; items: NavItem[] };
 
-function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated: () => void }) {
+export function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated: () => void }) {
   const { t } = useTranslation();
   const [key, setKey] = useState("");
   const [username, setUsername] = useState("");
@@ -105,7 +109,7 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
   const [authMethod, setAuthMethod] = useState<"credentials" | "api_key">(
     mode === "api_key" ? "api_key" : "credentials",
   );
-  const [errorKey, setErrorKey] = useState<"invalid_api_key" | "invalid_credentials" | "invalid_totp" | null>(null);
+  const [errorKey, setErrorKey] = useState<"invalid" | "invalid_api_key" | "invalid_credentials" | "invalid_totp" | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [totpRequired, setTotpRequired] = useState(false);
   const [totpCode, setTotpCode] = useState("");
@@ -119,6 +123,14 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
     setTotpRequired(false);
     setTotpCode("");
   }, [mode]);
+
+  const discardApiKey = () => {
+    try {
+      clearApiKey();
+    } catch {
+      // Storage may be unavailable. Authentication still fails visibly.
+    }
+  };
 
   async function handleApiKeySubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,11 +146,15 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
       setApiKey(key.trim());
       const isAuthenticated = await verifyStoredAuth();
       if (!isAuthenticated) {
+        discardApiKey();
         setErrorKey("invalid_api_key");
         return;
       }
 
       onAuthenticated();
+    } catch {
+      discardApiKey();
+      setErrorKey("invalid");
     } finally {
       setSubmitting(false);
     }
@@ -181,6 +197,8 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
       }
 
       onAuthenticated();
+    } catch {
+      setErrorKey("invalid");
     } finally {
       setSubmitting(false);
     }
@@ -217,6 +235,87 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
   // dashboard principal). Hidden during the TOTP step and on unsupported
   // browsers.
   const showPasskey = passkeySupported && isCredentials && !totpRequired;
+  let isSubmitDisabled = submitting;
+  if (!isSubmitDisabled) {
+    if (!isCredentials) {
+      isSubmitDisabled = !key.trim();
+    } else if (totpRequired) {
+      isSubmitDisabled = totpCode.length !== 6;
+    } else {
+      isSubmitDisabled = !username.trim() || !password;
+    }
+  }
+
+  const renderAuthFormFields = () => {
+    if (isCredentials && totpRequired) {
+      return (
+        <>
+          <p className="text-sm text-text-dim text-center">{t("auth.totp_prompt")}</p>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            value={totpCode}
+            onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErrorKey(null); }}
+            placeholder="000000"
+            autoFocus
+            className={`w-full rounded-xl border px-4 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:ring-2 outline-none transition-colors ${
+              errorKey === "invalid_totp"
+                ? "border-error focus:border-error focus:ring-error/10"
+                : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
+            }`}
+          />
+        </>
+      );
+    }
+
+    if (isCredentials) {
+      return (
+        <>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => { setUsername(e.target.value); setErrorKey(null); }}
+            placeholder={t("auth.username_placeholder")}
+            autoFocus
+            className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
+              errorKey
+                ? "border-error focus:border-error focus:ring-error/10"
+                : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
+            }`}
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setErrorKey(null); }}
+            placeholder={t("auth.password_placeholder")}
+            className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
+              errorKey
+                ? "border-error focus:border-error focus:ring-error/10"
+                : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
+            }`}
+          />
+        </>
+      );
+    }
+
+    return (
+      <input
+        type="password"
+        value={key}
+        onChange={(e) => { setKey(e.target.value); setErrorKey(null); }}
+        placeholder={t("auth.placeholder")}
+        autoFocus
+        className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
+          errorKey
+            ? "border-error focus:border-error focus:ring-error/10"
+            : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
+        }`}
+      />
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-200 flex items-center justify-center bg-black/70 backdrop-blur-md">
@@ -252,72 +351,13 @@ function AuthDialog({ mode, onAuthenticated }: { mode: AuthMode; onAuthenticated
             </div>
           )}
           <form onSubmit={isCredentials ? handleCredentialsSubmit : handleApiKeySubmit} className="space-y-4">
-            {isCredentials && totpRequired ? (
-              <>
-                <p className="text-sm text-text-dim text-center">{t("auth.totp_prompt")}</p>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={totpCode}
-                  onChange={(e) => { setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErrorKey(null); }}
-                  placeholder="000000"
-                  autoFocus
-                  className={`w-full rounded-xl border px-4 py-3 text-center text-2xl font-mono tracking-[0.5em] focus:ring-2 outline-none transition-colors ${
-                    errorKey === "invalid_totp"
-                      ? "border-error focus:border-error focus:ring-error/10"
-                      : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
-                  }`}
-                />
-              </>
-            ) : isCredentials ? (
-              <>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => { setUsername(e.target.value); setErrorKey(null); }}
-                  placeholder={t("auth.username_placeholder")}
-                  autoFocus
-                  className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
-                    errorKey
-                      ? "border-error focus:border-error focus:ring-error/10"
-                      : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
-                  }`}
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setErrorKey(null); }}
-                  placeholder={t("auth.password_placeholder")}
-                  className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
-                    errorKey
-                      ? "border-error focus:border-error focus:ring-error/10"
-                      : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
-                  }`}
-                />
-              </>
-            ) : (
-              <input
-                type="password"
-                value={key}
-                onChange={(e) => { setKey(e.target.value); setErrorKey(null); }}
-                placeholder={t("auth.placeholder")}
-                autoFocus
-                className={`w-full rounded-xl border px-4 py-3 text-sm focus:ring-2 outline-none transition-colors ${
-                  errorKey
-                    ? "border-error focus:border-error focus:ring-error/10"
-                    : "border-border-subtle bg-main focus:border-brand focus:ring-brand/10"
-                }`}
-              />
-            )}
+            {renderAuthFormFields()}
             {errorKey && (
               <p className="text-xs text-error font-medium">{t(`auth.${errorKey}`)}</p>
             )}
             <button
               type="submit"
-              disabled={submitting || (isCredentials ? (totpRequired ? totpCode.length !== 6 : !username.trim() || !password) : !key.trim())}
+              disabled={isSubmitDisabled}
               className="w-full rounded-xl bg-brand py-3 text-sm font-bold text-white hover:bg-brand/90 transition-colors shadow-lg shadow-brand/20"
             >
               {totpRequired ? t("auth.verify_totp") : t("auth.submit")}
@@ -548,7 +588,7 @@ type UserMenuPanelProps = {
   theme: "dark" | "light";
   language: string;
   onToggleTheme: () => void;
-  onSwitchLanguage: (lang: "en" | "zh" | "uk" | "ko") => void;
+  onSwitchLanguage: (lang: "en" | "zh" | "uk" | "ko" | "pl") => void;
   onOpenChangePassword: () => void;
   onOpenShortcuts: () => void;
   onLogout: () => void | Promise<void>;
@@ -642,6 +682,7 @@ function UserMenuPanel({
             { id: "ko", label: "한국어",     sub: "ko-KR" },
             { id: "uk", label: "Українська", sub: "uk-UA" },
             { id: "zh", label: "简体中文",   sub: "zh-CN" },
+            { id: "pl", label: "Polski",     sub: "pl-PL" },
           ] as const).map((opt) => {
             const active = opt.id === language;
             return (
@@ -724,7 +765,7 @@ type SidebarUserBlockProps = {
   onOpenShortcuts: () => void;
   onLogout: () => void | Promise<void>;
   onToggleTheme: () => void;
-  onSwitchLanguage: (lang: "en" | "zh" | "uk" | "ko") => void;
+  onSwitchLanguage: (lang: "en" | "zh" | "uk" | "ko" | "pl") => void;
   theme: "dark" | "light";
   language: string;
   t: ReturnType<typeof useTranslation>["t"];
@@ -857,8 +898,9 @@ const FULL_HEIGHT_ROUTES = new Set(["/terminal"]);
 // no API key yet, so the AuthDialog gate would deadlock the first launch.
 const NO_AUTH_ROUTES = new Set(["/connect"]);
 
-export function App() {
+function DashboardApp() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -873,6 +915,7 @@ export function App() {
   const navLayout = useUIStore((s) => s.navLayout);
   const collapsedNavGroups = useUIStore((s) => s.collapsedNavGroups);
   const toggleNavGroup = useUIStore((s) => s.toggleNavGroup);
+  const pruneCollapsedNavGroups = useUIStore((s) => s.pruneCollapsedNavGroups);
   const { isOpen: isPaletteOpen, setIsOpen: setPaletteOpen } = useCommandPalette();
   const [authNeeded, setAuthNeeded] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
@@ -975,7 +1018,7 @@ export function App() {
       cancelled = true;
       setOnUnauthorized(null);
     };
-  }, []);
+  }, [setTerminalEnabled]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -1026,6 +1069,7 @@ export function App() {
           { to: "/chat", label: t("nav.chat"), icon: MessageCircle },
           { to: "/sessions", label: t("nav.sessions", { defaultValue: "Sessions" }), icon: History },
           { to: "/skills", label: t("nav.skills"), icon: Sparkles },
+          { to: "/agent-types", label: t("nav.agent_types"), icon: LayoutTemplate },
           { to: "/prompts", label: t("nav.prompts"), icon: ScrollText },
           { to: "/workflows", label: t("nav.workflows"), icon: Layers },
           { to: "/scheduler", label: t("nav.scheduler"), icon: Calendar },
@@ -1061,11 +1105,16 @@ export function App() {
           { to: "/runtime", label: t("nav.runtime"), icon: Activity },
           { to: "/config", label: t("nav.config", { defaultValue: "Config" }), icon: FileText },
           { to: "/users", label: t("nav.users", { defaultValue: "Users" }), icon: User },
+          { to: "/groups", label: t("nav.groups", { defaultValue: "Groups" }), icon: Users },
           { to: "/settings", label: t("nav.settings"), icon: Settings },
         ],
       },
     ];
   }, [t, terminalEnabled]);
+
+  useEffect(() => {
+    pruneCollapsedNavGroups(new Set(navGroups.map((group) => group.key)));
+  }, [navGroups, pruneCollapsedNavGroups]);
 
   const currentPageLabel = useMemo(() => {
     const current = navGroups
@@ -1111,7 +1160,10 @@ export function App() {
       <div className="flex h-screen items-center justify-center bg-main text-slate-900 dark:text-slate-100">
         <AuthDialog
           mode={authMode}
-          onAuthenticated={() => { setAuthNeeded(false); window.location.hash = "#/overview"; }}
+          onAuthenticated={() => {
+            setAuthNeeded(false);
+            void navigate({ to: "/overview", replace: true });
+          }}
         />
       </div>
     );
@@ -1227,6 +1279,8 @@ export function App() {
             })}
           </div>
         </nav>
+
+        <EveryApiPartnerLink collapsed={isSidebarCollapsed} />
 
         {/* User-avatar footer — opens the unified user menu (theme / language /
             settings / change credentials / logout). Replaces the old "daemon
@@ -1405,5 +1459,13 @@ export function App() {
       <ShortcutsHelp isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <DashboardApp />
+    </MotionConfig>
   );
 }

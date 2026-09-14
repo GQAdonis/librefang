@@ -58,6 +58,34 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock, Weak};
 use tracing::{debug, error, info, instrument, warn};
 
+fn read_config_override<'a, T>(
+    lock: &'a std::sync::RwLock<T>,
+    state: &'static str,
+) -> std::sync::RwLockReadGuard<'a, T> {
+    lock.read().unwrap_or_else(|poisoned| {
+        warn!(
+            state,
+            "kernel config override read lock poisoned; recovering inner state"
+        );
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+fn write_config_override<'a, T>(
+    lock: &'a std::sync::RwLock<T>,
+    state: &'static str,
+) -> std::sync::RwLockWriteGuard<'a, T> {
+    lock.write().unwrap_or_else(|poisoned| {
+        warn!(
+            state,
+            "kernel config override write lock poisoned; recovering inner state"
+        );
+        lock.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
 /// Per-trait `kernel_handle::*` impls live in their own files under
 /// `kernel/handles/` to keep this file from doubling as a trait-impl
 /// dumping ground. The submodules are descendants of `kernel`, so they
@@ -96,23 +124,27 @@ mod cron_script;
 // this file (#4683 landing zone). Extracted as `pub(super) async fn`
 // so the body can be edited and reviewed in isolation.
 mod cron_tick;
+mod ephemeral_spawn;
 mod goal_lifecycle;
 mod hands_lifecycle;
 mod llm_drivers;
 mod mcp_setup;
 mod mcp_summary;
 mod messaging;
+pub mod mission_workspace;
 mod pooled_driver;
 mod prompt_context;
 mod provider_probe;
+mod provisioning_ops;
 mod reviewer_sanitize;
 mod session_ops;
 mod spawn;
+pub mod step_agent;
 mod subsystem_forwards;
 pub mod subsystems;
 mod task_registry;
 mod tools_and_skills;
-pub use tools_and_skills::SkillReloadOutcome;
+pub use tools_and_skills::{PendingSkillMcpDeclarations, SemanticMemoryAccess, SkillReloadOutcome};
 mod triggers_and_workflow;
 
 // `cron_deliver_response`, `cron_fan_out_targets`, and `cron_script_wake_gate`
@@ -311,6 +343,13 @@ fn sanitize_session_title(raw: &str) -> String {
         .to_string()
 }
 
+/// Env var that overrides `KernelConfig.api_key` (#6635). Read by
+/// `boot_with_config` to fold the value into the live config, and again by
+/// `build_mcp_bridge_cfg` because a config reload drops that fold. Mirrors
+/// `librefang_api::server::API_KEY_ENV`, which the crate boundary keeps us
+/// from sharing.
+pub(crate) const API_KEY_ENV: &str = "LIBREFANG_API_KEY";
+
 /// Build the MCP bridge config that lets CLI-based drivers (Claude Code)
 /// reach back into the daemon's own `/mcp` endpoint. Uses loopback when the
 /// API listens on a wildcard address.
@@ -327,14 +366,69 @@ fn build_mcp_bridge_cfg(cfg: &KernelConfig) -> librefang_llm_driver::McpBridgeCo
     } else {
         format!("http://{listen}")
     };
-    let api_key = if cfg.api_key.is_empty() {
-        None
-    } else {
-        Some(cfg.api_key.clone())
+    // Outbound leg of #6613: this bearer is *transmitted* to the daemon's own
+    // API, so unlike the inbound auth path it needs the plaintext, not a hash.
+    // Resolve the same env / `vault:` indirection the API layer applies when
+    // deciding what to accept — sending the literal string `vault:master` would
+    // fail against a daemon that resolved the same field to the vault's value.
+    //
+    // `LIBREFANG_API_KEY` is consulted here rather than relied upon to already
+    // sit in `cfg.api_key`. `boot_with_config` does fold it in at boot, but
+    // `reload_config` re-reads `config.toml` from disk and never re-applies the
+    // override — so on an env-only deployment the next driver rebuild after a
+    // reload would hand the bridge an empty key and every self-call would 401.
+    // Same precedence as the API layer's `resolve_credential`: env, then
+    // `vault:`, then the literal.
+    let api_key = match std::env::var(API_KEY_ENV) {
+        Ok(key) if !key.trim().is_empty() => key.trim().to_string(),
+        _ => resolve_vault_prefixed(cfg.api_key.trim(), &cfg.home_dir),
     };
+    // A hash-only config is the one posture that resolves to nothing here while the daemon still enforces auth, and it is the posture `api_key_hash`'s own documentation and `librefang hash-api-key` both recommend ("put the hash here and leave `api_key` unset").
+    // `api_key_hash` cannot be substituted: a verifier does not yield the secret it verifies, and this leg *transmits* the credential.
+    // So the bridge goes out with no `Authorization` header and the daemon's own middleware answers 401 — precisely because #6613 made it treat a hash as configured auth.
+    //
+    // Nothing downstream can explain that: the driver reports a failed tool call, not a missing kernel-side credential.
+    // Say it here, where the empty result is produced, and name the two fixes that keep the secret out of `config.toml` while staying transmittable.
+    if api_key.is_empty() && !cfg.api_key_hash.trim().is_empty() {
+        warn!(
+            "[mcp bridge] no transmittable api_key: `api_key_hash` is set but `api_key` \
+             and ${API_KEY_ENV} are empty. CLI-based drivers (claude-code) call this \
+             daemon's own /mcp endpoint and will get 401 on every tool call, because a \
+             hash verifies a key rather than yielding one. Set `api_key = \
+             \"vault:NAME\"` or ${API_KEY_ENV} — the hash stays in use for inbound auth."
+        );
+    }
     librefang_llm_driver::McpBridgeConfig {
         base_url: base,
-        api_key,
+        api_key: (!api_key.is_empty()).then_some(api_key),
+    }
+}
+
+/// Expand a `vault:KEY_NAME` reference against `<home_dir>/vault.enc`, leaving
+/// any other value untouched.
+///
+/// Mirrors step 2 of the API layer's credential resolution
+/// (`librefang_api::server::resolve_credential`). Kept as a separate small
+/// function rather than shared because the two live on opposite sides of the
+/// kernel/API boundary and carry opposite directions of trust: the API layer
+/// decides what to *accept*, this decides what to *send*.
+fn resolve_vault_prefixed(value: &str, home_dir: &std::path::Path) -> String {
+    let Some(vault_key) = value.strip_prefix("vault:") else {
+        return value.to_string();
+    };
+    let mut vault = librefang_extensions::vault::CredentialVault::new(home_dir.join("vault.enc"));
+    match vault.unlock() {
+        Ok(()) => match vault.get(vault_key) {
+            Some(secret) => secret.to_string(),
+            None => {
+                warn!("Vault key '{vault_key}' not found in vault; MCP bridge will be unauthenticated");
+                String::new()
+            }
+        },
+        Err(e) => {
+            warn!("Could not unlock vault to resolve the MCP bridge api_key: {e}");
+            String::new()
+        }
     }
 }
 
@@ -722,8 +816,18 @@ pub(crate) struct RunningTask {
 pub struct LibreFangKernel {
     /// Boot-time home directory (immutable — cannot hot-reload).
     home_dir_boot: PathBuf,
+    /// Absolute path of the `config.toml` this kernel was booted from (immutable — cannot hot-reload).
+    ///
+    /// Resolved exactly once, in `boot` / `boot_with_config`, and read by every surface that re-reads or persists the configuration — hot-reload, the mtime watcher, and every API route that writes into the file (#6695).
+    /// Deriving it a second time from `home_dir_boot` is what let the daemon load `LIBREFANG_CONFIG_PATH` and then write somewhere else.
+    config_path_boot: PathBuf,
     /// Boot-time data directory (immutable — cannot hot-reload).
     data_dir_boot: PathBuf,
+    /// What the deployment's provisioning tree currently owns (#6695).
+    ///
+    /// Swapped wholesale by [`Self::apply_provisioning`] so a reader never observes a half-applied plan, and read on every resource write guard — which is why it is an `ArcSwap` rather than a lock.
+    /// Empty and disabled unless `LIBREFANG_PROVISIONING_PATH` is set, which is every installation that has not opted in.
+    pub(crate) provisioning: ArcSwap<crate::provisioning::ProvisioningRuntime>,
     /// Kernel configuration (atomically swappable for hot-reload).
     pub(crate) config: ArcSwap<KernelConfig>,
     /// Cached raw `config.toml` value used for skill config-var injection.
@@ -1000,7 +1104,7 @@ impl DeliveryTracker {
     }
 }
 
-mod workspace_setup;
+pub(crate) mod workspace_setup;
 use workspace_setup::*;
 
 /// Spawn a fire-and-forget tokio task that logs panics instead of silently
@@ -1043,6 +1147,28 @@ fn validate_manifest_module_path(manifest: &AgentManifest, agent_name: &str) -> 
         ));
     }
     Ok(())
+}
+
+/// Surface a mis-declared `channel_overrides.group_trigger_patterns` at manifest-acceptance time instead of letting it fail silently on every group message (#6732).
+///
+/// WARN, never reject: a mis-escaped alias is an operator typo, not a security problem, and an agent that cannot be woken by name is still a working agent.
+/// Failing the spawn would turn a cosmetic mistake into an outage.
+///
+/// Centralised next to [`validate_manifest_module_path`] and called from every path that accepts a manifest — spawn (via `validate_spawnable`), hand-role activation, on-disk hot-reload, `update_manifest`, and boot-time restore from persistent storage — because the underlying bug is invisible by construction: the pattern compiles, so the lazy `error!` inside the channel bridge never fires, and the only symptom is an agent that never answers to its own name.
+/// See [`librefang_channels::bridge::validate_group_trigger_patterns`] for the diagnosis.
+fn warn_invalid_group_trigger_patterns(manifest: &AgentManifest, agent_name: &str) {
+    let Some(overrides) = manifest.channel_overrides.as_ref() else {
+        return;
+    };
+    for diagnostic in librefang_channels::bridge::validate_group_trigger_patterns(
+        &overrides.group_trigger_patterns,
+    ) {
+        warn!(
+            agent = %agent_name,
+            %diagnostic,
+            "Agent declares a group trigger pattern that will never match — the agent cannot be woken by that alias in group chats"
+        );
+    }
 }
 
 // Accessors / lifecycle helpers live in `kernel::accessors`.
@@ -1286,24 +1412,39 @@ impl LibreFangKernel {
             buttons,
         };
 
-        if let Some(adapter) = self.mesh.channel_adapters.get(&target.channel_type) {
-            let user = librefang_channels::types::ChannelUser {
-                platform_id: target.recipient.clone(),
-                display_name: target.recipient.clone(),
-                librefang_user: None,
-            };
-            if let Err(e) = adapter.send_interactive(&user, &interactive).await {
-                warn!(
+        // Resolve through the same helper every outbound send uses (#8055).
+        // `NotificationTarget.channel_type` is a channel *type* (`"slack"`) while the bridge keys the registry by instance `name` (`"slack-hr"`), so the bare `channel_adapters.get(&target.channel_type)` that used to sit here missed on every named instance and dropped straight to the plain-text fallback below — silently costing the approver the Approve / Reject buttons on the one notification whose entire point is those buttons.
+        // Resolving to an owned `Arc` also stops a `DashMap` shard guard from being held across the `send_interactive` await.
+        match handles::channel_sender::resolve_channel_adapter(
+            &self.mesh.channel_adapters,
+            &target.channel_type,
+            None,
+        ) {
+            Ok(adapter) => {
+                let user = librefang_channels::types::ChannelUser {
+                    platform_id: target.recipient.clone(),
+                    display_name: target.recipient.clone(),
+                    librefang_user: None,
+                };
+                if let Err(e) = adapter.send_interactive(&user, &interactive).await {
+                    warn!(
+                        channel = %target.channel_type,
+                        error = %e,
+                        "Failed to send interactive approval notification, falling back to text"
+                    );
+                    // Fallback to plain text
+                    self.push_to_target(target, &display_message).await;
+                }
+            }
+            Err(e) => {
+                // No adapter resolved — fall back to send_channel_message, which reports its own failure.
+                debug!(
                     channel = %target.channel_type,
                     error = %e,
-                    "Failed to send interactive approval notification, falling back to text"
+                    "No adapter resolved for interactive approval notification, falling back to text"
                 );
-                // Fallback to plain text
                 self.push_to_target(target, &display_message).await;
             }
-        } else {
-            // No adapter found — fall back to send_channel_message
-            self.push_to_target(target, &display_message).await;
         }
     }
 
@@ -1752,22 +1893,16 @@ impl LibreFangKernel {
             );
             return;
         }
-        // Route the reply through the canonical account-qualified outbound
-        // path (#6492 Bug 2). `send_channel_message` builds the adapter
-        // lookup key as `"<channel>:<account_id>"` when an account is present
-        // and falls back to the bare `<channel>` otherwise — matching how the
-        // channel bridge registers adapters under BOTH keys for multi-account
-        // installs. The previous bare `channel_adapters.get(channel)` ignored
-        // `deferred.account_id`, so on a multi-account daemon a post-approval
-        // reply for a non-first account was delivered to the wrong account's
-        // adapter (wrong bot/chat) or missed entirely. Reusing the canonical
-        // path also picks up the adapter's `output_format` override for free,
-        // exactly as a normal inbound reply would. `thread_id: None` — the wake
-        // path carries no thread context (mirrors the pre-fix `adapter.send()`,
-        // which never threaded). On an adapter-miss OR a send failure the call
-        // returns `Err`; we log WARN (it does not log itself) with the same
-        // information as before — the reply is still persisted in session
-        // history, so the next user turn surfaces it.
+        // Route the reply through the canonical account-qualified outbound path (#6492 Bug 2).
+        // `send_channel_message` delegates to `handles::channel_sender::resolve_channel_adapter`, whose precedence rules are documented there.
+        // The previous bare `channel_adapters.get(channel)` ignored `deferred.account_id`, so on a multi-account daemon a post-approval reply for a non-first account was delivered to the wrong account's adapter (wrong bot/chat) or missed entirely.
+        //
+        // `channel` here is the *channel type* the inbound turn was stamped with (`librefang_channels::bridge` uses `channel_type_str(adapter.channel_type())`), while the bridge keys the adapter registry by instance `name`.
+        // Resolving the two against each other is what #8055 fixed; keep that in mind before reintroducing any direct `channel_adapters` lookup on this path.
+        //
+        // Reusing the canonical path also picks up the adapter's `output_format` override for free, exactly as a normal inbound reply would.
+        // `thread_id: None` — the wake path carries no thread context (mirrors the pre-fix `adapter.send()`, which never threaded).
+        // On an adapter-miss OR a send failure the call returns `Err`; we log WARN (it does not log itself) — the reply is still persisted in session history, so the next user turn surfaces it.
         if let Err(e) = self
             .send_channel_message(
                 channel,
@@ -1852,6 +1987,32 @@ impl LibreFangKernel {
             // originating session's checker is no longer live — skip the
             // session-scoped dangerous-command check here.
             dangerous_command_checker: None,
+            // #7744: deliberately `None`, and this is the one decision the
+            // issue thread left genuinely open, so it is recorded here rather
+            // than in a commit message.
+            //
+            // `DeferredToolExecution` is persisted. A principal written into
+            // it would be resolved at *defer* time and consumed at *resume*
+            // time — possibly after a restart, a config reload, or the
+            // deletion of the user it names — so it would be an assertion
+            // about the past presented as a live one. That is the same failure
+            // mode as stamping an unauthenticated sender: it looks
+            // authoritative and is not.
+            //
+            // The three candidate answers are (a) stamp it and accept the
+            // staleness, (b) re-resolve at resume and fail closed if the
+            // principal is gone, (c) refuse to defer a tool call that needs an
+            // owner. Choosing between them needs the enforcement semantics
+            // that this increment deliberately does not have yet — with
+            // nothing reading the owner, all three are indistinguishable — so
+            // the conservative one is taken and the choice is left to the PR
+            // that makes ownership restrict something.
+            //
+            // Concretely: a `workflow_create` or `cron_create` that goes
+            // through the approval gate is recorded unowned. That is a real
+            // gap, and it is narrower than the alternative of recording an
+            // owner nobody re-verified.
+            acting_principal: None,
         }
     }
 

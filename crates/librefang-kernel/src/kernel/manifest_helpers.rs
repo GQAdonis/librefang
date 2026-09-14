@@ -6,6 +6,7 @@
 
 use librefang_types::agent::*;
 use librefang_types::capability::Capability;
+use librefang_types::model_catalog::{ContextWindowSource, LimitSource, ResolvedContextWindow};
 
 /// Convert a manifest's capability declarations into Capability enums.
 ///
@@ -31,10 +32,11 @@ pub(super) fn manifest_to_capabilities(manifest: &AgentManifest) -> Vec<Capabili
             if manifest.capabilities.agent_spawn {
                 merged.agent_spawn = true;
             }
-            if !manifest.capabilities.memory_read.is_empty() {
+            // A declared list wins over the profile's implied one, including when it is empty: `memory_read = []` is the operator saying "grant nothing", which #7605 made expressible and load-bearing for the automatic memorize / retrieve paths.
+            if manifest.capabilities.memory_read.is_some() {
                 merged.memory_read = manifest.capabilities.memory_read.clone();
             }
-            if !manifest.capabilities.memory_write.is_empty() {
+            if manifest.capabilities.memory_write.is_some() {
                 merged.memory_write = manifest.capabilities.memory_write.clone();
             }
             if manifest.capabilities.ofp_discover {
@@ -57,10 +59,10 @@ pub(super) fn manifest_to_capabilities(manifest: &AgentManifest) -> Vec<Capabili
     for tool in &effective_caps.tools {
         caps.push(Capability::ToolInvoke(tool.clone()));
     }
-    for scope in &effective_caps.memory_read {
+    for scope in effective_caps.memory_read.iter().flatten() {
         caps.push(Capability::MemoryRead(scope.clone()));
     }
-    for scope in &effective_caps.memory_write {
+    for scope in effective_caps.memory_write.iter().flatten() {
         caps.push(Capability::MemoryWrite(scope.clone()));
     }
     if effective_caps.agent_spawn {
@@ -100,59 +102,127 @@ pub(super) fn global_thinking_backfill_allowed(
 }
 
 /// Resolve the context window (in tokens) for one turn, honouring the
-/// documented precedence chain (#6568).
+/// documented precedence chain (#6568, extended by #7774).
 ///
-/// 1. `agent.toml: [model] context_window` — an explicit operator override. The
+/// 1. `agent.toml: [model] context_window` — an explicit *per-agent* override. The
 ///    warning the agent loop emits for an unknown model literally tells the
 ///    operator to set this field, so it has to win; before this helper the three
 ///    execution paths never read it and the field was inert.
-/// 2. `ModelCatalog` lookup — provider-aware and prefix-reconciling (#6423), with
+/// 2. `model_overrides.json: context_window` — the *per-model* operator override
+///    (#7774), reached from the API and the dashboard and keyed by
+///    `provider:model_id`. It sits above the catalog because it exists precisely
+///    to correct the catalog: a window the registry never carried, or one a
+///    `/models` discovery pass assumed. Being keyed rather than attached to an
+///    entry, it also applies to a model the catalog does not know at all —
+///    the reported case, a gateway-served model whose window is configured in
+///    the runtime behind it and surfaced by nothing.
+/// 3. `ModelCatalog` lookup — provider-aware and prefix-reconciling (#6423), with
 ///    `0` filtered out so image / audio entries (which carry no context window)
 ///    fall through instead of poisoning the budget math.
-/// 3. `session_hint` — the value persisted on the session, authoritative only
-///    when the catalog has no entry. Callers with no session in hand pass `None`.
+/// 4. `session_hint` — the value persisted on the session, authoritative only
+///    when neither an override nor the catalog resolves. Callers with no session
+///    in hand pass `None`.
 ///
 /// Returns `None` when nothing resolves, leaving the fallback (currently
 /// `UNKNOWN_MODEL_CONTEXT_WINDOW`, 8192) to the agent loop, which also logs it.
+///
+/// The answer carries the layer that produced it ([`ResolvedContextWindow`]),
+/// because the number alone cannot tell an operator whether their model's
+/// window is known or guessed — the distinction #7774 was filed over.
+/// A caller that only needs the size reads `.tokens`.
 pub(super) fn resolve_context_window(
     catalog: &librefang_runtime::model_catalog::ModelCatalog,
     model: &librefang_types::agent::ModelConfig,
     session_hint: Option<u64>,
-) -> Option<usize> {
-    model
-        .context_window
+) -> Option<ResolvedContextWindow> {
+    if let Some(tokens) = model.context_window.filter(|v| *v > 0) {
+        return Some(ResolvedContextWindow {
+            tokens: tokens as usize,
+            source: ContextWindowSource::AgentOverride,
+        });
+    }
+    // Layers 2 and 3 in one call: `effective_limits_for_manifest`
+    // already ranks the operator override above the catalog entry and
+    // filters both sides' zeros, so the two cannot drift apart here — and it
+    // reports which of the two answered, so neither can this.
+    let limits = catalog.effective_limits_for_manifest(&model.provider, &model.model);
+    if let Some(tokens) = limits.context_window {
+        let source = match limits.context_window_source {
+            LimitSource::Override => ContextWindowSource::ModelOverride,
+            // `Unknown` is unreachable while `context_window` is `Some` —
+            // `rank_limit` sets the two in the same expression — but mapping it
+            // to `Catalog` keeps this total without an unreachable panic.
+            LimitSource::Catalog | LimitSource::Unknown => ContextWindowSource::Catalog,
+        };
+        return Some(ResolvedContextWindow {
+            tokens: tokens as usize,
+            source,
+        });
+    }
+    session_hint
         .filter(|v| *v > 0)
-        .map(|v| v as usize)
-        .or_else(|| {
-            catalog
-                .find_model_for_manifest(&model.provider, &model.model)
-                .map(|m| m.context_window as usize)
-                .filter(|w| *w > 0)
+        .map(|tokens| ResolvedContextWindow {
+            tokens: tokens as usize,
+            source: ContextWindowSource::SessionHint,
         })
-        .or_else(|| session_hint.filter(|v| *v > 0).map(|v| v as usize))
 }
 
-/// Apply a per-call deep-thinking override to a manifest clone.
+/// Apply a per-call reasoning override to a manifest clone.
 ///
-/// - `Some(true)` — ensure the manifest has a `ThinkingConfig` (inserting the
-///   default one if previously empty) so the driver enables reasoning.
-/// - `Some(false)` — clear `manifest.thinking` so the driver does not request
-///   thinking regardless of the manifest/global default.
-/// - `None` — leave the manifest untouched.
+/// This is the top rung of the #7946 resolution order — per-call > per-agent >
+/// global > compiled default. The two rungs below it have already been applied
+/// by the caller: the manifest carries the per-agent `[thinking]` table, and
+/// the global `[thinking]` section was backfilled into it a few lines earlier
+/// when the agent declared none. So this function only has to overwrite, and
+/// whatever it leaves behind is the effective configuration for the turn.
+///
+/// - [`ThinkingOverride::Enable`] (legacy `thinking: true`) — ensure the
+///   manifest has a `ThinkingConfig`, inserting the default one if previously
+///   empty, so the driver enables reasoning. No mode is pinned: the caller
+///   asked for reasoning, not for a particular amount of it. An inherited
+///   `reasoning_mode = "none"` *is* cleared, though: the boolean documents
+///   itself as "force thinking on even if the manifest has it off", and a
+///   non-think mode is exactly that off-state, so leaving it in place would
+///   make `thinking: true` a silent no-op.
+/// - [`ThinkingOverride::Disable`] (legacy `thinking: false`) — clear
+///   `manifest.thinking` so the driver does not request thinking regardless of
+///   the manifest/global default.
+/// - [`ThinkingOverride::Mode`] — stamp the mode onto the manifest's thinking
+///   config, creating it if absent. Note that `Mode(ReasoningMode::None)` is
+///   *not* the same as `Disable`: it keeps a thinking config so the driver can
+///   send the provider's explicit non-think toggle, which is the whole point
+///   of #7946. `Disable` merely omits the opt-in, which leaves a model that
+///   reasons by default reasoning.
+/// - [`ThinkingOverride::Inherit`] — leave the manifest untouched.
 pub(super) fn apply_thinking_override(
     manifest: &mut librefang_types::agent::AgentManifest,
-    thinking_override: Option<bool>,
+    thinking_override: librefang_types::config::ThinkingOverride,
 ) {
+    use librefang_types::config::{ReasoningMode, ThinkingConfig, ThinkingOverride};
     match thinking_override {
-        Some(true) if manifest.thinking.is_none() => {
-            manifest.thinking = Some(librefang_types::config::ThinkingConfig::default());
+        ThinkingOverride::Enable if manifest.thinking.is_none() => {
+            manifest.thinking = Some(ThinkingConfig::default());
         }
-        Some(false) => {
+        // Enable when thinking is already set — keep the existing budget, but
+        // drop an inherited non-think mode so the caller's "on" is not silently
+        // overruled by the agent's (or the global) `reasoning_mode = "none"`.
+        ThinkingOverride::Enable => {
+            if let Some(tc) = manifest.thinking.as_mut() {
+                if tc.reasoning_mode == Some(ReasoningMode::None) {
+                    tc.reasoning_mode = None;
+                }
+            }
+        }
+        ThinkingOverride::Disable => {
             manifest.thinking = None;
         }
-        // Some(true) when thinking is already set — keep the existing budget
-        // — and None when no override is requested are both no-ops.
-        _ => {}
+        ThinkingOverride::Mode(mode) => {
+            manifest
+                .thinking
+                .get_or_insert_with(ThinkingConfig::default)
+                .reasoning_mode = Some(mode);
+        }
+        ThinkingOverride::Inherit => {}
     }
 }
 
@@ -281,6 +351,31 @@ pub(super) fn infer_provider_from_model(model: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+pub(super) fn resolve_fallback_target(
+    fallback_provider: &str,
+    fallback_model: &str,
+    default_provider: &str,
+    default_model: &str,
+) -> (String, String) {
+    let inherits_default_model = fallback_model.is_empty() || fallback_model == "default";
+    let resolved_model = if inherits_default_model {
+        default_model
+    } else {
+        fallback_model
+    };
+    let inherits_default_provider = fallback_provider.is_empty() || fallback_provider == "default";
+    let resolved_provider = if !inherits_default_provider {
+        fallback_provider.to_string()
+    } else if inherits_default_model {
+        default_provider.to_string()
+    } else {
+        infer_provider_from_model(resolved_model).unwrap_or_else(|| default_provider.to_string())
+    };
+    let resolved_model =
+        librefang_runtime::agent_loop::strip_provider_prefix(resolved_model, &resolved_provider);
+    (resolved_provider, resolved_model)
 }
 
 /// A well-known agent ID used for the legacy shared memory namespace.
@@ -413,144 +508,58 @@ const SKILL_REFERENCE_TAIL_MARKER: &str = "\n\n---\n\n## Reference Knowledge";
 /// match the marker and cause `find()` to truncate user-authored content.
 const TEAM_TAIL_MARKER: &str = "\n\n---\n\n## Your Team";
 
-/// Append (or refresh) the rendered `## User Configuration` block on a
-/// manifest's `model.system_prompt` from a hand's `[[settings]]` schema +
-/// instance config.
+/// Byte offset of the earliest runtime-rendered prompt tail in `prompt`, or `None` when the prompt carries no tail at all.
 ///
-/// This is the single source of truth for the "settings -> system prompt"
-/// materialization. Two call sites use it:
+/// The three tails are always appended in a fixed order (settings -> reference -> team), so truncating at the earliest marker drops every tail in one shot and leaves the author-written base prompt.
+/// Each marker is probed individually so a prompt carrying only a subset still truncates at the right place.
+fn earliest_rendered_tail_idx(prompt: &str) -> Option<usize> {
+    [
+        USER_CONFIG_TAIL_MARKER,
+        SKILL_REFERENCE_TAIL_MARKER,
+        TEAM_TAIL_MARKER,
+    ]
+    .into_iter()
+    .filter_map(|marker| prompt.find(marker))
+    .min()
+}
+
+/// The `## User Configuration` tail for a hand's settings, fenced and ready to concatenate, plus the settings-derived env-var names.
 ///
-/// 1. Hand activation (`activate_hand`) — turns the disk TOML's bare prompt
-///    into the runtime prompt with settings spliced in before save_agent.
-/// 2. Boot-time TOML drift detection (`new_with_config`) — when the disk
-///    manifest replaces the DB blob, the bare TOML doesn't carry the
-///    settings tail (it's runtime-materialized, not persisted), so without
-///    re-rendering here the agent loses its configured values on every
-///    restart until somebody re-runs `hand activate`.
-///
-/// Idempotency: if the prompt already ends with a `## User Configuration`
-/// tail, that tail is stripped before the freshly resolved one is appended.
-/// This keeps repeated calls (e.g. drift loop firing back-to-back) from
-/// growing the prompt without bound.
-///
-/// No-ops (no allocation, no mutation) when `settings` is empty or the
-/// resolved prompt block is empty.
-///
-/// Returns the env-var allowlist that callers may want to merge into
-/// `manifest.metadata["hand_allowed_env"]`.
-pub(super) fn apply_settings_block_to_manifest(
-    manifest: &mut AgentManifest,
+/// `None` when the hand declares no settings or every one of them renders empty.
+/// Pure: it never looks at an existing prompt, which is what lets [`rerender_hand_prompt_tails`] assemble all three tails without a single content search.
+fn render_settings_block(
     settings: &[librefang_hands::HandSetting],
     instance_config: &std::collections::HashMap<String, serde_json::Value>,
-) -> Vec<String> {
+) -> (Option<String>, Vec<String>) {
     let resolved = librefang_hands::resolve_settings(settings, instance_config);
-
     if resolved.prompt_block.is_empty() {
-        return resolved.env_vars;
+        return (None, resolved.env_vars);
     }
-
-    // Strip any pre-existing settings tail so we replace rather than append.
-    if let Some(idx) = manifest.model.system_prompt.find(USER_CONFIG_TAIL_MARKER) {
-        manifest.model.system_prompt.truncate(idx);
-    }
-
-    manifest.model.system_prompt = format!(
-        "{}\n\n---\n\n{}",
-        manifest.model.system_prompt, resolved.prompt_block
-    );
-
-    resolved.env_vars
+    (
+        Some(format!("\n\n---\n\n{}", resolved.prompt_block)),
+        resolved.env_vars,
+    )
 }
 
-/// Append (or refresh) the rendered `## Reference Knowledge` block on a
-/// manifest's `model.system_prompt` from a hand's skill content.
+/// The `## Reference Knowledge` tail for a role, fenced and ready to concatenate, or `None` when the hand ships no skill content for it.
 ///
-/// Per-role override (`def.agent_skill_content[role.to_lowercase()]`)
-/// takes precedence over the hand-shared `def.skill_content`. When neither
-/// is set, the call only strips any pre-existing tail without re-appending
-/// — covers the case where the hand's SKILL.md was deleted and the prompt
-/// must drop its now-stale reference section.
-///
-/// Idempotency: pre-existing `## Reference Knowledge` tails are stripped
-/// before re-appending, so repeated calls (e.g. drift loop firing
-/// back-to-back) do not duplicate the section.
-///
-/// Both call sites use this helper:
-///
-/// 1. Hand activation (`activate_hand_with_id`) — see `kernel/mod.rs`.
-/// 2. Boot-time TOML drift detection — when the disk manifest replaces
-///    the DB blob, the bare TOML doesn't carry the rendered tail and
-///    without re-rendering here the agent loses skill discoverability on
-///    every restart.
-pub(super) fn apply_skill_reference_block_to_manifest(
-    manifest: &mut AgentManifest,
+/// Per-role `agent_skill_content` wins over the hand-shared `skill_content`.
+fn render_skill_reference_block(
     role: &str,
     def: &librefang_hands::HandDefinition,
-) {
-    // Always strip first — covers the case where skill content is now
-    // empty (skill removed from hand) so the stale tail doesn't linger.
-    //
-    // Ordering note: at activation this helper runs BEFORE
-    // `apply_team_block_to_manifest`, so a stale team tail (which sits
-    // downstream of the skill marker) is also dropped by this truncate
-    // and re-appended afterwards. If callers ever invert the order,
-    // `apply_team_block_to_manifest` must be widened to strip both
-    // markers — otherwise a re-render leaves the team block stranded
-    // before the freshly appended skill block.
-    if let Some(idx) = manifest
-        .model
-        .system_prompt
-        .find(SKILL_REFERENCE_TAIL_MARKER)
-    {
-        manifest.model.system_prompt.truncate(idx);
-    }
-
+) -> Option<String> {
     let role_lower = role.to_lowercase();
-    let effective_skill = def
-        .agent_skill_content
+    def.agent_skill_content
         .get(&role_lower)
-        .or(def.skill_content.as_ref());
-
-    if let Some(skill_content) = effective_skill {
-        if !skill_content.is_empty() {
-            manifest.model.system_prompt = format!(
-                "{}\n\n---\n\n## Reference Knowledge\n\n{}",
-                manifest.model.system_prompt, skill_content
-            );
-        }
-    }
+        .or(def.skill_content.as_ref())
+        .filter(|content| !content.is_empty())
+        .map(|content| format!("\n\n---\n\n## Reference Knowledge\n\n{content}"))
 }
 
-/// Append (or refresh) the rendered `## Your Team` block on a manifest's
-/// `model.system_prompt` from the hand's peer roster. No-op for
-/// single-agent hands.
-///
-/// Idempotency: pre-existing `## Your Team` tails are stripped before
-/// re-appending, so repeated calls do not duplicate the section.
-///
-/// `role` identifies the agent we're rendering for; the agent's own role
-/// is excluded from the peer list. Each peer line uses
-/// `hand_agent.invoke_hint` when set, falling back to the peer's manifest
-/// description.
-pub(super) fn apply_team_block_to_manifest(
-    manifest: &mut AgentManifest,
-    role: &str,
-    def: &librefang_hands::HandDefinition,
-) {
-    // Always strip first — covers the case where the hand was edited from
-    // multi-agent down to single-agent so the stale Team tail must drop.
-    //
-    // Ordering note: this helper is the LAST tail appended at activation
-    // (settings -> reference -> team). Truncating at the team marker only
-    // drops the team block itself — no later tail can be lost. If a future
-    // change inserts a new tail after team, this strip will need to widen
-    // (or that tail's helper must run before this one).
-    if let Some(idx) = manifest.model.system_prompt.find(TEAM_TAIL_MARKER) {
-        manifest.model.system_prompt.truncate(idx);
-    }
-
+/// The `## Your Team` tail for a role, fenced and ready to concatenate, or `None` for a single-agent hand or a role with no peers.
+fn render_team_block(role: &str, def: &librefang_hands::HandDefinition) -> Option<String> {
     if !def.is_multi_agent() {
-        return;
+        return None;
     }
 
     let mut peer_lines = Vec::new();
@@ -567,10 +576,13 @@ pub(super) fn apply_team_block_to_manifest(
         ));
     }
 
-    if !peer_lines.is_empty() {
-        let team_block = format!("\n\n---\n\n## Your Team\n\n{}", peer_lines.join("\n"));
-        manifest.model.system_prompt = format!("{}{team_block}", manifest.model.system_prompt);
+    if peer_lines.is_empty() {
+        return None;
     }
+    Some(format!(
+        "\n\n---\n\n## Your Team\n\n{}",
+        peer_lines.join("\n")
+    ))
 }
 
 /// Return a clone of `manifest` with all known runtime-rendered prompt
@@ -593,20 +605,97 @@ pub(super) fn apply_team_block_to_manifest(
 pub(super) fn manifest_for_diff(manifest: &AgentManifest) -> AgentManifest {
     let mut copy = manifest.clone();
     let prompt = &mut copy.model.system_prompt;
-    let mut earliest_idx: Option<usize> = None;
-    for marker in [
-        USER_CONFIG_TAIL_MARKER,
-        SKILL_REFERENCE_TAIL_MARKER,
-        TEAM_TAIL_MARKER,
-    ] {
-        if let Some(idx) = prompt.find(marker) {
-            earliest_idx = Some(earliest_idx.map_or(idx, |cur| cur.min(idx)));
-        }
-    }
-    if let Some(idx) = earliest_idx {
+    if let Some(idx) = earliest_rendered_tail_idx(prompt) {
         prompt.truncate(idx);
     }
     copy
+}
+
+/// Env-var passthrough allowlist for a hand instance: the `provider_env` / `env_var` names its resolved settings select, plus the `[[requires]]` entries that name an env var or API key.
+///
+/// SECURITY: every candidate is attacker-controllable HAND.toml text and is later materialized into a child process's env from the daemon's LIVE environment, so the shared secret blocklist filters the whole list.
+/// A marketplace hand cannot exfiltrate `LIBREFANG_VAULT_KEY` / `ANTHROPIC_API_KEY` / … by naming them in a setting or requirement.
+/// `sandbox_command` re-checks defensively at spawn time.
+///
+/// Shared by hand activation and the settings-save re-render so the two paths cannot drift on which names survive the filter.
+pub(super) fn resolve_hand_allowed_env(
+    def: &librefang_hands::HandDefinition,
+    instance_config: &std::collections::HashMap<String, serde_json::Value>,
+) -> Vec<String> {
+    let mut allowed: Vec<String> =
+        librefang_hands::resolve_settings(&def.settings, instance_config)
+            .env_vars
+            .into_iter()
+            .filter(|v| !librefang_runtime::subprocess_sandbox::is_blocked_env_var(v))
+            .collect();
+    for req in &def.requires {
+        match req.requirement_type {
+            librefang_hands::RequirementType::ApiKey | librefang_hands::RequirementType::EnvVar
+                if !req.check_value.is_empty()
+                    && !allowed.contains(&req.check_value)
+                    && !librefang_runtime::subprocess_sandbox::is_blocked_env_var(
+                        &req.check_value,
+                    ) =>
+            {
+                allowed.push(req.check_value.clone());
+            }
+            _ => {}
+        }
+    }
+    allowed
+}
+
+/// Render a hand agent's complete system prompt: the author-written base plus the settings, reference-knowledge, and team tails, in that order.
+///
+/// This is the canonical renderer — every production path that materializes a hand prompt goes through it (activation, the boot TOML-drift loop, and the settings save), so the three cannot disagree about content or ordering.
+///
+/// It works for any input shape.
+/// A live registry manifest already ends in `[base][settings][reference][team]`, so the tails are stripped back to the base first via [`earliest_rendered_tail_idx`]; a manifest freshly parsed from disk has no tails and the strip is a no-op.
+///
+/// The tails are then **assembled from pure renderers rather than the `apply_*` helpers**, and that is the load-bearing difference.
+/// Each `apply_*` helper locates its own tail by searching the whole prompt for its marker, which is only sound while nothing downstream of that marker is author-controlled.
+/// It is not: a SKILL.md playbook may legitimately contain a `---` rule followed by a `## Your Team` heading, and once the reference tail has been appended, the team helper's search finds *that* copy and truncates the playbook there — silently dropping everything after it from what the LLM sees.
+/// Assembling in one pass never searches appended content, so author text cannot be mistaken for a marker.
+///
+/// Returns the filtered env-var passthrough allowlist for this instance (see [`resolve_hand_allowed_env`]); callers write it to `metadata["hand_allowed_env"]`, removing the key when the list is empty.
+pub(super) fn rerender_hand_prompt_tails(
+    manifest: &mut AgentManifest,
+    role: &str,
+    def: &librefang_hands::HandDefinition,
+    instance_config: &std::collections::HashMap<String, serde_json::Value>,
+) -> Vec<String> {
+    if let Some(idx) = earliest_rendered_tail_idx(&manifest.model.system_prompt) {
+        manifest.model.system_prompt.truncate(idx);
+    }
+
+    let (settings_block, _) = render_settings_block(&def.settings, instance_config);
+    for block in [
+        settings_block,
+        render_skill_reference_block(role, def),
+        render_team_block(role, def),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        manifest.model.system_prompt.push_str(&block);
+    }
+
+    resolve_hand_allowed_env(def, instance_config)
+}
+
+/// Write (or clear) a hand agent's env passthrough allowlist on its manifest metadata.
+///
+/// An empty list **removes** the key rather than storing `[]`: a settings change that drops the last `provider_env` has to narrow the passthrough, and an insert-only write would leave the previous, wider list in place.
+/// Mirrors `AgentRegistry::update_hand_rendered_prompt`, which applies the same rule to the live registry entry.
+pub(super) fn set_hand_allowed_env(manifest: &mut AgentManifest, allowed_env: &[String]) {
+    if allowed_env.is_empty() {
+        manifest.metadata.remove("hand_allowed_env");
+    } else {
+        manifest.metadata.insert(
+            "hand_allowed_env".to_string(),
+            serde_json::to_value(allowed_env).unwrap_or_default(),
+        );
+    }
 }
 
 pub fn shared_memory_agent_id() -> AgentId {
@@ -672,12 +761,138 @@ pub(super) fn peer_scoped_key(
     }
 }
 
+/// Tag prefixes the kernel owns rather than the operator.
+///
+/// These three are written by hand-role activation (`kernel/hands_lifecycle.rs`) and are the only tags any code branches on.
+/// `hand:` and `hand_role:` route the agent's workspace under `hands/<hand>/<role>` instead of `agents/<name>` (`backfill_workspace_dir` in `kernel/workspace_setup.rs`), and `hand:` alone marks an agent autonomous for idle-wake purposes (`kernel/messaging.rs`), decides whether a tool call needs an approval gate (`kernel/handles/approval_gate.rs`), and scopes structured memory (`librefang-memory/src/structured.rs`).
+/// An operator who could add or drop one would be relocating a workspace and re-deciding an approval boundary through a field that reads like free-form metadata, so [`merge_agent_tags`] keeps them out of operator reach in both directions.
+const SYSTEM_TAG_PREFIXES: [&str; 3] = ["hand:", "hand_instance:", "hand_role:"];
+
+/// Whether a tag belongs to the kernel rather than the operator.
+fn is_system_tag(tag: &str) -> bool {
+    SYSTEM_TAG_PREFIXES
+        .iter()
+        .any(|prefix| tag.starts_with(prefix))
+}
+
+/// Merge an incoming tag list over the tags an agent is currently running with.
+///
+/// System-owned tags are taken from `live` and operator-owned tags from `incoming`, so a caller that submits a whole manifest can freely rewrite the operator half without being able to forge, drop or preserve-by-accident the kernel half.
+/// A submitted system tag is dropped rather than rejected: the round-trip a dashboard performs is GET-manifest / edit-one-field / PUT-manifest, and echoing back the `hand:` tags it was just shown must not fail the write.
+///
+/// Ordering is `live` system tags first, then `incoming` operator tags in submitted order, de-duplicated.
+/// That is deterministic for a given pair of inputs, which matters because `manifest.tags` is stringified into the router's agent summary (`librefang-kernel-router`) and a reordering there would invalidate provider prompt caches for no reason (#3298).
+pub(super) fn merge_agent_tags(live: &[String], incoming: &[String]) -> Vec<String> {
+    let mut merged: Vec<String> = live
+        .iter()
+        .filter(|tag| is_system_tag(tag))
+        .cloned()
+        .collect();
+    for tag in incoming.iter().filter(|tag| !is_system_tag(tag)) {
+        if !merged.contains(tag) {
+            merged.push(tag.clone());
+        }
+    }
+    merged
+}
+
+#[cfg(test)]
+mod tag_merge_tests {
+    use super::merge_agent_tags;
+
+    fn v(items: &[&str]) -> Vec<String> {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn operator_tags_are_replaced_wholesale() {
+        assert_eq!(
+            merge_agent_tags(&v(&["research", "beta"]), &v(&["prod"])),
+            v(&["prod"]),
+            "an operator must be able to drop a tag, not just add one"
+        );
+    }
+
+    #[test]
+    fn empty_incoming_clears_operator_tags() {
+        assert_eq!(
+            merge_agent_tags(&v(&["research"]), &[]),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn system_tags_survive_an_operator_rewrite() {
+        assert_eq!(
+            merge_agent_tags(
+                &v(&["hand:clipper", "hand_role:editor", "research"]),
+                &v(&["prod"])
+            ),
+            v(&["hand:clipper", "hand_role:editor", "prod"]),
+            "hand membership drives workspace routing and approval gating; an operator tag edit must not move it"
+        );
+    }
+
+    #[test]
+    fn submitted_system_tags_are_dropped_not_honoured() {
+        assert_eq!(
+            merge_agent_tags(
+                &v(&["hand:real"]),
+                &v(&["hand:forged", "hand_role:admin", "ok"])
+            ),
+            v(&["hand:real", "ok"]),
+            "an operator must not be able to forge hand membership through the tags field"
+        );
+    }
+
+    #[test]
+    fn duplicate_operator_tags_collapse() {
+        assert_eq!(
+            merge_agent_tags(&[], &v(&["a", "b", "a"])),
+            v(&["a", "b"]),
+            "tags are stringified into the router prompt, so a duplicate is noise in the cache key"
+        );
+    }
+
+    #[test]
+    fn is_deterministic_and_order_preserving() {
+        let live = v(&["hand:h", "old"]);
+        assert_eq!(
+            merge_agent_tags(&live, &v(&["z", "a"])),
+            v(&["hand:h", "z", "a"]),
+            "submitted order is preserved verbatim so repeated identical writes are byte-identical"
+        );
+    }
+}
+
 #[cfg(test)]
 mod context_window_tests {
     use super::resolve_context_window;
     use librefang_runtime::model_catalog::ModelCatalog;
     use librefang_types::agent::ModelConfig;
-    use librefang_types::model_catalog::{ModelCatalogEntry, ModelTier};
+    use librefang_types::model_catalog::{
+        ContextWindowSource, ModelCatalogEntry, ModelOverrides, ModelTier,
+    };
+
+    /// The resolved size on its own.
+    ///
+    /// The precedence assertions below predate provenance and are about which *number* wins; `source_of` covers which layer is named for it, so each test reads as one claim.
+    fn resolve(
+        catalog: &ModelCatalog,
+        model: &ModelConfig,
+        session_hint: Option<u64>,
+    ) -> Option<usize> {
+        resolve_context_window(catalog, model, session_hint).map(|r| r.tokens)
+    }
+
+    /// The layer that produced the resolved window, or `None` when nothing did.
+    fn source_of(
+        catalog: &ModelCatalog,
+        model: &ModelConfig,
+        session_hint: Option<u64>,
+    ) -> Option<ContextWindowSource> {
+        resolve_context_window(catalog, model, session_hint).map(|r| r.source)
+    }
 
     fn catalog() -> ModelCatalog {
         ModelCatalog::from_entries(
@@ -718,7 +933,7 @@ mod context_window_tests {
     /// them to do — and it was ignored, leaving the 8192 fallback in place.
     #[test]
     fn manifest_override_wins_for_an_unknown_model() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("deepseek", "deepseek-v4-flash", Some(131_072)),
             None,
@@ -728,7 +943,7 @@ mod context_window_tests {
 
     #[test]
     fn manifest_override_wins_over_the_catalog() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("anthropic", "claude-sonnet-4-6", Some(64_000)),
             None,
@@ -742,7 +957,7 @@ mod context_window_tests {
 
     #[test]
     fn falls_back_to_the_catalog_without_an_override() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("anthropic", "claude-sonnet-4-6", None),
             None,
@@ -752,7 +967,7 @@ mod context_window_tests {
 
     #[test]
     fn a_zero_override_is_ignored() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("anthropic", "claude-sonnet-4-6", Some(0)),
             None,
@@ -764,14 +979,13 @@ mod context_window_tests {
     fn a_zero_catalog_window_falls_through_to_the_session_hint() {
         // Image / audio entries carry 0; feeding that into budget math would
         // divide by an empty window.
-        let resolved =
-            resolve_context_window(&catalog(), &model("openai", "dall-e-3", None), Some(48_000));
+        let resolved = resolve(&catalog(), &model("openai", "dall-e-3", None), Some(48_000));
         assert_eq!(resolved, Some(48_000));
     }
 
     #[test]
     fn session_hint_is_last() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("anthropic", "claude-sonnet-4-6", None),
             Some(48_000),
@@ -785,7 +999,7 @@ mod context_window_tests {
 
     #[test]
     fn a_zero_session_hint_is_ignored() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("deepseek", "deepseek-v4-flash", None),
             Some(0),
@@ -798,12 +1012,147 @@ mod context_window_tests {
 
     #[test]
     fn returns_none_when_nothing_resolves() {
-        let resolved = resolve_context_window(
+        let resolved = resolve(
             &catalog(),
             &model("deepseek", "deepseek-v4-flash", None),
             None,
         );
         assert_eq!(resolved, None);
+    }
+
+    /// Refs #7774. The per-model operator override beats the catalog entry —
+    /// including one whose window came from a discovery probe rather than the
+    /// registry. This is the precedence contract the dashboard, the API and the
+    /// agent loop all rely on: operator override > discovered value > fallback.
+    #[test]
+    fn a_model_level_override_beats_the_catalog_value() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                context_window: Some(48_000),
+                ..Default::default()
+            },
+        );
+        let resolved = resolve(&cat, &model("anthropic", "claude-sonnet-4-6", None), None);
+        assert_eq!(resolved, Some(48_000));
+    }
+
+    /// Refs #7774. The reported case: a gateway-served model the catalog has
+    /// never heard of. Before this the chain fell straight through to the agent
+    /// loop's 8192 and the agent hit an overflow that did not exist.
+    #[test]
+    fn a_model_level_override_resolves_a_model_the_catalog_does_not_know() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "litellm:sensor-model-generic-high".to_string(),
+            ModelOverrides {
+                context_window: Some(16_384),
+                ..Default::default()
+            },
+        );
+        let resolved = resolve(
+            &cat,
+            &model("litellm", "sensor-model-generic-high", None),
+            None,
+        );
+        assert_eq!(resolved, Some(16_384));
+    }
+
+    /// Refs #7774 / #6568. The per-agent `agent.toml` value stays the most
+    /// specific layer — a model-level correction is inherited by every agent,
+    /// so an agent that states its own window must still win.
+    #[test]
+    fn the_agent_toml_value_still_wins_over_a_model_level_override() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                context_window: Some(48_000),
+                ..Default::default()
+            },
+        );
+        let resolved = resolve(
+            &cat,
+            &model("anthropic", "claude-sonnet-4-6", Some(96_000)),
+            None,
+        );
+        assert_eq!(resolved, Some(96_000));
+    }
+
+    /// Refs #7774. An override on some *other* model, and an override that
+    /// carries only inference parameters, both leave the chain exactly where it
+    /// was. This is the backward-compatibility guard: adding the field must not
+    /// move a single existing install's resolved window.
+    #[test]
+    fn an_absent_limit_override_leaves_the_chain_unchanged() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                temperature: Some(0.3),
+                max_tokens: Some(4_096),
+                ..Default::default()
+            },
+        );
+        cat.set_overrides(
+            "openai:some-other-model".to_string(),
+            ModelOverrides {
+                context_window: Some(1_000),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            resolve(&cat, &model("anthropic", "claude-sonnet-4-6", None), None),
+            Some(200_000),
+            "the catalog value must still be what resolves"
+        );
+        assert_eq!(
+            resolve(
+                &cat,
+                &model("deepseek", "deepseek-v4-flash", None),
+                Some(48_000)
+            ),
+            Some(48_000),
+            "the session hint must still be the last resort"
+        );
+        assert_eq!(
+            resolve(&cat, &model("deepseek", "deepseek-v4-flash", None), None),
+            None,
+            "nothing resolved — the caller's fallback still applies"
+        );
+    }
+
+    /// Refs #7774. An override of `0` — what a cleared dashboard field could
+    /// submit — must not pin the window to zero and poison the budget math.
+    #[test]
+    fn a_zero_model_level_override_falls_through_to_the_catalog() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                context_window: Some(0),
+                ..Default::default()
+            },
+        );
+        let resolved = resolve(&cat, &model("anthropic", "claude-sonnet-4-6", None), None);
+        assert_eq!(resolved, Some(200_000));
+    }
+
+    /// Refs #7774. An image model carries no window, and an override must be
+    /// able to supply one without the catalog's `0` shadowing it.
+    #[test]
+    fn an_override_supplies_a_window_the_catalog_stores_as_zero() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "openai:dall-e-3".to_string(),
+            ModelOverrides {
+                context_window: Some(4_096),
+                ..Default::default()
+            },
+        );
+        let resolved = resolve(&cat, &model("openai", "dall-e-3", None), None);
+        assert_eq!(resolved, Some(4_096));
     }
 
     /// Guards the `session_hint: None` choice at the compaction gate.
@@ -818,17 +1167,124 @@ mod context_window_tests {
     fn a_stale_session_hint_would_beat_the_compaction_gate_default() {
         let unknown = model("deepseek", "deepseek-v4-flash", None);
         // What the gate must NOT do: rank the stale value above its default.
-        let with_stale_hint = resolve_context_window(&catalog(), &unknown, Some(8192));
+        let with_stale_hint = resolve(&catalog(), &unknown, Some(8192));
         assert_eq!(with_stale_hint, Some(8192));
         // What the gate does: no hint, so its own `unwrap_or(200_000)` applies.
-        let without_hint = resolve_context_window(&catalog(), &unknown, None);
+        let without_hint = resolve(&catalog(), &unknown, None);
         assert_eq!(without_hint, None);
+    }
+
+    /// Refs #7774 item 5. Every layer names itself, so a surface reporting the
+    /// window can say where it came from.
+    ///
+    /// Without this an operator reads one number for four different facts: a
+    /// window they set, a window the registry declared, a window an earlier
+    /// turn happened to persist, and a window nobody knows.
+    /// The reported incident is the last one — 8192 assumed against a real 16K — and it is indistinguishable from the others by size alone.
+    #[test]
+    fn each_layer_names_itself_as_the_source() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "litellm:sensor-model-generic-high".to_string(),
+            ModelOverrides {
+                context_window: Some(16_384),
+                ..Default::default()
+            },
+        );
+
+        assert_eq!(
+            source_of(
+                &cat,
+                &model("anthropic", "claude-sonnet-4-6", Some(96_000)),
+                None
+            ),
+            Some(ContextWindowSource::AgentOverride),
+        );
+        assert_eq!(
+            source_of(
+                &cat,
+                &model("litellm", "sensor-model-generic-high", None),
+                None
+            ),
+            Some(ContextWindowSource::ModelOverride),
+        );
+        assert_eq!(
+            source_of(&cat, &model("anthropic", "claude-sonnet-4-6", None), None),
+            Some(ContextWindowSource::Catalog),
+        );
+        assert_eq!(
+            source_of(
+                &cat,
+                &model("deepseek", "deepseek-v4-flash", None),
+                Some(48_000)
+            ),
+            Some(ContextWindowSource::SessionHint),
+        );
+        assert_eq!(
+            source_of(&cat, &model("deepseek", "deepseek-v4-flash", None), None),
+            None,
+            "nothing resolved — the caller labels its own fallback",
+        );
+    }
+
+    /// A model-level override of a window the catalog also declares reports the
+    /// override, not the catalog.
+    ///
+    /// The two layers are ranked inside one `effective_limits_for_manifest` call, so this is the assertion that keeps the value and its label from being computed by different rules.
+    #[test]
+    fn an_override_shadowing_a_catalog_entry_reports_the_override() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                context_window: Some(48_000),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            resolve_context_window(&cat, &model("anthropic", "claude-sonnet-4-6", None), None)
+                .map(|r| (r.tokens, r.source)),
+            Some((48_000, ContextWindowSource::ModelOverride)),
+        );
+    }
+
+    /// A zero override does not get to claim provenance either: it falls
+    /// through, and the catalog is named as the source of the value that wins.
+    #[test]
+    fn a_zero_override_reports_the_catalog_as_the_source() {
+        let mut cat = catalog();
+        cat.set_overrides(
+            "anthropic:claude-sonnet-4-6".to_string(),
+            ModelOverrides {
+                context_window: Some(0),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            source_of(&cat, &model("anthropic", "claude-sonnet-4-6", None), None),
+            Some(ContextWindowSource::Catalog),
+        );
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_agent_example_grants_tools_matching_its_scopes() {
+        let source = include_str!("../../../../examples/custom-agent/agent.toml");
+        let manifest: AgentManifest = toml::from_str(source).unwrap();
+        let caps = manifest_to_capabilities(&manifest);
+
+        assert!(caps.contains(&Capability::ToolInvoke("web_fetch".into())));
+        assert!(caps.contains(&Capability::NetConnect("*".into())));
+        assert!(caps.contains(&Capability::ToolInvoke("memory_store".into())));
+        assert!(caps.contains(&Capability::ToolInvoke("memory_recall".into())));
+        assert!(caps.contains(&Capability::MemoryRead("self.*".into())));
+        assert!(caps.contains(&Capability::MemoryWrite("self.*".into())));
+        assert_eq!(manifest.resources.max_cost_per_hour_usd, 1.0);
+    }
 
     const HAND_TOML: &str = r#"
 id = "jarvis"
@@ -945,40 +1401,50 @@ system_prompt = "p"
         m
     }
 
+    /// A hand with only settings: base prompt preserved, one fenced tail, env list returned.
     #[test]
-    fn apply_settings_appends_tail_when_settings_present() {
+    fn settings_only_hand_renders_one_fenced_tail() {
+        let def = parse_hand_with_settings(SINGLE_AGENT_HAND, "", &make_settings());
         let mut m = manifest_with_prompt("BASE");
-        let env = apply_settings_block_to_manifest(
-            &mut m,
-            &make_settings(),
-            &std::collections::HashMap::new(),
-        );
-        assert!(
-            m.model.system_prompt.contains("## User Configuration"),
-            "settings tail must be appended"
-        );
+        let env =
+            rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
         assert!(
             m.model.system_prompt.starts_with("BASE\n\n---\n\n"),
-            "base prompt must be preserved with the canonical separator"
+            "base prompt must be preserved with the canonical separator; got: {}",
+            m.model.system_prompt
         );
-        assert_eq!(env, vec!["GROQ_API_KEY".to_string()]);
+        assert!(m.model.system_prompt.contains(USER_CONFIG_TAIL_MARKER));
+        assert!(!m.model.system_prompt.contains("## Reference Knowledge"));
+        assert!(!m.model.system_prompt.contains("## Your Team"));
+        // The renderer returns the *filtered* allowlist, so the selected option's
+        // `provider_env = "GROQ_API_KEY"` is dropped by the secret blocklist rather
+        // than handed to the subprocess. A hand cannot widen the passthrough into
+        // the operator's credentials by naming one in a setting.
+        assert!(
+            env.is_empty(),
+            "GROQ_API_KEY ends in a blocked word and must not survive; got: {env:?}"
+        );
     }
 
+    /// A hand declaring nothing renderable leaves the prompt byte-identical.
     #[test]
-    fn apply_settings_is_noop_when_settings_empty() {
+    fn hand_with_no_tails_leaves_prompt_untouched() {
+        let def = parse_hand(SINGLE_AGENT_HAND, "");
         let mut m = manifest_with_prompt("BASE");
-        let env = apply_settings_block_to_manifest(&mut m, &[], &std::collections::HashMap::new());
-        assert_eq!(m.model.system_prompt, "BASE", "no settings -> no mutation");
+        let env =
+            rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
+        assert_eq!(m.model.system_prompt, "BASE");
         assert!(env.is_empty());
     }
 
     #[test]
-    fn apply_settings_is_idempotent_on_repeated_calls() {
-        let mut m = manifest_with_prompt("BASE");
+    fn settings_tail_is_not_duplicated_on_repeated_renders() {
+        let def = parse_hand_with_settings(SINGLE_AGENT_HAND, "", &make_settings());
         let cfg = std::collections::HashMap::new();
-        apply_settings_block_to_manifest(&mut m, &make_settings(), &cfg);
+        let mut m = manifest_with_prompt("BASE");
+        rerender_hand_prompt_tails(&mut m, "main", &def, &cfg);
         let after_first = m.model.system_prompt.clone();
-        apply_settings_block_to_manifest(&mut m, &make_settings(), &cfg);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &cfg);
         assert_eq!(
             m.model.system_prompt, after_first,
             "second invocation must not duplicate the tail"
@@ -993,21 +1459,20 @@ system_prompt = "p"
         );
     }
 
-    #[test]
-    fn apply_settings_returns_none_for_standalone_agent_toml_marker() {
-        // Sanity: ensures the marker constant matches what `resolve_settings` emits.
-        let mut m = manifest_with_prompt("BASE");
-        apply_settings_block_to_manifest(
-            &mut m,
-            &make_settings(),
-            &std::collections::HashMap::new(),
-        );
-        assert!(m.model.system_prompt.contains(USER_CONFIG_TAIL_MARKER));
-    }
-
     fn parse_hand(toml: &str, skill: &str) -> librefang_hands::HandDefinition {
         librefang_hands::registry::parse_hand_toml(toml, skill, std::collections::HashMap::new())
             .expect("hand toml must parse")
+    }
+
+    /// `parse_hand` plus a settings schema grafted on, so a fixture hand can exercise the settings tail without a second TOML constant per case.
+    fn parse_hand_with_settings(
+        toml: &str,
+        skill: &str,
+        settings: &[librefang_hands::HandSetting],
+    ) -> librefang_hands::HandDefinition {
+        let mut def = parse_hand(toml, skill);
+        def.settings = settings.to_vec();
+        def
     }
 
     const SINGLE_AGENT_HAND: &str = r#"
@@ -1058,10 +1523,10 @@ system_prompt = "BASE-WORKER"
 "#;
 
     #[test]
-    fn apply_skill_reference_appends_tail_when_skill_present() {
+    fn skill_reference_tail_is_appended_when_skill_present() {
         let def = parse_hand(SINGLE_AGENT_HAND, "RESOURCE A\nRESOURCE B");
         let mut m = manifest_with_prompt("BASE");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
         assert!(
             m.model
                 .system_prompt
@@ -1071,20 +1536,13 @@ system_prompt = "BASE-WORKER"
     }
 
     #[test]
-    fn apply_skill_reference_is_noop_when_skill_empty() {
-        let def = parse_hand(SINGLE_AGENT_HAND, "");
-        let mut m = manifest_with_prompt("BASE");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def);
-        assert_eq!(m.model.system_prompt, "BASE");
-    }
-
-    #[test]
-    fn apply_skill_reference_is_idempotent() {
+    fn skill_reference_tail_is_not_duplicated_on_repeated_renders() {
         let def = parse_hand(SINGLE_AGENT_HAND, "STUFF");
+        let cfg = std::collections::HashMap::new();
         let mut m = manifest_with_prompt("BASE");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &cfg);
         let after_first = m.model.system_prompt.clone();
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &cfg);
         assert_eq!(m.model.system_prompt, after_first);
         assert_eq!(
             m.model
@@ -1095,42 +1553,137 @@ system_prompt = "BASE-WORKER"
         );
     }
 
+    /// A per-role `SKILL-<role>.md` must win over the hand-shared `SKILL.md`, and the role that has no override must still get the shared one.
     #[test]
-    fn apply_skill_reference_replaces_stale_tail_when_content_changes() {
+    fn per_role_skill_content_overrides_the_shared_one() {
+        let mut def = parse_hand(MULTI_AGENT_HAND, "SHARED PLAYBOOK");
+        def.agent_skill_content
+            .insert("lead".to_string(), "LEAD PLAYBOOK".to_string());
+        let cfg = std::collections::HashMap::new();
+
+        let mut lead = manifest_with_prompt("BASE-LEAD");
+        rerender_hand_prompt_tails(&mut lead, "lead", &def, &cfg);
+        assert!(lead.model.system_prompt.contains("LEAD PLAYBOOK"));
+        assert!(!lead.model.system_prompt.contains("SHARED PLAYBOOK"));
+
+        let mut worker = manifest_with_prompt("BASE-WORKER");
+        rerender_hand_prompt_tails(&mut worker, "worker", &def, &cfg);
+        assert!(worker.model.system_prompt.contains("SHARED PLAYBOOK"));
+        assert!(!worker.model.system_prompt.contains("LEAD PLAYBOOK"));
+    }
+
+    /// A base prompt that *talks about* the User Configuration section must not be mistaken for one.
+    ///
+    /// This is the shape the registry's Trading Hand actually has: its Phase 0 says "Read **User Configuration** section for trading_mode, market_focus, …" and Phase 6 says "Read trading_mode from User Configuration", with no `## User Configuration` heading anywhere in the prompt body.
+    /// The marker is the fenced `\n\n---\n\n## User Configuration` form precisely so prose like that cannot make `find()` truncate author-written instructions, which would silently delete the phases that consume the settings.
+    #[test]
+    fn settings_marker_ignores_prose_references_to_the_section() {
+        let base = "You are a trader.\n\n\
+                    2. Read **User Configuration** section for trading_mode and watchlist\n\n\
+                    ## Phase 6\n\nRead trading_mode from User Configuration:";
+        let mut m = manifest_with_prompt(base);
+        let def = parse_hand_with_settings(SINGLE_AGENT_HAND, "", &make_settings());
+        rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
+        assert!(
+            m.model.system_prompt.starts_with(base),
+            "prose mentions must survive verbatim; got: {}",
+            m.model.system_prompt
+        );
+        assert_eq!(
+            manifest_for_diff(&m).model.system_prompt,
+            base,
+            "stripping back to the base prompt must land at the fence, not at a prose mention"
+        );
+
+        // And a re-render over that prompt stays stable rather than eating a phase per save.
+        let def = parse_hand(MULTI_AGENT_HAND_WITH_SETTINGS, "");
+        let mut live = manifest_with_prompt(base);
+        rerender_hand_prompt_tails(
+            &mut live,
+            "lead",
+            &def,
+            &config_with("trading_mode", "live"),
+        );
+        let after_first = live.model.system_prompt.clone();
+        rerender_hand_prompt_tails(
+            &mut live,
+            "lead",
+            &def,
+            &config_with("trading_mode", "live"),
+        );
+        assert_eq!(live.model.system_prompt, after_first);
+        assert!(live.model.system_prompt.starts_with(base));
+    }
+
+    #[test]
+    fn skill_reference_tail_replaces_stale_content() {
         let def_old = parse_hand(SINGLE_AGENT_HAND, "OLD");
         let def_new = parse_hand(SINGLE_AGENT_HAND, "NEW");
+        let cfg = std::collections::HashMap::new();
         let mut m = manifest_with_prompt("BASE");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def_old);
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def_new);
+        rerender_hand_prompt_tails(&mut m, "main", &def_old, &cfg);
+        rerender_hand_prompt_tails(&mut m, "main", &def_new, &cfg);
         assert!(m.model.system_prompt.contains("NEW"));
         assert!(!m.model.system_prompt.contains("OLD"));
     }
 
     #[test]
-    fn apply_skill_reference_drops_tail_when_skill_removed() {
+    fn skill_reference_tail_is_dropped_when_skill_removed() {
         // Hand previously had skill content; on next render the SKILL.md is gone.
         let def_with = parse_hand(SINGLE_AGENT_HAND, "STUFF");
         let def_without = parse_hand(SINGLE_AGENT_HAND, "");
+        let cfg = std::collections::HashMap::new();
         let mut m = manifest_with_prompt("BASE");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def_with);
+        rerender_hand_prompt_tails(&mut m, "main", &def_with, &cfg);
         assert!(m.model.system_prompt.contains("STUFF"));
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def_without);
+        rerender_hand_prompt_tails(&mut m, "main", &def_without, &cfg);
         assert_eq!(m.model.system_prompt, "BASE");
     }
 
+    /// The hazard behind #6637's review: a playbook may legitimately contain a `---` rule followed by a `## Your Team` heading.
+    /// Rendering must not mistake that author text for the rendered team tail and truncate the playbook there — and a second render must not compound the loss.
     #[test]
-    fn apply_team_block_noop_for_single_agent_hand() {
+    fn skill_content_containing_a_team_heading_survives_intact() {
+        let playbook =
+            "STEP 1\n\n---\n\n## Your Team\n\nthe roster is documented here\n\nSTEP 2 MUST SURVIVE";
+        let def = parse_hand(MULTI_AGENT_HAND, playbook);
+        let cfg = std::collections::HashMap::new();
+        let mut m = manifest_with_prompt("BASE-LEAD");
+
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
+        assert!(
+            m.model.system_prompt.contains("STEP 2 MUST SURVIVE"),
+            "author text after a `## Your Team` heading inside SKILL.md must reach the LLM; got: {}",
+            m.model.system_prompt
+        );
+        assert!(
+            m.model.system_prompt.contains("- **worker**:"),
+            "the real team tail must still be appended; got: {}",
+            m.model.system_prompt
+        );
+
+        // Idempotent even though the prompt now contains two `## Your Team` headings.
+        let after_first = m.model.system_prompt.clone();
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
+        assert_eq!(
+            m.model.system_prompt, after_first,
+            "a second render must neither duplicate nor erode the prompt"
+        );
+    }
+
+    #[test]
+    fn team_block_absent_for_single_agent_hand() {
         let def = parse_hand(SINGLE_AGENT_HAND, "");
         let mut m = manifest_with_prompt("BASE");
-        apply_team_block_to_manifest(&mut m, "main", &def);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
         assert_eq!(m.model.system_prompt, "BASE");
     }
 
     #[test]
-    fn apply_team_block_appends_peers_excluding_self() {
+    fn team_block_lists_peers_excluding_self() {
         let def = parse_hand(MULTI_AGENT_HAND, "");
         let mut m = manifest_with_prompt("BASE");
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &std::collections::HashMap::new());
         let prompt = &m.model.system_prompt;
         assert!(
             prompt.contains("\n\n---\n\n## Your Team\n\n"),
@@ -1146,7 +1699,7 @@ system_prompt = "BASE-WORKER"
     }
 
     #[test]
-    fn apply_team_block_ignores_legacy_unfenced_tail() {
+    fn team_render_ignores_legacy_unfenced_tail() {
         // Lock-down for the LEGACY_TEAM_TAIL_MARKER cleanup. The pre-fence
         // form (`\n\n## Your Team`) is no longer recognised by the strip
         // logic, so a prompt carrying it gets a fresh fenced block appended
@@ -1163,7 +1716,7 @@ system_prompt = "BASE-WORKER"
         let mut m = manifest_with_prompt(
             "BASE\n\n## Your Team\n\n- **worker**: stale (use agent_send to message)",
         );
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &std::collections::HashMap::new());
         let prompt = &m.model.system_prompt;
         assert!(
             prompt.contains("stale"),
@@ -1181,10 +1734,10 @@ system_prompt = "BASE-WORKER"
     }
 
     #[test]
-    fn apply_team_block_uses_invoke_hint_when_present() {
+    fn team_block_uses_invoke_hint_when_present() {
         let def = parse_hand(MULTI_AGENT_HAND, "");
         let mut m = manifest_with_prompt("BASE");
-        apply_team_block_to_manifest(&mut m, "worker", &def);
+        rerender_hand_prompt_tails(&mut m, "worker", &def, &std::collections::HashMap::new());
         // `lead` has invoke_hint = "delegates work", so the line must use that
         // instead of the manifest description.
         assert!(m.model.system_prompt.contains("- **lead**: delegates work"));
@@ -1192,12 +1745,13 @@ system_prompt = "BASE-WORKER"
     }
 
     #[test]
-    fn apply_team_block_is_idempotent() {
+    fn team_block_is_idempotent() {
         let def = parse_hand(MULTI_AGENT_HAND, "");
+        let cfg = std::collections::HashMap::new();
         let mut m = manifest_with_prompt("BASE");
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
         let after_first = m.model.system_prompt.clone();
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
         assert_eq!(m.model.system_prompt, after_first);
         assert_eq!(m.model.system_prompt.matches("## Your Team").count(), 1);
     }
@@ -1207,14 +1761,8 @@ system_prompt = "BASE-WORKER"
         // Build a prompt that contains all three tails in activation order.
         let base = "BASE";
         let mut m = manifest_with_prompt(base);
-        apply_settings_block_to_manifest(
-            &mut m,
-            &make_settings(),
-            &std::collections::HashMap::new(),
-        );
-        let def = parse_hand(MULTI_AGENT_HAND, "STUFF");
-        apply_skill_reference_block_to_manifest(&mut m, "lead", &def);
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        let def = parse_hand_with_settings(MULTI_AGENT_HAND, "STUFF", &make_settings());
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &std::collections::HashMap::new());
         assert!(m.model.system_prompt.contains("## User Configuration"));
         assert!(m.model.system_prompt.contains("## Reference Knowledge"));
         assert!(m.model.system_prompt.contains("## Your Team"));
@@ -1228,14 +1776,14 @@ system_prompt = "BASE-WORKER"
         // Only Team tail present (no settings, no skills).
         let mut m = manifest_with_prompt("BASE");
         let def = parse_hand(MULTI_AGENT_HAND, "");
-        apply_team_block_to_manifest(&mut m, "lead", &def);
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &std::collections::HashMap::new());
         let projected = manifest_for_diff(&m);
         assert_eq!(projected.model.system_prompt, "BASE");
 
         // Only Reference Knowledge.
         let mut m = manifest_with_prompt("BASE");
         let def = parse_hand(SINGLE_AGENT_HAND, "STUFF");
-        apply_skill_reference_block_to_manifest(&mut m, "main", &def);
+        rerender_hand_prompt_tails(&mut m, "main", &def, &std::collections::HashMap::new());
         let projected = manifest_for_diff(&m);
         assert_eq!(projected.model.system_prompt, "BASE");
     }
@@ -1248,6 +1796,175 @@ system_prompt = "BASE-WORKER"
             projected.model.system_prompt,
             "BASE prompt with no rendered tails"
         );
+    }
+
+    const MULTI_AGENT_HAND_WITH_SETTINGS: &str = r#"
+id = "team"
+version = "1.0.0"
+name = "Team"
+description = "t"
+category = "other"
+
+[[settings]]
+key = "trading_mode"
+label = "Trading Mode"
+setting_type = "select"
+default = "paper"
+
+[[settings.options]]
+value = "paper"
+label = "Paper Trading"
+
+[[settings.options]]
+value = "live"
+label = "Live Trading"
+provider_env = "BROKER_ACCOUNT_ID"
+
+[[requires]]
+key = "feed_endpoint"
+label = "Feed endpoint"
+requirement_type = "env_var"
+check_value = "MARKET_FEED_ENDPOINT"
+
+# Deliberately names a daemon secret — must never survive the blocklist.
+[[requires]]
+key = "vault"
+label = "Vault"
+requirement_type = "api_key"
+check_value = "LIBREFANG_VAULT_KEY"
+
+[agents.lead]
+name = "team-lead"
+description = "lead agent"
+module = "builtin:chat"
+invoke_hint = "delegates work"
+
+[agents.lead.model]
+provider = "openrouter"
+model = "x"
+system_prompt = "BASE-LEAD"
+
+[agents.worker]
+name = "team-worker"
+description = "executes tasks"
+module = "builtin:chat"
+
+[agents.worker.model]
+provider = "openrouter"
+model = "x"
+system_prompt = "BASE-WORKER"
+"#;
+
+    fn config_with(key: &str, value: &str) -> std::collections::HashMap<String, serde_json::Value> {
+        std::collections::HashMap::from([(
+            key.to_string(),
+            serde_json::Value::String(value.to_string()),
+        )])
+    }
+
+    /// The #6636 hazard in isolation: re-rendering a *live* prompt — one that already carries all three tails — must not lose the reference or team blocks.
+    #[test]
+    fn rerender_preserves_reference_and_team_tails() {
+        let def = parse_hand(MULTI_AGENT_HAND_WITH_SETTINGS, "STUFF");
+        let mut m = manifest_with_prompt("BASE-LEAD");
+
+        // Materialize the activation-time shape.
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &std::collections::HashMap::new());
+        assert!(m.model.system_prompt.contains("Paper Trading"));
+
+        // Now re-render with a changed setting, as a settings save does.
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &config_with("trading_mode", "live"));
+
+        let prompt = &m.model.system_prompt;
+        assert!(
+            prompt.starts_with("BASE-LEAD\n\n---\n\n"),
+            "author-written base prompt must survive; got: {prompt}"
+        );
+        assert!(
+            prompt.contains("Live Trading"),
+            "new value must be rendered; got: {prompt}"
+        );
+        assert!(
+            !prompt.contains("Paper Trading"),
+            "stale default must be gone; got: {prompt}"
+        );
+        assert!(
+            prompt.contains("## Reference Knowledge\n\nSTUFF"),
+            "skill tail must survive the re-render; got: {prompt}"
+        );
+        assert!(
+            prompt.contains("- **worker**: executes tasks"),
+            "team tail must survive the re-render; got: {prompt}"
+        );
+        for heading in [
+            "## User Configuration",
+            "## Reference Knowledge",
+            "## Your Team",
+        ] {
+            assert_eq!(
+                prompt.matches(heading).count(),
+                1,
+                "exactly one {heading} block must be present; got: {prompt}"
+            );
+        }
+    }
+
+    #[test]
+    fn rerender_is_idempotent_and_order_stable() {
+        let def = parse_hand(MULTI_AGENT_HAND_WITH_SETTINGS, "STUFF");
+        let cfg = config_with("trading_mode", "live");
+        let mut m = manifest_with_prompt("BASE-LEAD");
+
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
+        let after_first = m.model.system_prompt.clone();
+        rerender_hand_prompt_tails(&mut m, "lead", &def, &cfg);
+        assert_eq!(m.model.system_prompt, after_first);
+
+        // Canonical order: settings -> reference -> team.
+        let settings_at = after_first.find("## User Configuration").unwrap();
+        let reference_at = after_first.find("## Reference Knowledge").unwrap();
+        let team_at = after_first.find("## Your Team").unwrap();
+        assert!(settings_at < reference_at && reference_at < team_at);
+    }
+
+    /// A hand whose prompt has no rendered tail yet — the very first save after an activation that had nothing to render — must still come out with the base prompt intact.
+    #[test]
+    fn rerender_from_bare_prompt_keeps_base() {
+        let def = parse_hand(MULTI_AGENT_HAND_WITH_SETTINGS, "");
+        let mut m = manifest_with_prompt("BASE-WORKER");
+        rerender_hand_prompt_tails(&mut m, "worker", &def, &config_with("trading_mode", "live"));
+        assert!(m.model.system_prompt.starts_with("BASE-WORKER\n\n---\n\n"));
+        assert!(!m.model.system_prompt.contains("## Reference Knowledge"));
+    }
+
+    #[test]
+    fn allowed_env_covers_selected_option_and_requirements() {
+        let def = parse_hand(MULTI_AGENT_HAND_WITH_SETTINGS, "");
+
+        // Default `paper` option declares no provider_env.
+        let on_default = resolve_hand_allowed_env(&def, &std::collections::HashMap::new());
+        assert_eq!(on_default, vec!["MARKET_FEED_ENDPOINT".to_string()]);
+
+        // Switching to `live` pulls in that option's provider_env — the
+        // whole point of re-resolving the allowlist on a settings save.
+        let on_live = resolve_hand_allowed_env(&def, &config_with("trading_mode", "live"));
+        assert_eq!(
+            on_live,
+            vec![
+                "BROKER_ACCOUNT_ID".to_string(),
+                "MARKET_FEED_ENDPOINT".to_string()
+            ]
+        );
+
+        // The `[[requires]]` entry naming a daemon secret is filtered out on
+        // both paths — a marketplace hand cannot widen the passthrough into
+        // the operator's own credentials by declaring a requirement for one.
+        for resolved in [&on_default, &on_live] {
+            assert!(
+                !resolved.contains(&"LIBREFANG_VAULT_KEY".to_string()),
+                "blocklisted env var must never reach the allowlist; got: {resolved:?}"
+            );
+        }
     }
 
     #[test]

@@ -34,6 +34,81 @@ const HOLDER_STALE_MS: u64 = 60 * 60 * 1000;
 /// concurrent acquirers targeting the same path inside one process.
 static IN_PROCESS_CLAIMS: LazyLock<DashSet<PathBuf>> = LazyLock::new(DashSet::new);
 
+/// Owns a process-local claim until acquisition either succeeds or is
+/// abandoned. Dropping the acquisition future at any await point drops this
+/// guard and makes the path available to later callers.
+struct InProcessClaimGuard {
+    path: PathBuf,
+    token: String,
+    prior_mtime: Option<u64>,
+    armed: bool,
+}
+
+impl InProcessClaimGuard {
+    fn claim(path: PathBuf, prior_mtime: Option<u64>) -> Option<Self> {
+        if IN_PROCESS_CLAIMS.insert(path.clone()) {
+            Some(Self {
+                path,
+                token: format!("{}:{}", std::process::id(), uuid::Uuid::new_v4()),
+                prior_mtime,
+                armed: true,
+            })
+        } else {
+            None
+        }
+    }
+
+    fn write_and_verify(&self) -> LibreFangResult<bool> {
+        std::fs::write(&self.path, self.token.as_bytes()).map_err(|e| {
+            LibreFangError::Internal(format!("auto_dream: write lock file failed: {e}"))
+        })?;
+        let verify = std::fs::read_to_string(&self.path).map_err(|e| {
+            LibreFangError::Internal(format!("auto_dream: verify lock file failed: {e}"))
+        })?;
+        Ok(verify.trim() == self.token)
+    }
+
+    /// Keep the claim after a verified acquisition. `release` or `rollback`
+    /// becomes responsible for removing it from `IN_PROCESS_CLAIMS`.
+    fn retain(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for InProcessClaimGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        IN_PROCESS_CLAIMS.remove(&self.path);
+
+        // A cancelled Tokio filesystem future may finish its blocking write
+        // after the async owner is gone. Acquisition therefore performs the
+        // complete write+verify sequence in one blocking task and returns
+        // this armed guard. If the JoinHandle is dropped, the task output is
+        // dropped after that sequence finishes and cleanup cannot race its
+        // own write. Never clear a token that another process overwrote.
+        let owns_disk_token =
+            std::fs::read_to_string(&self.path).is_ok_and(|body| body.trim() == self.token);
+        if !owns_disk_token {
+            return;
+        }
+
+        let cleanup_result = if let Some(prior_mtime) = self.prior_mtime {
+            std::fs::write(&self.path, b"").and_then(|()| set_mtime_ms(&self.path, prior_mtime))
+        } else {
+            std::fs::remove_file(&self.path)
+        };
+        if let Err(error) = cleanup_result {
+            tracing::warn!(
+                path = %self.path.display(),
+                %error,
+                "auto_dream: failed to clean abandoned lock claim"
+            );
+        }
+    }
+}
+
 /// Handle onto the lock file. Stateless — every operation re-reads from disk
 /// so multiple processes racing on the same path stay coherent.
 #[derive(Debug, Clone)]
@@ -83,7 +158,11 @@ impl ConsolidationLock {
         let (prior_mtime, holder_pid) = match fs::metadata(&self.path).await {
             Ok(meta) => {
                 let mtime = mtime_ms(&meta)?;
-                let body = fs::read_to_string(&self.path).await.unwrap_or_default();
+                let body = fs::read_to_string(&self.path).await.map_err(|e| {
+                    LibreFangError::Internal(format!(
+                        "auto_dream: read existing lock file failed: {e}"
+                    ))
+                })?;
                 let pid = parse_pid_from_body(&body);
                 (Some(mtime), pid)
             }
@@ -123,32 +202,27 @@ impl ConsolidationLock {
         // Same-process racers must lose before touching the file. The
         // token-based verify below only proves "my write was visible when I
         // re-read", not "nobody overwrote me later".
-        if !IN_PROCESS_CLAIMS.insert(self.path.clone()) {
+        let claim_path = self.path.clone();
+        let claim =
+            tokio::task::spawn_blocking(move || -> LibreFangResult<Option<InProcessClaimGuard>> {
+                let Some(claim) = InProcessClaimGuard::claim(claim_path, prior_mtime) else {
+                    return Ok(None);
+                };
+                if claim.write_and_verify()? {
+                    Ok(Some(claim))
+                } else {
+                    Ok(None)
+                }
+            })
+            .await
+            .map_err(|e| {
+                LibreFangError::Internal(format!("auto_dream: lock claim task failed: {e}"))
+            })??;
+        let Some(claim) = claim else {
             return Ok(None);
-        }
+        };
 
-        // Per-acquire token — makes "did our write win?" a real check even
-        // when two acquirers are in the same process and thus share a PID.
-        let token = format!("{}:{}", std::process::id(), uuid::Uuid::new_v4());
-        fs::write(&self.path, token.as_bytes()).await.map_err(|e| {
-            IN_PROCESS_CLAIMS.remove(&self.path);
-            LibreFangError::Internal(format!("auto_dream: write lock file failed: {e}"))
-        })?;
-
-        // Verify our write won the race. Last-writer-wins semantics mean
-        // the loser sees a body that is not their unique token — they bail
-        // and retry next tick. Without the UUID this check would falsely
-        // succeed for same-PID racers because their bodies would be
-        // identical.
-        let verify = fs::read_to_string(&self.path).await.map_err(|e| {
-            IN_PROCESS_CLAIMS.remove(&self.path);
-            LibreFangError::Internal(format!("auto_dream: verify lock file failed: {e}"))
-        })?;
-        if verify.trim() != token {
-            IN_PROCESS_CLAIMS.remove(&self.path);
-            return Ok(None);
-        }
-
+        claim.retain();
         Ok(Some(prior_mtime.unwrap_or(0)))
     }
 
@@ -193,10 +267,20 @@ impl ConsolidationLock {
                 LibreFangError::Internal(format!("auto_dream: create lock parent dir failed: {e}"))
             })?;
         }
-        let token = format!("{}:{}", std::process::id(), uuid::Uuid::new_v4());
-        fs::write(&self.path, token.as_bytes())
+        // `record_now` records a completed manual consolidation. It must not
+        // leave a holder token: our PID remains live, so `try_acquire` would
+        // otherwise treat this completed run as active for up to an hour.
+        fs::write(&self.path, b"")
             .await
             .map_err(|e| LibreFangError::Internal(format!("auto_dream: touch lock failed: {e}")))?;
+        // Keep the completion timestamp explicit, matching `release`. This is
+        // also needed on coarse-resolution filesystems when the lock file was
+        // written earlier in the same clock tick.
+        set_mtime_ms(&self.path, now_ms()).map_err(|e| {
+            LibreFangError::Internal(format!(
+                "auto_dream: refresh mtime after manual consolidation failed: {e}"
+            ))
+        })?;
         Ok(())
     }
 
@@ -362,6 +446,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn acquire_propagates_existing_lock_read_error() {
+        let path = tmpfile("unreadable");
+        tokio::fs::create_dir(&path).await.unwrap();
+        let lock = ConsolidationLock::new(path.clone());
+
+        let error = lock.try_acquire().await.unwrap_err();
+
+        assert!(error.to_string().contains("read existing lock file"));
+        assert!(
+            path.is_dir(),
+            "failed acquisition must not replace the lock path"
+        );
+        tokio::fs::remove_dir(&path).await.unwrap();
+    }
+
+    #[tokio::test]
     async fn parse_pid_from_body_handles_legacy_and_new_formats() {
         // Legacy bare-PID format — daemons built before the token change.
         assert_eq!(parse_pid_from_body("4242"), Some(4242));
@@ -448,6 +548,28 @@ mod tests {
         let _ = tokio::fs::remove_file(&path).await;
     }
 
+    #[tokio::test]
+    async fn record_now_leaves_no_holder_so_next_acquire_succeeds() {
+        let path = tmpfile("record-now");
+        let lock = ConsolidationLock::new(path.clone());
+
+        lock.record_now().await.unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(&path).await.unwrap(),
+            "",
+            "a completed manual consolidation must not retain a live PID token"
+        );
+        let prior = lock.try_acquire().await.unwrap();
+        assert!(
+            prior.is_some(),
+            "record_now must not make a completed run look like a live holder"
+        );
+
+        lock.release().await.unwrap();
+        tokio::fs::remove_file(&path).await.unwrap();
+    }
+
     // Unix-only: `is_process_running` always returns true on Windows
     // (documented fallback in lock.rs — no cheap liveness probe without an
     // extra crate, so production relies on HOLDER_STALE_MS to reclaim stale
@@ -492,5 +614,34 @@ mod tests {
             .count();
         assert_eq!(winners, 1, "exactly one racer should win the lock");
         let _ = tokio::fs::remove_file(&path).await;
+    }
+
+    #[tokio::test]
+    async fn cancelling_claim_owner_releases_in_process_claim() {
+        let path = tmpfile("cancelled-claim");
+        let task_path = path.clone();
+        let (claimed_tx, claimed_rx) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(async move {
+            let claim = InProcessClaimGuard::claim(task_path, None).unwrap();
+            claim.write_and_verify().unwrap();
+            claimed_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        });
+
+        claimed_rx.await.unwrap();
+        assert!(IN_PROCESS_CLAIMS.contains(&path));
+        assert!(InProcessClaimGuard::claim(path.clone(), None).is_none());
+        assert!(
+            IN_PROCESS_CLAIMS.contains(&path),
+            "failed claimant must not remove the current owner's claim"
+        );
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(!IN_PROCESS_CLAIMS.contains(&path));
+        assert!(!path.exists(), "cancelled owner must remove its disk token");
+
+        let lock = ConsolidationLock::new(path.clone());
+        assert_eq!(lock.try_acquire().await.unwrap(), Some(0));
+        lock.rollback(0).await.unwrap();
     }
 }

@@ -3,6 +3,8 @@ name = "librefang-acp"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Agent Client Protocol (ACP) adapter for LibreFang — embeds LibreFang agents in Zed/VSCode/JetBrains via stdio JSON-RPC (#3313)"
 
 [features]
@@ -34,7 +36,7 @@ uuid = { workspace = true }
 dashmap = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+tokio = { workspace = true, features = ["test-util"] }
 # Used by `tests/acp_integration.rs` for the duplex transport's
 # `AsyncRead` / `AsyncWrite` bounds and for stamping `ApprovalRequest`
 # fixtures. Production code in this crate doesn't touch them directly

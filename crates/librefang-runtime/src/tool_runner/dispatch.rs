@@ -12,6 +12,7 @@
 use super::*;
 use crate::mcp;
 use crate::web_search::WebToolsContext;
+use librefang_kernel_handle::KernelOpError;
 use librefang_skills::registry::SkillRegistry;
 use librefang_types::taint::TaintSink;
 use librefang_types::tool::{ToolDefinition, ToolResult};
@@ -113,6 +114,23 @@ pub struct ToolExecContext<'a> {
     /// is preserved across tool calls so previously-approved patterns are not re-blocked.
     pub dangerous_command_checker:
         Option<&'a Arc<tokio::sync::RwLock<crate::dangerous_command::DangerousCommandChecker>>>,
+    /// The principal this turn is acting *for* — the authenticated caller, or
+    /// the agent's configured owner when nothing human started the turn (#7744).
+    ///
+    /// Deliberately separate from `sender_id`, which sits three fields up and
+    /// answers a different question. `sender_id` is a *platform* identifier
+    /// (`telegram:12345`, an `api:<name>` binding key) that steers per-sender
+    /// tool authorization and `peer:{user_id}:KEY` memory scoping; this is a
+    /// LibreFang identity, resolved kernel-side by
+    /// [`librefang_types::principal::resolve_acting_principal`], and it steers
+    /// nothing — the `*_create` tools stamp it on what they persist and no
+    /// branch of the dispatch table reads it as a permission.
+    ///
+    /// Owned rather than borrowed because `Principal` is `Copy` and 20 bytes.
+    ///
+    /// `None` on the deferred-approval resume path, and that is a decision
+    /// rather than an omission: see `Kernel::build_deferred_tool_exec_context`.
+    pub acting_principal: Option<librefang_types::principal::Principal>,
 }
 
 /// Execute a tool without running the approval / capability / taint gate.
@@ -217,7 +235,23 @@ pub async fn execute_tool_raw(
         checkpoint_manager,
         interrupt,
         dangerous_command_checker,
+        acting_principal,
     } = ctx;
+
+    // #8051: the kernel advertises every named workspace to the model as
+    // `@name` in TOOLS.md, so expand that form here — once, before any arm
+    // reads a path — into the mount it points at. Downstream everything sees
+    // an ordinary absolute path, which keeps the security checks and the
+    // resolver enforcing against the same string that will be opened.
+    let aliased_input;
+    let input = match expand_alias_in_tool_input(tool_name, input, *kernel, *caller_agent_id) {
+        Ok(None) => input,
+        Ok(Some(rewritten)) => {
+            aliased_input = rewritten;
+            &aliased_input
+        }
+        Err(reason) => return ToolResult::error(tool_use_id.to_string(), reason),
+    };
 
     // ACL-gated, `ToolError`-native tools (memory_* + wiki_*) are dispatched
     // here, before the stringly `match` below, through the typed boundary —
@@ -248,6 +282,39 @@ pub async fn execute_tool_raw(
             *sender_id,
             *channel,
         )),
+        // #7808: semantic (vector) memory. Dispatched here with the KV tools
+        // because they share the same soft-`Denied` contract — a per-user ACL
+        // refusal on the `proactive` namespace must not count toward the
+        // consecutive-hard-failure abort.
+        "memory_semantic_search" => Some(
+            tool_memory_semantic_search(input, *kernel, *caller_agent_id, *sender_id, *channel)
+                .await,
+        ),
+        "memory_semantic_add" => Some(
+            tool_memory_semantic_add(input, *kernel, *caller_agent_id, *sender_id, *channel).await,
+        ),
+        "memory_semantic_forget" => Some(
+            tool_memory_semantic_forget(input, *kernel, *caller_agent_id, *sender_id, *channel)
+                .await,
+        ),
+        "memory_semantic_stats" => Some(
+            tool_memory_semantic_stats(input, *kernel, *caller_agent_id, *sender_id, *channel)
+                .await,
+        ),
+        "memory_semantic_duplicates" => Some(
+            tool_memory_semantic_duplicates(input, *kernel, *caller_agent_id, *sender_id, *channel)
+                .await,
+        ),
+        "memory_semantic_consolidate" => Some(
+            tool_memory_semantic_consolidate(
+                input,
+                *kernel,
+                *caller_agent_id,
+                *sender_id,
+                *channel,
+            )
+            .await,
+        ),
         "wiki_get" => Some(tool_wiki_get(input, *kernel, *sender_id, *channel)),
         "wiki_search" => Some(tool_wiki_search(input, *kernel, *sender_id, *channel)),
         "wiki_write" => Some(tool_wiki_write(
@@ -301,7 +368,7 @@ pub async fn execute_tool_raw(
                     let path = std::path::PathBuf::from(path_str);
                     let line = input["line"].as_u64().and_then(|v| u32::try_from(v).ok());
                     let limit = input["limit"].as_u64().and_then(|v| u32::try_from(v).ok());
-                    return match client.read_text_file(path.clone(), line, limit).await {
+                    match client.read_text_file(path.clone(), line, limit).await {
                         Ok(content) => {
                             // #4971: dedup repeated reads of the same buffer.
                             // Only applies when no slicing args were supplied —
@@ -313,13 +380,18 @@ pub async fn execute_tool_raw(
                             } else {
                                 content
                             };
-                            ToolResult::ok(tool_use_id.to_string(), final_content)
+                            return ToolResult::ok(tool_use_id.to_string(), final_content);
                         }
-                        Err(e) => ToolResult::error(
-                            tool_use_id.to_string(),
-                            format!("ACP fs/read_text_file failed: {e}"),
-                        ),
-                    };
+                        Err(KernelOpError::Unavailable(reason)) => {
+                            debug!(%reason, "ACP file read unavailable; falling back to local filesystem");
+                        }
+                        Err(e) => {
+                            return ToolResult::error(
+                                tool_use_id.to_string(),
+                                format!("ACP fs/read_text_file failed: {e}"),
+                            );
+                        }
+                    }
                 }
             }
             let extra_refs: Vec<&Path> = allowed.iter().map(|p| p.as_path()).collect();
@@ -390,16 +462,23 @@ pub async fn execute_tool_raw(
                         );
                     };
                     let path = std::path::PathBuf::from(path_str);
-                    return match client.write_text_file(path, content.to_string()).await {
-                        Ok(()) => ToolResult::ok(
-                            tool_use_id.to_string(),
-                            format!("Wrote {path_str} via editor"),
-                        ),
-                        Err(e) => ToolResult::error(
-                            tool_use_id.to_string(),
-                            format!("ACP fs/write_text_file failed: {e}"),
-                        ),
-                    };
+                    match client.write_text_file(path, content.to_string()).await {
+                        Ok(()) => {
+                            return ToolResult::ok(
+                                tool_use_id.to_string(),
+                                format!("Wrote {path_str} via editor"),
+                            );
+                        }
+                        Err(KernelOpError::Unavailable(reason)) => {
+                            debug!(%reason, "ACP file write unavailable; falling back to local filesystem");
+                        }
+                        Err(e) => {
+                            return ToolResult::error(
+                                tool_use_id.to_string(),
+                                format!("ACP fs/write_text_file failed: {e}"),
+                            );
+                        }
+                    }
                 }
             }
             let extra_refs: Vec<&Path> = writable.iter().map(|p| p.as_path()).collect();
@@ -966,6 +1045,8 @@ pub async fn execute_tool_raw(
         "agent_spawn" => tool_agent_spawn(input, *kernel, *caller_agent_id, *allowed_tools).await,
         "agent_list" => tool_agent_list(*kernel),
         "agent_kill" => tool_agent_kill(input, *kernel),
+        // Authoring an agent type is an agent-lifecycle operation — it writes the manifest a later `agent_spawn` consumes — so it sits with the inter-agent tools rather than with the workflow tools it was modelled on (#7722).
+        "agent_type_create" => tool_agent_type_create(input, *kernel).await,
 
         // Shared memory (`memory_*`) and wiki (`wiki_*`) tools are dispatched
         // before this match, through the typed `ToolError` boundary, so their
@@ -982,7 +1063,14 @@ pub async fn execute_tool_raw(
 
         // Scheduling tools (delegate to CronScheduler via kernel handle).
         "schedule_create" => {
-            tool_schedule_create(input, *kernel, *caller_agent_id, *sender_id).await
+            tool_schedule_create(
+                input,
+                *kernel,
+                *caller_agent_id,
+                *sender_id,
+                *acting_principal,
+            )
+            .await
         }
         "schedule_list" => tool_schedule_list(*kernel, *caller_agent_id).await,
         "schedule_delete" => tool_schedule_delete(input, *kernel, *caller_agent_id).await,
@@ -1103,7 +1191,16 @@ pub async fn execute_tool_raw(
         "skill_evolve_remove_file" => tool_skill_evolve_remove_file(input, *skill_registry).await,
 
         // Cron scheduling tools.
-        "cron_create" => tool_cron_create(input, *kernel, *caller_agent_id, *sender_id).await,
+        "cron_create" => {
+            tool_cron_create(
+                input,
+                *kernel,
+                *caller_agent_id,
+                *sender_id,
+                *acting_principal,
+            )
+            .await
+        }
         "cron_list" => tool_cron_list(*kernel, *caller_agent_id).await,
         "cron_cancel" => tool_cron_cancel(input, *kernel, *caller_agent_id).await,
         "cron_enable" => tool_cron_enable(input, *kernel, *caller_agent_id).await,
@@ -1132,6 +1229,27 @@ pub async fn execute_tool_raw(
             .await
             .map_err(ToolError::upstream_msg)
         }
+
+        // Targeted delivery to one member of the current conversation (#7086).
+        // Deliberately takes no channel / chat_id / account_id: all three come
+        // from the turn, so the roster that authorizes the recipient is the one
+        // the model is actually talking in and cannot be chosen by the model.
+        "channel_dm" => tool_channel_dm(
+            input,
+            *kernel,
+            *sender_id,
+            *channel,
+            *chat_id,
+            *sender_account_id,
+            *caller_agent_id,
+        )
+        .await
+        .map_err(ToolError::upstream_msg),
+
+        // Roster read — the companion of `channel_send` (#7086).
+        // The bridge has been persisting group senders through `roster_upsert` all along; this is the first caller of the matching read.
+        "channel_members" => tool_channel_members(input, *kernel, *sender_id, *channel, *chat_id)
+            .map_err(ToolError::upstream_msg),
 
         // Persistent process tools.
         "process_start" => {
@@ -1167,7 +1285,9 @@ pub async fn execute_tool_raw(
         "goal_update" => tool_goal_update(input, *kernel),
 
         // Workflow tools.
-        "workflow_run" => tool_workflow_run(input, *kernel).await,
+        // #7714: forward the caller so the kernel can stamp it on the run as
+        // the run's owner, exactly as `workflow_start` already forwards it.
+        "workflow_run" => tool_workflow_run(input, *kernel, *caller_agent_id).await,
         "workflow_list" => tool_workflow_list(*kernel).await,
         "workflow_describe" => tool_workflow_describe(input, *kernel).await,
         "workflow_status" => tool_workflow_status(input, *kernel).await,
@@ -1175,6 +1295,9 @@ pub async fn execute_tool_raw(
             tool_workflow_start(input, *kernel, *caller_agent_id, *session_id).await
         }
         "workflow_cancel" => tool_workflow_cancel(input, *kernel).await,
+        "workflow_create" => {
+            tool_workflow_create(input, *kernel, *caller_agent_id, *acting_principal).await
+        }
 
         // Browser automation tools
         #[cfg(feature = "browser")]
@@ -1326,10 +1449,15 @@ pub async fn execute_tool_raw(
                                 server = server_name,
                                 "Dispatching to MCP server"
                             );
-                            match conn
+                            // #7963: report the outcome of every MCP tool call to the kernel's health monitor through the connection's health reporter.
+                            // This is the only path that observes a server which completed its handshake and later wedged; without it `should_reconnect` was structurally unreachable, so a dead server stayed dead until the daemon restarted while `/api/mcp/health` reported it healthy.
+                            //
+                            // `report_call_outcome` reports only transport-level failures — an application error (bad arguments, file not found) leaves health untouched, because the server answered.
+                            let result = conn
                                 .call_tool_with_caller(other, input, caller_ctx.as_ref())
-                                .await
-                            {
+                                .await;
+                            conn.report_call_outcome(result.as_ref().map(|_| ()));
+                            match result {
                                 Ok(content) => Ok(content),
                                 Err(e) => Err(ToolError::upstream_msg(format!(
                                     "MCP tool call failed: {e}"
@@ -1523,6 +1651,10 @@ pub async fn execute_tool(
         // Out-of-band callers of the positional shim are user-facing / MCP
         // bridge calls, never system-internal forks (#6463).
         false,
+        // #7744: the shim has no turn context to resolve a principal from, so
+        // what these callers create is recorded unowned rather than attributed
+        // to whichever agent happened to run the tool.
+        None,
     )
     .await
 }
@@ -1573,6 +1705,10 @@ pub async fn execute_tool_with_sender_account(
     // guest gate once `[[users]]` is configured (#6463). Every user-facing
     // caller passes `false`.
     system_call: bool,
+    // #7744: the principal this turn acts for, resolved kernel-side. Stamped
+    // onto the artifacts the `*_create` tools persist; never read as a
+    // permission by this layer.
+    acting_principal: Option<librefang_types::principal::Principal>,
 ) -> ToolResult {
     // Normalize the tool name through compat mappings so LLM-hallucinated aliases
     // (e.g. "fs-write" → "file_write") resolve to the canonical LibreFang name.
@@ -1617,8 +1753,16 @@ pub async fn execute_tool_with_sender_account(
         };
     }
 
-    let shell_exec_full_mode = tool_name == "shell_exec"
-        && exec_policy.is_some_and(|p| p.mode == librefang_types::config::ExecSecurityMode::Full);
+    // #6594: `Full` waives the global `require_approval` list only while the
+    // operator leaves `exec_policy.full_mode_skips_approval` set, which is the
+    // default and therefore preserves the historical behaviour. Setting it to
+    // `false` narrows `Full` to command validation and lets `[approval]` decide
+    // who must confirm, so an operator can have unrestricted commands that
+    // still prompt.
+    let shell_exec_full_mode_waives_approval = tool_name == "shell_exec"
+        && exec_policy.is_some_and(|p| {
+            p.mode == librefang_types::config::ExecSecurityMode::Full && p.full_mode_skips_approval
+        });
 
     // #5962: opt-in — in allowlist mode, a shell_exec whose EVERY base command is a
     // declared safe_bin may skip the approval prompt. Off by default.
@@ -1699,14 +1843,14 @@ pub async fn execute_tool_with_sender_account(
             }
         };
 
-        // SECURITY: the shell-Full bypass (and the #5962 opt-in all-safe-bins
-        // bypass) only applies to the global `require_approval` list — a
-        // user-policy `NeedsApproval` MUST still route through the approval
-        // queue. Without `!force_approval` here, a user whose RBAC policy
-        // demanded approval would have the call execute directly, defeating
-        // Phase-2.
+        // SECURITY: both bypasses below waive only the global `require_approval` list — a user-policy `NeedsApproval` MUST still route through the approval queue.
+        // Without `!force_approval` here, a user whose RBAC policy demanded approval would have the call execute directly, defeating Phase-2.
+        //
+        // The two halves are deliberately asymmetric (#6594).
+        // The shell-Full waiver is operator-overridable through `exec_policy.full_mode_skips_approval` because `Full` is a command-validation mode that never claimed to be a statement about approval.
+        // The #5962 all-safe-bins waiver is not overridable: `safe_bins_skip_approval` is by its own name an explicit approval opt-out, so honouring `require_approval` on top of it would leave the flag meaning nothing.
         let skip_approval_for_full_exec =
-            (shell_exec_full_mode || shell_exec_all_safe_bins) && !force_approval;
+            (shell_exec_full_mode_waives_approval || shell_exec_all_safe_bins) && !force_approval;
 
         if !skip_approval_for_full_exec
             && (force_approval || kh.requires_approval_with_context(tool_name, sender_id, channel))
@@ -1816,6 +1960,7 @@ pub async fn execute_tool_with_sender_account(
         checkpoint_manager,
         interrupt,
         dangerous_command_checker,
+        acting_principal,
     };
     execute_tool_raw(tool_use_id, tool_name, input, &ctx).await
 }

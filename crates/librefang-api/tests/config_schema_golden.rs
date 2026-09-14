@@ -101,9 +101,9 @@ fn normalize_path_like(value: &mut serde_json::Value) {
     }
 }
 
-// Regenerate with:
-//     cargo test --test config_schema_golden -p librefang-api -- \
-//         --ignored regenerate_golden --nocapture
+// Was `#[ignore]`d as a temporary measure while a 490-byte drift went unresolved, with the attribute meant to come off once the fixture was regenerated.
+// It did not, and the guard stayed off long enough for real schema changes to land unreviewed — see the PR that re-enabled it for the inventory.
+// If this fails, review the diff before regenerating: an unexplained change here is a wire-format change to `GET /api/config/schema`.
 #[test]
 fn kernel_config_schema_matches_golden_fixture() {
     let actual = generate_schema_json();

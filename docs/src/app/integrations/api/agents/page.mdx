@@ -173,7 +173,13 @@ Send a message to an agent and receive the complete response.
 }
 ```
 
-**Optional `session_id`**: per-request override of which session this message lands in. When omitted, the agent's current session is used. When supplied, the call is routed into that specific session (the session must already exist for the agent), letting one agent serve many parallel chats from a single client without `POST /sessions/{id}/switch` round-trips first. Useful for fan-out backends and multi-tab dashboards.
+**Optional `session_id`**: per-request override of which session this message lands in.
+When omitted, the agent's current session is used.
+When supplied, the call is routed into that specific session, letting one agent serve many parallel chats from a single client without `POST /sessions/{id}/switch` round-trips first.
+The session need not exist yet — an unknown id materialises a new session under exactly that id, which is what makes a caller-generated per-conversation UUID work.
+It must not belong to a *different* agent: that is rejected rather than read, so one agent's id can never surface another's history.
+Useful for fan-out backends, multi-tab dashboards, and public multi-user front-ends.
+The same field is available from the CLI as `librefang message <agent> <text> --session-id <UUID>`.
 
 **Response** `200 OK`:
 
@@ -592,7 +598,14 @@ A `task_posted` trigger can opt to fire only when the task is assigned to the ag
 `assignee_match` accepts:
 
 - `"self"` — fire only when `task.assignee_id == agent.id`. Use this for "I should work on tasks assigned to me" agents.
-- `"any"` (default) — legacy behaviour; fires on every `task_posted` event regardless of assignee.
+- `"unassigned"` — fire only for work nobody owns.
+  Matches both spellings that reach the event: an absent assignee and an empty one, since neither the `task_post` tool nor `POST /api/tasks` normalises the field.
+- Omitting `assignee_match` (or sending `null`) — legacy behaviour; fires on every `task_posted` event regardless of assignee.
+  The literal string `"any"` is **not** a special keyword here, unlike `"self"` and `"unassigned"`: sending `"assignee_match": "any"` falls through to the exact-string match arm, so it only fires for a task literally assigned to an agent named `"any"`.
+  Omit the field entirely to get the fire-for-all default.
+
+Note that `"unassigned"` reacts to a task being *posted* without an owner, not to one becoming unowned later.
+A claim released by the stuck-task sweeper publishes no event, so it does not wake this trigger — see #6728.
 
 ### GET /api/triggers
 

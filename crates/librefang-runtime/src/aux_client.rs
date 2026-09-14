@@ -261,6 +261,13 @@ impl AuxClient {
             );
             return Err(self.kernel_config.providers.rejection_reason(provider));
         }
+        if self
+            .model_catalog
+            .as_ref()
+            .is_some_and(|catalog| catalog.is_suppressed(provider))
+        {
+            return Err(format!("provider '{provider}' is suppressed"));
+        }
 
         let api_key = self.resolve_api_key(provider);
 
@@ -531,6 +538,26 @@ mod tests {
         let aux = AuxClient::new(Arc::new(cfg), primary);
         let resolution = aux.resolve(AuxTask::Title);
         assert!(resolution.used_primary, "all entries should fail to init");
+        assert!(resolution.resolved.is_empty());
+    }
+
+    /// An explicitly EMPTY chain (`llm.auxiliary.<task> = []`) resolves exactly like an absent key: both inherit the agent's primary fallback chain.
+    /// The dashboard's clear-this-chain flow sends `value: []`, so this pins the equivalence the UI relies on (#8059 review).
+    #[test]
+    fn explicit_empty_chain_equals_absent_key() {
+        let primary = MarkerDriver::new("primary");
+        let mut cfg = KernelConfig::default();
+        cfg.llm
+            .auxiliary
+            .tasks
+            .insert(AuxTask::Compression, Vec::new());
+
+        let aux = AuxClient::new(Arc::new(cfg), primary);
+        let resolution = aux.resolve(AuxTask::Compression);
+        assert!(
+            resolution.used_primary,
+            "an explicit empty chain must inherit the primary chain exactly like an absent key"
+        );
         assert!(resolution.resolved.is_empty());
     }
 

@@ -24,8 +24,11 @@ librefang agent new [<TEMPLATE>]
 
 **Behavior:**
 
-- Templates are discovered from: the repo `agents/` directory (dev builds), `~/.librefang/workspaces/agents/` (assistant pre-installed, others installed from dashboard), and `LIBREFANG_AGENTS_DIR` (env override).
+- Templates are discovered from: `~/.librefang/workspaces/agents/` (pre-installed by the registry sync) and `LIBREFANG_AGENTS_DIR` (env override).
 - Each template is a directory containing an `agent.toml` manifest.
+  A flat `<name>.toml` dropped into one of those directories is skipped, because discovery filters on `is_dir()` before it looks at any file.
+- Agent types authored through the dashboard, the `agent_type_create` tool or `save-as-agent-type` are written to `~/.librefang/agent-types/<name>.toml` instead (#7758), and this picker does not scan that directory.
+  The daemon does resolve them — `agent_spawn` and a workflow step's `{"type": ...}` search `agent-types/` first — so spawn one of those through the daemon rather than through `agent new`.
 - In daemon mode: sends `POST /api/agents` with the manifest. Agent is persistent.
 - In standalone mode: boots an in-process kernel. Agent is ephemeral.
 
@@ -145,6 +148,70 @@ librefang agent kill <AGENT_ID>
 
 ```bash
 librefang agent kill a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+---
+
+### librefang message
+
+Send one message to an agent and print the reply.
+Unlike `agent chat` this is a single request, meant for scripts and automation.
+
+```
+librefang message <AGENT> <TEXT> [--json] [--incognito] [--session-id <UUID>]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `<AGENT>` | Agent name or UUID. |
+| `<TEXT>` | The message to send. |
+
+**Options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `--json` | off | Print the raw JSON response instead of just the reply text. |
+| `--incognito` | off | Suppress session writes and memory writes for this turn; memory reads still happen. |
+| `--session-id <UUID>` | *(canonical session)* | Address one specific conversation. Also accepted as `--session`. |
+
+**Session targeting:**
+
+Without `--session-id` the daemon resolves the agent's *canonical* session — one conversation per agent.
+That is fine for a personal agent and wrong for an agent serving several unrelated people: every caller's turns land in the same history, so each visitor's text is in the model context of the next visitor's turn, and the shared transcript is re-sent (and billed) on every turn until it hits the context limit.
+
+Pass a per-conversation UUID and each conversation gets its own history.
+The same UUID continues a conversation; a different UUID starts an isolated one.
+This is the CLI equivalent of the `session_id` field on `POST /api/agents/{id}/message`.
+
+`--incognito` is not a substitute: it suppresses session writes entirely, so continuity *inside* one conversation is lost too.
+
+**Interaction with `session_mode`:**
+
+An explicit `--session-id` sits at the top of the kernel's session-resolution ladder, so it wins over the agent's `session_mode` in `agent.toml` in both directions:
+
+| `session_mode` | Without `--session-id` | With `--session-id` |
+|---|---|---|
+| `persistent` (default) | Every call reuses the agent's one canonical session. | The named session is used instead; the canonical session is left untouched. |
+| `new` | Every call mints a fresh throwaway session. | The named session is reused across calls, so continuity is restored for that conversation. |
+
+The session must belong to the agent being addressed.
+A UUID owned by another agent is rejected rather than read, so one agent's id can never surface another's history.
+A malformed UUID is rejected by the CLI before any request is sent.
+
+**Examples:**
+
+```bash
+# Canonical session — unchanged behavior
+librefang message coder "Fix the bug in main.rs"
+
+# Two isolated conversations with the same agent
+librefang message sales "My customer code is PINE-77." --session-id 11111111-1111-4111-8111-111111111111
+librefang message sales "What is my customer code?"    --session-id 22222222-2222-4222-8222-222222222222
+
+# Continue the first conversation
+librefang message sales "And how many licences does that cover?" --session-id 11111111-1111-4111-8111-111111111111
 ```
 
 ---
@@ -487,7 +554,7 @@ librefang trigger create <AGENT_ID> <PATTERN_JSON> [options]
 | `--prompt <TEMPLATE>` | `"Event: {{event}}"` | Prompt template sent to the agent. Use `{{event}}` as placeholder. |
 | `--max-fires <N>` | `0` (unlimited) | Maximum number of times the trigger can fire. |
 | `--target-agent <ID>` | *(owner)* | Route the triggered message to a different agent instead of the owner. |
-| `--cooldown <SECS>` | none | Minimum seconds between consecutive fires of this trigger. |
+| `--cooldown <SECS>` | none | Minimum seconds between consecutive fires of the same window. For task-board, memory-key and agent-lifecycle patterns the window is per subject, so a different task, key or agent fires immediately. |
 | `--session-mode <MODE>` | agent default | Override session mode for triggered invocations (`persistent` or `new`). |
 
 **Pattern examples:**
@@ -499,7 +566,9 @@ librefang trigger create <AGENT_ID> '"lifecycle"'
 # Fire when any agent is spawned
 librefang trigger create <AGENT_ID> '"agent_spawned"'
 
-# Fire on agent termination, max 5 times, 60s cooldown
+# Fire on agent termination, max 5 times, 60s cooldown per terminated agent.
+# The cooldown is per subject here, so five agents dying at once produce five
+# fires and exhaust --max-fires immediately; raise it if you expect crash waves.
 librefang trigger create <AGENT_ID> '"agent_terminated"' --max-fires 5 --cooldown 60
 
 # Fire on all events, route message to a different agent
@@ -537,7 +606,7 @@ librefang trigger update <TRIGGER_ID> [options]
 | `--prompt <TEMPLATE>` | New prompt template. |
 | `--enabled <true\|false>` | Enable or disable the trigger. |
 | `--max-fires <N>` | New maximum fires limit. |
-| `--cooldown <SECS>` | New cooldown in seconds. |
+| `--cooldown <SECS>` | New cooldown in seconds, applied per window (per subject for task-board, memory-key and agent-lifecycle patterns). |
 | `--clear-cooldown` | Remove the cooldown limit entirely. |
 | `--session-mode <MODE>` | New session mode override (`persistent` or `new`). |
 | `--clear-session-mode` | Remove the session mode override (revert to agent default). |
@@ -1212,7 +1281,7 @@ Beyond the agent / hand / skill / workflow / channel / config groups documented 
 | `librefang spawn <template>` | `agent spawn` | Spawn an agent from template/manifest. `--name`, `--dry-run` |
 | `librefang agents` | `agent list` | List agents. `--json` |
 | `librefang kill <agent_id>` | `agent kill` | Kill a running agent. |
-| `librefang message <agent> <text>` | — | Send one-shot message; print the reply. `--json` |
+| `librefang message <agent> <text>` | — | Send one-shot message; print the reply. `--json`, `--incognito`, `--session-id <UUID>` — see [librefang message](#librefang-message). |
 
 ### Scaffolding
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { type GoalItem, type GoalTemplate } from "../api";
+import { type GoalItem, type GoalRunState, type GoalTemplate } from "../api";
 import { useGoals, useGoalTemplates, useGoalRun } from "../lib/queries/goals";
 import {
   useCreateGoal,
@@ -11,12 +11,13 @@ import {
 } from "../lib/mutations/goals";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ListSkeleton } from "../components/ui/Skeleton";
+import { ErrorState } from "../components/ui/ErrorState";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Badge } from "../components/ui/Badge";
+import { Badge, type BadgeVariant } from "../components/ui/Badge";
 import { useUIStore } from "../lib/store";
 import { toastErr } from "../lib/errors";
-import { Shield, Trash2, Edit2, Plus, Target, Rocket, Bot, Database, Users, AlertTriangle, Loader2, CheckCircle2, Clock, Play, Square, ChevronDown, ChevronRight } from "lucide-react";
+import { Shield, Trash2, Edit2, Plus, Target, Rocket, Bot, Database, Users, AlertTriangle, Loader2, CheckCircle2, Clock, Play, Square, ChevronDown, ChevronRight, Zap, Ban, Activity } from "lucide-react";
 import { StaggerList } from "../components/ui/StaggerList";
 
 const TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -27,6 +28,152 @@ const TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: string }>
   users: Users,
   alert: AlertTriangle,
 };
+
+type GoalRow = { goal: GoalItem; depth: number; hasChildren: boolean };
+
+export function buildGoalRows(
+  goals: GoalItem[],
+  expandedById: Record<string, boolean>,
+): GoalRow[] {
+  const roots: GoalItem[] = [];
+  const childrenByParent = new Map<string, GoalItem[]>();
+  const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
+  for (const goal of goals) {
+    if (goal.parent_id && goalsById.has(goal.parent_id)) {
+      const children = childrenByParent.get(goal.parent_id) ?? [];
+      children.push(goal);
+      childrenByParent.set(goal.parent_id, children);
+    } else {
+      roots.push(goal);
+    }
+  }
+
+  const rows: GoalRow[] = [];
+  const visited = new Set<string>();
+  function walk(goal: GoalItem, depth: number) {
+    if (visited.has(goal.id)) return;
+    visited.add(goal.id);
+    const children = childrenByParent.get(goal.id) ?? [];
+    rows.push({ goal, depth, hasChildren: children.length > 0 });
+    if (expandedById[goal.id]) {
+      for (const child of children) walk(child, depth + 1);
+    }
+  }
+  for (const root of roots) walk(root, 0);
+  return rows;
+}
+
+export async function runIndependentBatch<T>(
+  items: readonly T[],
+  action: (item: T) => Promise<unknown>,
+) {
+  const settled = await Promise.allSettled(items.map((item) => action(item)));
+  const errors = settled.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  return {
+    total: items.length,
+    succeeded: items.length - errors.length,
+    failed: errors.length,
+    errors,
+  };
+}
+
+async function runSequentialBatch<T>(
+  items: readonly T[],
+  action: (item: T) => Promise<unknown>,
+) {
+  let succeeded = 0;
+  const errors: unknown[] = [];
+  for (const item of items) {
+    try {
+      await action(item);
+      succeeded += 1;
+    } catch (err) {
+      errors.push(err);
+    }
+  }
+  return {
+    total: items.length,
+    succeeded,
+    failed: items.length - succeeded,
+    errors,
+  };
+}
+
+export function progressForGoalStatus(status: string, current: number): number {
+  if (status === "completed") return 100;
+  if (status === "in_progress") return Math.max(current, 50);
+  return 0;
+}
+
+export function goalStatusBadgeVariant(status: string) {
+  if (status === "completed") return "success";
+  if (status === "in_progress") return "warning";
+  return "default";
+}
+
+function GoalStatusIcon({ status }: { status: string }) {
+  if (status === "completed") {
+    return <CheckCircle2 className="h-4 w-4 text-success" />;
+  }
+  if (status === "in_progress") {
+    return <Play className="h-4 w-4 text-warning" />;
+  }
+  return <Clock className="h-4 w-4 text-text-dim/40" />;
+}
+
+// The page's only phase→appearance map, and the only place a run phase is turned into something visible.
+// `phase` is typed from the wire contract rather than `string` so a caller cannot pass a typo'd literal: a `case` naming a phase that does not exist is a compile error, which a `Record<string, …>` keyed map accepts silently.
+// The `default` arm stays regardless: `phase` crosses the network, so a phase this build predates has to render as something.
+//
+// It speaks `BadgeVariant` rather than raw Tailwind classes so `Badge` owns the padding, border, dot and spacing.
+// The colours are the ones this page already shipped in #8108; only the vocabulary changed.
+const goalRunPhaseBadge = (
+  phase?: GoalRunState["phase"],
+): { variant: BadgeVariant; icon?: React.ComponentType<{ className?: string }> } => {
+  switch (phase) {
+    case "running":                 return { variant: "brand",   icon: Activity };
+    case "finished":                return { variant: "success", icon: CheckCircle2 };
+    case "stopped":                 return { variant: "warning", icon: Ban };
+    case "rate_limited":            return { variant: "error",   icon: AlertTriangle };
+    case "max_iterations_reached":  return { variant: "warning", icon: Zap };
+    default:                        return { variant: "default" };
+  }
+};
+
+// `phase` stays `string` (not the wire union) so a phase the daemon adds before the dashboard knows about it still reaches the switch's `default` arm.
+//
+// `dot` is passed only when there is no icon. `Badge` renders its own dot, so a known phase carrying both would show a coloured dot AND a lucide glyph before the label; the unknown phase is the one case that has nothing else to lead with.
+// The icon carries no margin of its own either — `Badge`'s flex container already applies `gap-1.5` between every child, and an extra `mr-*` only makes the icon→label gap disagree with the dot→label one.
+export function GoalRunPhaseBadge({ phase }: { phase: string }) {
+  const { t } = useTranslation();
+  const { variant, icon: Icon } = goalRunPhaseBadge(phase as GoalRunState["phase"]);
+  return (
+    <Badge variant={variant} dot={!Icon}>
+      {Icon && <Icon className={`h-3 w-3 ${phase === "running" ? "animate-pulse" : ""}`} />}
+      {t(`goals.run_phase_${phase}`, { defaultValue: phase.replace(/_/g, " ") })}
+    </Badge>
+  );
+}
+
+function GoalRunInfo({ goal }: { goal: GoalItem }) {
+  const hasAgent = !!goal.agent_id;
+  const runQuery = useGoalRun(goal.id, { enabled: hasAgent });
+  const run = runQuery.data?.run;
+  if (!run) return null;
+
+  // The phase belongs here rather than in `GoalRunControl`'s action cluster: this row already owns the run's iteration count and error, it is the only one that wraps (`flex-wrap`), and rendering the phase in both put the same word twice in the same row.
+  return (
+    <div className="mt-2 ml-[calc(1rem+4px)] flex flex-wrap items-center gap-2 text-xs">
+      <GoalRunPhaseBadge phase={run.phase} />
+      <span className="text-text-dim font-mono">{run.iteration}/{run.max_iterations}</span>
+      {run.last_error && (
+        <span className="text-error truncate max-w-[200px]" title={run.last_error}>{run.last_error}</span>
+      )}
+    </div>
+  );
+}
 
 /**
  * Start / stop the autonomous long-horizon run for a single goal (#5744).
@@ -73,6 +220,7 @@ function GoalRunControl({ goal }: { goal: GoalItem }) {
     }
   };
 
+  // No `&& run` guard: `isRunning` already requires `run?.phase === "running"`, and the daemon computes `running` as `run.phase == GoalRunPhase::Running` with no `run` field at all when there is no run, so the two cannot disagree. Written as a guard it would have rendered the *start* button for a live run — the opposite of safe for a state it implied it was handling.
   if (isRunning) {
     return (
       <button
@@ -80,11 +228,7 @@ function GoalRunControl({ goal }: { goal: GoalItem }) {
         onClick={() => void onStop()}
         disabled={stopMutation.isPending}
         className="p-1.5 rounded-lg hover:bg-warning/10 text-warning transition-colors"
-        title={
-          run
-            ? t("goals.run_active", { iteration: run.iteration, max: run.max_iterations })
-            : t("goals.run_stop")
-        }
+        title={t("goals.run_stop")}
       >
         {stopMutation.isPending ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -95,6 +239,7 @@ function GoalRunControl({ goal }: { goal: GoalItem }) {
     );
   }
 
+  // The phase is not rendered here. `Badge` is `whitespace-nowrap` and this cluster is `shrink-0`, so a badge in it takes its full width out of the `truncate`d title's budget on every narrow viewport — worst with the longest translations ("Обмеження швидкості" in uk, "Limit szybkości" in pl), which is where the title has least room to give. `GoalRunInfo` renders it on the wrapping row below instead.
   return (
     <button
       type="button"
@@ -116,10 +261,11 @@ export function GoalsPage() {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
   const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
-  const [createDraft, setCreateDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0, parent_id: "", agent_id: "" });
+  const [createDraft, setCreateDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0 });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const goalsQuery = useGoals();
   const templatesQuery = useGoalTemplates();
@@ -128,42 +274,16 @@ export function GoalsPage() {
   const createMutation = useCreateGoal();
   const updateMutation = useUpdateGoal();
   const deleteMutation = useDeleteGoal();
-  const goals = goalsQuery.data ?? [];
+  const goals = useMemo(() => goalsQuery.data ?? [], [goalsQuery.data]);
   const templates = templatesQuery.data ?? [];
-
-  const runBatch = async <T,>(items: readonly T[], action: (item: T) => Promise<unknown>) => {
-    let succeeded = 0;
-    const errors: unknown[] = [];
-    for (const item of items) {
-      try {
-        await action(item);
-        succeeded += 1;
-      } catch (err) {
-        errors.push(err);
-      }
-    }
-
-    return {
-      total: items.length,
-      succeeded,
-      failed: items.length - succeeded,
-      errors,
-    };
-  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createDraft.title.trim()) return;
     try {
-      // Drop blank parent_id / agent_id instead of posting `""` (#6562): the form seeds both as empty strings, and an empty parent_id used to fail the backend's parent-existence check with "Parent goal '' not found".
-      const { parent_id, agent_id, ...rest } = createDraft;
-      await createMutation.mutateAsync({
-        ...rest,
-        ...(parent_id.trim() ? { parent_id: parent_id.trim() } : {}),
-        ...(agent_id.trim() ? { agent_id: agent_id.trim() } : {}),
-      });
+      await createMutation.mutateAsync(createDraft);
       addToast(t("common.success"), "success");
-      setCreateDraft({ title: "", description: "", status: "pending", progress: 0, parent_id: "", agent_id: "" });
+      setCreateDraft({ title: "", description: "", status: "pending", progress: 0 });
     } catch (err) {
       addToast(toastErr(err, t("common.error")), "error");
     }
@@ -172,7 +292,9 @@ export function GoalsPage() {
   const handleApplyTemplate = async (tpl: GoalTemplate) => {
     setApplyingTemplate(tpl.id);
     try {
-      const result = await runBatch(tpl.goals, (goal) => createMutation.mutateAsync(goal));
+      const result = await runIndependentBatch(tpl.goals, (goal) =>
+        createMutation.mutateAsync(goal),
+      );
       if (result.failed === 0) {
         addToast(`${t("common.success")} (${result.succeeded}/${result.total})`, "success");
       } else {
@@ -234,7 +356,7 @@ export function GoalsPage() {
     const status = nextStatus(current);
     try {
       const goal = goals.find(g => g.id === id);
-      const progress = status === "completed" ? 100 : status === "in_progress" ? Math.max(goal?.progress ?? 0, 50) : 0;
+      const progress = progressForGoalStatus(status, goal?.progress ?? 0);
       await updateMutation.mutateAsync({ id, data: { status, progress } });
     } catch (err) {
       addToast(toastErr(err, t("common.error")), "error");
@@ -243,7 +365,11 @@ export function GoalsPage() {
 
   const handleClearAll = async () => {
     try {
-      const result = await runBatch(goals, (goal) => deleteMutation.mutateAsync(goal.id));
+      // Goal deletion cascades to descendants, so these requests must remain
+      // ordered rather than sharing the independent template-create batch.
+      const result = await runSequentialBatch(goals, (goal) =>
+        deleteMutation.mutateAsync(goal.id),
+      );
       if (result.failed === 0) {
         addToast(`${t("common.success")} (${result.succeeded}/${result.total})`, "success");
         setShowClearConfirm(false);
@@ -262,30 +388,10 @@ export function GoalsPage() {
     }
   };
 
-  const rows = useMemo(() => {
-    const roots: GoalItem[] = [];
-    const childrenByParent = new Map<string, GoalItem[]>();
-    const goalsById = new Map(goals.map(goal => [goal.id, goal]));
-    for (const goal of goals) {
-      if (goal.parent_id && goalsById.has(goal.parent_id)) {
-        const list = childrenByParent.get(goal.parent_id) ?? [];
-        list.push(goal);
-        childrenByParent.set(goal.parent_id, list);
-      } else roots.push(goal);
-    }
-    const result: { goal: GoalItem; depth: number; hasChildren: boolean }[] = [];
-    const visited = new Set<string>();
-    function walk(goal: GoalItem, depth: number) {
-      if (visited.has(goal.id)) return;
-      visited.add(goal.id);
-      const children = childrenByParent.get(goal.id) ?? [];
-      result.push({ goal, depth, hasChildren: children.length > 0 });
-      if (expandedById[goal.id]) for (const child of children) walk(child, depth + 1);
-    }
-    for (const root of roots) walk(root, 0);
-    for (const goal of goals) walk(goal, 0);
-    return result;
-  }, [expandedById, goals]);
+  const rows = useMemo(
+    () => buildGoalRows(goals, expandedById),
+    [expandedById, goals],
+  );
 
   const stats = useMemo(() => ({
     total: goals.length,
@@ -294,9 +400,7 @@ export function GoalsPage() {
     pending: goals.filter(g => g.status === "pending").length,
     pct: goals.length > 0 ? Math.round((goals.filter(g => g.status === "completed").length / goals.length) * 100) : 0,
   }), [goals]);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-
-  const inputClass = "rounded-xl border border-border-subtle bg-main px-4 py-2 text-sm focus:border-primary outline-none transition-colors";
+  const inputClass = "rounded-xl border border-border-subtle bg-main px-4 py-2 text-sm focus:border-brand outline-none transition-colors";
 
   const statusLabel = (status: string) => {
     if (status === "in_progress") return t("goals.in_progress");
@@ -318,6 +422,13 @@ export function GoalsPage() {
 
       {goalsQuery.isLoading ? (
         <ListSkeleton rows={4} />
+      ) : goalsQuery.isError ? (
+        // A failed load must not fall through to the empty state (#6654).
+        // `GET /api/goals` now answers a storage failure with a 500 instead of an empty page, but with no error branch here the query simply yielded no goals and the page drew "pick a template" over data it had failed to read — the same swallow, one layer up.
+        <ErrorState
+          message={t("goals.loadError")}
+          onRetry={() => void goalsQuery.refetch()}
+        />
       ) : goals.length === 0 ? (
         <div className="flex flex-col gap-6">
           <div className="text-center py-8">
@@ -441,11 +552,6 @@ export function GoalsPage() {
                 {rows.map(r => {
                   const status = r.goal.status || "pending";
                   const progress = r.goal.progress ?? 0;
-                  const statusIcon = status === "completed"
-                    ? <CheckCircle2 className="h-4 w-4 text-success" />
-                    : status === "in_progress"
-                      ? <Play className="h-4 w-4 text-warning" />
-                      : <Clock className="h-4 w-4 text-text-dim/40" />;
                   return (
                     <div key={r.goal.id} className="rounded-xl bg-main/40 border border-border-subtle hover:border-primary/30 transition-colors" style={{ marginLeft: `${r.depth * 16}px` }}>
                       {editingId === r.goal.id ? (
@@ -489,12 +595,12 @@ export function GoalsPage() {
                                 className="shrink-0 hover:scale-110 transition-transform"
                                 title={t("goals.toggle_reset")}
                               >
-                                {statusIcon}
+                                <GoalStatusIcon status={status} />
                               </button>
                               <span className={`text-sm font-bold truncate ${status === "completed" ? "line-through text-text-dim" : ""}`}>
                                 {r.goal.title}
                               </span>
-                              <Badge variant={status === "completed" ? "success" : status === "in_progress" ? "warning" : "default"} className="shrink-0">
+                              <Badge variant={goalStatusBadgeVariant(status)} className="shrink-0">
                                 {statusLabel(status)}
                               </Badge>
                             </div>
@@ -526,6 +632,10 @@ export function GoalsPage() {
                               </div>
                             </div>
                           )}
+                          {/* Run state — phase, iterations and last error, like workflow runs.
+                              Deliberately not gated on status: `GoalRunPhase::Finished` is documented as "the goal reached Completed/Cancelled", so a `status !== "completed"` gate made the `finished` badge — and its five translations — unreachable, and hid the outcome exactly when it is most worth reading (did the run finish on its own, or stop at the iteration cap?).
+                              `GoalRunInfo` already renders nothing when the goal has no run, so a completed goal that never ran stays as quiet as before. */}
+                          <GoalRunInfo goal={r.goal} />
                         </div>
                       )}
                     </div>

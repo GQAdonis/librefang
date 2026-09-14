@@ -301,6 +301,49 @@ pub(crate) enum Commands {
         long_about = "Low-level daemon control commands.\n\nExamples:\n  librefang gateway start          # Start the daemon\n  librefang gateway stop           # Stop the daemon\n  librefang gateway restart        # Restart the daemon\n  librefang gateway status         # Show daemon status"
     )]
     Gateway(GatewayCommands),
+    /// Run an autonomous goal until an agent completes it [*].
+    #[command(
+        long_about = "Create an autonomous goal and start an agent working on it.\n\nCreates the goal via POST /api/goals, starts the run via POST /api/goals/{id}/start,\nand with --watch polls every 2 seconds until the run leaves the running phase.\nWithout --watch the goal id is printed and the command returns immediately.\n\nWith --watch the exit status reports the outcome: 0 when the run finished, 1 when\nit stopped, was rate-limited, or hit the iteration cap.\n\nExamples:\n  librefang goal \"Fix the login bug\" --agent my-agent\n  librefang goal \"Refactor auth module\" --agent 8f2b1c94-... --watch\n  librefang goal \"Write tests\" --agent my-agent --max-iterations 10 --watch"
+    )]
+    Goal {
+        /// Goal description — serves as both title and prompt.
+        description: String,
+        /// Agent name or UUID that will pursue the goal.
+        #[arg(long)]
+        agent: Option<String>,
+        /// Maximum autonomous iterations before the run stops.
+        #[arg(long)]
+        max_iterations: Option<u64>,
+        /// Poll the run and print progress until it ends.
+        #[arg(long)]
+        watch: bool,
+    },
+    /// Purge every trace of an agent: roster entry, sessions, memories,
+    /// workspace directory, cron jobs, event triggers, channel/conversation
+    /// routing bindings and any agent-type with the same name. For agents
+    /// the operator already deleted but whose data lingers. Refuses to run
+    /// while a daemon holds this installation (pass `--force` to override).
+    /// Prompts for confirmation; pass `--yes` to skip (required when stdin
+    /// is not a TTY), or `--dry-run` to preview. Note that even `--dry-run`
+    /// opens the database, which may apply pending schema migrations and
+    /// reindex the search index — nothing is deleted either way.
+    Purge {
+        /// Agent name to purge.
+        #[arg(long)]
+        agent: String,
+        /// Skip the confirmation prompt.
+        #[arg(long)]
+        yes: bool,
+        /// Print what would be purged. Still opens the database (may apply
+        /// pending migrations and reindex search), but deletes nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Run the destructive path even while a daemon is detected for
+        /// this installation. Only reach for this once you know the daemon
+        /// is not actually holding the data (e.g. a stale daemon.json).
+        #[arg(long)]
+        force: bool,
+    },
     /// Manage execution approvals (list, approve, reject) [*].
     #[command(
         subcommand,
@@ -373,6 +416,12 @@ pub(crate) enum Commands {
         long_about = "Manage paired devices and remote access tokens.\n\nExamples:\n  librefang devices list          # List paired devices\n  librefang devices pair          # Start pairing flow\n  librefang devices remove <ID>   # Remove a device"
     )]
     Devices(DevicesCommands),
+    /// Manage user groups.
+    #[command(
+        subcommand,
+        long_about = "Manage user groups.\n\nA group names a team instead of a person, so a permission or an ownership decision survives the people in it changing.\n\nMembership is many-to-many and FLAT — groups do not nest.\n\nExamples:\n  librefang group list\n  librefang group create oncall --description \"Support rota\" --role approver\n  librefang group add-member oncall alice\n  librefang group of alice"
+    )]
+    Group(GroupCommands),
     /// Generate device pairing QR code.
     #[command(
         long_about = "Generate a QR code for pairing a mobile device.\n\nDisplays a QR code in the terminal that can be scanned to pair a device.\n\nExamples:\n  librefang qr"
@@ -415,7 +464,7 @@ pub(crate) enum Commands {
     Configure,
     /// Send a one-shot message to an agent.
     #[command(
-        long_about = "Send a single message to an agent and print the response.\n\nUnlike `chat`, this does not start an interactive session. Useful for\nscripting and automation.\n\nExamples:\n  librefang message coder \"Fix the bug in main.rs\"\n  librefang message coder \"Summarize this file\" --json\n  librefang message coder \"Draft this email\" --incognito"
+        long_about = "Send a single message to an agent and print the response.\n\nUnlike `chat`, this does not start an interactive session. Useful for\nscripting and automation.\n\n--session-id addresses one conversation among many served by the same agent.\nWithout it every caller collapses onto the agent's single canonical session,\nso N unrelated end-users share one message history. Pass the same UUID again\nto continue that conversation; pass a different one to start an isolated one.\n\nAn explicit --session-id overrides the agent's `session_mode` either way: a\n`persistent` agent stops funnelling the turn into its canonical session, and a\n`new` agent stops minting a throwaway session, because the named session is\nreused across calls. The id must belong to this agent; the daemon rejects a\nsession owned by another agent rather than silently reading it.\n\nExamples:\n  librefang message coder \"Fix the bug in main.rs\"\n  librefang message coder \"Summarize this file\" --json\n  librefang message coder \"Draft this email\" --incognito\n  librefang message sales \"What are your prices?\" --session-id 550e8400-e29b-41d4-a716-446655440000"
     )]
     Message {
         /// Agent name or ID.
@@ -429,6 +478,10 @@ pub(crate) enum Commands {
         /// suppressed while memory reads remain fully operational.
         #[arg(long)]
         incognito: bool,
+        /// Session UUID to address. Omit for the agent's canonical session
+        /// (today's behavior). Overrides the agent's `session_mode`.
+        #[arg(long, alias = "session")]
+        session_id: Option<String>,
     },
     /// System info and version [*].
     #[command(
@@ -472,6 +525,19 @@ pub(crate) enum Commands {
         /// Password to hash (omit for interactive prompt).
         #[arg(long)]
         password: Option<String>,
+    },
+    /// Generate the api_key_hash verifier for the master API key.
+    #[command(
+        name = "hash-api-key",
+        long_about = "Generate the api_key_hash value for the master API key, so config.toml holds a verifier instead of the key itself.\n\nUses SHA-256, not Argon2id: the master key is a machine-generated bearer token verified on every request, where a memory-hard KDF costs ~50-100ms per request and buys nothing against an offline attacker who has no dictionary to try. Argon2id is the right choice for the human-chosen dashboard password -- see `hash-password` for that.\n\nWith --generate, a fresh 256-bit key is produced for you and printed alongside its hash; give the key to your clients and keep only the hash on the daemon.\n\nExamples:\n  librefang hash-api-key --generate            # New random key + its hash\n  librefang hash-api-key                       # Interactive prompt for an existing key\n  librefang hash-api-key --key 'existing-key'  # Inline (less secure, visible in shell history)"
+    )]
+    HashApiKey {
+        /// API key to hash (omit for interactive prompt).
+        #[arg(long, conflicts_with = "generate")]
+        key: Option<String>,
+        /// Generate a fresh 256-bit random key and print it with its hash.
+        #[arg(long)]
+        generate: bool,
     },
 }
 
@@ -1189,16 +1255,16 @@ pub(crate) enum AgentCommands {
         #[arg(long)]
         from: String,
     },
-    /// Set an agent property (e.g., model).
+    /// Set an agent property (model, or one of its inference parameters).
     #[command(
-        long_about = "Set a property on a running agent.\n\nCurrently supports changing the model. Provider can be set if provided as a prefix.\n\nExamples:\n  librefang agent set <ID> model gpt-4o\n  librefang agent set <ID> model claude-code/claude-sonnet"
+        long_about = "Set a property on a running agent.\n\nFields:\n  model               Model id; provider can be set as a prefix\n  temperature         Sampling temperature (0.0-2.0)\n  max_tokens          Output tokens to request\n  top_p               Nucleus sampling (0.0-1.0)\n  frequency_penalty   -2.0 to 2.0\n  presence_penalty    -2.0 to 2.0\n  context_window      Context-window override for this endpoint\n  max_output_tokens   Output-cap override for this endpoint\n\nThe agent's own value wins over the per-model override. Pass `inherit`\nto drop the agent's value and let the per-model override (or the system\ndefault) supply it again.\n\nAsking for more than the model's known limit is reported, not clamped:\nthe value you set is the value that gets sent.\n\nExamples:\n  librefang agent set <ID> model gpt-4o\n  librefang agent set <ID> model claude-code/claude-sonnet\n  librefang agent set <ID> temperature 0.2\n  librefang agent set <ID> temperature inherit"
     )]
     Set {
         /// Agent ID (UUID).
         agent_id: String,
-        /// Field to set (model).
+        /// Field to set — see the command's long help for the full list.
         field: String,
-        /// New value.
+        /// New value, or `inherit` to clear the agent's own value.
         value: String,
     },
 }
@@ -1267,7 +1333,8 @@ pub(crate) enum TriggerCommands {
         /// Route triggered messages to this agent instead of the owner (cross-session wake).
         #[arg(long)]
         target_agent: Option<String>,
-        /// Cooldown in seconds before this trigger can fire again (0 = no cooldown).
+        /// Cooldown in seconds before the same window may fire again (0 = no cooldown).
+        /// Patterns that name a subject — task board, memory key, agent lifecycle — hold one window per subject, so the trigger can fire again immediately for a different task, key or agent.
         #[arg(long)]
         cooldown: Option<u64>,
         /// Session mode override: "persistent" or "new".
@@ -1293,7 +1360,7 @@ pub(crate) enum TriggerCommands {
         /// New maximum fires limit (0 = unlimited).
         #[arg(long)]
         max_fires: Option<u64>,
-        /// New cooldown in seconds between fires.
+        /// New cooldown in seconds before the same window may fire again (per subject for task-board, memory-key and agent-lifecycle patterns).
         #[arg(long)]
         cooldown: Option<u64>,
         /// Remove the cooldown limit entirely.
@@ -1377,6 +1444,26 @@ pub(crate) enum ModelsCommands {
     Set {
         /// Model ID or alias (e.g. "gpt-4o", "claude-sonnet"). Interactive picker if omitted.
         model: Option<String>,
+    },
+    /// View, set, or clear per-model inference overrides (context_window, max_output_tokens).
+    #[command(
+        long_about = "View, set, or clear per-model inference parameter overrides.\n\nUseful when a self-hosted gateway misreports context_window or max_output_tokens.\n\nExamples:\n  librefang models overrides gpt-4o\n  librefang models overrides gpt-4o --context-window 131072\n  librefang models overrides gpt-4o --max-output-tokens 16384\n  librefang models overrides gpt-4o --clear\n  librefang models overrides gpt-4o --json"
+    )]
+    Overrides {
+        /// Model ID to view or modify overrides for.
+        model: String,
+        /// Override the model's context window size.
+        #[arg(long)]
+        context_window: Option<u64>,
+        /// Override the model's max output tokens.
+        #[arg(long)]
+        max_output_tokens: Option<u64>,
+        /// Remove all overrides for this model.
+        #[arg(long)]
+        clear: bool,
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
     },
     /// Register an external AI gateway as an LLM provider.
     #[command(
@@ -1556,6 +1643,18 @@ pub(crate) enum SecurityCommands {
         #[arg(long)]
         confirm: bool,
     },
+    /// Repair a broken audit chain by severing the rows past the break, preserving them in an archive.
+    ///
+    /// Use instead of `audit-reset` whenever the pre-break history is worth keeping — which in a compliance or production environment is always.
+    /// Requires `--confirm` and refuses to run while a daemon holds the database.
+    #[command(
+        long_about = "Repair the audit trail after `librefang security verify` reports a chain break, without discarding history.\n\nA Merkle chain has one predecessor per row, so a repair has to sever one side of the break. This command archives the severed rows to `<data_dir>/audit-archive/` as JSON Lines before removing them, appends a `ChainReanchored` marker linked to the last row that still verified, and commits the archive's SHA-256 into that marker so the preserved copy is tamper-evident too. Rows below the break keep their original hashes.\n\nWithout `--confirm` it prints the break and what it would do, and exits non-zero. Refuses to run if the daemon is still holding the database.\n\nExamples:\n  librefang security audit-reanchor\n  librefang security audit-reanchor --confirm"
+    )]
+    AuditReanchor {
+        /// Required. Without this flag the command prints what it would do and exits non-zero.
+        #[arg(long)]
+        confirm: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1632,6 +1731,83 @@ pub(crate) enum DevicesCommands {
     Remove {
         /// Device ID.
         id: String,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum GroupCommands {
+    /// List configured groups.
+    #[command(
+        long_about = "List every configured group with its member count, conferred roles and description.\n\nExamples:\n  librefang group list\n  librefang group list --json"
+    )]
+    List {
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show one group in detail.
+    #[command(
+        long_about = "Show a group's description, conferred roles and full membership.\n\nMembers with no matching user entry are listed separately — that is expected when membership is synced from an external identity provider.\n\nExamples:\n  librefang group show oncall"
+    )]
+    Show {
+        /// Group name.
+        name: String,
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Create a group.
+    #[command(
+        long_about = "Create a group. Members are added afterwards with `group add-member`.\n\nA role given here is conferred on every member. The group's own name is always conferred too, so it does not need repeating.\n\nExamples:\n  librefang group create oncall\n  librefang group create oncall --description \"Support rota\" --role approver --role auditor"
+    )]
+    Create {
+        /// Group name.
+        name: String,
+        /// Free-text description of what the group is for.
+        #[arg(long)]
+        description: Option<String>,
+        /// Role conferred on every member. Repeat for several.
+        #[arg(long = "role")]
+        roles: Vec<String>,
+    },
+    /// Delete a group.
+    #[command(
+        long_about = "Delete a group. Its membership goes with it; the users themselves are untouched.\n\nExamples:\n  librefang group delete oncall"
+    )]
+    Delete {
+        /// Group name.
+        name: String,
+    },
+    /// Add a user to a group.
+    #[command(
+        long_about = "Add a user to a group. Idempotent — adding an existing member succeeds and changes nothing.\n\nExamples:\n  librefang group add-member oncall alice"
+    )]
+    AddMember {
+        /// Group name.
+        group: String,
+        /// User name.
+        user: String,
+    },
+    /// Remove a user from a group.
+    #[command(
+        long_about = "Remove a user from a group. Idempotent — removing someone who is not a member is a successful revocation, not an error.\n\nExamples:\n  librefang group remove-member oncall alice"
+    )]
+    RemoveMember {
+        /// Group name.
+        group: String,
+        /// User name.
+        user: String,
+    },
+    /// Show the groups a user belongs to, and the roles that confers.
+    #[command(
+        long_about = "Show which groups a user belongs to and the resolved role set that membership confers.\n\nExamples:\n  librefang group of alice\n  librefang group of alice --json"
+    )]
+    Of {
+        /// User name.
+        user: String,
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
     },
 }
 

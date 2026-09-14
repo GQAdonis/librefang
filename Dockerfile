@@ -25,9 +25,20 @@ ENV CI=true
 WORKDIR /build
 COPY crates/librefang-api/dashboard ./dashboard
 WORKDIR /build/dashboard
-# corepack is refreshed first to avoid stale keyring errors when pnpm rotates
-# signing keys. pnpm@10.33.0 matches the packageManager field in package.json.
-RUN npm install --global corepack@latest \
+# `corepack enable` alone hits `fetchLatestStableVersion2` against the npm
+# registry, which has flaked on us during builds. Activate the pinned pnpm
+# version (matches the `packageManager` field in package.json) directly so
+# the build never has to ask the registry "what's the latest stable?".
+# We also refresh corepack itself first: the keyring bundled with the node
+# base image goes stale as pnpm rotates signing keys, manifesting as
+# "Internal Error: Cannot find matching keyid" during `corepack prepare`.
+# Node ≥20.19 is also required by vite 8 / rolldown's optional native
+# bindings (engines: ^20.19.0), without which `pnpm install` silently skips
+# the linux-x64-musl binding and `vite build` fails at require-time.
+# Dependency lifecycle scripts are intentionally disabled in this build
+# stage. Vite/rolldown and esbuild ship their musl binaries through pinned
+# optional dependencies, so the dashboard build needs no postinstall code.
+RUN npm install --global corepack@0.34.6 \
     && corepack enable \
     && corepack prepare pnpm@10.33.0 --activate \
     && pnpm install --frozen-lockfile --ignore-scripts \
@@ -149,8 +160,14 @@ COPY packages ./packages
 # librefang-channels embeds the Python SDK tree at compile time via
 # include_dir! — without this COPY the proc macro panics.
 COPY sdk/python/librefang ./sdk/python/librefang
-COPY sdk/python/setup.py sdk/python/pyproject.toml ./sdk/python/
-# librefang-api embeds deploy/ configs at compile time via include_str!.
+# The same module reads the SDK version out of `sdk/python/pyproject.toml` with include_str!, because the extracted tree has neither a sibling pyproject.toml nor installed package metadata and would answer `0+unknown`.
+# Without this COPY the build fails with "couldn't read crates/librefang-channels/src/../../../sdk/python/pyproject.toml".
+COPY sdk/python/pyproject.toml ./sdk/python/pyproject.toml
+# librefang-api uses include_str!("../../../deploy/...") to embed the
+# observability stack (prometheus / tempo / otel-collector / grafana
+# configs) at compile time — added in #3062. Without this COPY the
+# build fails with "couldn't read deploy/grafana/...". flake.nix
+# already lists the same paths in its source fileset.
 COPY deploy ./deploy
 COPY --from=dashboard-builder /build/static/react ./crates/librefang-api/static/react
 
@@ -189,14 +206,15 @@ RUN --mount=type=ssh \
         --features telemetry,surreal-backend,uar-driver && \
     cp target/release/librefang /usr/local/bin/librefang
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Stage 4 — Runtime image (Node.js 24 LTS)
-# Updated from Node 22 to Node 24 (Active LTS as of 2026-05).
-# Pin to a specific 24.x.x patch for bit-for-bit reproducibility
-# (check hub.docker.com/r/library/node for the current bookworm-slim tag).
-FROM node:24-bookworm-slim
-# ─────────────────────────────────────────────────────────────────────────────
-
+# Node remains in the runtime image for JavaScript sidecars such as the
+# WhatsApp gateway copied under /opt/librefang/packages.
+# Pinned to a specific Node 22 LTS minor (not floating `node:lts-bookworm-slim`)
+# so a rebuild months later doesn't quietly land on a new major when the
+# `lts` alias rolls forward. `curl` is added for the HEALTHCHECK below.
+FROM node:22.11.0-bookworm-slim
+# libdbus-1-3 = runtime SO that libdbus-sys links against. Without it the
+# binary fails to start (the keyring init path runs early in boot and
+# exits 101 if the .so can't be resolved).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -366,9 +384,25 @@ ENV UAR_MODELS_DIR=/opt/uar/models
 # environment variables.
 ENV UAR_PERSISTENCE__PROVIDER=surreal
 ENV UAR_PERSISTENCE__DATABASE_URL=surrealkv:///data/uar-surreal
+# Native restart-on-failure signal for orchestrators (Docker/Swarm/Compose;
+# Kubernetes uses its own probes and ignores this). 20 s start-period gives
+# the daemon time to bind, run `librefang init` on first boot, and start the
+# axum server. The shell form is required so ${PORT:-4545} expands at
+# runtime — Railway/Render/Fly inject $PORT and the entrypoint rewrites
+# api_listen accordingly (see deploy/docker-entrypoint.sh).
+#
+# Probes `/api/ready`, not `/api/health` (#6633). Docker's healthcheck does
+# not restart an unhealthy container — its consumer is Compose's
+# `depends_on: condition: service_healthy` gate, which is readiness
+# semantics: "may dependents start talking to it yet?". `/api/health`
+# answers the liveness question and returns 200 even while its body reports
+# `status: degraded`, so it can never fail this check and the gate was
+# effectively unconditional. Kubernetes ignores HEALTHCHECK entirely and
+# uses the probes declared in deploy/kubernetes/.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD curl -fsS http://127.0.0.1:${PORT:-4545}/api/health || exit 1
-# docker-entrypoint.sh runs as root for bind-mount chown/init, then gosu drops
-# to the librefang user before executing the daemon binary.
+  CMD curl -fsS http://127.0.0.1:${PORT:-4545}/api/ready || exit 1
+# docker-entrypoint.sh uses gosu to exec as the librefang user, so we
+# keep the entrypoint itself running as root to allow bind-mount chown
+# and data-dir initialisation before privilege drop.
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["librefang", "start", "--foreground"]

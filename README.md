@@ -10,6 +10,12 @@
 </p>
 
 <p align="center">
+  <strong>Official integration partner:</strong>
+  <a href="https://everyapi.ai/integrations/librefang?utm_source=librefang_github&amp;utm_medium=partner&amp;utm_campaign=librefang_everyapi">LibreFang × EveryAPI</a>
+  — Agent OS + unified AI infrastructure.
+</p>
+
+<p align="center">
   <a href="README.md">English</a> | <a href="i18n/README.zh.md">中文</a> | <a href="i18n/README.ja.md">日本語</a> | <a href="i18n/README.ko.md">한국어</a> | <a href="i18n/README.es.md">Español</a> | <a href="i18n/README.de.md">Deutsch</a> | <a href="i18n/README.pl.md">Polski</a> | <a href="i18n/README.fr.md">Français</a> | <a href="i18n/README.uk.md">Українська</a>
 </p>
 
@@ -173,7 +179,7 @@ nix profile install github:librefang/librefang#librefang-desktop
 ```
 
 The desktop app is the rougher path on NixOS.
-It links the full GTK / webview closure (`gtk3`, `libsoup_3`, `webkitgtk_4_1`, plus a runtime `dlopen` of `libayatana-appindicator3`), so it takes far longer to build than the CLI and it exercises code paths that the CLI package never touches.
+It links the full GTK / webview closure (`gtk3`, `libsoup_3`, `webkitgtk_4_1`), so it takes far longer to build than the CLI and it exercises code paths that the CLI package never touches.
 If it does not build or launch on your machine, install `librefang-cli` instead and use the web dashboard at `http://127.0.0.1:4545/`.
 
 Every `services.librefang` option, the `environmentFile` pattern for provider keys, and the known sharp edges are documented in [`docs/operations/nixos.md`](docs/operations/nixos.md).
@@ -206,7 +212,6 @@ Install it yourself first — this is the same dependency set the project instal
 sudo apt-get install -y \
   libwebkit2gtk-4.1-dev \
   libgtk-3-dev \
-  libayatana-appindicator3-dev \
   librsvg2-dev \
   libdbus-1-dev
 ```

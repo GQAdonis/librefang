@@ -4,15 +4,29 @@ use super::*;
 // Cron job management endpoints
 // ---------------------------------------------------------------------------
 /// GET /api/cron/jobs — List all cron jobs, optionally filtered by agent_id.
+///
+/// Owner-scoping (#6753 follow-up): non-admins can't see cron jobs for agents they don't author — same leak class this PR closed for `/api/triggers`, since `JobMeta`/`CronJob` carries `prompt_template` and other user-authored content.
+/// Mirrors `list_triggers` in `triggers.rs`: an explicit `?agent_id=` for an unowned agent returns an empty list rather than 404 (avoids leaking existence), and an unfiltered list is post-filtered down to jobs on agents the caller authors.
 #[utoipa::path(get, path = "/api/cron/jobs", tag = "workflows", responses((status = 200, description = "List cron jobs", body = Vec<serde_json::Value>)))]
 pub async fn list_cron_jobs(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
+    let restrict_to: Option<String> = match api_user.as_ref() {
+        Some(u) if u.0.role < crate::middleware::UserRole::Admin => Some(u.0.name.clone()),
+        _ => None,
+    };
     let jobs = if let Some(agent_id_str) = params.get("agent_id") {
         match uuid::Uuid::parse_str(agent_id_str) {
             Ok(uuid) => {
                 let aid = AgentId(uuid);
+                if !super::super::can_access_agent(&state, aid, api_user.as_ref()) {
+                    return (
+                        StatusCode::OK,
+                        Json(serde_json::json!({"jobs": [], "total": 0})),
+                    );
+                }
                 state.kernel.cron().list_jobs(aid)
             }
             Err(_) => {
@@ -21,6 +35,21 @@ pub async fn list_cron_jobs(
         }
     } else {
         state.kernel.cron().list_all_jobs()
+    };
+    let jobs: Vec<_> = if let Some(ref user_name) = restrict_to {
+        let owned_ids: std::collections::HashSet<AgentId> = state
+            .kernel
+            .agent_registry()
+            .list()
+            .iter()
+            .filter(|e| e.manifest.author.eq_ignore_ascii_case(user_name))
+            .map(|e| e.id)
+            .collect();
+        jobs.into_iter()
+            .filter(|j| owned_ids.contains(&j.agent_id))
+            .collect()
+    } else {
+        jobs
     };
     let total = jobs.len();
     let jobs_json: Vec<serde_json::Value> = jobs
@@ -37,10 +66,22 @@ pub async fn list_cron_jobs(
 #[utoipa::path(post, path = "/api/cron/jobs", tag = "workflows", request_body = crate::types::JsonObject, responses((status = 200, description = "Cron job created", body = crate::types::JsonObject)))]
 pub async fn create_cron_job(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
     let agent_id = body["agent_id"].as_str().unwrap_or("");
-    match state.kernel.cron_create(agent_id, body.clone()).await {
+    // #7744: the job belongs to the authenticated caller, read from the auth
+    // extension and never from `body` — which is forwarded to `cron_create`
+    // whole, so a body-readable owner would be a caller-chosen owner.
+    let owner = api_user
+        .as_ref()
+        .and_then(|u| u.0.owner_principal())
+        .or_else(|| state.kernel.config_ref().default_owner_principal());
+    match state
+        .kernel
+        .cron_create(agent_id, body.clone(), owner)
+        .await
+    {
         Ok(result) => {
             // cron_create returns a JSON string — parse it so the response
             // is a proper JSON object instead of a stringified blob.
@@ -54,6 +95,46 @@ pub async fn create_cron_job(
         // (should be 503) and `Other` to 400 (should be 500), both fixed
         // here because the From impl is the single source of truth.
         Err(e) => ApiErrorResponse::from(e).into_json_tuple(),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CronJobErrorClass<'a> {
+    NotFound,
+    BadRequest(&'a str),
+    Internal,
+}
+
+fn classify_cron_job_error<'a>(
+    error: &'a librefang_types::error::LibreFangError,
+    job_id: librefang_types::scheduler::CronJobId,
+) -> CronJobErrorClass<'a> {
+    use librefang_types::error::LibreFangError;
+
+    match error {
+        LibreFangError::ResourceNotFound { kind, id }
+            if kind.eq_ignore_ascii_case("cron job") && id == &job_id.to_string() =>
+        {
+            CronJobErrorClass::NotFound
+        }
+        LibreFangError::Internal(message) if message == &format!("Cron job {job_id} not found") => {
+            CronJobErrorClass::NotFound
+        }
+        LibreFangError::InvalidInput(message) => CronJobErrorClass::BadRequest(message),
+        LibreFangError::Internal(message)
+            if [
+                "Invalid agent_id:",
+                "Invalid schedule:",
+                "Invalid action:",
+                "Invalid delivery:",
+                "Invalid delivery_targets:",
+            ]
+            .iter()
+            .any(|prefix| message.starts_with(prefix)) =>
+        {
+            CronJobErrorClass::BadRequest(message)
+        }
+        _ => CronJobErrorClass::Internal,
     }
 }
 
@@ -96,7 +177,7 @@ pub async fn delete_cron_job(
                 Json(serde_json::json!({"status": "deleted", "job_id": id})),
             )
         }
-        Err(_) => {
+        Err(error) if classify_cron_job_error(&error, job_id) == CronJobErrorClass::NotFound => {
             // Idempotent DELETE — the cron job is already gone (replayed
             // request, double-click, or removed by another deleter). Treat
             // as success so clients don't have to special-case 404.
@@ -104,6 +185,10 @@ pub async fn delete_cron_job(
                 StatusCode::OK,
                 Json(serde_json::json!({"status": "already-deleted", "job_id": id})),
             )
+        }
+        Err(error) => {
+            tracing::error!(%job_id, error = %error, "Failed to remove cron job");
+            ApiErrorResponse::internal("Failed to delete cron job").into_json_tuple()
         }
     }
 }
@@ -133,15 +218,18 @@ pub async fn update_cron_job(
                         Json(serde_json::to_value(&job).unwrap_or_default()),
                     )
                 }
-                // SSRF / shape rejections from `validate_cron_delivery*`
-                // surface as `InvalidInput` and must map to 400, not the
-                // catch-all 404 (#4732). 404 here would silently mask a
-                // refused webhook host as "schedule not found", letting
-                // attacker-controlled clients confuse the failure mode.
-                Err(librefang_types::error::LibreFangError::InvalidInput(msg)) => {
-                    ApiErrorResponse::bad_request(msg).into_json_tuple()
-                }
-                Err(e) => ApiErrorResponse::not_found(format!("{e}")).into_json_tuple(),
+                Err(error) => match classify_cron_job_error(&error, job_id) {
+                    CronJobErrorClass::NotFound => {
+                        ApiErrorResponse::not_found("Cron job not found").into_json_tuple()
+                    }
+                    CronJobErrorClass::BadRequest(message) => {
+                        ApiErrorResponse::bad_request(message).into_json_tuple()
+                    }
+                    CronJobErrorClass::Internal => {
+                        tracing::error!(%job_id, error = %error, "Failed to update cron job");
+                        ApiErrorResponse::internal("Failed to update cron job").into_json_tuple()
+                    }
+                },
             }
         }
         Err(_) => ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
@@ -193,17 +281,26 @@ pub async fn toggle_cron_job(
 #[utoipa::path(get, path = "/api/cron/jobs/{id}", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), responses((status = 200, description = "Cron job details", body = crate::types::JsonObject), (status = 404, description = "Job not found")))]
 pub async fn get_cron_job(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match uuid::Uuid::parse_str(&id) {
         Ok(uuid) => {
             let job_id = librefang_types::scheduler::CronJobId(uuid);
             match state.kernel.cron().get_meta(job_id) {
-                Some(meta) => (
-                    StatusCode::OK,
-                    Json(cron_job_response_with_metrics(&state, &meta)),
-                ),
-                None => ApiErrorResponse::not_found("Job not found").into_json_tuple(),
+                Some(meta)
+                    if super::super::can_access_agent(
+                        &state,
+                        meta.job.agent_id,
+                        api_user.as_ref(),
+                    ) =>
+                {
+                    (
+                        StatusCode::OK,
+                        Json(cron_job_response_with_metrics(&state, &meta)),
+                    )
+                }
+                _ => ApiErrorResponse::not_found("Job not found").into_json_tuple(),
             }
         }
         Err(_) => ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
@@ -217,19 +314,88 @@ pub async fn get_cron_job(
 #[utoipa::path(get, path = "/api/cron/jobs/{id}/status", tag = "workflows", params(("id" = String, Path, description = "Cron job ID")), responses((status = 200, description = "Cron job status", body = crate::types::JsonObject)))]
 pub async fn cron_job_status(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match uuid::Uuid::parse_str(&id) {
         Ok(uuid) => {
             let job_id = librefang_types::scheduler::CronJobId(uuid);
             match state.kernel.cron().get_meta(job_id) {
-                Some(meta) => (
-                    StatusCode::OK,
-                    Json(cron_job_response_with_metrics(&state, &meta)),
-                ),
-                None => ApiErrorResponse::not_found("Job not found").into_json_tuple(),
+                Some(meta)
+                    if super::super::can_access_agent(
+                        &state,
+                        meta.job.agent_id,
+                        api_user.as_ref(),
+                    ) =>
+                {
+                    (
+                        StatusCode::OK,
+                        Json(cron_job_response_with_metrics(&state, &meta)),
+                    )
+                }
+                _ => ApiErrorResponse::not_found("Job not found").into_json_tuple(),
             }
         }
         Err(_) => ApiErrorResponse::bad_request("Invalid job ID").into_json_tuple(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use librefang_types::error::LibreFangError;
+
+    #[test]
+    fn cron_job_error_classification_is_narrow() {
+        let job_id = librefang_types::scheduler::CronJobId::new();
+        let missing = LibreFangError::Internal(format!("Cron job {job_id} not found"));
+        assert_eq!(
+            classify_cron_job_error(&missing, job_id),
+            CronJobErrorClass::NotFound
+        );
+
+        let other_id = librefang_types::scheduler::CronJobId::new();
+        assert_eq!(
+            classify_cron_job_error(&missing, other_id),
+            CronJobErrorClass::Internal,
+            "a failure for a different job must not become idempotent success"
+        );
+
+        let storage = LibreFangError::Internal("scheduler storage unavailable".to_string());
+        assert_eq!(
+            classify_cron_job_error(&storage, job_id),
+            CronJobErrorClass::Internal
+        );
+    }
+
+    #[test]
+    fn cron_job_update_parse_errors_are_bad_requests() {
+        let job_id = librefang_types::scheduler::CronJobId::new();
+        for message in [
+            "Invalid agent_id: malformed UUID",
+            "Invalid schedule: missing field",
+            "Invalid action: unknown variant",
+            "Invalid delivery: unknown variant",
+            "Invalid delivery_targets: expected array",
+        ] {
+            let error = LibreFangError::Internal(message.to_string());
+            assert_eq!(
+                classify_cron_job_error(&error, job_id),
+                CronJobErrorClass::BadRequest(message)
+            );
+        }
+    }
+
+    #[test]
+    fn typed_cron_not_found_is_supported() {
+        let job_id = librefang_types::scheduler::CronJobId::new();
+        let missing = LibreFangError::ResourceNotFound {
+            kind: "Cron job".to_string(),
+            id: job_id.to_string(),
+        };
+        assert_eq!(
+            classify_cron_job_error(&missing, job_id),
+            CronJobErrorClass::NotFound
+        );
     }
 }

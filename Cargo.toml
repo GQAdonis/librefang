@@ -34,7 +34,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2026.7.27"
+version = "2026.8.30"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/librefang/librefang"
@@ -43,6 +43,10 @@ rust-version = "1.94.1"
 
 [workspace.dependencies]
 # Async runtime
+# Workspace applications collectively use Tokio's filesystem, process,
+# signal, networking, synchronization, timing, and test utilities. Features
+# unify across the workspace, so keep one explicit full runtime contract here;
+# a future split must audit every member rather than narrowing this line alone.
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
 
@@ -108,6 +112,8 @@ uuid = { version = "1", features = ["v4", "v5", "serde"] }
 webauthn-rs = "0.5.5"
 
 # Database
+# r2d2_sqlite 0.34 is coupled to rusqlite 0.39. Bump them together to avoid
+# compiling two rusqlite/libsqlite3-sys versions and two bundled SQLite copies.
 rusqlite = { version = "0.39.0", features = ["bundled", "serde_json"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.34"
@@ -118,8 +124,8 @@ r2d2_sqlite = "0.34"
 # Without this pin, `cargo generate-lockfile` / `cargo update` can drift
 # surrealdb-core onto a newer minor whose internal API surface breaks the
 # surrealdb client we pin. This pin makes the alignment structural.
-surrealdb = { version = "=3.2.1", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
-surrealdb-core = { version = "=3.2.1", default-features = false }
+surrealdb = { version = "=3.2.4", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb-core = { version = "=3.2.4", default-features = false }
 # surreal-memory — pinned by `rev`, and the URL/rev form is kept BYTE-IDENTICAL to
 # the one UAR declares. Cargo keys a git source on the literal URL + ref, so
 # `…/surreal-memory-server?branch=main` and `…/surreal-memory-server.git?rev=<sha>`
@@ -133,6 +139,8 @@ clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 
 # HTTP client (for LLM drivers)
+# reqwest 0.13's `rustls` feature explicitly selects aws-lc-rs. Keep it aligned
+# with jsonwebtoken and the process-wide provider installed by application code.
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "multipart", "rustls", "gzip", "deflate", "brotli", "form", "query", "socks"] }
 
 # TLS fallback — bundled Mozilla CA roots for systems without system certs (musl, Termux, minimal containers)
@@ -156,7 +164,10 @@ bytes = "1"
 futures = "0.3"
 
 # MCP SDK
-rmcp = { version = "2.0", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest"] }
+# The transport feature activates rmcp's optional reqwest dependency but no TLS
+# backend. The separate `reqwest` feature is required to add rustls/aws-lc-rs;
+# keep both when upgrading rmcp, which currently tracks reqwest 0.13.
+rmcp = { version = "3.1", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest"] }
 
 # ACP (Agent Client Protocol) SDK — official Zed-maintained crates for IDE integration (#3313)
 # `unstable` enables session/{resume,close,fork,list-additional-directories}, message-id, session-usage,
@@ -215,7 +226,7 @@ wasmtime = { version = "47", features = [
 
 # WASI Preview 2 host implementation — paired in lockstep with wasmtime.
 # Pinned `=` so a `cargo update` can't drift the WasiView trait signature
-# under us between minor releases (same reasoning as the surrealdb = "=3.0.5"
+# under us between minor releases (same reasoning as the surrealdb = "=3.2.4"
 # workspace pin). Phase-7 C-001 wires this into the Component plugin host so
 # language runtimes (CPython, StarlingMonkey, Go, cargo-component's wasi-rt)
 # find their `wasi:*` init imports satisfied. The WasiCtx is deny-by-default
@@ -265,7 +276,7 @@ rand = "0.10"
 zeroize = { version = "1", features = ["derive"] }
 
 # TOTP
-totp-rs = { version = "5", features = ["gen_secret", "otpauth", "qr"] }
+totp-rs = { version = "6", features = ["gen_secret", "otpauth", "qr"] }
 
 # JWT validation
 #
@@ -341,6 +352,16 @@ debug = "line-tables-only"
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
+# Emit debug info into a *separate* file rather than dropping it (#6659).
+# `strip = "symbols"` above still applies to the executable, so the shipped binary is byte-for-byte what it was — the debug info lives in the `.dSYM` bundle / `.dwp` file beside it, which the release workflow uploads as its own artifact.
+#
+# Why this is not optional tooling polish: #6659 is a `tokio-rt-worker` stack overflow whose crash report shows a six-function cycle repeating in a 52-frame window — an unbounded recursion whose culprit is one `atos` invocation away.
+# It could not be run, because no shipped build and no CI artifact carried symbols, and offsets from an existing crash report cannot be mapped onto a later rebuild.
+# Without this the next occurrence is diagnosed no better than the last one.
+#
+# `line-tables-only` matches `[profile.dev]` above and is what makes the cost small: function names and `file:line` for every frame, without the variable-inspection DWARF that dominates debug-info size.
+debug = "line-tables-only"
+split-debuginfo = "packed"
 # Size-optimized: daemon bottleneck is network I/O (LLM calls), not CPU.
 # "s" trims ~5-15% binary vs opt-level=3 with negligible runtime impact.
 opt-level = "s"

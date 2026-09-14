@@ -500,6 +500,15 @@ async fn read_body_capped(mut resp: reqwest::Response, max_bytes: usize) -> Resu
     ))
 }
 
+fn build_net_fetch_client(
+    builder: reqwest::ClientBuilder,
+) -> Result<reqwest::Client, serde_json::Value> {
+    builder.build().map_err(|error| {
+        tracing::warn!(%error, "failed to build WASM guest HTTP client");
+        json!({"error": "HTTP client initialization failed"})
+    })
+}
+
 fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json::Value {
     let url = match params.get("url").and_then(|u| u.as_str()) {
         Some(u) => u,
@@ -546,14 +555,15 @@ fn host_net_fetch(state: &GuestState, params: &serde_json::Value) -> serde_json:
                     return e;
                 }
 
-                // DNS-pinned, non-redirecting client: connect to the exact IPs
-                // we just validated for this hop.
-                let mut builder = librefang_http::proxied_client_builder()
-                    .redirect(reqwest::redirect::Policy::none());
-                for addr in &ssrf_result.resolved {
-                    builder = builder.resolve(&ssrf_result.hostname, *addr);
-                }
-                let client = builder.build().expect("HTTP client build");
+                // DNS-pinned, non-redirecting, direct (no-proxy) client: connect to the exact IPs we just validated for this hop.
+                // A configured proxy would re-resolve `hostname` itself, bypassing the pin below and reopening DNS rebinding (#6761); `resolve_to_addrs` (rather than repeated `resolve()` calls, which overwrite the mapping instead of accumulating it) keeps every validated address available as a fallback.
+                let builder = librefang_http::direct_client_builder()
+                    .redirect(reqwest::redirect::Policy::none())
+                    .resolve_to_addrs(&ssrf_result.hostname, &ssrf_result.resolved);
+                let client = match build_net_fetch_client(builder) {
+                    Ok(client) => client,
+                    Err(error) => return error,
+                };
                 let request = match current_method.as_str() {
                     "POST" => client.post(&current_url).body(current_body.clone()),
                     "PUT" => client.put(&current_url).body(current_body.clone()),
@@ -1083,6 +1093,13 @@ mod tests {
         let mut fresh: Vec<u8> = Vec::new();
         assert!(append_capped(&mut fresh, &vec![0u8; max + 1], max).is_err());
         assert!(fresh.is_empty());
+    }
+
+    #[test]
+    fn guest_http_client_build_failure_returns_json_error() {
+        let builder = reqwest::Client::builder().user_agent("invalid\nuser-agent");
+        let error = build_net_fetch_client(builder).unwrap_err();
+        assert_eq!(error, json!({"error": "HTTP client initialization failed"}));
     }
 
     /// Word-boundary blocklist: real secret-shaped names match, benign

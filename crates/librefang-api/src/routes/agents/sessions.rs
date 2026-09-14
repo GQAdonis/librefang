@@ -1,5 +1,100 @@
 use super::*;
 
+const TOOL_RESULT_MAX_BYTES: usize = 100 * 1024;
+
+fn cap_tool_result(result: &str) -> String {
+    if result.len() <= TOOL_RESULT_MAX_BYTES {
+        return result.to_string();
+    }
+    let mut end = TOOL_RESULT_MAX_BYTES;
+    while !result.is_char_boundary(end) {
+        end -= 1;
+    }
+    result[..end].to_string()
+}
+
+async fn remove_history_image_temp(path: &std::path::Path) {
+    if let Err(error) = tokio::fs::remove_file(path).await {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!(%error, "failed to clean up session history image");
+        }
+    }
+}
+
+async fn materialize_history_image(
+    upload_dir: &std::path::Path,
+    session_scope: &[u8],
+    media_type: &str,
+    data: &str,
+) -> Option<serde_json::Value> {
+    use base64::Engine as _;
+    use sha2::{Digest, Sha256};
+
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(data) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            tracing::warn!(%error, "failed to decode session history image");
+            return None;
+        }
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(session_scope);
+    hasher.update([0]);
+    hasher.update(media_type.as_bytes());
+    hasher.update([0]);
+    hasher.update(&bytes);
+    let digest = hasher.finalize();
+    let mut file_id_bytes = [0_u8; 16];
+    file_id_bytes.copy_from_slice(&digest[..16]);
+    // RFC 9562 UUIDv8 keeps the content-derived 128-bit identifier compatible with the upload route while reserving the standard version/variant bits.
+    file_id_bytes[6] = (file_id_bytes[6] & 0x0f) | 0x80;
+    file_id_bytes[8] = (file_id_bytes[8] & 0x3f) | 0x80;
+    let file_id = uuid::Uuid::from_bytes(file_id_bytes).to_string();
+    let on_disk = librefang_types::media::on_disk_name(&file_id, media_type, "");
+
+    if let Err(error) = tokio::fs::create_dir_all(upload_dir).await {
+        tracing::warn!(%error, "failed to create session image directory");
+        return None;
+    }
+    let path = upload_dir.join(on_disk);
+    let exists = match tokio::fs::try_exists(&path).await {
+        Ok(exists) => exists,
+        Err(error) => {
+            tracing::warn!(%error, "failed to inspect session history image");
+            return None;
+        }
+    };
+    if !exists {
+        let temporary = upload_dir.join(format!(".{file_id}.{}.tmp", uuid::Uuid::new_v4()));
+        if let Err(error) = tokio::fs::write(&temporary, &bytes).await {
+            tracing::warn!(%error, "failed to write temporary session history image");
+            remove_history_image_temp(&temporary).await;
+            return None;
+        }
+        if let Err(error) = tokio::fs::rename(&temporary, &path).await {
+            if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                tracing::warn!(%error, "failed to publish session history image");
+                remove_history_image_temp(&temporary).await;
+                return None;
+            }
+            remove_history_image_temp(&temporary).await;
+        }
+    }
+
+    let filename = format!("image.{}", media_type.rsplit('/').next().unwrap_or("png"));
+    UPLOAD_REGISTRY
+        .entry(file_id.clone())
+        .or_insert_with(|| UploadMeta {
+            filename: filename.clone(),
+            content_type: media_type.to_string(),
+            uploaded_by: None,
+        });
+    Some(serde_json::json!({
+        "file_id": file_id,
+        "filename": filename,
+    }))
+}
+
 /// Query params for `GET /api/agents/{id}/session`.
 ///
 /// Using a typed struct (rather than `HashMap<String,String>`) gives us
@@ -25,15 +120,24 @@ pub struct GetAgentSessionQuery {
 )]
 pub async fn get_agent_session(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
     query: Result<Query<GetAgentSessionQuery>, axum::extract::rejection::QueryRejection>,
     lang: Option<axum::Extension<RequestLanguage>>,
 ) -> impl IntoResponse {
-    let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
+    let (err_session_invalid, err_agent_invalid, err_agent_not_found, err_session_load_failed) = {
+        let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
+        (
+            t.t("api-error-session-invalid-id"),
+            t.t("api-error-agent-invalid-id"),
+            t.t("api-error-agent-not-found"),
+            t.t("api-error-session-load-failed"),
+        )
+    };
     let Query(params) = match query {
         Ok(q) => q,
         Err(_) => {
-            return ApiErrorResponse::bad_request("invalid session_id")
+            return ApiErrorResponse::bad_request(err_session_invalid)
                 .with_code("invalid_session_id")
                 .into_response();
         }
@@ -41,7 +145,7 @@ pub async fn get_agent_session(
     let agent_id: AgentId = match id.parse() {
         Ok(id) => id,
         Err(_) => {
-            return ApiErrorResponse::bad_request(t.t("api-error-agent-invalid-id"))
+            return ApiErrorResponse::bad_request(err_agent_invalid)
                 .with_code("invalid_agent_id")
                 .into_response();
         }
@@ -50,11 +154,21 @@ pub async fn get_agent_session(
     let entry = match state.kernel.agent_registry().get(agent_id) {
         Some(e) => e,
         None => {
-            return ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
+            return ApiErrorResponse::not_found(err_agent_not_found)
                 .with_code("agent_not_found")
                 .into_response();
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        // `err_agent_not_found` rather than a fresh `ErrorTranslator`: the
+        // translator is `!Send` and this handler awaits below, so #6921 moved
+        // it into a block that pre-resolves every message and drops it before
+        // the first await. The move in the registry-miss arm above sits on a
+        // diverging branch, so the binding is still live on this path.
+        return ApiErrorResponse::not_found(err_agent_not_found)
+            .with_code("agent_not_found")
+            .into_response();
+    }
 
     // Callers (e.g. the dashboard tab with `?sessionId=` pinned) can override
     // the canonical-active session for this request. The returned messages
@@ -84,7 +198,6 @@ pub async fn get_agent_session(
             // collects all tool_use entries keyed by id; pass 2 attaches results.
 
             // Pass 1: build messages and a lookup from tool_use_id → (msg_idx, tool_idx)
-            use base64::Engine as _;
             let mut built_messages: Vec<serde_json::Value> = Vec::new();
             let mut tool_use_index: std::collections::HashMap<String, (usize, usize)> =
                 std::collections::HashMap::new();
@@ -122,48 +235,20 @@ pub async fn get_agent_session(
                                     data,
                                 } => {
                                     texts.push("[Image]".to_string());
-                                    // Persist image to upload dir so it can be
-                                    // served back when loading session history.
-                                    let file_id = uuid::Uuid::new_v4().to_string();
                                     let upload_dir = state
                                         .kernel
                                         .config_ref()
                                         .channels
                                         .effective_file_download_dir();
-                                    if let Err(e) = std::fs::create_dir_all(&upload_dir) {
-                                        tracing::warn!("Failed to create upload directory: {e}");
-                                    }
-                                    if let Ok(bytes) =
-                                        base64::engine::general_purpose::STANDARD.decode(data)
+                                    if let Some(image) = materialize_history_image(
+                                        &upload_dir,
+                                        target_session_id.0.as_bytes(),
+                                        media_type,
+                                        data,
+                                    )
+                                    .await
                                     {
-                                        // Persist as `<uuid>.<ext>` (#6530); the
-                                        // registry stores content_type so the
-                                        // history-load serve reconstructs it.
-                                        let on_disk = librefang_types::media::on_disk_name(
-                                            &file_id, media_type, "",
-                                        );
-                                        if let Err(e) =
-                                            std::fs::write(upload_dir.join(&on_disk), &bytes)
-                                        {
-                                            tracing::warn!("Failed to write upload file: {e}");
-                                        }
-                                        UPLOAD_REGISTRY.insert(
-                                            file_id.clone(),
-                                            UploadMeta {
-                                                filename: format!(
-                                                    "image.{}",
-                                                    media_type.rsplit('/').next().unwrap_or("png")
-                                                ),
-                                                content_type: media_type.clone(),
-                                                // Generated content has no
-                                                // operator owner — leave None.
-                                                uploaded_by: None,
-                                            },
-                                        );
-                                        msg_images.push(serde_json::json!({
-                                            "file_id": file_id,
-                                            "filename": format!("image.{}", media_type.rsplit('/').next().unwrap_or("png")),
-                                        }));
+                                        msg_images.push(image);
                                     }
                                 }
                                 librefang_types::message::ContentBlock::ToolUse {
@@ -250,9 +335,8 @@ pub async fn get_agent_session(
                                         msg.get_mut("tools").and_then(|v| v.as_array_mut())
                                     {
                                         if let Some(tool_obj) = tools_arr.get_mut(tool_idx) {
-                                            // Cap at 100 KB to keep session responses manageable
-                                            let capped: String =
-                                                result.chars().take(102_400).collect();
+                                            // Cap at 100 KiB of UTF-8 without splitting a code point.
+                                            let capped = cap_tool_result(result);
                                             tool_obj["result"] = serde_json::Value::String(capped);
                                             tool_obj["is_error"] =
                                                 serde_json::Value::Bool(*is_error);
@@ -344,6 +428,7 @@ pub async fn get_agent_session(
                             "agent_id": agent_id.to_string(),
                             "message_count": 0,
                             "context_window_tokens": 0,
+                            "label": null,
                             "messages": [],
                             "compacted_summary": compacted_summary,
                         })),
@@ -353,7 +438,7 @@ pub async fn get_agent_session(
         }
         Err(e) => {
             tracing::warn!("Session load failed for agent {id}: {e}");
-            ApiErrorResponse::internal(t.t("api-error-session-load-failed"))
+            ApiErrorResponse::internal(err_session_load_failed)
                 .with_code("session_load_failed")
                 .into_response()
         }
@@ -376,6 +461,23 @@ pub struct SessionContextResponse {
     /// `UNKNOWN_MODEL_CONTEXT_WINDOW` (8192) for an unknown model, so this is
     /// always positive.
     pub max_context_tokens: usize,
+    /// Which layer of the precedence chain produced `max_context_tokens`
+    /// (refs #7774): `agent_override`, `model_override`, `catalog`,
+    /// `session_hint` or `fallback`.
+    ///
+    /// Without this the number is unreadable: a window an operator set, one the
+    /// registry declared and one the runtime invented are all the same integer.
+    pub max_context_tokens_source: String,
+    /// True when `max_context_tokens` is a guess rather than a fact about the
+    /// model — i.e. the source is `fallback` (refs #7774).
+    ///
+    /// The condition behind the report that opened the issue: a gateway-served
+    /// model reports no window, the runtime assumes 8192, and a conversation
+    /// well inside the model's real window is refused for an overflow that
+    /// exists only in that assumption.
+    /// Clients render the warning off this flag rather than string-matching the
+    /// source.
+    pub max_context_tokens_assumed: bool,
     /// Usage percentage, clamped to 100 with one decimal of precision.
     pub pct: f64,
     /// The agent's model id.
@@ -401,6 +503,7 @@ pub struct SessionContextResponse {
 )]
 pub async fn get_agent_session_context(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
     query: Result<Query<GetAgentSessionQuery>, axum::extract::rejection::QueryRejection>,
     lang: Option<axum::Extension<RequestLanguage>>,
@@ -431,6 +534,11 @@ pub async fn get_agent_session_context(
                 .into_response();
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
+            .with_code("agent_not_found")
+            .into_response();
+    }
     let model = entry.manifest.model.model.clone();
 
     // A dashboard tab can pin a non-active session via `?session_id=`. Validate
@@ -487,6 +595,8 @@ pub async fn get_agent_session_context(
             Json(SessionContextResponse {
                 used_tokens: report.estimated_tokens,
                 max_context_tokens: report.context_window,
+                max_context_tokens_source: report.context_window_source.as_str().to_string(),
+                max_context_tokens_assumed: report.context_window_source.is_assumed(),
                 pct: report.usage_percent,
                 model,
                 pressure: format!("{:?}", report.pressure).to_lowercase(),
@@ -496,7 +606,7 @@ pub async fn get_agent_session_context(
 }
 
 /// GET /api/agents/{id}/sessions/{session_id}/stream — attach to a session's
-/// in-flight stream events (SSE).
+/// in-flight stream events (SSE or WebSocket).
 ///
 /// Any client can subscribe to the events emitted by an active turn on this
 /// session: the originating client (CLI, Tauri desktop, web) plus any number
@@ -514,18 +624,25 @@ pub async fn get_agent_session_context(
     ),
     responses(
         (status = 200, description = "Server-sent events stream of session events"),
+        (status = 101, description = "WebSocket session event stream"),
         (status = 400, description = "Invalid agent or session ID"),
         (status = 404, description = "Agent or session not found")
     )
 )]
 pub async fn attach_session_stream(
+    ws: Result<
+        axum::extract::ws::WebSocketUpgrade,
+        axum::extract::ws::rejection::WebSocketUpgradeRejection,
+    >,
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+    connect_info: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     Path((id, session_id_str)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
     lang: Option<axum::Extension<RequestLanguage>>,
 ) -> axum::response::Response {
     use axum::response::sse::{Event, Sse};
     use futures::stream;
-    use librefang_kernel::llm_driver::StreamEvent;
     use tokio::sync::broadcast::error::RecvError;
 
     let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
@@ -558,6 +675,11 @@ pub async fn attach_session_stream(
                 .into_response();
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
+            .with_code("agent_not_found")
+            .into_response();
+    }
 
     // Validate the session belongs to this agent. Two acceptable shapes:
     //   1. The session has been persisted (one or more turns ran) and its
@@ -591,65 +713,125 @@ pub async fn attach_session_stream(
     }
 
     let receiver = state.kernel.session_stream_hub().subscribe(session_id);
+    let lifecycle = state.kernel.session_lifecycle_bus().subscribe();
+
+    if let Ok(ws) = ws {
+        let cfg = state.kernel.config_ref();
+        let listen_port = cfg
+            .api_listen
+            .parse::<std::net::SocketAddr>()
+            .ok()
+            .map(|address| address.port());
+        let allow_remote = std::env::var("LIBREFANG_ALLOW_NO_AUTH")
+            .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "on"))
+            .unwrap_or(false);
+        if crate::ws::validate_ws_origin(&headers, listen_port, &cfg.cors_origin, allow_remote)
+            .is_err()
+        {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+
+        let Some(axum::Extension(axum::extract::ConnectInfo(peer))) = connect_info else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        let client_ip = crate::client_ip::resolve_real_client_ip(
+            peer.ip(),
+            &headers,
+            &state.trusted_proxies,
+            state.trust_forwarded_for,
+        );
+        let Some(connection_guard) = crate::ws::try_acquire_ws_slot(
+            client_ip,
+            state.kernel.config_ref().rate_limit.max_ws_per_ip,
+        ) else {
+            return StatusCode::TOO_MANY_REQUESTS.into_response();
+        };
+
+        let upgrade = match crate::ws::ws_bearer_protocol(&headers) {
+            Some(protocol) => ws.protocols([protocol]),
+            None => ws,
+        };
+        return crate::extensions::with_session_id(
+            session_id,
+            crate::extensions::with_agent_id(
+                agent_id,
+                upgrade.on_upgrade(move |socket| {
+                    session_stream_websocket(
+                        socket,
+                        receiver,
+                        lifecycle,
+                        agent_id,
+                        session_id,
+                        connection_guard,
+                    )
+                }),
+            ),
+        );
+    }
 
     // Bridge broadcast::Receiver into an SSE stream. Skip Lagged events with
     // a debug log (intentionally lossy semantics — see SessionStreamHub
     // docs) and end the stream when the channel closes.
     let sse_stream = stream::unfold(
-        (receiver, StreamDedup::new()),
-        |(mut rx, mut dedup)| async move {
+        (receiver, lifecycle, SessionStreamState::new(), false),
+        move |(mut rx, mut lifecycle, mut stream_state, finished)| async move {
+            if finished {
+                return None;
+            }
             loop {
-                let event = match rx.recv().await {
-                    Ok(ev) => ev,
-                    Err(RecvError::Lagged(n)) => {
-                        tracing::debug!(skipped = n, "session attach stream lagged, skipping");
-                        continue;
-                    }
-                    Err(RecvError::Closed) => return None,
-                };
-                let sse_event: Result<Event, std::convert::Infallible> = Ok(match event {
-                    StreamEvent::TextDelta { text } => {
-                        if dedup.is_duplicate(&text) {
-                            continue;
-                        }
-                        dedup.record_sent(&text);
-                        Event::default()
-                            .event("chunk")
-                            .json_data(serde_json::json!({"content": text, "done": false}))
-                            .unwrap_or_else(|_| Event::default().data("error"))
-                    }
-                    StreamEvent::ToolUseStart { name, .. } => Event::default()
-                        .event("tool_use")
-                        .json_data(serde_json::json!({"tool": name}))
-                        .unwrap_or_else(|_| Event::default().data("error")),
-                    StreamEvent::ToolUseEnd { name, input, .. } => Event::default()
-                        .event("tool_result")
-                        .json_data(serde_json::json!({"tool": name, "input": input}))
-                        .unwrap_or_else(|_| Event::default().data("error")),
-                    StreamEvent::ContentComplete { usage, .. } => Event::default()
-                        .event("done")
-                        .json_data(serde_json::json!({
-                            "done": true,
-                            "usage": {
-                                "input_tokens": usage.input_tokens,
-                                "output_tokens": usage.output_tokens,
+                tokio::select! {
+                    received = rx.recv() => {
+                        let event = match received {
+                            Ok(event) => event,
+                            Err(RecvError::Lagged(n)) => {
+                                tracing::debug!(skipped = n, "session attach stream lagged, skipping");
+                                continue;
                             }
-                        }))
-                        .unwrap_or_else(|_| Event::default().data("error")),
-                    StreamEvent::PhaseChange { phase, detail } => Event::default()
-                        .event("phase")
-                        .json_data(serde_json::json!({
-                            "phase": phase,
-                            "detail": detail,
-                        }))
-                        .unwrap_or_else(|_| Event::default().data("error")),
-                    StreamEvent::OwnerNotice { text } => Event::default()
-                        .event("owner_notice")
-                        .json_data(serde_json::json!({ "text": text }))
-                        .unwrap_or_else(|_| Event::default().data("error")),
-                    _ => Event::default().comment("skip"),
-                });
-                return Some((sse_event, (rx, dedup)));
+                            Err(RecvError::Closed) => return None,
+                        };
+                        let Some((event_type, payload, terminal)) =
+                            session_stream_payload(event, &mut stream_state)
+                        else {
+                            continue;
+                        };
+                        let sse_event: Result<Event, std::convert::Infallible> =
+                            Ok(Event::default()
+                                .event(event_type)
+                                .json_data(payload)
+                                .unwrap_or_else(|_| Event::default().data("error")));
+                        return Some((
+                            sse_event,
+                            (rx, lifecycle, stream_state, terminal),
+                        ));
+                    }
+                    received = lifecycle.recv() => {
+                        let event = match received {
+                            Ok(event) => event,
+                            Err(RecvError::Lagged(n)) => {
+                                tracing::debug!(skipped = n, "session lifecycle stream lagged, skipping");
+                                continue;
+                            }
+                            Err(RecvError::Closed) => return None,
+                        };
+                        let Some((event_type, payload)) = session_lifecycle_payload(
+                            event,
+                            agent_id,
+                            session_id,
+                            &stream_state,
+                        ) else {
+                            continue;
+                        };
+                        let sse_event: Result<Event, std::convert::Infallible> =
+                            Ok(Event::default()
+                                .event(event_type)
+                                .json_data(payload)
+                                .unwrap_or_else(|_| Event::default().data("error")));
+                        return Some((
+                            sse_event,
+                            (rx, lifecycle, stream_state, true),
+                        ));
+                    }
+                }
             }
         },
     );
@@ -667,6 +849,205 @@ pub async fn attach_session_stream(
             ),
         ),
     )
+}
+
+async fn session_stream_websocket(
+    mut socket: axum::extract::ws::WebSocket,
+    mut receiver: tokio::sync::broadcast::Receiver<librefang_kernel::llm_driver::StreamEvent>,
+    mut lifecycle: tokio::sync::broadcast::Receiver<
+        librefang_kernel::session_lifecycle::SessionLifecycleEvent,
+    >,
+    agent_id: AgentId,
+    session_id: librefang_types::agent::SessionId,
+    _connection_guard: crate::ws::WsConnectionGuard,
+) {
+    use axum::extract::ws::Message;
+    use futures::SinkExt as _;
+    use tokio::sync::broadcast::error::RecvError;
+
+    let mut stream_state = SessionStreamState::new();
+    loop {
+        tokio::select! {
+            received = receiver.recv() => {
+                let event = match received {
+                    Ok(event) => event,
+                    Err(RecvError::Lagged(skipped)) => {
+                        tracing::debug!(skipped, "session attach WebSocket lagged, skipping");
+                        continue;
+                    }
+                    Err(RecvError::Closed) => break,
+                };
+                let Some((event_type, payload, terminal)) =
+                    session_stream_payload(event, &mut stream_state)
+                else {
+                    continue;
+                };
+                if send_session_stream_message(&mut socket, event_type, payload)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                if terminal {
+                    let _ = socket.close().await;
+                    break;
+                }
+            }
+            received = lifecycle.recv() => {
+                let event = match received {
+                    Ok(event) => event,
+                    Err(RecvError::Lagged(skipped)) => {
+                        tracing::debug!(skipped, "session lifecycle WebSocket lagged, skipping");
+                        continue;
+                    }
+                    Err(RecvError::Closed) => break,
+                };
+                let Some((event_type, payload)) = session_lifecycle_payload(
+                    event,
+                    agent_id,
+                    session_id,
+                    &stream_state,
+                ) else {
+                    continue;
+                };
+                let _ = send_session_stream_message(&mut socket, event_type, payload).await;
+                let _ = socket.close().await;
+                break;
+            }
+            incoming = socket.recv() => {
+                match incoming {
+                    Some(Ok(Message::Ping(data))) => {
+                        if socket.send(Message::Pong(data)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        }
+    }
+}
+
+async fn send_session_stream_message(
+    socket: &mut axum::extract::ws::WebSocket,
+    event_type: &str,
+    payload: serde_json::Value,
+) -> Result<(), axum::Error> {
+    use axum::extract::ws::Message;
+
+    let mut envelope = match payload {
+        serde_json::Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    };
+    envelope.insert(
+        "type".to_string(),
+        serde_json::Value::String(event_type.to_string()),
+    );
+    socket
+        .send(Message::Text(
+            serde_json::Value::Object(envelope).to_string().into(),
+        ))
+        .await
+}
+
+struct SessionStreamState {
+    dedup: StreamDedup,
+    input_tokens: u64,
+    output_tokens: u64,
+}
+
+impl SessionStreamState {
+    fn new() -> Self {
+        Self {
+            dedup: StreamDedup::new(),
+            input_tokens: 0,
+            output_tokens: 0,
+        }
+    }
+}
+
+fn session_stream_payload(
+    event: librefang_kernel::llm_driver::StreamEvent,
+    state: &mut SessionStreamState,
+) -> Option<(&'static str, serde_json::Value, bool)> {
+    use librefang_kernel::llm_driver::{StreamEvent, PHASE_RESPONSE_COMPLETE};
+
+    match event {
+        StreamEvent::TextDelta { text } => {
+            if state.dedup.is_duplicate(&text) {
+                return None;
+            }
+            state.dedup.record_sent(&text);
+            Some((
+                "chunk",
+                serde_json::json!({"content": text, "done": false}),
+                false,
+            ))
+        }
+        StreamEvent::ToolUseStart { name, .. } => {
+            Some(("tool_use", serde_json::json!({"tool": name}), false))
+        }
+        StreamEvent::ToolUseEnd { name, input, .. } => Some((
+            "tool_result",
+            serde_json::json!({"tool": name, "input": input}),
+            false,
+        )),
+        StreamEvent::ContentComplete { usage, .. } => {
+            state.input_tokens = state.input_tokens.saturating_add(usage.input_tokens);
+            state.output_tokens = state.output_tokens.saturating_add(usage.output_tokens);
+            None
+        }
+        StreamEvent::PhaseChange { phase, .. } if phase == PHASE_RESPONSE_COMPLETE => Some((
+            "done",
+            serde_json::json!({
+                "done": true,
+                "usage": {
+                    "input_tokens": state.input_tokens,
+                    "output_tokens": state.output_tokens,
+                }
+            }),
+            true,
+        )),
+        StreamEvent::PhaseChange { phase, detail } => Some((
+            "phase",
+            serde_json::json!({"phase": phase, "detail": detail}),
+            false,
+        )),
+        StreamEvent::OwnerNotice { text } => {
+            Some(("owner_notice", serde_json::json!({"text": text}), false))
+        }
+        _ => None,
+    }
+}
+
+fn session_lifecycle_payload(
+    event: librefang_kernel::session_lifecycle::SessionLifecycleEvent,
+    expected_agent_id: AgentId,
+    expected_session_id: librefang_types::agent::SessionId,
+    _state: &SessionStreamState,
+) -> Option<(&'static str, serde_json::Value)> {
+    use librefang_kernel::session_lifecycle::SessionLifecycleEvent;
+
+    match event {
+        SessionLifecycleEvent::TurnFailed {
+            agent_id,
+            session_id,
+            ..
+        } if agent_id == expected_agent_id && session_id == expected_session_id => Some((
+            "phase",
+            serde_json::json!({"phase": "error", "detail": null}),
+        )),
+        SessionLifecycleEvent::AgentTerminated { agent_id, .. }
+            if agent_id == expected_agent_id =>
+        {
+            Some((
+                "phase",
+                serde_json::json!({"phase": "error", "detail": null}),
+            ))
+        }
+        _ => None,
+    }
 }
 
 #[utoipa::path(
@@ -836,6 +1217,7 @@ pub async fn switch_agent_session(
 )]
 pub async fn export_session(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path((id, session_id_str)): Path<(String, String)>,
     lang: Option<axum::Extension<RequestLanguage>>,
 ) -> impl IntoResponse {
@@ -849,6 +1231,12 @@ pub async fn export_session(
             )
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": t.t("api-error-agent-not-found")})),
+        );
+    }
     let session_id = match session_id_str.parse::<uuid::Uuid>() {
         Ok(uuid) => librefang_types::agent::SessionId(uuid),
         Err(_) => {
@@ -901,6 +1289,7 @@ pub async fn export_session(
 )]
 pub async fn export_session_trajectory(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path((id, session_id_str)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
     lang: Option<axum::Extension<RequestLanguage>>,
@@ -908,20 +1297,13 @@ pub async fn export_session_trajectory(
     use axum::http::header;
     use axum::response::IntoResponse;
 
-    let (
-        err_invalid_id,
-        err_session_invalid,
-        err_not_found,
-        err_session_not_found,
-        err_generic_key,
-    ) = {
+    let (err_invalid_id, err_session_invalid, err_not_found, err_session_not_found) = {
         let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
         (
             t.t("api-error-agent-invalid-id"),
             t.t("api-error-session-invalid-id"),
             t.t("api-error-agent-not-found"),
             "Session not found".to_string(),
-            "api-error-generic".to_string(),
         )
     };
 
@@ -936,6 +1318,13 @@ pub async fn export_session_trajectory(
                 .into_response();
         }
     };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": err_not_found})),
+        )
+            .into_response();
+    }
 
     // Parse session ID.
     let session_id = match session_id_str.parse::<uuid::Uuid>() {
@@ -973,10 +1362,9 @@ pub async fn export_session_trajectory(
         }
         Err(e) => {
             let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
-            let msg = t.t_args(&err_generic_key, &[("error", &e.to_string())]);
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": msg})),
+                Json(serde_json::json!({"error": scrub_500(&e, &t)})),
             )
                 .into_response();
         }
@@ -990,7 +1378,18 @@ pub async fn export_session_trajectory(
     let (body, content_type, ext): (String, &'static str, &'static str) = if format == "jsonl" {
         (bundle.to_jsonl(), "application/x-ndjson", "jsonl")
     } else {
-        (bundle.to_json().to_string(), "application/json", "json")
+        let json = match bundle.to_json() {
+            Ok(json) => json,
+            Err(error) => {
+                let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": scrub_500(&error, &t)})),
+                )
+                    .into_response();
+            }
+        };
+        (json.to_string(), "application/json", "json")
     };
 
     let filename = format!("trajectory-{}.{}", session_id.0, ext);
@@ -1337,5 +1736,72 @@ pub async fn stop_session(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": scrub_500(&e, &t)})),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine as _;
+
+    #[tokio::test]
+    async fn history_image_materialization_is_stable_and_idempotent() {
+        let temp = tempfile::tempdir().unwrap();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(b"same image bytes");
+        let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(16));
+        let mut tasks = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let path = temp.path().to_path_buf();
+            let encoded = encoded.clone();
+            let barrier = barrier.clone();
+            tasks.spawn(async move {
+                barrier.wait().await;
+                materialize_history_image(&path, b"session-a", "image/png", &encoded).await
+            });
+        }
+        let mut materialized = Vec::new();
+        while let Some(result) = tasks.join_next().await {
+            materialized.push(result.unwrap().expect("concurrent materialization"));
+        }
+
+        let first = &materialized[0];
+        assert!(materialized
+            .iter()
+            .all(|image| image["file_id"] == first["file_id"]));
+        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1);
+        let file_id = first["file_id"].as_str().unwrap();
+        assert!(uuid::Uuid::parse_str(file_id).is_ok());
+        assert!(UPLOAD_REGISTRY.contains_key(file_id));
+
+        let other_session =
+            materialize_history_image(temp.path(), b"session-b", "image/png", &encoded)
+                .await
+                .expect("other-session materialization");
+        let other_file_id = other_session["file_id"].as_str().unwrap();
+        assert_ne!(file_id, other_file_id);
+        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 2);
+
+        UPLOAD_REGISTRY.remove(file_id);
+        UPLOAD_REGISTRY.remove(other_file_id);
+    }
+
+    #[test]
+    fn tool_result_cap_is_a_utf8_byte_limit() {
+        let input = "界".repeat(40_000);
+        let capped = cap_tool_result(&input);
+        assert!(capped.len() <= 102_400);
+        assert!(capped.is_char_boundary(capped.len()));
+        assert!(input.starts_with(&capped));
+    }
+
+    #[test]
+    fn trajectory_export_internal_errors_are_scrubbed() {
+        let t = ErrorTranslator::new("en");
+        let detail = "database failure at /srv/private/memory.db";
+        let body = scrub_500(&detail, &t);
+
+        assert_eq!(body, "Internal server error");
+        assert!(!body.contains("/srv/private"));
+        assert!(!body.contains("database"));
     }
 }

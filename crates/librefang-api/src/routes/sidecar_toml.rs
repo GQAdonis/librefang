@@ -4,10 +4,25 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use toml_edit::{value, Array, ArrayOfTables, DocumentMut, Item, Table};
 
+fn read_existing_or_empty(path: &Path) -> Result<String, String> {
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(contents),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(format!("read {path:?}: {error}")),
+    }
+}
+
+// `agent` (multi-instance support) pushed this to 8 positional params — a
+// dedicated params struct would help call-site readability more than it
+// would help correctness here (every call site is already a well-commented
+// test or the one production caller), so the lint is silenced rather than
+// churned into a struct.
+#[allow(clippy::too_many_arguments)]
 pub fn upsert_sidecar_block(
     path: &Path,
     name: &str,
@@ -16,8 +31,9 @@ pub fn upsert_sidecar_block(
     args: &[&str],
     env: &BTreeMap<String, String>,
     managed_env_keys: &[&str],
+    agent: Option<&str>,
 ) -> Result<(), String> {
-    let original = fs::read_to_string(path).unwrap_or_default();
+    let original = read_existing_or_empty(path)?;
     let mut doc: DocumentMut = original
         .parse()
         .map_err(|e| format!("parse {path:?}: {e}"))?;
@@ -30,8 +46,11 @@ pub fn upsert_sidecar_block(
     // a venv binary (`command = "/opt/venv/bin/python"`) or pass extra
     // flags (`args = [..., "--debug"]`) don't lose those edits every
     // time someone clicks Save in the dashboard.
-    fn write_command_and_args_defaults(block: &mut Table, command: &str, args: &[&str]) {
+    fn write_command_default(block: &mut Table, command: &str) {
         block["command"] = value(command);
+    }
+
+    fn write_args_default(block: &mut Table, args: &[&str]) {
         let mut args_arr = Array::new();
         for a in args {
             args_arr.push(*a);
@@ -39,16 +58,23 @@ pub fn upsert_sidecar_block(
         block["args"] = value(args_arr);
     }
 
-    fn command_or_args_present(block: &Table) -> bool {
-        let cmd_present = block
+    fn command_present(block: &Table) -> bool {
+        block
             .get("command")
             .and_then(|i| i.as_str())
-            .is_some_and(|s| !s.is_empty());
-        let args_present = block
+            .is_some_and(|s| !s.is_empty())
+    }
+
+    fn args_present(block: &Table) -> bool {
+        block
             .get("args")
             .and_then(|i| i.as_array())
-            .is_some_and(|a| !a.is_empty());
-        cmd_present || args_present
+            .is_some_and(|a| !a.is_empty())
+    }
+
+    fn write_command_and_args_defaults(block: &mut Table, command: &str, args: &[&str]) {
+        write_command_default(block, command);
+        write_args_default(block, args);
     }
 
     // Helper: apply the keys the dashboard configure form owns. `name`
@@ -71,9 +97,23 @@ pub fn upsert_sidecar_block(
         channel_type: &str,
         env: &BTreeMap<String, String>,
         managed_env_keys: &[&str],
+        agent: Option<&str>,
     ) {
         block["name"] = value(name);
         block["channel_type"] = value(channel_type);
+        // `agent` is the per-instance default-agent binding (multi-instance
+        // support, #8xxx). Always normalize to the current field name —
+        // drop the pre-#5671 `default_agent` alias key too, so a config
+        // hand-edited (or written by an older dashboard build) under the
+        // old key doesn't leave a stale duplicate sitting next to the one
+        // this save actually intends.
+        match agent {
+            Some(a) if !a.is_empty() => block["agent"] = value(a),
+            _ => {
+                block.remove("agent");
+            }
+        }
+        block.remove("default_agent");
         // Start from the existing env table (clone it) so non-schema
         // keys survive the rewrite. If it's missing or shaped wrong,
         // fall back to a fresh empty table.
@@ -114,13 +154,16 @@ pub fn upsert_sidecar_block(
             .unwrap_or("");
         if existing_name == name {
             let existing = aot.get_mut(i).expect("indexed");
-            // Backfill catalog defaults only if the operator never set
-            // `command`/`args` (e.g. block was hand-written as a stub).
-            // Otherwise preserve their hand-edits.
-            if !command_or_args_present(existing) {
-                write_command_and_args_defaults(existing, command, args);
+            // Backfill each missing catalog field independently. A partial
+            // hand-edit must not suppress the default for its required
+            // sibling, while a non-empty operator value remains untouched.
+            if !command_present(existing) {
+                write_command_default(existing, command);
             }
-            write_form_managed(existing, name, channel_type, env, managed_env_keys);
+            if !args_present(existing) {
+                write_args_default(existing, args);
+            }
+            write_form_managed(existing, name, channel_type, env, managed_env_keys, agent);
             replaced = true;
             break;
         }
@@ -128,22 +171,11 @@ pub fn upsert_sidecar_block(
     if !replaced {
         let mut block = Table::new();
         write_command_and_args_defaults(&mut block, command, args);
-        write_form_managed(&mut block, name, channel_type, env, managed_env_keys);
+        write_form_managed(&mut block, name, channel_type, env, managed_env_keys, agent);
         aot.push(block);
     }
 
-    // Atomic write to a sibling tempfile then rename.
-    let parent = path.parent().ok_or("config path has no parent")?;
-    // Disambiguate parallel callers: PID guards against other daemon
-    // processes touching the same dir; the per-process atomic counter
-    // guards against concurrent threads within this process (e.g. parallel
-    // tests, or two HTTP handlers racing on the same config file). Same
-    // defect class as secrets_env::upsert_secret (T3.1).
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = parent.join(format!(".config.toml.tmp.{}.{seq}", std::process::id()));
-    fs::write(&tmp, doc.to_string()).map_err(|e| format!("write {tmp:?}: {e}"))?;
-    fs::rename(&tmp, path).map_err(|e| format!("rename {tmp:?} -> {path:?}: {e}"))?;
+    atomic_write(path, &doc.to_string())?;
     Ok(())
 }
 
@@ -284,9 +316,80 @@ mod tests {
     }
 }
 
+/// Monotonic counter disambiguating concurrent tempfile names within this process.
+///
+/// Module-level on purpose.
+/// Both writers format into the same `.config.toml.tmp.{pid}.{seq}` namespace, so a counter declared inside each function would give each its own sequence starting at zero and the first call to either would mint the identical path — a concurrent configure and remove could then write and rename each other's tempfile, landing one request's document at the other's target or losing it entirely.
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// Write `contents` to `path` by way of a sibling tempfile and a rename.
+///
+/// Shared by both writers so the sequence that disambiguates their tempfile names is genuinely shared — see [`TMP_SEQ`].
+/// PID guards against other daemon processes touching the same directory; the counter guards against concurrent threads within this process (parallel tests, or two HTTP handlers racing on the same config file).
+/// Same defect class as `secrets_env::upsert_secret` (T3.1).
+fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
+    let parent = path.parent().ok_or("config path has no parent")?;
+    let tmp = parent.join(next_tmp_name());
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .map_err(|e| format!("open {tmp:?}: {e}"))?;
+    let write_result = (|| -> Result<(), String> {
+        file.write_all(contents.as_bytes())
+            .map_err(|e| format!("write {tmp:?}: {e}"))?;
+        file.sync_all().map_err(|e| format!("sync {tmp:?}: {e}"))?;
+        Ok(())
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
+    }
+
+    if let Err(error) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("rename {tmp:?} -> {path:?}: {error}"));
+    }
+
+    #[cfg(unix)]
+    fs::File::open(parent)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|e| format!("sync parent directory {parent:?}: {e}"))?;
+
+    Ok(())
+}
+
+pub(super) fn restore_sidecar_file(path: &Path, contents: Option<&str>) -> Result<(), String> {
+    match contents {
+        Some(contents) => atomic_write(path, contents),
+        None => match fs::remove_file(path) {
+            Ok(()) => {
+                #[cfg(unix)]
+                {
+                    let parent = path.parent().ok_or("config path has no parent")?;
+                    fs::File::open(parent)
+                        .and_then(|dir| dir.sync_all())
+                        .map_err(|e| format!("sync parent directory {parent:?}: {e}"))?;
+                }
+                Ok(())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!("remove {path:?}: {error}")),
+        },
+    }
+}
+
+/// Next tempfile name from the shared sequence.
+/// Split out so a test can assert successive names differ without writing to the filesystem.
+fn next_tmp_name() -> String {
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    format!(".config.toml.tmp.{}.{seq}", std::process::id())
+}
+
 /// Remove the `[[sidecar_channels]]` block identified by `name`; returns whether one was removed.
 pub fn remove_sidecar_block(path: &Path, name: &str) -> Result<bool, String> {
-    let original = fs::read_to_string(path).unwrap_or_default();
+    let original = read_existing_or_empty(path)?;
     let mut doc: DocumentMut = original
         .parse()
         .map_err(|e| format!("parse {path:?}: {e}"))?;
@@ -316,12 +419,105 @@ pub fn remove_sidecar_block(path: &Path, name: &str) -> Result<bool, String> {
         doc.remove("sidecar_channels");
     }
 
-    // Atomic write to a sibling tempfile then rename (same scheme as upsert_sidecar_block).
-    let parent = path.parent().ok_or("config path has no parent")?;
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = parent.join(format!(".config.toml.tmp.{}.{seq}", std::process::id()));
-    fs::write(&tmp, doc.to_string()).map_err(|e| format!("write {tmp:?}: {e}"))?;
-    fs::rename(&tmp, path).map_err(|e| format!("rename {tmp:?} -> {path:?}: {e}"))?;
+    atomic_write(path, &doc.to_string())?;
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use tempfile::TempDir;
+
+    #[test]
+    fn atomic_write_replaces_config_without_staging_residue() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+
+        atomic_write(&path, "[kernel]\nname = \"test\"\n").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "[kernel]\nname = \"test\"\n"
+        );
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "successful writes must not leave staging files"
+        );
+    }
+
+    #[test]
+    fn remove_propagates_existing_config_read_error() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("config.toml");
+        fs::create_dir(&path).unwrap();
+
+        let error = remove_sidecar_block(&path, "telegram").unwrap_err();
+
+        assert!(error.contains("read"), "got: {error}");
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "a read failure must not create a staging file"
+        );
+    }
+
+    #[test]
+    fn atomic_write_removes_staging_file_when_rename_fails() {
+        let dir = TempDir::new().unwrap();
+        let target_dir = dir.path().join("config.toml");
+        fs::create_dir(&target_dir).unwrap();
+
+        let error = atomic_write(&target_dir, "new config").unwrap_err();
+
+        assert!(error.contains("rename"), "got: {error}");
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "failed renames must not leave staging files"
+        );
+    }
+
+    /// Both writers mint tempfile names from one namespace, so the sequence backing that namespace has to be shared and atomic.
+    /// Before the writers were funnelled through `atomic_write`, each declared its own `static SEQ` starting at zero, so the first `upsert` and the first `remove` in a process both produced `.config.toml.tmp.{pid}.0`.
+    ///
+    /// Names are drawn concurrently and asserted all-distinct.
+    /// This pins atomicity and the single shared counter; it cannot detect a future writer that bypasses `next_tmp_name` and formats the same pattern itself, which is what the doc comment on `TMP_SEQ` is for.
+    #[test]
+    fn tmp_names_are_unique_across_concurrent_callers() {
+        const THREADS: usize = 8;
+        const PER_THREAD: usize = 32;
+
+        let handles: Vec<_> = (0..THREADS)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    (0..PER_THREAD)
+                        .map(|_| next_tmp_name())
+                        .collect::<Vec<String>>()
+                })
+            })
+            .collect();
+
+        let names: Vec<String> = handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("tmp-name thread panicked"))
+            .collect();
+
+        let distinct: HashSet<&str> = names.iter().map(String::as_str).collect();
+        assert_eq!(
+            distinct.len(),
+            THREADS * PER_THREAD,
+            "tempfile names collided — the sequence is not shared or not atomic; \
+             a concurrent configure and remove can rename each other's tempfile away"
+        );
+
+        let pid_prefix = format!(".config.toml.tmp.{}.", std::process::id());
+        for name in &names {
+            assert!(
+                name.starts_with(&pid_prefix),
+                "unexpected tempfile name shape: {name}"
+            );
+        }
+    }
 }

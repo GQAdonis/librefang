@@ -8,6 +8,8 @@
 //! and inter-agent communication.
 
 pub mod agent_identity_registry;
+pub mod agent_purge;
+pub mod agent_template;
 pub mod approval;
 pub mod auth;
 pub mod auto_dream;
@@ -20,6 +22,8 @@ pub mod cron;
 pub mod cron_delivery;
 pub mod error;
 pub mod event_bus;
+pub mod everyapi_credentials;
+pub mod everyapi_driver;
 pub mod goal_runner;
 pub mod heartbeat;
 pub mod hooks;
@@ -27,12 +31,14 @@ pub mod inbox;
 pub mod kernel;
 pub mod kernel_api;
 pub mod log_reload;
+pub mod mcp_health_reporter;
 pub mod mcp_oauth_provider;
 pub mod oauth_cache_invalidator;
 pub mod storage_backends; // BossFang: SurrealDB / SQLite backend selection
 pub use librefang_kernel_metering as metering;
 pub mod orchestration;
 pub mod pairing;
+pub mod provisioning;
 pub mod registry;
 pub mod rl_export;
 pub use librefang_kernel_router as router;
@@ -55,7 +61,7 @@ pub mod workflow;
 
 pub use kernel::DeliveryTracker;
 pub use kernel::LibreFangKernel;
-pub use kernel::SkillReloadOutcome;
+pub use kernel::{PendingSkillMcpDeclarations, SemanticMemoryAccess, SkillReloadOutcome};
 pub use kernel::{SYSTEM_CHANNEL_AUTONOMOUS, SYSTEM_CHANNEL_CRON, SYSTEM_CHANNEL_WEBUI};
 pub use kernel_api::KernelApi;
 
@@ -65,9 +71,9 @@ pub use kernel_api::KernelApi;
 // migration can move callers off `LibreFangKernel` inherent forwards.
 pub use kernel::subsystems::{
     AgentSubsystemApi, CredentialPoolSummary, EventSubsystemApi, GovernanceSubsystemApi,
-    LlmSubsystemApi, McpSubsystemApi, MediaSubsystemApi, MemorySubsystemApi, MeshSubsystemApi,
-    MeteringSubsystemApi, ProcessSubsystemApi, SecuritySubsystemApi, SkillsSubsystemApi,
-    WorkflowSubsystemApi,
+    LlmSubsystemApi, McpSubsystemApi, MediaSubsystemApi, MemoryExtractionResolution,
+    MemoryExtractionTarget, MemorySubsystemApi, MeshSubsystemApi, MeteringSubsystemApi,
+    ProcessSubsystemApi, SecuritySubsystemApi, SkillsSubsystemApi, WorkflowSubsystemApi,
 };
 
 // ---------------------------------------------------------------------------

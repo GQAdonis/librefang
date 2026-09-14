@@ -152,6 +152,10 @@ fn redacted_config_json(
         .collect();
 
     // -- external_auth: redact secrets --
+    // Every field of `OidcProvider` is enumerated here.
+    // None of them holds a secret value: `client_secret_env` is the *name* of the environment variable the secret is read from (the secret itself is never stored in config), and `client_id` is the public half of the OAuth client registration — both were already emitted before #6605.
+    // `auth_url` / `token_url` / `userinfo_url` / `jwks_uri` / `audience` / `require_email_verified` were missing, which left an operator unable to tell from the API whether a non-OIDC provider's explicit endpoints were picked up or whether this provider overrides the global email-verification gate (#6605).
+    // These stay read-only: `external_auth.` is deliberately absent from `WRITABLE_SECTION_PREFIXES`, because flipping an endpoint or the verification gate post-auth is the #3703 impersonation vector.
     let external_auth_providers: Vec<serde_json::Value> = config
         .external_auth
         .providers
@@ -161,11 +165,18 @@ fn redacted_config_json(
                 "id": p.id,
                 "display_name": p.display_name,
                 "issuer_url": p.issuer_url,
+                "auth_url": p.auth_url,
+                "token_url": p.token_url,
+                "userinfo_url": p.userinfo_url,
+                "jwks_uri": p.jwks_uri,
                 "client_id": p.client_id,
                 "client_secret_env": p.client_secret_env,
                 "redirect_url": p.redirect_url,
                 "scopes": p.scopes,
                 "allowed_domains": p.allowed_domains,
+                "audience": p.audience,
+                // `None` renders as `null` — "inherit the global setting", which is a different state from an explicit `false` and must stay distinguishable.
+                "require_email_verified": p.require_email_verified,
             })
         })
         .collect();
@@ -241,6 +252,7 @@ fn redacted_config_json(
         "vector_store_url": config.memory.vector_store_url,
         "soft_delete_retention_days": config.memory.soft_delete_retention_days,
         "pool_size": config.memory.pool_size,
+        "max_episodic_chars": config.memory.max_episodic_chars,
     });
 
     // ── Proactive Memory ──
@@ -260,6 +272,8 @@ fn redacted_config_json(
         "update_threshold_same_category": config.proactive_memory.update_threshold_same_category,
         "update_threshold_cross_category": config.proactive_memory.update_threshold_cross_category,
         "extractor_sidecar": serde_json::to_value(&config.proactive_memory.extractor_sidecar).unwrap_or_default(),
+        "session_scoped_recall": config.proactive_memory.session_scoped_recall,
+        "min_similarity": config.proactive_memory.min_similarity,
     });
 
     // ── Auto-Dream (background memory consolidation) ──
@@ -327,6 +341,7 @@ fn redacted_config_json(
         "chromium_path": config.browser.chromium_path,
         "cdp_endpoint": config.browser.cdp_endpoint,
         "cdp_auth_token_env": config.browser.cdp_auth_token_env,
+        "max_content_chars": config.browser.max_content_chars,
     });
 
     set!("extensions", {
@@ -349,11 +364,19 @@ fn redacted_config_json(
         "audio_transcription": config.media.audio_transcription,
         "video_description": config.media.video_description,
         "max_concurrency": config.media.max_concurrency,
+        "transcription_timeout_secs": config.media.transcription_timeout_secs,
+        "ffmpeg_timeout_secs": config.media.ffmpeg_timeout_secs,
         "image_provider": config.media.image_provider,
         "image_model": config.media.image_model,
         "audio_provider": config.media.audio_provider,
         "audio_model": config.media.audio_model,
+        "audio_language": config.media.audio_language,
+        "audio_prompt": config.media.audio_prompt,
+        "video_provider": config.media.video_provider,
+        "video_model": config.media.video_model,
         "custom_stt": serde_json::to_value(&config.media.custom_stt).unwrap_or_default(),
+        "custom_image": serde_json::to_value(&config.media.custom_image).unwrap_or_default(),
+        "custom_video": serde_json::to_value(&config.media.custom_video).unwrap_or_default(),
         "stt_available": stt_available,
     });
 
@@ -383,14 +406,28 @@ fn redacted_config_json(
         },
     );
 
+    // The `approval` section declares no explicit `fields` list in `ui_sections_overlay`, so the dashboard renders a control for every `ApprovalPolicy` field the derived schema knows about — and seven of the fourteen were absent here, rendering blank and reading back as their JSON zero value.
+    // `cache_approvals_per_session` was the visible one: it defaults to `true`, so an operator who left it alone still saw the box unchecked and had no way to tell whether per-session caching was on (#6636 observation (e)).
+    // None of the seven is writable, which is why `every_writable_config_leaf_is_readable` never saw them; `approval_policy_fields_are_all_readable` is the guard for this direction.
+    // Nothing added here is secret-bearing: `trusted_senders`, `channel_rules`, and `routing` hold operator-chosen user ids, channel names, tool globs, and notification recipients — the same class as the `external_auth` fields exposed in #6605, and credentials never live in `ApprovalPolicy`.
+    // Of those seven, `trusted_senders` is the one with teeth: it is an approval-*bypass* list, so a sender on it skips the prompt for every tool `classify_risk` ranks below `High` (see `ApprovalManager::requires_approval_with_context_for`), which is why the Approvals page renders it as its own card rather than leaving it to the generic config form (#6611).
+    // Read-only on purpose — it stays out of `WRITABLE_EXACT_PATHS` so an Owner-role caller holding a leaked API key cannot add themselves to it over HTTP, which is also why the `writable ⊆ readable` guard never noticed while it was missing from this response.
     set!("approval", {
         "require_approval": config.approval.require_approval,
         "timeout_secs": config.approval.timeout_secs,
         "auto_approve_autonomous": config.approval.auto_approve_autonomous,
         "auto_approve": config.approval.auto_approve,
+        "trusted_senders": config.approval.trusted_senders,
+        "channel_rules": serde_json::to_value(&config.approval.channel_rules).unwrap_or(serde_json::json!([])),
+        // Serde encoding, not `Debug` — see `enum_valued_fields_use_the_serde_encoding_not_debug`.
+        "timeout_fallback": serde_json::to_value(&config.approval.timeout_fallback).unwrap_or(serde_json::json!("deny")),
+        "routing": serde_json::to_value(&config.approval.routing).unwrap_or(serde_json::json!([])),
         "second_factor": serde_json::to_value(config.approval.second_factor).unwrap_or(serde_json::json!("none")),
         "totp_issuer": config.approval.totp_issuer,
         "totp_grace_period_secs": config.approval.totp_grace_period_secs,
+        "totp_tools": config.approval.totp_tools,
+        "audit_retention_days": config.approval.audit_retention_days,
+        "cache_approvals_per_session": config.approval.cache_approvals_per_session,
     });
 
     // `ExecSecurityMode` is `rename_all = "lowercase"` — the schema's select offers `deny | allowlist | full`, so `Debug`'s `"Allowlist"` never matched an option.
@@ -398,6 +435,7 @@ fn redacted_config_json(
         "mode": serde_json::to_value(config.exec_policy.mode).unwrap_or(serde_json::json!("allowlist")),
         "safe_bins": config.exec_policy.safe_bins,
         "safe_bins_skip_approval": config.exec_policy.safe_bins_skip_approval,
+        "full_mode_skips_approval": config.exec_policy.full_mode_skips_approval,
         "allowed_commands": config.exec_policy.allowed_commands,
         "allowed_env_vars": config.exec_policy.allowed_env_vars,
         "timeout_secs": config.exec_policy.timeout_secs,
@@ -536,7 +574,11 @@ fn redacted_config_json(
         "token_expiry_secs": config.pairing.token_expiry_secs,
         "public_base_url": config.pairing.public_base_url,
         "push_provider": config.pairing.push_provider,
-        "ntfy_url": config.pairing.ntfy_url,
+        "ntfy_url": config
+            .pairing
+            .ntfy_url
+            .as_deref()
+            .map(redact_url_credentials),
         "ntfy_topic": config.pairing.ntfy_topic,
     });
 
@@ -548,6 +590,11 @@ fn redacted_config_json(
             Some(t) => serde_json::json!({
                 "budget_tokens": t.budget_tokens,
                 "stream_thinking": t.stream_thinking,
+                // #7946. Serialized through `ReasoningMode`'s serde form, not
+                // `Debug`, so the dashboard receives one of the values its
+                // dropdown offers — see
+                // `enum_valued_fields_use_the_serde_encoding_not_debug`.
+                "reasoning_mode": t.reasoning_mode,
             }),
             None => serde_json::json!(null),
         },
@@ -614,6 +661,10 @@ fn redacted_config_json(
         );
     }
 
+    set!("usage", {
+        "retention_days": config.usage.retention_days,
+    });
+
     set!("external_auth", {
         "enabled": config.external_auth.enabled,
         "issuer_url": config.external_auth.issuer_url,
@@ -642,6 +693,32 @@ fn redacted_config_json(
             "providers".into(),
             serde_json::json!(external_auth_providers),
         );
+        // Read-only by design, and absent from this payload entirely until #6605.
+        // `external_auth.require_email_verified` is the #3703 mitigation — it rejects logins whose ID token does not carry `email_verified = true`, which is what stops an attacker registering an unverified address in an `allowed_domains` domain and inheriting that domain's authorization.
+        // It stays out of `WRITABLE_EXACT_PATHS` / `WRITABLE_SECTION_PREFIXES` precisely so an Owner-role caller with a leaked API key cannot turn it off, but the write-side exclusion is not a reason to hide the value: an operator otherwise has no way short of reading `config.toml` on the host to confirm the protection is on.
+        // The read/write parity guard cannot catch this class — it enforces `writable ⊆ readable`, and a field that is intentionally non-writable sits outside that invariant by construction.
+        ea.insert(
+            "require_email_verified".into(),
+            serde_json::json!(config.external_auth.require_email_verified),
+        );
+        // Read-only for the same reason as `require_email_verified`, and readable for the same reason too (#7744).
+        // `role_map` is what turns a signed ID token into an API credential, so a caller who could write it could grant themselves Owner by naming a claim they already hold; it stays out of the writable sets.
+        // Reading it back is how an operator confirms which IdP groups currently carry privilege — the values are group names the operator chose, never secrets.
+        ea.insert(
+            "role_map".into(),
+            serde_json::json!(config.external_auth.role_map),
+        );
+        // #7746: read-only and readable for exactly the same pair of reasons.
+        // `group_map` decides which local `[[groups]]` an IdP claim confers, and a group confers ownership and the role strings channel binding matches on, so a caller who could write it could join themselves to any team; `claim_paths` decides *where* the claim values both maps are matched against come from, and pointing it at an attacker-controlled claim would be the same escalation one level up.
+        // Both are group and claim names an operator chose, never secrets, and reading them back is how an operator confirms which IdP groups currently confer membership and which part of the token is being trusted.
+        ea.insert(
+            "group_map".into(),
+            serde_json::json!(config.external_auth.group_map),
+        );
+        ea.insert(
+            "claim_paths".into(),
+            serde_json::json!(config.external_auth.claim_paths),
+        );
     }
 
     // ── Newly surfaced sections (#4678) ──
@@ -661,6 +738,18 @@ fn redacted_config_json(
         config.workflow_stale_timeout_minutes
     );
     set!("tool_timeout_secs", config.tool_timeout_secs);
+    // `tool_exec`: the backend selector and the local backend's per-command
+    // default. Neither is a secret — the SSH / Daytona sub-tables carry the
+    // credentials and are deliberately left out, which is also why
+    // `WRITABLE_EXACT_PATHS` lists this section leaf-by-leaf.
+    // `default_timeout_secs` is `Option` with a `None` default, so it is
+    // reported as `null` rather than omitted: the dashboard reads it with
+    // `getNestedValue`, and an absent key renders as "not configured" no
+    // matter what the operator just saved.
+    set!("tool_exec", {
+        "kind": config.tool_exec.kind,
+        "default_timeout_secs": config.tool_exec.default_timeout_secs,
+    });
     set!(
         "local_probe_interval_secs",
         config.local_probe_interval_secs
@@ -727,6 +816,9 @@ fn redacted_config_json(
         "claim_ttl_secs": config.task_board.claim_ttl_secs,
         "sweep_interval_secs": config.task_board.sweep_interval_secs,
         "max_retries": config.task_board.max_retries,
+        "assignee_wake": config.task_board.assignee_wake,
+        "pending_grace_secs": config.task_board.pending_grace_secs,
+        "wake_backoff_max_secs": config.task_board.wake_backoff_max_secs,
     });
 
     // ── tool_policy (rules + groups, no secrets) ──
@@ -770,6 +862,7 @@ fn redacted_config_json(
         "cache_ttl_secs": config.registry.cache_ttl_secs,
         "registry_mirror": config.registry.registry_mirror,
         "registry_host": config.registry.registry_host,
+        "auto_sync": config.registry.auto_sync,
     });
 
     // ── privacy ──
@@ -901,6 +994,20 @@ fn redacted_config_json(
 // ---------------------------------------------------------------------------
 // Config Reload endpoint
 // ---------------------------------------------------------------------------
+fn config_reload_status(
+    restart_required: bool,
+    has_changes: bool,
+    channel_reload_failed: bool,
+) -> &'static str {
+    if restart_required || channel_reload_failed {
+        "partial"
+    } else if has_changes {
+        "applied"
+    } else {
+        "no_changes"
+    }
+}
+
 /// POST /api/config/reload — Reload configuration from disk and apply hot-reloadable changes.
 ///
 /// Reads the config file, diffs against current config, validates the new config,
@@ -918,21 +1025,25 @@ pub async fn config_reload(
     State(state): State<Arc<AppState>>,
     api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> impl IntoResponse {
-    // SECURITY: Record config reload in audit trail with caller attribution.
     let user_id = api_user.as_ref().map(|u| u.0.user_id);
-    state.kernel.audit().record_with_context(
-        "system",
-        librefang_kernel::audit::AuditAction::ConfigChange,
-        "config reload requested via API",
-        "pending",
-        user_id,
-        Some("api".to_string()),
-    );
     match state.kernel.reload_config().await {
         Ok(plan) => {
+            // `api_key` / `api_key_hash` are classified as read-live in
+            // `build_reload_plan`, which is true for the WS and terminal
+            // upgrade paths (they call `valid_api_tokens(&auth_snapshot())`
+            // per connection) but was never true for the HTTP middleware:
+            // `api_key_lock` was written only at boot and on a dashboard
+            // credential change, so a reloaded master key kept authenticating
+            // with the old value until the daemon restarted. Push the fresh
+            // snapshot into both live handles here (#6613).
+            let snap = state.kernel.auth_snapshot();
+            crate::server::refresh_master_credential(&snap, &state.api_key_lock, &state.master_key)
+                .await;
+
             // If channel config changed, the kernel already cleared the adapter
             // registry — but we also need to stop the old BridgeManager and
             // restart adapters from the new config.
+            let mut warnings = Vec::new();
             if plan.hot_actions.contains(&HotAction::ReloadChannels) {
                 match crate::channel_bridge::reload_channels_from_disk(&state).await {
                     Ok(names) => {
@@ -944,6 +1055,9 @@ pub async fn config_reload(
                     }
                     Err(e) => {
                         tracing::error!("Hot-reload: failed to restart channel bridge: {e}");
+                        warnings.push(
+                            "Channel adapters could not be restarted; see server logs".to_string(),
+                        );
                     }
                 }
             }
@@ -967,29 +1081,47 @@ pub async fn config_reload(
                 }
             }
 
-            let status = if plan.restart_required {
-                "partial"
-            } else if plan.has_changes() {
-                "applied"
-            } else {
-                "no_changes"
-            };
+            let status = config_reload_status(
+                plan.restart_required,
+                plan.has_changes(),
+                !warnings.is_empty(),
+            );
+            state.kernel.audit().record_with_context(
+                "system",
+                librefang_kernel::audit::AuditAction::ConfigChange,
+                "config reload requested via API",
+                status,
+                user_id,
+                Some("api".to_string()),
+            );
 
+            let mut body = serde_json::json!({
+                "status": status,
+                "restart_required": plan.restart_required,
+                "restart_reasons": plan.restart_reasons,
+                "hot_actions_applied": plan.hot_actions.iter().map(|a| format!("{a:?}")).collect::<Vec<_>>(),
+                "noop_changes": plan.noop_changes,
+            });
+            if !warnings.is_empty() {
+                body["warnings"] = serde_json::json!(warnings);
+            }
+
+            (StatusCode::OK, Json(body))
+        }
+        Err(e) => {
+            state.kernel.audit().record_with_context(
+                "system",
+                librefang_kernel::audit::AuditAction::ConfigChange,
+                "config reload requested via API",
+                "failed",
+                user_id,
+                Some("api".to_string()),
+            );
             (
-                StatusCode::OK,
-                Json(serde_json::json!({
-                    "status": status,
-                    "restart_required": plan.restart_required,
-                    "restart_reasons": plan.restart_reasons,
-                    "hot_actions_applied": plan.hot_actions.iter().map(|a| format!("{a:?}")).collect::<Vec<_>>(),
-                    "noop_changes": plan.noop_changes,
-                })),
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"status": "error", "error": e})),
             )
         }
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"status": "error", "error": e})),
-        ),
     }
 }
 
@@ -1011,42 +1143,42 @@ pub async fn config_reload(
 pub async fn export_config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     use axum::body::Body;
 
-    let config_path = state.kernel.home_dir().join("config.toml");
+    let config_path = state.kernel.config_path().to_path_buf();
 
-    let toml_content = if config_path.exists() {
-        match std::fs::read_to_string(&config_path) {
-            Ok(content) => content,
-            Err(e) => {
-                // Scrub the io error (audit: rusqlite-errors-leak).
-                tracing::error!(error = %e, "failed to read config for export");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(axum::http::header::CONTENT_TYPE, "application/json")],
-                    Body::from(
-                        serde_json::json!({"status": "error", "error": "Internal server error"})
-                            .to_string(),
-                    ),
-                )
-                    .into_response();
+    let toml_content = match tokio::fs::read_to_string(&config_path).await {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Fall back to serializing in-memory config only when there is no
+            // persisted file to export.
+            match toml::to_string_pretty(&**state.kernel.config_ref()) {
+                Ok(s) => s,
+                Err(e) => {
+                    // Scrub the serialize error (audit: rusqlite-errors-leak).
+                    tracing::error!(error = %e, "failed to serialize config for export");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(axum::http::header::CONTENT_TYPE, "application/json")],
+                        Body::from(
+                            serde_json::json!({"status": "error", "error": "Internal server error"})
+                                .to_string(),
+                        ),
+                    )
+                        .into_response();
+                }
             }
         }
-    } else {
-        // Fall back to serializing in-memory config
-        match toml::to_string_pretty(&**state.kernel.config_ref()) {
-            Ok(s) => s,
-            Err(e) => {
-                // Scrub the serialize error (audit: rusqlite-errors-leak).
-                tracing::error!(error = %e, "failed to serialize config for export");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(axum::http::header::CONTENT_TYPE, "application/json")],
-                    Body::from(
-                        serde_json::json!({"status": "error", "error": "Internal server error"})
-                            .to_string(),
-                    ),
-                )
-                    .into_response();
-            }
+        Err(e) => {
+            // Scrub the io error (audit: rusqlite-errors-leak).
+            tracing::error!(error = %e, "failed to read config for export");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                Body::from(
+                    serde_json::json!({"status": "error", "error": "Internal server error"})
+                        .to_string(),
+                ),
+            )
+                .into_response();
         }
     };
 
@@ -1067,6 +1199,25 @@ pub async fn export_config(State(state): State<Arc<AppState>>) -> impl IntoRespo
 // ---------------------------------------------------------------------------
 // Config Schema endpoint
 // ---------------------------------------------------------------------------
+/// GET /api/config/status — where the effective configuration came from, and whether it can be written.
+///
+/// The dashboard branches on `writable` to decide whether to render write controls, rather than discovering managed mode by attempting a save and reading the `423` back (#6695).
+/// Authenticated like every other `/api/*` route; it exposes a path and a checksum over the file's bytes, never a value from inside it.
+#[utoipa::path(
+    get,
+    path = "/api/config/status",
+    tag = "system",
+    responses(
+        (status = 200, description = "Configuration provenance and writability", body = crate::types::JsonObject)
+    )
+)]
+pub async fn config_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    // The kernel's resolved path, not a second resolution: `source` is the file an operator will go and edit, and a status endpoint that names a different one is worse than no status endpoint (#6695).
+    axum::Json(librefang_kernel::config::config_provenance(Some(
+        state.kernel.config_path(),
+    )))
+}
+
 /// GET /api/config/schema — Return a simplified JSON description of the config structure.
 #[utoipa::path(
     get,
@@ -1111,21 +1262,110 @@ pub async fn config_schema(State(state): State<Arc<AppState>>) -> impl IntoRespo
         serde_json::to_value(schemars::schema_for!(librefang_types::config::KernelConfig))
             .unwrap_or_else(|_| serde_json::json!({}));
 
-    // Attach the UI overlay: sections + option/range hints.
+    // Attach the UI overlay: sections + option/range hints + read-only paths.
+    let non_writable = non_writable_schema_paths(&root);
     if let Some(obj) = root.as_object_mut() {
         obj.insert("x-sections".into(), ui_sections_overlay());
         obj.insert(
             "x-ui-options".into(),
             ui_options_overlay(provider_options, model_options),
         );
+        obj.insert(
+            "x-aux-tasks".into(),
+            serde_json::json!(librefang_types::config::AuxTask::ALL
+                .iter()
+                .map(|t| t.as_str())
+                .collect::<Vec<_>>()),
+        );
+        obj.insert("x-non-writable".into(), serde_json::json!(non_writable));
     }
 
     Json(root)
 }
 
+/// Every schema path `POST /api/config/set` would reject, so the dashboard can render those fields read-only instead of offering an edit that 403s (#6636 observation (d)).
+///
+/// The server sends the resolved verdict rather than the allowlists themselves.
+/// `is_writable_config_path` is not a lookup — it layers an exact-path list, section prefixes, a depth-2-only rule for some of those prefixes, and a suffix scrub for secret-bearing and privilege-bearing key names.
+/// Re-implementing that in TypeScript would make the SPA a third place to keep in sync with the two Rust lists, and it would drift silently: the UI would grey out the wrong fields while the write path kept its own opinion.
+///
+/// The oracle is the schema, not a serialized config, for the same reason `every_writable_allowlist_entry_has_a_backing_config_field` chose it: `config/types.rs` carries dozens of `#[serde(skip_serializing_if = …)]` attributes, so a value walk cannot see a field whose predicate holds for its default.
+///
+/// Depth mirrors what the allowlist accepts — root leaves and one nested level.
+/// A path absent from this set is treated as writable by the dashboard, which is exactly today's behaviour, so an enumeration gap degrades to the status quo rather than to a field the operator cannot edit.
+fn non_writable_schema_paths(root: &serde_json::Value) -> Vec<String> {
+    /// Name of the definition a property `$ref`s, directly or through `allOf` / `anyOf`.
+    fn referenced_definition(prop: &serde_json::Value) -> Option<&str> {
+        if let Some(r) = prop.get("$ref").and_then(|v| v.as_str()) {
+            return r.rsplit('/').next();
+        }
+        for combinator in ["allOf", "anyOf", "oneOf"] {
+            if let Some(entries) = prop.get(combinator).and_then(|v| v.as_array()) {
+                for entry in entries {
+                    if let Some(r) = entry.get("$ref").and_then(|v| v.as_str()) {
+                        return r.rsplit('/').next();
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    let definitions = root.get("definitions").and_then(|v| v.as_object());
+    let Some(properties) = root.get("properties").and_then(|v| v.as_object()) else {
+        return Vec::new();
+    };
+
+    let mut paths = Vec::new();
+    for (section, prop) in properties {
+        if !super::is_writable_config_path(section) {
+            paths.push(section.clone());
+        }
+        let Some(nested) = referenced_definition(prop)
+            .and_then(|name| definitions?.get(name))
+            .and_then(|d| d.get("properties"))
+            .and_then(|v| v.as_object())
+        else {
+            continue;
+        };
+        for field in nested.keys() {
+            let path = format!("{section}.{field}");
+            if !super::is_writable_config_path(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    paths.sort();
+    paths
+}
+
 // ---------------------------------------------------------------------------
 // Config Set endpoint
 // ---------------------------------------------------------------------------
+/// Make `item` addressable as a table, creating a standard table only when it
+/// is not already table-shaped.
+///
+/// The distinction matters because `toml_edit` models `[media]` and
+/// `media = { … }` as different `Item` variants — `Item::Table` and
+/// `Item::Value(Value::InlineTable)` — while `contains_table` / `as_table_mut`
+/// recognise only the former. The previous `if !doc.contains_table(name)` guard
+/// therefore judged a hand-written inline section "missing" and replaced it
+/// with an empty table, dropping every key it held, `api_key_env` included.
+///
+/// A caller editing one leaf of such a section would have silently deleted the
+/// rest of it — and #8085 recommends exactly those per-leaf writes as the safe
+/// route for tables carrying credential fields, which is what makes this
+/// reachable rather than theoretical.
+// Only the sqlite/file write path calls this: under `surreal-backend` the
+// toml_edit document is never built, so gate the definition to match its
+// call sites rather than silencing dead-code analysis for both builds.
+#[cfg(not(feature = "surreal-backend"))]
+fn ensure_table_like(item: &mut toml_edit::Item) {
+    if !item.is_table_like() {
+        *item = toml_edit::Item::Table(toml_edit::Table::new());
+    }
+}
+
 /// POST /api/config/set — Set a single config value and persist to config.toml.
 ///
 /// Accepts JSON `{ "path": "section.key", "value": "..." }`.
@@ -1234,253 +1474,222 @@ pub async fn config_set(
         );
     }
 
-    let config_path = state.kernel.home_dir().join("config.toml");
-    // Block path-traversal (`..`) but allow Windows drive-letter prefixes
-    if config_path.file_name().and_then(|n| n.to_str()) != Some("config.toml")
-        || config_path
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
-    {
+    // SECURITY (#8085): the path check above governs only the name being
+    // assigned. A write one level below a writable section assigns the
+    // submitted JSON wholesale, so an innocuous-looking path can carry a
+    // scrubbed field as a member of the table it replaces — the
+    // `{"path": "media.custom_stt", "value": {"api_key_env": "..."}}` shape.
+    // Scan the payload for the same key names the path check refuses, so a
+    // credential-shaped field is unreachable by either route.
+    if let Some(offending) = super::scrubbed_key_in_payload(&value) {
         return (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({"status":"error","error":"invalid config file path"})),
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "status": "error",
+                "error": format!(
+                    "value posted to '{path}' contains '{offending}', which is not \
+                     user-tunable via /api/config/set; post the other fields \
+                     individually (e.g. '{path}.<field>') and edit \
+                     '{offending}' in ~/.librefang/config.toml directly"
+                )
+            })),
         );
     }
 
+    // No basename / traversal check on `config_path`: it is the kernel's boot-resolved path, not anything the request supplied.
+    // Under `LIBREFANG_CONFIG_PATH` the operator's chosen filename is the point, so rejecting a name that is not literally `config.toml` would refuse to write the very file this daemon loaded (#6695).
+    let config_path = state.kernel.config_path().to_path_buf();
+
     // Serialize concurrent writes to prevent read-modify-write races
+    if let Some(locked) = crate::routes::guard_config_write(state.kernel.config_path()) {
+        return locked;
+    }
     let _config_guard = state.config_write_lock.lock().await;
 
-    // Phase 9 / C-005c: under surreal-backend, config_set persists to the DB
-    // config store (the `config_overrides` map) and applies the merged config
-    // via replace_config — so it works under a read-only config.toml. The
-    // sqlite-only fallback keeps the legacy config.toml write + reload path.
+    // BossFang Phase 9 / C-005c: under `surreal-backend` the edit is persisted to
+    // the SurrealDB config store (`config_overrides`) and applied via
+    // `replace_config`. config.toml is a read-only ConfigMap in the Kubernetes
+    // deployment, so the whole upstream read/mutate/backup/write path below must
+    // be skipped — not merely its reload step. Placed AFTER `guard_config_write`
+    // and the lock so the override-store read-modify-write is serialized with
+    // every other config writer.
     #[cfg(feature = "surreal-backend")]
-    let (reload_status, reload_error): (&'static str, Option<String>) = {
-        use crate::config_store_overlay::{
-            read_config_overrides, resolve_config_with_overrides, write_config_overrides,
-        };
-        let storage = state.kernel.config_ref().storage.clone();
-        let mut overrides = match read_config_overrides(&storage).await {
-            Ok(o) => o,
-            Err(e) => {
-                tracing::error!(error = %e, "read config_overrides");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"status":"error","error":"Internal server error"})),
-                );
-            }
-        };
-        if value.is_null() {
-            overrides.remove(&path);
-        } else {
-            overrides.insert(path.clone(), value.clone());
-        }
-        // Resolve config.toml ⊕ overrides and validate (schema + business)
-        // BEFORE persisting, so an invalid edit returns 400 without writing.
-        let (mut merged, raw) = match resolve_config_with_overrides(&config_path, &overrides) {
-            Ok(r) => r,
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(
-                        serde_json::json!({"status":"error","error":format!("invalid config after edit: {e}")}),
-                    ),
-                )
-            }
-        };
-        merged.clamp_bounds();
-        if let Err(errors) = validate_config_for_reload(&merged) {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(
-                    serde_json::json!({"status":"error","error":format!("invalid config: {}", errors.join("; "))}),
-                ),
-            );
-        }
-        if let Err(e) = write_config_overrides(&storage, &overrides).await {
-            tracing::error!(error = %e, "write config_overrides");
+    return config_set_surreal(&state, &path, &value, &config_path, api_user.as_ref()).await;
+
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+    // Read existing config — use toml_edit to preserve comments and formatting.
+    // A read failure on an existing file (permission denied, hardware fault,
+    // …) MUST abort — falling back to "" would silently drop every other
+    // section in `config.toml` (agents, providers, taint rules, …) on the
+    // next write. Same protection as `users::persist_users` (#3368).
+    let raw_content = match tokio::fs::read_to_string(&config_path).await {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            // Scrub the io error (audit: rusqlite-errors-leak) —
+            // path / permission detail stays in the log.
+            tracing::error!(%error, "could not read existing config.toml");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"status":"error","error":"Internal server error"})),
+                Json(serde_json::json!({
+                    "status": "error",
+                    "error": "Internal server error"
+                })),
             );
         }
-        match state.kernel.replace_config(merged, raw).await {
-            Ok(plan) => (
-                if plan.restart_required {
-                    "applied_partial"
-                } else {
-                    "applied"
-                },
-                None,
-            ),
-            Err(e) => {
-                tracing::warn!(error = %e, %path, "config replace failed after override write");
-                ("saved_reload_failed", Some(e))
-            }
+    };
+    // Parse failure means the on-disk file is already corrupt — refuse to
+    // write rather than overwriting with an empty document, which would
+    // clobber every other section the operator is hand-editing (#3368).
+    let mut doc: toml_edit::DocumentMut = match raw_content.parse() {
+        Ok(d) => d,
+        Err(e) => {
+            return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "error": format!(
+                        "config.toml has a syntax error and cannot be safely edited \
+                         from the dashboard. Fix the file manually first: {e}"
+                    )
+                })),
+            );
         }
     };
 
-    #[cfg(not(feature = "surreal-backend"))]
-    let (reload_status, reload_error): (&'static str, Option<String>) = {
-        // Read existing config — use toml_edit to preserve comments and formatting.
-        // A read failure on an existing file (permission denied, hardware fault,
-        // …) MUST abort — falling back to "" would silently drop every other
-        // section in `config.toml` (agents, providers, taint rules, …) on the
-        // next write. Same protection as `users::persist_users` (#3368).
-        let raw_content = if config_path.exists() {
-            match std::fs::read_to_string(&config_path) {
-                Ok(s) => s,
-                Err(e) => {
-                    // Scrub the io error (audit: rusqlite-errors-leak) —
-                    // path / permission detail stays in the log.
-                    tracing::error!(error = %e, "could not read existing config.toml");
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({
-                            "status": "error",
-                            "error": "Internal server error"
-                        })),
-                    );
-                }
+    // null → remove key instead of writing empty string
+    let is_remove = value.is_null();
+
+    // Parse "section.key" path and set/remove value
+    let parts: Vec<&str> = path.split('.').collect();
+    match parts.len() {
+        1 => {
+            if is_remove {
+                doc.remove(parts[0]);
+            } else {
+                doc[parts[0]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
             }
-        } else {
-            String::new()
-        };
-        // Parse failure means the on-disk file is already corrupt — refuse to
-        // write rather than overwriting with an empty document, which would
-        // clobber every other section the operator is hand-editing (#3368).
-        let mut doc: toml_edit::DocumentMut = match raw_content.parse() {
-            Ok(d) => d,
+        }
+        2 => {
+            if is_remove {
+                // `as_table_like_mut` rather than `as_table_mut`: a section an
+                // operator hand-wrote as an inline table (`media = { … }`) is
+                // `Item::Value(InlineTable)`, not `Item::Table`, and the
+                // narrower accessor returns `None` — so the removal silently
+                // did nothing while the handler still answered success.
+                if let Some(t) = doc[parts[0]].as_table_like_mut() {
+                    t.remove(parts[1]);
+                }
+            } else {
+                ensure_table_like(&mut doc[parts[0]]);
+                doc[parts[0]][parts[1]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
+            }
+        }
+        3 => {
+            if is_remove {
+                if let Some(t) = doc[parts[0]].as_table_like_mut() {
+                    if let Some(t2) = t.get_mut(parts[1]).and_then(|i| i.as_table_like_mut()) {
+                        t2.remove(parts[2]);
+                    }
+                }
+            } else {
+                ensure_table_like(&mut doc[parts[0]]);
+                if let Some(section) = doc[parts[0]].as_table_like_mut() {
+                    if !section.get(parts[1]).is_some_and(|i| i.is_table_like()) {
+                        section.insert(parts[1], toml_edit::Item::Table(toml_edit::Table::new()));
+                    }
+                }
+                doc[parts[0]][parts[1]][parts[2]] =
+                    toml_edit::Item::Value(json_to_toml_edit_value(&value));
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(
+                    serde_json::json!({"status": "error", "error": "path too deep (max 3 levels)"}),
+                ),
+            );
+        }
+    }
+
+    // Validate by parsing the result as KernelConfig before writing.
+    // This is the *schema* check (types deserialize cleanly), not the
+    // *business* check (e.g. cross-field invariants).
+    let new_toml_str = doc.to_string();
+    let mut parsed_config =
+        match toml::from_str::<librefang_types::config::KernelConfig>(&new_toml_str) {
+            Ok(cfg) => cfg,
             Err(e) => {
                 return (
-                    StatusCode::CONFLICT,
+                    StatusCode::BAD_REQUEST,
                     Json(serde_json::json!({
                         "status": "error",
-                        "error": format!(
-                            "config.toml has a syntax error and cannot be safely edited \
-                             from the dashboard. Fix the file manually first: {e}"
-                        )
+                        "error": format!("invalid config after edit: {e}")
                     })),
                 );
             }
         };
 
-        // null → remove key instead of writing empty string
-        let is_remove = value.is_null();
+    // Business-level validation BEFORE writing to disk. Without this
+    // check, edits like `network_enabled = true` (without setting
+    // `shared_secret`) would persist a definitely-broken config to disk
+    // and only fail at the post-write reload step, leaving the user
+    // with a `saved_reload_failed` status and a TOML file that will
+    // also fail the next daemon startup. Apply clamp_bounds first to
+    // mirror the reload-side preprocessing — otherwise a user-set
+    // out-of-range value would be flagged here even though reload
+    // would silently fix it.
+    parsed_config.clamp_bounds();
+    if let Err(errors) = validate_config_for_reload(&parsed_config) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "status": "error",
+                "error": format!("invalid config: {}", errors.join("; "))
+            })),
+        );
+    }
 
-        // Parse "section.key" path and set/remove value
-        let parts: Vec<&str> = path.split('.').collect();
-        match parts.len() {
-            1 => {
-                if is_remove {
-                    doc.remove(parts[0]);
-                } else {
-                    doc[parts[0]] = toml_edit::Item::Value(json_to_toml_edit_value(&value));
-                }
-            }
-            2 => {
-                if is_remove {
-                    if let Some(t) = doc[parts[0]].as_table_mut() {
-                        t.remove(parts[1]);
-                    }
-                } else {
-                    if !doc.contains_table(parts[0]) {
-                        doc[parts[0]] = toml_edit::Item::Table(toml_edit::Table::new());
-                    }
-                    doc[parts[0]][parts[1]] =
-                        toml_edit::Item::Value(json_to_toml_edit_value(&value));
-                }
-            }
-            3 => {
-                if is_remove {
-                    if let Some(t) = doc[parts[0]].as_table_mut() {
-                        if let Some(t2) = t.get_mut(parts[1]).and_then(|i| i.as_table_mut()) {
-                            t2.remove(parts[2]);
-                        }
-                    }
-                } else {
-                    if !doc.contains_table(parts[0]) {
-                        doc[parts[0]] = toml_edit::Item::Table(toml_edit::Table::new());
-                    }
-                    if !doc[parts[0]]
-                        .as_table()
-                        .is_some_and(|t| t.contains_table(parts[1]))
-                    {
-                        doc[parts[0]][parts[1]] = toml_edit::Item::Table(toml_edit::Table::new());
-                    }
-                    doc[parts[0]][parts[1]][parts[2]] =
-                        toml_edit::Item::Value(json_to_toml_edit_value(&value));
-                }
-            }
-            _ => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(
-                        serde_json::json!({"status": "error", "error": "path too deep (max 3 levels)"}),
-                    ),
-                );
+    // Backup under backups/ before write (single rolling copy).
+    if let Some(home_dir) = config_path.parent() {
+        let backups_dir = home_dir.join("backups");
+        if tokio::fs::create_dir_all(&backups_dir).await.is_ok() {
+            match tokio::fs::copy(&config_path, backups_dir.join("config.toml.prev")).await {
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => tracing::warn!(%error, "failed to back up config.toml"),
             }
         }
+    }
 
-        // Validate by parsing the result as KernelConfig before writing.
-        // This is the *schema* check (types deserialize cleanly), not the
-        // *business* check (e.g. cross-field invariants).
-        let new_toml_str = doc.to_string();
-        let mut parsed_config =
-            match toml::from_str::<librefang_types::config::KernelConfig>(&new_toml_str) {
-                Ok(cfg) => cfg,
-                Err(e) => {
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(serde_json::json!({
-                            "status": "error",
-                            "error": format!("invalid config after edit: {e}")
-                        })),
-                    );
-                }
-            };
-
-        // Business-level validation BEFORE writing to disk. Without this
-        // check, edits like `network_enabled = true` (without setting
-        // `shared_secret`) would persist a definitely-broken config to disk
-        // and only fail at the post-write reload step, leaving the user
-        // with a `saved_reload_failed` status and a TOML file that will
-        // also fail the next daemon startup. Apply clamp_bounds first to
-        // mirror the reload-side preprocessing — otherwise a user-set
-        // out-of-range value would be flagged here even though reload
-        // would silently fix it.
-        parsed_config.clamp_bounds();
-        if let Err(errors) = validate_config_for_reload(&parsed_config) {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "status": "error",
-                    "error": format!("invalid config: {}", errors.join("; "))
-                })),
-            );
-        }
-
-        // Backup under backups/ before write (single rolling copy).
-        if config_path.exists() {
-            if let Some(home_dir) = config_path.parent() {
-                let backups_dir = home_dir.join("backups");
-                if std::fs::create_dir_all(&backups_dir).is_ok() {
-                    let _ = std::fs::copy(&config_path, backups_dir.join("config.toml.prev"));
-                }
-            }
-        }
-
-        // Write back — preserves comments, whitespace, and key ordering
-        if let Err(e) = crate::atomic_write(&config_path, new_toml_str.as_bytes()) {
+    // Write back — preserves comments, whitespace, and key ordering
+    let write_path = config_path.clone();
+    let write_bytes = new_toml_str.into_bytes();
+    let write_result =
+        tokio::task::spawn_blocking(move || crate::atomic_write(&write_path, &write_bytes)).await;
+    match write_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
             // Scrub the io error (audit: rusqlite-errors-leak).
-            tracing::error!(error = %e, "failed to write config.toml");
+            tracing::error!(%error, "failed to write config.toml");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
             );
         }
+        Err(error) => {
+            tracing::error!(%error, "config write task failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status": "error", "error": "Internal server error"})),
+            );
+        }
+    }
 
-        // Trigger reload
+    // Trigger reload
+    let (reload_status, reload_error): (&'static str, Option<String>) =
         match state.kernel.reload_config().await {
             Ok(plan) => {
                 let s = if plan.restart_required {
@@ -1503,15 +1712,14 @@ pub async fn config_set(
                 tracing::warn!(error = %e, %path, "config reload failed after write");
                 ("saved_reload_failed", Some(e))
             }
-        }
-    };
+        };
 
     let user_id = api_user.as_ref().map(|u| u.0.user_id);
     state.kernel.audit().record_with_context(
         "system",
         librefang_kernel::audit::AuditAction::ConfigChange,
         format!("config set: {path}"),
-        "completed",
+        reload_status,
         user_id,
         Some("api".to_string()),
     );
@@ -1521,6 +1729,119 @@ pub async fn config_set(
         body["reload_error"] = serde_json::Value::String(err);
     }
     (StatusCode::OK, Json(body))
+    }
+}
+
+/// SurrealDB-backed `config_set` (BossFang, phase-9 C-005c).
+///
+/// Writes the edit into the `config_overrides` map and applies the resolved
+/// config with `replace_config`, leaving `config.toml` untouched. Reproduces the
+/// audit record and response body of the file path, because the caller returns
+/// early and never reaches that shared tail.
+#[cfg(feature = "surreal-backend")]
+async fn config_set_surreal(
+    state: &Arc<AppState>,
+    path: &str,
+    value: &serde_json::Value,
+    config_path: &std::path::Path,
+    api_user: Option<&axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::config_store_overlay::{
+        read_config_overrides, resolve_config_with_overrides, write_config_overrides,
+    };
+
+    let storage = state.kernel.config_ref().storage.clone();
+    let mut overrides = match read_config_overrides(&storage).await {
+        Ok(o) => o,
+        Err(e) => {
+            tracing::error!(error = %e, "read config_overrides");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"status":"error","error":"Internal server error"})),
+            );
+        }
+    };
+    if value.is_null() {
+        overrides.remove(path);
+    } else {
+        overrides.insert(path.to_string(), value.clone());
+    }
+
+    // Resolve config.toml + overrides and validate (schema, then business rules)
+    // BEFORE persisting, so an invalid edit returns 400 having written nothing.
+    let (mut merged, raw) = match resolve_config_with_overrides(config_path, &overrides) {
+        Ok(r) => r,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"status":"error","error":format!("invalid config after edit: {e}")})),
+            );
+        }
+    };
+    merged.clamp_bounds();
+    if let Err(errors) = validate_config_for_reload(&merged) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"status":"error","error":format!("invalid config: {}", errors.join("; "))})),
+        );
+    }
+    if let Err(e) = write_config_overrides(&storage, &overrides).await {
+        tracing::error!(error = %e, "write config_overrides");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"status":"error","error":"Internal server error"})),
+        );
+    }
+
+    let (reload_status, reload_error): (&'static str, Option<String>) =
+        match state.kernel.replace_config(merged, raw).await {
+            Ok(plan) => (
+                if plan.restart_required {
+                    "applied_partial"
+                } else {
+                    "applied"
+                },
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, %path, "config replace failed after override write");
+                ("saved_reload_failed", Some(e))
+            }
+        };
+
+    let user_id = api_user.map(|u| u.0.user_id);
+    state.kernel.audit().record_with_context(
+        "system",
+        librefang_kernel::audit::AuditAction::ConfigChange,
+        format!("config set: {path}"),
+        reload_status,
+        user_id,
+        Some("api".to_string()),
+    );
+
+    let mut body = serde_json::json!({"status": reload_status, "path": path});
+    if let Some(err) = reload_error {
+        body["reload_error"] = serde_json::Value::String(err);
+    }
+    (StatusCode::OK, Json(body))
+}
+
+#[cfg(test)]
+mod config_reload_outcome_tests {
+    use super::config_reload_status;
+
+    #[test]
+    fn channel_restart_failure_forces_partial_reload_status() {
+        assert_eq!(config_reload_status(false, true, true), "partial");
+        assert_eq!(config_reload_status(false, false, true), "partial");
+    }
+
+    #[test]
+    fn reload_status_preserves_existing_success_states() {
+        assert_eq!(config_reload_status(true, true, false), "partial");
+        assert_eq!(config_reload_status(false, true, false), "applied");
+        assert_eq!(config_reload_status(false, false, false), "no_changes");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1650,6 +1971,41 @@ mod config_read_write_parity_tests {
         }
     }
 
+    #[test]
+    fn pairing_ntfy_url_hides_embedded_credentials() {
+        let mut config = KernelConfig::default();
+        config.pairing.ntfy_url =
+            Some("https://notify-user:notify-password@ntfy.example.test/topic".to_string());
+
+        let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+        let rendered = lookup(&payload, "pairing.ntfy_url")
+            .and_then(|value| value.as_str())
+            .expect("configured ntfy URL remains visible in redacted form");
+
+        assert_eq!(rendered, "https://***@ntfy.example.test/topic");
+        assert!(!rendered.contains("notify-user"));
+        assert!(!rendered.contains("notify-password"));
+    }
+
+    #[test]
+    fn pairing_ntfy_url_preserves_at_signs_outside_the_authority() {
+        for url in [
+            "https://ntfy.example.test/topic@tenant",
+            "https://ntfy.example.test/topic?contact=ops@example.test",
+            "https://ntfy.example.test/topic#owner@tenant",
+        ] {
+            let mut config = KernelConfig::default();
+            config.pairing.ntfy_url = Some(url.to_string());
+
+            let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+            let rendered = lookup(&payload, "pairing.ntfy_url")
+                .and_then(|value| value.as_str())
+                .expect("configured ntfy URL remains visible");
+
+            assert_eq!(rendered, url);
+        }
+    }
+
     /// The specific paths the #6596 report listed as writable-but-unreadable, pinned by name so a regression names the issue rather than surfacing as one entry in the bulk diff above.
     #[test]
     fn reported_missing_paths_are_present() {
@@ -1661,6 +2017,8 @@ mod config_read_write_parity_tests {
             "browser.cdp_endpoint",
             "media.image_model",
             "media.custom_stt",
+            "media.transcription_timeout_secs",
+            "media.ffmpeg_timeout_secs",
             "tts.custom",
             "channels.file_download_dir",
             "terminal.enabled",
@@ -1671,6 +2029,349 @@ mod config_read_write_parity_tests {
             assert!(
                 lookup(&payload, path).is_some(),
                 "`{path}` was reported missing from GET /api/config in #6596"
+            );
+        }
+    }
+
+    /// `tool_exec.default_timeout_secs` (#8171), pinned by hand because the bulk guard is structurally blind to it.
+    ///
+    /// `every_writable_config_leaf_is_readable` derives its candidates from `serde_json::to_value(&config)`, and this field is `Option<u64>` with `#[serde(skip_serializing_if = "Option::is_none")]` and a `None` default — so it is absent from the serialized value and filtered out before `is_writable_config_path` is ever consulted, exactly the blind spot that test's own doc-comment names.
+    /// A writable-but-unreadable field is the #6596 class: the dashboard reads it with `getNestedValue`, an absent key renders as "not configured", and the operator's save appears to have been discarded even though it returned `200 OK`.
+    #[test]
+    fn tool_exec_default_timeout_is_readable_both_unset_and_configured() {
+        let config = KernelConfig::default();
+        assert_eq!(
+            config.tool_exec.default_timeout_secs, None,
+            "this test is only meaningful while the field defaults to None"
+        );
+        let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+        assert_eq!(
+            lookup(&payload, "tool_exec.default_timeout_secs"),
+            Some(&serde_json::Value::Null),
+            "an unset writable field must still be reported, as null — omitting it is \
+             indistinguishable from the section not existing"
+        );
+
+        let mut config = KernelConfig::default();
+        config.tool_exec.default_timeout_secs = Some(300);
+        let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+        assert_eq!(
+            lookup(&payload, "tool_exec.default_timeout_secs").and_then(serde_json::Value::as_u64),
+            Some(300),
+            "a saved value must read back"
+        );
+    }
+
+    /// #6605: fields that are intentionally NOT writable but must still be readable.
+    ///
+    /// `every_writable_config_leaf_is_readable` enforces `writable ⊆ readable`, so it is blind to this direction by construction — a field deliberately excluded from the write allowlist sits outside that invariant.
+    /// `external_auth.require_email_verified` is the #3703 mitigation, and an operator who cannot read it back has no way to confirm the protection is active short of reading `config.toml` on the host.
+    /// The `OidcProvider` endpoint fields have the same problem: with them hidden, a non-OIDC provider's explicit endpoint overrides were invisible.
+    #[test]
+    fn non_writable_but_operator_visible_fields_are_readable() {
+        let mut config = config_with_optional_sections_populated();
+        // Deliberately the non-default value: `require_email_verified` defaults to `true`, so asserting `true` would also pass against a hardcoded literal in the response builder.
+        config.external_auth.require_email_verified = false;
+        config.external_auth.providers.push(oidc_provider_fixture());
+        let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+
+        assert_eq!(
+            lookup(&payload, "external_auth.require_email_verified").and_then(|v| v.as_bool()),
+            Some(false),
+            "the #3703 email-verification gate must be readable, and read from config, even though \
+             it is deliberately non-writable (#6605)"
+        );
+
+        let provider = lookup(&payload, "external_auth.providers")
+            .and_then(|v| v.as_array())
+            .and_then(|providers| providers.first())
+            .and_then(|p| p.as_object())
+            .expect("the configured provider is rendered as an object");
+        for key in [
+            "id",
+            "display_name",
+            "issuer_url",
+            "auth_url",
+            "token_url",
+            "userinfo_url",
+            "jwks_uri",
+            "client_id",
+            "client_secret_env",
+            "redirect_url",
+            "scopes",
+            "allowed_domains",
+            "audience",
+            "require_email_verified",
+        ] {
+            // Presence is not enough: a response builder that emits the key but drops the value renders `"jwks_uri": null`, which a `contains_key` check accepts.
+            // The fixture populates all 14 fields, so a null here is always a dropped field.
+            // Exact values are pinned by the `get_config_exposes_non_writable_external_auth_fields` integration test rather than duplicated here.
+            assert!(
+                provider.get(key).is_some_and(|v| !v.is_null()),
+                "`external_auth.providers[].{key}` is missing or null in GET /api/config — every \
+                 `OidcProvider` field is non-secret, is set by the fixture, and must be visible \
+                 (#6605); got {provider:#?}"
+            );
+        }
+    }
+
+    /// #6636 observation (e): every `ApprovalPolicy` field must be readable.
+    ///
+    /// The `approval` section declares no explicit `fields` list in `ui_sections_overlay`, so `ConfigPage` renders a control for whatever the derived schema says the struct has — but the response builder enumerated seven of fourteen fields by hand, and the rest rendered blank and read back as their JSON zero value.
+    /// `cache_approvals_per_session` made it visible: it defaults to `true`, so the dashboard showed it off for every operator who had never touched it, including one whose `config.toml` said `true`.
+    /// Only three approval paths are writable, so `every_writable_config_leaf_is_readable` covers three of fourteen and is blind to the rest by construction.
+    ///
+    /// The oracle is the serialized struct rather than a restated list, so a field added to `ApprovalPolicy` later fails here instead of quietly joining the gap.
+    /// The fixture sets non-default values so a response builder that emits the key with a hardcoded literal cannot pass.
+    #[test]
+    fn approval_policy_fields_are_all_readable() {
+        use librefang_types::approval::{ChannelToolRule, NotificationTarget};
+
+        let mut config = config_with_optional_sections_populated();
+        config.approval.cache_approvals_per_session = false;
+        config.approval.audit_retention_days = 7;
+        config.approval.trusted_senders = vec!["operator-1".into()];
+        config.approval.totp_tools = vec!["shell_exec".into()];
+        config.approval.timeout_fallback = librefang_types::approval::TimeoutFallback::Escalate {
+            extra_timeout_secs: 45,
+        };
+        config.approval.channel_rules = vec![ChannelToolRule {
+            channel: "telegram".into(),
+            allowed_tools: vec!["file_read".into()],
+            denied_tools: vec!["shell_exec".into()],
+        }];
+        config.approval.routing = vec![librefang_types::approval::ApprovalRoutingRule {
+            tool_pattern: "shell_*".into(),
+            route_to: vec![NotificationTarget {
+                channel_type: "telegram".into(),
+                recipient: "12345".into(),
+                thread_id: None,
+            }],
+        }];
+
+        let payload = super::redacted_config_json(&config, &BudgetConfig::default());
+        let serialized =
+            serde_json::to_value(&config.approval).expect("ApprovalPolicy derives Serialize");
+        let expected = serialized
+            .as_object()
+            .expect("ApprovalPolicy serializes to an object");
+
+        // Sanity floor: a refactor that empties the oracle would make the loop below pass vacuously.
+        assert!(
+            expected.len() >= 14,
+            "the ApprovalPolicy oracle enumerated only {} fields — the walk is broken, not the config",
+            expected.len()
+        );
+
+        let mut missing: Vec<&String> = Vec::new();
+        let mut mismatched: Vec<String> = Vec::new();
+        for (key, want) in expected {
+            match lookup(&payload, &format!("approval.{key}")) {
+                None => missing.push(key),
+                Some(got) if got != want => {
+                    mismatched.push(format!("approval.{key}: want {want}, got {got}"))
+                }
+                Some(_) => {}
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "GET /api/config omits these ApprovalPolicy fields, so the dashboard renders each one \
+             blank and reads it back as its zero value (#6636). Add them to `redacted_config_json`: \
+             {missing:#?}"
+        );
+        assert!(
+            mismatched.is_empty(),
+            "these ApprovalPolicy fields are emitted but do not carry the configured value: \
+             {mismatched:#?}"
+        );
+    }
+
+    /// One fully-populated provider.
+    /// `OidcProvider` derives no `Default`, so every field is spelled out; distinct values make it obvious in a failure which field a payload dropped.
+    fn oidc_provider_fixture() -> librefang_types::config::OidcProvider {
+        librefang_types::config::OidcProvider {
+            id: "corp".into(),
+            display_name: "Corporate SSO".into(),
+            issuer_url: "https://issuer.example.invalid".into(),
+            auth_url: "https://issuer.example.invalid/authorize".into(),
+            token_url: "https://issuer.example.invalid/token".into(),
+            userinfo_url: "https://issuer.example.invalid/userinfo".into(),
+            jwks_uri: "https://issuer.example.invalid/jwks".into(),
+            client_id: "corp-client".into(),
+            client_secret_env: "LIBREFANG_PARITY_GUARD_FIXTURE_SECRET".into(),
+            redirect_url: "http://127.0.0.1:4545/api/auth/callback".into(),
+            scopes: vec!["openid".into()],
+            allowed_domains: vec!["example.invalid".into()],
+            audience: "corp-audience".into(),
+            require_email_verified: Some(false),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Writable-allowlist backing-field guard (#6605)
+// ---------------------------------------------------------------------------
+
+/// Guards the mirror of the parity invariant above: every entry in the `POST /api/config/set` allowlist must name a field that actually exists on `KernelConfig`.
+///
+/// `config_set` validates the caller's dotted path against `is_writable_config_path` and then edits `config.toml` through `toml_edit` keyed by that path.
+/// Nothing between those two steps requires the path to correspond to a real field, and the post-edit `toml::from_str::<KernelConfig>` check cannot reject one either because `KernelConfig` does not set `deny_unknown_fields`.
+/// So a write against a path with no backing field is accepted, lands a table on disk, and is discarded by the next load: the caller gets a success status for a change that is never applied and never reads back.
+/// `ui.theme`, `ui.locale`, `ui.timezone`, and `ui.language` sat in the allowlist in exactly that state from #4113 until #6605 removed them.
+///
+/// `every_writable_config_leaf_is_readable` cannot catch this class: it derives its candidate paths *from* a serialized config, so a path naming a field that does not exist is structurally invisible to it.
+///
+/// The oracle here is the schemars-derived JSON Schema rather than a serialized `KernelConfig` value.
+/// A value walk cannot see a field whose `#[serde(skip_serializing_if = …)]` predicate holds for its default value, and `librefang-types/src/config/types.rs` carries 63 of those attributes — several on writable paths (`exec_policy.allowed_env_vars`, `budget.providers`, `tool_invoke.allowlist`, …) — so a value-based oracle would report real fields as dangling.
+/// The schema declares every field regardless of that attribute.
+#[cfg(test)]
+mod writable_allowlist_backing_field_tests {
+    /// Maximum `$ref` / combinator hops before the resolver gives up.
+    /// Descending through `properties` consumes a path segment, so only a `$ref` chain can recurse without making progress; schemars does not emit one that cycles, and the cap keeps a future schema shape from turning this test into a stack overflow.
+    const MAX_SCHEMA_DEPTH: usize = 32;
+
+    /// Does `segments` resolve to a field declared by the draft-07 schema rooted at `node`?
+    ///
+    /// Follows `$ref` into `definitions`.
+    /// Treats `allOf` / `anyOf` / `oneOf` as "any branch that resolves counts": schemars renders a struct-typed field as `allOf: [{$ref}]`, an `Option<T>` as `anyOf: [{$ref}, {"type": "null"}]`, and a `OneOrMany<T>` as a `T` / `[T]` branch pair, so the branch that matches is the one that answers the question.
+    /// `additionalProperties` consumes one segment: a map-typed section (`provider_urls`, `tool_timeouts`, …) has dynamic keys by design, and an allowlist entry addressing one is correct rather than dangling.
+    /// Everything else — including a dotted segment against an array or a scalar — is not a declared field.
+    fn schema_declares_path(
+        definitions: &serde_json::Map<String, serde_json::Value>,
+        node: &serde_json::Value,
+        segments: &[&str],
+        depth: usize,
+    ) -> bool {
+        if segments.is_empty() {
+            return true;
+        }
+        if depth >= MAX_SCHEMA_DEPTH {
+            return false;
+        }
+        let Some(obj) = node.as_object() else {
+            return false;
+        };
+        if let Some(reference) = obj.get("$ref").and_then(|v| v.as_str()) {
+            let name = reference.rsplit('/').next().unwrap_or_default();
+            return definitions.get(name).is_some_and(|target| {
+                schema_declares_path(definitions, target, segments, depth + 1)
+            });
+        }
+        for combinator in ["allOf", "anyOf", "oneOf"] {
+            let branch_resolves =
+                obj.get(combinator)
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|branches| {
+                        branches.iter().any(|branch| {
+                            schema_declares_path(definitions, branch, segments, depth + 1)
+                        })
+                    });
+            if branch_resolves {
+                return true;
+            }
+        }
+        if let Some(child) = obj
+            .get("properties")
+            .and_then(|v| v.as_object())
+            .and_then(|properties| properties.get(segments[0]))
+        {
+            return schema_declares_path(definitions, child, &segments[1..], depth + 1);
+        }
+        // `additionalProperties: true` is a bool rather than a subschema — it means "anything goes", which is not a field declaration.
+        if let Some(values) = obj.get("additionalProperties").filter(|v| v.is_object()) {
+            return schema_declares_path(definitions, values, &segments[1..], depth + 1);
+        }
+        false
+    }
+
+    fn declares(
+        definitions: &serde_json::Map<String, serde_json::Value>,
+        schema: &serde_json::Value,
+        path: &str,
+    ) -> bool {
+        let segments: Vec<&str> = path.split('.').collect();
+        schema_declares_path(definitions, schema, &segments, 0)
+    }
+
+    #[test]
+    fn every_writable_allowlist_entry_has_a_backing_config_field() {
+        let schema =
+            serde_json::to_value(schemars::schema_for!(librefang_types::config::KernelConfig))
+                .expect("KernelConfig derives JsonSchema");
+        let definitions = schema
+            .get("definitions")
+            .and_then(|v| v.as_object())
+            .cloned()
+            .unwrap_or_default();
+
+        // A schemars upgrade to draft 2020-12 renames this block to `$defs`, which would leave every `$ref` dangling and report all ~90 entries as missing at once.
+        // Fail on the shape change directly so the cause is legible instead of inferred from the fallout.
+        assert!(
+            !definitions.is_empty(),
+            "the KernelConfig schema has no `definitions` block, so the resolver cannot follow a \
+             single `$ref` and its verdicts are meaningless (draft 2020-12 names it `$defs`)"
+        );
+
+        // Sanity floor, same purpose as the one in `every_writable_config_leaf_is_readable`: an assertion over an accidentally-empty enumeration passes vacuously.
+        let entry_count = super::super::WRITABLE_EXACT_PATHS.len()
+            + super::super::WRITABLE_SECTION_PREFIXES.len();
+        assert!(
+            entry_count > 50,
+            "the allowlist enumerated only {entry_count} entries — the lists shrank drastically or \
+             moved, so this guard is no longer checking the real write surface (expected 80+)"
+        );
+
+        // Negative controls.
+        // The failure mode of a resolver is over-permissiveness: one stray fallback, or a schema shape it walks past instead of rejecting, turns the guard into a no-op that still passes.
+        // `ui.theme` is the exact path #6605 removed, which also ties this guard to the defect it exists for.
+        for absent in [
+            "ui.theme",
+            "ui",
+            "nonexistent_section.nonexistent_field",
+            "log_level.nested_under_a_scalar",
+        ] {
+            assert!(
+                !declares(&definitions, &schema, absent),
+                "the resolver claims `{absent}` is a declared `KernelConfig` field — it is not, so \
+                 it cannot discriminate and the guard below is worthless"
+            );
+        }
+
+        let mut dangling: Vec<String> = Vec::new();
+        for &path in super::super::WRITABLE_EXACT_PATHS {
+            if !declares(&definitions, &schema, path) {
+                dangling.push(path.to_string());
+            }
+        }
+        // A section prefix is checked at its base.
+        // The prefix admits arbitrary leaves beneath it, so "this section exists" is the strongest claim available without enumerating what a caller might post — the leaf itself is only reachable at request time.
+        for &prefix in super::super::WRITABLE_SECTION_PREFIXES {
+            if !declares(&definitions, &schema, prefix.trim_end_matches('.')) {
+                dangling.push(prefix.to_string());
+            }
+        }
+        dangling.sort();
+
+        assert!(
+            dangling.is_empty(),
+            "these `POST /api/config/set` allowlist entries name no field on `KernelConfig`, so a \
+             write against one is accepted, lands in config.toml, and is silently discarded by the \
+             next load — a success status for a no-op (#6605). Add the backing field or drop the \
+             entry: {dangling:#?}"
+        );
+    }
+
+    /// `WRITABLE_DEPTH_2_ONLY_PREFIXES` is only consulted from inside the `WRITABLE_SECTION_PREFIXES` loop, so an entry missing from the latter restricts nothing at all.
+    /// Same defect shape as a dangling path: a rule that reads as a restriction but has no effect.
+    #[test]
+    fn every_depth_2_only_prefix_is_also_a_section_prefix() {
+        for &prefix in super::super::WRITABLE_DEPTH_2_ONLY_PREFIXES {
+            assert!(
+                super::super::WRITABLE_SECTION_PREFIXES.contains(&prefix),
+                "`{prefix}` restricts writes to depth 2 but is not a writable section prefix, so \
+                 the restriction is never reached"
             );
         }
     }

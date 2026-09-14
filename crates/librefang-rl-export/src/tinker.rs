@@ -34,8 +34,8 @@
 //! module should switch to it; until then the telemetry-event path is
 //! what the upstream actually accepts. See the PR body for sign-off.
 //!
-//! All HTTP traffic flows through `librefang_http::proxied_client()` so
-//! the operator's `[proxy]` config and TLS fallback apply uniformly.
+//! HTTP clients inherit LibreFang's TLS, timeout, and user-agent settings,
+//! but disable redirects and proxies so validated DNS addresses stay pinned.
 
 use base64::Engine;
 use chrono::Utc;
@@ -62,6 +62,9 @@ const LIBREFANG_SDK_VERSION: &str = concat!("librefang-rl-export/", env!("CARGO_
 /// Platform string sent in the telemetry envelope. Low-cardinality on
 /// purpose — Tinker's telemetry schema treats `platform` as a label.
 const LIBREFANG_PLATFORM: &str = "librefang";
+
+/// Header used by Tinker's generated SDK to deduplicate retried writes.
+const TINKER_IDEMPOTENCY_HEADER: &str = "x-idempotency-key";
 
 /// Wire shape of the Tinker "create session" request body. Matches the
 /// Stainless-generated SDK's `CreateSessionRequest` (tags, user_metadata,
@@ -112,29 +115,7 @@ struct TelemetrySendRequest<'a> {
     session_id: &'a str,
 }
 
-/// Export a trajectory to Tinker. Internal entry point; the public
-/// `crate::export` dispatch matches on `ExportTarget::Tinker` and calls
-/// in here.
-pub(crate) async fn export_to_tinker(
-    project: &str,
-    api_key: &str,
-    base_url_override: Option<&str>,
-    export: RlTrajectoryExport,
-) -> Result<ExportReceipt, ExportError> {
-    let base = base_url_override.unwrap_or(DEFAULT_TINKER_BASE);
-    export_to_tinker_with_base(base, project, api_key, export).await
-}
-
-/// Same as `export_to_tinker` but with a caller-supplied base URL.
-/// Exposed at `pub(crate)` so the in-crate wiremock tests can point at
-/// a `MockServer::uri()`; production callers go through the public
-/// `crate::export` surface.
-pub(crate) async fn export_to_tinker_with_base(
-    base: &str,
-    project: &str,
-    api_key: &str,
-    export: RlTrajectoryExport,
-) -> Result<ExportReceipt, ExportError> {
+pub(crate) fn validate_config(project: &str, api_key: &str) -> Result<(), ExportError> {
     if api_key.is_empty() {
         return Err(ExportError::InvalidConfig(
             "Tinker api_key is empty".to_string(),
@@ -145,6 +126,53 @@ pub(crate) async fn export_to_tinker_with_base(
             "Tinker project is empty".to_string(),
         ));
     }
+    Ok(())
+}
+
+/// Export a trajectory to Tinker. Internal entry point; the public
+/// `crate::export` dispatch matches on `ExportTarget::Tinker` and calls
+/// in here.
+pub(crate) async fn export_to_tinker(
+    project: &str,
+    api_key: &str,
+    base_url_override: Option<&str>,
+    client: reqwest::Client,
+    export: RlTrajectoryExport,
+) -> Result<ExportReceipt, ExportError> {
+    let base = base_url_override.unwrap_or(DEFAULT_TINKER_BASE);
+    export_to_tinker_with_client(base, project, api_key, client, export).await
+}
+
+/// Same as `export_to_tinker` but with a caller-supplied base URL.
+/// Exposed at `pub(crate)` so the in-crate wiremock tests can point at
+/// a `MockServer::uri()`; production callers go through the public
+/// `crate::export` surface.
+#[cfg(test)]
+pub(crate) async fn export_to_tinker_with_base(
+    base: &str,
+    project: &str,
+    api_key: &str,
+    export: RlTrajectoryExport,
+) -> Result<ExportReceipt, ExportError> {
+    let resolution = crate::ssrf::ResolvedEgress {
+        hostname: None,
+        addresses: Vec::new(),
+    };
+    let client = crate::build_export_http_client(&resolution)?;
+    export_to_tinker_with_client(base, project, api_key, client, export).await
+}
+
+async fn export_to_tinker_with_client(
+    base: &str,
+    project: &str,
+    api_key: &str,
+    client: reqwest::Client,
+    mut export: RlTrajectoryExport,
+) -> Result<ExportReceipt, ExportError> {
+    // Redact at the last hop before egress so every entry point is covered,
+    // not just the `crate::export` dispatch. The pass is idempotent.
+    crate::normalize_export_metadata(&mut export);
+    validate_config(project, api_key)?;
     // SSRF validation runs in `crate::export` before dispatch so the
     // in-crate wiremock tests can point `*_with_base` at a loopback
     // mock. Production callers never bypass that gate.
@@ -152,21 +180,7 @@ pub(crate) async fn export_to_tinker_with_base(
     // pins the value to the session's `user_metadata` (visible on
     // Tinker's session inspection surface), so a stray credential in
     // a tool result would otherwise leak.
-    let scrubbed_metadata = export
-        .toolset_metadata
-        .as_ref()
-        .map(crate::redact::redact_metadata);
-
-    // Disable redirect following: the SSRF allowlist validates only the
-    // initial base URL, so a redirect-following client would let an
-    // attacker-controlled base 3xx to an internal host (e.g. cloud
-    // metadata), replaying the `x-api-key` header on 307/308. A finished
-    // upload never needs to follow a redirect; a 3xx must surface as an
-    // error. Mirrors `librefang_http::oauth_client_builder`.
-    let client = librefang_http::proxied_client_builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap_or_else(|_| librefang_http::proxied_client());
+    let scrubbed_metadata = export.toolset_metadata.take();
 
     // Step 1: register the session on Tinker. Sort tags for byte-
     // identical wire output (refs #3298 prompt-cache determinism).
@@ -180,12 +194,17 @@ pub(crate) async fn export_to_tinker_with_base(
         project_id: Some(project),
         request_type: "create_session",
     };
+    // Match Tinker's generated SDK: one opaque key per logical request,
+    // reused across transport retries. Without it, a response-side failure
+    // after the server commits can create an orphan session on the retry.
+    let create_idempotency_key = format!("librefang-rl-export-{}", uuid::Uuid::new_v4());
 
     let create_json: CreateSessionResponse =
         crate::retry::retry_upload("tinker.create_session", || {
             let req = client
                 .post(&create_url)
                 .header("x-api-key", api_key)
+                .header(TINKER_IDEMPOTENCY_HEADER, &create_idempotency_key)
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
                 .json(&create_body);
             async move {
@@ -293,8 +312,26 @@ mod tests {
     //! evolve uniformly.
     use super::*;
     use chrono::TimeZone;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use wiremock::matchers::{body_partial_json, header, method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+
+    struct FailFirstCreateSession {
+        attempts: AtomicUsize,
+    }
+
+    impl Respond for FailFirstCreateSession {
+        fn respond(&self, _request: &Request) -> ResponseTemplate {
+            if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                ResponseTemplate::new(503).set_body_string("temporary outage")
+            } else {
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "type": "create_session",
+                    "session_id": "deduplicated-session",
+                }))
+            }
+        }
+    }
 
     fn sample_export(run_id: &str) -> RlTrajectoryExport {
         RlTrajectoryExport {
@@ -355,6 +392,60 @@ mod tests {
             b"opaque-trajectory-bytes".len() as u64,
             "bytes_uploaded must equal payload length",
         );
+    }
+
+    #[tokio::test]
+    async fn create_session_reuses_idempotency_key_across_retries() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/create_session"))
+            .respond_with(FailFirstCreateSession {
+                attempts: AtomicUsize::new(0),
+            })
+            .expect(2)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/v1/telemetry"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        export_to_tinker_with_base(
+            &server.uri(),
+            "rl-proj",
+            "tml-test-key",
+            sample_export("client-run-id"),
+        )
+        .await
+        .expect("transient create-session failure should recover");
+
+        let requests = server.received_requests().await.expect("request journal");
+        let create_requests: Vec<_> = requests
+            .iter()
+            .filter(|request| request.url.path() == "/api/v1/create_session")
+            .collect();
+        assert_eq!(create_requests.len(), 2);
+
+        let first_key = create_requests[0]
+            .headers
+            .get(TINKER_IDEMPOTENCY_HEADER)
+            .expect("first attempt must carry an idempotency key");
+        let second_key = create_requests[1]
+            .headers
+            .get(TINKER_IDEMPOTENCY_HEADER)
+            .expect("retry must carry an idempotency key");
+        assert_eq!(
+            first_key, second_key,
+            "one logical request must reuse its key"
+        );
+
+        let key = first_key.to_str().expect("idempotency key must be ASCII");
+        let uuid = key
+            .strip_prefix("librefang-rl-export-")
+            .expect("key must identify the LibreFang client");
+        uuid::Uuid::parse_str(uuid).expect("key suffix must be a UUID");
     }
 
     #[tokio::test]

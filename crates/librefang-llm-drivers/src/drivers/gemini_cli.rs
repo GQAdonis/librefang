@@ -43,6 +43,7 @@ pub struct GeminiCliDriver {
     cli_path: String,
     #[allow(dead_code)]
     skip_permissions: bool,
+    message_timeout_secs: u64,
     /// When `true` (the default), set `LIBREFANG_AGENT_ID`, `LIBREFANG_SESSION_ID`,
     /// and `LIBREFANG_STEP_ID` env vars on the spawned subprocess so operators can
     /// correlate process-tree entries with LibreFang agent sessions.
@@ -61,8 +62,16 @@ impl GeminiCliDriver {
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "gemini".to_string()),
             skip_permissions,
+            message_timeout_secs: crate::cli_process::DEFAULT_MESSAGE_TIMEOUT_SECS,
             emit_caller_trace_headers: true,
         }
+    }
+
+    /// Set the default subprocess deadline.
+    /// A per-request timeout overrides it.
+    pub fn with_message_timeout(mut self, timeout_secs: u64) -> Self {
+        self.message_timeout_secs = timeout_secs;
+        self
     }
 
     /// Control whether caller-trace env vars are injected into the spawned
@@ -115,8 +124,8 @@ impl GeminiCliDriver {
     }
 
     /// Build the CLI arguments for a given request.
-    pub fn build_args(&self, prompt: &str, model: &str) -> Vec<String> {
-        let mut args = vec!["-p".to_string(), prompt.to_string()];
+    pub fn build_args(&self, model: &str) -> Vec<String> {
+        let mut args = vec!["--output-format".to_string(), "json".to_string()];
 
         let model_flag = Self::model_flag(model);
         if let Some(ref m) = model_flag {
@@ -164,6 +173,61 @@ impl GeminiCliDriver {
         }
     }
 
+    /// Parse the single JSON object produced by `gemini --output-format json`.
+    ///
+    /// Gemini CLI reports session-wide metrics per model. Aggregate every
+    /// model entry because a single agent turn may route work across multiple
+    /// models. Thoughts are billable output tokens, matching the Gemini API
+    /// driver's metering convention.
+    fn parse_json_output(stdout: &str) -> Result<(String, TokenUsage), String> {
+        let output: serde_json::Value = serde_json::from_str(stdout)
+            .map_err(|error| format!("invalid Gemini CLI JSON output: {error}"))?;
+
+        let text = output
+            .get("response")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "Gemini CLI JSON output did not include a response".to_string())?
+            .to_string();
+
+        let mut usage = TokenUsage::default();
+        if let Some(models) = output
+            .pointer("/stats/models")
+            .and_then(serde_json::Value::as_object)
+        {
+            for model in models.values() {
+                let tokens = model.get("tokens").unwrap_or(&serde_json::Value::Null);
+                usage.input_tokens = usage.input_tokens.saturating_add(
+                    tokens
+                        .get("prompt")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0),
+                );
+                usage.output_tokens = usage
+                    .output_tokens
+                    .saturating_add(
+                        tokens
+                            .get("candidates")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0),
+                    )
+                    .saturating_add(
+                        tokens
+                            .get("thoughts")
+                            .and_then(serde_json::Value::as_u64)
+                            .unwrap_or(0),
+                    );
+                usage.cache_read_input_tokens = usage.cache_read_input_tokens.saturating_add(
+                    tokens
+                        .get("cached")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(0),
+                );
+            }
+        }
+
+        Ok((text, usage))
+    }
+
     /// Apply security env filtering to a command.
     fn apply_env_filter(cmd: &mut tokio::process::Command) {
         for key in SENSITIVE_ENV_EXACT {
@@ -193,7 +257,7 @@ impl LlmDriver for GeminiCliDriver {
     )]
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         let prompt = Self::build_prompt(&request);
-        let args = self.build_args(&prompt, &request.model);
+        let args = self.build_args(&request.model);
 
         let mut cmd = tokio::process::Command::new(&self.cli_path);
         for arg in &args {
@@ -210,13 +274,33 @@ impl LlmDriver for GeminiCliDriver {
 
         debug!(cli = %self.cli_path, "Spawning Gemini CLI");
 
-        let output = cmd.output().await.map_err(|e| {
-            LlmError::Http(format!(
-                "Gemini CLI not found or failed to start ({}). \
-                 Install the Google Gemini CLI and run: gemini",
-                e
-            ))
-        })?;
+        let timeout_secs = request.timeout_secs.unwrap_or(self.message_timeout_secs);
+        let output = match crate::cli_process::output_with_input_timeout(
+            &mut cmd,
+            prompt.as_bytes(),
+            std::time::Duration::from_secs(timeout_secs),
+        )
+        .await
+        {
+            Ok(output) => output,
+            Err(crate::cli_process::OutputError::TimedOut) => {
+                return Err(crate::cli_process::timeout_error(
+                    timeout_secs,
+                    "Gemini CLI",
+                ));
+            }
+            Err(crate::cli_process::OutputError::Spawn(e)) => {
+                return Err(LlmError::Http(format!(
+                    "Gemini CLI not found or failed to start ({e}). \
+                     Install the Google Gemini CLI and run: gemini"
+                )));
+            }
+            Err(crate::cli_process::OutputError::Io(e)) => {
+                return Err(LlmError::Http(format!(
+                    "Gemini CLI subprocess failed after starting: {e}"
+                )));
+            }
+        };
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -255,7 +339,11 @@ impl LlmDriver for GeminiCliDriver {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let text = stdout.trim().to_string();
+        let (text, usage) = Self::parse_json_output(&stdout).map_err(|message| LlmError::Api {
+            status: 502,
+            message,
+            code: None,
+        })?;
 
         Ok(CompletionResponse {
             content: vec![ContentBlock::Text {
@@ -264,11 +352,7 @@ impl LlmDriver for GeminiCliDriver {
             }],
             stop_reason: StopReason::EndTurn,
             tool_calls: Vec::new(),
-            usage: TokenUsage {
-                input_tokens: 0,
-                output_tokens: 0,
-                ..Default::default()
-            },
+            usage,
             actual_provider: None,
             actual_model: None,
         })
@@ -349,6 +433,141 @@ mod tests {
         let driver = GeminiCliDriver::new(None, false);
         assert_eq!(driver.cli_path, "gemini");
         assert!(!driver.skip_permissions);
+        assert_eq!(
+            driver.message_timeout_secs,
+            crate::cli_process::DEFAULT_MESSAGE_TIMEOUT_SECS
+        );
+    }
+
+    #[test]
+    fn with_message_timeout_overrides_default() {
+        let driver = GeminiCliDriver::new(None, false).with_message_timeout(19);
+        assert_eq!(driver.message_timeout_secs, 19);
+    }
+
+    #[cfg(unix)]
+    fn sleeping_cli() -> tempfile::TempPath {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut file, b"#!/bin/sh\nsleep 30\n").unwrap();
+        let mut permissions = file.as_file().metadata().unwrap().permissions();
+        permissions.set_mode(0o700);
+        file.as_file().set_permissions(permissions).unwrap();
+        // Convert to a `TempPath` (file still on disk, deleted on drop) so
+        // this process no longer holds the file open for writing. Spawning
+        // the path directly as a subprocess otherwise fails with `ETXTBSY`
+        // ("Text file busy") because Linux refuses to exec a file that has
+        // a writable fd open anywhere, including in the exec-ing process.
+        file.into_temp_path()
+    }
+
+    #[cfg(unix)]
+    fn json_cli() -> tempfile::TempPath {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(
+            &mut file,
+            br##"#!/bin/sh
+printf '%s\n' '{"response":"hello from gemini","stats":{"models":{"gemini-test":{"tokens":{"prompt":42,"candidates":7,"cached":12,"thoughts":3}}}}}'
+"##,
+        )
+        .unwrap();
+        let mut permissions = file.as_file().metadata().unwrap().permissions();
+        permissions.set_mode(0o700);
+        file.as_file().set_permissions(permissions).unwrap();
+        file.into_temp_path()
+    }
+
+    #[cfg(unix)]
+    fn stdin_cli() -> tempfile::TempPath {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(
+            &mut file,
+            br##"#!/bin/sh
+case " $* " in
+  *private-prompt*) exit 8 ;;
+esac
+prompt=$(cat)
+case "$prompt" in
+  *private-prompt*) ;;
+  *) exit 9 ;;
+esac
+printf '%s\n' '{"response":"stdin received","stats":{"models":{"gemini-test":{"tokens":{"prompt":2,"candidates":3}}}}}'
+"##,
+        )
+        .unwrap();
+        let mut permissions = file.as_file().metadata().unwrap().permissions();
+        permissions.set_mode(0o700);
+        file.as_file().set_permissions(permissions).unwrap();
+        file.into_temp_path()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn complete_honors_request_timeout() {
+        let cli = sleeping_cli();
+        let driver = GeminiCliDriver::new(Some(cli.to_string_lossy().into_owned()), false);
+        let request = CompletionRequest {
+            model: "gemini-cli".to_string(),
+            timeout_secs: Some(0),
+            ..Default::default()
+        };
+
+        let error = driver.complete(request).await.unwrap_err();
+
+        assert!(matches!(
+            error,
+            LlmError::TimedOut {
+                inactivity_secs: 0,
+                ..
+            }
+        ));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn complete_returns_json_message_and_usage() {
+        let cli = json_cli();
+        let driver = GeminiCliDriver::new(Some(cli.to_string_lossy().into_owned()), false);
+        let response = driver
+            .complete(CompletionRequest {
+                model: "gemini-cli".to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            &response.content[0],
+            ContentBlock::Text { text, .. } if text == "hello from gemini"
+        ));
+        assert_eq!(response.usage.input_tokens, 42);
+        assert_eq!(response.usage.output_tokens, 10);
+        assert_eq!(response.usage.cache_read_input_tokens, 12);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn complete_pipes_prompt_without_putting_it_in_argv() {
+        let cli = stdin_cli();
+        let driver = GeminiCliDriver::new(Some(cli.to_string_lossy().into_owned()), false);
+        let response = driver
+            .complete(CompletionRequest {
+                model: "gemini-cli".to_string(),
+                system: Some("private-prompt".to_string()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            &response.content[0],
+            ContentBlock::Text { text, .. } if text == "stdin received"
+        ));
     }
 
     #[test]
@@ -366,11 +585,38 @@ mod tests {
     #[test]
     fn test_build_args() {
         let driver = GeminiCliDriver::new(None, false);
-        let args = driver.build_args("test prompt", "gemini-cli/gemini-2.5-pro");
-        assert!(args.contains(&"-p".to_string()));
-        assert!(args.contains(&"test prompt".to_string()));
+        let args = driver.build_args("gemini-cli/gemini-2.5-pro");
+        assert!(!args.contains(&"-p".to_string()));
         assert!(args.contains(&"--model".to_string()));
         assert!(args.contains(&"gemini-2.5-pro".to_string()));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair == ["--output-format", "json"]));
+    }
+
+    #[test]
+    fn parse_json_output_aggregates_model_usage() {
+        let output = r#"{
+            "response": "final answer",
+            "stats": {"models": {
+                "gemini-pro": {"tokens": {"prompt": 100, "candidates": 10, "cached": 80, "thoughts": 20}},
+                "gemini-flash": {"tokens": {"prompt": 30, "candidates": 5, "cached": 0, "thoughts": 2}}
+            }}
+        }"#;
+
+        let (text, usage) = GeminiCliDriver::parse_json_output(output).unwrap();
+
+        assert_eq!(text, "final answer");
+        assert_eq!(usage.input_tokens, 130);
+        assert_eq!(usage.output_tokens, 37);
+        assert_eq!(usage.cache_read_input_tokens, 80);
+    }
+
+    #[test]
+    fn parse_json_output_rejects_malformed_or_missing_response() {
+        assert!(GeminiCliDriver::parse_json_output("not-json").is_err());
+        let error = GeminiCliDriver::parse_json_output(r#"{"stats": {}}"#).unwrap_err();
+        assert!(error.contains("response"));
     }
 
     #[test]

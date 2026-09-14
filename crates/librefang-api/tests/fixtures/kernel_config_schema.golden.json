@@ -33,7 +33,12 @@
       }
     },
     "api_key": {
-      "description": "API authentication key. When set, all API endpoints (except /api/health) require a `Authorization: Bearer <key>` header. If empty, the API is unauthenticated (local development only).",
+      "description": "API authentication key. When set, all API endpoints (except /api/health) require a `Authorization: Bearer <key>` header. If empty (and no `api_key_hash` is set), the API is unauthenticated (local development only).\n\nThe value is resolved by the API layer in three steps, the same order the dashboard credentials use: 1. The `LIBREFANG_API_KEY` environment variable, when set to a non-empty value, wins over whatever this field holds. 2. A `vault:KEY_NAME` prefix reads `KEY_NAME` out of the encrypted vault (`$LIBREFANG_HOME/vault.enc`). Example: `api_key = \"vault:master_api_key\"`, then run `librefang vault set master_api_key`. 3. Anything else is the literal bearer token.\n\nSteps 1 and 2 keep the working secret out of `config.toml` entirely, which matters because the daemon rewrites that file and cannot read it from a read-only Kubernetes Secret mount. Resolution happens per auth snapshot rather than once at boot, so an env-sourced or vault-sourced key survives `POST /api/config/reload` — a reload re-reads `config.toml` from disk and would otherwise clobber the boot-time override.\n\nPrefer [`KernelConfig::api_key_hash`] when the daemon only needs to *verify* the key rather than transmit it — run `librefang hash-api-key` to produce the value. The two can be combined, and a plaintext value here is verified with a constant-time comparison.",
+      "default": "",
+      "type": "string"
+    },
+    "api_key_hash": {
+      "description": "Hash of the API authentication key, so the master credential does not have to sit in cleartext on disk.\n\nWhen set, a presented bearer token is verified against this hash after the constant-time comparison against `api_key` misses.\n\n**Generate it with `librefang hash-api-key`** — `--generate` mints a fresh 256-bit key and prints it beside its hash, or omit the flag to hash a key you already have. Put the hash here, give the key to your clients, and leave `api_key` unset.\n\nThe recommended form is `$sha256$…` (what `hash-api-key` produces). `$argon2id$…` is also accepted, dispatched by prefix exactly as the per-user `users[].api_key_hash` column is, so a hand-written value keeps working.\n\nThe default is SHA-256 rather than Argon2id on purpose, and it is the reverse of the advice for [`KernelConfig::dashboard_pass_hash`]. A dashboard password is human-chosen and low-entropy, so a memory-hard KDF is what makes an offline dictionary attack uneconomic. A master API key is a machine-generated bearer token: there is no dictionary to enumerate, so the KDF buys nothing against an offline attacker and charges its cost to every request instead. That cost is ~50–100 ms of CPU per verify by construction, and with `api_key` unset *every* presented token reaches it — including every wrong one, from an unauthenticated caller, on paths with no login-attempt limiter. So an `$argon2id$` value here is verified on a blocking thread rather than inline, which keeps the async runtime responsive but does not make the CPU cost go away. If you want a short human-memorable master key, `$argon2id$` is the right trade; otherwise use a generated key and the cheap verifier.\n\nExisting plaintext deployments keep working and are upgraded transparently: the first request that authenticates against a plaintext-only `api_key` writes a `$sha256$` hash of it to `$LIBREFANG_HOME/api-key-hash.upgrade-hint` (mode 0600) and logs a pointer to the file. Copy the value into `api_key_hash`, remove `api_key`, delete the hint file. Clients keep sending the same key — only the daemon's stored copy changes. The hash itself is never logged — it is the verifier, so anyone reading the log stream could paste it into their own config and authenticate.\n\n**A hash alone is not enough if you run a CLI-based driver** (`claude-code`, and any other driver that reaches the daemon's own `/mcp` endpoint). Those drivers are clients of this daemon, so they need the key itself, and a hash cannot yield it: the daemon would have to reverse its own verifier. With `api_key` unset and no `LIBREFANG_API_KEY`, the MCP bridge goes out with no `Authorization` header and the daemon's own middleware answers 401 — precisely because the hash *is* honoured as configured auth. Keep a transmittable copy for that case: `api_key = \"vault:master_api_key\"` or `LIBREFANG_API_KEY`, either of which keeps the secret out of `config.toml` while leaving the bridge able to authenticate. The kernel logs a `WARN` naming this at every driver rebuild when the bridge ends up keyless while a hash is set, so it fails loudly rather than as an unexplained 401 on every tool call.",
       "default": "",
       "type": "string"
     },
@@ -185,7 +190,8 @@
         "max_sessions": 5,
         "chromium_path": null,
         "cdp_endpoint": null,
-        "cdp_auth_token_env": null
+        "cdp_auth_token_env": null,
+        "max_content_chars": 50000
       },
       "allOf": [
         {
@@ -431,6 +437,13 @@
         }
       ]
     },
+    "default_owner": {
+      "description": "Fleet-wide fallback owner for artifacts created by a turn that has neither an authenticated caller nor an `owner` on the agent's manifest (#7744).\n\nAn operator spec string — `user:alice`, `group:platform`, or a bare `alice` meaning `user:alice` — parsed by [`crate::principal::Principal::from_spec`].\n\n`None` (the default) means unowned artifacts stay unowned rather than being attributed to a synthetic principal nobody chose. The first artifact created with no principal resolvable logs one `WARN` per daemon naming this key ([`crate::principal::warn_once_unowned`]), so the gap is visible without being fatal or noisy.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "default_routing": {
       "description": "Kernel-wide Smart Model Router defaults applied to any agent whose `agent.toml` does not set its own `[routing]` block. The `init` wizard writes user-selected tier models here under `[default_routing]` so the chosen routing actually reaches the kernel — see issue #4466. Per-agent `routing` always wins when present.",
       "anyOf": [
@@ -497,6 +510,7 @@
           "env"
         ],
         "safe_bins_skip_approval": false,
+        "full_mode_skips_approval": true,
         "allowed_commands": [],
         "timeout_secs": 30,
         "max_output_bytes": 102400,
@@ -539,7 +553,13 @@
         "audience": "",
         "session_ttl_secs": 86400,
         "providers": [],
-        "require_email_verified": true
+        "require_email_verified": true,
+        "role_map": {},
+        "group_map": {},
+        "claim_paths": [
+          "roles",
+          "groups"
+        ]
       },
       "allOf": [
         {
@@ -572,6 +592,13 @@
           "$ref": "#/definitions/GatewayCompressionConfig"
         }
       ]
+    },
+    "groups": {
+      "description": "Named user groups (#7745). See [`GroupConfig`] for why membership is flat and how `roles` lines up with the role strings the channel layer already carries.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/GroupConfig"
+      }
     },
     "hands": {
       "description": "Hands marketplace configuration (SSRF allowlist for a caller-supplied `registry_url` on the install endpoint).",
@@ -751,11 +778,29 @@
         "audio_transcription": true,
         "video_description": false,
         "max_concurrency": 2,
+        "transcription_timeout_secs": 60,
+        "ffmpeg_timeout_secs": 30,
         "image_provider": null,
         "image_model": null,
         "audio_provider": null,
         "audio_model": null,
+        "audio_language": null,
+        "audio_prompt": null,
+        "video_provider": null,
+        "video_model": null,
         "custom_stt": {
+          "base_url": "",
+          "api_key_env": "",
+          "key_required": false,
+          "model": null
+        },
+        "custom_image": {
+          "base_url": "",
+          "api_key_env": "",
+          "key_required": false,
+          "model": null
+        },
+        "custom_video": {
           "base_url": "",
           "api_key_env": "",
           "key_required": false,
@@ -784,6 +829,7 @@
           "enabled": false,
           "session_ttl_days": 7,
           "agent_ttl_days": 30,
+          "episodic_ttl_days": 90,
           "decay_interval_hours": 1
         },
         "chunking": {
@@ -794,13 +840,23 @@
         "vector_backend": null,
         "vector_store_url": null,
         "soft_delete_retention_days": 30,
-        "pool_size": 8
+        "pool_size": 8,
+        "max_episodic_chars": 8000
       },
       "allOf": [
         {
           "$ref": "#/definitions/MemoryConfig"
         }
       ]
+    },
+    "memory_fact_budget_percent": {
+      "description": "Share of the prompt memory section's character budget reserved for extracted facts, as a percentage; the remainder goes to raw dialogue.\n\nThe two classes differ by roughly nine to one in row size, so a single ranked list spends the section on dialogue by size alone and leaves a large fraction of turns with no extracted fact in the prompt at all (#7920). Neither share is wasted: whatever one class does not use spills to the other, so a turn with only one class still fills the whole budget.\n\n`None` means \"use the compiled-in default\" (`prompt_builder::MEMORY_FACT_BUDGET_PERCENT`, 70 — the best arm of the measurement, which could not separate 30/50/70 from run-to-run noise). Values above 100 are clamped down. Lower it when raw dialogue carries narrative continuity your agents depend on; raise it when the store is dominated by per-turn dialogue rows. The section's total character budget is unaffected either way.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint8",
+      "minimum": 0.0
     },
     "memory_wiki": {
       "description": "Memory wiki: durable markdown knowledge vault with provenance and optional Obsidian-friendly export. Off by default; see `librefang-memory-wiki` and issue #3329 for the runbook.",
@@ -969,6 +1025,8 @@
         "format_context_max_chars": 8000,
         "update_threshold_same_category": 0.699999988079071,
         "update_threshold_cross_category": 0.800000011920929,
+        "session_scoped_recall": true,
+        "min_similarity": null,
         "extractor_sidecar": null
       },
       "allOf": [
@@ -1135,7 +1193,8 @@
       "default": {
         "cache_ttl_secs": 86400,
         "registry_mirror": "",
-        "registry_host": null
+        "registry_host": null,
+        "auto_sync": true
       },
       "allOf": [
         {
@@ -1277,7 +1336,10 @@
       "default": {
         "claim_ttl_secs": 600,
         "sweep_interval_secs": 30,
-        "max_retries": 0
+        "max_retries": 0,
+        "assignee_wake": true,
+        "pending_grace_secs": 60,
+        "wake_backoff_max_secs": 900
       },
       "allOf": [
         {
@@ -1500,6 +1562,17 @@
       "allOf": [
         {
           "$ref": "#/definitions/UpdateChannel"
+        }
+      ]
+    },
+    "usage": {
+      "description": "Usage/metering retention for the `usage_events` table (#7891).",
+      "default": {
+        "retention_days": 90
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/UsageConfig"
         }
       ]
     },
@@ -2227,7 +2300,7 @@
           ]
         },
         "cdp_endpoint": {
-          "description": "Remote CDP endpoint to attach to instead of spawning a local Chromium.\n\nAccepted formats: - `ws://host:port/devtools/browser/<id>` — page-level WebSocket (direct attach) - `http://host:port` — HTTP discovery endpoint; librefang calls `GET /json/new` to create a fresh tab and connects to the returned WebSocket URL.\n\nWhen set, `headless`, `chromium_path`, and local-process discovery are ignored. Browser lifecycle (start/stop) is the operator's responsibility.\n\n**Security**: CDP is unauthenticated. Never expose the debugging port on a public interface. Use SSH tunnels, WireGuard, or a trusted-network path.",
+          "description": "Remote CDP endpoint to attach to instead of spawning a local Chromium.\n\nAccepted formats: - `ws://host:port/…` — direct WebSocket attach. Both page-level and browser-level endpoints work: librefang asks `Target.getTargetInfo` which it is, and on a browser-level endpoint creates a target with `Target.createTarget`, attaches to it with `Target.attachToTarget` (flattened), and routes later commands through the returned `sessionId`. Required by CDP servers that expose no Chrome-style HTTP discovery routes, such as Lightpanda. - `http://host:port` — HTTP discovery endpoint; librefang calls `/json/new` to create a fresh tab and connects to the returned WebSocket URL.\n\nWhen set, `headless`, `chromium_path`, and local-process discovery are ignored. Browser lifecycle (start/stop) is the operator's responsibility.\n\n**Security**: CDP is unauthenticated. Never expose the debugging port on a public interface. Use SSH tunnels, WireGuard, or a trusted-network path.",
           "default": null,
           "type": [
             "string",
@@ -2257,6 +2330,13 @@
           "default": 300,
           "type": "integer",
           "format": "uint64",
+          "minimum": 0.0
+        },
+        "max_content_chars": {
+          "description": "Maximum characters of extracted page content returned by `browser_navigate` / `browser_read_page`, before the truncation marker.\n\nThis is a real ceiling on what reaches the model: the script cuts the content short enough that appending `... (truncated, N chars total)` still lands within the limit, so an operator can size this against a context window without accounting for the marker separately.\n\nThe default of 50,000 characters is roughly 12–15k tokens, which suits a 200k-context model and is actively hostile to a 32k local one — the reason this is a knob rather than a compile-time constant (#6624). A mainstream Wikipedia article overruns it.",
+          "default": 50000,
+          "type": "integer",
+          "format": "uint",
           "minimum": 0.0
         },
         "max_sessions": {
@@ -3150,6 +3230,35 @@
         }
       ]
     },
+    "CustomImageConfig": {
+      "description": "Configuration for a custom / self-hosted vision endpoint used by image description (the understanding path, not generation).\n\nPoints `describe_image` at any OpenAI-compatible `/v1/chat/completions` endpoint that accepts a vision message — e.g. a local `llama.cpp` server, `ollama` with a multimodal model, or any other OpenAI-compatible service.\n\n## Example (`config.toml`) ```toml [media] image_provider = \"local-llava\"\n\n[media.custom_image] base_url = \"http://localhost:11434/v1/chat/completions\" # api_key_env = \"MY_LOCAL_VISION_KEY\"  # omit for keyless servers  # pragma: allowlist secret key_required = false model = \"llava\" ```",
+      "type": "object",
+      "properties": {
+        "api_key_env": {
+          "description": "Environment variable that holds the API key for this endpoint. When empty (default), no `Authorization` header is sent.",
+          "default": "",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Full URL of the OpenAI-compatible chat/completions endpoint. E.g. `\"http://localhost:11434/v1/chat/completions\"`.",
+          "default": "",
+          "type": "string"
+        },
+        "key_required": {
+          "description": "When `true`, the request is rejected immediately if the env var named by `api_key_env` is not set. When `false` (default), a missing key simply means no auth header is added — suitable for keyless local servers.",
+          "default": false,
+          "type": "boolean"
+        },
+        "model": {
+          "description": "Model identifier forwarded to the endpoint. When unset the endpoint default is used.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
     "CustomSttConfig": {
       "description": "Configuration for a self-hosted / custom-URL speech-to-text provider.\n\nPoints STT at any OpenAI-compatible `/v1/audio/transcriptions` endpoint — e.g. a local `faster-whisper-server`, `whisper.cpp` HTTP server, or any other Whisper-API-compatible service. No new dependencies are needed: the same multipart HTTP path used for cloud providers is reused here.\n\n## Example (`config.toml`) ```toml [media] audio_provider = \"local-whisper\"\n\n[media.custom_stt] base_url = \"http://localhost:8080/v1/audio/transcriptions\" # api_key_env = \"MY_LOCAL_WHISPER_KEY\"  # omit for keyless servers  # pragma: allowlist secret key_required = false model = \"large-v3\" ```",
       "type": "object",
@@ -3212,6 +3321,35 @@
           "description": "Voice identifier forwarded to the endpoint. Default: `\"alloy\"`.",
           "default": "alloy",
           "type": "string"
+        }
+      }
+    },
+    "CustomVideoConfig": {
+      "description": "Configuration for a custom / self-hosted video description endpoint.\n\nPoints `describe_video` at any OpenAI-compatible multimodal endpoint that accepts video input — mirrors `CustomImageConfig` for video.\n\n## Example (`config.toml`) ```toml [media] video_provider = \"local-video\"\n\n[media.custom_video] base_url = \"http://localhost:8080/v1/chat/completions\" key_required = false model = \"video-llava\" ```",
+      "type": "object",
+      "properties": {
+        "api_key_env": {
+          "description": "Environment variable that holds the API key for this endpoint.",
+          "default": "",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Full URL of the multimodal endpoint.",
+          "default": "",
+          "type": "string"
+        },
+        "key_required": {
+          "description": "When `true`, the request is rejected if the env var is not set.",
+          "default": false,
+          "type": "boolean"
+        },
+        "model": {
+          "description": "Model identifier forwarded to the endpoint.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -3529,6 +3667,11 @@
             "type": "string"
           }
         },
+        "full_mode_skips_approval": {
+          "description": "Whether `mode = \"full\"` also waives the global `approval.require_approval` list for `shell_exec`.\n\nDefault `true` preserves the historical coupling, and the default is deliberately NOT flipped (#6594). Two facts make a flipped default a breaking change for ordinary installs: `ApprovalPolicy::default()` puts `shell_exec` in `require_approval`, and `Kernel::spawn` promotes any standalone agent whose `capabilities.tools` contains `shell_exec` or `*` and which declares no `exec_policy` to `mode = \"full\"`. So on a default install this waiver is the only reason ordinary agents run shell commands unattended, and flipping it would make every install prompt on every command.\n\nSet `false` to hold both positions at once — unrestricted commands that still prompt. `Full` then waives only allowlist *validation*, and `require_approval` is honoured exactly as it is for any other mode. This overrides a coupling that was deliberate rather than accidental: `Full` skipping the approval queue was documented behaviour, and `false` narrows `Full` to what its name describes — a command-validation mode — leaving who-must-confirm to `[approval]`.\n\nIndependent of this flag in both positions: a per-user RBAC `NeedsApproval` still forces the approval queue, and the dangerous-command denylist still screens every command under `full`.",
+          "default": true,
+          "type": "boolean"
+        },
         "max_output_bytes": {
           "description": "Max output size in bytes. Default: 100KB.",
           "default": 102400,
@@ -3686,6 +3829,17 @@
           "default": "",
           "type": "string"
         },
+        "claim_paths": {
+          "description": "Where in the token to look for the identity attributes [`ExternalAuthConfig::role_map`] and [`ExternalAuthConfig::group_map`] are matched against (#7746).\n\nEvery entry is a **dotted path** into the validated ID token (or the userinfo document, when the provider issued no ID token). Keycloak — named as a conformance target on #7746 and the common self-hosted case — puts realm roles at `realm_access.roles` and per-client roles at `resource_access.<client>.roles`, neither of which a flat claim *name* can address, so the path form is the minimum that reaches the deployment this feature is for. The literal token `<client>` is substituted with the provider's configured `client_id`, so one entry works across providers without restating the id.\n\nResolution is permissive about shape and strict about nothing else: a path resolving to an array of strings contributes each element, and a path resolving to a single string contributes its whitespace-separated words. The second rule is what makes `scope` work — RFC 6749 defines it as a space-delimited list in one string — and it also handles a provider that emits a single-valued `role` claim. Its cost is that a claim value containing a space is split; that is documented rather than solved, because the IdPs this targets do not produce them (Entra sends GUIDs, Keycloak forbids spaces in role names) and a quoting convention would be a worse trade than the limitation. A path that resolves to nothing, or to a value of any other shape, contributes nothing and is not an error — providers differ in which claims they emit, and a missing claim is the normal case rather than a misconfiguration.\n\n# Why `scope` is not in the default\n\nThe default is `[\"roles\", \"groups\"]`. `scope` is deliberately absent, and adding it is a one-line opt-in.\n\n`roles` and `groups` are assertions the identity provider makes *about the user*. `scope` is an assertion about *what a client application asked for and was granted*, which is a different trust question with a different attacker: a token minted for some other OAuth client in the same tenant carries that client's scopes, and the only thing standing between such a token and this daemon is audience binding. Audience binding is enforced — a provider with neither `audience` nor `client_id` set grants nothing at all — so opting in is safe where an operator has bound the audience, and defaulting it off means nobody inherits the weaker assertion by accident.\n\n```toml [external_auth] claim_paths = [\"realm_access.roles\", \"resource_access.<client>.roles\", \"groups\"] ```",
+          "default": [
+            "roles",
+            "groups"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "client_id": {
           "description": "OAuth2 client ID registered with the identity provider.",
           "default": "",
@@ -3700,6 +3854,14 @@
           "description": "Whether external auth is enabled.",
           "default": false,
           "type": "boolean"
+        },
+        "group_map": {
+          "description": "IdP group (or role, or scope) claim value → the name of a `[[groups]]` entry the caller is treated as a member of for the lifetime of the request (#7746).\n\n# Why a map and not \"the claim value *is* the group name\"\n\nMatching by name would let the identity provider mint a LibreFang grant by inventing a claim value. Anyone who can create a group in the IdP — in most tenants a far larger set of people than \"LibreFang operators\", and in a self-service Entra or Google Workspace tenant frequently *every employee* — could create one named `oncall` and acquire whatever `oncall` owns and confers here. The same argument [`ExternalAuthConfig::role_map`] makes for roles applies unchanged to groups, and for the same reason the answer is the same: a grant is something an operator wrote down in `config.toml`, and the IdP only gets to say which of the operator's written-down grants a given caller matches.\n\nThe map is also what makes the two namespaces independent. An IdP group is named for the organisation (`platform-oncall-emea`, or a bare GUID in Entra's case, where the `groups` claim carries object ids rather than display names); a LibreFang group is named for what it owns. A GUID cannot be a name-match against anything.\n\n# An unmapped claim value grants nothing\n\nNot \"grants a lower group\", not \"grants viewer\" — nothing. A claim value absent from this map, or present but naming a `[[groups]]` entry that does not exist, contributes no membership, no group-conferred role string and no [`crate::principal::Principal`], and the caller falls through to exactly the outcome they would have had with no claim at all. A typo'd target is skipped rather than creating a phantom group, mirroring how a typo'd target in `role_map` is skipped rather than resolving to `User`: an unrecognised value must never be an escalation, and a group that exists only in this map would be a principal that owns things and that no operator can see in `[[groups]]`.\n\n# Membership is ephemeral\n\nA match here does **not** write the caller's name into `[[groups]] members`. The membership is recomputed from the presented token on every request and discarded with the request. Persisting it would turn operator-owned `config.toml` into an unmanaged cache of IdP state with no invalidation path — the entry is written when someone logs in, and the one event that should remove it (their removal from the group in the IdP) is precisely the event after which they never log in again, so a revoked membership would persist forever in the file that is supposed to be the operator's own record. It would also make every login a config write, with the reload, the backup rotation and the `git diff` churn that implies. Recomputing per request is strictly stronger than what #7746 asked for (\"re-evaluate on every login\"): a revocation in the IdP takes effect here when the caller's token expires, with no local action at all.\n\n# Precedence against a declared `[[groups]]` member\n\nThe two are **unioned**, and no arbitration is needed because there is nothing to arbitrate: group membership is a set, not a ladder, so \"both say yes\" and \"one says yes\" have the same answer. This is deliberately unlike `role_map`, which picks the highest-privilege match — an ordinal ladder has a defined `max`, a set does not. The consequence worth stating: removing someone from the IdP group does not remove them from a `[[groups]] members` list that names them explicitly. That is correct rather than a leak. A name in `members` is an independent grant an operator typed, and letting an IdP retract it would make the IdP authoritative over config the operator owns — the mirror image of the drift this feature exists to fix.\n\n# Relationship to `role_map`\n\nThe two maps compose over the same claim-value vocabulary and confer different things, so one claim can feed both and neither implies the other. `role_map` confers RBAC privilege (`viewer < user < admin < owner`) and decides *what the caller may do*; `group_map` confers membership and decides *which teams the caller is on*, which is what group-conferred role strings ([`KernelConfig::effective_roles_for`]) and group-shaped ownership ([`crate::principal::Principal::group_named`]) key off. A group is still not a route of privilege escalation: membership confers no `UserRole` whatsoever, so an operator who wants an IdP group to also carry admin privilege writes that claim value into *both* maps, and writes it deliberately.\n\n```toml [external_auth.group_map] \"platform-oncall\" = \"oncall\" \"3f2a9c81-0e4d-4c9a-9a2e-77e2a1b4c5d6\" = \"compliance\" ```\n\n`BTreeMap` for the same `GET /api/config` stability reason as `role_map` (#3298).",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "issuer_url": {
           "description": "OIDC issuer URL (e.g., `https://accounts.google.com`). Used to discover the OIDC configuration at `{issuer_url}/.well-known/openid-configuration`.",
@@ -3723,6 +3885,14 @@
           "description": "Require `email_verified = true` in the OIDC ID token before allowing login. Defaults to `true`. Set to `false` only if your identity provider does not set this claim. When `true`, logins where the claim is absent or false are rejected — prevents `allowed_domains` impersonation via unverified addresses (#3703).",
           "default": true,
           "type": "boolean"
+        },
+        "role_map": {
+          "description": "IdP role/group claim value → LibreFang role string (`owner` / `admin` / `user` / `viewer` / `guest`).\n\nEmpty by default, and an empty map means an OIDC bearer authorizes nothing — exactly the behaviour before #7744, where the validated `roles` claim was injected into request extensions and never read. Declaring an entry is what turns a signed ID token into an API credential, so the grant is always something the operator wrote down rather than something the identity provider decided unilaterally.\n\nA caller holding several mapped roles gets the **highest-privilege** match, mirroring `[channel_role_mapping.discord] role_map` — claim ordering is the IdP's business, and letting it pick the effective LibreFang role would put privilege outside operator control. A claim value that is absent from this map, or present but mapped to an unrecognised LibreFang role string, grants nothing: the caller falls through to the same 401 they get today rather than being demoted to `User`.\n\n```toml [external_auth.role_map] \"librefang-owners\" = \"owner\" \"librefang-operators\" = \"admin\" \"engineering\" = \"user\" ```\n\n`BTreeMap` rather than `HashMap` so `GET /api/config` renders the entries in a stable order and a diff of two config snapshots reflects real edits.\n\nThe claim values matched against this map are the ones [`ExternalAuthConfig::claim_paths`] resolves, which is `roles` and `groups` by default rather than `roles` alone. The key's documented meaning has always been \"role/group claim value\"; before #7746 only the `roles` array was actually read, so an operator who wrote a group name here got silence.",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "scopes": {
           "description": "OAuth2 scopes to request.",
@@ -3804,6 +3974,37 @@
           "default": 0.8500000238418579,
           "type": "number",
           "format": "float"
+        }
+      }
+    },
+    "GroupConfig": {
+      "description": "A named collection of users, declared as `[[groups]]` in `config.toml`.\n\nA group exists so a permission or an ownership decision can name a team instead of a person. The support rota, the on-call shift, the project team and the department all outlive the individuals filling them, and every one of them is currently expressible only by enumerating names (#7745).\n\n# Membership is flat — groups do not nest\n\nThis is a deliberate decision, not an omission. A `GroupConfig` has `members` (user names) and no parent or child pointer, so the set of principals a group denotes is exactly its `members` list and resolving it is a single lookup that cannot cycle, cannot fan out, and cannot change cost as the deployment grows. Nesting would buy expressiveness that the two consumers of this type do not ask for: #7744 needs `Principal::Group(name)` to answer \"does this user belong\", and #7746 maps an external identity provider's group claim onto a local group — and every IdP hands us the *flattened* effective membership on each login precisely because it has already resolved its own hierarchy. Re-deriving a hierarchy locally from flattened claims would be guesswork, and maintaining a second one by hand would drift from the IdP's. The cost of the decision is that an operator who wants `platform-oncall ⊂ platform` lists the members in both groups, or grants both groups the same entry in `roles`; the benefit is that membership resolution stays O(members), is trivially deterministic, and has no cycle-detection code to get wrong. If a deployment ever produces a concrete case that flat membership cannot express, adding a `parent` field is a backwards-compatible change — a group that names no parent behaves exactly as it does today.\n\n# Relationship to roles\n\n`roles` is not a new vocabulary. It holds the same role strings that [`BindingContext::roles`](../../librefang_channels/router/struct.BindingContext.html) already carries through channel-binding resolution and that [`ChannelRoleMapping`] already produces from platform-native roles, so a group can confer a role on its members without a third parallel notion of identity growing beside the two that exist. [`KernelConfig::roles_for_user`] is the resolver: it returns each group the user belongs to *by name* plus every string in that group's `roles`, so a binding rule can gate on the group directly (`roles = [\"oncall\"]` matches membership in the `oncall` group) without the operator restating the group name inside its own `roles` list.\n\n# Dangling members are tolerated\n\nA name in `members` need not resolve to a `[[users]]` entry. #7746 syncs membership from an IdP on every login, and the claim can name a person before that person has ever authenticated here and therefore before any local user row exists; rejecting the write would make the group the thing that has to be repaired by hand, which is the failure mode groups exist to remove. Deleting a user does strip that name from every group it appears in, so a *removed* member never lingers — the tolerance is for names that have not arrived yet, not for names that have left.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "description": {
+          "description": "Free-text description of what the group is for. Operator-facing only; nothing branches on it.",
+          "type": "string"
+        },
+        "members": {
+          "description": "User names belonging to this group. Stored sorted and de-duplicated so the on-disk `config.toml` and every prompt-facing stringification are byte-identical across writes (#3298).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "description": "Group name. Unique across `[[groups]]`, and the string a `Principal::Group` / a binding `match_rule.roles` entry names.",
+          "type": "string"
+        },
+        "roles": {
+          "description": "Role strings conferred on every member, in the same vocabulary as [`ChannelRoleMapping`] and `BindingContext.roles`. Stored sorted and de-duplicated for the same determinism reason as `members`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -3945,20 +4146,19 @@
           "type": "string"
         },
         "value": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "value_env": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "HttpCompatMethod": {
       "description": "HTTP request method for the built-in HTTP compatibility transport.",
@@ -4035,7 +4235,8 @@
             }
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "InboxConfig": {
       "description": "File-based input inbox configuration.\n\nWhen enabled, the kernel polls a directory for text files and dispatches their contents as messages to agents.  Files are moved to a `processed/` subdirectory after delivery.",
@@ -4491,7 +4692,8 @@
                 "stdio"
               ]
             }
-          }
+          },
+          "additionalProperties": false
         },
         {
           "description": "HTTP Server-Sent Events.",
@@ -4510,7 +4712,8 @@
             "url": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         {
           "description": "Streamable HTTP transport (MCP 2025-03-26+).",
@@ -4529,7 +4732,8 @@
             "url": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         },
         {
           "description": "Built-in compatibility adapter for plain HTTP/JSON tool backends.",
@@ -4562,7 +4766,8 @@
                 "http_compat"
               ]
             }
-          }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -4570,8 +4775,24 @@
       "description": "Configuration for media understanding.",
       "type": "object",
       "properties": {
+        "audio_language": {
+          "description": "Fallback ISO-639-1 language hint for transcription, used when a `media_transcribe` / `speech_to_text` call omits its own `language` (#6678). Per-call value always wins; this only applies when the tool call left the field unset.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "audio_model": {
           "description": "Preferred audio transcription model (provider default if None).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "audio_prompt": {
+          "description": "Fallback transcription prompt (domain vocabulary, proper nouns) used when a `media_transcribe` / `speech_to_text` call omits its own `prompt` (#6678). Per-call value always wins; this only applies when the tool call left the field unset.",
           "default": null,
           "type": [
             "string",
@@ -4591,6 +4812,20 @@
           "default": true,
           "type": "boolean"
         },
+        "custom_image": {
+          "description": "Custom / self-hosted vision endpoint for image description.\n\nWhen `image_provider` is set to a name that is not one of the built-in providers (`anthropic`, `openai`, `groq`, `gemini`), this block is consulted and the request is forwarded to an OpenAI-compatible chat/completions endpoint at `custom_image.base_url`.",
+          "default": {
+            "base_url": "",
+            "api_key_env": "",
+            "key_required": false,
+            "model": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/CustomImageConfig"
+            }
+          ]
+        },
         "custom_stt": {
           "description": "Custom / self-hosted STT endpoint configuration.\n\nWhen `audio_provider` is set to a name that is not one of the built-in providers (`groq`, `openai`, `minimax`, `fireworks`, `together`, `siliconflow`, `gemini`, `elevenlabs`), this block is consulted and the request is forwarded to an OpenAI-compatible Whisper endpoint at `custom_stt.base_url`.",
           "default": {
@@ -4604,6 +4839,27 @@
               "$ref": "#/definitions/CustomSttConfig"
             }
           ]
+        },
+        "custom_video": {
+          "description": "Custom / self-hosted endpoint for video description.\n\nWhen `video_provider` is set to a name that is not one of the built-in providers (`gemini`), this block is consulted.",
+          "default": {
+            "base_url": "",
+            "api_key_env": "",
+            "key_required": false,
+            "model": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/CustomVideoConfig"
+            }
+          ]
+        },
+        "ffmpeg_timeout_secs": {
+          "description": "Timeout for one ffmpeg subprocess in seconds. Default: 30.",
+          "default": 30,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         },
         "image_description": {
           "description": "Enable image description. Default: true.",
@@ -4619,7 +4875,7 @@
           ]
         },
         "image_provider": {
-          "description": "Preferred image description provider (auto-detect if None).",
+          "description": "Preferred image description provider (auto-detect if None).\n\nSet to any string (e.g. `\"local-llava\"`) to use the custom vision endpoint defined in `[media.custom_image]`.",
           "default": null,
           "type": [
             "string",
@@ -4633,10 +4889,33 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "transcription_timeout_secs": {
+          "description": "Timeout for one audio transcription provider request in seconds. Default: 60.",
+          "default": 60,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "video_description": {
           "description": "Enable video description. Default: false (expensive).",
           "default": false,
           "type": "boolean"
+        },
+        "video_model": {
+          "description": "Preferred video description model (provider default if None).",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "video_provider": {
+          "description": "Preferred video description provider (auto-detect if None).\n\nSet to any string (e.g. `\"local-video\"`) to use the custom video endpoint defined in `[media.custom_video]`.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -4677,6 +4956,7 @@
             "enabled": false,
             "session_ttl_days": 7,
             "agent_ttl_days": 30,
+            "episodic_ttl_days": 90,
             "decay_interval_hours": 1
           },
           "allOf": [
@@ -4730,6 +5010,13 @@
             "null"
           ]
         },
+        "max_episodic_chars": {
+          "description": "Upper bound, in characters, on the text of a single episodic memory row written by the agent loop's per-turn writer (#7911). Zero disables the cap.\n\nThe per-turn writer composes `[Past exchange]\\nThem: …\\nYou: …` from the raw turn, so an inbound attachment that the channel adapter rendered into the user message — a transcribed PDF, a pasted log — was previously stored verbatim and embedded verbatim. The cap is applied before the embedding call, so it bounds embedding cost as well as row size, and it is split across the two halves of the exchange so a large user message can never truncate the agent's reply away entirely.",
+          "default": 8000,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
         "pool_size": {
           "description": "Maximum number of pooled SQLite connections served by the memory substrate (#3378 follow-up). The pre-pool design serialised every SQLite call through a single `Mutex<Connection>`; the r2d2 pool removes that bottleneck but introduces a new ceiling — too low and the trigger lane / channel bridges / cron / audit / idempotency callers contend on `pool.get()`, too high and per-connection page caches add up (each connection holds at most ~2 MiB via `PRAGMA cache_size=-2000`). The default of 8 matches `queue.concurrency.trigger_lane` so the lane semaphore, not the pool, is the limiting factor under typical workloads. Bump in lockstep with `trigger_lane` if you raise that, or lower for memory-constrained deployments. Pool exhaustion is surfaced via the `librefang_memory_pool_get_failed_total{store=...}` counter.",
           "default": 8,
@@ -4775,7 +5062,7 @@
       "type": "object",
       "properties": {
         "agent_ttl_days": {
-          "description": "AGENT-scope memories expire after this many days of no access.",
+          "description": "AGENT-scope memories expire after this many days of no access. Zero disables expiry.",
           "default": 30,
           "type": "integer",
           "format": "uint32",
@@ -4793,8 +5080,15 @@
           "default": false,
           "type": "boolean"
         },
+        "episodic_ttl_days": {
+          "description": "EPISODIC-scope memories expire after this many days of no access. Zero disables expiry.\n\n`episodic` is the default scope of the `memories` table and the scope the agent loop writes one row into on every non-fork, non-incognito turn, so before #7911 it was the only scope with no exit at all: never decayed, never distilled, never deleted. The TTL is deliberately longer than the AGENT default because an episodic row is the only record that a conversation happened, and `accessed_at` is refreshed by recall — a row that keeps being retrieved keeps living.",
+          "default": 90,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
         "session_ttl_days": {
-          "description": "SESSION-scope memories expire after this many days of no access.",
+          "description": "SESSION-scope memories expire after this many days of no access. Zero disables expiry.",
           "default": 7,
           "type": "integer",
           "format": "uint32",
@@ -5533,6 +5827,20 @@
           "format": "uint",
           "minimum": 0.0
         },
+        "min_similarity": {
+          "description": "Minimum cosine similarity a memory must reach against the query before it is recalled at all — the \"nothing rather than noise\" floor (#7808).\n\nRecall over-fetches candidates, re-ranks them by cosine, and truncates to top-k. With no floor, a sparse store fills that top-k with whatever exists: vectors that fail to compare sink to the bottom, but merely-irrelevant ones are promoted on merit and then injected into the prompt as if they were answers. A floor makes an empty recall possible, which is the honest outcome when nothing stored is actually about the query.\n\n`None` (the default) preserves the historical behaviour: every re-ranked candidate is eligible. Useful values sit around 0.2–0.4 for `text-embedding-3-small`; too high a floor empties recall entirely, so raise it while watching what recall returns rather than setting it blind. Ignored when no query embedding exists (the `content LIKE` / FTS fallback measures no similarity), and overridable per agent via [`ProactiveMemoryOverrides::min_similarity`] or per call by the `memory_semantic_search` tool's `min_similarity` argument.",
+          "default": null,
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "session_scoped_recall": {
+          "description": "Whether `auto_memorize` stamps each extracted memory with the session it came from, and `auto_retrieve` refuses to surface a memory stamped for a *different* session (#7605).\n\nThe proactive store is per **agent**, not per conversation, so before this switch existed one visitor's turn on a public agent could be auto-retrieved into another visitor's turn purely through memory — even when the two turns were addressed to different `session_id`s and their message histories never touched. Default `true`: a memory belongs to the conversation that produced it unless an operator says otherwise.\n\nSetting `false` restores the pre-#7605 behaviour (every memory of an agent is a candidate for every one of that agent's turns). That is the right choice for a single-user assistant whose `session_mode = \"new\"` sub-agents are expected to inherit what earlier runs learned; it is the wrong choice for anything serving more than one person.\n\nMemories written before this shipped carry no session tag and stay recallable from every session, so turning it on does not hide an existing store.",
+          "default": true,
+          "type": "boolean"
+        },
         "session_ttl_hours": {
           "description": "Session memory TTL in hours. Memories older than this are cleaned up automatically before each agent execution. Default: 24 hours.",
           "default": 24,
@@ -5845,10 +6153,48 @@
         }
       }
     },
+    "ReasoningMode": {
+      "description": "How hard the model should reason on a turn (#7946).\n\n`budget_tokens` cannot express two things operators need. It cannot say \"do not reason at all\" — a sub-1024 budget merely omits the opt-in, which leaves a model that reasons by default (every DeepSeek V4 id) reasoning anyway — and it cannot reach the top rung of providers that have one (`max` / `xhigh`), because the bucket mapping in the OpenAI-compatible driver tops out at `high`. This enum is the direct control: it names the intent and each driver translates it into whatever its wire actually accepts.\n\nDeliberately four rungs rather than the union of every provider's vocabulary. `medium` is reachable only as the `budget_tokens` fallback bucket, because a fifth rung whose only distinct meaning is \"DeepSeek folds it into `high`\" is a knob that does nothing on the provider that motivated it.",
+      "oneOf": [
+        {
+          "description": "Do not reason — the wire-level \"non-think\" toggle.",
+          "type": "string",
+          "enum": [
+            "none"
+          ]
+        },
+        {
+          "description": "Reason briefly.",
+          "type": "string",
+          "enum": [
+            "low"
+          ]
+        },
+        {
+          "description": "Reason at the provider's normal full effort.",
+          "type": "string",
+          "enum": [
+            "high"
+          ]
+        },
+        {
+          "description": "Reason at the provider's highest available effort.",
+          "type": "string",
+          "enum": [
+            "max"
+          ]
+        }
+      ]
+    },
     "RegistryConfig": {
       "description": "Registry sync configuration.\n\nConfigure in config.toml: ```toml [registry] cache_ttl_secs = 86400 # Optional: proxy/mirror prefix for users behind the GFW. # All GitHub URLs are prefixed with this value, e.g. #   registry_mirror = \"https://ghproxy.cn\" # turns \"https://github.com/...\" into \"https://ghproxy.cn/https://github.com/...\" registry_mirror = \"\" # Optional: full base URL of the forge that hosts the registry repo. # Default unset = GitHub at GQAdonis/librefang-registry (the BossFang fork # default; the owner lives in the REGISTRY_REPO_PATH constant). Set to # consume a Codeberg/Forgejo-hosted registry, e.g. #   registry_host = \"https://codeberg.org\" ```",
       "type": "object",
       "properties": {
+        "auto_sync": {
+          "description": "Whether the daemon refreshes `~/.librefang/registry/` from upstream on its own (default: `true`).\n\nThat checkout is a git clone the sync fast-forwards with `git reset --hard origin/main`, so every local modification under it is destroyed — including the ones `PUT /api/hands/{id}/manifest` writes, which land in `registry/hands/<id>/HAND.toml` for a hand that shipped with the registry. Set to `false` to freeze the checkout: boot skips its `sync_registry` pass and the periodic catalog task skips the network refresh while still rebuilding the model catalog from what is already on disk.\n\nOnly *automatic* refreshes are gated. `librefang init` and `POST /api/catalog/update` are explicit operator actions and still fetch, so freezing the registry does not strand an operator who wants an update. `POST /api/hands/reload` never fetched from upstream in the first place — it only reloads hand definitions already on disk into memory — so it is unaffected either way.\n\nEquivalent to setting `LIBREFANG_REGISTRY_OFFLINE=1`, except it is scoped to the automatic paths rather than every fetch in the process tree, and it survives in `config.toml` rather than in whatever launched the daemon.",
+          "default": true,
+          "type": "boolean"
+        },
         "cache_ttl_secs": {
           "description": "Cache TTL for registry sync in seconds (default: 86400 = 24 hours). The registry is re-downloaded when the local cache is older than this.",
           "default": 86400,
@@ -6702,7 +7048,7 @@
           "type": "boolean"
         },
         "registry_repo": {
-          "description": "Upstream skill-registry repository, in GitHub `owner/name` form, targeted by the \"Propose to Registry\" action (`POST /api/skills/{name}/propose`). When unset the API falls back to the built-in default (`librefang/librefang-registry`). The proposal flow forks this repo under the authenticated GitHub user, pushes the evolved skill files to a branch, and opens a pull request back upstream.",
+          "description": "Upstream registry repository, in GitHub `owner/name` form, targeted by the \"Propose to Registry\" actions for skills (`POST /api/skills/{name}/propose`) and agent types (`POST /api/templates/{name}/promote`). When unset the API falls back to the built-in default (`librefang/librefang-registry`). The proposal flow forks this repo under the authenticated GitHub user, pushes the files to a branch, and opens a pull request back upstream.",
           "default": null,
           "type": [
             "string",
@@ -6977,9 +7323,14 @@
       ]
     },
     "TaskBoardConfig": {
-      "description": "Task-board (shared-task-queue) safety knobs.\n\nWhen a worker agent calls `task_claim` the task transitions to `in_progress` and `claimed_at` is stamped. If the worker's LLM stalls (empty response, crash, timeout) it will never call `task_complete` and the task would otherwise stay `in_progress` forever — no retry, no external signal, no way for the delegator to know something broke (issues #2923, #2926).\n\nThe sweeper runs in the kernel and flips stuck tasks back to `pending` so they can be reclaimed, clearing `assigned_to` in the process.\n\nConfigure in config.toml: ```toml [task_board] claim_ttl_secs = 600         # 10 minutes — auto-reset after this sweep_interval_secs = 30     # how often the sweeper runs ```\n\nSetting `claim_ttl_secs = 0` disables the sweeper entirely — useful for long-running human-in-the-loop tasks where a 10 minute reset would be wrong.",
+      "description": "Task-board (shared-task-queue) safety knobs.\n\nWhen a worker agent calls `task_claim` the task transitions to `in_progress` and `claimed_at` is stamped. If the worker's LLM stalls (empty response, crash, timeout) it will never call `task_complete` and the task would otherwise stay `in_progress` forever — no retry, no external signal, no way for the delegator to know something broke (issues #2923, #2926).\n\nThe sweeper runs in the kernel and flips stuck tasks back to `pending` so they can be reclaimed, clearing `assigned_to` in the process.\n\nConfigure in config.toml: ```toml [task_board] claim_ttl_secs = 600         # 10 minutes — auto-reset after this sweep_interval_secs = 30     # how often the sweeper runs assignee_wake = true         # wake the assignee even with no trigger declared ```\n\nSetting `claim_ttl_secs = 0` disables the sweeper entirely — useful for long-running human-in-the-loop tasks where a 10 minute reset would be wrong.\n\nEvery field is re-read live by its consumer — the sweeper re-reads its three knobs on each tick, and `assignee_wake` is read at the synthesis site on each `TaskPosted` — so the whole struct is hot-reloadable (`config_reload::build_reload_plan`).",
       "type": "object",
       "properties": {
+        "assignee_wake": {
+          "description": "Wake the assignee of a `TaskPosted` event even when no stored trigger covers them (issue #6728). Default: `true`.\n\nA task addressed to an agent used to reach that agent only if an operator had separately registered a matching `TaskPosted` trigger; with none, the task sat `pending` indefinitely and nothing said so. When this is enabled the kernel synthesizes the wake itself, so delivery no longer depends on out-of-band operator setup.\n\nThe synthesized wake defers to a stored trigger whenever one can currently fire for that assignee, so an operator who declared their own wake keeps full control of its prompt, session mode and routing. Set to `false` (globally here, or per agent via the manifest's `assignee_wake`) to opt out entirely — that flag is the only suppression; a disabled or fire-exhausted trigger is not one.",
+          "default": true,
+          "type": "boolean"
+        },
         "claim_ttl_secs": {
           "description": "How long an `in_progress` task may stay claimed before the sweeper resets it to `pending`. Default: 600 s (10 minutes). 0 disables.",
           "default": 600,
@@ -6994,9 +7345,23 @@
           "format": "uint32",
           "minimum": 0.0
         },
+        "pending_grace_secs": {
+          "description": "How long a task may sit `pending` before the sweeper's reconcile wakes its assignee, in seconds. Default: 60.\n\nThe event-driven wake is the fast path; this is the floor under it, so the grace window is what keeps the two from racing. A task younger than this is assumed to be in the hands of the wake its own `TaskPosted` event produced.\n\nLower means work lost by a dropped event is recovered sooner; higher means fewer redundant activations while an agent is mid-turn. `0` disables the reconcile, leaving delivery purely event-driven — which is the behaviour this floor exists to correct, so prefer the per-agent `assignee_wake` opt-out for one noisy agent.",
+          "default": 60,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "sweep_interval_secs": {
           "description": "How often the sweeper scans for stuck tasks. Default: 30 s.",
           "default": 30,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "wake_backoff_max_secs": {
+          "description": "Upper bound, in seconds, on the exponential backoff applied when reconcile wakes do not move an agent's pending tasks. Default: 900.\n\nEach wake that leaves the agent's pending set unchanged doubles the delay from `pending_grace_secs` up to this cap; any task leaving `pending` resets it. Without the cap, an agent that cannot act on its tasks — a failing provider, a missing `task_claim` capability — would be woken on every tick forever.",
+          "default": 900,
           "type": "integer",
           "format": "uint64",
           "minimum": 0.0
@@ -7165,6 +7530,18 @@
           "format": "uint32",
           "minimum": 0.0
         },
+        "reasoning_mode": {
+          "description": "Explicit reasoning mode (#7946).\n\nWhen set it wins over the [`Self::budget_tokens`] bucket mapping for drivers that honour it; when `None` the budget bucket is used, which is the pre-#7946 behaviour.",
+          "default": null,
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReasoningMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "stream_thinking": {
           "description": "Whether to stream thinking tokens to the client.",
           "default": false,
@@ -7213,7 +7590,7 @@
       ]
     },
     "ToolExecConfig": {
-      "description": "Top-level tool-execution backend configuration in `config.toml`.\n\n```toml [tool_exec] kind = \"local\"   # default\n\n# NOTE: setting kind != \"local\" here selects the resolved backend at # boot, but actual tool dispatch through the new ToolExecBackend # trait is wired up in a follow-up PR. Until then, tool calls fall # back to the legacy local/docker path. See # docs/architecture/tool-exec-backends.md \"Status\" section.\n\n# [tool_exec.ssh] # host = \"build.example.com\" # user = \"agent\" # key_path = \"/home/me/.ssh/id_ed25519\"\n\n# [tool_exec.daytona] # api_url = \"https://app.daytona.io\" # api_key_env = \"DAYTONA_API_KEY\" ```\n\n`kind` selects the active backend; the matching sub-table carries the connection knobs. Inactive sub-tables are ignored — keeping stale config around is fine.",
+      "description": "Top-level tool-execution backend configuration in `config.toml`.\n\n```toml [tool_exec] kind = \"local\"   # default\n\n# Default per-command timeout for the local backend, in seconds. # Omit to inherit the global `tool_timeout_secs`; `0` is rejected at boot. # default_timeout_secs = 300\n\n# NOTE: setting kind != \"local\" here selects the resolved backend at # boot, but actual tool dispatch through the new ToolExecBackend # trait is wired up in a follow-up PR. Until then, tool calls fall # back to the legacy local/docker path. See # docs/architecture/tool-exec-backends.md \"Status\" section.\n\n# [tool_exec.ssh] # host = \"build.example.com\" # user = \"agent\" # key_path = \"/home/me/.ssh/id_ed25519\"\n\n# [tool_exec.daytona] # api_url = \"https://app.daytona.io\" # api_key_env = \"DAYTONA_API_KEY\" ```\n\n`kind` selects the active backend; the matching sub-table carries the connection knobs. Inactive sub-tables are ignored — keeping stale config around is fine.",
       "type": "object",
       "properties": {
         "daytona": {
@@ -7226,6 +7603,15 @@
               "type": "null"
             }
           ]
+        },
+        "default_timeout_secs": {
+          "description": "Default per-command timeout for the local backend, in seconds, applied when an `ExecSpec` carries no timeout of its own.\n\nUnset inherits the global `tool_timeout_secs` (120s), so raising that one knob moves both tool-timeout paths instead of only the `ToolPolicy` one (#8171). Note that this is a change of default in one direction: the constant it replaces was 30s, so an unconfigured local backend now lets a hung command run four times longer before its own guard would fire. Set it to pin the local backend independently of the tool-dispatch timeout — which is the only way to make the backend's timeout the one that fires, since an equal value always loses the race to the dispatch timeout wrapping the call. The per-tool `tool_timeouts` map is not folded in here: it is resolved per call and has to arrive on the `ExecSpec`. `0` is rejected by [`ToolExecConfig::validate`].",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kind": {
           "description": "Active backend kind. Default: `local`.",
@@ -7847,6 +8233,19 @@
         "beta",
         "rc"
       ]
+    },
+    "UsageConfig": {
+      "description": "Usage/metering retention (#7891).\n\nThe daemon runs a daily sweep that hard-deletes `usage_events` rows older than `retention_days`. Before #7891 that horizon was a literal `90` in `background_lifecycle.rs`, so an operator who needed a longer window for quarterly or annual cost reporting had no way to ask for one, and one who wanted a shorter window for data-minimisation reasons had no way to shorten it either.\n\nThis is the retention of the underlying event table, so it bounds every `/api/usage*` endpoint at once — not just the daily breakdown. Raising it grows the table roughly linearly with call volume; the rows are small (a dozen scalar columns) but they are the highest-cardinality table in the substrate, so treat a multi-year horizon as a storage decision rather than a free one.\n\nConfigure in config.toml:\n\n```toml [usage] retention_days = 365 ```",
+      "type": "object",
+      "properties": {
+        "retention_days": {
+          "description": "How many days of `usage_events` the daily retention sweep keeps.\n\nDefault: 90, which is the horizon the sweep has always enforced. Set to 0 to disable pruning entirely — the table then grows without bound, which is the right call only when an external archival job (for example a scheduled `GET /api/usage/export`) owns the lifecycle.",
+          "default": 90,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
     },
     "UsageFooterMode": {
       "description": "Controls what usage info appears in response footers.",

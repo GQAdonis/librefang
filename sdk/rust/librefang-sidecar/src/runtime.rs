@@ -25,7 +25,7 @@
 //!     }
 //! }
 //!
-//! #[tokio::main]
+//! #[tokio::main(flavor = "current_thread")]
 //! async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 //!     run_stdio(MyAdapter).await
 //! }
@@ -134,10 +134,13 @@ pub trait SidecarAdapter: Send + Sync {
         Vec::new()
     }
 
-    /// Optional protocol-version tag carried on `ready` for skew diagnostics.
-    /// Logged by the daemon, never enforced.
+    /// Wire-protocol version announced on `ready`.
+    ///
+    /// Defaults to [`PROTOCOL_VERSION`](crate::protocol::PROTOCOL_VERSION) so every adapter declares it without a per-adapter override — the shape of #7140, where the field existed on both sides of the wire and was pinned at 1 in the shared conformance corpus, yet no adapter ever set it and every real `ready` frame carried `null`.
+    /// The daemon compares it against its own constant and warns on skew or absence; it still never refuses the connection.
+    /// Override only when an adapter deliberately speaks an older protocol.
     fn protocol_version(&self) -> Option<u32> {
-        None
+        Some(crate::protocol::PROTOCOL_VERSION)
     }
 
     /// Build the `ready` event payload from the trait's declarative methods.
@@ -566,7 +569,7 @@ pub async fn run_stdio_with<A: SidecarAdapter + 'static>(
 /// Returning `Result` from the builder means a missing-env bootstrap failure becomes a structured error message instead of a `panic!` + stack trace, which is what `MyAdapter::new()` -> `expect("BOT_TOKEN must be set")` would otherwise produce.
 ///
 /// ```ignore
-/// #[tokio::main]
+/// #[tokio::main(flavor = "current_thread")]
 /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 ///     run_stdio_main(MyAdapter::schema, || Ok(MyAdapter::new())).await
 /// }

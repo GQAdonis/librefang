@@ -12,7 +12,7 @@ cargo xtask <command> [options]
 
 ### `release` — Full Release Flow
 
-Runs changelog generation, version sync, dashboard build, commit, tag, and creates a PR.
+Runs `changelog.d/` fragment assembly, changelog generation, version sync, dashboard build, commit, tag, and creates a PR.
 
 ```bash
 cargo xtask release                                      # interactive (prompts for stable/beta/rc)
@@ -80,6 +80,26 @@ PRs are classified by conventional commit prefix:
 
 Requires: `gh` CLI.
 
+### `collect-fragments` — Assemble `changelog.d/` into `[Unreleased]`
+
+Fold every `changelog.d/<section>/*.md` fragment into the `## [Unreleased]` section of `CHANGELOG.md` and delete the files consumed.
+
+```bash
+cargo xtask collect-fragments
+```
+
+Contributors write one fragment per changelog entry instead of editing the shared `## [Unreleased]` section, which is what makes two concurrent PRs conflict on a file where the conflict carries no information.
+Format and sections: `changelog.d/README.md`.
+
+Bullets are ordered by file name within each section, so assembly is deterministic rather than dependent on filesystem read order.
+An existing `### ` subsection is appended to, never replaced, so editing `## [Unreleased]` by hand keeps working; a missing subsection is created in the repo's existing order (Added, Fixed, Changed, Security, Documentation).
+A fragment in a directory that is not one of those five sections is left in place with a warning rather than deleted — the gate that rejects it is `scripts/check-changelog-attribution.py`, which runs per-PR and on every push to main.
+
+`release` runs this step before `changelog`, so fragments are ordinary `[Unreleased]` bullets by the time a dated `## [VERSION]` section exists.
+A no-op exiting 0 when `changelog.d/` is absent or empty.
+
+If a fragment cannot be deleted after the fold, the command attempts every remaining deletion and then fails, naming the survivors: `CHANGELOG.md` is already written at that point, so re-running without removing them by hand would fold the same entries in a second time.
+
 ### `sync-versions` — Version Sync
 
 Sync CalVer version strings across all packages.
@@ -93,7 +113,7 @@ cargo xtask sync-versions 2026.3.2214-rc1   # pre-release version
 Updates:
 - `Cargo.toml` workspace version
 - `sdk/javascript/package.json`
-- `sdk/python/setup.py` (PEP 440: `-beta1` → `b1`)
+- `sdk/python/pyproject.toml` (PEP 440: `-beta1` → `b1`)
 - `sdk/rust/Cargo.toml` + `README.md`
 - `packages/whatsapp-gateway/package.json`
 - `crates/librefang-desktop/tauri.conf.json` (MSI-compatible encoding)

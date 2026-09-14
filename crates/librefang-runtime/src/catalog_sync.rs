@@ -44,10 +44,15 @@ struct ProviderCatalogFile {
 /// for CN / air-gapped users).
 ///
 /// `registry_host` is forwarded to `registry_sync` (full base URL of the forge hosting the registry; `None` = GitHub).
+///
+/// `refresh_from_upstream` is `[registry] auto_sync`.
+/// It gates the network refresh only — see the call site below for why the catalog rebuild is deliberately not gated with it.
+/// The periodic task passes the configured value; `POST /api/catalog/update` passes `true`, because clicking Update is an explicit request to fetch.
 pub async fn sync_catalog_to(
     home_dir: &std::path::Path,
     registry_mirror: &str,
     registry_host: Option<&str>,
+    refresh_from_upstream: bool,
 ) -> Result<CatalogSyncResult, String> {
     let cache_meta_dir = home_dir.join("cache").join("catalog");
     std::fs::create_dir_all(&cache_meta_dir)
@@ -64,7 +69,10 @@ pub async fn sync_catalog_to(
     // background task, manual trigger) don't race on the same
     // working tree. It's blocking (git subprocess), so hop to a
     // blocking task to keep the runtime responsive.
-    {
+    //
+    // `refresh_from_upstream = false` (`[registry] auto_sync = false`) skips only the network half.
+    // The catalog is still rebuilt from `registry/providers/` below, so an operator who froze the checkout keeps a working catalog instead of an empty one.
+    if refresh_from_upstream {
         let home = home_dir.to_path_buf();
         let mirror = registry_mirror.to_string();
         let host = registry_host.map(str::to_string);
@@ -79,6 +87,11 @@ pub async fn sync_catalog_to(
                  whatever is already on disk (previous sync may still be valid)"
             );
         }
+    } else {
+        tracing::debug!(
+            "[registry] auto_sync = false — rebuilding the catalog from the existing \
+             checkout without fetching"
+        );
     }
 
     let repo_providers = home_dir.join("registry").join("providers");
@@ -86,18 +99,51 @@ pub async fn sync_catalog_to(
     let mut models_count = 0usize;
 
     if repo_providers.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&repo_providers) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "toml") {
-                    file_count += 1;
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(file) = toml::from_str::<ProviderCatalogFile>(&content) {
-                            models_count += file.models.len();
+        match std::fs::read_dir(&repo_providers) {
+            Ok(entries) => {
+                for entry in entries {
+                    let entry = match entry {
+                        Ok(entry) => entry,
+                        Err(error) => {
+                            tracing::warn!(%error, "failed to inspect provider catalog entry");
+                            continue;
                         }
+                    };
+                    let path = entry.path();
+                    if path.extension().is_none_or(|e| e != "toml") {
+                        continue;
                     }
+                    let content = match std::fs::read_to_string(&path) {
+                        Ok(content) => content,
+                        Err(error) => {
+                            tracing::warn!(
+                                path = %path.display(),
+                                %error,
+                                "failed to read provider catalog"
+                            );
+                            continue;
+                        }
+                    };
+                    let file = match toml::from_str::<ProviderCatalogFile>(&content) {
+                        Ok(file) => file,
+                        Err(error) => {
+                            tracing::warn!(
+                                path = %path.display(),
+                                %error,
+                                "failed to parse provider catalog"
+                            );
+                            continue;
+                        }
+                    };
+                    file_count += 1;
+                    models_count += file.models.len();
                 }
             }
+            Err(error) => tracing::warn!(
+                path = %repo_providers.display(),
+                %error,
+                "failed to scan provider catalogs"
+            ),
         }
     } else {
         tracing::warn!(
@@ -187,6 +233,66 @@ pub fn remove_legacy_cache_dirs(home_dir: &std::path::Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `refresh_from_upstream = false` must gate the *fetch*, not the rebuild.
+    ///
+    /// An operator sets `[registry] auto_sync = false` to stop the daemon fast-forwarding `~/.librefang/registry/` over their local edits.
+    /// If that also skipped the catalog rebuild they would silently lose every model in the catalog, which is a much worse outcome than the clobbering they were avoiding — so this asserts the providers already on disk still load.
+    ///
+    /// It also proves the call makes no network attempt: the temp dir is not a git repo and has no `.sync_marker`, so a non-gated run would try a git clone and then an HTTP download of the real registry.
+    #[tokio::test]
+    async fn frozen_registry_still_rebuilds_the_catalog_from_disk() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let providers = tmp.path().join("registry").join("providers");
+        std::fs::create_dir_all(&providers).expect("create providers dir");
+        std::fs::write(
+            providers.join("acme.toml"),
+            r#"
+[[models]]
+id = "acme-1"
+display_name = "Acme One"
+provider = "acme"
+tier = "balanced"
+context_window = 128000
+max_output_tokens = 4096
+input_cost_per_m = 1.0
+output_cost_per_m = 2.0
+supports_tools = true
+supports_vision = false
+supports_streaming = true
+"#,
+        )
+        .expect("write provider catalog");
+
+        let result = sync_catalog_to(tmp.path(), "", None, false)
+            .await
+            .expect("catalog rebuild must succeed with the fetch gated off");
+
+        assert_eq!(
+            result.files_downloaded, 1,
+            "the on-disk provider file must still be read; got {result:?}"
+        );
+        assert!(
+            result.models_count >= 1,
+            "its models must reach the catalog; got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn malformed_provider_is_not_reported_as_downloaded() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let providers = tmp.path().join("registry").join("providers");
+        std::fs::create_dir_all(&providers).expect("create providers dir");
+        std::fs::write(providers.join("broken.toml"), "[[models]")
+            .expect("write malformed provider catalog");
+
+        let result = sync_catalog_to(tmp.path(), "", None, false)
+            .await
+            .expect("catalog rebuild should skip malformed provider files");
+
+        assert_eq!(result.files_downloaded, 0);
+        assert_eq!(result.models_count, 0);
+    }
 
     #[test]
     fn test_provider_catalog_parse() {

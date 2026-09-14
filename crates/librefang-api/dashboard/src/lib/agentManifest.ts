@@ -30,12 +30,23 @@ export interface ManifestFormState {
     | { mode: "proactive"; conditions: string[] }
     | { mode: "continuous"; check_interval_secs: string };
 
+  // Every numeric field here is tri-state, and `""` is the third state.
+  // It means "this agent has no opinion", which the kernel reads as inherit:
+  // the per-model override supplies the value, and failing that the system default.
+  // It is emphatically not zero, and it is not the same as a number that happens to match the default.
   model: {
     provider: string;
     model: string;
     system_prompt: string;
     temperature: string;
     max_tokens: string;
+    top_p: string;
+    frequency_penalty: string;
+    presence_penalty: string;
+    // Endpoint limits rather than sampling preferences: what the model can
+    // read and emit, not how it should sound.
+    context_window: string;
+    max_output_tokens: string;
     api_key_env: string;
     base_url: string;
   };
@@ -131,6 +142,13 @@ export interface ManifestFormState {
   tools_disabled: boolean;
   inherit_parent_context: boolean;
   generate_identity_files: boolean;
+
+  workspaces: Array<{
+    _uid: string;
+    name: string;
+    path: string;
+    mode: "rw" | "r";
+  }>;
 }
 
 export interface ManifestExtras {
@@ -138,6 +156,11 @@ export interface ManifestExtras {
   model: TomlTable;
   resources: TomlTable;
   capabilities: TomlTable;
+  // `[thinking]` keys the form has no widget for — `reasoning_mode` (#7946) is
+  // the first one. Without this slot the form re-emits the section from its two
+  // known fields alone, so opening an agent in the editor and saving it
+  // silently deletes any newer key from that agent's agent.toml.
+  thinking: TomlTable;
 }
 
 export const emptyManifestExtras = (): ManifestExtras => ({
@@ -145,6 +168,7 @@ export const emptyManifestExtras = (): ManifestExtras => ({
   model: {},
   resources: {},
   capabilities: {},
+  thinking: {},
 });
 
 export const emptyManifestForm = (): ManifestFormState => ({
@@ -165,6 +189,11 @@ export const emptyManifestForm = (): ManifestFormState => ({
     system_prompt: "",
     temperature: "",
     max_tokens: "",
+    top_p: "",
+    frequency_penalty: "",
+    presence_penalty: "",
+    context_window: "",
+    max_output_tokens: "",
     api_key_env: "",
     base_url: "",
   },
@@ -223,6 +252,7 @@ export const emptyManifestForm = (): ManifestFormState => ({
   tools_disabled: false,
   inherit_parent_context: true,
   generate_identity_files: true,
+  workspaces: [],
 });
 
 // Keys the form fully owns within each scope. Anything else is preserved
@@ -260,6 +290,7 @@ const FORM_TOP_LEVEL_KEYS = new Set([
   "context_injection",
   "response_format",
   "exec_policy",
+  "workspaces",
 ]);
 const FORM_MODEL_KEYS = new Set([
   "provider",
@@ -267,6 +298,11 @@ const FORM_MODEL_KEYS = new Set([
   "system_prompt",
   "temperature",
   "max_tokens",
+  "top_p",
+  "frequency_penalty",
+  "presence_penalty",
+  "context_window",
+  "max_output_tokens",
   "api_key_env",
   "base_url",
 ]);
@@ -297,6 +333,7 @@ const FORM_CAPABILITY_KEYS = new Set([
   "agent_spawn",
   "ofp_discover",
 ]);
+const FORM_THINKING_KEYS = new Set(["budget_tokens", "stream_thinking"]);
 
 const SCHEDULE_DEFAULT_INTERVAL = "300";
 const PRIORITIES = ["Low", "Normal", "High", "Critical"] as const;
@@ -305,8 +342,46 @@ const WEB_SEARCH_MODES = ["off", "auto", "always"] as const;
 const INJECTION_POSITIONS = ["system", "before_user", "after_reset"] as const;
 const EXEC_SHORTHANDS = ["allow", "deny", "full", "allowlist"] as const;
 
-const escapeTomlString = (value: string): string =>
-  `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+const escapeTomlString = (value: string): string => {
+  let escaped = "";
+  for (const character of value) {
+    switch (character) {
+      case "\\":
+        escaped += "\\\\";
+        break;
+      case '"':
+        escaped += '\\"';
+        break;
+      case "\b":
+        escaped += "\\b";
+        break;
+      case "\t":
+        escaped += "\\t";
+        break;
+      case "\n":
+        escaped += "\\n";
+        break;
+      case "\f":
+        escaped += "\\f";
+        break;
+      case "\r":
+        escaped += "\\r";
+        break;
+      default: {
+        const codeUnit = character.charCodeAt(0);
+        if (character.length === 1 && codeUnit >= 0xd800 && codeUnit <= 0xdfff) {
+          escaped += "\ufffd";
+        } else if (codeUnit <= 0x1f || character === "\u007f") {
+          escaped += `\\u${codeUnit.toString(16).padStart(4, "0")}`;
+        } else {
+          escaped += character;
+        }
+        break;
+      }
+    }
+  }
+  return `"${escaped}"`;
+};
 
 const tomlArray = (values: string[]): string =>
   `[${values.map(escapeTomlString).join(", ")}]`;
@@ -325,6 +400,39 @@ const parseInteger = (raw: string): number | null => {
   return n;
 };
 
+const TOML_INTEGER_MAX = 9_223_372_036_854_775_807n;
+
+// Resource byte/time/token quotas are u64 in Rust, but TOML integers are
+// signed 64-bit values. Keep their decimal form as a string so values beyond
+// JavaScript's safe integer range survive the visual-editor round-trip.
+const parseUnsignedTomlInteger = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = BigInt(trimmed);
+  if (value > TOML_INTEGER_MAX) return null;
+  return value.toString();
+};
+
+const isPositiveUnsignedTomlInteger = (raw: string): boolean => {
+  const value = parseUnsignedTomlInteger(raw);
+  return value !== null && BigInt(value) > 0n;
+};
+
+/**
+ * Parse a float that may legitimately be negative.
+ *
+ * `parseFloatish` refuses negatives because every field it was written for is a
+ * cost or a quota. `frequency_penalty` and `presence_penalty` range -2.0..2.0,
+ * so routing them through it silently dropped every negative value the operator
+ * typed — the field accepted the input and the TOML came out without the key.
+ */
+const parseSignedFloat = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+};
+
 const parseFloatish = (raw: string): number | null => {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -339,6 +447,10 @@ const writeStringScalar = (lines: string[], key: string, value: string): void =>
   lines.push(`${key} = ${escapeTomlString(value)}`);
 };
 const writeNumberScalar = (lines: string[], key: string, value: number | null): void => {
+  if (value === null) return;
+  lines.push(`${key} = ${value}`);
+};
+const writeIntegerScalar = (lines: string[], key: string, value: string | null): void => {
   if (value === null) return;
   lines.push(`${key} = ${value}`);
 };
@@ -412,22 +524,61 @@ export const serializeManifestForm = (
   if (form.response_format.mode !== "text") {
     filteredTopExtras = omitKey(filteredTopExtras, "response_format");
   }
+
   const { inline: topInlineExtras, tables: topTableExtras } =
     splitTopLevelExtras(filteredTopExtras);
   for (const line of renderExtraScalars(topInlineExtras)) lines.push(line);
 
+  const deferredSectionExtras: Record<string, TomlTable | TomlTable[]> = {};
   // Section-extras that contain nested tables must NOT be inlined inside
   // the [section] block — a stray `[name]` header would re-anchor TOML
   // scoping for everything that follows. Defer them and emit later with
   // their full dotted key path, e.g. `[model.exotic_subtable]`.
-  const deferredSectionExtras: Record<string, TomlTable | TomlTable[]> = {};
+  // Preserved `[workspaces]` entries (mount-based declarations, or malformed
+  // non-path rows) re-emit as `[workspaces.<name>]` sub-tables beside the
+  // form's rows — routed here rather than through the trailer, which would
+  // emit a duplicate `[workspaces]` header.
+  if (isTomlTable(topTableExtras.workspaces)) {
+    for (const [name, decl] of Object.entries(topTableExtras.workspaces)) {
+      // Non-table garbage under a preserved entry is skipped rather than
+      // emitted as a header it cannot legally have.
+      if (!isTomlTable(decl)) continue;
+      deferredSectionExtras[`workspaces.${name}`] = decl;
+    }
+    delete topTableExtras.workspaces;
+  }
+
   const safeModelExtras = pluckSafeExtras(extras.model, deferredSectionExtras, "model");
   const safeResourceExtras = pluckSafeExtras(extras.resources, deferredSectionExtras, "resources");
+
   const safeCapabilityExtras = pluckSafeExtras(
     extras.capabilities,
     deferredSectionExtras,
     "capabilities",
   );
+  // Only when the form is still emitting a `[thinking]` section: unticking
+  // "enabled" is the user deleting the whole table, and the preserved keys go
+  // with it rather than stranding a `[thinking]` block the form no longer owns.
+  const safeThinkingExtras = form.thinking.enabled
+    ? pluckSafeExtras(extras.thinking, deferredSectionExtras, "thinking")
+    : {};
+
+  // [workspaces] — table header, so it is emitted here, after every
+  // top-level scalar; a header inside the scalar block would scope the
+  // remaining bare keys into the table and silently delete them.
+
+  if (form.workspaces.length) {
+    const wsBody: string[] = [];
+    for (const ws of form.workspaces) {
+      const n = ws.name.trim();
+      const p = ws.path.trim();
+      if (!n || !p) continue;
+      const parts = [`path = ${escapeTomlString(p)}`];
+      if (ws.mode === "r") parts.push(`mode = "r"`);
+      wsBody.push(`${tomlBareKeyOrQuoted(n)} = { ${parts.join(", ")} }`);
+    }
+    if (wsBody.length) lines.push("", "[workspaces]", ...wsBody);
+  }
 
   // [model]
   const modelBody: string[] = [];
@@ -436,6 +587,11 @@ export const serializeManifestForm = (
   writeStringScalar(modelBody, "system_prompt", form.model.system_prompt);
   writeNumberScalar(modelBody, "temperature", parseFloatish(form.model.temperature));
   writeNumberScalar(modelBody, "max_tokens", parseInteger(form.model.max_tokens));
+  writeNumberScalar(modelBody, "top_p", parseFloatish(form.model.top_p));
+  writeNumberScalar(modelBody, "frequency_penalty", parseSignedFloat(form.model.frequency_penalty));
+  writeNumberScalar(modelBody, "presence_penalty", parseSignedFloat(form.model.presence_penalty));
+  writeNumberScalar(modelBody, "context_window", parseInteger(form.model.context_window));
+  writeNumberScalar(modelBody, "max_output_tokens", parseInteger(form.model.max_output_tokens));
   writeStringScalar(modelBody, "api_key_env", form.model.api_key_env.trim());
   writeStringScalar(modelBody, "base_url", form.model.base_url.trim());
   const modelExtras = renderExtraScalars(safeModelExtras);
@@ -445,14 +601,14 @@ export const serializeManifestForm = (
 
   // [resources]
   const resourceBody: string[] = [];
-  writeNumberScalar(resourceBody, "max_llm_tokens_per_hour", parseInteger(form.resources.max_llm_tokens_per_hour));
+  writeIntegerScalar(resourceBody, "max_llm_tokens_per_hour", parseUnsignedTomlInteger(form.resources.max_llm_tokens_per_hour));
   writeNumberScalar(resourceBody, "max_tool_calls_per_minute", parseInteger(form.resources.max_tool_calls_per_minute));
   writeNumberScalar(resourceBody, "max_cost_per_hour_usd", parseFloatish(form.resources.max_cost_per_hour_usd));
   writeNumberScalar(resourceBody, "max_cost_per_day_usd", parseFloatish(form.resources.max_cost_per_day_usd));
   writeNumberScalar(resourceBody, "max_cost_per_month_usd", parseFloatish(form.resources.max_cost_per_month_usd));
-  writeNumberScalar(resourceBody, "max_memory_bytes", parseInteger(form.resources.max_memory_bytes));
-  writeNumberScalar(resourceBody, "max_cpu_time_ms", parseInteger(form.resources.max_cpu_time_ms));
-  writeNumberScalar(resourceBody, "max_network_bytes_per_hour", parseInteger(form.resources.max_network_bytes_per_hour));
+  writeIntegerScalar(resourceBody, "max_memory_bytes", parseUnsignedTomlInteger(form.resources.max_memory_bytes));
+  writeIntegerScalar(resourceBody, "max_cpu_time_ms", parseUnsignedTomlInteger(form.resources.max_cpu_time_ms));
+  writeIntegerScalar(resourceBody, "max_network_bytes_per_hour", parseUnsignedTomlInteger(form.resources.max_network_bytes_per_hour));
   const resourceExtras = renderExtraScalars(safeResourceExtras);
   if (resourceBody.length || resourceExtras.length) {
     lines.push("", "[resources]", ...resourceBody, ...resourceExtras);
@@ -479,7 +635,7 @@ export const serializeManifestForm = (
     const body: string[] = [];
     writeNumberScalar(body, "budget_tokens", parseInteger(form.thinking.budget_tokens));
     writeBoolScalar(body, "stream_thinking", form.thinking.stream_thinking);
-    lines.push("", "[thinking]", ...body);
+    lines.push("", "[thinking]", ...body, ...renderExtraScalars(safeThinkingExtras));
   }
 
   // [autonomous]
@@ -487,9 +643,9 @@ export const serializeManifestForm = (
     const body: string[] = [];
     writeNumberScalar(body, "max_iterations", parseInteger(form.autonomous.max_iterations));
     writeNumberScalar(body, "max_restarts", parseInteger(form.autonomous.max_restarts));
-    writeNumberScalar(body, "heartbeat_interval_secs", parseInteger(form.autonomous.heartbeat_interval_secs));
+    writeIntegerScalar(body, "heartbeat_interval_secs", parseUnsignedTomlInteger(form.autonomous.heartbeat_interval_secs));
     writeNumberScalar(body, "heartbeat_timeout_secs", parseInteger(form.autonomous.heartbeat_timeout_secs));
-    writeNumberScalar(body, "heartbeat_keep_recent", parseInteger(form.autonomous.heartbeat_keep_recent));
+    writeIntegerScalar(body, "heartbeat_keep_recent", parseUnsignedTomlInteger(form.autonomous.heartbeat_keep_recent));
     writeStringScalar(body, "heartbeat_channel", form.autonomous.heartbeat_channel.trim());
     writeStringScalar(body, "quiet_hours", form.autonomous.quiet_hours.trim());
     lines.push("", "[autonomous]", ...body);
@@ -537,8 +693,15 @@ export const serializeManifestForm = (
   // `[model.exotic_subtable]` rather than quoting the dotted name.
   const nestedDeferred: TomlTable = {};
   for (const [dottedKey, value] of Object.entries(deferredSectionExtras)) {
-    const [section, subKey] = dottedKey.split(".", 2);
-    if (!subKey) continue;
+    // Split on the FIRST dot only. `String.split(".", 2)` truncates rather
+    // than preserving the remainder, so a preserved name that itself
+    // contains a dot (e.g. "workspaces.notes.v2", a legitimate arbitrary
+    // user string) lost everything after the second segment and
+    // overwrote a sibling entry.
+    const dot = dottedKey.indexOf(".");
+    if (dot === -1) continue;
+    const section = dottedKey.slice(0, dot);
+    const subKey = dottedKey.slice(dot + 1);
     if (!isTomlTable(nestedDeferred[section])) {
       nestedDeferred[section] = {};
     }
@@ -591,7 +754,7 @@ const renderSchedule = (s: ManifestFormState["schedule"]): string => {
     case "proactive":
       return `schedule = { proactive = { conditions = ${tomlArray(s.conditions)} } }`;
     case "continuous": {
-      const interval = parseInteger(s.check_interval_secs) ?? Number(SCHEDULE_DEFAULT_INTERVAL);
+      const interval = parseUnsignedTomlInteger(s.check_interval_secs) ?? SCHEDULE_DEFAULT_INTERVAL;
       return `schedule = { continuous = { check_interval_secs = ${interval} } }`;
     }
   }
@@ -603,13 +766,9 @@ const renderResponseFormat = (rf: ManifestFormState["response_format"]): string 
   // json_schema — schemas can be deeply nested, which makes inline-table
   // syntax brittle. Build the value once via JSON, then convert to TOML
   // using a small recursive emitter that always produces inline syntax.
-  let schemaValue: unknown = {};
-  try {
-    schemaValue = JSON.parse(rf.schema || "{}");
-  } catch {
-    // Bad JSON in the schema field — fall back to {} rather than emit
-    // garbage. The user sees the parse error live in the form anyway.
-  }
+  // Invalid form state is blocked by validateManifestForm before submit.
+  // Keep preview serialization total while sharing the exact same supported schema domain with the validator.
+  const schemaValue = parseSupportedJsonSchema(rf.schema) ?? {};
   const parts: string[] = [`type = "json_schema"`, `name = ${escapeTomlString(rf.name || "response")}`];
   parts.push(`schema = ${jsonValueToInlineToml(schemaValue)}`);
   if (rf.strict) parts.push("strict = true");
@@ -698,12 +857,149 @@ const stringifyOrEmpty = (value: unknown): string => {
   }
 };
 
+const containsJsonNull = (value: unknown): boolean => {
+  if (value === null) return true;
+  if (Array.isArray(value)) return value.some(containsJsonNull);
+  if (typeof value === "object") return Object.values(value).some(containsJsonNull);
+  return false;
+};
+
+const hasUnsupportedJsonNumber = (raw: string): boolean => {
+  for (let index = 0; index < raw.length; index += 1) {
+    if (raw[index] === '"') {
+      index += 1;
+      while (index < raw.length && raw[index] !== '"') {
+        if (raw[index] === "\\") index += 1;
+        index += 1;
+      }
+      continue;
+    }
+    if (raw[index] !== "-" && !/[0-9]/.test(raw[index])) continue;
+
+    const token = raw
+      .slice(index)
+      .match(/^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/)?.[0];
+    if (!token) continue;
+    const value = Number(token);
+    const mantissa = token.split(/[eE]/, 1)[0];
+    const underflowed = value === 0 && /[1-9]/.test(mantissa);
+    if (
+      !Number.isFinite(value) ||
+      underflowed ||
+      (Number.isInteger(value) && !Number.isSafeInteger(value))
+    ) {
+      return true;
+    }
+    index += token.length - 1;
+  }
+  return false;
+};
+
+// JSON Schema roots are objects or booleans.
+// TOML has no null value, so a schema containing a JSON null cannot be represented without changing its meaning and must be rejected before serialization.
+const parseSupportedJsonSchema = (raw: string): boolean | Record<string, unknown> | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (hasUnsupportedJsonNumber(raw)) return undefined;
+    if (typeof parsed === "boolean") return parsed;
+    if (isTomlTable(parsed) && !containsJsonNull(parsed)) return parsed;
+  } catch {
+    // The caller reports the field-level validation error.
+  }
+  return undefined;
+};
+
+// Mirrors `Path::is_absolute` on the platforms the daemon runs on: POSIX
+// root, Windows drive letter, or UNC prefix.
+const isAbsoluteWorkspacePath = (path: string): boolean =>
+  path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/.test(path);
+
+// Mirrors the kernel's `WorkspaceMode` alias set (`#[serde(alias = "r",
+// alias = "read", alias = "read-only")]` on `ReadOnly`,
+// crates/librefang-types/src/agent.rs) and the TUI's
+// `canonical_workspace_mode` (crates/librefang-cli/src/tui/event.rs, #7835).
+// `"readonly"` is the enum's own canonical serialized form — what
+// `toml::to_string_pretty` writes on every save and what the template
+// endpoints publish — so it MUST be recognized here, or a read-only shared
+// folder silently becomes read-write the moment this form re-saves it.
+const READONLY_MODE_ALIASES = new Set(["r", "read", "read-only", "readonly"]);
+
+// TOML bare-key characters only. `expand_workspace_alias`
+// (crates/librefang-runtime/src/tool_runner/fs.rs) resolves `@name/rest` by
+// matching only the segment before the first `/` against the declared
+// name, so a name containing `/` (or other punctuation) serializes to a
+// manifest the kernel accepts but the agent can never address.
+const WORKSPACE_ALIAS_SAFE_NAME = /^[A-Za-z0-9_-]+$/;
+
+// Names already declared as preserved `[workspaces]` entries (mount-based
+// declarations the form can't render) — feeds `validateManifestForm`'s
+// collision check. Pulled out as a named helper, rather than inlined at
+// the call site, so the exact logic the app runs is covered by a test
+// instead of only the validator's own unit tests (#8013: this parameter
+// was previously wired nowhere in the app).
+export const preservedWorkspaceNamesFromExtras = (extras: ManifestExtras): string[] => {
+  const workspaces = extras.topLevel.workspaces;
+  return isTomlTable(workspaces) ? Object.keys(workspaces) : [];
+};
+
 // Form-validation errors. Returns an empty array when submittable.
-export const validateManifestForm = (form: ManifestFormState): string[] => {
+export const validateManifestForm = (
+  form: ManifestFormState,
+  // Names already present as preserved declarations (e.g. mount-based
+  // entries), so a form row cannot silently collide with them.
+  preservedWorkspaceNames: Iterable<string> = [],
+): string[] => {
   const errors: string[] = [];
   if (!form.name.trim()) errors.push("name");
   if (!form.model.provider.trim()) errors.push("model.provider");
   if (!form.model.model.trim()) errors.push("model.model");
+  if (form.schedule.mode === "periodic" && !form.schedule.cron.trim()) {
+    errors.push("schedule.cron");
+  }
+  if (
+    form.schedule.mode === "continuous" &&
+    !isPositiveUnsignedTomlInteger(form.schedule.check_interval_secs)
+  ) {
+    errors.push("schedule.check_interval_secs");
+  }
+  if (form.response_format.mode === "json_schema") {
+    const schema = form.response_format.schema.trim();
+    if (!schema || parseSupportedJsonSchema(schema) === undefined) {
+      errors.push("response_format.schema");
+    }
+  }
+  // Folder rows: duplicate names produce a duplicate TOML key (hard parse
+  // failure on the daemon), and `path` mirrors the kernel's rule — relative
+  // to workspaces_dir, no `..`. A mount row carries an absolute host path
+  // and is not authored here, so only rows are checked.
+  //
+  // A wholly blank row (freshly added, untouched) is not an error and is
+  // dropped silently by the serializer. A half-filled row — only one of
+  // name/path set — is a different case: the serializer drops it exactly
+  // the same way, so without this check the agent is created believing it
+  // has a shared folder it does not have. Flag whichever side is blank.
+  const seenWorkspaceNames = new Set<string>(preservedWorkspaceNames);
+  for (const ws of form.workspaces) {
+    const name = ws.name.trim();
+    const wsPath = ws.path.trim();
+    if (!name && !wsPath) continue;
+
+    if (!name) {
+      errors.push(`workspaces.${ws._uid}.name`);
+    } else {
+      if (seenWorkspaceNames.has(name) || !WORKSPACE_ALIAS_SAFE_NAME.test(name)) {
+        errors.push(`workspaces.${ws._uid}.name`);
+      }
+      seenWorkspaceNames.add(name);
+    }
+
+    if (!wsPath) {
+      errors.push(`workspaces.${ws._uid}.path`);
+    } else if (isAbsoluteWorkspacePath(wsPath) || wsPath.split(/[\\/]/).includes("..")) {
+      errors.push(`workspaces.${ws._uid}.path`);
+    }
+  }
+
   return errors;
 };
 
@@ -731,6 +1027,12 @@ const asStringArray = (v: unknown): string[] => {
   if (!Array.isArray(v)) return [];
   return v.filter((x): x is string => typeof x === "string");
 };
+const containsBigInt = (value: unknown): boolean => {
+  if (typeof value === "bigint") return true;
+  if (Array.isArray(value)) return value.some(containsBigInt);
+  if (isTomlTable(value)) return Object.values(value).some(containsBigInt);
+  return false;
+};
 const asEnum = <T extends readonly string[]>(
   v: unknown,
   allowed: T,
@@ -745,7 +1047,7 @@ const asEnum = <T extends readonly string[]>(
 export const parseManifestToml = (toml: string): ParseResult | ParseError => {
   let parsed: TomlTable;
   try {
-    parsed = parse(toml);
+    parsed = parse(toml, { integersAsBigInt: "asNeeded" });
   } catch (e) {
     if (e instanceof TomlError) {
       return { ok: false, message: e.message, line: e.line, column: e.column };
@@ -753,8 +1055,21 @@ export const parseManifestToml = (toml: string): ParseResult | ParseError => {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
 
+  if (
+    isTomlTable(parsed.response_format) &&
+    asString(parsed.response_format.type) === "json_schema" &&
+    containsBigInt(parsed.response_format.schema)
+  ) {
+    return {
+      ok: false,
+      message: "json_schema_unsafe_integer",
+    };
+  }
+
   const form = emptyManifestForm();
   const extras = emptyManifestExtras();
+  let parsedUid = 0;
+  const generateParsedUid = (): string => `parsed-${++parsedUid}`;
 
   form.name = asString(parsed.name);
   form.version = asString(parsed.version) || form.version;
@@ -812,6 +1127,11 @@ export const parseManifestToml = (toml: string): ParseResult | ParseError => {
   form.model.system_prompt = asString(modelTable.system_prompt);
   form.model.temperature = asNumberString(modelTable.temperature);
   form.model.max_tokens = asNumberString(modelTable.max_tokens);
+  form.model.top_p = asNumberString(modelTable.top_p);
+  form.model.frequency_penalty = asNumberString(modelTable.frequency_penalty);
+  form.model.presence_penalty = asNumberString(modelTable.presence_penalty);
+  form.model.context_window = asNumberString(modelTable.context_window);
+  form.model.max_output_tokens = asNumberString(modelTable.max_output_tokens);
   form.model.api_key_env = asString(modelTable.api_key_env);
   form.model.base_url = asString(modelTable.base_url);
   extras.model = stripKnown(modelTable, FORM_MODEL_KEYS);
@@ -820,7 +1140,7 @@ export const parseManifestToml = (toml: string): ParseResult | ParseError => {
   // so e.g. Qwen's enable_memory survives a TOML→Form→TOML round-trip.
   if (Array.isArray(parsed.fallback_models)) {
     form.fallback_models = parsed.fallback_models.filter(isTomlTable).map((fb) => ({
-      _uid: generateUid(),
+      _uid: generateParsedUid(),
       provider: asString(fb.provider),
       model: asString(fb.model),
       api_key_env: asString(fb.api_key_env),
@@ -859,6 +1179,7 @@ export const parseManifestToml = (toml: string): ParseResult | ParseError => {
     form.thinking.enabled = true;
     form.thinking.budget_tokens = asNumberString(parsed.thinking.budget_tokens);
     form.thinking.stream_thinking = asBoolean(parsed.thinking.stream_thinking, false);
+    extras.thinking = stripKnown(parsed.thinking, FORM_THINKING_KEYS);
   }
 
   // [autonomous]
@@ -890,12 +1211,38 @@ export const parseManifestToml = (toml: string): ParseResult | ParseError => {
     form.context_injection = parsed.context_injection
       .filter(isTomlTable)
       .map((ci) => ({
-        _uid: generateUid(),
+        _uid: generateParsedUid(),
         name: asString(ci.name),
         content: asString(ci.content),
         position: asEnum(ci.position, INJECTION_POSITIONS, "system"),
         condition: asString(ci.condition),
       }));
+  }
+
+  // Only `path`-based declarations become rows. A `mount` entry points at an
+  // absolute host directory; rewriting it as an empty `path` and dropping it
+  // in the incomplete-row filter would silently delete the declaration on
+  // save, so the entry is preserved verbatim in extras instead (mirrors the
+  // TUI editor, #7835).
+  if (isTomlTable(parsed.workspaces)) {
+    const preservedWorkspaces: TomlTable = {};
+    for (const [name, v] of Object.entries(parsed.workspaces)) {
+      if (isTomlTable(v) && typeof (v as TomlTable).path === "string") {
+        form.workspaces.push({
+          _uid: generateParsedUid(),
+          name,
+          path: (v as TomlTable).path as string,
+          mode: READONLY_MODE_ALIASES.has(asString((v as TomlTable).mode))
+            ? ("r" as const)
+            : ("rw" as const),
+        });
+      } else {
+        preservedWorkspaces[name] = v;
+      }
+    }
+    if (Object.keys(preservedWorkspaces).length) {
+      extras.topLevel.workspaces = preservedWorkspaces;
+    }
   }
 
   return { ok: true, form, extras };
@@ -913,10 +1260,7 @@ const stripKnown = (table: TomlTable, knownKeys: Set<string>): TomlTable => {
 };
 
 const parseScheduleField = (raw: unknown): ManifestFormState["schedule"] => {
-  if (typeof raw === "string") {
-    if (raw === "reactive") return { mode: "reactive" };
-    return { mode: "reactive" };
-  }
+  if (typeof raw === "string") return { mode: "reactive" };
   if (!isTomlTable(raw)) return { mode: "reactive" };
   if (isTomlTable(raw.periodic)) {
     return { mode: "periodic", cron: asString(raw.periodic.cron) };

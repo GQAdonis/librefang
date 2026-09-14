@@ -92,9 +92,81 @@ fn is_void_tag(name: &str) -> bool {
     VOID_TAGS.contains(&name)
 }
 
+fn decode_url_html_entities(value: &str) -> String {
+    let mut decoded = String::with_capacity(value.len());
+    let mut index = 0;
+    while index < value.len() {
+        let rest = &value[index..];
+        if let Some(numeric) = rest.strip_prefix("&#") {
+            let (radix, digits) = if let Some(hex) = numeric
+                .strip_prefix('x')
+                .or_else(|| numeric.strip_prefix('X'))
+            {
+                (16, hex)
+            } else {
+                (10, numeric)
+            };
+            let digit_len = digits
+                .bytes()
+                .take_while(|byte| (*byte as char).is_digit(radix))
+                .count();
+            if digit_len > 0 {
+                let number = &digits[..digit_len];
+                if let Ok(codepoint) = u32::from_str_radix(number, radix) {
+                    if let Some(ch) = char::from_u32(codepoint) {
+                        decoded.push(ch);
+                        index += 2
+                            + usize::from(radix == 16)
+                            + digit_len
+                            + usize::from(digits[digit_len..].starts_with(';'));
+                        continue;
+                    }
+                }
+            }
+        }
+        let named_entity_end = rest.strip_prefix('&').and_then(|_| {
+            rest.as_bytes()
+                .iter()
+                .take(17)
+                .position(|byte| *byte == b';')
+        });
+        if let Some(end) = named_entity_end {
+            let entity = &rest[1..end].to_ascii_lowercase();
+            let replacement = match entity.as_str() {
+                "amp" => Some('&'),
+                "apos" => Some('\''),
+                "colon" => Some(':'),
+                "gt" => Some('>'),
+                "lt" => Some('<'),
+                "newline" => Some('\n'),
+                "quot" => Some('"'),
+                "tab" => Some('\t'),
+                _ => None,
+            };
+            if let Some(ch) = replacement {
+                decoded.push(ch);
+                index += end + 1;
+                continue;
+            }
+        }
+
+        // `rest` is non-empty here (loop guard: `index < value.len()`), but avoid `expect()`/`unwrap()` on data derived from agent-supplied HTML — fail closed by stopping the decode rather than asserting an invariant on untrusted input.
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
+        decoded.push(ch);
+        index += ch.len_utf8();
+    }
+    decoded
+}
+
 fn is_safe_url(url: &str) -> bool {
     let trimmed = url.trim().trim_matches(|c| c == '"' || c == '\'');
-    let lower = trimmed.to_lowercase();
+    let decoded = decode_url_html_entities(trimmed);
+    if decoded.chars().any(|ch| ch.is_ascii_control()) {
+        return false;
+    }
+    let lower = decoded.trim_matches(|ch| ch <= '\u{20}').to_lowercase();
     if lower.starts_with("javascript:") || lower.starts_with("vbscript:") {
         return false;
     }
@@ -104,7 +176,6 @@ fn is_safe_url(url: &str) -> bool {
             "data:image/jpeg;",
             "data:image/gif;",
             "data:image/webp;",
-            "data:image/svg+xml;",
         ];
         return safe_prefixes.iter().any(|p| lower.starts_with(p));
     }
@@ -204,6 +275,21 @@ fn parse_tag_close(html: &str) -> Option<(String, usize)> {
     Some((name, 2 + close_pos + 1))
 }
 
+fn append_sanitized_html(
+    output: &mut String,
+    fragment: &str,
+    max_bytes: usize,
+) -> Result<(), String> {
+    let next_len = output.len().saturating_add(fragment.len());
+    if next_len > max_bytes {
+        return Err(format!(
+            "Sanitized HTML too large: {next_len} bytes (max {max_bytes})"
+        ));
+    }
+    output.push_str(fragment);
+    Ok(())
+}
+
 pub fn sanitize_canvas_html(html: &str, max_bytes: usize) -> Result<String, String> {
     sanitize_canvas_html_with_tags(html, max_bytes, &[])
 }
@@ -254,9 +340,9 @@ pub fn sanitize_canvas_html_with_tags(
             if bytes[pos..].starts_with(b"</") {
                 if let Some((name, consumed)) = parse_tag_close(&html[pos..]) {
                     if is_allowed_tag(&name, allowed_tags) {
-                        result.push_str("</");
-                        result.push_str(&name);
-                        result.push('>');
+                        append_sanitized_html(&mut result, "</", max_bytes)?;
+                        append_sanitized_html(&mut result, &name, max_bytes)?;
+                        append_sanitized_html(&mut result, ">", max_bytes)?;
                     }
                     pos += consumed;
                     continue;
@@ -265,26 +351,26 @@ pub fn sanitize_canvas_html_with_tags(
             if let Some((name, attrs, consumed)) = parse_tag_open(&html[pos..]) {
                 if is_allowed_tag(&name, allowed_tags) {
                     let safe_attrs = strip_dangerous_attrs(&attrs);
-                    result.push('<');
-                    result.push_str(&name);
+                    append_sanitized_html(&mut result, "<", max_bytes)?;
+                    append_sanitized_html(&mut result, &name, max_bytes)?;
                     if !safe_attrs.is_empty() {
-                        result.push(' ');
-                        result.push_str(&safe_attrs);
+                        append_sanitized_html(&mut result, " ", max_bytes)?;
+                        append_sanitized_html(&mut result, &safe_attrs, max_bytes)?;
                     }
                     if is_void_tag(&name) {
-                        result.push_str(" /");
+                        append_sanitized_html(&mut result, " /", max_bytes)?;
                     }
-                    result.push('>');
+                    append_sanitized_html(&mut result, ">", max_bytes)?;
                 }
                 pos += consumed;
                 continue;
             }
-            result.push_str("&lt;");
+            append_sanitized_html(&mut result, "&lt;", max_bytes)?;
             pos += 1;
             continue;
         }
         if bytes[pos] == b'>' {
-            result.push_str("&gt;");
+            append_sanitized_html(&mut result, "&gt;", max_bytes)?;
             pos += 1;
             continue;
         }
@@ -305,12 +391,12 @@ pub fn sanitize_canvas_html_with_tags(
                 };
                 if valid {
                     let entity = &html[pos..pos + 2 + semi];
-                    result.push_str(entity);
+                    append_sanitized_html(&mut result, entity, max_bytes)?;
                     pos += 2 + semi;
                     continue;
                 }
             }
-            result.push_str("&amp;");
+            append_sanitized_html(&mut result, "&amp;", max_bytes)?;
             pos += 1;
             continue;
         }
@@ -318,15 +404,7 @@ pub fn sanitize_canvas_html_with_tags(
         while pos < bytes.len() && bytes[pos] != b'<' && bytes[pos] != b'>' && bytes[pos] != b'&' {
             pos += 1;
         }
-        result.push_str(&html[start..pos]);
-    }
-
-    if result.len() > max_bytes {
-        return Err(format!(
-            "Sanitized HTML too large: {} bytes (max {})",
-            result.len(),
-            max_bytes
-        ));
+        append_sanitized_html(&mut result, &html[start..pos], max_bytes)?;
     }
 
     Ok(result)
@@ -412,6 +490,72 @@ pub(super) async fn tool_canvas_present(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_sanitized_append_rejects_before_growing_output() {
+        let mut output = String::from("1234");
+        let error = append_sanitized_html(&mut output, "56", 5).unwrap_err();
+
+        assert_eq!(output, "1234");
+        assert!(error.contains("Sanitized HTML too large"));
+    }
+
+    #[test]
+    fn sanitizer_enforces_output_cap_during_escaping() {
+        for html in ["<", ">", "&"] {
+            let error = sanitize_canvas_html(html, html.len()).unwrap_err();
+            assert!(
+                error.contains("Sanitized HTML too large"),
+                "{html:?}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn sanitizer_rejects_mutation_xss_url_encodings() {
+        for html in [
+            r#"<a href="&#106;avascript:alert(1)">x</a>"#,
+            r#"<a href="&#106avascript:alert(1)">x</a>"#,
+            r#"<a href="&#x6a;avascript:alert(1)">x</a>"#,
+            r#"<a href="jav&#x61;script&#58;alert(1)">x</a>"#,
+            r#"<a href="javascript&colon;alert(1)">x</a>"#,
+            r#"<a href="&#32;javascript:alert(1)">x</a>"#,
+            r#"<a href="&#x20;javascript:alert(1)">x</a>"#,
+            r#"<a href="java&Tab;script:alert(1)">x</a>"#,
+            "<a href=\"java\tscript:alert(1)\">x</a>",
+            "<a href=\"java\nscript:alert(1)\">x</a>",
+            "<a href=\"java\rscript:alert(1)\">x</a>",
+            "<a href=\"java\0script:alert(1)\">x</a>",
+            r#"<a href="JaVaScRiPt:alert(1)">x</a>"#,
+            r#"<img src="data:image/svg+xml;base64,PHN2Zz48c2NyaXB0PmFsZXJ0KDEpPC9zY3JpcHQ+PC9zdmc+">"#,
+            r#"<img src="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">"#,
+        ] {
+            let sanitized = sanitize_canvas_html(html, 512 * 1024).expect("sanitize");
+            assert!(
+                !sanitized.to_ascii_lowercase().contains("href=")
+                    && !sanitized.to_ascii_lowercase().contains("src="),
+                "dangerous URL attribute survived: input={html:?}, output={sanitized:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sanitizer_preserves_safe_http_and_raster_urls() {
+        let html = concat!(
+            r#"<a href="https://example.com/a b?a=1&amp;b=2">link</a>"#,
+            "<a href=\"https://example.com/a\u{2002}b\">unicode space</a>",
+            r#"<img src="data:image/png;base64,AA==">"#,
+        );
+        let sanitized = sanitize_canvas_html(html, 512 * 1024).expect("sanitize");
+        assert!(sanitized.contains("href="), "{sanitized}");
+        assert!(sanitized.contains("src="), "{sanitized}");
+    }
+
+    #[test]
+    fn entity_decoder_handles_large_ampersand_input_linearly() {
+        let value = "&".repeat(512 * 1024);
+        assert_eq!(decode_url_html_entities(&value), value);
+    }
 
     #[tokio::test]
     async fn canvas_present_missing_html_is_missing_parameter() {

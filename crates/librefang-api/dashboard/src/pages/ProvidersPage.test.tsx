@@ -13,7 +13,8 @@ import type { ProviderItem } from "../api";
 import { ProvidersPage } from "./ProvidersPage";
 import { useDrawerStore } from "../lib/drawerStore";
 import { useProviders, useProviderStatus } from "../lib/queries/providers";
-import { useModels } from "../lib/queries/models";
+import { useModels, useModelOverrides } from "../lib/queries/models";
+import { useUpdateModelOverrides } from "../lib/mutations/models";
 import { useUarModels, useUarStatus } from "../lib/queries/uar";
 import {
   useTestProvider,
@@ -21,6 +22,7 @@ import {
   useDeleteProviderKey,
   useEnableProvider,
   useSetProviderUrl,
+  useSetProviderDiscovery,
   useSetDefaultProvider,
   useCreateRegistryContent,
   useConnectEveryApi,
@@ -48,8 +50,8 @@ vi.mock("../lib/queries/providers", () => ({
 
 vi.mock("../lib/queries/models", () => ({
   useModels: vi.fn(),
-  // ProviderMaxTokensSection (#6209) calls this; default to no override so the
-  // existing tests don't have to care about the max-tokens section.
+  // ProviderModelLimitsSection (#6209, #7774) calls this; default to no
+  // override so the existing tests don't have to care about the limit editors.
   useModelOverrides: vi.fn(() => ({ data: undefined, isLoading: false })),
 }));
 
@@ -58,12 +60,17 @@ vi.mock("../lib/queries/uar", () => ({
   useUarModels: vi.fn(),
 }));
 
+vi.mock("../lib/mutations/models", () => ({
+  useUpdateModelOverrides: vi.fn(),
+}));
+
 vi.mock("../lib/mutations/providers", () => ({
   useTestProvider: vi.fn(),
   useSetProviderKey: vi.fn(),
   useDeleteProviderKey: vi.fn(),
   useEnableProvider: vi.fn(),
   useSetProviderUrl: vi.fn(),
+  useSetProviderDiscovery: vi.fn(),
   useSetDefaultProvider: vi.fn(),
   useCreateRegistryContent: vi.fn(),
   useConnectEveryApi: vi.fn(),
@@ -110,6 +117,11 @@ const useProviderStatusMock = useProviderStatus as unknown as ReturnType<
 const useModelsMock = useModels as unknown as ReturnType<typeof vi.fn>;
 const useUarStatusMock = useUarStatus as unknown as ReturnType<typeof vi.fn>;
 const useUarModelsMock = useUarModels as unknown as ReturnType<typeof vi.fn>;
+const useModelOverridesMock = useModelOverrides as unknown as ReturnType<
+  typeof vi.fn
+>;
+const useUpdateModelOverridesMock =
+  useUpdateModelOverrides as unknown as ReturnType<typeof vi.fn>;
 const useTestProviderMock = useTestProvider as unknown as ReturnType<
   typeof vi.fn
 >;
@@ -125,6 +137,8 @@ const useDeleteProviderKeyMock = useDeleteProviderKey as unknown as ReturnType<
 const useSetProviderUrlMock = useSetProviderUrl as unknown as ReturnType<
   typeof vi.fn
 >;
+const useSetProviderDiscoveryMock =
+  useSetProviderDiscovery as unknown as ReturnType<typeof vi.fn>;
 const useSetDefaultProviderMock = useSetDefaultProvider as unknown as ReturnType<
   typeof vi.fn
 >;
@@ -194,6 +208,8 @@ function DrawerSlot(): React.ReactNode {
 describe("ProvidersPage", () => {
   let testMutateAsync: ReturnType<typeof vi.fn>;
   let connectEveryApiMutateAsync: ReturnType<typeof vi.fn>;
+  let setDiscoveryMutateAsync: ReturnType<typeof vi.fn>;
+  let updateOverridesMutateAsync: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -202,6 +218,8 @@ describe("ProvidersPage", () => {
     useDrawerStore.setState({ isOpen: false, content: null });
     testMutateAsync = vi.fn().mockResolvedValue({ status: "ok" });
     connectEveryApiMutateAsync = vi.fn().mockResolvedValue(undefined);
+    setDiscoveryMutateAsync = vi.fn().mockResolvedValue(undefined);
+    updateOverridesMutateAsync = vi.fn().mockResolvedValue({});
 
     useProviderStatusMock.mockReturnValue({
       data: { default_provider: "openai" },
@@ -213,6 +231,11 @@ describe("ProvidersPage", () => {
       isLoading: false,
     });
     useUarModelsMock.mockReturnValue({ data: {}, isLoading: false });
+    useModelOverridesMock.mockReturnValue({ data: undefined, isLoading: false });
+    useUpdateModelOverridesMock.mockReturnValue({
+      mutateAsync: updateOverridesMutateAsync,
+      isPending: false,
+    });
 
     const stubMutation = (mutateAsync: ReturnType<typeof vi.fn>) => ({
       mutateAsync,
@@ -231,6 +254,9 @@ describe("ProvidersPage", () => {
     );
     useSetProviderUrlMock.mockReturnValue(
       stubMutation(vi.fn().mockResolvedValue(undefined)),
+    );
+    useSetProviderDiscoveryMock.mockReturnValue(
+      stubMutation(setDiscoveryMutateAsync),
     );
     useSetDefaultProviderMock.mockReturnValue(
       stubMutation(vi.fn().mockResolvedValue(undefined)),
@@ -363,6 +389,25 @@ describe("ProvidersPage", () => {
     expect(screen.getByText("Anthropic")).toBeInTheDocument();
     // groq is `missing` → unconfigured tab only.
     expect(screen.queryByText("Groq")).not.toBeInTheDocument();
+  });
+
+  it("keeps provider actions outside implicit card button semantics", () => {
+    useProvidersMock.mockReturnValue({
+      data: PROVIDERS,
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    const provider = screen.getByRole("group", { name: "OpenAI" });
+    expect(provider).not.toHaveAttribute("tabindex");
+    expect(
+      within(provider).getByRole("button", {
+        name: "providers.details: OpenAI",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("opens the Add picker drawer and lists only unconfigured providers", async () => {
@@ -596,5 +641,255 @@ describe("ProvidersPage", () => {
     expect(
       within(drawer).getByRole("button", { name: /common\.save/ }),
     ).not.toBeDisabled();
+  });
+  // ── Local providers behind auth (#6703) + model discovery (#6702) ──
+
+  const VLLM: ProviderItem = {
+    id: "vllm",
+    display_name: "vLLM",
+    auth_status: "not_required",
+    reachable: true,
+    model_count: 1,
+    key_required: false,
+    key_present: false,
+    is_local: true,
+    base_url: "http://gpu-box:8000/v1",
+    api_key_env: "VLLM_API_KEY",
+  };
+
+  function openConfigureDrawer(provider: ProviderItem) {
+    useProvidersMock.mockReturnValue({
+      data: [provider],
+      isLoading: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    fireEvent.click(screen.getAllByRole("button", { name: /common\.edit/ })[0]);
+    return screen.findByTestId("drawer-slot");
+  }
+
+  it("offers the API key field for a key_required=false provider (#6703)", async () => {
+    // The regression: the field was gated on `key_required !== false`, so a
+    // self-hosted vLLM behind auth had no way to receive a key from the UI even
+    // though the runtime sends whatever key is stored as a Bearer token.
+    const drawer = await openConfigureDrawer(VLLM);
+
+    const keyInput = within(drawer).getByPlaceholderText(
+      "providers.key_placeholder",
+    );
+    expect(keyInput).toBeInTheDocument();
+    // Labelled as optional, because the provider genuinely does not require one.
+    expect(
+      within(drawer).getByText("providers.api_key_optional_hint"),
+    ).toBeInTheDocument();
+  });
+
+  it("treats key_present as a stored key for a keyless provider (#6703)", async () => {
+    // `auth_status` is `not_required` whether or not a key is set, so without
+    // `key_present` the drawer offered no way to replace or remove one.
+    const drawer = await openConfigureDrawer({ ...VLLM, key_present: true });
+
+    expect(
+      within(drawer).getByPlaceholderText("providers.key_placeholder_existing"),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByRole("button", { name: /providers\.remove_key/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the key field away from CLI passthrough providers (#6703)", async () => {
+    // The counterweight to the un-gating above: claude-code & friends also
+    // declare `key_required: false`, but they spawn a subprocess and carry no
+    // base URL. Showing a key field there would plant a meaningless
+    // CLAUDE_CODE_API_KEY in secrets.env, and there is no endpoint to send it to.
+    const drawer = await openConfigureDrawer({
+      id: "claude-code",
+      display_name: "Claude Code",
+      auth_status: "configured_cli",
+      model_count: 2,
+      key_required: false,
+      base_url: "",
+      api_key_env: "",
+    });
+
+    expect(
+      within(drawer).queryByPlaceholderText("providers.key_placeholder"),
+    ).toBeNull();
+    expect(
+      within(drawer).queryByText("providers.api_key_optional_hint"),
+    ).toBeNull();
+    // No endpoint to poll either, so the discovery control stays away too.
+    expect(
+      within(drawer).queryByRole("switch", {
+        name: "providers.discover_models_label",
+      }),
+    ).toBeNull();
+  });
+
+  it("pins discovery on for built-in local providers (#6702)", async () => {
+    const drawer = await openConfigureDrawer(VLLM);
+
+    const toggle = within(drawer).getByRole("switch", {
+      name: "providers.discover_models_label",
+    });
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeDisabled();
+    expect(
+      within(drawer).getByText("providers.discover_models_hint_builtin"),
+    ).toBeInTheDocument();
+  });
+
+  it("lets a custom provider opt into model discovery (#6702)", async () => {
+    const drawer = await openConfigureDrawer({
+      id: "acme-vllm",
+      display_name: "ACME vLLM",
+      auth_status: "configured",
+      model_count: 0,
+      key_required: true,
+      is_custom: true,
+      discover_models: false,
+      base_url: "http://gpu-box:4000/v1",
+      api_key_env: "ACME_VLLM_API_KEY",
+    });
+
+    const toggle = within(drawer).getByRole("switch", {
+      name: "providers.discover_models_label",
+    });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).not.toBeDisabled();
+
+    fireEvent.click(toggle);
+    expect(setDiscoveryMutateAsync).toHaveBeenCalledWith({
+      id: "acme-vllm",
+      discoverModels: true,
+    });
+  });
+  // ── Model capacity limits (#7774) ──
+  //
+  // The context window used to be settable only in the creation wizard and was
+  // overwritten by the next registry sync. It is now an entry in
+  // `model_overrides.json`, so it must be editable here, seeded from the value
+  // in force, and reverted against `limits_catalog` rather than against the
+  // row's own (already effective) `context_window`.
+
+  const LITELLM: ProviderItem = {
+    id: "litellm",
+    display_name: "LiteLLM",
+    auth_status: "configured",
+    model_count: 1,
+    key_required: true,
+    base_url: "http://gateway:4000/v1",
+    api_key_env: "LITELLM_API_KEY",
+  };
+
+  /** One gateway model whose window discovery guessed at 131072. */
+  function seedDiscoveredModel(overrides?: {
+    context_window?: number;
+    limitsCatalogWindow?: number;
+  }): void {
+    useModelsMock.mockReturnValue({
+      data: {
+        models: [
+          {
+            id: "sensor-model-generic-high",
+            display_name: "sensor-model-generic-high",
+            provider: "litellm",
+            context_window: overrides?.context_window ?? 131072,
+            max_output_tokens: 16384,
+            limits_catalog: {
+              context_window: overrides?.limitsCatalogWindow ?? 131072,
+              max_output_tokens: 16384,
+            },
+          },
+        ],
+      },
+      isLoading: false,
+    });
+  }
+
+  it("saves a corrected context window as a model override (#7774)", async () => {
+    seedDiscoveredModel();
+    const drawer = await openConfigureDrawer(LITELLM);
+
+    const field = within(drawer).getByLabelText("providers.context_window");
+    // Seeded from the value currently in force, so the operator edits the real
+    // number rather than an empty box.
+    expect(field).toHaveValue(131072);
+
+    fireEvent.change(field, { target: { value: "16384" } });
+    fireEvent.click(
+      within(drawer).getByRole("button", {
+        name: /providers\.context_window/,
+      }),
+    );
+
+    expect(updateOverridesMutateAsync).toHaveBeenCalledWith({
+      modelKey: "litellm:sensor-model-generic-high",
+      overrides: { context_window: 16384 },
+    });
+  });
+
+  it("keeps an active context-window override from deleting itself (#7774)", async () => {
+    // The row's `context_window` is the *effective* value, so it equals the
+    // override. Reverting against it instead of `limits_catalog` would make the
+    // seeded field look identical to the catalog default and clear the override
+    // on the next save.
+    seedDiscoveredModel({ context_window: 16384, limitsCatalogWindow: 131072 });
+    useModelOverridesMock.mockReturnValue({
+      data: { context_window: 16384 },
+      isLoading: false,
+    });
+    const drawer = await openConfigureDrawer(LITELLM);
+
+    const field = within(drawer).getByLabelText("providers.context_window");
+    expect(field).toHaveValue(16384);
+    // Untouched field → nothing to save.
+    expect(
+      within(drawer).getByRole("button", { name: /providers\.context_window/ }),
+    ).toBeDisabled();
+    // The hint names the catalog value as the revert target, not the override.
+    expect(
+      within(drawer).getByText("providers.context_window_hint_override"),
+    ).toBeInTheDocument();
+  });
+
+  it("clearing the field drops the context_window override (#7774)", async () => {
+    seedDiscoveredModel({ context_window: 16384, limitsCatalogWindow: 131072 });
+    useModelOverridesMock.mockReturnValue({
+      data: { context_window: 16384, temperature: 0.3 },
+      isLoading: false,
+    });
+    const drawer = await openConfigureDrawer(LITELLM);
+
+    fireEvent.change(
+      within(drawer).getByLabelText("providers.context_window"),
+      { target: { value: "" } },
+    );
+    fireEvent.click(
+      within(drawer).getByRole("button", {
+        name: /providers\.context_window/,
+      }),
+    );
+
+    // Only the limit is dropped — the unrelated inference parameter survives,
+    // because PUT replaces the whole document.
+    expect(updateOverridesMutateAsync).toHaveBeenCalledWith({
+      modelKey: "litellm:sensor-model-generic-high",
+      overrides: { temperature: 0.3 },
+    });
+  });
+
+  it("says so in the interface when no context window is known (#7774)", async () => {
+    // The runtime already logs "falling back to a conservative context window";
+    // the operator has to be able to see it next to the model.
+    seedDiscoveredModel({ context_window: 0, limitsCatalogWindow: 0 });
+    const drawer = await openConfigureDrawer(LITELLM);
+    expect(
+      within(drawer).getByText("providers.context_window_unknown"),
+    ).toBeInTheDocument();
+    expect(
+      within(drawer).getByLabelText("providers.context_window"),
+    ).toHaveValue(null);
   });
 });

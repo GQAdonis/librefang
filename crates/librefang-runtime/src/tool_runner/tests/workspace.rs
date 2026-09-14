@@ -1,4 +1,5 @@
 use super::*;
+use librefang_kernel_handle::KernelOpError;
 
 /// Regression: when the per-user gate returns `NeedsApproval`, the
 /// `DeferredToolExecution.force_human` flag MUST be set so the
@@ -385,13 +386,18 @@ async fn test_file_list_path_traversal_blocked() {
 
 // ── Named-workspace read-side support ────────────────────────────────
 //
-// Mock kernel that surfaces a configurable list of named workspaces
-// (paired with their access modes) via `named_workspace_prefixes`.
-// `readonly_workspace_prefixes` is derived from that list so the existing
+// Mock kernel that surfaces a configurable list of named workspaces (alias,
+// resolved path, access mode) via `named_workspace_aliases`.
+// `named_workspace_prefixes` comes from the trait's derivation of that list,
+// and `readonly_workspace_prefixes` is derived here too, so the existing
 // file_write denial path stays consistent.
 
 pub(super) struct NamedWsKernel {
-    pub(super) named: Vec<(std::path::PathBuf, librefang_types::agent::WorkspaceMode)>,
+    pub(super) named: Vec<(
+        String,
+        std::path::PathBuf,
+        librefang_types::agent::WorkspaceMode,
+    )>,
     /// Optional channel-bridge download dir surfaced via
     /// `KernelHandle::channel_file_download_dir` (#4434 regression test
     /// hook). `None` matches the default trait behaviour.
@@ -399,6 +405,8 @@ pub(super) struct NamedWsKernel {
     /// Whether `ToolPolicy::deduplicate_file_reads()` should return `true`
     /// (#4971 regression test hook). The stub trait default is `false`.
     pub(super) dedup_enabled: bool,
+    /// ACP filesystem client returned for every test session.
+    pub(super) acp_client: Option<Arc<dyn AcpFsClient>>,
 }
 
 // ---- BEGIN role-trait impls (split from former `impl KernelHandle for NamedWsKernel`, #3746) ----
@@ -572,18 +580,25 @@ impl KnowledgeGraph for NamedWsKernel {
 }
 
 impl ToolPolicy for NamedWsKernel {
-    fn named_workspace_prefixes(
+    // `named_workspace_prefixes` is deliberately NOT overridden: the trait
+    // derives it from this list, so the test exercises that derivation rather
+    // than a second copy of it.
+    fn named_workspace_aliases(
         &self,
         _agent_id: &str,
-    ) -> Vec<(std::path::PathBuf, librefang_types::agent::WorkspaceMode)> {
+    ) -> Vec<(
+        String,
+        std::path::PathBuf,
+        librefang_types::agent::WorkspaceMode,
+    )> {
         self.named.clone()
     }
 
     fn readonly_workspace_prefixes(&self, _agent_id: &str) -> Vec<std::path::PathBuf> {
         self.named
             .iter()
-            .filter(|(_, m)| *m == librefang_types::agent::WorkspaceMode::ReadOnly)
-            .map(|(p, _)| p.clone())
+            .filter(|(_, _, m)| *m == librefang_types::agent::WorkspaceMode::ReadOnly)
+            .map(|(_, p, _)| p.clone())
             .collect()
     }
     fn channel_file_download_dir(&self) -> Option<std::path::PathBuf> {
@@ -618,18 +633,51 @@ impl SessionWriter for NamedWsKernel {
     ) {
     }
 }
-impl AcpFsBridge for NamedWsKernel {}
+impl AcpFsBridge for NamedWsKernel {
+    fn acp_fs_client(
+        &self,
+        _session_id: librefang_types::agent::SessionId,
+    ) -> Option<Arc<dyn AcpFsClient>> {
+        self.acp_client.clone()
+    }
+}
 impl AcpTerminalBridge for NamedWsKernel {}
 
 // ---- END role-trait impls (#3746) ----
 
+/// Named workspaces keyed only by path + mode. Every entry gets the target
+/// directory's own basename as its `@alias`, so callers that don't care about
+/// the alias don't have to invent one.
 pub(super) fn make_named_ws_kernel(
     named: Vec<(std::path::PathBuf, librefang_types::agent::WorkspaceMode)>,
+) -> Arc<dyn KernelHandle> {
+    make_aliased_ws_kernel(
+        named
+            .into_iter()
+            .map(|(path, mode)| {
+                let alias = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "ws".to_string());
+                (alias, path, mode)
+            })
+            .collect(),
+    )
+}
+
+/// Named workspaces with explicit `@alias` names (#8051).
+pub(super) fn make_aliased_ws_kernel(
+    named: Vec<(
+        String,
+        std::path::PathBuf,
+        librefang_types::agent::WorkspaceMode,
+    )>,
 ) -> Arc<dyn KernelHandle> {
     Arc::new(NamedWsKernel {
         named,
         download_dir: None,
         dedup_enabled: false,
+        acp_client: None,
     })
 }
 
@@ -638,7 +686,169 @@ fn make_download_dir_kernel(download_dir: std::path::PathBuf) -> Arc<dyn KernelH
         named: vec![],
         download_dir: Some(download_dir),
         dedup_enabled: false,
+        acp_client: None,
     })
+}
+
+#[derive(Clone, Copy)]
+enum AcpFsFailure {
+    Unavailable,
+    Internal,
+}
+
+struct FailingAcpFsClient {
+    failure: AcpFsFailure,
+}
+
+impl FailingAcpFsClient {
+    fn error(&self) -> KernelOpError {
+        match self.failure {
+            AcpFsFailure::Unavailable => KernelOpError::unavailable("ACP test connection"),
+            AcpFsFailure::Internal => KernelOpError::Internal("ACP test failure".to_string()),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AcpFsClient for FailingAcpFsClient {
+    async fn read_text_file(
+        &self,
+        _path: std::path::PathBuf,
+        _line: Option<u32>,
+        _limit: Option<u32>,
+    ) -> Result<String, KernelOpError> {
+        Err(self.error())
+    }
+
+    async fn write_text_file(
+        &self,
+        _path: std::path::PathBuf,
+        _content: String,
+    ) -> Result<(), KernelOpError> {
+        Err(self.error())
+    }
+
+    fn capabilities(&self) -> (bool, bool) {
+        (true, true)
+    }
+}
+
+fn make_failing_acp_kernel(failure: AcpFsFailure) -> Arc<dyn KernelHandle> {
+    Arc::new(NamedWsKernel {
+        named: vec![],
+        download_dir: None,
+        dedup_enabled: false,
+        acp_client: Some(Arc::new(FailingAcpFsClient { failure })),
+    })
+}
+
+async fn run_acp_file_tool(
+    tool_name: &str,
+    input: &serde_json::Value,
+    kernel: &Arc<dyn KernelHandle>,
+    workspace: &Path,
+) -> ToolResult {
+    execute_tool(
+        "test-id",
+        tool_name,
+        input,
+        Some(kernel),
+        None,
+        Some("00000000-0000-0000-0000-000000000001"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(workspace),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some("00000000-0000-0000-0000-000000000042"),
+        None,
+        None,
+        0,
+        0,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn acp_unavailable_file_read_falls_back_to_local_filesystem() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    std::fs::write(workspace.path().join("note.txt"), "local content").unwrap();
+    let kernel = make_failing_acp_kernel(AcpFsFailure::Unavailable);
+
+    let result = run_acp_file_tool(
+        "file_read",
+        &serde_json::json!({"path": "note.txt"}),
+        &kernel,
+        workspace.path(),
+    )
+    .await;
+
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(result.content, "local content");
+}
+
+#[tokio::test]
+async fn acp_unavailable_file_write_falls_back_to_local_filesystem() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let kernel = make_failing_acp_kernel(AcpFsFailure::Unavailable);
+
+    let result = run_acp_file_tool(
+        "file_write",
+        &serde_json::json!({"path": "note.txt", "content": "local content"}),
+        &kernel,
+        workspace.path(),
+    )
+    .await;
+
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(
+        std::fs::read_to_string(workspace.path().join("note.txt")).unwrap(),
+        "local content"
+    );
+}
+
+#[tokio::test]
+async fn acp_internal_file_errors_do_not_fall_back_to_local_filesystem() {
+    let workspace = tempfile::tempdir().expect("workspace");
+    let target = workspace.path().join("note.txt");
+    std::fs::write(&target, "original").unwrap();
+    let kernel = make_failing_acp_kernel(AcpFsFailure::Internal);
+
+    let read = run_acp_file_tool(
+        "file_read",
+        &serde_json::json!({"path": "note.txt"}),
+        &kernel,
+        workspace.path(),
+    )
+    .await;
+    assert!(read.is_error);
+    assert!(read.content.contains("ACP fs/read_text_file failed"));
+    assert!(!read.content.contains("original"));
+
+    let write = run_acp_file_tool(
+        "file_write",
+        &serde_json::json!({"path": "note.txt", "content": "replacement"}),
+        &kernel,
+        workspace.path(),
+    )
+    .await;
+    assert!(write.is_error);
+    assert!(write.content.contains("ACP fs/write_text_file failed"));
+    assert_eq!(std::fs::read_to_string(target).unwrap(), "original");
 }
 
 #[tokio::test]
@@ -1738,3 +1948,251 @@ async fn test_apply_patch_denies_readonly_named_workspace_path() {
 }
 
 // ── Bug #3822: shell_exec must respect named workspace read-only mode ────
+
+// ── Named-workspace `@alias` expansion (#8051) ───────────────────────
+//
+// The kernel writes `- **@name** → /abs/path (mode)` into the agent-facing
+// TOOLS.md, so an agent that follows its own instructions calls the file tools
+// with `@name/...`. Before #8051 the runtime had no handling for a leading
+// `@`: the segment was appended to the workspace root and the agent got
+// `No such file or directory` naming a path it never asked for.
+//
+// These tests run through `execute_tool`, i.e. the dispatch boundary where the
+// expansion happens, so they also cover that the security checks downstream
+// see the expanded path.
+
+/// `execute_tool` with a kernel and a primary workspace, and no session bound
+/// (so the ACP routing in the `file_read` / `file_write` arms stays out of the
+/// way).
+async fn run_named_ws_tool(
+    tool_name: &str,
+    input: &serde_json::Value,
+    kernel: &Arc<dyn KernelHandle>,
+    workspace: &Path,
+) -> ToolResult {
+    execute_tool(
+        "test-id",
+        tool_name,
+        input,
+        Some(kernel),
+        None,
+        Some("00000000-0000-0000-0000-000000000001"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(workspace),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        0,
+        0,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn alias_path_lists_the_named_workspace_it_points_at() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+    let sub = shared_canon.join("notes");
+    std::fs::create_dir(&sub).unwrap();
+    std::fs::write(sub.join("a.txt"), "a").unwrap();
+    std::fs::write(sub.join("b.txt"), "b").unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadWrite,
+    )]);
+
+    let result = run_named_ws_tool(
+        "file_list",
+        &serde_json::json!({"path": "@vault/notes"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(result.content, "a.txt\nb.txt");
+}
+
+#[tokio::test]
+async fn alias_path_reads_a_file_in_the_named_workspace() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+    std::fs::write(shared_canon.join("note.md"), "hello shared").unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadWrite,
+    )]);
+
+    let result = run_named_ws_tool(
+        "file_read",
+        &serde_json::json!({"path": "@vault/note.md"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(result.content, "hello shared");
+}
+
+#[tokio::test]
+async fn bare_alias_with_no_subpath_resolves_to_the_workspace_root() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+    std::fs::write(shared_canon.join("top.txt"), "t").unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadOnly,
+    )]);
+
+    let result = run_named_ws_tool(
+        "file_list",
+        &serde_json::json!({"path": "@vault"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(result.content, "top.txt");
+}
+
+#[tokio::test]
+async fn unknown_alias_says_which_aliases_exist() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadWrite,
+    )]);
+
+    let result = run_named_ws_tool(
+        "file_list",
+        &serde_json::json!({"path": "@valut/notes"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(result.is_error, "typo must not resolve: {}", result.content);
+    assert!(
+        result.content.contains("@valut") && result.content.contains("@vault"),
+        "error must name the typo and the real alias, got: {}",
+        result.content
+    );
+}
+
+#[tokio::test]
+async fn alias_cannot_be_used_to_climb_out_of_the_workspace() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadWrite,
+    )]);
+
+    let result = run_named_ws_tool(
+        "file_read",
+        &serde_json::json!({"path": "@vault/../../etc/passwd"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(result.is_error, "traversal must be rejected");
+    assert!(
+        result.content.contains(".."),
+        "error must name the offending component, got: {}",
+        result.content
+    );
+}
+
+#[tokio::test]
+async fn alias_write_into_a_readonly_workspace_is_still_denied() {
+    use librefang_types::agent::WorkspaceMode;
+
+    let primary = tempfile::tempdir().expect("primary");
+    let shared = tempfile::tempdir().expect("shared");
+    let shared_canon = shared.path().canonicalize().unwrap();
+    let target = shared_canon.join("locked.txt");
+    std::fs::write(&target, "original").unwrap();
+
+    let kernel = make_aliased_ws_kernel(vec![(
+        "vault".to_string(),
+        shared_canon,
+        WorkspaceMode::ReadOnly,
+    )]);
+
+    // The expansion happens before the read-only pre-check, so the alias must
+    // not be a way around it.
+    let result = run_named_ws_tool(
+        "file_write",
+        &serde_json::json!({"path": "@vault/locked.txt", "content": "overwritten"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(
+        result.is_error,
+        "write through an alias into a read-only workspace must be denied: {}",
+        result.content
+    );
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), "original");
+}
+
+#[tokio::test]
+async fn a_leading_at_sign_is_left_alone_when_no_named_workspace_exists() {
+    // With nothing declared there is no alias the agent could have meant, so a
+    // file whose name genuinely starts with `@` must still be readable.
+    let primary = tempfile::tempdir().expect("primary");
+    std::fs::write(primary.path().join("@literal.txt"), "at-file").unwrap();
+
+    let kernel = make_named_ws_kernel(vec![]);
+
+    let result = run_named_ws_tool(
+        "file_read",
+        &serde_json::json!({"path": "@literal.txt"}),
+        &kernel,
+        primary.path(),
+    )
+    .await;
+    assert!(!result.is_error, "got error: {}", result.content);
+    assert_eq!(result.content, "at-file");
+}

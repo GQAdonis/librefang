@@ -21,6 +21,7 @@ use std::sync::{Arc, LazyLock};
 mod attachments;
 mod cloning;
 mod config;
+mod ephemeral;
 mod files;
 mod identity;
 mod lifecycle;
@@ -32,6 +33,7 @@ mod uploads;
 pub use attachments::*;
 pub use cloning::*;
 pub use config::*;
+pub use ephemeral::*;
 pub use files::*;
 pub use identity::*;
 pub use lifecycle::*;
@@ -56,6 +58,12 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route(
             "/agents/identities/{name}/reset",
             axum::routing::post(reset_agent_identity),
+        )
+        // Ephemeral worker spawn (#6699).
+        // A literal segment under `/agents`, so it is registered alongside the other literals rather than after `/agents/{id}`, where the name would be parsed as an agent id.
+        .route(
+            "/agents/spawn-ephemeral",
+            axum::routing::post(spawn_ephemeral_agent),
         )
         // Bulk agent operations (placed before /agents/{id} to avoid path conflicts)
         .route(
@@ -83,6 +91,10 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route(
             "/agents/{id}/events",
             axum::routing::get(list_agent_events),
+        )
+        .route(
+            "/agents/{id}/ephemeral-runs",
+            axum::routing::get(list_agent_ephemeral_runs),
         )
         .route(
             "/agents/{id}/mode",
@@ -237,6 +249,25 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         )
 }
 
+/// Refuse a write that would change the *definition* of an agent the deployment provisioned (#6695).
+///
+/// Returns `None` — proceed — for an agent that does not exist (the handler's own 404 is the better answer) and for every agent the provisioning tree does not declare, which is all of them unless `LIBREFANG_PROVISIONING_PATH` is set.
+///
+/// The guard is on the manifest, not on the agent: suspend, resume, stop, message, session and file routes stay open on a provisioned agent, because those change runtime state the deployment never declared.
+/// The dividing line is "would the next reconcile overwrite this" — if yes, the write is a lie and is refused; if no, it is the operator's to make.
+pub(crate) fn guard_provisioned_agent(
+    state: &AppState,
+    agent_id: AgentId,
+) -> Option<(StatusCode, Json<serde_json::Value>)> {
+    let name = state.kernel.agent_registry().get(agent_id)?.name;
+    super::guard_provisioned_write(
+        state
+            .kernel
+            .provisioned_resource(librefang_kernel::provisioning::ResourceKind::Agent, &name)
+            .as_ref(),
+    )
+}
+
 /// Shape an `ApiErrorResponse`-compatible JSON envelope into the
 /// `(status, bytes)` tuple the idempotency middleware caches.
 /// Mirrors `ApiErrorResponse::into_response` so callers see the same
@@ -332,6 +363,7 @@ pub(crate) fn enrich_agent_json(
         "supports_thinking": supports_thinking,
         "ready": ready,
         "profile": e.manifest.profile,
+        "source_template": e.manifest.source_template,
         "schedule": schedule,
         "sessions_24h": sessions_24h,
         "cost_24h": cost_24h,
@@ -341,7 +373,11 @@ pub(crate) fn enrich_agent_json(
             "color": e.identity.color,
         },
         "web_search_augmentation": e.manifest.web_search_augmentation,
+        // #7930: `parent_agent_id` used to be `null` for every agent after a daemon restart, because nothing persisted the link.
+        // It now round-trips through `agents.parent_id`.
+        // `parent_unknown` distinguishes the two reasons the field can be `null`: `false` means the agent really has no parent, `true` means the row predates schema v54 and its lineage was never recorded — a client must not render the latter as a root agent.
         "parent_agent_id": e.parent.as_ref().map(|p| p.to_string()),
+        "parent_unknown": e.parent_unknown,
         "children": e.children.iter().map(|c| c.to_string()).collect::<Vec<_>>(),
         "session_id": e.session_id.0.to_string(),
         "tags": e.tags,
@@ -473,8 +509,34 @@ where
     handle.await
 }
 
-fn request_sender_context(req: &MessageRequest) -> Option<SenderContext> {
+/// The channel name a plain HTTP `POST /api/agents/{id}/message` runs under.
+///
+/// Also the identity namespace an under-privileged caller is pinned into by [`request_sender_context`], so the default and the pin cannot drift apart.
+const API_SENDER_CHANNEL: &str = "api";
+
+/// Build the [`SenderContext`] for an inbound message request, letting the authenticated caller's identity override a sender identity the body asserts but cannot prove.
+///
+/// SECURITY (#7744): `SenderContext.{channel, user_id}` is not decoration — it is the `(channel_type, platform_id)` tuple `AuthManager::identify` keys on (`kernel/messaging.rs`, `kernel/agent_execution.rs`), the tuple `AuthManager::resolve_user` keys the memory ACL on (`kernel/handles/memory_access.rs: memory_acl_for_sender`), and the value stamped into `manifest.metadata["sender_user_id"]` for per-sender tool authorization and `peer:{user_id}:KEY` memory scoping.
+/// `user_role_allows_request` in `middleware.rs` admits any `User`-role bearer to this route, so copying that tuple out of the body let a `User` name themselves as any user the operator had bound in `[[users]] channel_bindings` and inherit that user's role, policy and peer memory — the same binding `authorize_channel_user` (`channel_bridge.rs`) exists to establish for inbound channel traffic, reached over HTTP without passing through it.
+///
+/// The precedence rule:
+///
+/// - No authenticated caller (loopback, `allow_no_auth`) — there is no identity to prefer, so the body's assertion stands and behaviour is unchanged.
+/// - `Admin` or above — may assert any sender identity, because an operator impersonating a user for support, or a channel gateway relaying real platform users, is legitimate.
+/// - Below `Admin`, asserting an identity that `identify` resolves back to the *caller themselves* — the body is stating its own true binding, which is not an attack.
+///   It stands, so the documented `[[users]] channel_bindings` recipe for a REST operator keeps working.
+/// - Anything else — the authenticated identity wins, silently and without erroring.
+///   A rejection would leak the role check back to the caller and break clients that assert a harmless id.
+///
+/// The channel and the user id are pinned together, never one without the other.
+/// `identify` keys on the pair, so pinning only the id still lets the caller choose the namespace their own name is looked up in: with `[[users]] name = "alice", channel_bindings = { slack = "bob" }` alongside a separate `[[users]] name = "bob"`, a `User`-role bob asserting `channel_type = "slack"` would resolve through `slack:bob` to alice.
+fn request_sender_context(
+    req: &MessageRequest,
+    api_user: Option<&crate::middleware::AuthenticatedApiUser>,
+    auth: &librefang_kernel::auth::AuthManager,
+) -> Option<SenderContext> {
     let sender_id = req.sender_id.as_ref()?;
+
     // Audit: cron-channel-name-not-reserved. An HTTP caller supplying
     // `channel_type = "cron"` (or case variant) used to derive the
     // SAME SessionId as the kernel's internal cron-fire path and
@@ -484,11 +546,32 @@ fn request_sender_context(req: &MessageRequest) -> Option<SenderContext> {
     let raw_channel = req
         .channel_type
         .clone()
-        .unwrap_or_else(|| "api".to_string());
+        .unwrap_or_else(|| API_SENDER_CHANNEL.to_string());
+    let asserted_channel = librefang_channels::types::sanitize_channel_name(&raw_channel);
+
+    // `Some` exactly when an authenticated caller may not speak as the identity they asserted.
+    let pinned_to = api_user.filter(|caller| {
+        caller.role < crate::middleware::UserRole::Admin
+            && auth.identify(&asserted_channel, sender_id) != Some(caller.user_id)
+    });
+
+    let (channel, user_id, display_name) = match pinned_to {
+        Some(caller) => (
+            API_SENDER_CHANNEL.to_string(),
+            caller.name.clone(),
+            caller.name.clone(),
+        ),
+        None => (
+            asserted_channel,
+            sender_id.clone(),
+            req.sender_name.clone().unwrap_or_else(|| sender_id.clone()),
+        ),
+    };
+
     Some(SenderContext {
-        channel: librefang_channels::types::sanitize_channel_name(&raw_channel),
-        user_id: sender_id.clone(),
-        display_name: req.sender_name.clone().unwrap_or_else(|| sender_id.clone()),
+        channel,
+        user_id,
+        display_name,
         is_group: req.is_group,
         was_mentioned: req.was_mentioned,
         thread_id: None,
@@ -511,8 +594,12 @@ fn request_sender_context(req: &MessageRequest) -> Option<SenderContext> {
 /// drops one of the three fields on its way to the kernel call breaks the
 /// test, not just a sibling unit that happens to call `request_sender_context`
 /// the same way.
+///
+/// `api_user` is forwarded so the streaming route applies the same sender-identity precedence as its non-streaming sibling; see [`request_sender_context`].
 fn build_streaming_kernel_args(
     req: &MessageRequest,
+    api_user: Option<&crate::middleware::AuthenticatedApiUser>,
+    auth: &librefang_kernel::auth::AuthManager,
     session_id_override: Option<librefang_types::agent::SessionId>,
 ) -> (
     Option<SenderContext>,
@@ -520,7 +607,7 @@ fn build_streaming_kernel_args(
     Option<librefang_types::agent::SessionId>,
 ) {
     (
-        request_sender_context(req),
+        request_sender_context(req, api_user, auth),
         req.incognito,
         session_id_override,
     )
@@ -558,6 +645,27 @@ fn patch_agent_mcp_servers(body: &serde_json::Value) -> Result<Option<Vec<String
     }
 
     Ok(Some(servers))
+}
+
+fn patch_agent_only_updates_mcp_servers(body: &serde_json::Value) -> bool {
+    if patch_agent_mcp_servers(body).ok().flatten().is_none() {
+        return false;
+    }
+    let Some(fields) = body.as_object() else {
+        return false;
+    };
+    if fields.len() != 1 {
+        return false;
+    }
+    if fields.contains_key("mcp_servers") {
+        return true;
+    }
+    fields
+        .get("capabilities")
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|capabilities| {
+            capabilities.len() == 1 && capabilities.contains_key("mcp_servers")
+        })
 }
 
 /// Translate a kernel error into the right HTTP status code for the
@@ -1058,6 +1166,7 @@ mod tests {
     #[test]
     fn test_clone_manifest_strips_skills_when_excluded() {
         let manifest = librefang_types::agent::AgentManifest {
+            source_template: None,
             skills: vec!["skill-a".to_string(), "skill-b".to_string()],
             tools: {
                 let mut m = std::collections::HashMap::new();
@@ -1106,6 +1215,7 @@ mod tests {
     #[test]
     fn test_clone_manifest_disables_tools_when_excluded() {
         let manifest = librefang_types::agent::AgentManifest {
+            source_template: None,
             tools: {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
@@ -1149,11 +1259,195 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
         };
-        assert!(request_sender_context(&req).is_none());
+        assert!(request_sender_context(&req, None, &no_users()).is_none());
+    }
+
+    /// An `AuthManager` with no `[[users]]`, so `identify` never resolves anything.
+    /// The default for tests that are not about a declared channel binding.
+    fn no_users() -> librefang_kernel::auth::AuthManager {
+        librefang_kernel::auth::AuthManager::new(&[])
+    }
+
+    /// Build a `MessageRequest` that asserts a sender identity the caller may not own.
+    fn impersonating_request() -> MessageRequest {
+        MessageRequest {
+            message: "hello".to_string(),
+            attachments: Vec::new(),
+            sender_id: Some("victim-9999".to_string()),
+            sender_name: Some("Victim".to_string()),
+            channel_type: Some("telegram".to_string()),
+            is_group: false,
+            was_mentioned: false,
+            ephemeral: false,
+            thinking: None,
+            show_thinking: None,
+            reasoning_mode: None,
+            group_participants: None,
+            session_id: None,
+            incognito: false,
+        }
+    }
+
+    fn caller(
+        name: &str,
+        role: crate::middleware::UserRole,
+    ) -> crate::middleware::AuthenticatedApiUser {
+        crate::middleware::AuthenticatedApiUser {
+            name: name.to_string(),
+            role,
+            user_id: librefang_types::agent::UserId::from_name(name),
+        }
+    }
+
+    /// #7744: a caller below `Admin` gets their own identity, never the one the body names.
+    ///
+    /// Both halves of the tuple are pinned.
+    /// `AuthManager::identify` keys on `(channel, user_id)`, so leaving the channel caller-chosen would still let the caller pick which `[[users]] channel_bindings` namespace their own name is looked up in.
+    #[test]
+    fn request_sender_context_pins_sub_admin_caller_to_their_own_identity() {
+        let req = impersonating_request();
+        let bob = caller("bob", crate::middleware::UserRole::User);
+
+        let sender = request_sender_context(&req, Some(&bob), &no_users()).expect("sender context");
+
+        assert_eq!(
+            sender.user_id, "bob",
+            "a User-role caller must not be able to assert another user's platform id"
+        );
+        assert_eq!(sender.display_name, "bob");
+        assert_eq!(
+            sender.channel, "api",
+            "the identity namespace is pinned alongside the id — `identify` keys on the pair"
+        );
+    }
+
+    /// A `Viewer` is below `User` and must be pinned too — the check is an ordering, not equality.
+    #[test]
+    fn request_sender_context_pins_viewer_caller_to_their_own_identity() {
+        let req = impersonating_request();
+        let vic = caller("vic", crate::middleware::UserRole::Viewer);
+
+        let sender = request_sender_context(&req, Some(&vic), &no_users()).expect("sender context");
+
+        assert_eq!(sender.user_id, "vic");
+        assert_eq!(sender.channel, "api");
+    }
+
+    /// #7744: `Admin` and above may assert a sender identity — an operator impersonating a user for support, or a channel gateway relaying real platform users, is legitimate.
+    #[test]
+    fn request_sender_context_lets_admin_and_owner_assert_a_sender_identity() {
+        let req = impersonating_request();
+
+        for role in [
+            crate::middleware::UserRole::Admin,
+            crate::middleware::UserRole::Owner,
+        ] {
+            let operator = caller("ops", role);
+            let sender =
+                request_sender_context(&req, Some(&operator), &no_users()).expect("sender context");
+            assert_eq!(
+                sender.user_id, "victim-9999",
+                "role {role} must be able to assert"
+            );
+            assert_eq!(sender.display_name, "Victim");
+            assert_eq!(sender.channel, "telegram");
+        }
+    }
+
+    /// #7744: loopback / `allow_no_auth` deployments carry no authenticated identity to prefer, so the body's assertion stands and behaviour is unchanged.
+    #[test]
+    fn request_sender_context_is_unchanged_without_an_authenticated_caller() {
+        let req = impersonating_request();
+
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
+
+        assert_eq!(sender.user_id, "victim-9999");
+        assert_eq!(sender.display_name, "Victim");
+        assert_eq!(sender.channel, "telegram");
+    }
+
+    /// #7744: a sub-Admin caller asserting an id that resolves back to *themselves* is stating a true fact about their own binding, not attacking.
+    /// It stands.
+    ///
+    /// This is what keeps the documented REST-operator recipe working — `[[users]]` with `channel_bindings.api = "<some sender id>"`, described in `docs/src/app/security/approvals/page.mdx` — rather than silently demoting that operator to the guest gate.
+    #[test]
+    fn request_sender_context_lets_a_caller_assert_their_own_declared_binding() {
+        let mut bindings = std::collections::HashMap::new();
+        bindings.insert("api".to_string(), "ops-bot-sender-id".to_string());
+        let auth =
+            librefang_kernel::auth::AuthManager::new(&[librefang_types::config::UserConfig {
+                name: "ops-bot".to_string(),
+                role: "user".to_string(),
+                channel_bindings: bindings,
+                ..Default::default()
+            }]);
+
+        let mut req = impersonating_request();
+        req.sender_id = Some("ops-bot-sender-id".to_string());
+        req.sender_name = Some("Ops Bot".to_string());
+        req.channel_type = Some("api".to_string());
+        let ops = caller("ops-bot", crate::middleware::UserRole::User);
+
+        let sender = request_sender_context(&req, Some(&ops), &auth).expect("sender context");
+
+        assert_eq!(sender.user_id, "ops-bot-sender-id");
+        assert_eq!(sender.display_name, "Ops Bot");
+        assert_eq!(sender.channel, "api");
+    }
+
+    /// The self-assertion escape hatch is scoped to the caller: a binding that resolves to somebody *else* is still pinned away, even though `identify` succeeds.
+    #[test]
+    fn request_sender_context_pins_a_binding_that_resolves_to_another_user() {
+        let mut bindings = std::collections::HashMap::new();
+        bindings.insert("telegram".to_string(), "victim-9999".to_string());
+        let auth =
+            librefang_kernel::auth::AuthManager::new(&[librefang_types::config::UserConfig {
+                name: "victim".to_string(),
+                role: "owner".to_string(),
+                channel_bindings: bindings,
+                ..Default::default()
+            }]);
+
+        let req = impersonating_request();
+        let bob = caller("bob", crate::middleware::UserRole::User);
+
+        let sender = request_sender_context(&req, Some(&bob), &auth).expect("sender context");
+
+        assert_eq!(
+            sender.user_id, "bob",
+            "a resolvable binding belonging to another user is exactly the escalation, not an \
+             exemption from the pin"
+        );
+        assert_eq!(sender.channel, "api");
+    }
+
+    /// The pin never *creates* a sender context: a caller who asserts nothing still gets `None`, so the kernel's canonical-session path is untouched for the dashboard and plain `curl`.
+    #[test]
+    fn request_sender_context_stays_none_when_the_body_asserts_nothing() {
+        let mut req = impersonating_request();
+        req.sender_id = None;
+        let bob = caller("bob", crate::middleware::UserRole::User);
+
+        assert!(request_sender_context(&req, Some(&bob), &no_users()).is_none());
+    }
+
+    /// The streaming route must apply the same precedence as its non-streaming sibling.
+    /// Before #7744 the two handlers read the authenticated identity and the asserted one without ever joining them, and the streaming path is the one with no `owner` consumer at all.
+    #[test]
+    fn build_streaming_kernel_args_applies_the_same_sender_identity_precedence() {
+        let req = impersonating_request();
+        let bob = caller("bob", crate::middleware::UserRole::User);
+
+        let (ctx, _, _) = build_streaming_kernel_args(&req, Some(&bob), &no_users(), None);
+        let ctx = ctx.expect("sender context");
+
+        assert_eq!(ctx.user_id, "bob");
+        assert_eq!(ctx.channel, "api");
     }
 
     #[test]
@@ -1169,11 +1463,12 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
         };
-        let sender = request_sender_context(&req).expect("sender context");
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
         assert_eq!(sender.user_id, "u-123");
         assert_eq!(sender.display_name, "u-123");
         assert_eq!(sender.channel, "api");
@@ -1193,11 +1488,12 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
         };
-        let sender = request_sender_context(&req).expect("sender context");
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
         assert!(sender.is_group);
         assert!(sender.was_mentioned);
     }
@@ -1225,11 +1521,12 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: Some(roster.clone()),
             session_id: None,
             incognito: false,
         };
-        let sender = request_sender_context(&req).expect("sender context");
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
         assert_eq!(sender.group_participants, roster);
     }
 
@@ -1246,7 +1543,7 @@ mod tests {
         let req: MessageRequest =
             serde_json::from_value(json).expect("deserialize without group_participants");
         assert!(req.group_participants.is_none());
-        let sender = request_sender_context(&req).expect("sender context");
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
         assert!(sender.group_participants.is_empty());
     }
 
@@ -1265,7 +1562,7 @@ mod tests {
         });
         let req: MessageRequest =
             serde_json::from_value(json).expect("deserialize with group_participants");
-        let sender = request_sender_context(&req).expect("sender context");
+        let sender = request_sender_context(&req, None, &no_users()).expect("sender context");
         assert_eq!(sender.group_participants.len(), 2);
         assert_eq!(sender.group_participants[1].display_name, "Bob");
     }
@@ -1306,6 +1603,7 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
@@ -1321,15 +1619,16 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
         };
 
-        let group_ctx =
-            request_sender_context(&group_req).expect("group request must produce sender context");
-        let dm_ctx =
-            request_sender_context(&dm_req).expect("dm request must produce sender context");
+        let group_ctx = request_sender_context(&group_req, None, &no_users())
+            .expect("group request must produce sender context");
+        let dm_ctx = request_sender_context(&dm_req, None, &no_users())
+            .expect("dm request must produce sender context");
 
         // Sanity: the gateway-side channel values match the live
         // incident exactly (no normalization between transport and
@@ -1388,6 +1687,7 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: Some(vec![
                 ParticipantRef {
                     jid: "111@s.whatsapp.net".to_string(),
@@ -1403,7 +1703,8 @@ mod tests {
         };
         let session_override = Some(SessionId::new());
 
-        let (sender_ctx, incognito, sid) = build_streaming_kernel_args(&req, session_override);
+        let (sender_ctx, incognito, sid) =
+            build_streaming_kernel_args(&req, None, &no_users(), session_override);
 
         // sender_context: every field that influences resolver behaviour
         // must flow through.
@@ -1437,11 +1738,12 @@ mod tests {
             ephemeral: false,
             thinking: None,
             show_thinking: None,
+            reasoning_mode: None,
             group_participants: None,
             session_id: None,
             incognito: false,
         };
-        let (ctx, _, _) = build_streaming_kernel_args(&bare, None);
+        let (ctx, _, _) = build_streaming_kernel_args(&bare, None, &no_users(), None);
         assert!(
             ctx.is_none(),
             "missing sender_id must produce None — kernel then uses its own fallback"
@@ -1499,7 +1801,7 @@ mod tests {
     fn test_patch_config_request_temperature_deserialization() {
         let json = r#"{"temperature": 1.5}"#;
         let req: PatchAgentConfigRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.temperature, Some(1.5));
+        assert_eq!(req.temperature, Some(Some(1.5)));
         assert!(req.max_tokens.is_none());
         assert!(req.model.is_none());
     }
@@ -1510,18 +1812,18 @@ mod tests {
         for temp in [0.0, 0.5, 1.0, 1.5, 2.0] {
             let json = format!(r#"{{"temperature": {temp}}}"#);
             let req: PatchAgentConfigRequest = serde_json::from_str(&json).unwrap();
-            assert_eq!(req.temperature, Some(temp));
+            assert_eq!(req.temperature, Some(Some(temp)));
         }
 
         // Out of range values still deserialize (validation happens in handler)
         let json = r#"{"temperature": 3.0}"#;
         let req: PatchAgentConfigRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.temperature, Some(3.0));
+        assert_eq!(req.temperature, Some(Some(3.0)));
 
         // Negative values still deserialize (validation happens in handler)
         let json = r#"{"temperature": -0.5}"#;
         let req: PatchAgentConfigRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.temperature, Some(-0.5));
+        assert_eq!(req.temperature, Some(Some(-0.5)));
     }
 
     #[test]
@@ -1529,7 +1831,47 @@ mod tests {
         let json = r#"{"max_tokens": 4096}"#;
         let req: PatchAgentConfigRequest = serde_json::from_str(json).unwrap();
         assert!(req.temperature.is_none());
-        assert_eq!(req.max_tokens, Some(4096));
+        assert_eq!(req.max_tokens, Some(Some(4096)));
+    }
+
+    /// The three states have to stay distinguishable over the wire: an absent
+    /// key leaves the stored value alone, an explicit `null` hands the field
+    /// back to inherit. A plain `Option<T>` collapses both into `None`, which
+    /// is why the inherit state was unreachable over HTTP before.
+    #[test]
+    fn test_patch_config_request_null_is_not_absent() {
+        let absent: PatchAgentConfigRequest = serde_json::from_str(r#"{}"#).unwrap();
+        assert_eq!(absent.temperature, None);
+        assert_eq!(absent.max_tokens, None);
+
+        let cleared: PatchAgentConfigRequest =
+            serde_json::from_str(r#"{"temperature": null, "max_tokens": null}"#).unwrap();
+        assert_eq!(cleared.temperature, Some(None));
+        assert_eq!(cleared.max_tokens, Some(None));
+    }
+
+    /// The four knobs an agent could not reach before (#7781): each is
+    /// accepted on the same tri-state contract as temperature.
+    #[test]
+    fn test_patch_config_request_accepts_the_remaining_preference_knobs() {
+        let json = r#"{"top_p": 0.9, "frequency_penalty": 0.5, "presence_penalty": -0.25,
+                       "context_window": 200000, "max_output_tokens": 8192}"#;
+        let req: PatchAgentConfigRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.top_p, Some(Some(0.9)));
+        assert_eq!(req.frequency_penalty, Some(Some(0.5)));
+        assert_eq!(req.presence_penalty, Some(Some(-0.25)));
+        assert_eq!(req.context_window, Some(Some(200_000)));
+        assert_eq!(req.max_output_tokens, Some(Some(8192)));
+    }
+
+    /// `reasoning_effort` is deliberately not on this request: it is an
+    /// endpoint fact, not an agent preference, and letting an agent force it
+    /// on reintroduces the gateway-rejects-every-turn failure of #7770.
+    /// `deny_unknown_fields` turns the attempt into a `400`.
+    #[test]
+    fn test_patch_config_request_rejects_reasoning_effort() {
+        let json = r#"{"reasoning_effort": "high"}"#;
+        assert!(serde_json::from_str::<PatchAgentConfigRequest>(json).is_err());
     }
 
     /// #3464 — when the awaiting future is dropped (simulates client
@@ -1732,7 +2074,7 @@ mod monitoring_tests {
             ..KernelConfig::default()
         };
 
-        let kernel = Arc::new(librefang_kernel::LibreFangKernel::boot_with_config(config).unwrap());
+        let kernel = Arc::new(crate::routes::boot_test_kernel(config));
         let idempotency_store: Arc<
             dyn librefang_memory::idempotency::IdempotencyStore + Send + Sync,
         > = Arc::new(librefang_memory::idempotency::SqliteIdempotencyStore::new(
@@ -1749,6 +2091,7 @@ mod monitoring_tests {
             )),
             kernel,
             started_at: std::time::Instant::now(),
+            readiness_requires_embedding: false,
             bridge_manager: arc_swap::ArcSwap::new(std::sync::Arc::new(None)),
             channels_config: tokio::sync::RwLock::new(Default::default()),
             shutdown_notify: Arc::new(tokio::sync::Notify::new()),
@@ -1763,11 +2106,13 @@ mod monitoring_tests {
             media_drivers: librefang_kernel::media::MediaDriverCache::new(),
             webhook_router: Arc::new(tokio::sync::RwLock::new(Arc::new(axum::Router::new()))),
             api_key_lock: Arc::new(tokio::sync::RwLock::new(String::new())),
+            master_key: Default::default(),
             user_api_keys: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             config_write_lock: tokio::sync::Mutex::new(()),
             pending_a2a_agents: dashmap::DashMap::new(),
             auth_login_limiter: std::sync::Arc::new(crate::rate_limiter::AuthLoginLimiter::new()),
             gcra_limiter: crate::rate_limiter::create_rate_limiter(0),
+            gcra_tokens_per_minute: 1,
             trusted_proxies: Arc::new(crate::client_ip::TrustedProxies::default()),
             trust_forwarded_for: false,
             idempotency_store,
@@ -1780,6 +2125,7 @@ mod monitoring_tests {
     fn spawn_monitoring_test_agent(state: &Arc<AppState>, name: &str) -> AgentId {
         let manifest = AgentManifest {
             name: name.to_string(),
+            source_template: None,
             ..AgentManifest::default()
         };
         state.kernel.spawn_agent_typed(manifest).unwrap()
@@ -1800,9 +2146,10 @@ mod monitoring_tests {
         let (state, _tmp) = monitoring_test_app_state();
         let agent_id = spawn_monitoring_test_agent(&state, "metrics-shape");
 
-        let (status, body) =
-            json_response(agent_metrics(State(state), Path(agent_id.to_string()), None).await)
-                .await;
+        let (status, body) = json_response(
+            agent_metrics(State(state), None, Path(agent_id.to_string()), None).await,
+        )
+        .await;
 
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["agent_id"], agent_id.to_string());
@@ -1816,7 +2163,7 @@ mod monitoring_tests {
         let (state, _tmp) = monitoring_test_app_state();
 
         let (status, body) = json_response(
-            agent_metrics(State(state), Path(AgentId::new().to_string()), None).await,
+            agent_metrics(State(state), None, Path(AgentId::new().to_string()), None).await,
         )
         .await;
 
@@ -1846,9 +2193,10 @@ mod monitoring_tests {
         let mut params = HashMap::new();
         params.insert("level".to_string(), "custom_error".to_string());
 
-        let (status, body) =
-            json_response(agent_logs(State(state), Path(agent_id_str), None, Query(params)).await)
-                .await;
+        let (status, body) = json_response(
+            agent_logs(State(state), None, Path(agent_id_str), None, Query(params)).await,
+        )
+        .await;
 
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["count"], 1);
@@ -1884,6 +2232,7 @@ mod monitoring_tests {
         let (state, _tmp) = monitoring_test_app_state();
         let manifest = AgentManifest {
             name: "patch-top-level-mcp".to_string(),
+            source_template: None,
             mcp_servers: vec!["server-a".to_string()],
             ..AgentManifest::default()
         };
@@ -1926,10 +2275,89 @@ mod monitoring_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn patch_agent_config_provider_only_preserves_model_and_persists() {
+        let (state, _tmp) = monitoring_test_app_state();
+        let manifest = AgentManifest {
+            name: "patch-provider-only".to_string(),
+            source_template: None,
+            model: librefang_types::agent::ModelConfig {
+                provider: "openai".to_string(),
+                model: "gpt-4.1".to_string(),
+                api_key_env: Some("OLD_PROVIDER_API_KEY".to_string()),
+                base_url: Some("https://old-provider.invalid/v1".to_string()),
+                ..Default::default()
+            },
+            ..AgentManifest::default()
+        };
+        let agent_id = state.kernel.spawn_agent_typed(manifest).unwrap();
+        let request = serde_json::from_value(serde_json::json!({"provider": "litellm"})).unwrap();
+
+        let (status, body) = json_response(
+            patch_agent_config(
+                State(state.clone()),
+                Path(agent_id.to_string()),
+                None,
+                Json(request),
+            )
+            .await,
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK, "response: {body}");
+        let entry = state.kernel.agent_registry().get(agent_id).unwrap();
+        assert_eq!(entry.manifest.model.model, "gpt-4.1");
+        assert_eq!(entry.manifest.model.provider, "litellm");
+        assert_eq!(entry.manifest.model.api_key_env, None);
+        assert_eq!(entry.manifest.model.base_url, None);
+
+        let persisted = state
+            .kernel
+            .memory_substrate()
+            .load_agent(agent_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(persisted.manifest.model.model, "gpt-4.1");
+        assert_eq!(persisted.manifest.model.provider, "litellm");
+        assert_eq!(persisted.manifest.model.api_key_env, None);
+        assert_eq!(persisted.manifest.model.base_url, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn patch_agent_config_model_and_provider_shapes_return_not_found_consistently() {
+        let (state, _tmp) = monitoring_test_app_state();
+        let missing_id = AgentId::new();
+
+        for payload in [
+            serde_json::json!({"provider": "litellm"}),
+            serde_json::json!({"model": "gpt-4.1"}),
+            serde_json::json!({"model": "gpt-4.1", "provider": "litellm"}),
+        ] {
+            let request = serde_json::from_value(payload.clone()).unwrap();
+            let (status, body) = json_response(
+                patch_agent_config(
+                    State(state.clone()),
+                    Path(missing_id.to_string()),
+                    None,
+                    Json(request),
+                )
+                .await,
+            )
+            .await;
+
+            assert_eq!(
+                status,
+                StatusCode::NOT_FOUND,
+                "payload {payload} returned {body}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_patch_agent_updates_nested_capabilities_mcp_servers_and_persists() {
         let (state, _tmp) = monitoring_test_app_state();
         let manifest = AgentManifest {
             name: "patch-nested-mcp".to_string(),
+            source_template: None,
             mcp_servers: vec!["server-b".to_string()],
             ..AgentManifest::default()
         };

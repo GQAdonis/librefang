@@ -101,6 +101,77 @@ pub struct CustomSttConfig {
     pub model: Option<String>,
 }
 
+/// Configuration for a custom / self-hosted vision endpoint used by image
+/// description (the understanding path, not generation).
+///
+/// Points `describe_image` at any OpenAI-compatible `/v1/chat/completions`
+/// endpoint that accepts a vision message — e.g. a local `llama.cpp` server,
+/// `ollama` with a multimodal model, or any other OpenAI-compatible service.
+///
+/// ## Example (`config.toml`)
+/// ```toml
+/// [media]
+/// image_provider = "local-llava"
+///
+/// [media.custom_image]
+/// base_url = "http://localhost:11434/v1/chat/completions"
+/// # api_key_env = "MY_LOCAL_VISION_KEY"  # omit for keyless servers  # pragma: allowlist secret
+/// key_required = false
+/// model = "llava"
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct CustomImageConfig {
+    /// Full URL of the OpenAI-compatible chat/completions endpoint.
+    /// E.g. `"http://localhost:11434/v1/chat/completions"`.
+    pub base_url: String,
+    /// Environment variable that holds the API key for this endpoint.
+    /// When empty (default), no `Authorization` header is sent.
+    #[serde(default)]
+    pub api_key_env: String,
+    /// When `true`, the request is rejected immediately if the env var named
+    /// by `api_key_env` is not set. When `false` (default), a missing key
+    /// simply means no auth header is added — suitable for keyless local
+    /// servers.
+    #[serde(default)]
+    pub key_required: bool,
+    /// Model identifier forwarded to the endpoint. When unset the endpoint
+    /// default is used.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+/// Configuration for a custom / self-hosted video description endpoint.
+///
+/// Points `describe_video` at any OpenAI-compatible multimodal endpoint
+/// that accepts video input — mirrors `CustomImageConfig` for video.
+///
+/// ## Example (`config.toml`)
+/// ```toml
+/// [media]
+/// video_provider = "local-video"
+///
+/// [media.custom_video]
+/// base_url = "http://localhost:8080/v1/chat/completions"
+/// key_required = false
+/// model = "video-llava"
+/// ```
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct CustomVideoConfig {
+    /// Full URL of the multimodal endpoint.
+    pub base_url: String,
+    /// Environment variable that holds the API key for this endpoint.
+    #[serde(default)]
+    pub api_key_env: String,
+    /// When `true`, the request is rejected if the env var is not set.
+    #[serde(default)]
+    pub key_required: bool,
+    /// Model identifier forwarded to the endpoint.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
 /// Configuration for media understanding.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
@@ -113,7 +184,14 @@ pub struct MediaConfig {
     pub video_description: bool,
     /// Max concurrent media processing tasks. Default: 2.
     pub max_concurrency: usize,
+    /// Timeout for one audio transcription provider request in seconds. Default: 60.
+    pub transcription_timeout_secs: u64,
+    /// Timeout for one ffmpeg subprocess in seconds. Default: 30.
+    pub ffmpeg_timeout_secs: u64,
     /// Preferred image description provider (auto-detect if None).
+    ///
+    /// Set to any string (e.g. `"local-llava"`) to use the custom vision
+    /// endpoint defined in `[media.custom_image]`.
     pub image_provider: Option<String>,
     /// Preferred image description model (provider default if None).
     pub image_model: Option<String>,
@@ -124,6 +202,23 @@ pub struct MediaConfig {
     pub audio_provider: Option<String>,
     /// Preferred audio transcription model (provider default if None).
     pub audio_model: Option<String>,
+    /// Fallback ISO-639-1 language hint for transcription, used when a
+    /// `media_transcribe` / `speech_to_text` call omits its own `language`
+    /// (#6678). Per-call value always wins; this only applies when the tool
+    /// call left the field unset.
+    pub audio_language: Option<String>,
+    /// Fallback transcription prompt (domain vocabulary, proper nouns) used
+    /// when a `media_transcribe` / `speech_to_text` call omits its own
+    /// `prompt` (#6678). Per-call value always wins; this only applies when
+    /// the tool call left the field unset.
+    pub audio_prompt: Option<String>,
+    /// Preferred video description provider (auto-detect if None).
+    ///
+    /// Set to any string (e.g. `"local-video"`) to use the custom video
+    /// endpoint defined in `[media.custom_video]`.
+    pub video_provider: Option<String>,
+    /// Preferred video description model (provider default if None).
+    pub video_model: Option<String>,
     /// Custom / self-hosted STT endpoint configuration.
     ///
     /// When `audio_provider` is set to a name that is not one of the
@@ -133,6 +228,20 @@ pub struct MediaConfig {
     /// Whisper endpoint at `custom_stt.base_url`.
     #[serde(default)]
     pub custom_stt: CustomSttConfig,
+    /// Custom / self-hosted vision endpoint for image description.
+    ///
+    /// When `image_provider` is set to a name that is not one of the
+    /// built-in providers (`anthropic`, `openai`, `groq`, `gemini`), this
+    /// block is consulted and the request is forwarded to an
+    /// OpenAI-compatible chat/completions endpoint at `custom_image.base_url`.
+    #[serde(default)]
+    pub custom_image: CustomImageConfig,
+    /// Custom / self-hosted endpoint for video description.
+    ///
+    /// When `video_provider` is set to a name that is not one of the
+    /// built-in providers (`gemini`), this block is consulted.
+    #[serde(default)]
+    pub custom_video: CustomVideoConfig,
 }
 
 impl Default for MediaConfig {
@@ -142,11 +251,19 @@ impl Default for MediaConfig {
             audio_transcription: true,
             video_description: false,
             max_concurrency: 2,
+            transcription_timeout_secs: 60,
+            ffmpeg_timeout_secs: 30,
             image_provider: None,
             image_model: None,
             audio_provider: None,
             audio_model: None,
+            audio_language: None,
+            audio_prompt: None,
+            video_provider: None,
+            video_model: None,
             custom_stt: CustomSttConfig::default(),
+            custom_image: CustomImageConfig::default(),
+            custom_video: CustomVideoConfig::default(),
         }
     }
 }
@@ -204,7 +321,20 @@ pub const ALLOWED_AUDIO_TYPES: &[&str] = &[
 ];
 
 /// Allowed video MIME types.
-pub const ALLOWED_VIDEO_TYPES: &[&str] = &["video/mp4", "video/quicktime", "video/webm"];
+///
+/// `video/x-matroska` (`.mkv`) and `video/x-msvideo` (`.avi`) are audio-only
+/// consumers here (#6679: `media_transcribe` / `speech_to_text` extract the
+/// audio track and discard the video), not general video-understanding
+/// inputs — `describe_video` only ever builds `video/mp4` / `video/quicktime`
+/// / `video/webm` attachments today, so widening this list has no effect
+/// there.
+pub const ALLOWED_VIDEO_TYPES: &[&str] = &[
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+    "video/x-matroska",
+    "video/x-msvideo",
+];
 
 /// Extract the bare `type/subtype` from a MIME string, discarding parameters
 /// and whitespace (RFC 2045). E.g. `"audio/ogg; codecs=opus"` → `"audio/ogg"`.
@@ -267,6 +397,25 @@ fn safe_ext_from_filename(filename: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Durable metadata for a file exposed through `/api/uploads/{file_id}`.
+///
+/// Cross-crate producers persist this sidecar beside the upload so the API can reconstruct its content type and access policy after a daemon restart.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct UploadMetadata {
+    pub filename: String,
+    pub content_type: String,
+    /// `Some` binds a human upload to its owner.
+    /// Persisted `None` explicitly marks daemon-generated or no-auth content as shared.
+    pub uploaded_by: Option<crate::agent::UserId>,
+}
+
+/// Hidden sidecar path for [`UploadMetadata`].
+///
+/// The leading dot keeps it out of the legacy `<uuid>.*` data-file probe.
+pub fn upload_metadata_path(upload_dir: &std::path::Path, file_id: &str) -> std::path::PathBuf {
+    upload_dir.join(format!(".{file_id}.meta.json"))
 }
 
 /// Compute the on-disk basename for a persisted upload: `"<file_id>.<ext>"`,
@@ -514,6 +663,16 @@ pub enum MediaCapability {
     TextToSpeech,
     VideoGeneration,
     MusicGeneration,
+    /// Turning speech into text. Understanding, not generation — but it is a
+    /// media capability a provider either has or lacks, and leaving it out
+    /// meant transcription providers could not be discovered from the
+    /// registry like every other one and were picked from a hardcoded env-var
+    /// cascade instead.
+    SpeechToText,
+    /// Describing an image. Same reasoning as `SpeechToText`: this is the
+    /// capability that decides whether an attached image reaches the model
+    /// or gets replaced by a note about a file path.
+    ImageUnderstanding,
 }
 
 impl std::fmt::Display for MediaCapability {
@@ -523,6 +682,8 @@ impl std::fmt::Display for MediaCapability {
             MediaCapability::TextToSpeech => write!(f, "text_to_speech"),
             MediaCapability::VideoGeneration => write!(f, "video_generation"),
             MediaCapability::MusicGeneration => write!(f, "music_generation"),
+            MediaCapability::SpeechToText => write!(f, "speech_to_text"),
+            MediaCapability::ImageUnderstanding => write!(f, "image_understanding"),
         }
     }
 }
@@ -912,6 +1073,25 @@ mod tests {
     }
 
     #[test]
+    fn upload_metadata_sidecar_contract_is_shared_and_hidden() {
+        let id = "33333333-3333-3333-3333-333333333333";
+        let meta = UploadMetadata {
+            filename: "generated.png".to_string(),
+            content_type: "image/png".to_string(),
+            uploaded_by: None,
+        };
+        let encoded = serde_json::to_vec(&meta).unwrap();
+        let decoded: UploadMetadata = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded.filename, "generated.png");
+        assert_eq!(decoded.content_type, "image/png");
+        assert_eq!(decoded.uploaded_by, None);
+        assert_eq!(
+            upload_metadata_path(std::path::Path::new("/uploads"), id),
+            std::path::Path::new("/uploads").join(format!(".{id}.meta.json"))
+        );
+    }
+
+    #[test]
     fn test_media_type_display() {
         assert_eq!(MediaType::Image.to_string(), "image");
         assert_eq!(MediaType::Audio.to_string(), "audio");
@@ -927,6 +1107,27 @@ mod tests {
         assert_eq!(config.max_concurrency, 2);
         assert!(config.image_provider.is_none());
         assert!(config.image_model.is_none());
+        let value = serde_json::to_value(config).unwrap();
+        assert_eq!(value["transcription_timeout_secs"], 60);
+        assert_eq!(value["ffmpeg_timeout_secs"], 30);
+    }
+
+    #[test]
+    fn test_media_config_timeout_defaults_and_overrides() {
+        let defaults: serde_json::Value = serde_json::from_str("{}").unwrap();
+        let defaults: MediaConfig = serde_json::from_value(defaults).unwrap();
+        let defaults = serde_json::to_value(defaults).unwrap();
+        assert_eq!(defaults["transcription_timeout_secs"], 60);
+        assert_eq!(defaults["ffmpeg_timeout_secs"], 30);
+
+        let configured: MediaConfig = serde_json::from_value(serde_json::json!({
+            "transcription_timeout_secs": 91,
+            "ffmpeg_timeout_secs": 47
+        }))
+        .unwrap();
+        let configured = serde_json::to_value(configured).unwrap();
+        assert_eq!(configured["transcription_timeout_secs"], 91);
+        assert_eq!(configured["ffmpeg_timeout_secs"], 47);
     }
 
     #[test]

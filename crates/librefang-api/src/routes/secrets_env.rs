@@ -10,6 +10,49 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard};
+
+static SECRET_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+fn lock_secret_writes() -> MutexGuard<'static, ()> {
+    match SECRET_WRITE_LOCK.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::warn!("Secret write lock was poisoned; recovering protected state");
+            SECRET_WRITE_LOCK.clear_poison();
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn write_secret_staging_file(path: &Path, contents: &[u8]) -> Result<(), String> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    // Exclusive creation prevents a pre-positioned file or symbolic link at
+    // the predictable staging path from being followed. An open failure means
+    // this call never owned the path, so the caller must not remove it.
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("create {path:?}: {error}"))?;
+    let write_result = file
+        .write_all(contents)
+        .map_err(|error| format!("write {path:?}: {error}"))
+        .and_then(|()| {
+            file.sync_all()
+                .map_err(|error| format!("sync {path:?}: {error}"))
+        });
+    if let Err(error) = write_result {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
+    Ok(())
+}
 
 pub fn upsert_secret(path: &Path, key: &str, value: &str) -> Result<(), String> {
     // The dotenv reader (`librefang_extensions::dotenv`) silently strips
@@ -56,7 +99,17 @@ pub fn upsert_secret(path: &Path, key: &str, value: &str) -> Result<(), String> 
         return Err(format!("invalid secret key `{key}`"));
     }
 
-    let original = fs::read_to_string(path).unwrap_or_default();
+    // Serialize the complete read-modify-write transaction. Unique staging
+    // names only prevent tempfile collisions; without this lock, concurrent
+    // callers can both read the same original and the last rename silently
+    // discards the other caller's key.
+    let _write_guard = lock_secret_writes();
+
+    let original = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(format!("read {path:?}: {error}")),
+    };
     let mut out = String::with_capacity(original.len() + key.len() + value.len() + 2);
     let mut replaced = false;
     for line in original.lines() {
@@ -90,30 +143,33 @@ pub fn upsert_secret(path: &Path, key: &str, value: &str) -> Result<(), String> 
     static SEQ: AtomicU64 = AtomicU64::new(0);
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = parent.join(format!(".secrets.env.tmp.{}.{seq}", std::process::id()));
-    {
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp)
-            .map_err(|e| format!("open {tmp:?}: {e}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let perm = fs::Permissions::from_mode(0o600);
-            fs::set_permissions(&tmp, perm).map_err(|e| format!("chmod 600 {tmp:?}: {e}"))?;
-        }
-        f.write_all(out.as_bytes())
-            .map_err(|e| format!("write {tmp:?}: {e}"))?;
-        f.sync_all().ok();
+    write_secret_staging_file(&tmp, out.as_bytes())?;
+
+    if let Err(error) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("rename {tmp:?} -> {path:?}: {error}"));
     }
-    fs::rename(&tmp, path).map_err(|e| format!("rename {tmp:?} -> {path:?}: {e}"))?;
+
+    // `rename(2)` is atomic, but the directory entry it rewrites is only
+    // guaranteed durable once the *directory's* metadata is synced — an
+    // fsync of the file itself (above) does not cover that. Without this,
+    // a crash right after a successful rename can roll the directory back
+    // to pointing at the old inode (or, on some filesystems, no inode at
+    // all) even though callers already observed `Ok(())`. Unix-only:
+    // Windows durably commits renames as part of the NTFS transaction log
+    // without a separate directory-handle fsync step.
+    #[cfg(unix)]
+    fs::File::open(parent)
+        .and_then(|dir| dir.sync_all())
+        .map_err(|e| format!("sync parent directory {parent:?}: {e}"))?;
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier};
     use tempfile::TempDir;
 
     fn read(path: &Path) -> String {
@@ -145,5 +201,113 @@ mod tests {
         let path = dir.path().join("secrets.env");
         upsert_secret(&path, "OPENAI_API_KEY", "sk-123").unwrap();
         assert_eq!(read(&path), "OPENAI_API_KEY=sk-123\n");
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "successful writes must not leave secret-bearing staging files"
+        );
+    }
+
+    #[test]
+    fn existing_secret_read_error_does_not_replace_target() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("secrets.env");
+        // A directory at the target path reliably produces a non-NotFound
+        // read error on every supported platform.
+        fs::create_dir(&path).unwrap();
+
+        let err = upsert_secret(&path, "OPENAI_API_KEY", "sk-123").unwrap_err();
+        assert!(err.contains("read"), "got: {err}");
+        assert!(path.is_dir(), "the unreadable target must remain untouched");
+
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "a read failure must not create a secret-bearing staging file"
+        );
+    }
+
+    #[test]
+    fn preexisting_staging_file_is_not_overwritten_or_removed() {
+        let dir = TempDir::new().unwrap();
+        let staging = dir.path().join("staging");
+        fs::write(&staging, b"owned by another writer").unwrap();
+
+        let error = write_secret_staging_file(&staging, b"SECRET=value\n").unwrap_err();
+
+        assert!(error.contains("create"), "got: {error}");
+        assert_eq!(fs::read(&staging).unwrap(), b"owned by another writer");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preexisting_staging_symlink_is_not_followed_or_removed() {
+        let dir = TempDir::new().unwrap();
+        let target = dir.path().join("target");
+        let staging = dir.path().join("staging");
+        fs::write(&target, b"safe").unwrap();
+        std::os::unix::fs::symlink(&target, &staging).unwrap();
+
+        assert!(write_secret_staging_file(&staging, b"SECRET=value\n").is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"safe");
+        assert!(fs::symlink_metadata(&staging)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
+
+    #[test]
+    fn concurrent_upserts_preserve_every_key() {
+        const WRITERS: usize = 16;
+        let dir = TempDir::new().unwrap();
+        let path = Arc::new(dir.path().join("secrets.env"));
+        let barrier = Arc::new(Barrier::new(WRITERS));
+        let threads: Vec<_> = (0..WRITERS)
+            .map(|index| {
+                let path = Arc::clone(&path);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    upsert_secret(&path, &format!("KEY_{index}"), &format!("value-{index}"))
+                })
+            })
+            .collect();
+
+        for thread in threads {
+            thread.join().unwrap().unwrap();
+        }
+
+        let content = read(&path);
+        for index in 0..WRITERS {
+            assert!(
+                content
+                    .lines()
+                    .any(|line| line == format!("KEY_{index}=value-{index}")),
+                "missing KEY_{index} from {content:?}"
+            );
+        }
+        assert_eq!(content.lines().count(), WRITERS);
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "concurrent writes must not leave staging files"
+        );
+    }
+
+    #[test]
+    fn poisoned_secret_write_lock_recovers() {
+        let panic = std::thread::spawn(|| {
+            let _guard = SECRET_WRITE_LOCK.lock().unwrap();
+            panic!("poison secret write lock");
+        })
+        .join();
+        assert!(panic.is_err());
+
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("secrets.env");
+        upsert_secret(&path, "RECOVERED", "true").unwrap();
+
+        assert_eq!(read(&path), "RECOVERED=true\n");
+        assert!(!SECRET_WRITE_LOCK.is_poisoned());
     }
 }

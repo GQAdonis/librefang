@@ -13,6 +13,7 @@ use dashmap::DashMap;
 use librefang_runtime::interrupt::SessionInterrupt;
 use librefang_types::agent::{AgentId, SessionId};
 use librefang_types::tool::DecisionTrace;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::super::RunningTask;
@@ -70,8 +71,11 @@ pub struct AgentSubsystem {
     /// Per-agent invocation semaphore — caps concurrent **trigger
     /// dispatch** fires to a single agent.
     pub(crate) agent_concurrency: DashMap<AgentId, Arc<tokio::sync::Semaphore>>,
-    /// Per-hand-instance lock serializing runtime-override mutations.
-    pub(crate) hand_runtime_override_locks: DashMap<Uuid, Arc<std::sync::Mutex<()>>>,
+    /// Per-manifest write locks.
+    /// Writers re-read registry and disk state after acquiring the path lock so field patches cannot overwrite a concurrent full persist with a stale snapshot.
+    pub(crate) manifest_write_locks: DashMap<PathBuf, Arc<std::sync::Mutex<()>>>,
+    /// Per-hand-instance lock serializing mutations that touch both the `HandInstance` and the live `AgentRegistry` entries it owns — runtime-override PATCH/DELETE and settings-config saves.
+    pub(crate) hand_instance_locks: DashMap<Uuid, Arc<std::sync::Mutex<()>>>,
     /// Per-agent decision traces from the most recent message exchange.
     pub(crate) decision_traces: DashMap<AgentId, Vec<DecisionTrace>>,
     /// Per-agent fire-and-forget background tasks (skill reviews, owner
@@ -97,7 +101,8 @@ impl AgentSubsystem {
             agent_msg_locks: DashMap::new(),
             session_msg_locks: DashMap::new(),
             agent_concurrency: DashMap::new(),
-            hand_runtime_override_locks: DashMap::new(),
+            manifest_write_locks: DashMap::new(),
+            hand_instance_locks: DashMap::new(),
             decision_traces: DashMap::new(),
             agent_watchers: DashMap::new(),
         }

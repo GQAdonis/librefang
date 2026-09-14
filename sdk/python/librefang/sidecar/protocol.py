@@ -35,6 +35,24 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
+#: Wire-protocol version this SDK implements, carried on every ``ready`` frame via :attr:`librefang.sidecar.runtime.SidecarAdapter.protocol_version`.
+#:
+#: The daemon's ``librefang_channels::sidecar::SIDECAR_PROTOCOL_VERSION`` is the source of truth for the number; this constant mirrors it and ``crates/librefang-channels/tests/sidecar_version_contract.rs`` fails the build if the two ever disagree.
+#:
+#: Bump only for a non-additive change to a frozen-core frame — see ``docs/architecture/sidecar-protocol.md``.
+PROTOCOL_VERSION = 1
+
+
+def sdk_version() -> str:
+    """The installed ``librefang-sdk`` version, as reported on ``--describe``.
+
+    Imported lazily: :mod:`librefang.sidecar.protocol` is imported by every adapter at startup, and resolving the version touches the filesystem or the installed-distribution metadata.
+    """
+    from librefang import __version__
+
+    return __version__
+
+
 # --------------------------------------------------------------------------
 # ChannelContent — externally tagged, mirrors crate::types::ChannelContent
 # --------------------------------------------------------------------------
@@ -408,13 +426,31 @@ def parse_command(line: str) -> Command:
     valid JSON that is not an object (e.g. a bare number/array) — the
     reader treats both the same: emit a protocol error and continue,
     rather than letting an ``AttributeError`` escape and wedge the
-    adapter. Unknown methods become :class:`UnknownCommand`."""
+    adapter. Known commands also require object-shaped ``params``;
+    unknown methods retain their raw shape for forward compatibility."""
     obj = json.loads(line)
     if not isinstance(obj, dict):
         raise json.JSONDecodeError(
             "expected a JSON object", line, 0)
     method = obj.get("method")
-    p = obj.get("params") or {}
+    if method is not None and not isinstance(method, str):
+        raise json.JSONDecodeError(
+            "expected command method to be a JSON string", line, 0,
+        )
+    known_methods = {
+        "send", "ready_ack", "shutdown", "typing", "reaction",
+        "interactive", "stream_start", "stream_delta", "stream_end",
+        "heartbeat",
+    }
+    if method not in known_methods:
+        return UnknownCommand(method or "", obj)
+    p = obj.get("params")
+    if p is None:
+        p = {}
+    elif not isinstance(p, dict):
+        raise json.JSONDecodeError(
+            "expected command params to be a JSON object", line, 0,
+        )
     if method == "send":
         return Send(p.get("channel_id", ""), p.get("text", ""),
                     p.get("content"), p.get("thread_id"),
@@ -440,7 +476,7 @@ def parse_command(line: str) -> Command:
         return StreamEnd(p.get("stream_id", ""))
     if method == "heartbeat":
         return Heartbeat()
-    return UnknownCommand(method or "", obj)
+    raise AssertionError("known command was not parsed")
 
 
 # ---------------------------------------------------------------------------
@@ -505,9 +541,12 @@ class Schema:
         self.fields = list(fields)
 
     def to_dict(self):
+        # `sdk_version` is emitted unconditionally rather than declared per adapter: #7140 was a deployment running a four-month-old SDK against a current daemon, and the daemon had no path by which the adapter's own version could reach it.
+        # `--describe` runs the same interpreter, with the same PYTHONPATH resolution, as the eventual spawn — so the version it reports is the version that will actually serve traffic.
         return {
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
             "fields": [f.to_dict() for f in self.fields],
+            "sdk_version": sdk_version(),
         }

@@ -20,6 +20,7 @@ mod fs;
 mod goal;
 mod hand;
 mod image;
+mod io_retry;
 mod knowledge;
 #[cfg(feature = "media")]
 mod media;
@@ -46,11 +47,12 @@ mod workflow;
 use self::a2a::{tool_a2a_discover, tool_a2a_send};
 use self::agent::{
     tool_agent_find, tool_agent_kill, tool_agent_list, tool_agent_send, tool_agent_spawn,
+    tool_agent_type_create,
 };
 use self::artifact::tool_read_artifact;
 pub use self::canvas::sanitize_canvas_html;
 use self::canvas::tool_canvas_present;
-use self::channel::tool_channel_send;
+use self::channel::{tool_channel_dm, tool_channel_members, tool_channel_send};
 use self::cron::{tool_cron_cancel, tool_cron_create, tool_cron_enable, tool_cron_list};
 pub(crate) use self::definitions::tool_name;
 pub use self::definitions::{builtin_tool_definitions, select_native_tools, ALWAYS_NATIVE_TOOLS};
@@ -62,9 +64,9 @@ pub use self::dispatch::{
 pub(super) use self::error::{ToolError, ToolResult as TypedToolResult};
 use self::event::tool_event_publish;
 use self::fs::{
-    check_absolute_path_inside_workspace, maybe_dedup_file_read, maybe_snapshot, named_ws_prefixes,
-    named_ws_prefixes_readonly, named_ws_prefixes_writable, resolve_file_path_ext,
-    tool_apply_patch, tool_file_list, tool_file_read, tool_file_write,
+    check_absolute_path_inside_workspace, expand_alias_in_tool_input, maybe_dedup_file_read,
+    maybe_snapshot, named_ws_prefixes, named_ws_prefixes_readonly, named_ws_prefixes_writable,
+    resolve_file_path_ext, tool_apply_patch, tool_file_list, tool_file_read, tool_file_write,
 };
 use self::goal::tool_goal_update;
 use self::hand::{tool_hand_activate, tool_hand_deactivate, tool_hand_list, tool_hand_status};
@@ -77,7 +79,11 @@ use self::media::{
     tool_image_generate, tool_media_describe, tool_media_transcribe, tool_music_generate,
     tool_speech_to_text, tool_text_to_speech, tool_video_generate, tool_video_status,
 };
-use self::memory::{tool_memory_list, tool_memory_recall, tool_memory_store};
+use self::memory::{
+    tool_memory_list, tool_memory_recall, tool_memory_semantic_add,
+    tool_memory_semantic_consolidate, tool_memory_semantic_duplicates, tool_memory_semantic_forget,
+    tool_memory_semantic_search, tool_memory_semantic_stats, tool_memory_store,
+};
 use self::meta::{tool_meta_load, tool_meta_search};
 use self::notify::tool_notify_owner;
 use self::process::{
@@ -114,8 +120,8 @@ use self::workflow::{
     build_workflow_run_result, prepare_workflow_input, resolve_workflow_input_artifacts,
 };
 use self::workflow::{
-    tool_workflow_cancel, tool_workflow_describe, tool_workflow_list, tool_workflow_run,
-    tool_workflow_start, tool_workflow_status,
+    tool_workflow_cancel, tool_workflow_create, tool_workflow_describe, tool_workflow_list,
+    tool_workflow_run, tool_workflow_start, tool_workflow_status,
 };
 
 /// Maximum inter-agent call depth to prevent infinite recursion (A->B->C->...).
@@ -130,6 +136,29 @@ tokio::task_local! {
     /// Canvas allowed-tag override (set from kernel config at loop start).
     /// Empty → the canvas sanitizer falls back to its hardcoded `ALLOWED_TAGS`.
     pub static CANVAS_ALLOWED_TAGS: std::sync::Arc<Vec<String>>;
+}
+
+/// Run `fut` one level deeper in the synchronous inter-agent call chain.
+///
+/// Every path that nests a *whole agent turn* inside another agent's turn on the same task must go through here, so [`current_agent_depth`] reflects the real number of stacked turns and the operator quota (`config.toml: max_agent_call_depth`) actually bounds it.
+///
+/// Before this existed, `agent_send` was the only path that accounted for nesting; the workflow-step dispatch in the kernel nested turns with no accounting at all, so an agent whose workflow step targets an agent that re-runs the same workflow recursed with no depth bound whatsoever (refs #6659).
+/// Callers outside `tool_runner` — the kernel's workflow drivers — need this because `AGENT_CALL_DEPTH` is module-private.
+///
+/// The check itself stays with the caller: each entry point already knows how to shape its own refusal (`ToolError::PermissionDenied` for a tool, `LibreFangError::CapabilityDenied` for a kernel op), and both read the same `max_agent_call_depth` knob.
+///
+/// `fut` is boxed for the same reason [`crate::held_agent_locks::scope`] boxes its argument: the future being wrapped here is an entire agent turn, an enormous state machine.
+/// Inlining it would stack another full copy of it per nesting level, adding stack cost at exactly the boundary this helper exists to bound.
+/// Boxing makes each level cost a pointer.
+pub async fn with_agent_call_depth<F>(fut: F) -> F::Output
+where
+    F: std::future::Future,
+{
+    let fut = Box::pin(fut);
+    let next = current_agent_depth().saturating_add(1);
+    AGENT_CALL_DEPTH
+        .scope(std::cell::Cell::new(next), fut)
+        .await
 }
 
 /// Shared `Option<&Arc<dyn KernelHandle>>` -> `&Arc<dyn KernelHandle>` unwrap

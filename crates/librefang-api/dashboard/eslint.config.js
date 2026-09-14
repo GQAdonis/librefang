@@ -80,6 +80,35 @@ export default [
       // always a bug.
       "react/no-danger-with-children": "error",
 
+      // Ban the raw clipboard API outside the helper that wraps it.
+      // The API is undefined outside a secure context, so on a dashboard served over plain HTTP on a LAN / VPN address the property access throws before the promise exists — the copy button does nothing and says nothing.
+      // `lib/clipboard.ts` already falls back to `document.execCommand('copy')`; this rule exists because six call sites reintroduced the raw API after that helper landed (#6611).
+      //
+      // Coverage, measured against this config rather than inferred from it.
+      // Caught: `navigator.clipboard…`, `navigator?.clipboard?.…`, and `const { clipboard } = navigator` — `no-restricted-properties` checks destructuring patterns as well as member reads.
+      // `no-restricted-syntax` adds the `<obj>.navigator.clipboard` spelling (`window.` / `globalThis.` prefixed), which `no-restricted-properties` cannot see because its `object` option only matches a bare identifier and here the object is itself a member expression.
+      // Not caught: an aliased receiver (`const n = navigator; n.clipboard`) and `const { clipboard } = window.navigator`.
+      // Both need type-aware alias tracking; these are syntactic rules with no notion of what an identifier was assigned.
+      // Nobody writes either shape in this codebase, and the review that catches a hand-rolled copy path at all catches those too.
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "navigator",
+          property: "clipboard",
+          message:
+            "Use `copyToClipboard` from `lib/clipboard` — `navigator.clipboard` is undefined outside secure contexts (plain HTTP on a LAN IP), so the copy silently no-ops.",
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            'MemberExpression[property.name="clipboard"][object.type="MemberExpression"][object.property.name="navigator"]',
+          message:
+            "Use `copyToClipboard` from `lib/clipboard` — `navigator.clipboard` is undefined outside secure contexts (plain HTTP on a LAN IP), so the copy silently no-ops.",
+        },
+      ],
+
       // ── Pragmatic adjustments for this codebase ────────────────────
       // Vite + automatic JSX runtime: React import is not required.
       "react/react-in-jsx-scope": "off",
@@ -116,14 +145,14 @@ export default [
       // already covered by tsc with `noFallthroughCasesInSwitch`.
       "no-case-declarations": "off",
 
+      // Hook ordering is a correctness invariant. The previous ChatPage
+      // violation has been removed, so regressions fail lint again.
+      "react-hooks/rules-of-hooks": "error",
+
       // ── Demoted-to-warn for the bootstrap PR (follow-up issue) ────
       // These have small, real baselines we want to clean up
       // incrementally rather than block the initial CI gate on.
       //
-      //   * `react-hooks/rules-of-hooks` — `ChatPage.tsx` calls hooks
-      //     after an early return for `system` messages; needs a real
-      //     refactor of MessageBubble to fix correctly. Tracked as a
-      //     follow-up; demoted here so the gate ships.
       //   * `no-unused-expressions` — a couple of inline
       //     `cond ? a() : b()` statement shorthands in event handlers
       //     (CanvasPage / TerminalPage). Stylistic; not a defect.
@@ -132,19 +161,28 @@ export default [
       //     describing real-world CSV pitfalls.
       //   * `no-control-regex` — `TerminalTabs.tsx` ANSI / xterm
       //     handling legitimately matches control characters.
-      "react-hooks/rules-of-hooks": "warn",
       "@typescript-eslint/no-unused-expressions": "warn",
       "no-irregular-whitespace": "warn",
       "no-control-regex": "warn",
     },
   },
 
+  // The clipboard helper is the one place allowed to touch the raw API — it is the fallback the restrictions above point everyone else at.
+  {
+    files: ["src/lib/clipboard.ts"],
+    rules: {
+      "no-restricted-properties": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+
   // Test files — relax a couple of rules that are noisy in vitest specs.
   {
     files: [
-      "src/**/*.test.{ts,tsx}",
-      "src/lib/__tests__/**/*.{ts,tsx}",
-      "src/lib/test/**/*.{ts,tsx}",
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "src/**/__tests__/**/*.{ts,tsx}",
+      "src/**/test/**/*.{ts,tsx}",
+      "src/setupTests.ts",
     ],
     languageOptions: {
       globals: {
@@ -161,7 +199,7 @@ export default [
 
   // Config-style files at the repo root of the dashboard.
   {
-    files: ["*.config.{js,ts,mjs}", "vitest.config.ts", "vite.config.ts"],
+    files: ["*.config.{js,ts,mjs,cjs}"],
     languageOptions: {
       globals: {
         ...globals.node,

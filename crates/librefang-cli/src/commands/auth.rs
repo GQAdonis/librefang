@@ -120,7 +120,7 @@ pub(crate) async fn persist_chatgpt_auth(
         i18n::t_args("auth-chatgpt-selected-model", &[("model", &best_model)])
     );
 
-    update_chatgpt_config(&home, &best_model)?;
+    update_chatgpt_config(&best_model)?;
 
     println!(
         "{}",
@@ -165,36 +165,18 @@ pub(crate) fn write_chatgpt_secrets(
     // file with owner-only (0600) permissions from the start so there is no
     // window in which a freshly created file sits at the umask default (often
     // 0644, world-readable) before it is tightened.
-    #[cfg(unix)]
-    {
-        use std::io::Write as _;
-        use std::os::unix::fs::OpenOptionsExt as _;
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&secrets_path)
-            .map_err(|e| i18n::t_args("auth-error-write-secrets", &[("error", &e.to_string())]))?;
-        f.write_all(updated.as_bytes())
-            .map_err(|e| i18n::t_args("auth-error-write-secrets", &[("error", &e.to_string())]))?;
-    }
-    #[cfg(not(unix))]
-    std::fs::write(&secrets_path, &updated)
+    durable_atomic_write(&secrets_path, updated.as_bytes(), 0o600)
         .map_err(|e| i18n::t_args("auth-error-write-secrets", &[("error", &e.to_string())]))?;
 
-    // `OpenOptions.mode` only applies to a newly created file, so still tighten
-    // a pre-existing file that an older build may have written at a looser mode.
+    // Still tighten a pre-existing file that an older build may have written
+    // at a looser mode.
     restrict_file_permissions(&secrets_path);
 
     Ok(secrets_path)
 }
 
-pub(crate) fn update_chatgpt_config(
-    home: &std::path::Path,
-    best_model: &str,
-) -> Result<(), String> {
-    let config_path = home.join("config.toml");
+pub(crate) fn update_chatgpt_config(best_model: &str) -> Result<(), String> {
+    let config_path = cli_config_path();
     let config_str = std::fs::read_to_string(&config_path).unwrap_or_default();
     let mut doc = if config_str.trim().is_empty() {
         toml_edit::DocumentMut::new()
@@ -217,7 +199,7 @@ pub(crate) fn update_chatgpt_config(
         toml_edit::value(librefang_runtime::chatgpt_oauth::CHATGPT_BASE_URL),
     );
 
-    std::fs::write(&config_path, doc.to_string())
+    durable_atomic_write(&config_path, doc.to_string().as_bytes(), 0o600)
         .map_err(|e| i18n::t_args("auth-error-write-config", &[("error", &e.to_string())]))?;
 
     Ok(())
@@ -250,7 +232,7 @@ pub(crate) fn cmd_auth_chatgpt(device_auth: bool) {
 /// Resolve the active config.toml path. `--config <path>` overrides; else
 /// `$LIBREFANG_HOME/config.toml` (or `~/.librefang/config.toml`).
 pub(crate) fn pool_config_path(config_override: Option<PathBuf>) -> PathBuf {
-    config_override.unwrap_or_else(|| librefang_home().join("config.toml"))
+    config_override.unwrap_or_else(cli_config_path)
 }
 
 /// Parse config.toml into a `toml_edit::DocumentMut` so comments, blank
@@ -285,7 +267,7 @@ pub(crate) fn pool_load_doc_or_exit(path: &std::path::Path) -> toml_edit::Docume
 }
 
 pub(crate) fn pool_write_doc_or_exit(path: &std::path::Path, doc: &toml_edit::DocumentMut) {
-    std::fs::write(path, doc.to_string()).unwrap_or_else(|e| {
+    durable_atomic_write(path, doc.to_string().as_bytes(), 0o600).unwrap_or_else(|e| {
         ui::error(&i18n::t_args(
             "auth-write-failed",
             &[
@@ -1069,6 +1051,64 @@ pub(crate) fn cmd_hash_password(password: Option<String>) {
             std::process::exit(1);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// hash-api-key command (#6613)
+// ---------------------------------------------------------------------------
+
+/// Produce the `api_key_hash` value for the master API key, so `config.toml` can
+/// hold a verifier instead of the key itself.
+///
+/// Deliberately a sibling of `hash-password` rather than a flag on it, for two
+/// reasons. The hash format differs — `$sha256$` here versus Argon2id there,
+/// because the master key is a machine-generated bearer verified on every
+/// request while `dashboard_pass` is a human-chosen password (the reasoning
+/// lives on `middleware::MasterKeyState`). And the input flow differs:
+/// `hash-password` prompts twice and compares, which is right for a password
+/// someone is inventing and wrong for a key they are pasting.
+pub(crate) fn cmd_hash_api_key(key: Option<String>, generate: bool) {
+    let (key, generated) = if generate {
+        (librefang_api::password_hash::generate_bearer_token(), true)
+    } else {
+        match key {
+            Some(k) if !k.trim().is_empty() => (k.trim().to_string(), false),
+            Some(_) => {
+                ui::error(&i18n::t("auth-api-key-empty"));
+                std::process::exit(1);
+            }
+            None => {
+                let entered = prompt_input(&i18n::t("auth-enter-api-key-prompt"));
+                if entered.trim().is_empty() {
+                    ui::error(&i18n::t("auth-api-key-empty"));
+                    std::process::exit(1);
+                }
+                (entered.trim().to_string(), false)
+            }
+        }
+    };
+
+    let hash = librefang_api::password_hash::hash_device_token(&key);
+
+    // Print the plaintext only for a key we just minted — the operator has no
+    // other copy of it. An existing key they typed in is already in their
+    // possession and echoing it back would only widen its exposure.
+    if generated {
+        println!();
+        println!("{}", i18n::t("auth-api-key-generated"));
+        println!("  {key}");
+    }
+    println!();
+    println!("{}", i18n::t("auth-hash-add-config-hint"));
+    println!(
+        "{}",
+        i18n::t_args("auth-api-key-config-entry", &[("hash", &hash)])
+    );
+    println!();
+    println!("{}", i18n::t("auth-api-key-remove-plaintext-hint"));
+    // "Remove the plaintext line" is wrong for anyone running a CLI-based driver: those drivers are clients of this daemon's own /mcp endpoint, and a hash cannot be presented as a bearer token, so a hash-only config makes every driver tool call 401.
+    // Printed unconditionally rather than gated on the running config, because this command is normally run *before* the daemon is configured — and often on a different machine entirely.
+    println!("{}", i18n::t("auth-api-key-cli-driver-caveat"));
 }
 
 #[cfg(all(test, unix))]

@@ -162,9 +162,10 @@ impl ReloadPlan {
 /// `serde_json::to_string` serializes a `HashMap` in its per-instance iteration order, so two content-identical maps built from separate deserializations (the live config vs the reload candidate) produce different strings and `field_changed` fired spuriously — emitting a needless `ReloadAuth` / `restart_required` on every reload for any multi-entry deployment.
 /// `to_value` normalizes every (possibly nested) map to a `BTreeMap`-backed `Value::Object` (the workspace does not enable serde_json's `preserve_order`), so semantically-equal configs compare equal regardless of map iteration order.
 fn field_changed<T: serde::Serialize>(old: &T, new: &T) -> bool {
-    let old_val = serde_json::to_value(old).ok();
-    let new_val = serde_json::to_value(new).ok();
-    old_val != new_val
+    match (serde_json::to_value(old), serde_json::to_value(new)) {
+        (Ok(old_val), Ok(new_val)) => old_val != new_val,
+        _ => true,
+    }
 }
 
 /// Decide whether two `[external_auth]` snapshots disagree on a field
@@ -292,6 +293,11 @@ pub fn build_reload_plan_with_caps(
     if old.api_key != new.api_key {
         plan.noop_changes
             .push("api_key changed (effective immediately via config swap)".to_string());
+    }
+
+    if old.api_key_hash != new.api_key_hash {
+        plan.noop_changes
+            .push("api_key_hash changed (effective immediately via config swap)".to_string());
     }
 
     if old.dashboard_user != new.dashboard_user
@@ -452,6 +458,13 @@ pub fn build_reload_plan_with_caps(
         );
     }
 
+    if field_changed(&old.media, &new.media) {
+        plan.restart_required = true;
+        plan.restart_reasons.push(
+            "media config changed (MediaEngine is boot-captured; restart required)".to_string(),
+        );
+    }
+
     if field_changed(&old.approval, &new.approval) {
         plan.hot_actions.push(HotAction::UpdateApprovalPolicy);
     }
@@ -523,6 +536,40 @@ pub fn build_reload_plan_with_caps(
         plan.hot_actions.push(HotAction::ReloadAuth);
     }
 
+    // `[[groups]]` (#7745). Every reader — the `/api/groups` handlers, the
+    // per-user reverse lookup, `KernelConfig::roles_for_user` — resolves from
+    // `config_ref()` on each call, so the bare config swap is the whole of what
+    // "reloading" means here: no cache to evict, no subsystem holding a
+    // boot-time copy. It still has to be *declared*, because `should_store_config`
+    // gates the swap on the plan carrying an effective change; a groups-only edit
+    // that classified as nothing at all would be written to disk and then silently
+    // discarded on reload, which is exactly what happened before this branch existed.
+    if field_changed(&old.groups, &new.groups) {
+        plan.noop_changes.push(
+            "groups config changed (effective immediately — group membership and roles are \
+             resolved from the live config on every lookup)"
+                .to_string(),
+        );
+    }
+
+    // `default_owner` (#7744). Read live, once per artifact creation, through
+    // `KernelConfig::default_owner_principal()` on the current config snapshot —
+    // nothing caches the parsed principal, so a swap is immediately in effect for
+    // the next workflow or cron an ownerless turn creates. Declared for the same
+    // `should_store_config` reason as `[[groups]]` above: an edit that classified
+    // as nothing at all would be persisted and then discarded.
+    //
+    // Note that this does **not** retroactively re-own anything: artifacts already
+    // recorded keep the principal stamped at creation, because an owner that moved
+    // when a config key changed would not be an audit answer.
+    if field_changed(&old.default_owner, &new.default_owner) {
+        plan.noop_changes.push(
+            "default_owner changed (effective immediately for newly created artifacts — \
+             already-recorded owners are not rewritten)"
+                .to_string(),
+        );
+    }
+
     if field_changed(&old.proactive_memory, &new.proactive_memory) {
         plan.hot_actions.push(HotAction::UpdateProactiveMemory);
     }
@@ -561,7 +608,7 @@ pub fn build_reload_plan_with_caps(
         plan.hot_actions.push(HotAction::ReloadExternalAuth);
     } else if field_changed(&old.external_auth, &new.external_auth) {
         // Non-IdP edits only (session_ttl_secs, allowed_domains, redirect_url,
-        // scopes, audience, require_email_verified). The OAuth layer reads
+        // scopes, audience, require_email_verified, role_map). The OAuth layer reads
         // these live from the ArcSwap config on every request (`oauth.rs`:
         // `config_ref()` / `config_snapshot()`), so the bare config swap makes
         // them effective on the next request — no restart, and no cache
@@ -574,6 +621,24 @@ pub fn build_reload_plan_with_caps(
     if field_changed(&old.sanitize, &new.sanitize) {
         plan.noop_changes.push(
             "sanitize config changed (effective on next message via config swap)".to_string(),
+        );
+    }
+
+    // `[task_board]` was classified restart-required, but no consumer has
+    // ever needed a restart to see it: the stuck-task sweeper re-reads
+    // `claim_ttl_secs`, `sweep_interval_secs` and `max_retries` from the
+    // ArcSwap config on every tick (`kernel/accessors.rs`,
+    // `spawn_task_board_sweep_task`, whose doc comment states the live read
+    // is deliberate), and `assignee_wake` is read per `TaskPosted` at the
+    // synthesis site. Reporting "restart required" for a change that has
+    // already taken effect trains operators to restart for nothing — and
+    // would have been a second false statement once `assignee_wake` landed
+    // under the same classification (#6728).
+    if field_changed(&old.task_board, &new.task_board) {
+        plan.noop_changes.push(
+            "task_board config changed (effective immediately — the sweeper re-reads its \
+             knobs each tick and assignee_wake is read per task post)"
+                .to_string(),
         );
     }
 
@@ -723,7 +788,14 @@ pub fn build_reload_plan_with_caps(
         );
         restart_if_changed(field_changed(&old.heartbeat, &new.heartbeat), "heartbeat");
         restart_if_changed(field_changed(&old.plugins, &new.plugins), "plugins");
-        restart_if_changed(field_changed(&old.registry, &new.registry), "registry");
+        // `registry` minus `auto_sync`: the mirror / host / TTL are read once when the checkout is set up, but `auto_sync` is re-read from the config snapshot on every tick of the 24 h catalog task, so it belongs in the NOOP block below.
+        // Classifying the whole section as restart-required made the documented "flip it off and the next automatic refresh stops" impossible: `should_store_config` swaps the config only when there is a hot action or a noop change, so a registry-only reload was recorded as restart-required and then discarded, leaving the task reading the old value until the daemon actually restarted.
+        let registry_except_auto_sync_changed = {
+            let mut old_rest = old.registry.clone();
+            old_rest.auto_sync = new.registry.auto_sync;
+            field_changed(&old_rest, &new.registry)
+        };
+        restart_if_changed(registry_except_auto_sync_changed, "registry");
         restart_if_changed(
             field_changed(&old.rate_limit, &new.rate_limit),
             "rate_limit",
@@ -747,7 +819,12 @@ pub fn build_reload_plan_with_caps(
         );
         restart_if_changed(old.log_dir != new.log_dir, "log_dir");
         restart_if_changed(old.workspaces_dir != new.workspaces_dir, "workspaces_dir");
-        restart_if_changed(field_changed(&old.llm, &new.llm), "llm");
+        // Reclassifying the whole section as a no-op is safe exactly because `LlmConfig` has a single field (`auxiliary`): the blanket classification stops being safe the day a second field is added that genuinely needs a restart.
+        // The AuxClient rebuild (see `kernel/config_reload_ops.rs`) only runs when `should_store_config` accepts the plan, and a restart-only plan is discarded — the same failure the `registry` row in docs/operations/config-reload.md records.
+        if field_changed(&old.llm, &new.llm) {
+            plan.noop_changes
+                .push("llm.auxiliary changed (AuxClient rebuilt on config swap)".to_string());
+        }
         restart_if_changed(field_changed(&old.reload, &new.reload), "reload");
         restart_if_changed(
             old.max_request_body_bytes != new.max_request_body_bytes,
@@ -789,10 +866,6 @@ pub fn build_reload_plan_with_caps(
             "context_engine",
         );
         restart_if_changed(field_changed(&old.session, &new.session), "session");
-        restart_if_changed(
-            field_changed(&old.task_board, &new.task_board),
-            "task_board",
-        );
         restart_if_changed(field_changed(&old.broadcast, &new.broadcast), "broadcast");
         restart_if_changed(
             field_changed(&old.auto_reply, &new.auto_reply),
@@ -836,6 +909,11 @@ pub fn build_reload_plan_with_caps(
             old.max_history_messages != new.max_history_messages,
             "max_history_messages",
         );
+        // Read live per turn: the kernel copies it into `LoopOptions` from `self.config.load()` at every `send_message_full` / spawn site, so the ArcSwap swap is the whole reapply action.
+        noop_if_changed(
+            old.memory_fact_budget_percent != new.memory_fact_budget_percent,
+            "memory_fact_budget_percent",
+        );
         noop_if_changed(
             old.max_agent_call_depth != new.max_agent_call_depth,
             "max_agent_call_depth",
@@ -855,11 +933,20 @@ pub fn build_reload_plan_with_caps(
             "notification",
         );
         noop_if_changed(field_changed(&old.tts, &new.tts), "tts");
-        noop_if_changed(field_changed(&old.media, &new.media), "media");
         // The hands marketplace install handler reads `hands.registry_allowed_hosts`
         // live from `config_snapshot()` on every request, so a swap is effective
         // on the next install with no explicit reapply action.
         noop_if_changed(field_changed(&old.hands, &new.hands), "hands");
+        // The 24 h catalog task calls `kernel.config_snapshot()` at the top of each tick and passes `registry.auto_sync` into `sync_catalog_to` (server.rs), so freezing the checkout takes effect on the next tick.
+        // This is the one field of `registry` that is not captured at setup time — the rest of the section stays restart-required above.
+        noop_if_changed(
+            old.registry.auto_sync != new.registry.auto_sync,
+            "registry.auto_sync",
+        );
+        // #7891 — the daily metering sweep reads `usage.retention_days` from
+        // `config_ref()` at the top of each tick, so a swapped value is in
+        // force on the next sweep with no reapply action.
+        noop_if_changed(field_changed(&old.usage, &new.usage), "usage");
         noop_if_changed(field_changed(&old.links, &new.links), "links");
         noop_if_changed(field_changed(&old.privacy, &new.privacy), "privacy");
         noop_if_changed(field_changed(&old.pairing, &new.pairing), "pairing");
@@ -960,6 +1047,7 @@ pub fn classified_reload_fields() -> std::collections::BTreeSet<&'static str> {
         // -- hand-tuned branches at the top of build_reload_plan --
         "api_listen",
         "api_key",
+        "api_key_hash",
         "dashboard_user",
         "dashboard_pass",
         "dashboard_pass_hash",
@@ -998,8 +1086,11 @@ pub fn classified_reload_fields() -> std::collections::BTreeSet<&'static str> {
         "provider_regions",
         "tool_policy",
         "users",
+        "groups",
+        "default_owner",
         "proactive_memory",
         "queue",
+        "usage",
         "budget",
         "sanitize",
         "provider_api_keys",
@@ -1067,6 +1158,7 @@ pub fn classified_reload_fields() -> std::collections::BTreeSet<&'static str> {
         // -- backfilled NOOP branches --
         "agent_max_iterations",
         "max_history_messages",
+        "memory_fact_budget_percent",
         "max_agent_call_depth",
         "tool_timeout_secs",
         "tool_timeouts",
@@ -1186,6 +1278,25 @@ pub fn should_store_config(mode: ReloadMode, plan: &ReloadPlan) -> bool {
 mod tests {
     use super::*;
     use librefang_types::config::KernelConfig;
+
+    struct SerializationFailure;
+
+    impl serde::Serialize for SerializationFailure {
+        fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            Err(serde::ser::Error::custom("intentional test failure"))
+        }
+    }
+
+    #[test]
+    fn field_changed_fails_closed_when_both_values_fail_to_serialize() {
+        assert!(
+            field_changed(&SerializationFailure, &SerializationFailure),
+            "serialization failures must be treated as a change"
+        );
+    }
 
     /// Regression (#6441 follow-up): `field_changed` must not report a change
     /// for two content-identical `HashMap`s that merely iterate in different
@@ -1307,6 +1418,76 @@ mod tests {
             .any(|r| r.contains("memory config")));
     }
 
+    /// Flipping `[registry] auto_sync` must reach the running catalog task.
+    ///
+    /// The task re-reads `config_snapshot()` each tick, but a plan that records only `restart_required` never gets stored: `should_store_config` swaps the config only when there is a hot action or a noop change.
+    /// Classifying the whole `registry` section as restart-required therefore made the documented "flip it off and the next automatic refresh stops" impossible — the reload reported restart-required and then threw the new value away.
+    #[test]
+    fn registry_auto_sync_is_read_live_and_reaches_the_config_store() {
+        let a = default_cfg();
+        let mut b = default_cfg();
+        b.registry.auto_sync = !a.registry.auto_sync;
+        let plan = build_reload_plan(&a, &b);
+
+        assert!(
+            !plan.restart_required,
+            "auto_sync is re-read per catalog tick; restart_reasons: {:?}",
+            plan.restart_reasons
+        );
+        assert!(
+            plan.noop_changes
+                .iter()
+                .any(|r| r.contains("registry.auto_sync")),
+            "auto_sync must be recorded as a live-read change: {:?}",
+            plan.noop_changes
+        );
+        for mode in [ReloadMode::Hot, ReloadMode::Hybrid] {
+            assert!(
+                should_store_config(mode, &plan),
+                "the reloaded config must be stored in {mode:?} mode, or the running \
+                 task keeps reading the old auto_sync"
+            );
+        }
+    }
+
+    /// The rest of the `registry` section stays restart-required — it is read when the checkout is set up, so a bare config swap would silently no-op.
+    #[test]
+    fn registry_fields_other_than_auto_sync_still_require_restart() {
+        for (label, mutate) in [
+            (
+                "cache_ttl_secs",
+                Box::new(|c: &mut KernelConfig| c.registry.cache_ttl_secs = 1)
+                    as Box<dyn Fn(&mut KernelConfig)>,
+            ),
+            (
+                "registry_mirror",
+                Box::new(|c: &mut KernelConfig| {
+                    c.registry.registry_mirror = "https://example.invalid/mirror".to_string()
+                }),
+            ),
+            (
+                "registry_host",
+                Box::new(|c: &mut KernelConfig| {
+                    c.registry.registry_host = Some("example.invalid".to_string())
+                }),
+            ),
+        ] {
+            let a = default_cfg();
+            let mut b = default_cfg();
+            mutate(&mut b);
+            let plan = build_reload_plan(&a, &b);
+            assert!(
+                plan.restart_required,
+                "`registry.{label}` must still require a restart"
+            );
+            assert!(
+                plan.restart_reasons.iter().any(|r| r.contains("registry")),
+                "`registry.{label}` must name the section in its reason: {:?}",
+                plan.restart_reasons
+            );
+        }
+    }
+
     #[test]
     fn test_default_model_hot_reloadable() {
         let a = default_cfg();
@@ -1334,6 +1515,41 @@ mod tests {
             .noop_changes
             .iter()
             .any(|r| r.contains("stable_prefix_mode")));
+    }
+
+    /// Regression test for the #8059 hot-reload fix: an `[llm.auxiliary]`-only
+    /// edit must be classified as a no-op change, never as restart-required.
+    /// The doc drift guard only checks that the field name appears in the doc table, not the R/H/N letter, so nothing else fails if `llm` slips back under `restart_if_changed`.
+    /// When it did, the plan carried neither a hot action nor a no-op change, `should_store_config` discarded the new config, and the AuxClient rebuild never ran — the operator's chain edit silently did nothing until restart.
+    #[test]
+    fn test_llm_auxiliary_noop_classification_stores_config() {
+        let a = default_cfg();
+        let mut b = default_cfg();
+        b.llm.auxiliary.tasks.insert(
+            librefang_types::config::AuxTask::Compression,
+            vec!["groq:llama-3.1-8b-instant".to_string()],
+        );
+        let plan = build_reload_plan(&a, &b);
+        assert!(
+            !plan.restart_required,
+            "[llm.auxiliary] edits must not require a restart"
+        );
+        assert!(
+            plan.restart_reasons.iter().all(|r| !r.contains("llm")),
+            "no restart reason may name llm: {:?}",
+            plan.restart_reasons
+        );
+        assert!(
+            plan.noop_changes
+                .iter()
+                .any(|c| c.contains("llm.auxiliary")),
+            "plan must record the noop change: {:?}",
+            plan.noop_changes
+        );
+        assert!(
+            should_store_config(ReloadMode::Hot, &plan),
+            "a Hot reload of [llm.auxiliary] must store the new config — a discarded plan means the AuxClient rebuild never runs"
+        );
     }
 
     #[test]
@@ -1771,6 +1987,24 @@ mod tests {
         assert_eq!(plan.noop_changes.len(), 2);
         assert!(plan.noop_changes.iter().any(|c| c.contains("language")));
         assert!(plan.noop_changes.iter().any(|c| c.contains("mode")));
+    }
+
+    #[test]
+    fn media_config_change_requires_restart() {
+        let a = default_cfg();
+        let mut b = default_cfg();
+        b.media.audio_provider = Some("openai".to_string());
+
+        let plan = build_reload_plan(&a, &b);
+        assert!(plan.restart_required);
+        assert!(plan
+            .restart_reasons
+            .iter()
+            .any(|reason| reason.contains("media config changed")));
+        assert!(!plan
+            .noop_changes
+            .iter()
+            .any(|change| change.contains("media")));
     }
 
     #[test]

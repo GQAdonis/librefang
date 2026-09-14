@@ -20,7 +20,7 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -146,7 +146,27 @@ pub struct CheckpointManager {
     /// snapshot that cannot immediately obtain the permit is **skipped**
     /// rather than queued — preventing memory pressure from accumulated
     /// waiting tasks.
-    semaphore: Arc<std::sync::Mutex<usize>>,
+    semaphore: Arc<Mutex<usize>>,
+}
+
+fn lock_snapshot_counter(counter: &Mutex<usize>) -> MutexGuard<'_, usize> {
+    counter.lock().unwrap_or_else(|poisoned| {
+        warn!("checkpoint concurrency counter lock poisoned; recovering counter state");
+        let guard = poisoned.into_inner();
+        // `into_inner` recovers the guard but leaves the mutex's poison flag set, so every future `lock()` call would keep taking this `Err(PoisonError)` branch (and re-logging this warning) even though the counter itself is now known-good.
+        // Clear it once we've recovered so the mutex behaves normally again for the rest of the process's life.
+        counter.clear_poison();
+        guard
+    })
+}
+
+struct ConcurrencyGuard(Arc<Mutex<usize>>);
+
+impl Drop for ConcurrencyGuard {
+    fn drop(&mut self) {
+        let mut count = lock_snapshot_counter(&self.0);
+        *count = count.saturating_sub(1);
+    }
 }
 
 impl CheckpointManager {
@@ -157,7 +177,7 @@ impl CheckpointManager {
     pub fn new(base_dir: PathBuf) -> Self {
         Self {
             base_dir,
-            semaphore: Arc::new(std::sync::Mutex::new(0)),
+            semaphore: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -182,7 +202,7 @@ impl CheckpointManager {
         // use 20–50 MB).  The skipped snapshot is non-fatal — the next
         // file_write/apply_patch will attempt a fresh snapshot.
         {
-            let mut count = self.semaphore.lock().unwrap();
+            let mut count = lock_snapshot_counter(&self.semaphore);
             if *count >= MAX_CONCURRENT_SNAPSHOTS {
                 debug!(
                     reason,
@@ -194,14 +214,6 @@ impl CheckpointManager {
             // MutexGuard drops here — lock released before git runs.
         }
         // Decrement the counter when this function returns (success or error).
-        struct ConcurrencyGuard(Arc<std::sync::Mutex<usize>>);
-        impl Drop for ConcurrencyGuard {
-            fn drop(&mut self) {
-                if let Ok(mut c) = self.0.lock() {
-                    *c = c.saturating_sub(1);
-                }
-            }
-        }
         let _guard = ConcurrencyGuard(Arc::clone(&self.semaphore));
 
         let work_dir = normalize_path(work_dir)?;
@@ -312,7 +324,8 @@ impl CheckpointManager {
         }
 
         // Take a pre-rollback snapshot so the user can undo the undo.
-        let pre_reason = format!("pre-rollback snapshot (restoring to {})", &commit_hash[..8]);
+        let display_hash = commit_hash.get(..8).unwrap_or(commit_hash);
+        let pre_reason = format!("pre-rollback snapshot (restoring to {display_hash})");
         if let Err(e) = self.snapshot(&work_dir, &pre_reason) {
             // Non-fatal: warn but continue with the restore.
             warn!("pre-rollback snapshot failed (continuing): {e}");
@@ -705,7 +718,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn poisoned_snapshot_counter_recovers_and_guard_releases_permit() {
+        let counter = Arc::new(Mutex::new(0usize));
+        let poison_counter = Arc::clone(&counter);
+        let poison = std::thread::spawn(move || {
+            let mut count = poison_counter.lock().unwrap();
+            *count = 1;
+            panic!("poison checkpoint concurrency counter");
+        })
+        .join();
+        assert!(poison.is_err());
+
+        {
+            let mut count = lock_snapshot_counter(&counter);
+            *count += 1;
+        }
+        drop(ConcurrencyGuard(Arc::clone(&counter)));
+
+        assert_eq!(*lock_snapshot_counter(&counter), 1);
+    }
+
+    #[test]
     fn valid_commit_hashes_are_accepted() {
+        assert!(CheckpointManager::validate_commit_hash("abcd").is_ok());
         assert!(CheckpointManager::validate_commit_hash("abcdef01").is_ok());
         assert!(CheckpointManager::validate_commit_hash("ABCDEF01").is_ok());
         assert!(CheckpointManager::validate_commit_hash(
@@ -731,6 +766,59 @@ mod tests {
             "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2a1b2c3d4e5f6a1b2c3d4e5f6f"
         )
         .is_err());
+    }
+
+    #[test]
+    fn restore_accepts_valid_commit_hash_shorter_than_eight_characters() {
+        let checkpoint_root = tempfile::tempdir().unwrap();
+        let workspace = tempfile::tempdir().unwrap();
+        let manager = CheckpointManager::new(checkpoint_root.path().to_path_buf());
+        let tracked_file = workspace.path().join("tracked.txt");
+
+        std::fs::write(&tracked_file, "first version").unwrap();
+        let first_hash = manager
+            .snapshot(workspace.path(), "first snapshot")
+            .unwrap();
+        std::fs::write(&tracked_file, "second version").unwrap();
+        let second_hash = manager
+            .snapshot(workspace.path(), "second snapshot")
+            .unwrap();
+
+        let shadow = manager.shadow_repo_dir(&workspace.path().canonicalize().unwrap());
+        let (ok, short_hash, stderr) = run_git(
+            &["rev-parse", "--short=4", &first_hash],
+            &shadow,
+            workspace.path(),
+            GIT_TIMEOUT_SECS,
+            &[],
+        );
+        assert!(ok, "git failed to abbreviate {first_hash}: {stderr}");
+        assert!(
+            short_hash.len() < 8,
+            "test setup did not produce a commit abbreviation shorter than eight characters: \
+             first={first_hash}, second={second_hash}, abbreviation={short_hash}",
+        );
+
+        std::fs::write(&tracked_file, "third version").unwrap();
+        manager.restore(workspace.path(), &short_hash).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&tracked_file).unwrap(),
+            "first version"
+        );
+        let snapshots = manager.list_snapshots(workspace.path()).unwrap();
+        assert_eq!(
+            snapshots[0].message,
+            format!("pre-rollback snapshot (restoring to {short_hash})")
+        );
+
+        manager
+            .restore(workspace.path(), &snapshots[0].hash)
+            .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(tracked_file).unwrap(),
+            "third version"
+        );
     }
 
     #[test]

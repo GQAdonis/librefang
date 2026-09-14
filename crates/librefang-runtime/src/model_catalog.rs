@@ -4,8 +4,9 @@
 //! with alias resolution, auth status detection, and pricing lookups.
 
 use librefang_types::model_catalog::{
-    AliasesCatalogFile, AuthStatus, EffectiveCapabilities, ModelCatalogEntry, ModelCatalogFile,
-    ModelOverrides, ModelTier, ProviderInfo,
+    AliasesCatalogFile, AuthStatus, EffectiveCapabilities, EffectiveLimits, LimitSource,
+    ModelCatalogEntry, ModelCatalogFile, ModelOverrides, ModelTier, ProviderCatalogToml,
+    ProviderInfo, VisionSupport,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -38,6 +39,14 @@ pub struct ModelCatalog {
     overrides: HashMap<String, ModelOverrides>,
 }
 
+/// Whether a model's name marks it as an embedding model, which is neither a chat model nor a vision model.
+///
+/// Shared by [`infer_capabilities`] and [`resolve_discovered_capabilities`] so the two cannot disagree about which side of the short-circuit a name falls on.
+fn is_embedding_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("embed") || lower.contains("embedding")
+}
+
 /// Infer (supports_vision, supports_tools, supports_thinking) from a model's
 /// name and the `families` array returned by Ollama's `/api/tags`.
 ///
@@ -52,8 +61,7 @@ fn infer_capabilities(name: &str, families: Option<&[String]>) -> (bool, bool, b
     // A vision-encoder used for embeddings (e.g. a hypothetical "clip-embed")
     // is still not a chat vision model, so the families check is intentionally
     // skipped for embedding models.
-    let is_embed = lower.contains("embed") || lower.contains("embedding");
-    if is_embed {
+    if is_embedding_name(name) {
         return (false, false, false);
     }
 
@@ -74,34 +82,66 @@ fn infer_capabilities(name: &str, families: Option<&[String]>) -> (bool, bool, b
     (supports_vision, true, supports_thinking)
 }
 
-/// Resolve capabilities from the explicit Ollama ≥0.7 `capabilities` array, falling back to name heuristics when empty.
+/// What one probe learned about a discovered model's capabilities, and how much of it it actually *knows* (refs #7957).
+///
+/// [`Self::vision_known`] is the field that makes this a struct rather than the tuple it used to be.
+/// Before #7957 the resolver returned three bare booleans, so a `supports_vision: false` inferred from a model's name was indistinguishable at the call site from one a provider had declared — and `merge_discovered_models` wrote both into the catalog as the same fact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DiscoveredCapabilities {
+    supports_vision: bool,
+    /// Whether [`Self::supports_vision`] came from something that knows, rather than from the name heuristic.
+    /// Written straight through to `ModelCatalogEntry::vision_known`.
+    vision_known: bool,
+    supports_tools: bool,
+    supports_streaming: bool,
+    supports_thinking: bool,
+}
+
+/// Resolve a discovered model's capabilities, preferring what the provider declared over what its name suggests.
+///
+/// The rule for vision is one line, and #7957 is what made it worth stating: **`vision_known` is true if and only if the provider declared the capability.**
+/// `reported_vision` is that declaration — an OpenAI-compatible gateway's per-model `supports_vision` flag, or an Ollama `capabilities` array the server actually sent (see `provider_health::parse_ollama_tags`, which deliberately reports `None` for the array it synthesizes from the model name).
+/// Everything else — the name heuristic in [`infer_capabilities`], the synthesized Ollama array, an entry the probe learned nothing about — is a guess, and a guess resolves to [`VisionSupport::Unknown`] at the request-build gate and keeps sending images.
+///
+/// That is the whole defect. An operator-run gateway names its models `team-default` or `fast` or an internal ticket id; the heuristic answered anyway; a wrong `false` reached `redact_images_for_text_only`, which replaced each picture with its on-disk path and let the turn succeed looking like it had worked.
 fn resolve_discovered_capabilities(
     name: &str,
     families: Option<&[String]>,
     capabilities: &[String],
-) -> (bool, bool, bool) {
-    if capabilities.is_empty() {
-        return infer_capabilities(name, families);
-    }
-    let is_embedding = capabilities
-        .iter()
-        .any(|c| c.eq_ignore_ascii_case("embedding"));
-    if is_embedding {
-        return (false, false, false);
-    }
-    let has_vision = capabilities
-        .iter()
-        .any(|c| c.eq_ignore_ascii_case("vision"));
-    let has_thinking = capabilities
-        .iter()
-        .any(|c| c.eq_ignore_ascii_case("thinking"));
+    reported_vision: Option<bool>,
+    reported_tools: Option<bool>,
+) -> DiscoveredCapabilities {
+    let has = |wanted: &str| capabilities.iter().any(|c| c.eq_ignore_ascii_case(wanted));
+    // The `capabilities` array, when present, is the more specific signal for the value of each
+    // flag; the name heuristic covers the case where there is no array at all.
+    let (is_embedding, inferred_vision, supports_thinking) = if capabilities.is_empty() {
+        let (vision, _, thinking) = infer_capabilities(name, families);
+        (is_embedding_name(name), vision, thinking)
+    } else if has("embedding") {
+        (true, false, false)
+    } else {
+        (false, has("vision"), has("thinking"))
+    };
+
     // `tools`/`completion` is the default for any non-embedding chat model.
     // Ollama ≥0.7 emits an explicit `tools` capability for tool-aware models;
     // older daemons just emit `completion`. We treat any non-embedding model
     // as tool-capable to preserve the prior behaviour (`!is_embedding`) and
     // because most modern chat models expose tool calls via the OpenAI shape.
-    let supports_tools = true;
-    (has_vision, supports_tools, has_thinking)
+    // A gateway that states `supports_function_calling` overrides that assumption; an absent flag
+    // leaves it exactly as it was.
+    let supports_tools = !is_embedding && reported_tools.unwrap_or(true);
+
+    DiscoveredCapabilities {
+        supports_vision: reported_vision.unwrap_or(inferred_vision),
+        vision_known: reported_vision.is_some(),
+        supports_tools,
+        // Streaming tracks "is a chat model", not "has tools" — the two were the same expression
+        // before `supports_tools` became overridable, and conflating them would let a gateway's
+        // `supports_function_calling: false` also mark the model non-streaming, which it never said.
+        supports_streaming: !is_embedding,
+        supports_thinking,
+    }
 }
 
 fn strip_catalog_provider_prefix<'a>(provider: &str, model: &'a str) -> &'a str {
@@ -262,6 +302,59 @@ impl ModelCatalog {
     }
 }
 
+/// One provider-catalog TOML file as handed to [`ModelCatalog::from_sources`].
+struct CatalogSource {
+    /// Raw file contents.
+    content: String,
+    /// Whether the file is user-added rather than registry-shipped; copied onto
+    /// the resulting [`ProviderInfo`].
+    is_custom: bool,
+    /// Where the content came from, for diagnostics only. A parse failure has
+    /// to name the offending file or the operator is left grepping (#7776).
+    origin: String,
+}
+
+/// Fold a second `[provider]` record for an already-seen id into the first.
+///
+/// The invariant that matters: an absent value never overwrites a present one.
+/// A partial overlay — a file carrying `id` plus one flag — therefore adds its
+/// flag without erasing the `base_url`, `api_key_env` or `display_name` that
+/// the fuller record supplies (#7776). Where both records carry a value the
+/// later file wins, which is arbitrary but no worse than the previous
+/// behaviour of keeping two entries and letting `read_dir` order decide which
+/// one lookups found.
+///
+/// This deliberately operates on [`ProviderCatalogToml`] rather than the
+/// converted [`ProviderInfo`]: conversion back-fills the omitted fields (an
+/// absent `api_key_env` becomes the derived `{ID}_API_KEY`), and after that
+/// step "absent" is indistinguishable from "explicitly set to the default" —
+/// so a partial overlay would silently overwrite the operator's own values.
+fn merge_provider_record(existing: &mut ProviderCatalogToml, incoming: ProviderCatalogToml) {
+    fn take_non_empty(existing: &mut String, incoming: String) {
+        if !incoming.is_empty() {
+            *existing = incoming;
+        }
+    }
+    take_non_empty(&mut existing.display_name, incoming.display_name);
+    take_non_empty(&mut existing.api_key_env, incoming.api_key_env);
+    take_non_empty(&mut existing.base_url, incoming.base_url);
+    if incoming.signup_url.is_some() {
+        existing.signup_url = incoming.signup_url;
+    }
+    if !incoming.regions.is_empty() {
+        existing.regions = incoming.regions;
+    }
+    if !incoming.media_capabilities.is_empty() {
+        existing.media_capabilities = incoming.media_capabilities;
+    }
+    // `key_required` and `discover_models` both default when absent, so neither
+    // can distinguish "omitted" from "explicitly the default". Combine them so
+    // the result does not depend on `read_dir` order: any file declaring the
+    // provider keyless makes it keyless, any file opting in enables discovery.
+    existing.key_required &= incoming.key_required;
+    existing.discover_models |= incoming.discover_models;
+}
+
 impl ModelCatalog {
     /// Create a new catalog by loading providers from `home_dir/providers/`
     /// and aliases from `home_dir/aliases.toml`.
@@ -321,7 +414,7 @@ impl ModelCatalog {
                 })
             });
 
-        let mut sources: Vec<(String, bool)> = Vec::new();
+        let mut sources: Vec<CatalogSource> = Vec::new();
         if let Ok(entries) = std::fs::read_dir(providers_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -331,7 +424,11 @@ impl ModelCatalog {
                             (Some(set), Some(name)) => !set.contains(name),
                             _ => false,
                         };
-                        sources.push((content, is_custom));
+                        sources.push(CatalogSource {
+                            content,
+                            is_custom,
+                            origin: path.display().to_string(),
+                        });
                     }
                 }
             }
@@ -346,24 +443,49 @@ impl ModelCatalog {
     ///
     /// Each source is tagged with an `is_custom` flag that is copied onto
     /// the corresponding [`ProviderInfo`].
-    fn from_sources(sources: &[(String, bool)], aliases_source: Option<&str>) -> Self {
+    fn from_sources(sources: &[CatalogSource], aliases_source: Option<&str>) -> Self {
         let mut models: Vec<ModelCatalogEntry> = Vec::new();
-        let mut providers: Vec<ProviderInfo> = Vec::new();
-        for (source, is_custom) in sources {
-            let file = match toml::from_str::<ModelCatalogFile>(source) {
+        // Accumulated in TOML shape so the merge below can still tell an absent
+        // field from a defaulted one; converted to `ProviderInfo` after the loop.
+        let mut raw_providers: Vec<(ProviderCatalogToml, bool)> = Vec::new();
+        for CatalogSource {
+            content,
+            is_custom,
+            origin,
+        } in sources
+        {
+            let file = match toml::from_str::<ModelCatalogFile>(content) {
                 Ok(f) => f,
                 Err(e) => {
                     // A syntax error here previously reverted to defaults with
                     // no log — a misconfigured custom provider just vanished.
-                    tracing::warn!(%e, "provider catalog TOML ignored: parse failed");
+                    // Name the file: without it the operator has no way to tell
+                    // which of a dozen catalog TOMLs was dropped (#7776).
+                    tracing::warn!(path = %origin, %e, "provider catalog TOML ignored: parse failed");
                     continue;
                 }
             };
             let provider_id = file.provider.as_ref().map(|p| p.id.clone());
             if let Some(p) = file.provider {
-                let mut info: ProviderInfo = p.into();
-                info.is_custom = *is_custom;
-                providers.push(info);
+                match raw_providers
+                    .iter_mut()
+                    .find(|(existing, _)| existing.id == p.id)
+                {
+                    // Two files declaring the same provider id used to produce
+                    // two entries, of which `get_provider` returned whichever
+                    // `read_dir` happened to yield first. Merge instead, and
+                    // never let an absent value win over a present one — a
+                    // partial overlay must be able to flip one flag without
+                    // erasing the endpoint the full record carries (#7776).
+                    Some((existing, existing_is_custom)) => {
+                        merge_provider_record(existing, p);
+                        // Custom only when no contributing file is
+                        // registry-shipped: if one is, the boot-time registry
+                        // sync owns the file and a dashboard delete cannot stick.
+                        *existing_is_custom &= *is_custom;
+                    }
+                    None => raw_providers.push((p, *is_custom)),
+                }
             }
             for mut model in file.models {
                 // Back-fill provider from the [provider] section when
@@ -383,6 +505,15 @@ impl ModelCatalog {
                 models.push(model);
             }
         }
+
+        let mut providers: Vec<ProviderInfo> = raw_providers
+            .into_iter()
+            .map(|(record, is_custom)| {
+                let mut info: ProviderInfo = record.into();
+                info.is_custom = is_custom;
+                info
+            })
+            .collect();
 
         // Synthetic UAR (Universal Agent Runtime) provider.
         //
@@ -499,6 +630,13 @@ impl ModelCatalog {
                 } else {
                     AuthStatus::CliNotInstalled
                 };
+                continue;
+            }
+
+            // Managed EveryAPI credentials live behind EveryAPI's local credential-process command rather than in a LibreFang env var.
+            // No env var can describe this entry's auth, so the whole status is owned by the API refresh path — including demotion when the credential process later disappears.
+            // Probing `api_key_env` here would otherwise promote a CLI-managed entry on the strength of an unrelated key and send its refresh down the explicit-key branch.
+            if provider.id == "everyapi" && provider.cli_managed && !suppressed {
                 continue;
             }
 
@@ -968,8 +1106,9 @@ impl ModelCatalog {
         self.suppressed_providers.contains(id)
     }
 
-    /// Return `(id, base_url)` for every local HTTP provider that the
-    /// periodic probe loop should poll. Filters out providers the user has
+    /// Return `(id, base_url)` for every provider that the periodic probe loop
+    /// should poll: the built-in local HTTP ids plus any provider that opted in
+    /// via `discover_models` (#6702). Filters out providers the user has
     /// explicitly suppressed — without this, the next probe tick would
     /// overwrite the `Missing` status set by `delete_provider_key` with
     /// `NotRequired`/`LocalOffline` and the provider would re-appear in
@@ -978,12 +1117,26 @@ impl ModelCatalog {
         self.providers
             .iter()
             .filter(|p| {
-                crate::provider_health::is_local_provider(&p.id)
+                crate::provider_health::discovers_models(p)
                     && !p.base_url.is_empty()
                     && !self.suppressed_providers.contains(&p.id)
             })
             .map(|p| (p.id.clone(), p.base_url.clone()))
             .collect()
+    }
+
+    /// Turn live model discovery on or off for a provider (#6702).
+    ///
+    /// Returns `false` when the provider is unknown, so the caller can answer
+    /// 404 instead of silently persisting a flag nothing reads.
+    pub fn set_provider_discover_models(&mut self, provider: &str, discover: bool) -> bool {
+        match self.providers.iter_mut().find(|p| p.id == provider) {
+            Some(p) => {
+                p.discover_models = discover;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Load the suppressed-providers list from a JSON file.
@@ -1075,6 +1228,127 @@ impl ModelCatalog {
             .map(|m| self.effective_capabilities(m))
     }
 
+    /// Resolve what is actually *known* about an entry's image-input support, applying any operator override (refs #7957).
+    ///
+    /// Precedence, highest first:
+    ///
+    /// 1. An operator override in `model_overrides.json` — a human stated it, so it is knowledge in both directions.
+    /// 2. The entry's own `supports_vision`, but only when `vision_known` says a source declared it.
+    /// 3. [`VisionSupport::Unknown`] — the entry's boolean came from a name heuristic and carries no information.
+    ///
+    /// This is the vision counterpart to [`Self::effective_limits`], and it exists for the same reason #7774 gave `EffectiveLimits` a `LimitSource`: the value and its provenance have to be computed in one pass over the same override map and entry, or a caller reads a guess and treats it as a declaration.
+    pub fn vision_support(&self, entry: &ModelCatalogEntry) -> VisionSupport {
+        let key = format!("{}:{}", entry.provider, entry.id);
+        let overridden = self
+            .overrides
+            .get(&key)
+            .and_then(|o| o.supports_vision)
+            .map(|v| {
+                if v {
+                    VisionSupport::Supported
+                } else {
+                    VisionSupport::Unsupported
+                }
+            });
+        if let Some(from_operator) = overridden {
+            return from_operator;
+        }
+        match (entry.vision_known, entry.supports_vision) {
+            (true, true) => VisionSupport::Supported,
+            (true, false) => VisionSupport::Unsupported,
+            (false, _) => VisionSupport::Unknown,
+        }
+    }
+
+    /// Look up a model by id-or-alias and resolve its image-input support.
+    ///
+    /// A catalog **miss** is [`VisionSupport::Unknown`], not `Unsupported` — an unknown or
+    /// user-defined model has never been degraded by this gate and must not start being.
+    /// Since #7957 a catalog *hit* whose flag is only inferred resolves to `Unknown` as well,
+    /// so the hit path is no longer more confident than the miss path.
+    pub fn vision_support_for(&self, id_or_alias: &str) -> VisionSupport {
+        self.find_model(id_or_alias)
+            .map(|m| self.vision_support(m))
+            .unwrap_or(VisionSupport::Unknown)
+    }
+
+    /// Compute the effective capacity limits for a catalog entry, applying any
+    /// operator override on top of the catalog-declared values (refs #7774).
+    ///
+    /// Precedence, per limit: operator override (`model_overrides.json`) >
+    /// catalog entry (registry-declared or probe-discovered) > `None`.
+    /// A zero on either side is "unknown", never a limit — `ModelCatalogEntry`
+    /// documents that rule for its own fields, and an override of `0` gets the
+    /// same treatment so a cleared dashboard field cannot pin a model's window
+    /// to zero tokens.
+    pub fn effective_limits(&self, entry: &ModelCatalogEntry) -> EffectiveLimits {
+        let key = format!("{}:{}", entry.provider, entry.id);
+        let o = self.overrides.get(&key);
+        let (context_window, context_window_source) = rank_limit(
+            o.and_then(|x| x.context_window).filter(|v| *v > 0),
+            known(entry.context_window),
+        );
+        let (max_output_tokens, max_output_tokens_source) = rank_limit(
+            o.and_then(|x| x.max_output_tokens).filter(|v| *v > 0),
+            known(entry.max_output_tokens),
+        );
+        EffectiveLimits {
+            context_window,
+            context_window_source,
+            max_output_tokens,
+            max_output_tokens_source,
+        }
+    }
+
+    /// Resolve a manifest's `(provider, model)` pair to its effective capacity
+    /// limits, **without requiring the model to be in the catalog** (refs #7774).
+    ///
+    /// This is the shape the operator override exists for. The reported case is
+    /// a gateway-served model that no catalog knows: `find_model_for_manifest`
+    /// misses, so an override attached to a catalog *entry* would be
+    /// unreachable — but the override map is keyed by `provider:model_id` and
+    /// needs no entry to exist.
+    ///
+    /// Two keys are consulted, in order: the manifest's own
+    /// `provider:model` (what every surface writes, and the only key available
+    /// for a model with no entry), then the resolved entry's
+    /// `provider:id` when the catalog reconciled the pair to a differently
+    /// spelled id (an OpenRouter manifest naming a bare model resolves to a
+    /// `openrouter/<vendor>/<model>` entry, #6423). The manifest key wins so
+    /// the value the operator typed against the id they see is the one that
+    /// takes effect.
+    pub fn effective_limits_for_manifest(&self, provider: &str, model: &str) -> EffectiveLimits {
+        let entry = self.find_model_for_manifest(provider, model);
+        let manifest_key = format!("{provider}:{model}");
+        let entry_key = entry.map(|e| format!("{}:{}", e.provider, e.id));
+        let mut candidates: Vec<&ModelOverrides> = Vec::with_capacity(2);
+        if let Some(o) = self.overrides.get(&manifest_key) {
+            candidates.push(o);
+        }
+        if let Some(k) = entry_key.filter(|k| *k != manifest_key) {
+            if let Some(o) = self.overrides.get(&k) {
+                candidates.push(o);
+            }
+        }
+        let pick = |f: fn(&ModelOverrides) -> Option<u64>| -> Option<u64> {
+            candidates.iter().filter_map(|o| f(o)).find(|v| *v > 0)
+        };
+        let (context_window, context_window_source) = rank_limit(
+            pick(|o| o.context_window),
+            entry.and_then(|e| known(e.context_window)),
+        );
+        let (max_output_tokens, max_output_tokens_source) = rank_limit(
+            pick(|o| o.max_output_tokens),
+            entry.and_then(|e| known(e.max_output_tokens)),
+        );
+        EffectiveLimits {
+            context_window,
+            context_window_source,
+            max_output_tokens,
+            max_output_tokens_source,
+        }
+    }
+
     /// Load model overrides from a JSON file.
     pub fn load_overrides(&mut self, path: &std::path::Path) {
         let data = match std::fs::read_to_string(path) {
@@ -1115,10 +1389,17 @@ impl ModelCatalog {
     pub fn set_provider_url(&mut self, provider: &str, url: &str) -> bool {
         if let Some(p) = self.providers.iter_mut().find(|p| p.id == provider) {
             p.base_url = url.to_string();
+            // Repointing an auto-managed EveryAPI entry is an explicit user override.
+            // Stop replacing its endpoint with the CLI-managed URL.
+            if provider == "everyapi" && !p.is_custom {
+                p.is_custom = true;
+                p.cli_managed = false;
+                p.auth_status = AuthStatus::Configured;
+            }
             true
         } else {
             // Custom provider — add a new entry so it appears in /api/providers
-            let env_var = format!("{}_API_KEY", provider.to_uppercase().replace('-', "_"));
+            let env_var = librefang_types::model_catalog::default_api_key_env(provider);
             self.providers.push(ProviderInfo {
                 id: provider.to_string(),
                 display_name: provider.to_string(),
@@ -1133,12 +1414,115 @@ impl ModelCatalog {
                 available_models: Vec::new(),
                 // Added at runtime via set_provider_url → always custom.
                 is_custom: true,
+                // Credentials come from the derived env var above.
+                cli_managed: false,
                 proxy_url: None,
+                // Discovery is opt-in — a bare `[provider_urls]` entry says
+                // nothing about whether the endpoint serves `/models` (#6702).
+                discover_models: false,
             });
             // Re-detect auth for the newly added provider
             self.detect_auth();
             true
         }
+    }
+
+    /// Register or refresh the built-in EveryAPI provider discovered through EveryAPI's local credential process.
+    ///
+    /// User-created provider entries and explicit suppression always win.
+    /// Returns `true` only when managed registration is active.
+    pub fn ensure_managed_everyapi(&mut self, base_url: &str) -> bool {
+        const PROVIDER_ID: &str = "everyapi";
+        if self.suppressed_providers.contains(PROVIDER_ID) {
+            return false;
+        }
+        let base_url = base_url.trim().trim_end_matches('/');
+        if base_url.is_empty() {
+            return false;
+        }
+        if let Some(provider) = self.providers.iter_mut().find(|p| p.id == PROVIDER_ID) {
+            if provider.is_custom {
+                return false;
+            }
+            provider.base_url = base_url.to_string();
+            provider.auth_status = AuthStatus::AutoDetected;
+            // Boot only reaches this call after ruling out every explicit source, so adopting a registry-shipped entry here is correct.
+            // Runtime callers arrive through `resolve_managed_credential`, which is gated on this same flag — so an entry that was never CLI-managed can no longer be repointed at the CLI's endpoint.
+            provider.cli_managed = true;
+            return true;
+        }
+        self.providers.push(ProviderInfo {
+            id: PROVIDER_ID.to_string(),
+            display_name: "EveryAPI".to_string(),
+            api_key_env: "EVERYAPI_API_KEY".to_string(),
+            base_url: base_url.to_string(),
+            key_required: true,
+            auth_status: AuthStatus::AutoDetected,
+            model_count: 0,
+            signup_url: Some("https://everyapi.ai".to_string()),
+            regions: std::collections::HashMap::new(),
+            media_capabilities: Vec::new(),
+            available_models: Vec::new(),
+            is_custom: false,
+            cli_managed: true,
+            proxy_url: None,
+            discover_models: false,
+        });
+        true
+    }
+
+    /// Register an explicitly configured EveryAPI endpoint/key source.
+    /// Unlike CLI-managed discovery, this entry is custom and is never rewritten from the EveryAPI credential process.
+    pub fn ensure_explicit_everyapi(
+        &mut self,
+        base_url: &str,
+        api_key_env: &str,
+        credential_present: bool,
+    ) -> bool {
+        const PROVIDER_ID: &str = "everyapi";
+        if self.suppressed_providers.contains(PROVIDER_ID) {
+            return false;
+        }
+        let base_url = base_url.trim().trim_end_matches('/');
+        let api_key_env = api_key_env.trim();
+        if base_url.is_empty() || api_key_env.is_empty() {
+            return false;
+        }
+        if let Some(provider) = self.providers.iter_mut().find(|p| p.id == PROVIDER_ID) {
+            provider.base_url = base_url.to_string();
+            provider.api_key_env = api_key_env.to_string();
+            provider.auth_status = if credential_present {
+                AuthStatus::Configured
+            } else {
+                AuthStatus::Missing
+            };
+            provider.is_custom = true;
+            // Explicit configuration takes the entry back from CLI-managed discovery: its credentials now come from `api_key_env`.
+            provider.cli_managed = false;
+            return true;
+        }
+        self.providers.push(ProviderInfo {
+            id: PROVIDER_ID.to_string(),
+            display_name: "EveryAPI".to_string(),
+            api_key_env: api_key_env.to_string(),
+            base_url: base_url.to_string(),
+            key_required: true,
+            auth_status: if credential_present {
+                AuthStatus::Configured
+            } else {
+                AuthStatus::Missing
+            },
+            model_count: 0,
+            signup_url: Some("https://everyapi.ai".to_string()),
+            regions: std::collections::HashMap::new(),
+            media_capabilities: Vec::new(),
+            available_models: Vec::new(),
+            is_custom: true,
+            cli_managed: false,
+            proxy_url: None,
+            discover_models: false,
+        });
+        true
     }
 
     /// Apply a batch of provider URL overrides from config.
@@ -1262,6 +1646,24 @@ impl ModelCatalog {
     /// capabilities (vision via the "clip" family, embeddings, thinking models).
     /// Falls back to conservative defaults when metadata is absent.
     /// Also updates the provider's `model_count`.
+    ///
+    /// # Token limits
+    ///
+    /// Capacity comes from the probe and is never guessed (#7780).
+    /// Until this method stopped hardcoding `context_window: 131_072` / `max_output_tokens: 16_384`, a model behind an OpenAI-compatible gateway entered the catalog with a fabricated ceiling that every surface then presented as discovered fact, and that `manifest_helpers::resolve_context_window` accepted as a real value because its only test is `> 0`.
+    /// The agent loop built that turn's `ContextBudget` from it, so an 8K model reached through a gateway got a 131K budget: compaction never fired, the prompt was packed past what the provider accepts, and the request failed *after* the input tokens were billed.
+    /// The opposite error is just as silent — a 1M model clamped to 131K compacts away prompt content nobody asked to drop.
+    ///
+    /// # Vision capability
+    ///
+    /// The same rule, for the same reason, applies to `supports_vision` since #7957.
+    /// An OpenAI-compatible gateway's `/v1/models` entry that declares `supports_vision` is believed in both directions and the entry is stamped `vision_known: true`; an Ollama `capabilities` array counts as a declaration too.
+    /// When nothing declared it, `supports_vision` still carries [`infer_capabilities`]'s reading of the model's *name*, but the entry is stamped `vision_known: false` — and the request-build gate then treats it as [`librefang_types::model_catalog::VisionSupport::Unknown`] and sends the images anyway.
+    /// A model behind a gateway is named by its operator (`team-default`, `fast`, a ticket id), so the heuristic is guessing; a wrong `false` used to reach `redact_images_for_text_only`, which swapped each image for its on-disk path and let the turn succeed looking like it had worked.
+    ///
+    /// So an entry gets numbers only when the endpoint supplied them.
+    /// When it did not, both fields stay `0` and `limits_known` is `false`, and the `> 0` guards already present throughout the budget math fall through to `UNKNOWN_MODEL_CONTEXT_WINDOW` — whose warning names `agent.toml: model.context_window` as the operator's fix.
+    /// A conservative window with a loud warning is recoverable; an invented one is not visible from either end.
     pub fn merge_discovered_models(
         &mut self,
         provider: &str,
@@ -1297,20 +1699,41 @@ impl ModelCatalog {
             if existing_non_local.contains(&key) {
                 continue;
             }
-            let (supports_vision, supports_tools, supports_thinking) =
-                resolve_discovered_capabilities(
-                    &info.name,
-                    info.families.as_deref(),
-                    &info.capabilities,
-                );
+            let caps = resolve_discovered_capabilities(
+                &info.name,
+                info.families.as_deref(),
+                &info.capabilities,
+                info.supports_vision,
+                info.supports_function_calling,
+            );
+            let DiscoveredCapabilities {
+                supports_vision,
+                vision_known,
+                supports_tools,
+                supports_streaming,
+                supports_thinking,
+            } = caps;
+            let reported_context = info.context_window.filter(|v| *v > 0);
+            let reported_max_output = info.max_output_tokens.filter(|v| *v > 0);
+            let limits_known = reported_context.is_some() || reported_max_output.is_some();
             // Upgrade the previously-discovered Local entry in place when the
-            // current probe reports stronger capabilities. We never downgrade:
-            // a transient probe that drops the `capabilities` array (e.g. an
+            // current probe reports stronger capabilities. An *inferred* capability never
+            // downgrades: a transient probe that drops the `capabilities` array (e.g. an
             // older proxy in front of an upgraded Ollama) must not flip a
             // vision-capable model back to non-vision.
+            // A *declared* one does replace what is there — see the `vision_known` branch below.
             if let Some(&idx) = existing_local.get(&key) {
                 let entry = &mut self.models[idx];
-                if supports_vision {
+                // A declared capability replaces whatever is on the entry, in either direction:
+                // the provider has stated a fact, and a stale guess (or a stale declaration from
+                // before the operator reconfigured the gateway) must not outrank it.
+                // A *guess* still only ever upgrades, which is what the never-downgrade rule below
+                // was always protecting — a probe that drops the `capabilities` array reports
+                // `vision_known: false` and therefore cannot flip a known-vision model to blind.
+                if vision_known {
+                    entry.supports_vision = supports_vision;
+                    entry.vision_known = true;
+                } else if supports_vision {
                     entry.supports_vision = true;
                 }
                 if supports_thinking {
@@ -1318,25 +1741,45 @@ impl ModelCatalog {
                 }
                 if supports_tools {
                     entry.supports_tools = true;
-                    if !entry.supports_streaming {
-                        entry.supports_streaming = true;
-                    }
+                }
+                if supports_streaming && !entry.supports_streaming {
+                    entry.supports_streaming = true;
+                }
+                // Capacity follows the same never-downgrade rule as the capability flags, for the same reason: a probe that drops the capacity keys (an older proxy in front of an upgraded gateway) must not erase a number an earlier probe did report.
+                // Only what is still unknown gets filled in.
+                // Assigning `unwrap_or(0)` back onto a field that is already `0` is a no-op, which keeps this to one branch per field instead of a nested `if let`.
+                if entry.context_window == 0 {
+                    entry.context_window = reported_context.unwrap_or(0);
+                }
+                if entry.max_output_tokens == 0 {
+                    entry.max_output_tokens = reported_max_output.unwrap_or(0);
+                }
+                if limits_known {
+                    entry.limits_known = true;
                 }
                 continue;
             }
             let display = format!("{} ({})", info.name, provider);
+            // `0` is the catalog's documented "unknown" encoding for both fields, and `limits_known` records *why* it is zero — so a surface can tell "this model has no token context" (image / audio) apart from "nobody told us this model's context".
+            // See the `# Token limits` section above.
             self.models.push(ModelCatalogEntry {
                 id: info.name.clone(),
                 display_name: display,
                 provider: provider.to_string(),
                 tier: ModelTier::Local,
-                context_window: 131_072,
-                max_output_tokens: 16_384,
+                context_window: reported_context.unwrap_or(0),
+                max_output_tokens: reported_max_output.unwrap_or(0),
+                limits_known,
                 input_cost_per_m: 0.0,
                 output_cost_per_m: 0.0,
                 supports_tools,
                 supports_vision,
-                supports_streaming: supports_tools,
+                // The whole point of #7957: a freshly discovered gateway model records *whether*
+                // its vision flag is a fact. `Default` says `true` because a registry entry that
+                // omits the field is a curated declaration; a probe result is not, unless the
+                // provider actually declared it, so this must be written explicitly.
+                vision_known,
+                supports_streaming,
                 supports_thinking,
                 aliases: Vec::new(),
                 ..Default::default()
@@ -1507,6 +1950,11 @@ impl ModelCatalog {
                         existing.api_key_env = prov_toml.api_key_env;
                     }
                     existing.key_required = prov_toml.key_required;
+                    // A provider file is an explicit configuration, so it takes the entry back from CLI-managed discovery.
+                    //
+                    // Unconditional, and specifically not tied to the `api_key_env` branch above: this function has already overwritten `base_url` either way, so leaving the entry CLI-managed would let the next credential refresh rewrite the endpoint the file just set.
+                    // Only EveryAPI ever sets the flag, so clearing it is a no-op for every other provider.
+                    existing.cli_managed = false;
                 }
             } else {
                 self.providers.push(prov_toml.into());
@@ -1995,6 +2443,32 @@ fn extract_available_model_ids(body: &serde_json::Value) -> Option<Vec<String>> 
     }
 }
 
+/// A catalog / override capacity limit as `Option`: `0` means "unknown" and
+/// must never reach budget math as a limit (refs #7774, and the rule
+/// `ModelCatalogEntry::context_window` documents for its own fields).
+fn known(value: u64) -> Option<u64> {
+    (value > 0).then_some(value)
+}
+
+/// Rank one capacity limit's two candidate layers and report which answered
+/// (refs #7774).
+///
+/// The operator override outranks the catalog because it exists to correct it.
+/// Value and [`LimitSource`] come out of the same expression so they cannot
+/// disagree: a caller that recomputed the provenance separately would
+/// eventually label an override as a catalog value, which is precisely the
+/// confusion #7774's item 5 is about.
+fn rank_limit(
+    override_value: Option<u64>,
+    catalog_value: Option<u64>,
+) -> (Option<u64>, LimitSource) {
+    match (override_value, catalog_value) {
+        (Some(v), _) => (Some(v), LimitSource::Override),
+        (None, Some(v)) => (Some(v), LimitSource::Catalog),
+        (None, None) => (None, LimitSource::Unknown),
+    }
+}
+
 fn parse_openrouter_model_entries(body: &serde_json::Value) -> Vec<ModelCatalogEntry> {
     let Some(models) = body.get("data").and_then(|data| data.as_array()) else {
         return Vec::new();
@@ -2028,14 +2502,19 @@ fn parse_openrouter_model_entries(body: &serde_json::Value) -> Vec<ModelCatalogE
                         .any(|parameter| parameter.as_str() == Some(wanted))
                 })
             };
-            let supports_vision = model
+            // A present `input_modalities` array is OpenRouter declaring the model's inputs, and it
+            // is authoritative in both directions. An absent one is OpenRouter saying nothing, so
+            // the resulting `false` is a placeholder and `vision_known` records that (#7957) —
+            // otherwise a listing shape change would silently mark every model blind and strip
+            // images from requests that used to carry them.
+            let input_modalities = model
                 .pointer("/architecture/input_modalities")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|modalities| {
-                    modalities
-                        .iter()
-                        .any(|modality| modality.as_str() == Some("image"))
-                });
+                .and_then(serde_json::Value::as_array);
+            let supports_vision = input_modalities.is_some_and(|modalities| {
+                modalities
+                    .iter()
+                    .any(|modality| modality.as_str() == Some("image"))
+            });
 
             let input_cost_per_m = openrouter_price_per_million(model, "prompt");
             let output_cost_per_m = openrouter_price_per_million(model, "completion");
@@ -2056,6 +2535,7 @@ fn parse_openrouter_model_entries(body: &serde_json::Value) -> Vec<ModelCatalogE
                 pricing_known: input_cost_per_m.is_some() && output_cost_per_m.is_some(),
                 supports_tools: supports_parameter("tools"),
                 supports_vision,
+                vision_known: input_modalities.is_some(),
                 supports_streaming: true,
                 supports_thinking: supports_parameter("reasoning")
                     || supports_parameter("include_reasoning"),

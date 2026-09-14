@@ -13,7 +13,7 @@
 //! a cooldown period (`exhausted_ttl`, default 1 hour) and excluded from selection
 //! until the period expires.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 /// Build the redacted hint for an API key. Returns `"****"` plus the last
@@ -85,6 +85,9 @@ pub struct PooledCredential {
     /// When `Some(t)`, this credential is exhausted and must not be used until
     /// `Instant::now() >= t`.
     exhausted_until: Option<Instant>,
+    /// Auth failures disable a credential until the pool is rebuilt by a configuration reload.
+    /// A separate flag keeps permanence distinct from temporary cooldowns and cannot overflow the monotonic clock.
+    permanently_disabled: bool,
 }
 
 impl std::fmt::Debug for PooledCredential {
@@ -109,11 +112,15 @@ impl PooledCredential {
             priority,
             request_count: 0,
             exhausted_until: None,
+            permanently_disabled: false,
         }
     }
 
     /// Returns `true` if the credential is currently available (not exhausted).
     fn is_available(&self) -> bool {
+        if self.permanently_disabled {
+            return false;
+        }
         match self.exhausted_until {
             None => true,
             Some(until) => Instant::now() >= until,
@@ -151,22 +158,18 @@ impl CredentialSnapshot {
     fn from_credential(c: &PooledCredential) -> Self {
         let hint = redact_key_hint(&c.api_key);
         let now = Instant::now();
-        let (is_exhausted, cooldown) = match c.exhausted_until {
-            None => (false, None),
-            Some(until) => {
-                if now >= until {
-                    (false, None)
-                } else {
-                    let remaining = until.saturating_duration_since(now).as_secs();
-                    // mark_permanent uses Instant::now() + 100 years — any
-                    // value larger than a year is treated as permanent for
-                    // diagnostic purposes.
-                    let remaining = if remaining > 365 * 86400 {
-                        u64::MAX
+        let (is_exhausted, cooldown) = if c.permanently_disabled {
+            (true, Some(u64::MAX))
+        } else {
+            match c.exhausted_until {
+                None => (false, None),
+                Some(until) => {
+                    if now >= until {
+                        (false, None)
                     } else {
-                        remaining
-                    };
-                    (true, Some(remaining))
+                        let remaining = until.saturating_duration_since(now).as_secs();
+                        (true, Some(remaining))
+                    }
                 }
             }
         };
@@ -224,6 +227,21 @@ pub struct CredentialPool {
 }
 
 impl CredentialPool {
+    /// Lock the pool, preserving the existing recovery behavior while making
+    /// poison recovery observable. Continuing is intentional: the pool state
+    /// remains structurally valid and dropping every configured credential
+    /// after an unrelated panic would cause a provider-wide outage.
+    fn lock_inner(&self) -> MutexGuard<'_, CredentialPoolInner> {
+        self.inner.lock().unwrap_or_else(|poisoned| {
+            tracing::warn!("Credential pool lock poisoned; recovering inner state");
+            // `into_inner` recovers the guard but does not reset the mutex's
+            // poison flag. Clear it so one panic produces one warning rather
+            // than re-entering this recovery branch on every request forever.
+            self.inner.clear_poison();
+            poisoned.into_inner()
+        })
+    }
+
     /// Create a new pool from a list of `(api_key, priority)` pairs.
     ///
     /// Credentials are sorted by priority **descending** so that `FillFirst`
@@ -303,7 +321,7 @@ impl CredentialPool {
         // Lock the entire inner state so that the RoundRobin index read and
         // the credential selection happen atomically — no other thread can
         // advance the index between reading it and using it.
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut inner = self.lock_inner();
         match self.strategy {
             PoolStrategy::FillFirst => Self::acquire_fill_first(&inner.credentials),
             PoolStrategy::RoundRobin => {
@@ -341,7 +359,7 @@ impl CredentialPool {
     /// For quota-exhausted (402) responses use [`mark_credit_exhausted`]
     /// instead — quota windows are typically daily, so the cooldown is longer.
     pub fn mark_exhausted(&self, api_key: &str) {
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut inner = self.lock_inner();
         let until = Instant::now() + self.exhausted_ttl;
         if let Some(c) = inner.credentials.iter_mut().find(|c| c.api_key == api_key) {
             c.exhausted_until = Some(until);
@@ -352,7 +370,7 @@ impl CredentialPool {
     /// exhausted). The credential is placed in cooldown for
     /// `credit_exhausted_ttl` (default 24 hours per #4965 spec).
     pub fn mark_credit_exhausted(&self, api_key: &str) {
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut inner = self.lock_inner();
         let until = Instant::now() + self.credit_exhausted_ttl;
         if let Some(c) = inner.credentials.iter_mut().find(|c| c.api_key == api_key) {
             c.exhausted_until = Some(until);
@@ -360,38 +378,34 @@ impl CredentialPool {
     }
 
     /// Report that a credential is permanently invalid (e.g. auth failure).
-    /// Unlike [`mark_exhausted`] which uses a TTL-based cooldown, this marks
-    /// the key as unavailable for the lifetime of the pool. The only way to
-    /// recover a permanently-exhausted key is via [`mark_success`] from a
-    /// concurrent code path or a hot-reload that rebuilds the pool.
-    ///
-    /// Implementation uses a far-future timestamp (100 years) so that
-    /// `is_available()` naturally returns `false` without a separate flag.
+    /// Unlike [`mark_exhausted`] which uses a TTL-based cooldown, this marks the key as unavailable for the lifetime of the pool.
+    /// Only a hot-reload that rebuilds the pool can recover the credential.
     pub fn mark_permanent(&self, api_key: &str) {
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
-        // ~100 years from now — well past any realistic daemon lifetime.
-        let far_future = Instant::now() + Duration::from_secs(365 * 100 * 86400);
+        let mut inner = self.lock_inner();
         if let Some(c) = inner.credentials.iter_mut().find(|c| c.api_key == api_key) {
-            c.exhausted_until = Some(far_future);
+            c.permanently_disabled = true;
+            c.exhausted_until = None;
         }
     }
 
-    /// Report that a request with `api_key` succeeded.  Increments the
-    /// credential's `request_count` and clears any leftover exhaustion marker
-    /// (e.g. if a provider recovered before the TTL expired).
+    /// Report that a request with `api_key` succeeded.
+    /// Increments the credential's `request_count` and clears a temporary cooldown (e.g. if a provider recovered before the TTL expired).
+    /// Permanent auth-failure markers remain until a configuration reload rebuilds the pool.
     pub fn mark_success(&self, api_key: &str) {
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut inner = self.lock_inner();
         if let Some(c) = inner.credentials.iter_mut().find(|c| c.api_key == api_key) {
             c.request_count = c.request_count.saturating_add(1);
-            // Always clear the exhaustion marker on success — the key is working
-            // again regardless of whether the cooldown TTL has elapsed.
-            c.exhausted_until = None;
+            // Clear only temporary cooldowns.
+            // A stale in-flight success must not revive a key another request proved permanently invalid.
+            if !c.permanently_disabled {
+                c.exhausted_until = None;
+            }
         }
     }
 
     /// Number of currently available (non-exhausted) credentials.
     pub fn available_count(&self) -> usize {
-        let inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let inner = self.lock_inner();
         inner
             .credentials
             .iter()
@@ -401,7 +415,7 @@ impl CredentialPool {
 
     /// Total number of credentials in the pool (available + exhausted).
     pub fn total_count(&self) -> usize {
-        let inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let inner = self.lock_inner();
         inner.credentials.len()
     }
 
@@ -417,7 +431,7 @@ impl CredentialPool {
     /// and exhaustion status.  The list is sorted by priority descending,
     /// matching the internal ordering.
     pub fn snapshot(&self) -> Vec<CredentialSnapshot> {
-        let inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let inner = self.lock_inner();
         inner
             .credentials
             .iter()
@@ -509,7 +523,7 @@ impl CredentialPool {
     /// rather than panicking or wrapping silently to the wrong key.
     #[cfg(test)]
     fn replace_credentials_for_test(&self, new_keys: Vec<(String, u32)>) {
-        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        let mut inner = self.lock_inner();
         let mut creds: Vec<PooledCredential> = new_keys
             .into_iter()
             .map(|(k, p)| PooledCredential::new(k, String::new(), p))
@@ -562,6 +576,30 @@ mod tests {
     fn make_pool(keys: &[(&str, u32)], strategy: PoolStrategy) -> CredentialPool {
         let keys = keys.iter().map(|(k, p)| (k.to_string(), *p)).collect();
         CredentialPool::new(keys, strategy)
+    }
+
+    #[test]
+    fn poisoned_pool_lock_recovers_for_reads_and_writes() {
+        let pool = make_pool(&[("key-a", 10), ("key-b", 5)], PoolStrategy::FillFirst);
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut inner = pool.inner.lock().unwrap();
+                    inner.credentials[0].request_count = 7;
+                    panic!("poison credential pool lock");
+                })
+                .join()
+        });
+
+        assert!(poison.is_err());
+        assert!(pool.inner.is_poisoned());
+        assert_eq!(pool.total_count(), 2);
+        assert!(!pool.inner.is_poisoned());
+        assert_eq!(pool.snapshot()[0].request_count, 7);
+
+        pool.mark_success("key-a");
+        assert_eq!(pool.snapshot()[0].request_count, 8);
+        assert_eq!(pool.acquire().as_deref(), Some("key-a"));
     }
 
     // ── FillFirst ─────────────────────────────────────────────────────────────
@@ -799,6 +837,22 @@ mod tests {
             Some("key-a"),
             "should be available after mark_success clears exhaustion"
         );
+    }
+
+    #[test]
+    fn mark_success_does_not_revive_permanently_disabled_key() {
+        let pool = make_pool(&[("key-a", 1)], PoolStrategy::FillFirst);
+        pool.mark_permanent("key-a");
+        pool.mark_success("key-a");
+
+        assert!(
+            pool.acquire().is_none(),
+            "an in-flight success must not revive a key disabled by an auth failure"
+        );
+        let snapshot = pool.snapshot();
+        assert!(snapshot[0].is_exhausted);
+        assert_eq!(snapshot[0].cooldown_remaining_secs, Some(u64::MAX));
+        assert_eq!(snapshot[0].request_count, 1);
     }
 
     #[test]

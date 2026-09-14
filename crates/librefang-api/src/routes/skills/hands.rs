@@ -1,5 +1,39 @@
 use super::*;
 
+/// Hand lifecycle methods perform synchronous registry persistence and, for activation/deactivation, workspace and SQLite I/O.
+/// Keep that work off the async request worker.
+pub(super) async fn run_hand_lifecycle_job<F, T>(job: F) -> Result<T, tokio::task::JoinError>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(job).await
+}
+
+#[cfg(test)]
+mod lifecycle_job_tests {
+    use super::run_hand_lifecycle_job;
+    use std::time::Duration;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn lifecycle_job_does_not_block_the_async_worker() {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+
+        let job = tokio::spawn(run_hand_lifecycle_job(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        }));
+
+        tokio::time::timeout(Duration::from_secs(1), started_rx)
+            .await
+            .expect("blocking job did not start")
+            .expect("blocking job dropped its start signal");
+        release_tx.send(()).unwrap();
+        job.await.unwrap().unwrap();
+    }
+}
+
 /// GET /api/hands — List all hand definitions (marketplace).
 #[utoipa::path(
     get,
@@ -67,18 +101,12 @@ pub async fn list_hands(
                 "degraded": degraded,
                 "is_custom": is_custom,
                 "requirements": reqs.iter().map(|(r, ok)| {
-                    let mut req = serde_json::json!({
+                    serde_json::json!({
                         "key": r.check_value,
                         "label": r.label,
                         "satisfied": ok,
                         "optional": r.optional,
-                    });
-                    if *ok {
-                        if let Ok(val) = std::env::var(&r.check_value) {
-                            req["current_value"] = serde_json::json!(val);
-                        }
-                    }
-                    req
+                    })
                 }).collect::<Vec<_>>(),
                 "dashboard_metrics": d.dashboard.metrics.len(),
                 "has_settings": !d.settings.is_empty(),
@@ -350,11 +378,15 @@ pub async fn get_hand_manifest(
     };
 
     let home = state.kernel.home_dir();
-    // Two install layouts that scan_hands_dir actually walks
-    // (librefang-hands/src/registry.rs:165). Anything else is a
-    // codebase inconsistency that wouldn't make it into the registry,
-    // so the gate above would already 404 it before we get here.
+    // The three layouts scan_hands_dir walks, in its precedence order (`librefang_hands::registry::scan_hands_dir`).
+    // Anything else is a codebase inconsistency that wouldn't make it into the registry, so the gate above would already 404 it before we get here.
+    //
+    // The operator override has to come first for the same reason the scan reads it first: it is what the daemon loads.
+    // Returning upstream's copy instead would show a stale manifest in the editor, and saving it back would silently revert the operator's customisation.
     let candidates = [
+        librefang_hands::registry::hand_override_dir(home)
+            .join(&hand_id)
+            .join("HAND.toml"),
         home.join("registry")
             .join("hands")
             .join(&hand_id)
@@ -362,15 +394,15 @@ pub async fn get_hand_manifest(
         home.join("workspaces").join(&hand_id).join("HAND.toml"),
     ];
 
-    let mut toml_content: Option<String> = None;
-    for path in &candidates {
-        if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                toml_content = Some(content);
-                break;
-            }
+    let mut toml_content = match read_first_hand_manifest(&candidates).await {
+        Ok(content) => content,
+        Err(e) => {
+            tracing::error!(error = %e, "failed to read hand manifest");
+            return ApiErrorResponse::internal_scrub(e)
+                .into_json_tuple()
+                .into_response();
         }
-    }
+    };
 
     // Fall back to re-serialising the in-memory definition so hands
     // installed via API (no on-disk HAND.toml) still get a useful
@@ -395,6 +427,101 @@ pub async fn get_hand_manifest(
         Body::from(text),
     )
         .into_response()
+}
+
+/// Read the first manifest in registry precedence order.
+///
+/// A missing candidate means that layout is not in use, while any other I/O
+/// error must stop the lookup. Falling through after a permission or device
+/// error would make the endpoint return a lower-priority or synthesized
+/// manifest that is not the definition the daemon attempted to load.
+async fn read_first_hand_manifest(
+    candidates: &[std::path::PathBuf],
+) -> std::io::Result<Option<String>> {
+    for path in candidates {
+        match tokio::fs::read_to_string(path).await {
+            Ok(content) => return Ok(Some(content)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(None)
+}
+
+#[cfg(test)]
+mod hand_manifest_read_tests {
+    use super::read_first_hand_manifest;
+
+    #[tokio::test]
+    async fn missing_candidates_allow_in_memory_fallback() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let candidates = [temp.path().join("missing-a"), temp.path().join("missing-b")];
+
+        assert_eq!(
+            read_first_hand_manifest(&candidates)
+                .await
+                .expect("missing files are not errors"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_first_manifest_in_precedence_order() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let first = temp.path().join("first.toml");
+        let second = temp.path().join("second.toml");
+        tokio::fs::write(&first, "first")
+            .await
+            .expect("write first manifest");
+        tokio::fs::write(&second, "second")
+            .await
+            .expect("write second manifest");
+
+        assert_eq!(
+            read_first_hand_manifest(&[first, second])
+                .await
+                .expect("read manifest")
+                .as_deref(),
+            Some("first")
+        );
+    }
+
+    #[tokio::test]
+    async fn non_not_found_error_does_not_fall_through() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let unreadable_as_file = temp.path().join("directory");
+        tokio::fs::create_dir(&unreadable_as_file)
+            .await
+            .expect("create directory candidate");
+        let lower_priority = temp.path().join("lower.toml");
+        tokio::fs::write(&lower_priority, "lower")
+            .await
+            .expect("write lower-priority manifest");
+
+        read_first_hand_manifest(&[unreadable_as_file, lower_priority])
+            .await
+            .expect_err("read errors must not silently select a lower-priority manifest");
+    }
+}
+
+fn hand_manifest_update_error(
+    error: librefang_hands::HandError,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match error {
+        librefang_hands::HandError::NotFound(id) => {
+            ApiErrorResponse::not_found(format!("Hand not found: {id}")).into_json_tuple()
+        }
+        // A disk write / IO failure is a server-side problem, not caller-fixable
+        // input — surface it as a scrubbed 500 rather than exposing paths and
+        // OS error details to the caller.
+        error @ librefang_hands::HandError::Io(_) => {
+            ApiErrorResponse::internal_scrub(error).into_json_tuple()
+        }
+        // Invalid TOML, id mismatch, and a failed supply-chain audit are all
+        // caller-fixable input problems — surface the message at 400 so the
+        // editor can show it inline.
+        error => ApiErrorResponse::bad_request(format!("{error}")).into_json_tuple(),
+    }
 }
 
 /// PUT /api/hands/{hand_id}/manifest — Overwrite the hand's HAND.toml.
@@ -450,18 +577,27 @@ pub async fn update_hand_manifest(
             let body = serde_json::to_value(&def).unwrap_or(serde_json::Value::Null);
             (StatusCode::OK, Json(body))
         }
-        Err(librefang_hands::HandError::NotFound(id)) => {
-            ApiErrorResponse::not_found(format!("Hand not found: {id}")).into_json_tuple()
-        }
-        // A disk write / IO failure is a server-side problem, not caller-fixable
-        // input — surface it as 500 rather than 400.
-        Err(e @ librefang_hands::HandError::Io(_)) => {
-            ApiErrorResponse::internal(format!("{e}")).into_json_tuple()
-        }
-        // Invalid TOML, id mismatch, and a failed supply-chain audit are all
-        // caller-fixable input problems — surface the message at 400 so the
-        // editor can show it inline.
-        Err(e) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Err(error) => hand_manifest_update_error(error),
+    }
+}
+
+#[cfg(test)]
+mod update_manifest_error_tests {
+    use super::*;
+
+    #[test]
+    fn hand_manifest_io_errors_are_scrubbed_from_internal_responses() {
+        let source = librefang_hands::HandError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "secret/path/HAND.toml: permission denied",
+        ));
+
+        let (status, Json(body)) = hand_manifest_update_error(source);
+
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["error"]["message"], "Internal server error");
+        assert!(!body.to_string().contains("secret/path"));
+        assert!(!body.to_string().contains("permission denied"));
     }
 }
 
@@ -976,8 +1112,9 @@ pub async fn pause_hand(
     State(state): State<Arc<AppState>>,
     Path(id): Path<uuid::Uuid>,
 ) -> impl IntoResponse {
-    match state.kernel.pause_hand(id) {
-        Ok(()) => match state.kernel.hands().get_instance(id) {
+    let kernel = Arc::clone(&state.kernel);
+    match run_hand_lifecycle_job(move || kernel.pause_hand(id)).await {
+        Ok(Ok(())) => match state.kernel.hands().get_instance(id) {
             // #3832: return the post-mutation entity instead of an ack envelope
             // so the dashboard can setQueryData without a follow-up GET.
             Some(instance) => (StatusCode::OK, Json(hand_instance_to_json(&instance))),
@@ -986,7 +1123,11 @@ pub async fn pause_hand(
                     .into_json_tuple()
             }
         },
-        Err(e) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Ok(Err(e)) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Err(e) => {
+            tracing::error!(instance = %id, error = %e, "hand pause task failed");
+            ApiErrorResponse::internal("Hand pause task failed").into_json_tuple()
+        }
     }
 }
 
@@ -1006,8 +1147,9 @@ pub async fn resume_hand(
     State(state): State<Arc<AppState>>,
     Path(id): Path<uuid::Uuid>,
 ) -> impl IntoResponse {
-    match state.kernel.resume_hand(id) {
-        Ok(()) => match state.kernel.hands().get_instance(id) {
+    let kernel = Arc::clone(&state.kernel);
+    match run_hand_lifecycle_job(move || kernel.resume_hand(id)).await {
+        Ok(Ok(())) => match state.kernel.hands().get_instance(id) {
             // #3832: return the post-mutation entity instead of an ack envelope
             // so the dashboard can setQueryData without a follow-up GET.
             Some(instance) => (StatusCode::OK, Json(hand_instance_to_json(&instance))),
@@ -1016,7 +1158,11 @@ pub async fn resume_hand(
                     .into_json_tuple()
             }
         },
-        Err(e) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Ok(Err(e)) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Err(e) => {
+            tracing::error!(instance = %id, error = %e, "hand resume task failed");
+            ApiErrorResponse::internal("Hand resume task failed").into_json_tuple()
+        }
     }
 }
 
@@ -1036,12 +1182,17 @@ pub async fn deactivate_hand(
     State(state): State<Arc<AppState>>,
     Path(id): Path<uuid::Uuid>,
 ) -> impl IntoResponse {
-    match state.kernel.deactivate_hand(id) {
-        Ok(()) => (
+    let kernel = Arc::clone(&state.kernel);
+    match run_hand_lifecycle_job(move || kernel.deactivate_hand(id)).await {
+        Ok(Ok(())) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "deactivated", "instance_id": id})),
         ),
-        Err(e) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Ok(Err(e)) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
+        Err(e) => {
+            tracing::error!(instance = %id, error = %e, "hand deactivation task failed");
+            ApiErrorResponse::internal("Hand deactivation task failed").into_json_tuple()
+        }
     }
 }
 
@@ -1059,7 +1210,7 @@ pub async fn set_hand_secret(
     Path(hand_id): Path<String>,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    let env_key = match body["key"].as_str() {
+    let requested_key = match body["key"].as_str() {
         Some(k) if !k.trim().is_empty() => k.trim().to_string(),
         _ => {
             return ApiErrorResponse::bad_request("Missing 'key' field (env var name)")
@@ -1074,26 +1225,25 @@ pub async fn set_hand_secret(
         }
     };
 
-    // Verify this key belongs to a requirement of the specified hand
-    let valid = {
+    // Resolve the stable requirement key (`r.key`, as exposed by the single-hand detail endpoint) to the actual environment-variable name (`r.check_value`, as exposed by `list_hands`'s "key" field).
+    // Accepting either alias as input but persisting under whatever string the client sent would silently write the secret under a name `check_requirement` never reads, so a save could return 200 OK while leaving the requirement permanently unsatisfied.
+    let env_key = {
         let defs = state.kernel.hands().list_definitions();
-        defs.iter()
-            .find(|d| d.id == hand_id)
-            .map(|def| {
-                def.requires
-                    .iter()
-                    .any(|r| r.check_value == env_key || r.key == env_key)
-            })
-            .unwrap_or(false)
+        defs.iter().find(|d| d.id == hand_id).and_then(|def| {
+            def.requires
+                .iter()
+                .find(|r| r.check_value == requested_key || r.key == requested_key)
+                .map(|r| r.check_value.clone())
+        })
     };
 
-    if !valid {
+    let Some(env_key) = env_key else {
         return ApiErrorResponse::bad_request(format!(
             "'{}' is not a requirement of hand '{}'",
-            env_key, hand_id
+            requested_key, hand_id
         ))
         .into_json_tuple();
-    }
+    };
 
     // Write to secrets.env
     let secrets_path = state.kernel.home_dir().join("secrets.env");
@@ -1146,15 +1296,29 @@ pub async fn get_hand_settings(
         }
     };
 
-    // Find active instance config values (if any)
+    // `active_instance` (not a `list_instances` scan): several instances can share
+    // a `hand_id`, and a DashMap iteration order that varies per process would let
+    // this read and the write below resolve different ones (#6636).
     let instance_config: std::collections::HashMap<String, serde_json::Value> = state
         .kernel
         .hands()
-        .list_instances()
-        .iter()
-        .find(|i| i.hand_id == hand_id)
-        .map(|i| i.config.clone())
+        .active_instance(&hand_id)
+        .map(|i| i.config)
         .unwrap_or_default();
+
+    // `current_values` is what is stored; `effective_values` is what the resolver
+    // will actually use, which differs whenever a stored value is non-scalar or,
+    // for a Select, names no declared option. Reporting only the former is what
+    // let `librefang hand settings` print a value the agent was not using.
+    // `unknown_values` surfaces stored keys the schema does not declare — a typo
+    // is accepted silently by `update_config` and would otherwise be invisible.
+    let (effective_values, unknown_values) = match state.kernel.hands().get_definition(&hand_id) {
+        Some(def) => (
+            librefang_hands::effective_setting_values(&def.settings, &instance_config),
+            librefang_hands::undeclared_setting_keys(&def.settings, &instance_config),
+        ),
+        None => (Default::default(), Vec::new()),
+    };
 
     (
         StatusCode::OK,
@@ -1162,6 +1326,8 @@ pub async fn get_hand_settings(
             "hand_id": hand_id,
             "settings": settings_status,
             "current_values": instance_config,
+            "effective_values": effective_values,
+            "unknown_values": unknown_values,
         })),
     )
 }
@@ -1182,41 +1348,50 @@ pub async fn get_hand_settings(
 pub async fn update_hand_settings(
     State(state): State<Arc<AppState>>,
     Path(hand_id): Path<String>,
-    Json(config): Json<std::collections::HashMap<String, serde_json::Value>>,
+    Json(delta): Json<std::collections::HashMap<String, serde_json::Value>>,
 ) -> impl IntoResponse {
-    let instance = state
-        .kernel
-        .hands()
-        .list_instances()
-        .into_iter()
-        .find(|i| i.hand_id == hand_id);
-
-    match instance {
-        Some(inst) => {
-            let id = inst.instance_id;
-            // Merge over existing config so untouched keys keep their saved values.
-            let mut merged = inst.config;
-            merged.extend(config);
-            match state.kernel.hands().update_config(id, merged.clone()) {
-                Ok(()) => {
-                    state.kernel.persist_hand_state();
-                    (
-                        StatusCode::OK,
-                        Json(serde_json::json!({
-                            "status": "ok",
-                            "hand_id": hand_id,
-                            "instance_id": id,
-                            "config": merged,
-                        })),
-                    )
-                }
-                Err(e) => ApiErrorResponse::bad_request(format!("{e}")).into_json_tuple(),
-            }
-        }
-        None => ApiErrorResponse::not_found(format!(
+    // `active_instance`, not a `list_instances` scan — see the note in
+    // `get_hand_settings`. The two must resolve the same instance or a save lands
+    // on agents the operator was never looking at.
+    let Some(instance) = state.kernel.hands().active_instance(&hand_id) else {
+        return ApiErrorResponse::not_found(format!(
             "No active instance for hand: {hand_id}. Activate the hand first."
         ))
+        .into_json_tuple();
+    };
+    let id = instance.instance_id;
+
+    // The body is a *delta*. `update_hand_config` merges it onto the saved config
+    // under the per-instance lock; merging here would put the read-modify-write
+    // outside that lock, so two concurrent saves would each write their own
+    // snapshot and the later one would silently revert the earlier.
+    //
+    // It is also what re-renders the `## User Configuration` prompt tail on the
+    // hand's live agents — the only way a saved setting reaches an LLM before the
+    // next daemon restart (#6636).
+    match state.kernel.update_hand_config(id, delta) {
+        Ok(updated) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "ok",
+                "hand_id": hand_id,
+                "instance_id": id,
+                "config": updated.config,
+            })),
+        ),
+        // The instance was resolved a moment ago, so a `HandError::InstanceNotFound`
+        // here means it was deactivated concurrently — 404, not 400. Everything else
+        // reachable from this call is infrastructure (the `hand_state.json` write, an
+        // agent-registry write), which is a 500: answering 400 tells the operator
+        // their input was invalid and sends them to retype a valid setting instead of
+        // looking at the host.
+        Err(librefang_kernel::error::KernelError::Hand(
+            librefang_hands::HandError::InstanceNotFound(_),
+        )) => ApiErrorResponse::not_found(format!(
+            "Hand instance {id} was deactivated while saving settings"
+        ))
         .into_json_tuple(),
+        Err(e) => ApiErrorResponse::internal_scrub(e).into_json_tuple(),
     }
 }
 
@@ -1230,7 +1405,14 @@ pub async fn update_hand_settings(
     )
 )]
 pub async fn reload_hands(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let (added, updated) = state.kernel.reload_hands();
+    let kernel = Arc::clone(&state.kernel);
+    let (added, updated) = match run_hand_lifecycle_job(move || kernel.reload_hands()).await {
+        Ok(counts) => counts,
+        Err(e) => {
+            tracing::error!(error = %e, "hand reload task failed");
+            return ApiErrorResponse::internal("Hand reload task failed").into_json_tuple();
+        }
+    };
     let total = state.kernel.hands().list_definitions().len();
     (
         StatusCode::OK,
@@ -1375,14 +1557,9 @@ pub async fn hand_instance_browser(
             if let Some(data) = &resp.data {
                 url = data["url"].as_str().unwrap_or("").to_string();
                 title = data["title"].as_str().unwrap_or("").to_string();
-                content = data["content"].as_str().unwrap_or("").to_string();
-                // Truncate content to avoid huge payloads (UTF-8 safe)
-                if content.len() > 2000 {
-                    content = format!(
-                        "{}... (truncated)",
-                        librefang_types::truncate_str(&content, 2000)
-                    );
-                }
+                // Rendered with the link table rather than from `content` alone: the extraction emits `⟨n⟩` markers in the prose and the URLs beside it, so reading `content` by itself would show an operator markers with nothing to resolve them against, where this preview used to carry the destination inline.
+                // The payload budget applies to the prose, before the table is joined: the table runs to thousands of characters on a link-dense page, so a budget applied after the join would spend all of itself on URLs and show an operator none of the page.
+                content = librefang_kernel::browser::render_page_body_within(data, 2000);
             }
         }
         Ok(_) => {}  // Non-success: leave defaults
@@ -1430,6 +1607,7 @@ pub async fn hand_instance_browser(
 pub async fn hand_send_message(
     State(state): State<Arc<AppState>>,
     Path(id): Path<uuid::Uuid>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(req): Json<MessageRequest>,
 ) -> impl IntoResponse {
     let (_instance, agent_id) = match resolve_hand_agent(&state, id) {
@@ -1460,7 +1638,25 @@ pub async fn hand_send_message(
     // hand path's behaviour byte-identical while closing the cross-chat
     // leak on the agent message path.
     if !req.attachments.is_empty() {
-        let image_blocks = super::agents::resolve_attachments(&state, &req.attachments);
+        let image_blocks = match super::agents::resolve_attachments(
+            &state,
+            &req.attachments,
+            api_user.as_ref().map(|user| &user.0),
+        )
+        .await
+        {
+            Ok(blocks) => blocks,
+            Err(denied) => {
+                tracing::warn!(file_id = %denied.file_id, "hand attachment access denied");
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({
+                        "error": "You are not authorized to access this upload",
+                        "code": "upload_access_denied"
+                    })),
+                );
+            }
+        };
         if !image_blocks.is_empty() {
             let fallback_session_id = state
                 .kernel

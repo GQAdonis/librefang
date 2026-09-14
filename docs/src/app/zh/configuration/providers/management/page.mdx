@@ -45,6 +45,61 @@ supports_vision = false
 
 `~/.librefang/providers/` 中的文件在启动时加载，并与内置提供商一起合并到目录中。
 
+### 自定义提供商的模型自动发现
+
+BossFang 每 60 秒轮询一次内置本地提供商（`ollama`、`vllm`、`lmstudio`、`lemonade`），把它们 `/v1/models` 返回的模型合并进目录。
+以其他 id 注册的提供商——比如叫 `vllm-local` 的自建 vLLM——默认不会被轮询，因为任意一个 OpenAI 兼容端点未必提供模型列表接口。
+用 `discover_models` 按提供商逐个开启：
+
+```toml
+# ~/.librefang/providers/vllm-local.toml
+[provider]
+id = "vllm-local"
+display_name = "vLLM (GPU box)"
+base_url = "http://gpu-box:4000/v1"
+api_key_env = "VLLM_LOCAL_API_KEY"
+key_required = true
+discover_models = true
+```
+
+开启后，该提供商会走内置本地提供商完全相同的路径：周期性探测循环、`POST /api/providers/{name}/test` 刷新（响应中随之带上 `discovered_models`），以及 `GET /api/models` 上的实时模型过滤。
+`GET /api/models` 自己也会去请求一次模型列表，走的是 Dashboard 提供商网格所用的同一个 60 秒探测缓存，因此网关提供的模型在第一次请求时就已经在列表里，而不必等某一次后台探测恰好跑过。
+拉取列表失败并不构成错误：响应会退回到内置目录，失败原因以 `debug` 级别写入日志，因此一个只代理 `/chat/completions`、不暴露 `/models` 的网关，其行为与开启该开关之前完全一致。
+这个开关不会把内置 id 的发现能力关掉——那些由 id 决定而非由开关决定——所以已有安装不受影响。
+
+Dashboard 在「添加提供商」向导和提供商的配置抽屉里提供同一个开关**自动发现模型**；后者调用 `PUT /api/providers/{name}/discovery`，请求体为 `{"discover_models": true}`，并把值写回该提供商自己的 TOML。
+
+对你自己创建的提供商，这次写入是持久的——没有别的东西拥有那个文件。
+对**注册表下发**的提供商则不然：启动时的注册表同步会重写任何内容与上游副本不一致的文件，所以对 `providers/openai.toml` 之类文件的 `discover_models` 修改会立刻生效，但在下次守护进程启动时被还原。
+对内置本地 id 而言这只是纸面上的限制——它们的发现由 id 而非开关决定；如果你需要让某个注册表下发的远程提供商被长期轮询，请用自己的 id 单独注册一个提供商，而不是修改下发的文件。
+
+### 发现到的能力，以及「不支持视觉」到底是什么意思
+
+一个被发现的模型的 `supports_vision` 决定了图片附件能否真正送到模型面前：被记录为纯文本的模型，其请求在构建前会把每个图片块替换成占位文本，因为纯文本的 OpenAI 兼容端点会以 HTTP 400 拒绝 `image_url` 内容块。
+
+只要网关自己声明了这个标志，BossFang 就以网关为准。
+LiteLLM 及类似代理会在 `/v1/models` 上按模型暴露 `supports_vision` / `supports_function_calling`（位于顶层或 `model_info` 之下），OpenRouter 形状的列表则暴露 `architecture.input_modalities`；显式标志在两个方向上都被采信，因为网关才是它自己那些模型的权威。
+
+没有任何来源声明时，这个标志是**从模型名字推断出来的**——而名字是你自己起的（`team-default`、`fast`、一个内部工单号），本身不携带任何能力信息。
+因此推断得到的值被记为猜测而不是事实，而猜测绝不会让你丢掉一张图：请求会带着原图发出，如果该模型确实是纯文本的，提供商会返回一个你能据此处理的错误。
+`GET /api/models` 会按模型告诉你落在哪一种情况，字段为 `vision_support`：
+
+| `vision_support` | 来源 | 附加的图片会怎样 |
+|---|---|---|
+| `supported` | 网关、注册表，或你自己的覆盖项说支持 | 照原样发送 |
+| `unsupported` | 上述来源之一说不支持 | 替换为写明模型名与文件路径的占位文本，并记录一条 `WARN` |
+| `unknown` | 无人声明；`supports_vision` 里显示的值是从名字推断的 | 照原样发送 |
+
+如果你的某个模型落在 `unknown` 而你知道答案，就把它声明出来——`PUT /api/models/overrides/{provider}:{model}`，请求体 `{"supports_vision": true}`，或者用 Dashboard 模型抽屉里的能力开关。
+覆盖项属于声明，优先级高于其他一切来源。
+通过 `POST /api/models/custom` 手工添加的模型同理：带上 `supports_vision` 就视为已声明，省略则该模型是 `unknown`，而不是被当作不支持视觉。
+
+### 无需密钥的提供商同样可以配置 API Key
+
+`key_required = false` 表示密钥**不是必填**，而不是拒绝接受密钥。
+内置本地提供商都声明为 false，但启用了鉴权的自建 vLLM、或位于反向代理（Open WebUI、LiteLLM）之后的 Ollama，没有密钥会直接返回 401。
+按配置任何其他提供商的方式设置即可——`POST /api/providers/vllm/key`、Dashboard 配置抽屉里的 API Key 输入框，或直接在环境中导出声明的 `api_key_env`——运行时会在探测和对话请求上都带上 `Authorization: Bearer`。
+
 ### 自定义图像生成 provider
 
 不在内置列表（`openai`、`gemini`、`elevenlabs`、`minimax`、`google_tts`）的媒体驱动名以前会失败 `"Unknown media provider"`。现在配置了 URL 的自定义 provider 会落到通用 OpenAI 兼容图像驱动：
@@ -239,6 +294,44 @@ pinned_model = "claude-sonnet-4-20250514"  # 永不自动路由
 
 ---
 
+## 按模型的配置覆盖
+
+模型自身的配置——**包括上下文窗口**——可以随时修改，而不再只能在首次注册时设定。
+覆盖项以 `provider:model_id` 为键，保存在 `~/.librefang/data/model_overrides.json` 中，与目录条目分开存放，因此重写条目的注册表同步不会将其清除。
+
+```
+GET    /api/models/overrides/{provider}:{model_id}
+PUT    /api/models/overrides/{provider}:{model_id}
+DELETE /api/models/overrides/{provider}:{model_id}
+```
+
+`PUT` 接收的是整份文档而非补丁——请求体中省略的字段会被清除。
+
+```json
+{
+  "context_window": 16384,
+  "max_output_tokens": 4096,
+  "temperature": 0.3
+}
+```
+
+这两个容量上限回答的问题与旁边的推理参数并不相同。
+`context_window` 与 `max_output_tokens` 纠正的是模型**本身的事实**——自托管运行时前面的网关常常把它们报成 `null`——而 `max_tokens` 是随请求发送的单次输出上限。
+把输出上限设成模型的窗口大小，等于要求模型把整个上下文都留给回复，而这正是这两个字段要终结的混淆。
+
+### 上下文窗口的优先级
+
+1. `agent.toml` 的 `[model] context_window`：最具体的一层，代表单个智能体声明自己的窗口。
+2. `model_overrides.json` 的 `context_window`：运维人员针对该模型的纠正，使用该模型的每个智能体都会继承。
+3. 目录条目：注册表声明的值，或一次在线 `/models` 发现过程所假定的值。
+4. `8192`：以上都无法解析时智能体循环使用的保守回退值，并会输出一条 `WARN` 说明所假定的数值。
+
+各层中的 `0` 都视为“未知”而非上限，因此清空字段会回落到下一层，而不会把窗口固定为零 Token。
+
+`GET /api/models` 与 `GET /api/models/{id}` 返回的是**生效后**的 `context_window` / `max_output_tokens`，同时在 `limits_catalog` 中保留原始目录值，供“恢复默认”之类的控件作为目标。
+
+---
+
 ## 模型路由
 
 BossFang 可以自动为每个查询选择能够处理该查询的最便宜模型。这通过 `ModelRoutingConfig` 在逐 Agent 级别配置。
@@ -254,10 +347,12 @@ BossFang 可以自动为每个查询选择能够处理该查询的最便宜模�
 | 信号 | 权重 | 逻辑 |
 |--------|--------|-------|
 | 总消息长度 | 每 ~4 个字符 1 分 | 粗略的 token 近似 |
-| 工具可用性 | 每个定义的工具 +20 | 有工具意味着多步骤工作 |
 | 代码标记 | 每个标记 +30 | 反引号、`fn`、`def`、`class`、`import`、`function`、`async`、`await`、`struct`、`impl`、`return` |
 | 对话深度 | 每条超过 10 条的消息 +15 | 深层上下文 = 更难的推理 |
-| 系统提示长度 | 每 10 个字符（超过 500）+1 | 长系统提示意味着复杂任务 |
+
+所有信号都是**请求**的属性。工具数量与系统提示长度在 #7952 之前也参与评分，现在不再参与：它们在同一个 Agent 的每一轮里都是常量，因此只会整体抬高分数分布，而不能区分简单轮次与困难轮次。
+一个拥有约 50 个 MCP 工具的 Agent，在读到消息的第一个字符之前就已经因为工具数量拿到 +1000 分，超过任何可用的 `complex_threshold`，于是路由退化为永久固定到 complex，完全没有省钱。
+如果你的 Agent 现在评分低于以往，请相应下调 `simple_threshold` / `complex_threshold` — 分数不再被一个常量抬高。
 
 ### 阈值
 

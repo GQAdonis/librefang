@@ -3,6 +3,7 @@ import {
   emptyManifestExtras,
   emptyManifestForm,
   parseManifestToml,
+  preservedWorkspaceNamesFromExtras,
   serializeManifestForm,
   validateManifestForm,
 } from "./agentManifest";
@@ -37,6 +38,35 @@ describe("agentManifest serializer", () => {
 
     expect(toml).toContain('description = "has \\"quotes\\" and a \\\\backslash"');
     expect(toml).toContain('system_prompt = "Line 1\\nLine 2"');
+  });
+
+  it("round-trips TOML control characters in strings", () => {
+    const form = emptyManifestForm();
+    form.name = "control-characters";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.model.system_prompt = "prefix\r\t\0\b\v\f\u001f\u007fsuffix";
+
+    const toml = serializeManifestForm(form);
+    const parsed = parseManifestToml(toml);
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.model.system_prompt).toBe(form.model.system_prompt);
+  });
+
+  it("preserves Unicode scalars and replaces isolated UTF-16 surrogates", () => {
+    const form = emptyManifestForm();
+    form.name = "unicode-boundaries";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.model.system_prompt = "emoji 😀, high \ud800, low \udc00";
+
+    const parsed = parseManifestToml(serializeManifestForm(form));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.model.system_prompt).toBe("emoji 😀, high �, low �");
   });
 
   it("omits empty numeric fields and emits valid ones", () => {
@@ -144,9 +174,152 @@ describe("agentManifest validator", () => {
     form.model.model = "gpt-4o";
     expect(validateManifestForm(form)).toEqual([]);
   });
+
+  it("requires a cron expression for periodic schedules", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.schedule = { mode: "periodic", cron: "   " };
+
+    expect(validateManifestForm(form)).toContain("schedule.cron");
+  });
+
+  it.each(["", "0", "-1", "1.5", "invalid", "9223372036854775808"])(
+    "requires a positive TOML integer for continuous schedules: %j",
+    (check_interval_secs) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.schedule = { mode: "continuous", check_interval_secs };
+
+      expect(validateManifestForm(form)).toContain("schedule.check_interval_secs");
+    },
+  );
+
+  it("accepts the largest TOML integer for a continuous schedule", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.schedule = {
+      mode: "continuous",
+      check_interval_secs: "9223372036854775807",
+    };
+
+    expect(validateManifestForm(form)).not.toContain("schedule.check_interval_secs");
+  });
+
+  it.each(["", "{not-json"])(
+    "requires valid JSON for json_schema response format: %j",
+    (schema) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.response_format = { mode: "json_schema", name: "response", schema, strict: false };
+
+      expect(validateManifestForm(form)).toContain("response_format.schema");
+    },
+  );
+
+  it.each([
+    "[]",
+    '"string"',
+    "42",
+    "null",
+    '{"const":null}',
+    '{"const":9007199254740993}',
+    '{"maximum":1e400}',
+    '{"minimum":1e-400}',
+  ])(
+    "rejects schemas that TOML cannot preserve: %s",
+    (schema) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.response_format = { mode: "json_schema", name: "response", schema, strict: false };
+
+      expect(validateManifestForm(form)).toContain("response_format.schema");
+    },
+  );
+
+  it.each([
+    "true",
+    "false",
+    '{"type":"null"}',
+    '{"const":"9007199254740993"}',
+    '{"type":"object","properties":{}}',
+  ])(
+    "accepts and round-trips supported JSON Schema: %s",
+    (schema) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.response_format = { mode: "json_schema", name: "response", schema, strict: false };
+
+      expect(validateManifestForm(form)).not.toContain("response_format.schema");
+      const parsed = parseManifestToml(serializeManifestForm(form));
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok || parsed.form.response_format.mode !== "json_schema") return;
+      expect(JSON.parse(parsed.form.response_format.schema)).toEqual(JSON.parse(schema));
+    },
+  );
+
+  it("preserves the largest safe integer in a schema", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.response_format = {
+      mode: "json_schema",
+      name: "response",
+      schema: '{"maximum":9007199254740991}',
+      strict: false,
+    };
+
+    expect(validateManifestForm(form)).not.toContain("response_format.schema");
+    const toml = serializeManifestForm(form);
+    expect(toml).toContain("maximum = 9007199254740991");
+    const parsed = parseManifestToml(toml);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok || parsed.form.response_format.mode !== "json_schema") return;
+    expect(parsed.form.response_format.schema).toContain("9007199254740991");
+  });
 });
 
 describe("agentManifest parser", () => {
+  it("assigns deterministic parse-local list ids", () => {
+    const source = `name = "a"
+
+[model]
+provider = "openai"
+model = "gpt-4o"
+
+[[fallback_models]]
+provider = "qwen"
+model = "qwen-3.6"
+
+[[context_injection]]
+name = "rules"
+content = "Be concise"
+`;
+
+    const first = parseManifestToml(source);
+    const second = parseManifestToml(source);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    expect(first.form.fallback_models[0]._uid).toBe("parsed-1");
+    expect(first.form.context_injection[0]._uid).toBe("parsed-2");
+    expect(second.form.fallback_models[0]._uid).toBe("parsed-1");
+    expect(second.form.context_injection[0]._uid).toBe("parsed-2");
+  });
+
   it("parses the minimum viable manifest", () => {
     const result = parseManifestToml(
       'name = "researcher"\nmodule = "builtin:chat"\n\n[model]\nprovider = "openai"\nmodel = "gpt-4o"\n',
@@ -423,17 +596,81 @@ timeout_secs = 30
     expect(reparsed.extras.topLevel.exec_policy).toBeUndefined();
   });
 
+  it("preserves u64 resource limits above Number.MAX_SAFE_INTEGER", () => {
+    const source = `name = "a"
+
+[model]
+provider = "openai"
+model = "gpt-4o"
+
+[resources]
+max_llm_tokens_per_hour = 9007199254740993
+max_memory_bytes = 9007199254740994
+max_cpu_time_ms = 9223372036854775806
+max_network_bytes_per_hour = 9223372036854775807
+`;
+    const parsed = parseManifestToml(source);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const serialized = serializeManifestForm(parsed.form, parsed.extras);
+    expect(serialized).toContain("max_llm_tokens_per_hour = 9007199254740993");
+    expect(serialized).toContain("max_memory_bytes = 9007199254740994");
+    expect(serialized).toContain("max_cpu_time_ms = 9223372036854775806");
+    expect(serialized).toContain("max_network_bytes_per_hour = 9223372036854775807");
+
+    const reparsed = parseManifestToml(serialized);
+    expect(reparsed.ok).toBe(true);
+    if (!reparsed.ok) return;
+    expect(reparsed.form.resources).toMatchObject(parsed.form.resources);
+  });
+
+  it("preserves large continuous and autonomous interval values", () => {
+    const source = `name = "a"
+schedule = { continuous = { check_interval_secs = 9007199254740993 } }
+
+[model]
+provider = "openai"
+model = "gpt-4o"
+
+[autonomous]
+heartbeat_interval_secs = 9223372036854775807
+heartbeat_keep_recent = 9007199254740994
+`;
+    const parsed = parseManifestToml(source);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const serialized = serializeManifestForm(parsed.form, parsed.extras);
+    expect(serialized).toContain("check_interval_secs = 9007199254740993");
+    expect(serialized).toContain("heartbeat_interval_secs = 9223372036854775807");
+    expect(serialized).toContain("heartbeat_keep_recent = 9007199254740994");
+  });
+
+  it("fails closed when a JSON schema contains an unsafe BigInt", () => {
+    const parsed = parseManifestToml(`name = "a"
+response_format = { type = "json_schema", name = "score", schema = { maximum = 9007199254740993 } }
+
+[model]
+provider = "openai"
+model = "gpt-4o"
+`);
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message).toBe("json_schema_unsafe_integer");
+  });
+
   it("rejects negative and out-of-range integers in number fields", () => {
     // Codex P2 regression: parseInteger used to accept any JS number,
     // including negatives (which u32/u64 deserializers reject) and
-    // values above MAX_SAFE_INTEGER (which lose precision before
-    // serialization).
+    // values outside the target unsigned Rust type.
     const form = emptyManifestForm();
     form.name = "a";
     form.model.provider = "openai";
     form.model.model = "gpt-4o";
     form.model.max_tokens = "-100";
-    form.resources.max_llm_tokens_per_hour = "9999999999999999999"; // > MAX_SAFE_INTEGER
+    form.resources.max_llm_tokens_per_hour = "9223372036854775808"; // TOML i64::MAX + 1
 
     const toml = serializeManifestForm(form);
     expect(toml).not.toContain("max_tokens =");
@@ -509,6 +746,58 @@ model = "gpt-4o"
     expect(parsedSchema.properties.id.type).toBe("integer");
   });
 
+  // #7946 added `reasoning_mode` to the `[thinking]` table, and the form has no
+  // widget for it. Before the extras slot below, opening any agent in the visual
+  // editor and pressing save re-emitted `[thinking]` from `budget_tokens` and
+  // `stream_thinking` alone, silently deleting the operator's reasoning mode
+  // from agent.toml — the same class of loss `extras.capabilities` already guards.
+  it("round-trips an unknown [thinking] key such as reasoning_mode", () => {
+    const original = `name = "agent"
+
+[thinking]
+budget_tokens = 5000
+stream_thinking = true
+reasoning_mode = "none"
+`;
+    const result = parseManifestToml(original);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.form.thinking.budget_tokens).toBe("5000");
+    expect(result.extras.thinking).toEqual({ reasoning_mode: "none" });
+
+    const out = serializeManifestForm(result.form, result.extras);
+    expect(out).toContain('reasoning_mode = "none"');
+    // And it must land inside [thinking], not leak into a later section: an
+    // extra scalar emitted after the next `[header]` would belong to that
+    // section instead, which is a different (and silent) kind of corruption.
+    const after = out.slice(out.indexOf("[thinking]") + "[thinking]".length);
+    const nextHeader = after.search(/\n\[/);
+    const thinkingBlock = nextHeader === -1 ? after : after.slice(0, nextHeader);
+    expect(thinkingBlock).toContain('reasoning_mode = "none"');
+
+    // Stable across a second pass.
+    const second = parseManifestToml(out);
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.extras.thinking).toEqual({ reasoning_mode: "none" });
+  });
+
+  // Unticking "enabled" is the user deleting the whole table, so the preserved
+  // keys go with it rather than stranding a [thinking] block nothing owns.
+  it("drops preserved [thinking] extras when the section is disabled", () => {
+    const result = parseManifestToml(`name = "agent"
+
+[thinking]
+reasoning_mode = "max"
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    result.form.thinking.enabled = false;
+    const out = serializeManifestForm(result.form, result.extras);
+    expect(out).not.toContain("[thinking]");
+    expect(out).not.toContain("reasoning_mode");
+  });
+
   it("round-trips: serialize(parse(toml)) preserves form + extras", () => {
     const original = `name = "agent"
 description = "test"
@@ -569,7 +858,7 @@ params = { region = "us" }
     if (!reparsed.ok) return;
 
     // The form state and extras should match exactly after a full round-trip.
-    // _uid is an ephemeral React key, regenerated on each parse, so strip it.
+    // _uid is an ephemeral React key rather than manifest data, so strip it.
     const stripUids = <
       T extends Record<string, unknown> & { _uid?: string },
     >(items: T[]): Omit<T, "_uid">[] =>
@@ -581,5 +870,308 @@ params = { region = "us" }
     });
     expect(cleanForm(reparsed.form)).toEqual(cleanForm(parsed.form));
     expect(reparsed.extras).toEqual(parsed.extras);
+  });
+});
+
+describe("agentManifest — inference parameters (#7781)", () => {
+  it("round-trips every preference knob and both endpoint limits", () => {
+    const form = emptyManifestForm();
+    form.name = "academic-writer";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.model.temperature = "0.1";
+    form.model.top_p = "0.85";
+    form.model.frequency_penalty = "0.4";
+    form.model.presence_penalty = "-0.3";
+    form.model.max_tokens = "8192";
+    form.model.context_window = "200000";
+    form.model.max_output_tokens = "16384";
+
+    const toml = serializeManifestForm(form);
+    expect(toml).toContain("temperature = 0.1");
+    expect(toml).toContain("top_p = 0.85");
+    expect(toml).toContain("frequency_penalty = 0.4");
+    expect(toml).toContain("presence_penalty = -0.3");
+    expect(toml).toContain("max_tokens = 8192");
+    expect(toml).toContain("context_window = 200000");
+    expect(toml).toContain("max_output_tokens = 16384");
+
+    const parsed = parseManifestToml(toml);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.model.temperature).toBe("0.1");
+    expect(parsed.form.model.top_p).toBe("0.85");
+    expect(parsed.form.model.frequency_penalty).toBe("0.4");
+    expect(parsed.form.model.presence_penalty).toBe("-0.3");
+    expect(parsed.form.model.max_tokens).toBe("8192");
+    expect(parsed.form.model.context_window).toBe("200000");
+    expect(parsed.form.model.max_output_tokens).toBe("16384");
+  });
+
+  /**
+   * The inherit state has to survive the round trip as an *absent key*.
+   * Writing `top_p = 0` instead would pin a number the operator never chose and
+   * make the per-model override unreachable for that field — the exact failure
+   * the tri-state was introduced to remove.
+   */
+  it("omits a knob left on inherit rather than writing a zero", () => {
+    const form = emptyManifestForm();
+    form.name = "inheriting";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.model.temperature = "0.1";
+
+    const toml = serializeManifestForm(form);
+    expect(toml).toContain("temperature = 0.1");
+    expect(toml).not.toContain("top_p");
+    expect(toml).not.toContain("frequency_penalty");
+    expect(toml).not.toContain("presence_penalty");
+    expect(toml).not.toContain("max_tokens");
+    expect(toml).not.toContain("context_window");
+    expect(toml).not.toContain("max_output_tokens");
+
+    const parsed = parseManifestToml(toml);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.model.top_p).toBe("");
+    expect(parsed.form.model.max_tokens).toBe("");
+    expect(parsed.form.model.context_window).toBe("");
+  });
+
+  /**
+   * The migration guarantee for the 25 already-deployed agents: a manifest that
+   * carries a number keeps it as an explicit value. Nothing starts inheriting
+   * behind the operator's back on upgrade.
+   */
+  it("keeps an existing explicit value explicit", () => {
+    const parsed = parseManifestToml(
+      [
+        'name = "deployed"',
+        'module = "builtin:chat"',
+        "",
+        "[model]",
+        'provider = "openai"',
+        'model = "gpt-4o"',
+        "temperature = 0.7",
+        "max_tokens = 4096",
+      ].join("\n"),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.model.temperature).toBe("0.7");
+    expect(parsed.form.model.max_tokens).toBe("4096");
+
+    // …and comes back out unchanged.
+    const toml = serializeManifestForm(parsed.form);
+    expect(toml).toContain("temperature = 0.7");
+    expect(toml).toContain("max_tokens = 4096");
+  });
+});
+
+describe("agentManifest workspaces", () => {
+  // #8013: `[workspaces]` is a table header — if the serializer emitted it
+  // inside the top-level scalar block, every bare key after it (tags, skills,
+  // mcp_servers, schedule, …) would be scoped INTO the table and silently
+  // deleted from the manifest.
+  it("emits [workspaces] after the top-level scalars so tags survive a round-trip", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.tags = ["ops"];
+    form.workspaces.push({ _uid: "w1", name: "shared", path: "shared", mode: "rw" });
+
+    const toml = serializeManifestForm(form);
+
+    expect(toml).toContain("[workspaces]");
+    expect(toml).toContain('tags = ["ops"]');
+    expect(toml.indexOf("tags = ")).toBeLessThan(toml.indexOf("[workspaces]"));
+
+    const parsed = parseManifestToml(toml);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.tags).toEqual(["ops"]);
+    expect(parsed.form.workspaces).toHaveLength(1);
+    const { _uid: _ignored, ...ws } = parsed.form.workspaces[0];
+    expect(ws).toEqual({ name: "shared", path: "shared", mode: "rw" });
+  });
+
+  it("emits no [workspaces] header for an empty or blank-row list", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    expect(serializeManifestForm(form)).not.toContain("[workspaces]");
+
+    form.workspaces.push({ _uid: "blank", name: "  ", path: "  ", mode: "rw" });
+    expect(serializeManifestForm(form)).not.toContain("[workspaces]");
+  });
+
+  it("preserves a mount-based declaration verbatim instead of dropping it", () => {
+    const parsed = parseManifestToml(`name = "agent"
+[workspaces]
+vault = { mount = "/data/vault" }
+shared = { path = "shared" }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    // Only the path-based row becomes editable; the mount survives in extras.
+    expect(parsed.form.workspaces.map((ws) => ws.name)).toEqual(["shared"]);
+    const reserialized = serializeManifestForm(parsed.form, parsed.extras);
+    expect(reserialized).toContain("[workspaces.vault]");
+    expect(reserialized).toContain('mount = "/data/vault"');
+    // ...and the whole thing parses again.
+    const reparsed = parseManifestToml(reserialized);
+    expect(reparsed.ok).toBe(true);
+  });
+
+  it("flags duplicate folder names, including against a preserved declaration", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.workspaces.push(
+      { _uid: "w1", name: "shared", path: "shared", mode: "rw" },
+      { _uid: "w2", name: "shared", path: "other", mode: "r" },
+    );
+    expect(validateManifestForm(form)).toContain("workspaces.w2.name");
+    expect(validateManifestForm(form, ["vault"])).not.toContain("workspaces.w1.name");
+
+    form.workspaces[1].name = "vault";
+    expect(validateManifestForm(form, ["vault"])).toContain("workspaces.w2.name");
+  });
+
+  it.each(["/etc/passwd", "\\\\host\\share", "C:\\data", "../escape", "a/../b"])(
+    "rejects a workspace path that escapes workspaces_dir: %j",
+    (wsPath) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.workspaces.push({ _uid: "w1", name: "shared", path: wsPath, mode: "rw" });
+      expect(validateManifestForm(form)).toContain("workspaces.w1.path");
+    },
+  );
+
+  it("accepts a plain relative workspace path", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.workspaces.push({ _uid: "w1", name: "shared", path: "shared/library", mode: "rw" });
+    expect(validateManifestForm(form)).toEqual([]);
+  });
+
+  it.each(["r", "read", "read-only", "readonly"])(
+    // #8013: the kernel's `WorkspaceMode` accepts all four spellings, and
+    // "readonly" is the one it actually writes (persist_full_manifest_at,
+    // and the template endpoints). Missing any of them means a read-only
+    // shared folder silently becomes read-write the moment this form
+    // re-saves it.
+    "parses %j as read-only, matching the kernel's WorkspaceMode aliases",
+    (modeSpelling) => {
+      const parsed = parseManifestToml(`name = "agent"
+[workspaces]
+shared = { path = "shared", mode = "${modeSpelling}" }
+`);
+      expect(parsed.ok).toBe(true);
+      if (!parsed.ok) return;
+      expect(parsed.form.workspaces[0].mode).toBe("r");
+    },
+  );
+
+  it("parses an unrecognized mode spelling as read-write rather than silently upgrading", () => {
+    const parsed = parseManifestToml(`name = "agent"
+[workspaces]
+shared = { path = "shared", mode = "bogus" }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.workspaces[0].mode).toBe("rw");
+  });
+
+  it("flags a half-filled row (name without a path) instead of dropping it silently", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.workspaces.push({ _uid: "w1", name: "shared", path: "", mode: "rw" });
+    const errors = validateManifestForm(form);
+    expect(errors).toContain("workspaces.w1.path");
+    expect(errors).not.toContain("workspaces.w1.name");
+  });
+
+  it("flags a half-filled row (path without a name) instead of dropping it silently", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.workspaces.push({ _uid: "w1", name: "", path: "shared", mode: "rw" });
+    const errors = validateManifestForm(form);
+    expect(errors).toContain("workspaces.w1.name");
+    expect(errors).not.toContain("workspaces.w1.path");
+  });
+
+  it("does not flag a wholly blank row", () => {
+    const form = emptyManifestForm();
+    form.name = "agent";
+    form.model.provider = "openai";
+    form.model.model = "gpt-4o";
+    form.workspaces.push({ _uid: "w1", name: "  ", path: "  ", mode: "rw" });
+    expect(validateManifestForm(form)).toEqual([]);
+  });
+
+  it.each(["shared/library", "shared library", "@shared"])(
+    // #8013: expand_workspace_alias matches only the segment before the
+    // first '/' against the declared name, so a name with '/' can never be
+    // addressed via '@name/...'; whitespace and '@' are excluded for the
+    // same reason — they let the alias resolve to a name the agent never typed.
+    "rejects a workspace name outside the alias-safe character set: %j",
+    (name) => {
+      const form = emptyManifestForm();
+      form.name = "agent";
+      form.model.provider = "openai";
+      form.model.model = "gpt-4o";
+      form.workspaces.push({ _uid: "w1", name, path: "shared", mode: "rw" });
+      expect(validateManifestForm(form)).toContain("workspaces.w1.name");
+    },
+  );
+
+  it("preserves the remainder of a preserved workspace name containing a dot", () => {
+    // #8013: `dottedKey.split(".", 2)` truncates rather than preserving the
+    // remainder, so "workspaces.notes.v2" re-emitted as "[workspaces.notes]"
+    // and lost "v2" — silently colliding with a sibling entry literally
+    // named "notes".
+    const parsed = parseManifestToml(`name = "agent"
+[workspaces]
+"notes.v2" = { mount = "/data/notes" }
+notes = { mount = "/data/other" }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const reserialized = serializeManifestForm(parsed.form, parsed.extras);
+    expect(reserialized).toContain('[workspaces."notes.v2"]');
+    expect(reserialized).toContain('mount = "/data/notes"');
+    expect(reserialized).toContain("[workspaces.notes]");
+    expect(reserialized).toContain('mount = "/data/other"');
+
+    const reparsed = parseManifestToml(reserialized);
+    expect(reparsed.ok).toBe(true);
+  });
+
+  it("preservedWorkspaceNamesFromExtras extracts the preserved-name collision list AgentsPage wires into validateManifestForm", () => {
+    // #8013: this parameter was never supplied at the only production call
+    // site, so the collision check below was dead outside its own test.
+    const parsed = parseManifestToml(`name = "agent"
+[workspaces]
+vault = { mount = "/data/vault" }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(preservedWorkspaceNamesFromExtras(parsed.extras)).toEqual(["vault"]);
+    expect(preservedWorkspaceNamesFromExtras(emptyManifestExtras())).toEqual([]);
   });
 });

@@ -25,6 +25,7 @@ use librefang_types::memory::{MemoryFragment, MemoryId};
 use librefang_types::message::{
     ContentBlock, Message, MessageContent, Role, StopReason, TokenUsage,
 };
+use librefang_types::model_catalog::VisionSupport;
 use librefang_types::tool::{AgentLoopSignal, DecisionTrace, ToolCall, ToolDefinition};
 use std::collections::HashMap;
 use std::path::Path;
@@ -54,8 +55,8 @@ pub use self::types::{AgentLoopResult, ExperimentContext, LoopOptions, LoopPhase
 use self::end_turn::{
     build_silent_agent_loop_result, classify_end_turn_retry, finalize_end_turn_text,
     finalize_successful_end_turn, gated_proactive_memory_for_memorize,
-    gated_proactive_memory_for_retrieve, maybe_fold_stale_tool_results, EndTurnRetry,
-    EndTurnRetryContext, FinalizeEndTurnContext, FinalizeEndTurnResultData,
+    gated_proactive_memory_for_retrieve, maybe_fold_stale_tool_results, session_recall_scope,
+    EndTurnRetry, EndTurnRetryContext, FinalizeEndTurnContext, FinalizeEndTurnResultData,
 };
 use self::history::resolve_max_history;
 use self::message::{
@@ -128,6 +129,70 @@ fn repair_session_before_save(session: &mut Session, agent_id: &str, reason: &st
     }
     session.set_messages(repaired);
     session.last_repaired_generation = Some(session.messages_generation);
+}
+
+fn apply_context_compaction(
+    session: &mut Session,
+    messages: &mut Vec<Message>,
+    new_messages_start: &mut usize,
+    summary: String,
+    kept_messages: Vec<Message>,
+) {
+    let previous_new_messages_start = (*new_messages_start).min(session.messages.len());
+    let current_turn = &session.messages[previous_new_messages_start..];
+    let current_turn_json = current_turn
+        .iter()
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| {
+            warn!(%error, "Failed to identify current-turn boundary during compaction");
+        })
+        .ok();
+
+    let mut compacted = Vec::with_capacity(kept_messages.len() + usize::from(!summary.is_empty()));
+    if !summary.is_empty() {
+        compacted.push(Message {
+            role: Role::User,
+            content: MessageContent::Text(format!(
+                "[Context compaction summary] Earlier conversation turns were summarised to \
+                 preserve context space. Summary of removed messages: {summary}"
+            )),
+            pinned: false,
+            timestamp: None,
+        });
+    }
+    compacted.extend(kept_messages);
+
+    let compacted_new_messages_start = current_turn_json
+        .as_ref()
+        .and_then(|turn| {
+            if turn.is_empty() {
+                return Some(compacted.len());
+            }
+            let compacted_json = compacted
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| {
+                    warn!(%error, "Failed to identify compacted current-turn boundary");
+                })
+                .ok()?;
+            compacted_json
+                .windows(turn.len())
+                .rposition(|window| window == turn.as_slice())
+        })
+        .unwrap_or_else(|| {
+            // A custom context engine may omit or rewrite the current turn.
+            // Keep it in persistent history and in the next LLM request rather
+            // than letting a stale pre-compaction boundary hide or lose it.
+            let start = compacted.len();
+            compacted.extend_from_slice(current_turn);
+            start
+        });
+
+    session.set_messages(compacted.clone());
+    *messages = compacted;
+    *new_messages_start = compacted_new_messages_start;
 }
 
 /// Maximum consecutive iterations where every executed tool failed before
@@ -351,9 +416,20 @@ fn build_sender_prefix(manifest: &AgentManifest, sender_user_id: Option<&str>) -
 /// For `ImageFile` blocks (which reference the image by on-disk path) the placeholder keeps that path, so a text-only agent can still read or attach the raw file even though it can't see the pixels.
 /// The inline base64 `Image` variant has no path to keep.
 ///
-/// Pure function: the caller passes a clone, so the live session history is
+/// Pure function apart from the `WARN`: the caller passes a clone, so the live session history is
 /// never mutated and the vision path stays byte-identical to before.
+///
+/// # Observability
+///
+/// Removing a user's image from a request is a lossy, invisible-to-the-user edit, so it emits a
+/// `WARN` naming the model and the number of blocks replaced whenever it actually replaces one
+/// (refs #7957). The original complaint in that issue was not only that the wrong models were
+/// stripped — it was that nothing anywhere said an image had been dropped, so an operator watching
+/// a vision-capable model answer from a filename had nothing to grep for. A model that genuinely
+/// has no vision support still gets its images redacted; it now says so once per turn.
+/// The no-image case stays silent, because the redaction never happened.
 pub(super) fn redact_images_for_text_only(mut messages: Vec<Message>, model: &str) -> Vec<Message> {
+    let mut redacted = 0usize;
     for msg in &mut messages {
         if let MessageContent::Blocks(blocks) = &mut msg.content {
             for block in blocks.iter_mut() {
@@ -372,9 +448,21 @@ pub(super) fn redact_images_for_text_only(mut messages: Vec<Message>, model: &st
                         text,
                         provider_metadata: None,
                     };
+                    redacted += 1;
                 }
             }
         }
+    }
+    if redacted > 0 {
+        tracing::warn!(
+            model = %model,
+            images_redacted = redacted,
+            "stripped image content from the request: `{model}` is declared text-only (by its registry \
+             entry, an operator override, or the provider's own model listing), so the model receives a \
+             placeholder instead of the picture. \
+             If it can in fact see images, declare that — `PUT /api/models/overrides/{{provider}}:{model}` \
+             with `supports_vision: true`, or the vision toggle in the dashboard's model drawer."
+        );
     }
     messages
 }
@@ -643,6 +731,11 @@ async fn run_agent_loop_inner(
 
     let stable_prefix_mode = stable_prefix_mode_enabled(manifest);
 
+    // #7605: the session this turn belongs to, when session-scoped memory recall is in effect for this agent.
+    // Resolved once here so the recall (before the turn) and the memorize (after it) agree on the scope even if the manifest were hot-reloaded in between.
+    let session_scope: Option<String> =
+        session_recall_scope(manifest, session, proactive_memory.as_ref());
+
     let RecallSetup {
         memories,
         memories_used,
@@ -656,6 +749,7 @@ async fn run_agent_loop_inner(
         sender_user_id: sender_user_id.as_deref(),
         sender_channel: sender_channel.as_deref(),
         sender_chat_scope: sender_chat_scope.as_deref(),
+        session_scope: session_scope.as_deref(),
         kernel: kernel.as_ref(),
         stable_prefix_mode,
         streaming: false,
@@ -686,6 +780,7 @@ async fn run_agent_loop_inner(
         experiment_context: experiment_context.as_ref(),
         running_experiment: running_experiment.as_ref(),
         memories: &memories,
+        memory_fact_budget_percent: opts.memory_fact_budget_percent,
         stable_prefix_mode,
         streaming: false,
     });
@@ -1004,26 +1099,13 @@ async fn run_agent_loop_inner(
                             kept = result.kept_messages.len(),
                             "Context engine compaction complete"
                         );
-                        // Inject the LLM-generated summary as a synthetic user message
-                        // so the agent retains context about what was compacted.
-                        // Without this, the summary is silently discarded and the agent
-                        // loses all knowledge of earlier turns.
-                        let mut compacted = Vec::with_capacity(result.kept_messages.len() + 1);
-                        if !result.summary.is_empty() {
-                            compacted.push(Message {
-                                role: Role::User,
-                                content: MessageContent::Text(format!(
-                                    "[Context compaction summary] Earlier conversation turns \
-                                     were summarised to preserve context space. Summary of \
-                                     removed messages: {}",
-                                    result.summary
-                                )),
-                                pinned: false,
-                                timestamp: None,
-                            });
-                        }
-                        compacted.extend(result.kept_messages);
-                        messages = compacted;
+                        apply_context_compaction(
+                            session,
+                            &mut messages,
+                            &mut new_messages_start,
+                            result.summary,
+                            result.kept_messages,
+                        );
                         // `last_prompt_tokens` is intentionally NOT reset here.
                         // A second compaction should only fire after the next
                         // LLM call raises it above threshold again.  Resetting
@@ -1198,17 +1280,22 @@ async fn run_agent_loop_inner(
             .map(|k| k.reasoning_echo_policy_for(&api_model))
             .unwrap_or_default();
 
-        // Catalog-driven vision-capability gate (#6010). When the target model
-        // has no vision support, image content blocks are redacted to a text
-        // placeholder before the request is built — text-only OpenAI-compatible
-        // models otherwise reject `image_url` content parts with HTTP 400. Fails
-        // open (no kernel handle wired, or catalog miss) so vision and unknown
-        // models keep sending images unchanged.
-        let supports_vision = kernel
+        // Catalog-driven vision-capability gate (#6010, refs #7957). Only a model the catalog
+        // *declares* text-only gets its image content blocks redacted to a text placeholder before
+        // the request is built — such models otherwise reject `image_url` content parts with
+        // HTTP 400.
+        //
+        // Every other answer fails open, and they are now the same answer: no kernel handle wired,
+        // a catalog miss, and a catalog hit whose `supports_vision` was only inferred from the
+        // model's name all resolve to `VisionSupport::Unknown` and keep sending the images.
+        // Before #7957 the last of those three was a bare `false`, so a gateway model named
+        // `team-default` by its operator was silently treated as blind — the hit path was more
+        // confident than the miss path while knowing no more.
+        let vision = kernel
             .as_ref()
-            .map(|k| k.supports_vision_for(&api_model))
-            .unwrap_or(true);
-        let request_messages = if supports_vision {
+            .map(|k| k.vision_support_for(&api_model))
+            .unwrap_or(VisionSupport::Unknown);
+        let request_messages = if vision.allows_images() {
             messages.clone()
         } else {
             redact_images_for_text_only(messages.clone(), &api_model)
@@ -1227,8 +1314,12 @@ async fn run_agent_loop_inner(
             } else {
                 tools_cache.get(available_tools, &session_loaded_tools)
             },
-            max_tokens: manifest.model.max_tokens,
-            temperature: manifest.model.temperature,
+            // Already resolved by the kernel (agent manifest > per-model
+            // override > system default). The `effective_*` fallback covers
+            // the callers that build a loop without going through
+            // `execute_llm_agent` at all.
+            max_tokens: manifest.model.effective_max_tokens(),
+            temperature: manifest.model.effective_temperature(),
             // Clone from the pre-built snapshot rather than the original to
             // avoid redundant Arc-deref / string traversal on every iteration.
             system: Some(system_prompt_snapshot.clone()),
@@ -1545,6 +1636,7 @@ async fn run_agent_loop_inner(
                         messages: &messages,
                         sender_user_id: sender_user_id.as_deref(),
                         sender_chat_scope: sender_chat_scope.as_deref(),
+                        session_scope: session_scope.as_deref(),
                         streaming: false,
                         opts,
                     },

@@ -320,6 +320,15 @@ const TRIGGER_FIRE_SESSION_NAMESPACE: uuid::Uuid = uuid::Uuid::from_bytes([
     0xe1, 0xe3, 0x9b, 0x22, 0xc4, 0x16, 0x4e, 0x06, 0x93, 0xa5, 0x60, 0x65, 0x7b, 0x06, 0xe0, 0x03,
 ]);
 
+/// Distinct UUID v5 namespace for the built-in Task Board assignee wake.
+///
+/// The wake is synthesized by the kernel rather than produced by a stored trigger, so there is no `TriggerId` to key `for_trigger_fire` on.
+/// Keying on the task instead keeps the id reproducible from a log line, and a dedicated namespace keeps it disjoint from every other session flavour.
+/// Generated via `uuidgen`: 1cdd0042-32fd-4bac-91b0-b0eed5af0404.
+const TASK_WAKE_SESSION_NAMESPACE: uuid::Uuid = uuid::Uuid::from_bytes([
+    0x1c, 0xdd, 0x00, 0x42, 0x32, 0xfd, 0x4b, 0xac, 0x91, 0xb0, 0xb0, 0xee, 0xd5, 0xaf, 0x04, 0x04,
+]);
+
 impl SessionId {
     /// Create a new random SessionId.
     pub fn new() -> Self {
@@ -396,7 +405,10 @@ impl SessionId {
     ///
     /// `trigger_id` is taken as a raw `Uuid` to avoid a layering inversion:
     /// the concrete `TriggerId` newtype lives in `librefang-kernel`, which
-    /// depends on this crate. The dispatcher passes `trigger_match.trigger_id.0`.
+    /// depends on this crate. The dispatcher passes the id carried by
+    /// `TriggerMatchSource::Registered` (`tid.0`); `TriggerMatch` has had no
+    /// `trigger_id` field of its own since issue #6728, because a synthesized
+    /// match has no trigger behind it.
     /// `fire_time` is the moment the dispatcher resolved the match; the
     /// kernel event bus already carries `Event::timestamp` for this.
     pub fn for_trigger_fire(
@@ -412,6 +424,26 @@ impl SessionId {
         );
         Self(uuid::Uuid::new_v5(
             &TRIGGER_FIRE_SESSION_NAMESPACE,
+            name.as_bytes(),
+        ))
+    }
+
+    /// Derive a per-task session id for the built-in Task Board assignee wake.
+    ///
+    /// Used when the wake resolves to `SessionMode::New` and each fire must land on its own isolated session.
+    /// The built-in wake has no stored trigger, so `for_trigger_fire`'s `(agent, trigger_id, fire_time)` key has nothing to bind to; `(agent, task_id, fire_time)` is the natural substitute and keeps the id reproducible from the post-time log line.
+    ///
+    /// `task_id` is taken as `&str` rather than `Uuid` because the substrate stores task ids as opaque strings (`memory::substrate::task_post` mints them, but nothing in the type system pins the shape).
+    /// Lower-cased before hashing, mirroring `for_cron_run`.
+    pub fn for_task_wake(agent_id: AgentId, task_id: &str, fire_time: DateTime<Utc>) -> Self {
+        let name = format!(
+            "{}:{}:{}",
+            agent_id.0,
+            task_id.to_lowercase(),
+            fire_time.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+        );
+        Self(uuid::Uuid::new_v5(
+            &TASK_WAKE_SESSION_NAMESPACE,
             name.as_bytes(),
         ))
     }
@@ -789,6 +821,10 @@ impl ToolProfile {
                 "agent_send",
                 "agent_list",
                 "channel_send",
+                // Targeted delivery (#7086): an agent allowed to reply into a shared group but not to reach one member privately has to broadcast a notice meant for one person.
+                "channel_dm",
+                // The read half of the channel surface (#7086): an agent that may reply into a shared group but cannot enumerate its members has no way to attribute a request to the person who made it.
+                "channel_members",
                 "memory_store",
                 "memory_list",
                 "memory_recall",
@@ -803,6 +839,8 @@ impl ToolProfile {
                 "agent_send",
                 "agent_list",
                 "channel_send",
+                "channel_dm",
+                "channel_members",
                 "memory_store",
                 "memory_list",
                 "memory_recall",
@@ -827,19 +865,34 @@ impl ToolProfile {
             shell: if has_shell { vec!["*".into()] } else { vec![] },
             agent_spawn: has_agent,
             agent_message: if has_agent { vec!["*".into()] } else { vec![] },
-            memory_read: if has_memory {
+            memory_read: Some(if has_memory {
                 vec!["*".into()]
             } else {
                 vec!["self.*".into()]
-            },
-            memory_write: vec!["self.*".into()],
+            }),
+            memory_write: Some(vec!["self.*".into()]),
             ofp_discover: false,
             ofp_connect: vec![],
         }
     }
 }
 
+/// System default for [`ModelConfig::max_tokens`] when neither the agent nor the model sets one.
+pub const DEFAULT_MODEL_MAX_TOKENS: u32 = 4096;
+
+/// System default for [`ModelConfig::temperature`] when neither the agent nor the model sets one.
+pub const DEFAULT_MODEL_TEMPERATURE: f32 = 0.7;
+
 /// LLM model configuration for an agent.
+///
+/// The five sampling knobs (`max_tokens`, `temperature`, `top_p`, `frequency_penalty`, `presence_penalty`) are **preferences**, and each is tri-state.
+/// `Some(v)` is an explicit agent-level choice and beats the per-model override in [`crate::model_catalog::ModelOverrides`]; `None` means "inherit", so the model override applies, and failing that the system default.
+/// The specific setting winning over the general one is what lets two instances of the same agent type run the same model at different temperatures.
+///
+/// The knob deliberately absent here is `reasoning_effort`.
+/// That one is not a preference but a fact about the endpoint — a gateway that rejects the parameter rejects every turn that carries it (#7770) — so it stays model-level-only and the model level always wins, including over an `extra_params["reasoning_effort"]` entry written by hand.
+///
+/// [`Self::context_window`] and [`Self::max_output_tokens`] are **limits**, not preferences, and follow the opposite rule: they describe what the endpoint can do, they are never merged into the request as sampling parameters, and a `max_tokens` above a *known* limit is reported to the operator rather than silently clamped (see [`crate::inference_params::check_output_limit`]).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ModelConfig {
@@ -848,10 +901,21 @@ pub struct ModelConfig {
     /// Model identifier.
     #[serde(alias = "name")]
     pub model: String,
-    /// Maximum tokens for completion.
-    pub max_tokens: u32,
-    /// Sampling temperature.
-    pub temperature: f32,
+    /// Maximum tokens to request for the completion. `None` = inherit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    /// Sampling temperature. `None` = inherit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    /// Top-p / nucleus sampling (0.0–1.0). `None` = inherit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    /// Frequency penalty (-2.0–2.0). `None` = inherit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    /// Presence penalty (-2.0–2.0). `None` = inherit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
     /// System prompt for the agent.
     pub system_prompt: String,
     /// Optional API key environment variable name.
@@ -898,8 +962,11 @@ impl Default for ModelConfig {
         Self {
             provider: "default".to_string(),
             model: "default".to_string(),
-            max_tokens: 4096,
-            temperature: 0.7,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            frequency_penalty: None,
+            presence_penalty: None,
             system_prompt: "You are a helpful AI agent.".to_string(),
             api_key_env: None,
             base_url: None,
@@ -907,6 +974,23 @@ impl Default for ModelConfig {
             max_output_tokens: None,
             extra_params: std::collections::BTreeMap::new(),
         }
+    }
+}
+
+impl ModelConfig {
+    /// The `max_tokens` to send when no per-model override participates.
+    ///
+    /// Call this only on a manifest that has already been through
+    /// [`crate::inference_params::resolve_inference_params`], or from a code path
+    /// that has no catalog in hand (the agent loop's fallback).
+    pub fn effective_max_tokens(&self) -> u32 {
+        self.max_tokens.unwrap_or(DEFAULT_MODEL_MAX_TOKENS)
+    }
+
+    /// The `temperature` to send when no per-model override participates.
+    /// See [`Self::effective_max_tokens`].
+    pub fn effective_temperature(&self) -> f32 {
+        self.temperature.unwrap_or(DEFAULT_MODEL_TEMPERATURE)
     }
 }
 
@@ -996,6 +1080,17 @@ pub struct ManifestTrigger {
     /// [`librefang_kernel::triggers::TriggerPattern`] for the variant set.
     /// Carried as a `serde_json::Value` so the manifest crate does not
     /// have to depend on the kernel.
+    ///
+    /// A `[[triggers]]` block that omits `pattern` deserializes to
+    /// `Value::Null` because of the struct-level `#[serde(default)]`, and
+    /// TOML has no representation for null — serializing such a manifest
+    /// fails with `unsupported unit type`, which took the *entire*
+    /// `agent.toml` write down with it.
+    /// The kernel already treats a null pattern as inert (`reconcile_manifest_triggers`
+    /// skips it with a `warn!` and moves on), so the honest round trip is to
+    /// emit nothing and read it back as null again — the alternative was an
+    /// agent whose every manifest field silently stopped being persistable.
+    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
     pub pattern: serde_json::Value,
     /// Prompt template sent to the LLM when the trigger fires.
     /// `{{event}}` is replaced with the rendered event description.
@@ -1051,6 +1146,19 @@ pub struct AgentManifest {
     pub description: String,
     /// Author identifier.
     pub author: String,
+    /// The principal this agent acts for when no authenticated human is behind the turn (#7744).
+    ///
+    /// Written as an operator spec string — `user:alice`, `group:oncall`, or a bare `alice` meaning `user:alice` — and parsed by [`crate::principal::Principal::from_spec`].
+    /// It is deliberately **not** a required field: making it required would invalidate every existing `agent.toml`, and an ownership model that cannot be adopted incrementally is not adopted at all.
+    ///
+    /// This is a *fallback*, not an override.
+    /// A turn started by an authenticated caller is acting for that caller, and what it creates belongs to them; this value answers the other case — cron fires, triggers, workflow steps and autonomous ticks, where there is no human on the turn and the alternative is stamping nothing.
+    /// A malformed spec is reported as a `WARN` once at resolution and treated as absent rather than failing the turn, because an unparseable owner must not take an agent down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    /// Template this agent was created from, if any (#8018).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_template: Option<String>,
     /// Path to the agent module (WASM or Python file).
     pub module: String,
     /// Scheduling mode.
@@ -1314,6 +1422,14 @@ pub struct AgentManifest {
     /// capacity.
     #[serde(default)]
     pub max_concurrent_invocations: Option<u32>,
+    /// Per-agent override for the built-in Task Board assignee wake (issue #6728).
+    /// `None` inherits `KernelConfig.task_board.assignee_wake`.
+    ///
+    /// `Some(false)` is the only way to suppress the built-in wake for this agent: the absence of a stored trigger, or a stored trigger that is disabled or fire-exhausted, deliberately does **not** suppress it — treating a dead record as suppression is what let an addressed task sit `pending` indefinitely with nothing in the log.
+    ///
+    /// Set this when something other than the agent itself drains the board on its behalf (an external claimer against the HTTP claim route, or a human triaging by hand) and an autonomous wake would race it.
+    #[serde(default)]
+    pub assignee_wake: Option<bool>,
     /// If true, the agent's `context.md` is read once at session start and
     /// reused. Default is `false`: the runtime re-reads `context.md` before
     /// every turn so external writers (cron jobs, integrations) reach the LLM
@@ -1601,6 +1717,8 @@ impl Default for AgentManifest {
             version: crate::VERSION.to_string(),
             description: String::new(),
             author: String::new(),
+            owner: None,
+            source_template: None,
             module: "builtin:chat".to_string(),
             schedule: ScheduleMode::default(),
             session_mode: SessionMode::default(),
@@ -1642,6 +1760,7 @@ impl Default for AgentManifest {
             show_progress: true,
             auto_evolve: true,
             max_concurrent_invocations: None,
+            assignee_wake: None,
             channel_overrides: None,
             max_history_messages: None,
             cache_context: false,
@@ -1709,12 +1828,27 @@ pub struct ManifestCapabilities {
     /// Allowed tool IDs.
     #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
     pub tools: Vec<String>,
-    /// Memory read scopes.
-    #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
-    pub memory_read: Vec<String>,
-    /// Memory write scopes.
-    #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
-    pub memory_write: Vec<String>,
+    /// Memory read scopes, or `None` when the manifest never mentioned the key.
+    ///
+    /// The distinction is load-bearing (#7605).
+    /// Everywhere else in a manifest an empty list reads as "undeclared, therefore unrestricted" — `capabilities.tools = []` grants every tool — so an operator who writes `memory_read = []` to lock an agent out of memory gets the opposite of what they typed.
+    /// Keeping the tri-state lets `memory_read = []` mean "declared, and it grants nothing" while an absent key keeps the historical open default for the many manifests that never had a `[capabilities]` block.
+    ///
+    /// Read it through [`ManifestCapabilities::allows_own_memory_read`] rather than matching on the `Option` at call sites.
+    #[serde(
+        default,
+        deserialize_with = "crate::serde_compat::option_vec_lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub memory_read: Option<Vec<String>>,
+    /// Memory write scopes, or `None` when the manifest never mentioned the key.
+    /// See [`Self::memory_read`] for why this is an `Option` and not a plain `Vec`.
+    #[serde(
+        default,
+        deserialize_with = "crate::serde_compat::option_vec_lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub memory_write: Option<Vec<String>>,
     /// Whether this agent can spawn sub-agents.
     pub agent_spawn: bool,
     /// Agent message patterns (e.g., ["*"] or ["agent-name"]).
@@ -1728,6 +1862,34 @@ pub struct ManifestCapabilities {
     /// Allowed OFP peer patterns.
     #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
     pub ofp_connect: Vec<String>,
+}
+
+impl ManifestCapabilities {
+    /// Whether this manifest permits reading the agent's own semantic-memory store (#7605).
+    ///
+    /// `None` — the manifest never declared `memory_read` — is permissive, matching how every other capability list in a manifest reads when absent.
+    /// A declared list must contain a scope that covers the store; `memory_read = []` therefore denies, which is the whole point of keeping the tri-state.
+    ///
+    /// This governs the **automatic** recall path.
+    /// The `memory_semantic_*` tool gate (#7808) answers the same question from the kernel-resolved `Capability::MemoryRead` list, where the declared-empty case has already collapsed into "no entries" and stays open for backwards compatibility.
+    pub fn allows_own_memory_read(&self) -> bool {
+        scope_list_covers_own_memory(self.memory_read.as_deref())
+    }
+
+    /// Whether this manifest permits writing the agent's own semantic-memory store (#7605).
+    /// See [`Self::allows_own_memory_read`]; `memory_write = []` blocks automatic memorization.
+    pub fn allows_own_memory_write(&self) -> bool {
+        scope_list_covers_own_memory(self.memory_write.as_deref())
+    }
+}
+
+fn scope_list_covers_own_memory(scopes: Option<&[String]>) -> bool {
+    match scopes {
+        None => true,
+        Some(scopes) => scopes
+            .iter()
+            .any(|s| crate::capability::scope_covers_own_memory(s)),
+    }
 }
 
 /// Per-agent override for the kernel-global `[rl_export]` policy (#3331).
@@ -1995,9 +2157,27 @@ pub struct AgentEntry {
     /// When the agent was last active.
     pub last_active: DateTime<Utc>,
     /// Parent agent (if spawned by another agent).
+    ///
+    /// Persisted since schema v54 (#7930) as the `agents.parent_id` column.
+    /// Read `None` together with [`Self::parent_unknown`]: `None` means "this agent has no parent" only when `parent_unknown` is `false`.
     pub parent: Option<AgentId>,
     /// Child agents spawned by this agent.
+    ///
+    /// **Derived, never stored.**
+    /// There is no `children` column; the store reconstructs this from the `parent_id` of every other row (`WHERE parent_id = ?`, served by `idx_agents_parent_id`).
+    /// Two stored copies of one relationship can disagree, and this pair already would have: `spawn_agent_inner` pushes onto the parent's in-memory list but persists only the child row.
+    /// Sorted by agent id so the list is byte-identical across reloads (#3298).
     pub children: Vec<AgentId>,
+    /// `true` when [`Self::parent`] is `None` because nothing was ever recorded, as opposed to because the agent genuinely has no parent.
+    ///
+    /// Set only by the store, and only for a row written before schema v54 (#7930) added `agents.parent_id`.
+    /// Such a row has `parent_recorded = 0` and its lineage is unrecoverable — it must not be reported as a root agent, which is what a bare `parent: None` would imply.
+    ///
+    /// The polarity is deliberate.
+    /// `false` (the `Default` / `#[serde(default)]` value) means "recorded and authoritative", which is correct for every entry built in memory by the kernel, since it knows the lineage it just assigned.
+    /// A `parent_recorded`-style field would have defaulted to the unsafe answer and silently mislabelled live agents as unknown.
+    #[serde(default)]
+    pub parent_unknown: bool,
     /// Active session ID.
     pub session_id: SessionId,
     /// Original TOML manifest path, if this agent was spawned from disk.
@@ -2075,6 +2255,9 @@ impl Default for AgentEntry {
             last_active: now,
             parent: None,
             children: Vec::new(),
+            // `false` = "parent is recorded and authoritative".
+            // Only the store's hydration path flips this, and only for a pre-v54 row (#7930).
+            parent_unknown: false,
             session_id: SessionId::default(),
             source_toml_path: None,
             tags: Vec::new(),
@@ -2326,6 +2509,7 @@ mod tests {
     #[test]
     fn test_manifest_with_routing_and_autonomous() {
         let manifest = AgentManifest {
+            source_template: None,
             routing: Some(ModelRoutingConfig::default()),
             autonomous: Some(AutonomousConfig::default()),
             pinned_model: Some("sonnet".into()),
@@ -2342,6 +2526,7 @@ mod tests {
     fn test_agent_manifest_serialization() {
         let manifest = AgentManifest {
             name: "test-agent".to_string(),
+            source_template: None,
             description: "A test agent".to_string(),
             author: "test".to_string(),
             module: "test.wasm".to_string(),
@@ -2433,20 +2618,97 @@ mod tests {
         assert!(tools.contains(&"agent_send".to_string()));
         assert!(tools.contains(&"channel_send".to_string()));
         assert!(tools.contains(&"memory_recall".to_string()));
-        assert_eq!(tools.len(), 6);
+        // Targeted delivery ships with the broadcast send (#7086).
+        assert!(tools.contains(&"channel_dm".to_string()));
+        // The roster read ships with the send (#7086).
+        assert!(tools.contains(&"channel_members".to_string()));
+        assert_eq!(tools.len(), 8);
     }
 
     #[test]
     fn test_tool_profile_automation() {
         let tools = ToolProfile::Automation.tools();
         assert!(tools.contains(&"channel_send".to_string()));
-        assert_eq!(tools.len(), 12);
+        assert!(tools.contains(&"channel_dm".to_string()));
+        assert!(tools.contains(&"channel_members".to_string()));
+        assert_eq!(tools.len(), 14);
     }
 
     #[test]
     fn test_tool_profile_full() {
         let tools = ToolProfile::Full.tools();
         assert_eq!(tools, vec!["*"]);
+    }
+
+    /// #7605: `memory_read = []` in `agent.toml` must be distinguishable from
+    /// an absent key, or the operator's explicit lockout reads as the
+    /// permissive default that every other capability list uses when missing.
+    #[test]
+    fn declared_empty_memory_scopes_deny_while_an_absent_key_stays_open() {
+        let absent: ManifestCapabilities = toml::from_str("tools = []").expect("parse");
+        assert_eq!(absent.memory_read, None);
+        assert_eq!(absent.memory_write, None);
+        assert!(
+            absent.allows_own_memory_read(),
+            "a manifest with no [capabilities] memory keys keeps the historical open default"
+        );
+        assert!(absent.allows_own_memory_write());
+
+        let declared_empty: ManifestCapabilities =
+            toml::from_str("memory_read = []\nmemory_write = []").expect("parse");
+        assert_eq!(declared_empty.memory_read, Some(vec![]));
+        assert!(
+            !declared_empty.allows_own_memory_read(),
+            "regression #7605: memory_read = [] must block automatic recall"
+        );
+        assert!(
+            !declared_empty.allows_own_memory_write(),
+            "regression #7605: memory_write = [] must block automatic memorization"
+        );
+    }
+
+    #[test]
+    fn declared_memory_scopes_are_matched_against_the_agents_own_store() {
+        let wildcard: ManifestCapabilities =
+            toml::from_str("memory_read = [\"*\"]\nmemory_write = [\"self.*\"]").expect("parse");
+        assert!(wildcard.allows_own_memory_read());
+        assert!(wildcard.allows_own_memory_write());
+
+        // A grant that names an unrelated namespace is a declaration that
+        // does not reach this store.
+        let elsewhere: ManifestCapabilities =
+            toml::from_str("memory_read = [\"kv:*\"]\nmemory_write = [\"kv:*\"]").expect("parse");
+        assert!(!elsewhere.allows_own_memory_read());
+        assert!(!elsewhere.allows_own_memory_write());
+
+        let named: ManifestCapabilities =
+            toml::from_str("memory_read = [\"proactive\"]").expect("parse");
+        assert!(named.allows_own_memory_read());
+    }
+
+    /// The tri-state has to survive the msgpack / JSON round-trips a manifest
+    /// takes through the session store and the REST layer: an undeclared list
+    /// that came back as `Some([])` would silently switch memory off.
+    #[test]
+    fn undeclared_memory_scopes_survive_a_serde_roundtrip_as_undeclared() {
+        let caps = ManifestCapabilities::default();
+        let json = serde_json::to_string(&caps).expect("serialize");
+        assert!(
+            !json.contains("memory_read"),
+            "an undeclared list must not be emitted, or reading it back would declare it: {json}"
+        );
+        let back: ManifestCapabilities = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.memory_read, None);
+        assert!(back.allows_own_memory_read());
+
+        let declared = ManifestCapabilities {
+            memory_read: Some(vec![]),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&declared).expect("serialize");
+        let back: ManifestCapabilities = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(back.memory_read, Some(vec![]));
+        assert!(!back.allows_own_memory_read());
     }
 
     #[test]
@@ -2465,7 +2727,10 @@ mod tests {
         assert!(caps.shell.is_empty());
         assert!(caps.agent_spawn);
         assert!(caps.agent_message.contains(&"*".to_string()));
-        assert!(caps.memory_read.contains(&"*".to_string()));
+        assert!(caps
+            .memory_read
+            .as_deref()
+            .is_some_and(|r| r.contains(&"*".to_string())));
     }
 
     #[test]
@@ -2474,7 +2739,10 @@ mod tests {
         assert!(caps.network.is_empty());
         assert!(caps.shell.is_empty());
         assert!(!caps.agent_spawn);
-        assert_eq!(caps.memory_read, vec!["self.*".to_string()]);
+        assert_eq!(
+            caps.memory_read.as_deref(),
+            Some(&["self.*".to_string()][..])
+        );
     }
 
     #[test]
@@ -2598,6 +2866,7 @@ mod tests {
     #[test]
     fn test_manifest_with_new_fields() {
         let manifest = AgentManifest {
+            source_template: None,
             profile: Some(ToolProfile::Coding),
             fallback_models: Some(vec![FallbackModel {
                 provider: "groq".to_string(),
@@ -2972,10 +3241,13 @@ memory_write = ["self.*"]
         let manifest: AgentManifest = toml::from_str(toml_str).unwrap();
         assert_eq!(manifest.name, "brand-guardian");
         assert!(manifest.model.system_prompt.contains("Brand Guardian"));
-        assert_eq!(manifest.capabilities.memory_read, vec!["*".to_string()]);
+        assert_eq!(
+            manifest.capabilities.memory_read,
+            Some(vec!["*".to_string()])
+        );
         assert_eq!(
             manifest.capabilities.memory_write,
-            vec!["self.*".to_string()]
+            Some(vec!["self.*".to_string()])
         );
     }
 
@@ -3019,6 +3291,7 @@ model = "llama-3.3-70b-versatile"
     #[test]
     fn test_manifest_allowed_plugins_roundtrip_json() {
         let manifest = AgentManifest {
+            source_template: None,
             allowed_plugins: vec!["qdrant-recall".to_string(), "web-search".to_string()],
             ..Default::default()
         };
@@ -3039,9 +3312,11 @@ model = "llama-3.3-70b-versatile"
     #[test]
     fn test_manifest_thinking_config_roundtrip_json() {
         let manifest = AgentManifest {
+            source_template: None,
             thinking: Some(crate::config::ThinkingConfig {
                 budget_tokens: 5000,
                 stream_thinking: true,
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -3052,15 +3327,56 @@ model = "llama-3.3-70b-versatile"
         assert!(tc.stream_thinking);
     }
 
+    /// Per-agent knobs live in `agent.toml`, not `config.toml` (CLAUDE.md #5476),
+    /// so `reasoning_mode` has to survive a manifest TOML round trip inside the
+    /// existing `[thinking]` table (#7946).
+    #[test]
+    fn test_manifest_thinking_reasoning_mode_round_trips_through_toml() {
+        let toml_str = r#"
+            name = "researcher"
+            [thinking]
+            budget_tokens = 4096
+            reasoning_mode = "max"
+        "#;
+        let manifest: AgentManifest = toml::from_str(toml_str).expect("parse agent.toml");
+        let tc = manifest.thinking.as_ref().expect("thinking table parsed");
+        assert_eq!(tc.reasoning_mode, Some(crate::config::ReasoningMode::Max));
+        assert_eq!(tc.budget_tokens, 4096);
+
+        // And back out again, so an API round trip (PATCH → agent.toml → boot
+        // reconciliation) cannot drop it.
+        let back: AgentManifest =
+            serde_json::from_str(&serde_json::to_string(&manifest).unwrap()).unwrap();
+        assert_eq!(
+            back.thinking.unwrap().reasoning_mode,
+            Some(crate::config::ReasoningMode::Max),
+        );
+    }
+
+    /// An agent that omits `reasoning_mode` keeps the pre-#7946 shape: absent,
+    /// not defaulted to a mode.
+    #[test]
+    fn test_manifest_thinking_without_reasoning_mode_stays_absent() {
+        let toml_str = r#"
+            name = "plain"
+            [thinking]
+            budget_tokens = 4096
+        "#;
+        let manifest: AgentManifest = toml::from_str(toml_str).expect("parse agent.toml");
+        assert_eq!(manifest.thinking.unwrap().reasoning_mode, None);
+    }
+
     #[test]
     fn test_per_agent_thinking_overrides_global() {
         let global = crate::config::ThinkingConfig {
             budget_tokens: 10_000,
             stream_thinking: false,
+            ..Default::default()
         };
         let per_agent = crate::config::ThinkingConfig {
             budget_tokens: 5_000,
             stream_thinking: true,
+            ..Default::default()
         };
 
         let mut manifest = AgentManifest::default();
@@ -3086,14 +3402,11 @@ model = "llama-3.3-70b-versatile"
         let config = ModelConfig {
             provider: "qwen".to_string(),
             model: "qwen3.6".to_string(),
-            max_tokens: 4096,
-            temperature: 0.7,
+            max_tokens: Some(4096),
+            temperature: Some(0.7),
             system_prompt: "test".to_string(),
-            api_key_env: None,
-            base_url: None,
-            context_window: None,
-            max_output_tokens: None,
             extra_params: extra,
+            ..Default::default()
         };
 
         // Serialize to TOML
@@ -3526,6 +3839,7 @@ model = "claude-3-haiku-20240307"
     #[test]
     fn mcp_disabled_json_roundtrip() {
         let manifest = AgentManifest {
+            source_template: None,
             mcp_disabled: true,
             mcp_servers: vec!["foo".to_string()],
             ..Default::default()
@@ -3789,6 +4103,7 @@ model = "claude-3-haiku-20240307"
         // declarative-trigger field must survive the round-trip.
         let manifest = AgentManifest {
             name: "rt".to_string(),
+            source_template: None,
             reconcile_orphans: OrphanPolicy::Warn,
             triggers: vec![ManifestTrigger {
                 // `task_posted` is a struct variant that accepts the empty

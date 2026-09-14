@@ -1,6 +1,6 @@
 //! Ratatui TUI for LibreFang interactive mode.
 //!
-//! Two-level navigation: Phase::Boot (Welcome/Wizard) → Phase::Main with 16 tabs.
+//! Two-level navigation: Phase::Boot (Welcome/Wizard) → Phase::Main with 19 tabs.
 
 pub mod chat_runner;
 pub mod event;
@@ -16,8 +16,9 @@ use librefang_kernel::SkillsSubsystemApi;
 use librefang_runtime::llm_driver::StreamEvent;
 use librefang_types::agent::{AgentId, ResetScope};
 use screens::{
-    agents, audit, chat, comms, dashboard, extensions, hands, logs, memory, peers, security,
-    sessions, settings, skills, templates, triggers, usage, welcome, wizard, workflows,
+    agents, audit, channels, chat, comms, dashboard, extensions, goals, groups, hands, logs,
+    memory, models, peers, security, sessions, settings, skills, templates, triggers, usage,
+    welcome, wizard, workflows,
 };
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc};
@@ -50,13 +51,17 @@ enum Tab {
     Sessions,
     Workflows,
     Triggers,
+    Goals,
     Memory,
+    Models,
     Skills,
     Hands,
     Extensions,
     Templates,
     Peers,
+    Groups,
     Comms,
+    Channels,
     Security,
     Audit,
     Usage,
@@ -71,13 +76,17 @@ const TABS: &[Tab] = &[
     Tab::Sessions,
     Tab::Workflows,
     Tab::Triggers,
+    Tab::Goals,
     Tab::Memory,
+    Tab::Models,
     Tab::Skills,
     Tab::Hands,
     Tab::Extensions,
     Tab::Templates,
     Tab::Peers,
+    Tab::Groups,
     Tab::Comms,
+    Tab::Channels,
     Tab::Security,
     Tab::Audit,
     Tab::Usage,
@@ -94,13 +103,17 @@ impl Tab {
             Tab::Sessions => format!("{} {}", "\u{25c7}", crate::i18n::t("tui-tab-sessions")),
             Tab::Workflows => format!("{} {}", "\u{25b7}", crate::i18n::t("tui-tab-workflows")),
             Tab::Triggers => format!("{} {}", "\u{25c9}", crate::i18n::t("tui-tab-triggers")),
+            Tab::Goals => format!("{} {}", "\u{2316}", crate::i18n::t("tui-tab-goals")),
             Tab::Memory => format!("{} {}", "\u{25a1}", crate::i18n::t("tui-tab-memory")),
+            Tab::Models => format!("{} {}", "\u{25a4}", crate::i18n::t("tui-tab-models")),
             Tab::Skills => format!("{} {}", "\u{2605}", crate::i18n::t("tui-tab-skills")),
             Tab::Hands => format!("{} {}", "\u{270b}", crate::i18n::t("tui-tab-hands")),
             Tab::Extensions => format!("{} {}", "\u{29c9}", crate::i18n::t("tui-tab-extensions")),
             Tab::Templates => format!("{} {}", "\u{25a2}", crate::i18n::t("tui-tab-templates")),
             Tab::Peers => format!("{} {}", "\u{25cc}", crate::i18n::t("tui-tab-peers")),
+            Tab::Groups => format!("{} {}", "\u{2687}", crate::i18n::t("tui-tab-groups")),
             Tab::Comms => format!("{} {}", "\u{25ef}", crate::i18n::t("tui-tab-comms")),
+            Tab::Channels => format!("{} {}", "\u{25c8}", crate::i18n::t("tui-tab-channels")),
             Tab::Security => format!("{} {}", "\u{25c6}", crate::i18n::t("tui-tab-security")),
             Tab::Audit => format!("{} {}", "\u{25c8}", crate::i18n::t("tui-tab-audit")),
             Tab::Usage => format!("{} {}", "\u{25b4}", crate::i18n::t("tui-tab-usage")),
@@ -173,8 +186,10 @@ struct App {
     dashboard: dashboard::DashboardState,
     workflows: workflows::WorkflowState,
     triggers: triggers::TriggerState,
+    goals: goals::GoalsState,
     sessions: sessions::SessionsState,
     memory: memory::MemoryState,
+    models: models::ModelsState,
     skills: skills::SkillsState,
     hands: hands::HandsState,
     extensions: extensions::ExtensionsState,
@@ -184,7 +199,9 @@ struct App {
     usage: usage::UsageState,
     settings: settings::SettingsState,
     peers: peers::PeersState,
+    groups: groups::GroupsState,
     comms: comms::CommsState,
+    channels: channels::ChannelState,
     logs: logs::LogsState,
 
     kernel_booting: bool,
@@ -212,8 +229,10 @@ impl App {
             dashboard: dashboard::DashboardState::new(),
             workflows: workflows::WorkflowState::new(),
             triggers: triggers::TriggerState::new(),
+            goals: goals::GoalsState::new(),
             sessions: sessions::SessionsState::new(),
             memory: memory::MemoryState::new(),
+            models: models::ModelsState::new(),
             skills: skills::SkillsState::new(),
             hands: hands::HandsState::new(),
             extensions: extensions::ExtensionsState::new(),
@@ -223,7 +242,9 @@ impl App {
             usage: usage::UsageState::new(),
             settings: settings::SettingsState::new(),
             peers: peers::PeersState::new(),
+            groups: groups::GroupsState::new(),
             comms: comms::CommsState::new(),
+            channels: channels::ChannelState::new(),
             logs: logs::LogsState::new(),
             kernel_booting: false,
             kernel_boot_error: None,
@@ -299,6 +320,70 @@ impl App {
                 self.workflows.status_msg = crate::i18n::t("tui-mod-workflow-created");
                 self.refresh_workflows();
             }
+            AppEvent::WorkflowParamsLoaded(fetch) => {
+                self.workflows.run_params = Vec::new();
+                self.workflows.param_cursor = 0;
+                match fetch {
+                    workflows::WorkflowParamsFetch::Loaded(params) => {
+                        self.workflows.run_params = params;
+                    }
+                    workflows::WorkflowParamsFetch::None => {
+                        self.workflows.status_msg = crate::i18n::t("tui-workflows-params-none");
+                    }
+                    workflows::WorkflowParamsFetch::Failed => {
+                        self.workflows.status_msg = crate::i18n::t("tui-workflows-params-failed");
+                    }
+                }
+            }
+            AppEvent::ChannelListLoaded {
+                instances,
+                adapters,
+            } => {
+                self.channels.adapters = adapters;
+                self.channels.set_instances(instances);
+                self.channels.loading = false;
+            }
+            AppEvent::ChannelInstanceSaved {
+                instance_name,
+                restart_required,
+                shadowed_secrets,
+            } => {
+                // A save that needs a restart is not a failure, but it is not
+                // live either — say which one it was rather than a flat "saved".
+                // A shadowed secret outranks both: the write landed but the
+                // value will not be used, so it takes precedence in the one
+                // status line available. `librefang channel setup` already
+                // reports this, and the screen must not be quieter than the CLI.
+                self.channels.status_msg = if shadowed_secrets.is_empty() {
+                    let key = if restart_required {
+                        "tui-mod-channel-saved-restart-required"
+                    } else {
+                        "tui-mod-channel-saved"
+                    };
+                    crate::i18n::t_args(key, &[("name", &instance_name)])
+                } else {
+                    crate::i18n::t_args(
+                        "tui-mod-channel-saved-shadowed",
+                        &[
+                            ("name", &instance_name),
+                            ("keys", &shadowed_secrets.join(", ")),
+                        ],
+                    )
+                };
+                self.refresh_channels();
+            }
+            AppEvent::ChannelInstanceDeleted(name) => {
+                self.channels.status_msg =
+                    crate::i18n::t_args("tui-mod-channel-deleted", &[("name", &name)]);
+                self.refresh_channels();
+            }
+            AppEvent::ChannelsReloaded(started) => {
+                self.channels.status_msg = crate::i18n::t_args(
+                    "tui-mod-channels-reloaded",
+                    &[("started", &started.to_string())],
+                );
+                self.refresh_channels();
+            }
             AppEvent::TriggerListLoaded(list) => {
                 self.triggers.triggers = list;
                 if !self.triggers.triggers.is_empty() {
@@ -330,6 +415,15 @@ impl App {
                 available,
             } => {
                 // Populate skill editor: mark assigned skills as checked
+                if let Some(detail) = self.agents.detail.as_mut() {
+                    detail.skills_mode = if assigned.is_empty() {
+                        "all"
+                    } else {
+                        "allowlist"
+                    }
+                    .to_string();
+                    detail.skills = assigned.clone();
+                }
                 self.agents.available_skills = available
                     .into_iter()
                     .map(|name| {
@@ -344,6 +438,17 @@ impl App {
                 available,
             } => {
                 // Populate MCP editor: mark assigned servers as checked
+                if let Some(detail) = self.agents.detail.as_mut() {
+                    // `["*"]` is the explicit all-servers opt-in (#5855); an empty list is
+                    // a real "no servers", which the renderer reports separately.
+                    detail.mcp_servers_mode = if assigned.iter().any(|s| s == "*") {
+                        "all"
+                    } else {
+                        "allowlist"
+                    }
+                    .to_string();
+                    detail.mcp_servers = assigned.clone();
+                }
                 self.agents.available_mcp = available
                     .into_iter()
                     .map(|name| {
@@ -363,20 +468,158 @@ impl App {
                     crate::i18n::t_args("tui-mod-agent-mcp-updated", &[("id", &id)]);
                 self.agents.sub = agents::AgentSubScreen::AgentDetail;
             }
+            AppEvent::AgentChannelsLoaded {
+                assigned,
+                available,
+            } => {
+                // Populate the channel editor: mark assigned channels as checked
+                if let Some(detail) = self.agents.detail.as_mut() {
+                    detail.channels_mode = if assigned.is_empty() {
+                        "all"
+                    } else {
+                        "allowlist"
+                    }
+                    .to_string();
+                    detail.channels = assigned.clone();
+                }
+                self.agents.available_channels = available
+                    .into_iter()
+                    .map(|name| {
+                        let checked = assigned.contains(&name);
+                        (name, checked)
+                    })
+                    .collect();
+                self.agents.channel_cursor = 0;
+            }
+            AppEvent::AgentChannelsUpdated(id) => {
+                self.agents.status_msg =
+                    crate::i18n::t_args("tui-mod-agent-channels-updated", &[("id", &id)]);
+                self.agents.sub = agents::AgentSubScreen::AgentDetail;
+                // The detail pane renders the allowlist it was built with, so refresh it
+                // instead of leaving the old value on screen next to a success message.
+                if let Some(detail) = self.agents.detail.as_mut() {
+                    detail.channels = self
+                        .agents
+                        .available_channels
+                        .iter()
+                        .filter(|(_, checked)| *checked)
+                        .map(|(name, _)| name.clone())
+                        .collect();
+                    detail.channels_mode = if detail.channels.is_empty() {
+                        "all".to_string()
+                    } else {
+                        "allowlist".to_string()
+                    };
+                }
+            }
+            AppEvent::AgentModelParamsLoaded {
+                model,
+                context_cap,
+                output_cap,
+            } => {
+                self.agents.model_params.load(&model);
+                self.agents.model_params.set_caps(context_cap, output_cap);
+            }
+            AppEvent::AgentModelParamsUpdated { id, warnings } => {
+                // The values were stored as asked. A warning says the provider
+                // may refuse them, not that the save failed.
+                self.agents.status_msg = if warnings.is_empty() {
+                    crate::i18n::t_args("tui-mod-agent-model-params-updated", &[("id", &id)])
+                } else {
+                    warnings.join(" \u{2022} ")
+                };
+                self.agents.sub = agents::AgentSubScreen::AgentDetail;
+            }
             AppEvent::FetchError(err) => {
                 // Route to the active tab's status message
                 match self.active_tab {
                     Tab::Workflows => self.workflows.status_msg = err,
                     Tab::Triggers => self.triggers.status_msg = err,
+                    Tab::Goals => self.goals.status_msg = err,
                     Tab::Sessions => self.sessions.status_msg = err,
                     Tab::Memory => self.memory.status_msg = err,
+                    Tab::Models => self.models.status_msg = err,
                     Tab::Skills => self.skills.status_msg = err,
                     Tab::Hands => self.hands.status_msg = err,
                     Tab::Extensions => self.extensions.status_msg = err,
                     Tab::Templates => self.templates.status_msg = err,
-                    Tab::Settings => self.settings.status_msg = err,
+                    Tab::Settings => {
+                        // Same reason as `Tab::Channels` below: every Settings
+                        // pane draws its spinner on `state.loading` alone, and
+                        // `loading` is only cleared by a successful *Loaded
+                        // event. A fetch that fails after `refresh_settings_*`
+                        // set the flag would otherwise leave the pane spinning
+                        // forever, with the message underneath it invisible
+                        // behind the spinner (#8059 review). `loading` is shared
+                        // by all four panes, so this belongs here rather than in
+                        // any one fetch helper.
+                        self.settings.loading = false;
+                        self.settings.status_msg = err;
+                    }
+                    Tab::Channels => {
+                        // `draw_list` renders its spinner unconditionally while
+                        // `loading` is set, so a failed fetch that only wrote a
+                        // status message would leave the tab showing nothing but
+                        // a spinner until some later fetch happened to succeed.
+                        self.channels.loading = false;
+                        self.channels.status_msg = err;
+                    }
                     _ => {}
                 }
+            }
+
+            // ── Goals events ──
+            AppEvent::GoalsLoaded(list) => {
+                self.goals.goals = list;
+                self.goals.refilter();
+                self.goals.loading = false;
+            }
+            AppEvent::GoalRunLoaded {
+                goal_id,
+                phase,
+                iteration,
+                max_iterations,
+            } => {
+                self.goals
+                    .apply_run_state(&goal_id, phase, iteration, max_iterations);
+            }
+            AppEvent::GoalRunFailed { goal_id, failure } => {
+                // Deliberately does NOT touch the cached run state: the last
+                // known phase is more useful than blanking it, and the status
+                // line is what says the reading is stale.
+                self.goals.status_msg = match failure {
+                    event::FetchFailure::RequiresDaemon => {
+                        crate::i18n::t("tui-goals-run-requires-daemon")
+                    }
+                    event::FetchFailure::Error(reason) => crate::i18n::t_args(
+                        "tui-goals-run-fetch-failed",
+                        &[("id", &goal_id), ("error", &reason)],
+                    ),
+                };
+            }
+            AppEvent::GoalCreated(id) => {
+                self.goals.status_msg = crate::i18n::t_args("tui-goal-created", &[("id", &id)]);
+                self.refresh_goals();
+            }
+            AppEvent::GoalDeleted(id) => {
+                self.goals.goals.retain(|g| g.id != id);
+                self.goals.refilter();
+                // The detail pane may have been showing the goal that just went
+                // away, and `selected_goal` is a positional index into a list
+                // that just shifted.
+                self.goals.detail_open = false;
+                self.goals.selected_goal = None;
+                self.goals.status_msg = crate::i18n::t_args("tui-goal-deleted", &[("id", &id)]);
+            }
+            AppEvent::GoalRunStarted(id) => {
+                self.goals.status_msg = crate::i18n::t_args("tui-goal-run-started", &[("id", &id)]);
+                self.refresh_goal_run(id);
+                self.refresh_goals();
+            }
+            AppEvent::GoalRunStopped(id) => {
+                self.goals.status_msg = crate::i18n::t_args("tui-goal-run-stopped", &[("id", &id)]);
+                self.refresh_goal_run(id);
+                self.refresh_goals();
             }
 
             // ── New screen events ──
@@ -390,6 +633,32 @@ impl App {
                 self.sessions.refilter();
                 self.sessions.status_msg =
                     crate::i18n::t_args("tui-mod-session-deleted", &[("id", &id)]);
+            }
+            AppEvent::MemoryConfigLoaded(config) => {
+                self.memory.apply_config(config);
+            }
+            AppEvent::MemoryConfigSaved(result) => {
+                // A clean save asks for a refetch: the write moves
+                // `extraction_model` on disk without moving the running
+                // extractor, and the panel can only report both honestly by
+                // asking the daemon what each one now is.
+                let next = self.memory.apply_save_result(result);
+                self.handle_memory_action(next);
+            }
+            AppEvent::MemoryConfigFailed(failure) => {
+                // Clear `loading` on the failure path too, or the screen sits
+                // on its spinner forever and the message never gets read.
+                // The message is the config panel's own, not the KV
+                // browser's — this fetch is only ever for the config screen.
+                self.memory.loading = false;
+                self.memory.config_status_msg = match failure {
+                    event::FetchFailure::RequiresDaemon => {
+                        crate::i18n::t("tui-memory-config-requires-daemon")
+                    }
+                    event::FetchFailure::Error(reason) => {
+                        crate::i18n::t_args("tui-memory-config-fetch-failed", &[("error", &reason)])
+                    }
+                };
             }
             AppEvent::MemoryAgentsLoaded(agents) => {
                 self.memory.agents = agents;
@@ -454,6 +723,34 @@ impl App {
                 }
                 self.skills.loading = false;
             }
+            AppEvent::AgentTemplatesLoaded(templates) => {
+                self.templates.loading = false;
+                self.templates.set_manifest_templates(templates);
+            }
+            AppEvent::TemplateTomlLoaded { name, toml } => match toml {
+                Some(toml) => {
+                    self.templates.status_msg.clear();
+                    self.spawn_agent(toml);
+                }
+                None => {
+                    self.templates.status_msg = crate::i18n::t_args(
+                        "tui-templates-manifest-unavailable",
+                        &[("name", &name)],
+                    );
+                }
+            },
+            AppEvent::AgentTypePromoted { name, result } => match result {
+                Ok(pr_url) => {
+                    self.templates.status_msg =
+                        crate::i18n::t_args("tui-templates-promoted", &[("url", &pr_url)]);
+                }
+                Err(err) => {
+                    self.templates.status_msg = crate::i18n::t_args(
+                        "tui-templates-promote-failed",
+                        &[("name", &name), ("error", &err)],
+                    );
+                }
+            },
             AppEvent::TemplateProvidersLoaded(providers) => {
                 self.templates.providers = providers;
             }
@@ -511,6 +808,17 @@ impl App {
                 }
                 self.settings.loading = false;
             }
+            AppEvent::SettingsAuxiliaryLoaded(aux) => {
+                self.settings.auxiliary = aux;
+                self.settings.aux_tasks = self.settings.auxiliary.keys().cloned().collect();
+                self.settings.aux_tasks.sort();
+                if !self.settings.aux_tasks.is_empty()
+                    && self.settings.aux_list.selected().is_none()
+                {
+                    self.settings.aux_list.select(Some(0));
+                }
+                self.settings.loading = false;
+            }
             AppEvent::ProviderKeySaved(name) => {
                 self.settings.status_msg =
                     crate::i18n::t_args("tui-mod-key-saved-for", &[("name", &name)]);
@@ -523,6 +831,79 @@ impl App {
             }
             AppEvent::ProviderTestResult(result) => {
                 self.settings.test_result = Some(result);
+            }
+            AppEvent::ModelCatalogLoaded(list) => {
+                self.models.models = list;
+                if !self.models.models.is_empty() && self.models.list_state.selected().is_none() {
+                    self.models.list_state.select(Some(0));
+                }
+                self.models.loading = false;
+            }
+            AppEvent::ModelLimitsSaved(key) => {
+                self.models.status_msg =
+                    crate::i18n::t_args("tui-models-status-saved", &[("model", &key)]);
+                self.refresh_models();
+            }
+            AppEvent::ModelLimitsReset(key) => {
+                self.models.status_msg =
+                    crate::i18n::t_args("tui-models-status-reset", &[("model", &key)]);
+                self.refresh_models();
+            }
+            AppEvent::GroupsLoaded(list) => {
+                self.groups.groups = list;
+                if !self.groups.groups.is_empty() && self.groups.list_state.selected().is_none() {
+                    self.groups.list_state.select(Some(0));
+                }
+                self.groups.loading = false;
+            }
+            AppEvent::BackupsLoaded(backups) => {
+                self.settings.backups = backups;
+                if self.settings.backups.is_empty() {
+                    self.settings.backup_list.select(None);
+                } else {
+                    let last = self.settings.backups.len() - 1;
+                    let keep = self
+                        .settings
+                        .backup_list
+                        .selected()
+                        .map_or(0, |sel| sel.min(last));
+                    self.settings.backup_list.select(Some(keep));
+                }
+                self.settings.loading = false;
+            }
+            AppEvent::BackupCreated(filename) => {
+                self.settings.status_msg =
+                    crate::i18n::t_args("tui-mod-backup-created", &[("filename", &filename)]);
+                self.refresh_settings_backups();
+            }
+            AppEvent::BackupDeleted(filename) => {
+                self.settings.status_msg =
+                    crate::i18n::t_args("tui-mod-backup-deleted", &[("filename", &filename)]);
+                self.refresh_settings_backups();
+            }
+            AppEvent::BackupRestored {
+                filename,
+                restored_files,
+                errors,
+            } => {
+                self.settings.status_msg = if errors == 0 {
+                    crate::i18n::t_args(
+                        "tui-mod-backup-restored",
+                        &[
+                            ("filename", &filename),
+                            ("files", &restored_files.to_string()),
+                        ],
+                    )
+                } else {
+                    crate::i18n::t_args(
+                        "tui-mod-backup-restored-with-errors",
+                        &[
+                            ("filename", &filename),
+                            ("files", &restored_files.to_string()),
+                            ("errors", &errors.to_string()),
+                        ],
+                    )
+                };
             }
             AppEvent::PeersLoaded(list) => {
                 self.peers.peers = list;
@@ -745,9 +1126,13 @@ impl App {
                     self.switch_tab(Tab::Memory);
                     return;
                 }
-                // F(8) was the `Channels` tab shortcut; the tab is
-                // retired, so the key now falls through to the
-                // default arm rather than being swallowed.
+                // F(8) was the retired `Channels` tab's shortcut, and the
+                // Models screen (#7774) takes the freed slot rather than
+                // pushing every later binding along by one.
+                KeyCode::F(8) => {
+                    self.switch_tab(Tab::Models);
+                    return;
+                }
                 KeyCode::F(9) => {
                     self.switch_tab(Tab::Skills);
                     return;
@@ -834,15 +1219,27 @@ impl App {
                         self.switch_tab(Tab::Memory);
                         return;
                     }
-                    // Char('8') was the Alt-8 `Channels` tab shortcut;
-                    // the tab is retired, so the key falls through to
-                    // the default arm rather than being swallowed.
+                    // Char('8') was the retired `Channels` tab's Alt shortcut
+                    // and now reaches Models, matching F8 above.
+                    KeyCode::Char('8') => {
+                        self.switch_tab(Tab::Models);
+                        return;
+                    }
                     KeyCode::Char('9') => {
                         self.switch_tab(Tab::Skills);
                         return;
                     }
                     KeyCode::Char('0') => {
                         self.switch_tab(Tab::Templates);
+                        return;
+                    }
+                    // Goals is the twentieth tab and every numeric slot is
+                    // taken: F(1)-F(12) and Alt+0-9 are all bound. Rather than
+                    // renumber existing bindings — which retrains every user
+                    // for the sake of one new screen — it takes the mnemonic
+                    // `Alt+G`. `Tab` still cycles through it like any other.
+                    KeyCode::Char('g') => {
+                        self.switch_tab(Tab::Goals);
                         return;
                     }
                     _ => {}
@@ -894,6 +1291,14 @@ impl App {
                     let action = self.triggers.handle_key(key);
                     self.handle_trigger_action(action);
                 }
+                Tab::Goals => {
+                    let action = self.goals.handle_key(key);
+                    self.handle_goals_action(action);
+                }
+                Tab::Channels => {
+                    let action = self.channels.handle_key(key);
+                    self.handle_channel_action(action);
+                }
                 Tab::Sessions => {
                     let action = self.sessions.handle_key(key);
                     self.handle_sessions_action(action);
@@ -901,6 +1306,10 @@ impl App {
                 Tab::Memory => {
                     let action = self.memory.handle_key(key);
                     self.handle_memory_action(action);
+                }
+                Tab::Models => {
+                    let action = self.models.handle_key(key);
+                    self.handle_models_action(action);
                 }
                 Tab::Skills => {
                     let action = self.skills.handle_key(key);
@@ -934,6 +1343,10 @@ impl App {
                     let action = self.settings.handle_key(key);
                     self.handle_settings_action(action);
                 }
+                Tab::Groups => {
+                    let action = self.groups.handle_key(key);
+                    self.handle_groups_action(action);
+                }
                 Tab::Peers => {
                     let action = self.peers.handle_key(key);
                     self.handle_peers_action(action);
@@ -961,8 +1374,10 @@ impl App {
         self.dashboard.tick();
         self.workflows.tick();
         self.triggers.tick();
+        self.goals.tick();
         self.sessions.tick();
         self.memory.tick();
+        self.models.tick();
         self.skills.tick();
         self.hands.tick();
         self.extensions.tick();
@@ -972,7 +1387,9 @@ impl App {
         self.usage.tick();
         self.settings.tick();
         self.peers.tick();
+        self.groups.tick();
         self.comms.tick();
+        self.channels.tick();
         self.logs.tick();
 
         // Auto-poll for active tabs
@@ -980,6 +1397,7 @@ impl App {
             match self.active_tab {
                 Tab::Logs if self.logs.should_poll() => self.refresh_logs(),
                 Tab::Peers if self.peers.should_poll() => self.refresh_peers(),
+                Tab::Groups if self.groups.should_poll() => self.refresh_groups(),
                 Tab::Comms if self.comms.should_poll() => self.refresh_comms(),
                 _ => {}
             }
@@ -1018,8 +1436,11 @@ impl App {
             Tab::Agents => self.refresh_agents(),
             Tab::Workflows => self.refresh_workflows(),
             Tab::Triggers => self.refresh_triggers(),
+            Tab::Goals => self.refresh_goals(),
+            Tab::Channels => self.refresh_channels(),
             Tab::Sessions => self.refresh_sessions(),
             Tab::Memory => self.refresh_memory(),
+            Tab::Models => self.refresh_models(),
             Tab::Skills => self.refresh_skills(),
             Tab::Hands => self.refresh_hands(),
             Tab::Extensions => self.refresh_extensions(),
@@ -1027,8 +1448,17 @@ impl App {
             Tab::Security => self.refresh_security(),
             Tab::Audit => self.refresh_audit(),
             Tab::Usage => self.refresh_usage(),
-            Tab::Settings => self.refresh_settings_providers(),
+            Tab::Settings => {
+                // `sub` is a plain field that outlives the tab, so without this
+                // the screen reopens on whatever sub-tab was last used while
+                // `on_tab_enter` reloads providers — and a sub-tab holding a
+                // modal had no second way out. Re-entering the tab is now that
+                // way out.
+                self.settings.reset_sub();
+                self.refresh_settings_providers();
+            }
             Tab::Peers => self.refresh_peers(),
+            Tab::Groups => self.refresh_groups(),
             Tab::Comms => self.refresh_comms(),
             Tab::Logs => self.refresh_logs(),
             Tab::Chat => {} // Chat doesn't need refresh on enter
@@ -1065,7 +1495,12 @@ impl App {
         }
     }
 
-    // `refresh_channels` retired with the Channels tab.
+    fn refresh_channels(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.channels.loading = true;
+            event::spawn_fetch_channels(backend, self.event_tx.clone());
+        }
+    }
 
     fn refresh_workflows(&mut self) {
         if let Some(backend) = self.backend.to_ref() {
@@ -1078,6 +1513,24 @@ impl App {
         if let Some(backend) = self.backend.to_ref() {
             self.triggers.loading = true;
             event::spawn_fetch_triggers(backend, self.event_tx.clone());
+        }
+    }
+
+    fn refresh_goals(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.goals.loading = true;
+            event::spawn_fetch_goals(backend, self.event_tx.clone());
+        }
+    }
+
+    /// Re-fetch one goal's live run state.
+    ///
+    /// The list payload never carries run state, so the phase shown in the
+    /// detail pane — and the start/stop toggle that keys off it — would
+    /// otherwise stay stale until the pane is reopened.
+    fn refresh_goal_run(&mut self, goal_id: String) {
+        if let Some(backend) = self.backend.to_ref() {
+            event::spawn_fetch_goal_run(backend, goal_id, self.event_tx.clone());
         }
     }
 
@@ -1125,6 +1578,8 @@ impl App {
 
     fn refresh_templates(&mut self) {
         if let Some(backend) = self.backend.to_ref() {
+            self.templates.loading = true;
+            event::spawn_fetch_agent_templates(backend.clone(), self.event_tx.clone());
             event::spawn_fetch_template_providers(backend, self.event_tx.clone());
         }
     }
@@ -1167,6 +1622,33 @@ impl App {
     fn refresh_settings_tools(&mut self) {
         if let Some(backend) = self.backend.to_ref() {
             event::spawn_fetch_tools(backend, self.event_tx.clone());
+        }
+    }
+
+    fn refresh_models(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.models.loading = true;
+            event::spawn_fetch_model_catalog(backend, self.event_tx.clone());
+        }
+    }
+    fn refresh_settings_backups(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.settings.loading = true;
+            event::spawn_fetch_backups(backend, self.event_tx.clone());
+        }
+    }
+
+    fn refresh_settings_auxiliary(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.settings.loading = true;
+            event::spawn_fetch_auxiliary(backend, self.event_tx.clone());
+        }
+    }
+
+    fn refresh_groups(&mut self) {
+        if let Some(backend) = self.backend.to_ref() {
+            self.groups.loading = true;
+            event::spawn_fetch_groups(backend, self.event_tx.clone());
         }
     }
 
@@ -1422,6 +1904,53 @@ impl App {
                     event::spawn_fetch_agent_mcp_servers(backend, id, self.event_tx.clone());
                 }
             }
+            agents::AgentAction::FetchAgentChannels(id) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_channels(backend, id, self.event_tx.clone());
+                }
+            }
+            agents::AgentAction::LoadAgentDetail(id) => {
+                // All three allowlists the detail pane renders, fetched together so the
+                // pane shows the agent's real configuration rather than struct defaults.
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_skills(backend, id.clone(), self.event_tx.clone());
+                }
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_mcp_servers(
+                        backend,
+                        id.clone(),
+                        self.event_tx.clone(),
+                    );
+                }
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_channels(backend, id, self.event_tx.clone());
+                }
+            }
+            agents::AgentAction::UpdateChannels { id, channels } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_update_agent_channels(
+                        backend,
+                        id,
+                        channels,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
+            agents::AgentAction::FetchAgentModelParams(id) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_agent_model_params(backend, id, self.event_tx.clone());
+                }
+            }
+            agents::AgentAction::UpdateModelParams { id, changes } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_update_agent_model_params(
+                        backend,
+                        id,
+                        changes,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
         }
     }
 
@@ -1445,9 +1974,31 @@ impl App {
         }
     }
 
-    // `handle_channel_action` retired with the Channels tab — its
-    // SaveChannel / TestChannel arms hit the deleted
-    // `POST /api/channels/{name}/configure` and `.../test` endpoints.
+    fn handle_channel_action(&mut self, action: channels::ChannelAction) {
+        match action {
+            channels::ChannelAction::Continue => {}
+            channels::ChannelAction::Refresh => self.refresh_channels(),
+            channels::ChannelAction::SaveInstance(request) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_save_channel_instance(backend, request, self.event_tx.clone());
+                }
+            }
+            channels::ChannelAction::DeleteInstance { instance_name } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_delete_channel_instance(
+                        backend,
+                        instance_name,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
+            channels::ChannelAction::ReloadChannels => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_reload_channels(backend, self.event_tx.clone());
+                }
+            }
+        }
+    }
 
     fn handle_workflow_action(&mut self, action: workflows::WorkflowAction) {
         match action {
@@ -1474,10 +2025,53 @@ impl App {
                     );
                 }
             }
+            workflows::WorkflowAction::FetchWorkflowParams(wf_id) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_workflow_params(backend, wf_id, self.event_tx.clone());
+                }
+            }
             workflows::WorkflowAction::RunWorkflow { id, input } => {
                 if let Some(backend) = self.backend.to_ref() {
                     self.workflows.loading = true;
                     event::spawn_run_workflow(backend, id, input, self.event_tx.clone());
+                }
+            }
+        }
+    }
+
+    fn handle_goals_action(&mut self, action: goals::GoalsAction) {
+        match action {
+            goals::GoalsAction::Continue => {}
+            goals::GoalsAction::Refresh => self.refresh_goals(),
+            goals::GoalsAction::ShowDetail { goal_id } => self.refresh_goal_run(goal_id),
+            goals::GoalsAction::CreateGoal {
+                title,
+                description,
+                agent_id,
+            } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_create_goal(
+                        backend,
+                        title,
+                        description,
+                        agent_id,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
+            goals::GoalsAction::DeleteGoal { goal_id } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_delete_goal(backend, goal_id, self.event_tx.clone());
+                }
+            }
+            goals::GoalsAction::StartRun { goal_id } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_start_goal_run(backend, goal_id, self.event_tx.clone());
+                }
+            }
+            goals::GoalsAction::StopRun { goal_id } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_stop_goal_run(backend, goal_id, self.event_tx.clone());
                 }
             }
         }
@@ -1536,6 +2130,11 @@ impl App {
         match action {
             memory::MemoryUIAction::Continue => {}
             memory::MemoryUIAction::LoadAgents => self.refresh_memory(),
+            memory::MemoryUIAction::LoadConfig => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_fetch_memory_config(backend, self.event_tx.clone());
+                }
+            }
             memory::MemoryUIAction::LoadKv(agent_id) => {
                 if let Some(backend) = self.backend.to_ref() {
                     self.memory.loading = true;
@@ -1560,6 +2159,21 @@ impl App {
             memory::MemoryUIAction::DeleteKv { agent_id, key } => {
                 if let Some(backend) = self.backend.to_ref() {
                     event::spawn_delete_memory_kv(backend, agent_id, key, self.event_tx.clone());
+                }
+            }
+            memory::MemoryUIAction::SaveConfig {
+                auto_memorize,
+                auto_retrieve,
+                extraction_model,
+            } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_save_memory_config(
+                        backend,
+                        auto_memorize,
+                        auto_retrieve,
+                        extraction_model,
+                        self.event_tx.clone(),
+                    );
                 }
             }
         }
@@ -1660,14 +2274,27 @@ impl App {
         match action {
             templates::TemplatesAction::Continue => {}
             templates::TemplatesAction::Refresh => self.refresh_templates(),
-            templates::TemplatesAction::SpawnTemplate(name) => {
-                // Find template and generate TOML manifest
-                if let Some(t) = self.templates.templates.iter().find(|t| t.name == name) {
-                    let toml_content = format!(
-                        "name = \"{}\"\ndescription = \"{}\"\n\n[model]\nprovider = \"{}\"\nmodel = \"{}\"\n\n[capabilities]\ntools = [\"shell\", \"file_read\", \"file_write\", \"web_fetch\", \"web_search\"]\n",
-                        t.name, t.description, t.provider, t.model,
-                    );
-                    self.spawn_agent(toml_content);
+            templates::TemplatesAction::SpawnTemplate { name, source } => match source {
+                // A builtin has no file anywhere, so its declaration is the profile its table names — never an invented tool list.
+                templates::TemplateSource::Builtin => {
+                    if let Some(t) = self.templates.templates.iter().find(|t| t.name == name) {
+                        let toml_content = templates::builtin_manifest_toml(t);
+                        self.spawn_agent(toml_content);
+                    }
+                }
+                // An operator-created type is spawned from its own manifest, fetched verbatim.
+                // Nothing here reconstructs it (#7760).
+                templates::TemplateSource::Manifest => {
+                    if let Some(backend) = self.backend.to_ref() {
+                        event::spawn_fetch_template_toml(backend, name, self.event_tx.clone());
+                    }
+                }
+            },
+            templates::TemplatesAction::PromoteTemplate { name } => {
+                self.templates.status_msg =
+                    crate::i18n::t_args("tui-templates-promoting", &[("name", &name)]);
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_promote_agent_type(backend, name, self.event_tx.clone());
                 }
             }
         }
@@ -1711,6 +2338,8 @@ impl App {
             settings::SettingsAction::RefreshProviders => self.refresh_settings_providers(),
             settings::SettingsAction::RefreshModels => self.refresh_settings_models(),
             settings::SettingsAction::RefreshTools => self.refresh_settings_tools(),
+            settings::SettingsAction::RefreshBackups => self.refresh_settings_backups(),
+            settings::SettingsAction::RefreshAuxiliary => self.refresh_settings_auxiliary(),
             settings::SettingsAction::SaveProviderKey { name, key } => {
                 if let Some(backend) = self.backend.to_ref() {
                     event::spawn_save_provider_key(backend, name, key, self.event_tx.clone());
@@ -1726,6 +2355,60 @@ impl App {
                     event::spawn_test_provider(backend, name, self.event_tx.clone());
                 }
             }
+            settings::SettingsAction::CreateBackup => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_create_backup(backend, self.event_tx.clone());
+                }
+            }
+            settings::SettingsAction::DeleteBackup(filename) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_delete_backup(backend, filename, self.event_tx.clone());
+                }
+            }
+            settings::SettingsAction::RestoreBackup(body) => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_restore_backup(backend, body, self.event_tx.clone());
+                }
+            }
+            settings::SettingsAction::SaveAuxChain { task, chain } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_save_aux_chain(backend, task, chain, self.event_tx.clone());
+                }
+            }
+        }
+    }
+
+    fn handle_models_action(&mut self, action: models::ModelsAction) {
+        match action {
+            models::ModelsAction::Continue => {}
+            models::ModelsAction::Refresh => self.refresh_models(),
+            models::ModelsAction::SaveLimits {
+                key,
+                context_window,
+                max_output_tokens,
+            } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_save_model_limits(
+                        backend,
+                        key,
+                        context_window,
+                        max_output_tokens,
+                        self.event_tx.clone(),
+                    );
+                }
+            }
+            models::ModelsAction::ResetLimits { key } => {
+                if let Some(backend) = self.backend.to_ref() {
+                    event::spawn_reset_model_limits(backend, key, self.event_tx.clone());
+                }
+            }
+        }
+    }
+
+    fn handle_groups_action(&mut self, action: groups::GroupsAction) {
+        match action {
+            groups::GroupsAction::Continue => {}
+            groups::GroupsAction::Refresh => self.refresh_groups(),
         }
     }
 
@@ -2385,8 +3068,10 @@ impl App {
                     Tab::Chat => chat::draw(frame, chunks[1], &mut self.chat),
                     Tab::Workflows => workflows::draw(frame, chunks[1], &mut self.workflows),
                     Tab::Triggers => triggers::draw(frame, chunks[1], &mut self.triggers),
+                    Tab::Goals => goals::draw(frame, chunks[1], &mut self.goals),
                     Tab::Sessions => sessions::draw(frame, chunks[1], &mut self.sessions),
                     Tab::Memory => memory::draw(frame, chunks[1], &mut self.memory),
+                    Tab::Models => models::draw(frame, chunks[1], &mut self.models),
                     Tab::Skills => skills::draw(frame, chunks[1], &mut self.skills),
                     Tab::Hands => hands::draw(frame, chunks[1], &mut self.hands),
                     Tab::Extensions => extensions::draw(frame, chunks[1], &mut self.extensions),
@@ -2396,7 +3081,9 @@ impl App {
                     Tab::Usage => usage::draw(frame, chunks[1], &mut self.usage),
                     Tab::Settings => settings::draw(frame, chunks[1], &mut self.settings),
                     Tab::Peers => peers::draw(frame, chunks[1], &mut self.peers),
+                    Tab::Groups => groups::draw(frame, chunks[1], &mut self.groups),
                     Tab::Comms => comms::draw(frame, chunks[1], &mut self.comms),
+                    Tab::Channels => channels::draw(frame, chunks[1], &mut self.channels),
                     Tab::Logs => logs::draw(frame, chunks[1], &mut self.logs),
                 }
             }

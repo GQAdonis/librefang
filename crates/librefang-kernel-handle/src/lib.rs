@@ -179,12 +179,12 @@ pub mod test_stub;
 pub mod prelude {
     pub use super::{
         A2ARegistry, AcpFsBridge, AcpFsClient, AcpTerminalBridge, AcpTerminalClient,
-        AcpTerminalRunResult, AgentControl, AgentInfo, ApiAuth, ApiAuthSnapshot,
-        ApiUserConfigSnapshot, ApprovalGate, CatalogQuery, ChannelSender, CronControl,
-        DashboardRawConfig, EventBus, GoalControl, HandsControl, KernelHandle, KnowledgeGraph,
-        MemoryAccess, PromptStore, SessionWriter, StepOutputSummary, TaskQueue, ToolPolicy,
-        WikiAccess, WorkflowDescription, WorkflowInputParam, WorkflowRunSummary, WorkflowRunner,
-        WorkflowSummary,
+        AcpTerminalRunResult, AgentControl, AgentInfo, AgentTypeSummary, ApiAuth, ApiAuthSnapshot,
+        ApiUserConfigSnapshot, ApprovalGate, AsyncSendOutcome, CatalogQuery, ChannelSender,
+        CronControl, DashboardRawConfig, EventBus, GoalControl, HandsControl, KernelHandle,
+        KnowledgeGraph, MemoryAccess, PromptStore, SessionWriter, StepOutputSummary, TaskQueue,
+        ToolPolicy, WikiAccess, WorkflowDescription, WorkflowInputParam, WorkflowRunSummary,
+        WorkflowRunner, WorkflowSummary,
     };
 }
 

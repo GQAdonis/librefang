@@ -26,14 +26,40 @@ fn oauth_provider_clone(
 }
 
 impl LibreFangKernel {
+    /// Connect an MCP server and wire its transport-health reporter (#7963).
+    ///
+    /// Every connect site in the kernel goes through here rather than calling `McpConnection::connect` directly, because a connection built without a reporter silently loses auto-reconnect: its tool-call failures reach no health record, so `should_reconnect` never fires and the server stays wedged until the daemon restarts.
+    /// That was the whole of #7963, and one choke point is what keeps a future connect site from reintroducing it.
+    ///
+    /// `pub(super)` because the fifth connect site — the per-agent workspace-scoped pool in `accessors.rs` — lives in a sibling module and needs the same wiring.
+    pub(super) async fn connect_mcp_wired(
+        &self,
+        config: librefang_runtime::mcp::McpServerConfig,
+    ) -> Result<librefang_runtime::mcp::McpConnection, String> {
+        let reporter = crate::mcp_health_reporter::KernelMcpHealthReporter::shared(Arc::clone(
+            &self.mcp.mcp_health,
+        ));
+        librefang_runtime::mcp::McpConnection::connect(config)
+            .await
+            .map(|conn| conn.with_health_reporter(reporter))
+    }
+
+    async fn mcp_connection_requires_auth(&self, server_name: &str) -> bool {
+        matches!(
+            self.mcp.mcp_auth_states.lock().await.get(server_name),
+            Some(librefang_runtime::mcp_oauth::McpAuthState::NeedsAuth)
+        )
+    }
+
     /// Connect to all configured MCP servers and cache their tool definitions.
     ///
     /// Idempotent: servers that already have a live connection are skipped.
     /// Called at boot and after hot-reload adds/updates MCP server config.
     pub async fn connect_mcp_servers(self: &Arc<Self>) {
-        use librefang_runtime::mcp::{McpConnection, McpServerConfig, McpTransport};
+        use librefang_runtime::mcp::{McpServerConfig, McpTransport};
         use librefang_types::config::McpTransportEntry;
 
+        let _connection_op = self.mcp.mcp_connection_ops.lock().await;
         let servers = self
             .mcp
             .effective_mcp_servers
@@ -42,6 +68,9 @@ impl LibreFangKernel {
             .unwrap_or_default();
 
         for server_config in &servers {
+            if self.mcp_connection_requires_auth(&server_config.name).await {
+                continue;
+            }
             // Skip servers that already have a live connection (idempotent).
             {
                 let conns = self.mcp.mcp_connections.lock().await;
@@ -89,7 +118,7 @@ impl LibreFangKernel {
                 roots: self.mcp_roots_for_server(server_config),
             };
 
-            match McpConnection::connect(mcp_config).await {
+            match self.connect_mcp_wired(mcp_config).await {
                 Ok(conn) => {
                     let tool_count = conn.tools().len();
                     // Cache tool definitions
@@ -154,6 +183,7 @@ impl LibreFangKernel {
     /// The dropped `McpConnection` will shut down the underlying transport.
     /// Returns `true` if a connection was found and removed.
     pub async fn disconnect_mcp_server(&self, name: &str) -> bool {
+        let _connection_op = self.mcp.mcp_connection_ops.lock().await;
         // Extract the matching connection(s) so we can close them explicitly
         // rather than relying on the implicit Drop path.  Explicit close ensures
         // the underlying stdio child process is reaped before we return, which
@@ -207,8 +237,23 @@ impl LibreFangKernel {
     /// Looks up the server config, builds an `McpServerConfig`, and attempts
     /// to connect. On success, adds the connection and updates auth state.
     pub async fn retry_mcp_connection(self: &Arc<Self>, server_name: &str) {
-        use librefang_runtime::mcp::{McpConnection, McpServerConfig, McpTransport};
+        use librefang_runtime::mcp::{McpServerConfig, McpTransport};
         use librefang_types::config::McpTransportEntry;
+
+        let _connection_op = self.mcp.mcp_connection_ops.lock().await;
+        if self.mcp_connection_requires_auth(server_name).await {
+            return;
+        }
+        if self
+            .mcp
+            .mcp_connections
+            .lock()
+            .await
+            .iter()
+            .any(|connection| connection.name() == server_name)
+        {
+            return;
+        }
 
         let server_config = {
             let servers = self
@@ -268,7 +313,7 @@ impl LibreFangKernel {
             roots: self.mcp_roots_for_server(&server_config),
         };
 
-        match McpConnection::connect(mcp_config).await {
+        match self.connect_mcp_wired(mcp_config).await {
             Ok(conn) => {
                 let tool_count = conn.tools().len();
                 if let Ok(mut tools) = self.mcp.mcp_tools.lock() {
@@ -365,10 +410,11 @@ impl LibreFangKernel {
     ///
     /// Returns the number of *newly connected* servers (not the total count).
     pub async fn reload_mcp_servers(self: &Arc<Self>) -> Result<usize, String> {
-        let cfg = self.config.load_full();
-        use librefang_runtime::mcp::{McpConnection, McpServerConfig, McpTransport};
+        use librefang_runtime::mcp::{McpServerConfig, McpTransport};
         use librefang_types::config::McpTransportEntry;
 
+        let _connection_op = self.mcp.mcp_connection_ops.lock().await;
+        let cfg = self.config.load_full();
         // 1. Reload the MCP catalog from disk (new templates may have landed
         //    after `registry_sync`). Atomic swap — readers never blocked.
         let catalog_count = self.mcp_catalog_reload(&cfg.home_dir);
@@ -390,6 +436,44 @@ impl LibreFangKernel {
                 }
             }
         };
+
+        let old_configs = self
+            .mcp
+            .effective_mcp_servers
+            .read()
+            .map(|servers| servers.clone())
+            .unwrap_or_default();
+        let old_by_name: std::collections::HashMap<&str, _> = old_configs
+            .iter()
+            .map(|server| (server.name.as_str(), server))
+            .collect();
+        let new_by_name: std::collections::HashMap<&str, _> = new_configs
+            .iter()
+            .map(|server| (server.name.as_str(), server))
+            .collect();
+        let mut auth_state_resets = std::collections::HashSet::new();
+        for old in &old_configs {
+            match new_by_name.get(old.name.as_str()) {
+                None => {
+                    auth_state_resets.insert(old.name.clone());
+                }
+                Some(new) if serde_json::to_value(old).ok() != serde_json::to_value(new).ok() => {
+                    auth_state_resets.insert(old.name.clone());
+                }
+                Some(_) => {}
+            }
+        }
+        for new in &new_configs {
+            if !old_by_name.contains_key(new.name.as_str()) {
+                auth_state_resets.insert(new.name.clone());
+            }
+        }
+        if !auth_state_resets.is_empty() {
+            let mut auth_states = self.mcp.mcp_auth_states.lock().await;
+            for name in &auth_state_resets {
+                auth_states.remove(name);
+            }
+        }
 
         // 3. Find servers that aren't already connected
         let already_connected: Vec<String> = self
@@ -418,6 +502,9 @@ impl LibreFangKernel {
         // 5. Connect new servers
         let mut connected_count = 0;
         for server_config in &new_servers {
+            if self.mcp_connection_requires_auth(&server_config.name).await {
+                continue;
+            }
             let transport_entry = match &server_config.transport {
                 Some(t) => t,
                 None => {
@@ -458,7 +545,7 @@ impl LibreFangKernel {
 
             self.mcp.mcp_health.register(&server_config.name);
 
-            match McpConnection::connect(mcp_config).await {
+            match self.connect_mcp_wired(mcp_config).await {
                 Ok(conn) => {
                     let tool_count = conn.tools().len();
                     if let Ok(mut tools) = self.mcp.mcp_tools.lock() {
@@ -550,9 +637,10 @@ impl LibreFangKernel {
 
     /// Reconnect a single MCP server by id.
     pub async fn reconnect_mcp_server(self: &Arc<Self>, id: &str) -> Result<usize, String> {
-        use librefang_runtime::mcp::{McpConnection, McpServerConfig, McpTransport};
+        use librefang_runtime::mcp::{McpServerConfig, McpTransport};
         use librefang_types::config::McpTransportEntry;
 
+        let _connection_op = self.mcp.mcp_connection_ops.lock().await;
         // Find the config for this server
         let server_config = {
             let effective = self
@@ -565,6 +653,11 @@ impl LibreFangKernel {
 
         let server_config =
             server_config.ok_or_else(|| format!("No MCP config found for server '{id}'"))?;
+        if self.mcp_connection_requires_auth(id).await {
+            return Err(format!(
+                "MCP server '{id}' requires OAuth authorization before reconnecting"
+            ));
+        }
 
         // Disconnect existing connection if any
         {
@@ -590,10 +683,12 @@ impl LibreFangKernel {
         let transport_entry = match &server_config.transport {
             Some(t) => t,
             None => {
-                return Err(format!(
+                let error = format!(
                     "MCP server '{}' has no transport configured",
                     server_config.name
-                ));
+                );
+                self.mcp.mcp_health.report_error(id, error.clone());
+                return Err(error);
             }
         };
         let transport = match transport_entry {
@@ -628,7 +723,7 @@ impl LibreFangKernel {
             roots: self.mcp_roots_for_server(&server_config),
         };
 
-        match McpConnection::connect(mcp_config).await {
+        match self.connect_mcp_wired(mcp_config).await {
             Ok(conn) => {
                 let tool_count = conn.tools().len();
                 if let Ok(mut tools) = self.mcp.mcp_tools.lock() {
@@ -704,5 +799,95 @@ impl LibreFangKernel {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    /// Every `.rs` file under this crate's `src/`, read from disk at test time.
+    ///
+    /// Read from disk rather than `include_str!` because the invariant below is about files this module has never heard of — a `include_str!` list can only pin the connect sites someone already remembered to add to it, which is precisely the drift being guarded against.
+    fn crate_sources() -> Vec<(PathBuf, String)> {
+        fn walk(dir: &Path, out: &mut Vec<(PathBuf, String)>) {
+            let entries = std::fs::read_dir(dir)
+                .unwrap_or_else(|e| panic!("reading {} failed: {e}", dir.display()));
+            for entry in entries {
+                let path = entry.expect("dir entry").path();
+                if path.is_dir() {
+                    walk(&path, out);
+                } else if path.extension().is_some_and(|e| e == "rs") {
+                    let body = std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| panic!("reading {} failed: {e}", path.display()));
+                    out.push((path, body));
+                }
+            }
+        }
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut out = Vec::new();
+        walk(&root, &mut out);
+        out
+    }
+
+    /// Drift guard for #7963: every MCP connect site in this crate must go through `connect_mcp_wired`, which attaches the transport-health reporter.
+    ///
+    /// A connection built by a bare `connect` compiles and works — it just silently has no health reporter, so its tool-call failures reach no health record and auto-reconnect never fires for that server.
+    /// That failure mode is invisible at runtime until a server wedges and stays wedged, which is exactly the two days of broken tool calls #7963 reported, so it is pinned here instead.
+    ///
+    /// The guard scans the whole crate rather than a hand-maintained module list, because a hand-maintained list is the same class of omission it is meant to catch: the first version of this test scanned only `mcp_setup.rs` and so did not notice that `accessors.rs::build_agent_mcp_pool` — the per-agent workspace-scoped pool `execute_llm_agent`, `ephemeral_spawn` and the messaging path *prefer* over the daemon-global one — still had its own bare `connect`.
+    ///
+    /// Needles are assembled from fragments so this test's own source does not count as a match against the files it scans.
+    #[test]
+    fn every_connect_site_wires_the_transport_health_reporter() {
+        let direct_connect = concat!("McpConnection", "::connect(");
+        let helper_call = concat!("self.connect_mcp", "_wired(");
+        let helper_decl = concat!("fn connect_mcp", "_wired");
+        let attach = concat!("with_health", "_reporter");
+
+        let sources = crate_sources();
+        assert!(
+            sources.len() > 20,
+            "the source walk found only {} files — it is not scanning the crate, so every \
+             assertion below would pass vacuously",
+            sources.len()
+        );
+
+        let mut direct_sites: Vec<String> = Vec::new();
+        let mut helper_calls = 0usize;
+        let mut helper_declared_in = None;
+        for (path, body) in &sources {
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            for _ in 0..body.matches(direct_connect).count() {
+                direct_sites.push(name.clone());
+            }
+            helper_calls += body.matches(helper_call).count();
+            if body.contains(helper_decl) && body.contains(attach) {
+                helper_declared_in = Some(name);
+            }
+        }
+
+        assert_eq!(
+            helper_declared_in.as_deref(),
+            Some("mcp_setup.rs"),
+            "the wiring helper must be declared, and must attach the health reporter, in \
+             mcp_setup.rs — without it the counts below mean nothing"
+        );
+        assert_eq!(
+            direct_sites,
+            vec!["mcp_setup.rs".to_string()],
+            "exactly one bare `connect` may exist in this crate: the one inside the wiring \
+             helper in mcp_setup.rs. Route every other connect site through \
+             `connect_mcp_wired` so the #7963 health reporter is always attached."
+        );
+        assert!(
+            helper_calls >= 5,
+            "expected at least five wired connect sites (boot connect, retry, reload, \
+             reconnect, per-agent pool), found {helper_calls}"
+        );
     }
 }

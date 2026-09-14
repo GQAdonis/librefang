@@ -12,8 +12,43 @@
 //! literal directly.
 
 use super::*;
+use crate::kernel::subsystems::memory::{MemoryExtractionResolution, MemoryExtractionTarget};
 use crate::MeteringSubsystemApi;
 use librefang_types::error::LibreFangError;
+
+fn select_everyapi_default_model(
+    catalog: &librefang_runtime::model_catalog::ModelCatalog,
+    available_ids: &[String],
+) -> Option<String> {
+    use librefang_types::model_catalog::{Modality, ModelTier};
+    use std::collections::HashSet;
+
+    let available: HashSet<String> = available_ids
+        .iter()
+        .map(|id| id.trim().to_ascii_lowercase())
+        .filter(|id| !id.is_empty())
+        .collect();
+    [
+        ModelTier::Smart,
+        ModelTier::Balanced,
+        ModelTier::Frontier,
+        ModelTier::Fast,
+    ]
+    .into_iter()
+    .flat_map(|tier| catalog.models_by_tier(tier))
+    .find(|model| {
+        model.modality == Modality::Text && available.contains(&model.id.to_ascii_lowercase())
+    })
+    .map(|model| model.id.clone())
+    .or_else(|| {
+        available_ids
+            .iter()
+            .map(|id| id.trim())
+            .filter(|id| !id.is_empty())
+            .min_by_key(|id| id.to_ascii_lowercase())
+            .map(str::to_string)
+    })
+}
 
 impl LibreFangKernel {
     /// Per-session stream-event hub (multi-client SSE attach).
@@ -26,10 +61,25 @@ impl LibreFangKernel {
     }
 
     /// Boot the kernel with configuration from the given path.
+    ///
+    /// Returns a bare `LibreFangKernel`. **Wrapping it in an `Arc` and calling
+    /// [`Self::set_self_handle`] on that `Arc` is the caller's job** — booting
+    /// does not populate the `self_handle` slot, and [`Self::kernel_handle`] is
+    /// an `.expect` that aborts the process when the slot is empty. Every path
+    /// that dispatches an agent turn resolves that handle, so a surface which
+    /// skips the call works for read-only operations and dies the moment it
+    /// sends a message. Both CLI in-process backends did exactly that until
+    /// #6651; the call is idempotent, so make it unconditionally right after
+    /// the `Arc` wrap.
     pub fn boot(config_path: Option<&Path>) -> KernelResult<Self> {
-        let config = load_config(config_path)
+        // Resolve the path *before* loading, and hand the same value to the kernel.
+        // `load_config(None)` would resolve it internally and throw it away, leaving every later reader to guess at it from `home_dir` — which is wrong under `LIBREFANG_CONFIG_PATH`, wrong under `--config`, and wrong for a file whose own `home_dir` key points elsewhere (#6695).
+        let config_path = config_path
+            .map(Path::to_path_buf)
+            .unwrap_or_else(crate::config::default_config_path);
+        let config = load_config(Some(&config_path))
             .map_err(|e| crate::error::KernelError::LibreFang(LibreFangError::Config(e)))?;
-        Self::boot_with_config(config)
+        Self::boot_with_config_at(Some(config_path), config)
     }
 
     /// Boot the kernel with an explicit configuration.
@@ -40,12 +90,59 @@ impl LibreFangKernel {
     /// `main()`. Mutating env from here would be UB: this function is
     /// reached from inside a tokio runtime, and `std::env::set_var` is
     /// unsound once other threads exist (Rust 1.80+).
-    pub fn boot_with_config(mut config: KernelConfig) -> KernelResult<Self> {
+    ///
+    /// Carries the same post-boot obligation as [`Self::boot`]: wrap the
+    /// returned kernel in an `Arc` and call [`Self::set_self_handle`] on it
+    /// before anything can dispatch an agent turn.
+    pub fn boot_with_config(config: KernelConfig) -> KernelResult<Self> {
+        Self::boot_with_config_at(None, config)
+    }
+
+    /// Boot the kernel with an explicit configuration *and* the file it came from.
+    ///
+    /// `config_path` is the path the kernel will re-read on hot-reload, watch for changes, and persist API config writes into.
+    /// `None` means "the caller built this config in memory": the path is then derived with [`crate::config::config_path_for`], which honours `LIBREFANG_CONFIG_PATH` and otherwise falls back to the config's own `home_dir`.
+    ///
+    /// Same post-boot obligation as [`Self::boot`].
+    pub fn boot_with_config_at(
+        config_path: Option<PathBuf>,
+        mut config: KernelConfig,
+    ) -> KernelResult<Self> {
         use librefang_types::config::KernelMode;
+
+        // One resolution, recorded on the kernel, used by every later reader and writer.
+        let config_path_boot =
+            config_path.unwrap_or_else(|| crate::config::config_path_for(&config));
 
         // Env var overrides — useful for Docker where config.toml is baked in.
         if let Ok(listen) = std::env::var("LIBREFANG_LISTEN") {
             config.api_listen = listen;
+        }
+        // `LIBREFANG_API_KEY` is the only way a Kubernetes Secret can supply
+        // the API bearer token (#6635). `config.toml` lives inside the
+        // daemon's own writable data dir (`$LIBREFANG_HOME/config.toml`), so
+        // it cannot be mounted from a Secret — the daemon rewrites it. Every
+        // other credential the deployment needs already has an env path
+        // (`LIBREFANG_VAULT_KEY`, `LIBREFANG_DASHBOARD_USER` /
+        // `LIBREFANG_DASHBOARD_PASS`, provider `*_API_KEY` vars); without
+        // this one, a manifest satisfying `api_key` had to bake the literal
+        // into the image or shell it into config.toml at boot.
+        //
+        // An empty or whitespace-only value is ignored rather than treated as
+        // "clear the key": a Secret key that exists but is unset would
+        // otherwise silently disarm bearer authentication, and on a
+        // non-loopback bind that turns into an open daemon. Refusing the
+        // override leaves whatever `config.toml` says, so the #3572 bind
+        // guard still gets the truth.
+        match resolve_api_key_override(std::env::var(super::API_KEY_ENV).ok().as_deref()) {
+            ApiKeyOverride::Use(key) => config.api_key = key,
+            ApiKeyOverride::IgnoredEmpty => warn!(
+                "LIBREFANG_API_KEY is set but empty — ignoring it and keeping the \
+                 api_key from config.toml. An empty value cannot be distinguished \
+                 from a misconfigured Secret, and silently clearing the key would \
+                 open the API on a non-loopback bind."
+            ),
+            ApiKeyOverride::Absent => {}
         }
 
         // Clamp configuration bounds to prevent zero-value or unbounded misconfigs
@@ -275,6 +372,8 @@ impl LibreFangKernel {
         migrate_root_backups(&config.home_dir);
         migrate_root_state_files(&config.home_dir);
         cleanup_legacy_root_logs(&config.home_dir);
+        // #7723: a transient mission workspace is removed by its in-process guard when the run ends, so anything still sitting under `<home>/transient` is the residue of a run the daemon did not survive. Boot is the one moment at which no mission of ours can be live, which makes it the only safe place to collect it.
+        mission_workspace::sweep_orphan_missions(&config.home_dir);
 
         // Initialize memory substrate
         let db_path = config
@@ -304,6 +403,11 @@ impl LibreFangKernel {
         // hardcoded default while operators tune the on-demand path.
         substrate
             .set_consolidation_duplicate_threshold(config.proactive_memory.duplicate_threshold);
+
+        // #7911: bound the per-turn episodic memory row.
+        // The runtime's per-turn writer reads this off the substrate it already holds, so the value does not have to be threaded through `LoopOptions` at every construction site.
+        // `[memory]` is restart-required in `build_reload_plan`, so a value read once here cannot go stale relative to the config on disk.
+        substrate.set_max_episodic_chars(config.memory.max_episodic_chars);
 
         // Optionally attach an external vector store backend.
         if let Some(ref backend) = config.memory.vector_backend {
@@ -370,6 +474,82 @@ impl LibreFangKernel {
             .is_ok()
         }
 
+        // #7743: `default_model.provider = "none"` is an explicit declaration that this kernel has no LLM driver.
+        // Every host-probing step below — the EveryAPI credential helper subprocess, the provider env-var scan, the Ollama TCP probe, the coding-agent-CLI-on-`PATH` scan — is gated on this flag being false, and so is every driver construction.
+        // The kernel ends up holding `StubDriver`, deterministically, on any machine.
+        // Without it the only way to ask for "no driver" was to name a provider that does not exist, which boot classifies as a misconfiguration to recover from: it falls through to auto-detection and wires up whatever the developer happens to have logged in.
+        let driverless = config.default_model.is_driverless();
+        if driverless {
+            info!(
+                "default_model.provider = \"{}\" — LLM driver resolution and host provider detection are disabled",
+                librefang_types::config::NO_LLM_PROVIDER
+            );
+        }
+
+        let (everyapi_suppressed, early_everyapi_provider) = {
+            let mut catalog = librefang_runtime::model_catalog::ModelCatalog::new(&config.home_dir);
+            catalog.load_suppressed(
+                &config
+                    .home_dir
+                    .join("data")
+                    .join("suppressed_providers.json"),
+            );
+            (
+                catalog.is_suppressed("everyapi"),
+                catalog.get_provider("everyapi").cloned(),
+            )
+        };
+        let everyapi_explicit = config.provider_urls.contains_key("everyapi")
+            || config.provider_api_keys.contains_key("everyapi")
+            || config.auth_profiles.contains_key("everyapi")
+            || (config.default_model.provider == "everyapi"
+                && (config.default_model.base_url.is_some()
+                    || !config.default_model.api_key_env.trim().is_empty()))
+            || std::env::var("EVERYAPI_API_KEY").is_ok_and(|key| !key.trim().is_empty())
+            || config
+                .home_dir
+                .join("providers")
+                .join("everyapi.toml")
+                .exists();
+        // `everyapi_credentials::resolve` shells out to the EveryAPI CLI, so an
+        // ungated call here spawns a subprocess on every boot — including every
+        // test kernel boot (#7743).
+        let everyapi_credential = if driverless || everyapi_suppressed || everyapi_explicit {
+            None
+        } else {
+            crate::everyapi_credentials::resolve(false).ok()
+        };
+        let everyapi_explicit_key_available = if config.default_model.provider == "everyapi"
+            && !config.default_model.api_key_env.trim().is_empty()
+        {
+            std::env::var(&config.default_model.api_key_env).is_ok_and(|key| !key.trim().is_empty())
+        } else if let Some(env_var) = config.provider_api_keys.get("everyapi") {
+            std::env::var(env_var).is_ok_and(|key| !key.trim().is_empty())
+        } else if let Some(profile) = config
+            .auth_profiles
+            .get("everyapi")
+            .and_then(|profiles| profiles.iter().min_by_key(|profile| profile.priority))
+        {
+            std::env::var(&profile.api_key_env).is_ok_and(|key| !key.trim().is_empty())
+        } else if let Some(provider) = early_everyapi_provider.as_ref() {
+            std::env::var(&provider.api_key_env).is_ok_and(|key| !key.trim().is_empty())
+        } else {
+            std::env::var("EVERYAPI_API_KEY").is_ok_and(|key| !key.trim().is_empty())
+        };
+        if config.default_model.provider == "everyapi"
+            && everyapi_explicit_key_available
+            && config.default_model.base_url.is_none()
+            && !config.provider_urls.contains_key("everyapi")
+        {
+            config.default_model.base_url = Some(
+                early_everyapi_provider
+                    .as_ref()
+                    .map(|provider| provider.base_url.clone())
+                    .filter(|url| !url.trim().is_empty())
+                    .unwrap_or_else(|| "https://api.everyapi.ai/v1".to_string()),
+            );
+        }
+
         // Resolve "auto" provider: scan environment for the first available API key.
         if config.default_model.provider == "auto" || config.default_model.provider.is_empty() {
             if let Some((provider, model_hint, env_var)) = drivers::detect_available_provider() {
@@ -396,6 +576,47 @@ impl LibreFangKernel {
                 config.default_model.provider = provider.to_string();
                 config.default_model.model = model;
                 config.default_model.api_key_env = env_var.to_string();
+            } else if !everyapi_suppressed
+                && (everyapi_explicit_key_available || everyapi_credential.is_some())
+            {
+                let catalog = librefang_runtime::model_catalog::ModelCatalog::new(&config.home_dir);
+                let model = everyapi_credential
+                    .as_ref()
+                    .and_then(|_| crate::everyapi_credentials::resolve_available_models().ok())
+                    .and_then(|available| select_everyapi_default_model(&catalog, &available))
+                    .unwrap_or_else(|| {
+                        warn!(
+                            "EveryAPI account model catalog unavailable or has no curated text model; \
+                             falling back to the built-in default"
+                        );
+                        "claude-sonnet-5".to_string()
+                    });
+                let auth_source = if everyapi_explicit_key_available {
+                    "EveryAPI API key"
+                } else {
+                    "EveryAPI CLI login"
+                };
+                info!(
+                    provider = "everyapi",
+                    model = %model,
+                    auth_source,
+                    "Auto-detected default provider"
+                );
+                config.default_model.provider = "everyapi".to_string();
+                config.default_model.model = model;
+                config.default_model.api_key_env = String::new();
+                if everyapi_explicit_key_available
+                    && config.default_model.base_url.is_none()
+                    && !config.provider_urls.contains_key("everyapi")
+                {
+                    config.default_model.base_url = Some(
+                        early_everyapi_provider
+                            .as_ref()
+                            .map(|provider| provider.base_url.clone())
+                            .filter(|url| !url.trim().is_empty())
+                            .unwrap_or_else(|| "https://api.everyapi.ai/v1".to_string()),
+                    );
+                }
             } else if is_ollama_reachable() {
                 // Ollama is running locally — use the catalog's default model, not a hardcoded one.
                 let model = librefang_runtime::model_catalog::ModelCatalog::default()
@@ -433,7 +654,10 @@ impl LibreFangKernel {
         // For the API key, try: 1) explicit api_key_env from config, 2) provider_api_keys
         // mapping, 3) auth profiles, 4) convention {PROVIDER}_API_KEY. This ensures
         // custom providers (e.g. nvidia, azure) work without hardcoded env var names.
-        let default_api_key = if !config.default_model.api_key_env.is_empty() {
+        let default_api_key = if driverless {
+            // #7743: no driver means no credential — and no reason to read one out of the environment.
+            None
+        } else if !config.default_model.api_key_env.is_empty() {
             std::env::var(&config.default_model.api_key_env).ok()
         } else {
             // api_key_env not set — resolve using provider_api_keys / convention
@@ -478,7 +702,32 @@ impl LibreFangKernel {
         };
         // Primary driver failure is non-fatal: the dashboard should remain accessible
         // even if the LLM provider is misconfigured. Users can fix config via dashboard.
-        let primary_result = drivers::create_driver(&driver_config);
+        let managed_everyapi_default = config.default_model.provider == "everyapi"
+            && default_api_key.is_none()
+            && !everyapi_suppressed
+            && !everyapi_explicit
+            && everyapi_credential.is_some();
+        let primary_result = if driverless {
+            // #7743: the stub IS the primary driver here, deliberately. Returning
+            // it as `Ok` rather than an error keeps boot off the "primary init
+            // failed — try auto-detect" recovery path below, which is precisely
+            // the path that resolves a live provider from the host.
+            Ok(Arc::new(StubDriver) as Arc<dyn LlmDriver>)
+        } else if everyapi_suppressed && config.default_model.provider == "everyapi" {
+            Err(LlmError::MissingApiKey(
+                "EveryAPI provider is suppressed".to_string(),
+            ))
+        } else if managed_everyapi_default {
+            Ok(
+                Arc::new(crate::everyapi_driver::ManagedEveryApiDriver::new_gated(
+                    driver_config.clone(),
+                    Arc::new(drivers::DriverCache::new()),
+                    config.home_dir.clone(),
+                )) as Arc<dyn LlmDriver>,
+            )
+        } else {
+            drivers::create_driver(&driver_config)
+        };
         let mut driver_chain: Vec<Arc<dyn LlmDriver>> = Vec::new();
 
         let rotation_specs = collect_rotation_key_specs(
@@ -489,7 +738,9 @@ impl LibreFangKernel {
             default_api_key.as_deref(),
         );
 
-        if rotation_specs.len() > 1 || (primary_result.is_err() && !rotation_specs.is_empty()) {
+        if !driverless
+            && (rotation_specs.len() > 1 || (primary_result.is_err() && !rotation_specs.is_empty()))
+        {
             let mut rotation_drivers: Vec<(Arc<dyn LlmDriver>, String)> = Vec::new();
 
             for spec in rotation_specs {
@@ -547,7 +798,8 @@ impl LibreFangKernel {
 
         // CLI profile rotation (Claude Code): create one driver per profile
         // directory, wrapped in TokenRotationDriver for automatic failover.
-        if driver_chain.is_empty()
+        if !driverless
+            && driver_chain.is_empty()
             && !config.default_model.cli_profile_dirs.is_empty()
             && matches!(
                 config.default_model.provider.as_str(),
@@ -687,68 +939,84 @@ impl LibreFangKernel {
                  fallthrough to this provider is a known residual"
             );
         }
-        for fb in &config.fallback_providers {
-            // Governance allowlist (issue #6459): never add a disallowed provider
-            // to the boot default_driver fallback chain. This driver seeds
-            // aux.primary and the CLI-profile / init-failure primary shortcuts, so
-            // an ungated slot here lets a failover reach a disallowed vendor.
-            // Fail-closed skip + WARN, mirroring the per-slot gate in resolve_driver.
-            if !config.providers.is_provider_allowed(&fb.provider) {
-                warn!(
-                    provider = %fb.provider,
-                    allowed = ?config.providers.allowed,
-                    "Fallback LLM provider blocked by org-wide allowlist; skipping slot"
+        // #7743: a driverless kernel gets no fallback slots either. A single live
+        // slot here would make `driver_chain` longer than one, wrap the stub primary
+        // in a `FallbackDriver`, and let a failover reach a real provider — which is
+        // the same host leak one layer out.
+        if !driverless {
+            for fb in &config.fallback_providers {
+                let (fb_provider, fb_model) = resolve_fallback_target(
+                    &fb.provider,
+                    &fb.model,
+                    &config.default_model.provider,
+                    &config.default_model.model,
                 );
-                continue;
-            }
-            let fb_api_key = if !fb.api_key_env.is_empty() {
-                std::env::var(&fb.api_key_env).ok()
-            } else {
-                // Resolve using provider_api_keys / convention for custom providers
-                let env_var = config.resolve_api_key_env(&fb.provider);
-                std::env::var(&env_var).ok()
-            };
-            let fb_config = DriverConfig {
-                provider: fb.provider.clone(),
-                api_key: fb_api_key,
-                base_url: fb
-                    .base_url
-                    .clone()
-                    .or_else(|| config.provider_urls.get(&fb.provider).cloned()),
-                vertex_ai: config.vertex_ai.clone(),
-                azure_openai: config.azure_openai.clone(),
-                skip_permissions: true,
-                message_timeout_secs: config.default_model.message_timeout_secs,
-                mcp_bridge: Some(mcp_bridge_cfg.clone()),
-                proxy_url: config.provider_proxy_urls.get(&fb.provider).cloned(),
-                request_timeout_secs: config
-                    .provider_request_timeout_secs
-                    .get(&fb.provider)
-                    .copied(),
-                emit_caller_trace_headers: config.telemetry.emit_caller_trace_headers,
-                max_retries: config
-                    .provider_max_retries
-                    .get(&fb.provider)
-                    .copied()
-                    .unwrap_or_else(|| DriverConfig::default().max_retries),
-            };
-            match drivers::create_driver(&fb_config) {
-                Ok(d) => {
-                    info!(
-                        provider = %fb.provider,
-                        model = %fb.model,
-                        "Fallback provider configured"
-                    );
-                    driver_chain.push(d.clone());
-                    model_chain.push((d, strip_provider_prefix(&fb.model, &fb.provider)));
-                    provider_chain.push(fb.provider.clone());
+                if everyapi_suppressed && fb_provider == "everyapi" {
+                    warn!("EveryAPI fallback provider is suppressed; skipping slot");
+                    continue;
                 }
-                Err(e) => {
+                // Governance allowlist (issue #6459): never add a disallowed provider
+                // to the boot default_driver fallback chain. This driver seeds
+                // aux.primary and the CLI-profile / init-failure primary shortcuts, so
+                // an ungated slot here lets a failover reach a disallowed vendor.
+                // Fail-closed skip + WARN, mirroring the per-slot gate in resolve_driver.
+                if !config.providers.is_provider_allowed(&fb_provider) {
                     warn!(
-                        provider = %fb.provider,
-                        error = %e,
-                        "Fallback provider init failed — skipped"
+                        provider = %fb_provider,
+                        allowed = ?config.providers.allowed,
+                        "Fallback LLM provider blocked by org-wide allowlist; skipping slot"
                     );
+                    continue;
+                }
+                let fb_api_key = if !fb.api_key_env.is_empty() {
+                    std::env::var(&fb.api_key_env).ok()
+                } else {
+                    // Resolve using provider_api_keys / convention for custom providers
+                    let env_var = config.resolve_api_key_env(&fb_provider);
+                    std::env::var(&env_var).ok()
+                };
+                let fb_config = DriverConfig {
+                    provider: fb_provider.clone(),
+                    api_key: fb_api_key,
+                    base_url: fb
+                        .base_url
+                        .clone()
+                        .or_else(|| config.provider_urls.get(&fb_provider).cloned()),
+                    vertex_ai: config.vertex_ai.clone(),
+                    azure_openai: config.azure_openai.clone(),
+                    skip_permissions: true,
+                    message_timeout_secs: config.default_model.message_timeout_secs,
+                    mcp_bridge: Some(mcp_bridge_cfg.clone()),
+                    proxy_url: config.provider_proxy_urls.get(&fb_provider).cloned(),
+                    request_timeout_secs: config
+                        .provider_request_timeout_secs
+                        .get(&fb_provider)
+                        .copied(),
+                    emit_caller_trace_headers: config.telemetry.emit_caller_trace_headers,
+                    max_retries: config
+                        .provider_max_retries
+                        .get(&fb_provider)
+                        .copied()
+                        .unwrap_or_else(|| DriverConfig::default().max_retries),
+                };
+                match drivers::create_driver(&fb_config) {
+                    Ok(d) => {
+                        info!(
+                            provider = %fb_provider,
+                            model = %fb_model,
+                            "Fallback provider configured"
+                        );
+                        driver_chain.push(d.clone());
+                        model_chain.push((d, fb_model));
+                        provider_chain.push(fb_provider);
+                    }
+                    Err(e) => {
+                        warn!(
+                            provider = %fb_provider,
+                            error = %e,
+                            "Fallback provider init failed — skipped"
+                        );
+                    }
                 }
             }
         }
@@ -842,6 +1110,23 @@ impl LibreFangKernel {
                  LibreFang role and will default-deny — see WARN lines above"
             );
         }
+        // Same visibility fix for `[external_auth.role_map]` (#7744): a typo'd target role grants nothing, and without a boot WARN the only symptom is SSO callers getting 401 with no explanation.
+        let oidc_typo_count = crate::auth::validate_oidc_role_map(&config.external_auth.role_map);
+        if oidc_typo_count > 0 {
+            warn!(
+                "external_auth.role_map: {oidc_typo_count} entr(ies) reference an unrecognized \
+                 LibreFang role and grant nothing — see WARN lines above"
+            );
+        }
+        // And for `[external_auth.group_map]` (#7746): a target that names no `[[groups]]` entry — a rename that missed the map, or a typo — confers no membership, with the same silent symptom.
+        let oidc_group_dangling =
+            crate::auth::validate_oidc_group_map(&config.external_auth.group_map, &config.groups);
+        if oidc_group_dangling > 0 {
+            warn!(
+                "external_auth.group_map: {oidc_group_dangling} entr(ies) point at a group that \
+                 does not exist in [[groups]] and confer no membership — see WARN lines above"
+            );
+        }
 
         // Initialize git repo for config version control (first boot)
         init_git_if_missing(&config.home_dir);
@@ -849,12 +1134,21 @@ impl LibreFangKernel {
         // Auto-sync registry content on first boot or after upgrade when
         // Sync registry: downloads if cache is stale, pre-installs providers/agents/integrations.
         // Skips download if cache is fresh; skips copy if files already exist.
-        librefang_runtime::registry_sync::sync_registry(
-            &config.home_dir,
-            config.registry.cache_ttl_secs,
-            &config.registry.registry_mirror,
-            config.registry.registry_host.as_deref(),
-        );
+        // `[registry] auto_sync = false` freezes `~/.librefang/registry/`: the sync fast-forwards that checkout with `git reset --hard origin/main`, which destroys every local modification under it — including the ones `PUT /api/hands/{id}/manifest` writes for a registry-shipped hand.
+        // Explicit operator actions (`librefang init`, `POST /api/catalog/update`) still fetch; `POST /api/hands/reload` only reloads whatever is already on disk and never fetched from upstream, so it is unaffected either way.
+        if config.registry.auto_sync {
+            librefang_runtime::registry_sync::sync_registry(
+                &config.home_dir,
+                config.registry.cache_ttl_secs,
+                &config.registry.registry_mirror,
+                config.registry.registry_host.as_deref(),
+            );
+        } else {
+            info!(
+                "[registry] auto_sync = false — skipping the boot registry sync; \
+                 run POST /api/catalog/update to refresh on demand"
+            );
+        }
 
         // One-shot: reclaim the duplicate registry checkout that older
         // librefang versions maintained under `~/.librefang/cache/registry/`.
@@ -899,6 +1193,76 @@ impl LibreFangKernel {
                 "applied {} provider URL override(s)",
                 config.provider_urls.len()
             );
+        }
+        let everyapi_explicit = everyapi_explicit
+            || config.provider_urls.contains_key("everyapi")
+            || config.provider_api_keys.contains_key("everyapi")
+            || config.auth_profiles.contains_key("everyapi")
+            || std::env::var("EVERYAPI_API_KEY").is_ok_and(|key| !key.trim().is_empty());
+        if !everyapi_suppressed && everyapi_explicit {
+            let base_url = config
+                .default_model
+                .base_url
+                .clone()
+                .filter(|_| config.default_model.provider == "everyapi")
+                .or_else(|| config.provider_urls.get("everyapi").cloned())
+                .or_else(|| {
+                    model_catalog
+                        .get_provider("everyapi")
+                        .filter(|provider| provider.is_custom)
+                        .map(|provider| provider.base_url.clone())
+                })
+                .unwrap_or_else(|| "https://api.everyapi.ai/v1".to_string());
+            let api_key_env = if config.default_model.provider == "everyapi"
+                && !config.default_model.api_key_env.trim().is_empty()
+            {
+                config.default_model.api_key_env.clone()
+            } else if let Some(env_var) = config.provider_api_keys.get("everyapi") {
+                env_var.clone()
+            } else if let Some(profile) = config
+                .auth_profiles
+                .get("everyapi")
+                .and_then(|profiles| profiles.iter().min_by_key(|profile| profile.priority))
+            {
+                profile.api_key_env.clone()
+            } else if let Some(provider) = model_catalog
+                .get_provider("everyapi")
+                .filter(|provider| provider.is_custom)
+            {
+                provider.api_key_env.clone()
+            } else {
+                "EVERYAPI_API_KEY".to_string()
+            };
+            let credential_present =
+                std::env::var(&api_key_env).is_ok_and(|key| !key.trim().is_empty());
+            model_catalog.ensure_explicit_everyapi(&base_url, &api_key_env, credential_present);
+        } else if !everyapi_suppressed {
+            match everyapi_credential
+                .clone()
+                .map(Ok)
+                .unwrap_or_else(|| crate::everyapi_credentials::resolve(false))
+            {
+                Ok(credential) => {
+                    if model_catalog.ensure_managed_everyapi(&credential.base_url) {
+                        info!(
+                            base_url = %credential.base_url,
+                            "Auto-detected EveryAPI managed provider"
+                        );
+                    }
+                }
+                Err(
+                    crate::everyapi_credentials::CredentialError::NotLoggedIn
+                    | crate::everyapi_credentials::CredentialError::NoRelayKey,
+                ) => {
+                    if model_catalog.ensure_managed_everyapi("https://api.everyapi.ai/v1") {
+                        model_catalog.set_provider_auth_status(
+                            "everyapi",
+                            librefang_types::model_catalog::AuthStatus::Missing,
+                        );
+                    }
+                }
+                Err(_) => {}
+            }
         }
         if !config.provider_proxy_urls.is_empty() {
             model_catalog.apply_proxy_url_overrides(&config.provider_proxy_urls);
@@ -982,7 +1346,10 @@ impl LibreFangKernel {
         // silently replace the caller's in-memory config with whatever is on
         // disk, which is wrong when the caller started the kernel with a
         // non-default config path or a programmatically-built config.
-        let migrated = match librefang_runtime::mcp_migrate::migrate_if_needed(&config.home_dir) {
+        let migrated = match librefang_runtime::mcp_migrate::migrate_if_needed(
+            &config.home_dir,
+            &config_path_boot,
+        ) {
             Ok(Some(summary)) => {
                 info!("MCP migration: {summary}");
                 true
@@ -1000,7 +1367,7 @@ impl LibreFangKernel {
         info!("MCP catalog: {catalog_count} template(s) available");
 
         let config = if migrated {
-            let cfg_path = config.home_dir.join("config.toml");
+            let cfg_path = config_path_boot.clone();
             if cfg_path.is_file() {
                 match load_config(Some(&cfg_path)) {
                     Ok(reloaded) => {
@@ -1060,7 +1427,9 @@ impl LibreFangKernel {
             max_backoff_secs: config.extensions.reconnect_max_backoff_secs,
             check_interval_secs: hc_interval,
         };
-        let mcp_health = librefang_extensions::health::HealthMonitor::new(health_config);
+        let mcp_health = Arc::new(librefang_extensions::health::HealthMonitor::new(
+            health_config,
+        ));
         // Register every configured MCP server for health monitoring.
         for srv in &all_mcp_servers {
             mcp_health.register(&srv.name);
@@ -1090,6 +1459,16 @@ impl LibreFangKernel {
                 web_cache,
             ),
         };
+
+        // #7912: the identity of the embedding model actually in use, in
+        // `provider/model` form. This is deliberately not
+        // `config.memory.embedding_model` — the resolution below substitutes a
+        // provider default when the configured string is one of the two
+        // built-in placeholders, and auto-detection picks the provider from the
+        // environment, so the configured string and the model that produced a
+        // vector routinely differ. Only the resolved pair identifies the vector
+        // space a stored embedding belongs to.
+        let mut effective_embedding_identity: Option<String> = None;
 
         // Auto-detect embedding driver for vector similarity search
         let embedding_driver: Option<
@@ -1138,6 +1517,7 @@ impl LibreFangKernel {
                 ) {
                     Ok(d) => {
                         info!(provider = %provider, model = %model, "Embedding driver configured from memory config");
+                        effective_embedding_identity = Some(format!("{provider}/{model}"));
                         Some(Arc::from(d))
                     }
                     Err(e) => {
@@ -1188,6 +1568,7 @@ impl LibreFangKernel {
                     ) {
                         Ok(d) => {
                             info!(provider = %detected, model = %model, "Embedding driver auto-detected");
+                            effective_embedding_identity = Some(format!("{detected}/{model}"));
                             Some(Arc::from(d))
                         }
                         Err(e) => {
@@ -1206,6 +1587,41 @@ impl LibreFangKernel {
                 }
             }
         };
+
+        // #7912: stamp new vectors with the model that produced them, and tell
+        // the operator when the store already holds vectors from a different
+        // one. Both models in the report on that issue are 1024-dimensional, so
+        // the length check inside `cosine_similarity` never fires and the only
+        // symptom of a model swap is that retrieval quietly goes random.
+        if let Some(ref identity) = effective_embedding_identity {
+            memory.set_embedding_model(identity);
+            match memory.embedding_model_census() {
+                Ok(census) => {
+                    // BTreeMap, so the rendered summary is byte-identical across
+                    // boots for the same store rather than reshuffling per run.
+                    let stale: Vec<String> = census
+                        .iter()
+                        .filter(|(model, _)| model.as_str() != identity.as_str())
+                        .map(|(model, count)| format!("{model}={count}"))
+                        .collect();
+                    if !stale.is_empty() {
+                        warn!(
+                            active_model = %identity,
+                            stale = %stale.join(", "),
+                            "Stored embeddings were produced by a different model than the one now configured. \
+                             Cosine similarity across two embedding spaces is meaningless, so those vectors are \
+                             skipped during vector recall. Restore the previous embedding_model, or re-embed \
+                             the affected rows."
+                        );
+                    } else {
+                        debug!(active_model = %identity, "Embedding model census clean");
+                    }
+                }
+                Err(e) => {
+                    warn!(error = %e, "Embedding model census failed; skipping the model-drift check");
+                }
+            }
+        }
 
         let browser_ctx = librefang_runtime::browser::BrowserManager::new(config.browser.clone());
 
@@ -1467,7 +1883,7 @@ impl LibreFangKernel {
         // skill config injection layer treats a missing/invalid file as an
         // empty table, which is the same semantics as the previous on-miss
         // path.
-        let initial_raw_config_toml = load_raw_config_toml(&config.home_dir.join("config.toml"));
+        let initial_raw_config_toml = load_raw_config_toml(&config_path_boot);
 
         // Canonical agent UUID registry (refs #4614). Loaded from
         // `<home_dir>/agent_identities.toml`; missing or malformed files
@@ -1557,7 +1973,11 @@ impl LibreFangKernel {
 
         let kernel = Self {
             home_dir_boot: config.home_dir.clone(),
+            config_path_boot,
             data_dir_boot: config.data_dir.clone(),
+            provisioning: ArcSwap::new(std::sync::Arc::new(
+                crate::provisioning::ProvisioningRuntime::default(),
+            )),
             config: ArcSwap::new(std::sync::Arc::new(config)),
             raw_config_toml: ArcSwap::new(std::sync::Arc::new(initial_raw_config_toml)),
             agents: crate::kernel::subsystems::AgentSubsystem::new(agent_identities, supervisor),
@@ -1677,10 +2097,10 @@ impl LibreFangKernel {
         let cfg = kernel.config.load();
         if cfg.proactive_memory.enabled {
             let pm_config = cfg.proactive_memory.clone();
-            let extraction_spec = pm_config
-                .extraction_model
+            let configured_extraction_model =
+                pm_config.extraction_model.clone().filter(|s| !s.is_empty());
+            let extraction_spec = configured_extraction_model
                 .clone()
-                .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| cfg.default_model.model.clone());
 
             let catalog = kernel.llm.model_catalog.load();
@@ -1697,6 +2117,56 @@ impl LibreFangKernel {
                 &extraction_provider,
             );
 
+            // Say out loud which model ended up doing the extraction, and
+            // whether anyone chose it — *after* resolution, so the line names
+            // the provider and the model that will actually be called rather
+            // than the spec string that was fed in. An inherited
+            // `provider/model` spec logged before resolution answers neither
+            // "which provider" nor "what will the upstream API see", which is
+            // the whole question.
+            //
+            // The fallback to `default_model` used to be silent, and silence
+            // is what made it expensive: on a live deployment an agent was
+            // answering in 2 s on its own fast model while its memory
+            // extraction ran on the global default — a reasoning model that
+            // needs 30.5 s for the *smallest possible* extraction, against a
+            // 30 s ceiling it could therefore never meet. It failed on every
+            // single turn, retried four times, and held each finished reply
+            // for over two minutes. Nothing in the operator's config file
+            // mentioned that model in connection with memory at all, so there
+            // was nothing to read and no reason to suspect it.
+            //
+            // Inheriting the default is the documented behaviour of an unset
+            // field, so it is reported at INFO, not WARN: a warning that fires
+            // on every default install is a warning operators learn to skip,
+            // and the one path here that is genuinely surprising — the driver
+            // failing to build and extraction silently losing its LLM — needs
+            // that level to still mean something.
+            let extraction_target = MemoryExtractionTarget {
+                configured_spec: configured_extraction_model.clone(),
+                provider: extraction_provider.clone(),
+                model: extraction_model_name.clone(),
+            };
+            if configured_extraction_model.is_some() {
+                debug!(
+                    extraction_spec = %extraction_spec,
+                    extraction_provider = %extraction_provider,
+                    extraction_model = %extraction_model_name,
+                    "proactive memory: using the configured extraction model"
+                );
+            } else {
+                info!(
+                    extraction_spec = %extraction_spec,
+                    extraction_provider = %extraction_provider,
+                    extraction_model = %extraction_model_name,
+                    "proactive memory: no [proactive_memory] extraction_model is set, so \
+                     extraction inherits the global default model. This runs on every turn \
+                     after the reply is ready, so a slow model here delays every answer. \
+                     Set [proactive_memory] extraction_model to a small, fast model to \
+                     decouple it from the model your agents converse with."
+                );
+            }
+
             // Build the extraction driver: reuse the kernel's default driver
             // when extraction provider == default provider (no extra
             // driver_cache entry); otherwise build a fresh driver for the
@@ -1705,6 +2175,7 @@ impl LibreFangKernel {
             // — explicit visible degradation beats silently 404'ing the
             // operator's named provider on every turn (the original #4871
             // bug).
+            let mut extraction_driver_error: Option<String> = None;
             let llm: Option<(Arc<dyn librefang_runtime::llm_driver::LlmDriver>, String)> =
                 if extraction_provider == cfg.default_model.provider {
                     Some((
@@ -1716,14 +2187,16 @@ impl LibreFangKernel {
                         Ok(driver) => Some((driver, extraction_model_name)),
                         Err(e) => {
                             warn!(
-                                extraction_model = %extraction_spec,
+                                extraction_spec = %extraction_spec,
                                 extraction_provider = %extraction_provider,
+                                extraction_model = %extraction_model_name,
                                 error = %e,
                                 "Failed to build extraction LLM driver for the configured \
                                  [proactive_memory] extraction_model; falling back to substring \
                                  extraction. Check that the named provider has its API key + \
                                  base URL configured."
                             );
+                            extraction_driver_error = Some(e.to_string());
                             None
                         }
                     }
@@ -1742,6 +2215,16 @@ impl LibreFangKernel {
             // inherits caching from the agent's manifest metadata which
             // the kernel derives from this same flag.
             let prompt_caching = cfg.prompt_caching;
+            // A sidecar extractor takes precedence inside
+            // `init_proactive_memory_full_with_extractor` and bypasses the LLM
+            // path wholesale, so it is one of the ways a resolved model ends up
+            // not being the thing that writes memories. Read it before
+            // `pm_config` is moved.
+            let sidecar_command = pm_config
+                .extractor_sidecar
+                .as_ref()
+                .map(|s| s.command.trim().to_string())
+                .filter(|c| !c.is_empty());
             let result =
                 librefang_runtime::proactive_memory::init_proactive_memory_full_with_extractor(
                     Arc::clone(&kernel.memory.substrate),
@@ -1750,12 +2233,52 @@ impl LibreFangKernel {
                     embedding,
                     prompt_caching,
                 );
+
+            // Record the *outcome*, not the intent. Every reporting surface
+            // reads this snapshot instead of re-deriving "which model extracts
+            // memories" from `KernelConfig`, because a re-derivation cannot see
+            // any of the three ways the configured model stops being the answer
+            // — the store never being built, a sidecar taking over, or the
+            // driver failing to build and extraction quietly dropping to
+            // substring matching with no LLM at all.
+            let resolution = match &result {
+                // Both `auto_memorize` and `auto_retrieve` are off, so no store
+                // was built and nothing extracts.
+                None => MemoryExtractionResolution::Inactive,
+                Some((_, Some(_))) => MemoryExtractionResolution::Llm {
+                    target: extraction_target,
+                },
+                Some((_, None)) => match sidecar_command {
+                    Some(command) => MemoryExtractionResolution::Sidecar { command },
+                    None => MemoryExtractionResolution::DegradedToSubstring {
+                        reason: format!(
+                            "failed to build the {} driver for extraction model {}: {}",
+                            extraction_target.provider,
+                            extraction_target.model,
+                            extraction_driver_error
+                                .as_deref()
+                                .unwrap_or("no extraction LLM driver was built"),
+                        ),
+                        target: extraction_target,
+                    },
+                },
+            };
+            let _ = kernel.memory.extraction_resolution.set(resolution);
+
             if let Some((store, extractor)) = result {
                 let _ = kernel.memory.proactive_memory.set(store);
                 if let Some(ex) = extractor {
                     let _ = kernel.memory.proactive_memory_extractor.set(ex);
                 }
             }
+        } else {
+            // Record the inactive outcome too, so a reporting surface can tell
+            // "extraction is switched off" apart from "boot never got here" and
+            // never has to fall back to guessing from config.
+            let _ = kernel
+                .memory
+                .extraction_resolution
+                .set(MemoryExtractionResolution::Inactive);
         }
 
         // Initialize prompt store
@@ -1784,6 +2307,14 @@ impl LibreFangKernel {
                 .map(|e| (e.hand_id, e.config))
                 .collect()
         };
+
+        // Propagate the global default burst ratio to the scheduler so
+        // agents without a per-agent override use the config value instead
+        // of the compiled fallback (fixes #8115).
+        kernel
+            .agents
+            .scheduler
+            .set_default_burst_ratio(kernel.current_budget().default_burst_ratio);
 
         // Restore persisted agents from SQLite
         match kernel.memory.substrate.load_all_agents() {
@@ -1938,57 +2469,14 @@ impl LibreFangKernel {
                                                     .hand_registry
                                                     .get_definition(&hand_id)
                                                 {
-                                                    if !def.settings.is_empty() {
-                                                        let empty =
-                                                            std::collections::HashMap::new();
-                                                        let cfg_for_settings =
-                                                            persisted_hand_configs
-                                                                .get(&hand_id)
-                                                                .unwrap_or(&empty);
-                                                        // Capture the returned env-var allowlist
-                                                        // and re-inject it into
-                                                        // metadata["hand_allowed_env"] — mirroring
-                                                        // the activation path in
-                                                        // `activate_hand_with_id`. Discarding it
-                                                        // here meant hand-injected env passthrough
-                                                        // silently disappeared on every restart
-                                                        // until a manual re-activation (#5137).
-                                                        let allowed_env =
-                                                            apply_settings_block_to_manifest(
-                                                                &mut entry.manifest,
-                                                                &def.settings,
-                                                                cfg_for_settings,
-                                                            );
-                                                        if !allowed_env.is_empty() {
-                                                            entry.manifest.metadata.insert(
-                                                                "hand_allowed_env".to_string(),
-                                                                serde_json::to_value(&allowed_env)
-                                                                    .unwrap_or_default(),
-                                                            );
-                                                        }
-                                                    }
-
-                                                    // Re-render `## Reference Knowledge` and
-                                                    // `## Your Team` tails — like the settings
-                                                    // tail above, the bare disk TOML never
-                                                    // carries them, so without re-rendering
-                                                    // here the agent silently loses skill
-                                                    // discoverability and peer awareness on
-                                                    // every restart. Helpers are
-                                                    // unconditionally idempotent: empty skill
-                                                    // content / single-agent hand / no peers
-                                                    // all collapse to a strip-only call that
-                                                    // also clears any stale tail left over
-                                                    // from when the hand previously had
-                                                    // those.
+                                                    // Re-render the whole prompt through the canonical helper — the same one activation and the settings-save path use, so the three cannot disagree about content or ordering.
+                                                    // The bare disk TOML carries none of the rendered tails, so without this the agent silently loses its configured values, skill discoverability and peer awareness on every restart.
                                                     //
-                                                    // Recover the agent's role from the
-                                                    // `hand_role:<role>` tag stamped at
-                                                    // activation. Skip silently when the tag
-                                                    // is missing — the agent isn't
-                                                    // hand-derived in a way we recognise, and
-                                                    // the activation path will re-stamp the
-                                                    // tags on the next `hand activate`.
+                                                    // The env passthrough allowlist is re-derived from the same (definition, config) pair.
+                                                    // Discarding it here meant hand-injected env passthrough silently disappeared on every restart until a manual re-activation (#5137); deriving it from the settings alone dropped every `[[requires]]`-declared name, which is the same disappearance one layer down.
+                                                    //
+                                                    // Recover the agent's role from the `hand_role:<role>` tag stamped at activation.
+                                                    // Skip when the tag is missing — the agent isn't hand-derived in a way we recognise, and the activation path will re-stamp the tags on the next `hand activate`.
                                                     let role_opt = entry
                                                         .manifest
                                                         .tags
@@ -1996,29 +2484,31 @@ impl LibreFangKernel {
                                                         .find_map(|t| t.strip_prefix("hand_role:"))
                                                         .map(|s| s.to_string());
                                                     if let Some(role) = role_opt {
-                                                        apply_skill_reference_block_to_manifest(
+                                                        let empty =
+                                                            std::collections::HashMap::new();
+                                                        let cfg_for_settings =
+                                                            persisted_hand_configs
+                                                                .get(&hand_id)
+                                                                .unwrap_or(&empty);
+                                                        let allowed_env =
+                                                            rerender_hand_prompt_tails(
+                                                                &mut entry.manifest,
+                                                                &role,
+                                                                &def,
+                                                                cfg_for_settings,
+                                                            );
+                                                        set_hand_allowed_env(
                                                             &mut entry.manifest,
-                                                            &role,
-                                                            &def,
-                                                        );
-                                                        apply_team_block_to_manifest(
-                                                            &mut entry.manifest,
-                                                            &role,
-                                                            &def,
+                                                            &allowed_env,
                                                         );
                                                     } else {
-                                                        // Hand membership is known (we're inside
-                                                        // the `hand:<id>` branch) but the role tag
-                                                        // wasn't stamped — this agent will boot
-                                                        // without skill discoverability or peer
-                                                        // awareness until somebody re-runs
-                                                        // `hand activate`. Log so the silent
-                                                        // degradation is at least greppable.
+                                                        // Hand membership is known (we're inside the `hand:<id>` branch) but the role tag wasn't stamped — this agent will boot without its rendered tails until somebody re-runs `hand activate`.
+                                                        // Log so the silent degradation is at least greppable.
                                                         debug!(
                                                             agent = %name,
                                                             hand = %hand_id,
                                                             "hand_role:<role> tag missing on \
-                                                             hand-derived agent; skipping skill/team \
+                                                             hand-derived agent; skipping prompt \
                                                              tail re-render until next hand activate"
                                                         );
                                                     }
@@ -2250,6 +2740,12 @@ impl LibreFangKernel {
                         );
                         continue;
                     }
+
+                    // #6732: this boot-time restore path inserts straight into the registry and never goes through `validate_spawnable`, so it is a fourth manifest-accepting path alongside spawn, hand-role activation, hot-reload and `update_manifest`.
+                    // Without this call, every daemon restart would silently skip the diagnostic for every already-existing agent — the most common case in practice.
+                    // Report-only, same as the other three call sites.
+                    warn_invalid_group_trigger_patterns(&restored_entry.manifest, &name);
+
                     if let Err(e) = kernel.agents.registry.register(restored_entry) {
                         tracing::warn!(agent = %name, "Failed to restore agent: {e}");
                     } else {
@@ -2521,6 +3017,14 @@ impl LibreFangKernel {
             }
         }
 
+        // Reconcile the deployment-owned provisioning tree (#6695).
+        //
+        // Ordered after the registry restore so the plan can tell "this agent exists" from
+        // "this agent must be created", and before the default-assistant fallback below so a
+        // deployment that declares its own agents does not also get an `assistant` it never
+        // asked for.
+        kernel.apply_provisioning();
+
         // If no agents exist (fresh install), spawn a default assistant.
         if kernel.agents.registry.list().is_empty() {
             info!("No agents found — spawning default assistant");
@@ -2683,6 +3187,37 @@ system_prompt = "You are a helpful assistant."
 
         info!("LibreFang kernel booted successfully");
         Ok(kernel)
+    }
+}
+
+/// What the `LIBREFANG_API_KEY` env var asks `boot_with_config` to do.
+#[derive(Debug, PartialEq, Eq)]
+enum ApiKeyOverride {
+    /// Env unset — leave `config.toml`'s `api_key` alone.
+    Absent,
+    /// Env set to a usable value — replace `config.toml`'s `api_key` with it.
+    Use(String),
+    /// Env set but empty or whitespace-only. Treated as `Absent` plus a
+    /// warning, deliberately NOT as "clear the api_key": a Kubernetes Secret
+    /// key that exists but holds nothing is indistinguishable from this, and
+    /// clearing the key disarms bearer auth — which on a non-loopback bind
+    /// means an open daemon. Keeping `config.toml`'s value also keeps the
+    /// #3572 bind guard's inputs honest.
+    IgnoredEmpty,
+}
+
+/// Pure decision for the `LIBREFANG_API_KEY` override — `None` means env
+/// unset.
+///
+/// Separated from the env read for the same reason as
+/// `validate_state_secret_value` below: it makes the accept/reject envelope
+/// testable without mutating process-global env, which would force the suite
+/// serial and is unsound once other threads exist (Rust 1.80+).
+fn resolve_api_key_override(raw: Option<&str>) -> ApiKeyOverride {
+    match raw {
+        None => ApiKeyOverride::Absent,
+        Some(value) if value.trim().is_empty() => ApiKeyOverride::IgnoredEmpty,
+        Some(value) => ApiKeyOverride::Use(value.trim().to_string()),
     }
 }
 
@@ -3092,6 +3627,54 @@ mod extraction_model_tests {
 }
 
 #[cfg(test)]
+mod api_key_env_override {
+    //! `LIBREFANG_API_KEY` is the only path by which a Kubernetes Secret can
+    //! supply the API bearer token (#6635), because `config.toml` lives in the
+    //! daemon's own writable data dir and is rewritten at boot. The pure
+    //! resolver is pinned here so the security-relevant edge — an env var that
+    //! exists but is empty — cannot regress into "clear the key".
+    use super::{resolve_api_key_override, ApiKeyOverride};
+
+    #[test]
+    fn unset_env_leaves_config_alone() {
+        assert_eq!(resolve_api_key_override(None), ApiKeyOverride::Absent);
+    }
+
+    #[test]
+    fn a_real_value_overrides_config() {
+        assert_eq!(
+            resolve_api_key_override(Some("s3cret-token")),
+            ApiKeyOverride::Use("s3cret-token".to_string())
+        );
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_trimmed() {
+        // A Secret created with `--from-file` carries the file's trailing
+        // newline; a token with a stray \n would never match a bearer header.
+        assert_eq!(
+            resolve_api_key_override(Some("  s3cret-token\n")),
+            ApiKeyOverride::Use("s3cret-token".to_string())
+        );
+    }
+
+    #[test]
+    fn empty_value_is_ignored_not_treated_as_clearing_the_key() {
+        // The security-relevant case. An empty Secret value must not disarm
+        // bearer authentication — on a non-loopback bind that is an open
+        // daemon, and the #3572 boot guard would see a cleared api_key and
+        // conclude no auth is configured.
+        for empty in ["", " ", "\n", "\t  \n"] {
+            assert_eq!(
+                resolve_api_key_override(Some(empty)),
+                ApiKeyOverride::IgnoredEmpty,
+                "empty value {empty:?} must be ignored, never applied"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod state_secret_validation {
     //! Regression guards for the `state-secret-default-random` audit
     //! item. `Kernel::open` refuses to boot when
@@ -3160,6 +3743,54 @@ mod state_secret_validation {
         assert!(
             err.starts_with("the wrong length") || err.starts_with("not base64"),
             "expected length-or-decode rejection on empty string; got {err:?}",
+        );
+    }
+}
+
+#[cfg(test)]
+mod everyapi_default_model_selection {
+    use super::select_everyapi_default_model;
+    use librefang_runtime::model_catalog::ModelCatalog;
+    use librefang_types::model_catalog::{ModelCatalogEntry, ModelTier};
+
+    fn catalog() -> ModelCatalog {
+        let model = |id: &str, tier| ModelCatalogEntry {
+            id: id.to_string(),
+            display_name: id.to_string(),
+            provider: "anthropic".to_string(),
+            tier,
+            context_window: 200_000,
+            max_output_tokens: 16_384,
+            ..ModelCatalogEntry::default()
+        };
+        ModelCatalog::from_entries(
+            vec![
+                model("claude-opus-5", ModelTier::Frontier),
+                model("claude-sonnet-5", ModelTier::Smart),
+            ],
+            Vec::new(),
+        )
+    }
+
+    #[test]
+    fn selects_a_curated_model_the_account_can_reach() {
+        let catalog = catalog();
+        let available = vec!["claude-opus-5".to_string(), "claude-sonnet-5".to_string()];
+
+        assert_eq!(
+            select_everyapi_default_model(&catalog, &available).as_deref(),
+            Some("claude-sonnet-5")
+        );
+    }
+
+    #[test]
+    fn selects_an_unknown_model_after_the_cli_proves_it_is_chat_capable() {
+        let catalog = catalog();
+        let available = vec!["future-chat-model".to_string()];
+
+        assert_eq!(
+            select_everyapi_default_model(&catalog, &available).as_deref(),
+            Some("future-chat-model")
         );
     }
 }

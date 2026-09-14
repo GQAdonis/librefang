@@ -306,6 +306,8 @@ image_description = true
 audio_transcription = true
 video_description = false
 max_concurrency = 2
+transcription_timeout_secs = 60
+ffmpeg_timeout_secs = 30
 # image_provider = "openai"   # 省略则自动检测
 # audio_provider = "openai"   # 省略则自动检测
 ```
@@ -316,8 +318,13 @@ max_concurrency = 2
 | `audio_transcription` | bool | `true` | 启用对传入音频附件的自动转录。 |
 | `video_description` | bool | `false` | 启用视频描述。默认禁用（耗费大且速度慢）。 |
 | `max_concurrency` | usize | `2` | 并发媒体处理任务的最大数量。 |
+| `transcription_timeout_secs` | u64 | `60` | 单次音频转录提供商请求的超时时间（秒）。修改后需要重启守护进程。 |
+| `ffmpeg_timeout_secs` | u64 | `30` | 单次 ffmpeg 子进程的超时时间（秒）。修改后需要重启守护进程。 |
 | `image_provider` | string 或 null | `null` | 首选的图片描述提供商。为 `null` 时根据可用提供商自动检测。 |
 | `audio_provider` | string 或 null | `null` | 首选的音频转录提供商。为 `null` 时根据可用提供商自动检测。 |
+| `audio_model` | string 或 null | `null` | 首选的音频转录模型。为 `null` 时使用提供商的默认模型。 |
+| `audio_language` | string 或 null | `null` | 当 `media_transcribe` / `speech_to_text` 调用未指定 `language` 时使用的兜底 ISO-639-1 语言代码。单次调用的值始终优先。 |
+| `audio_prompt` | string 或 null | `null` | 当调用未指定 `prompt` 时使用的兜底转录提示（专有名词、领域词汇等）。单次调用的值始终优先。 |
 
 ---
 
@@ -686,7 +693,7 @@ trusted_manifest_signers   = []
 | `max_upload_size_bytes` | usize | `10485760`(10 MiB) | 单文件上传上限。 |
 | `max_request_body_bytes` | usize | `16777216`(16 MiB) | 整个 HTTP 请求体上限。 |
 | `max_concurrent_bg_llm` | usize | `8` | 后台 LLM 调用并发数(compaction、summarise、dream 等)。 |
-| `max_agent_call_depth` | u32 | `5` | Agent 间调用深度(防 `agent_send` 递归炸弹)。 |
+| `max_agent_call_depth` | u32 | `5` | Agent 间调用深度(防 `agent_send` 递归炸弹);嵌套的 `workflow_run` 调用也计入同一份预算。 |
 | `local_probe_interval_secs` | u64 | `60` | 本地 provider(Ollama / vLLM / LM Studio)的复探周期。 |
 | `strict_config` | bool | `false` | `true` 时配置里有未知字段就启动失败(否则 warn 后继续)。 |
 | `update_channel` | enum | `"stable"` | `librefang upgrade` 看哪个发布通道。 |
@@ -977,4 +984,3 @@ shell_allowlist = ["git", "cargo", "npm"]
 | `[a2a]` | A2A 协议监听路径 + 跨实例鉴权的可信发行者列表。 | 联邦多个 BossFang 实例时设置。 |
 | `[pairing]` | 设备配对 TTL 与主开关。 | 单用户场景禁掉。 |
 | `[exec_policy]` | 全局默认 shell/exec 允许列表;`agent.toml` 里的 per-agent `[exec_policy]` 覆盖给那个 agent。 | 锁死 daemon 默认,选择性给可信 agent 更宽访问。 |
-

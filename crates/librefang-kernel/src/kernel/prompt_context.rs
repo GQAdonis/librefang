@@ -14,9 +14,36 @@
 
 use std::path::Path;
 
-use librefang_types::agent::AgentId;
+use librefang_runtime::prompt_builder::ActiveGoalPrompt;
+use librefang_types::{agent::AgentId, goal::GoalId};
 
 use super::*;
+
+fn goal_progress_for_prompt(goal: &serde_json::Value) -> u8 {
+    goal["progress"].as_u64().unwrap_or(0).min(100) as u8
+}
+
+fn goal_is_active_for_agent(goal: &serde_json::Value, agent_id: AgentId) -> bool {
+    let status = goal["status"].as_str().unwrap_or("");
+    if status != "pending" && status != "in_progress" {
+        return false;
+    }
+    goal["agent_id"]
+        .as_str()
+        .and_then(|stored| stored.trim().parse::<AgentId>().ok())
+        == Some(agent_id)
+}
+
+fn active_goal_for_prompt(goal: &serde_json::Value) -> Option<ActiveGoalPrompt> {
+    let id = goal["id"].as_str()?;
+    id.parse::<GoalId>().ok()?;
+    Some(ActiveGoalPrompt {
+        id: id.to_string(),
+        title: goal["title"].as_str().unwrap_or("").to_string(),
+        status: goal["status"].as_str().unwrap_or("pending").to_string(),
+        progress: goal_progress_for_prompt(goal),
+    })
+}
 
 impl LibreFangKernel {
     /// Get cached workspace metadata (workspace context + identity files) for
@@ -36,30 +63,44 @@ impl LibreFangKernel {
             }
         }
 
-        let metadata = CachedWorkspaceMetadata {
-            workspace_context: {
-                let mut ws_ctx =
-                    librefang_runtime::workspace_context::WorkspaceContext::detect(workspace);
-                Some(ws_ctx.build_context_section())
-            },
-            soul_md: read_identity_file(workspace, "SOUL.md"),
-            user_md: read_identity_file(workspace, "USER.md"),
-            memory_md: read_identity_file(workspace, "MEMORY.md"),
-            agents_md: read_identity_file(workspace, "AGENTS.md"),
-            bootstrap_md: read_identity_file(workspace, "BOOTSTRAP.md"),
-            identity_md: read_identity_file(workspace, "IDENTITY.md"),
-            heartbeat_md: if is_autonomous {
-                read_identity_file(workspace, "HEARTBEAT.md")
-            } else {
-                None
-            },
-            tools_md: read_identity_file(workspace, "TOOLS.md"),
-            created_at: std::time::Instant::now(),
+        let metadata = load_workspace_metadata(workspace, is_autonomous);
+        self.prompt_metadata_cache
+            .workspace
+            .insert(workspace.to_path_buf(), metadata.clone());
+        metadata
+    }
+
+    /// Async-worker-safe counterpart of [`Self::cached_workspace_metadata`].
+    /// Cache misses perform all workspace filesystem inspection on the
+    /// blocking pool; cache hits return without spawning a task.
+    pub(crate) async fn cached_workspace_metadata_async(
+        &self,
+        workspace: &Path,
+        is_autonomous: bool,
+    ) -> CachedWorkspaceMetadata {
+        if let Some(entry) = self.prompt_metadata_cache.workspace.get(workspace) {
+            if !entry.is_expired() {
+                return entry.clone();
+            }
+        }
+
+        let workspace = workspace.to_path_buf();
+        let metadata = match run_workspace_metadata_job({
+            let workspace = workspace.clone();
+            move || load_workspace_metadata(&workspace, is_autonomous)
+        })
+        .await
+        {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                tracing::warn!(%error, "workspace metadata task failed");
+                empty_workspace_metadata()
+            }
         };
 
         self.prompt_metadata_cache
             .workspace
-            .insert(workspace.to_path_buf(), metadata.clone());
+            .insert(workspace, metadata.clone());
         metadata
     }
 
@@ -100,12 +141,8 @@ impl LibreFangKernel {
         metadata
     }
 
-    /// Load active goals (pending/in_progress) as (title, status, progress) tuples
-    /// for injection into the agent system prompt.
-    pub(crate) fn active_goals_for_prompt(
-        &self,
-        agent_id: Option<AgentId>,
-    ) -> Vec<(String, String, u8)> {
+    /// Load active goals assigned to the agent for injection into its system prompt. Unassigned goals remain visible in management APIs but are not agent work.
+    pub(crate) fn active_goals_for_prompt(&self, agent_id: AgentId) -> Vec<ActiveGoalPrompt> {
         let shared_id = shared_memory_agent_id();
         let goals: Vec<serde_json::Value> = match self
             .memory
@@ -117,29 +154,8 @@ impl LibreFangKernel {
         };
         goals
             .into_iter()
-            .filter(|g| {
-                let status = g["status"].as_str().unwrap_or("");
-                let is_active = status == "pending" || status == "in_progress";
-                if !is_active {
-                    return false;
-                }
-                match agent_id {
-                    Some(aid) => {
-                        // Include goals assigned to this agent OR unassigned goals
-                        match g["agent_id"].as_str() {
-                            Some(gid) => gid == aid.to_string(),
-                            None => true,
-                        }
-                    }
-                    None => true,
-                }
-            })
-            .map(|g| {
-                let title = g["title"].as_str().unwrap_or("").to_string();
-                let status = g["status"].as_str().unwrap_or("pending").to_string();
-                let progress = g["progress"].as_u64().unwrap_or(0) as u8;
-                (title, status, progress)
-            })
+            .filter(|goal| goal_is_active_for_agent(goal, agent_id))
+            .filter_map(|goal| active_goal_for_prompt(&goal))
             .collect()
     }
 
@@ -243,7 +259,7 @@ impl LibreFangKernel {
         summary
     }
 
-    /// Build a compact MCP server/tool summary for the system prompt; caches per allowlist + mcp_generation to skip Mutex and re-render on hit.
+    /// Build a compact MCP server/tool summary for the system prompt; caches per allowlist + mcp_generation to skip tool-lock acquisition and re-rendering on hit.
     pub(crate) fn build_mcp_summary(&self, mcp_allowlist: &[String]) -> String {
         let mcp_gen = self
             .mcp
@@ -252,8 +268,7 @@ impl LibreFangKernel {
         let cache_key = mcp_summary_cache_key(mcp_allowlist);
 
         // Cache hit on the current generation: clone the cached String.
-        if let Some(entry) = self.mcp.mcp_summary_cache.get(&cache_key) {
-            let (cached_gen, cached_str) = entry.value();
+        if let Some((cached_gen, cached_str)) = self.mcp.mcp_summary_cache.lock().get(&cache_key) {
             if *cached_gen == mcp_gen {
                 return cached_str.clone();
             }
@@ -279,9 +294,17 @@ impl LibreFangKernel {
             .unwrap_or_default();
 
         let rendered = render_mcp_summary(&tool_names, &configured_servers, mcp_allowlist);
-        self.mcp
-            .mcp_summary_cache
-            .insert(cache_key, (mcp_gen, rendered.clone()));
+        let mut cache = self.mcp.mcp_summary_cache.lock();
+        if cache.len() >= super::subsystems::mcp::MAX_MCP_SUMMARY_CACHE_ENTRIES
+            && !cache.contains_key(&cache_key)
+        {
+            // Allowlist combinations are caller-controlled through agent
+            // manifests. Drop the derived cache wholesale at its hard cap so
+            // stale generations and one-off combinations cannot grow for the
+            // lifetime of the daemon.
+            cache.clear();
+        }
+        cache.insert(cache_key, (mcp_gen, rendered.clone()));
         rendered
     }
 
@@ -364,5 +387,241 @@ impl LibreFangKernel {
             ));
         }
         context_parts.join("\n\n")
+    }
+}
+
+/// Build the per-turn precise-time value for [`PromptContext::current_time_precise`].
+///
+/// Minute-resolution counterpart to `current_date`, which stays date-only so
+/// the cached system prefix is byte-stable across a day (#3700). Suppressed
+/// under `stable_prefix_mode` for the same reason `canonical_context` is:
+/// that mode is an operator opt-out from volatile per-turn content (#8131).
+///
+/// Paired with [`attach_current_time_msg`] — the gate here and the metadata
+/// write there were previously inlined at each dispatch site, and review of
+/// #8132 caught a path that wired one without the other.
+///
+/// **Timezone is the daemon host's, deliberately** (`chrono::Local`), not the
+/// requesting user's — a self-hosted agent's "now" is its own wall clock, and
+/// the daemon has no reliable per-user timezone to prefer anyway. The rendered
+/// `%Z` offset ships with the value, so a user in another timezone reads an
+/// unambiguous timestamp rather than a silently wrong one.
+pub(crate) fn current_time_precise_for_prompt(stable_prefix_mode: bool) -> Option<String> {
+    if stable_prefix_mode {
+        return None;
+    }
+    Some(
+        chrono::Local::now()
+            .format("%A, %B %d, %Y %H:%M %Z")
+            .to_string(),
+    )
+}
+
+/// Attach the per-turn precise-time message to `manifest.metadata` so
+/// `agent_loop::prepare_llm_messages` can append it to the message tail.
+///
+/// Deliberately not part of the system prompt: the tail changes every turn
+/// anyway, so a volatile value there costs nothing, while the same value in
+/// the cached prefix would invalidate it every 60 s (#8131).
+pub(crate) fn attach_current_time_msg(
+    manifest: &mut AgentManifest,
+    prompt_ctx: &librefang_runtime::prompt_builder::PromptContext,
+) {
+    if let Some(time_msg) =
+        librefang_runtime::prompt_builder::build_current_time_message(prompt_ctx)
+    {
+        manifest.metadata.insert(
+            "current_time_msg".to_string(),
+            serde_json::Value::String(time_msg),
+        );
+    }
+}
+
+#[cfg(test)]
+mod current_time_prompt_tests {
+    use super::*;
+
+    #[test]
+    fn precise_time_is_suppressed_under_stable_prefix_mode() {
+        assert_eq!(current_time_precise_for_prompt(true), None);
+    }
+
+    #[test]
+    fn precise_time_carries_minute_resolution_when_enabled() {
+        let value = current_time_precise_for_prompt(false).expect("time present");
+        // Minute resolution is the whole point — `current_date` already
+        // covers the date, and the locked prompt-builder test forbids HH:MM
+        // in the cached system prompt.
+        let has_hh_mm = value.as_bytes().windows(5).any(|w| {
+            w[2] == b':'
+                && w[0].is_ascii_digit()
+                && w[1].is_ascii_digit()
+                && w[3].is_ascii_digit()
+                && w[4].is_ascii_digit()
+        });
+        assert!(has_hh_mm, "expected an HH:MM timestamp, got {value:?}");
+    }
+
+    #[test]
+    fn attach_writes_metadata_only_when_precise_time_present() {
+        let mut ctx = librefang_runtime::prompt_builder::PromptContext {
+            agent_name: "tester".to_string(),
+            ..Default::default()
+        };
+
+        let mut manifest = AgentManifest::default();
+        attach_current_time_msg(&mut manifest, &ctx);
+        assert!(
+            !manifest.metadata.contains_key("current_time_msg"),
+            "no metadata when current_time_precise is None (stable_prefix_mode)"
+        );
+
+        ctx.current_time_precise = Some("Wednesday, September 02, 2026 07:29 GMT+3".to_string());
+        attach_current_time_msg(&mut manifest, &ctx);
+        assert_eq!(
+            manifest
+                .metadata
+                .get("current_time_msg")
+                .and_then(serde_json::Value::as_str),
+            Some("[Current date/time: Wednesday, September 02, 2026 07:29 GMT+3]")
+        );
+    }
+}
+
+#[cfg(test)]
+mod goal_prompt_tests {
+    use super::*;
+
+    #[test]
+    fn agent_prompt_excludes_unassigned_and_other_agent_goals() {
+        let agent_a = AgentId::new();
+        let agent_b = AgentId::new();
+        let goals = [
+            serde_json::json!({"title": "owned by A", "status": "pending", "agent_id": agent_a.to_string().to_uppercase()}),
+            serde_json::json!({"title": "owned by B", "status": "in_progress", "agent_id": agent_b.0.simple().to_string()}),
+            serde_json::json!({"title": "unassigned", "status": "pending"}),
+            serde_json::json!({"title": "malformed", "status": "pending", "agent_id": "not-a-uuid"}),
+            serde_json::json!({"title": "completed A", "status": "completed", "agent_id": agent_a.to_string()}),
+        ];
+
+        let visible_to_a: Vec<_> = goals
+            .iter()
+            .filter(|goal| goal_is_active_for_agent(goal, agent_a))
+            .map(|goal| goal["title"].as_str().unwrap())
+            .collect();
+        let visible_to_b: Vec<_> = goals
+            .iter()
+            .filter(|goal| goal_is_active_for_agent(goal, agent_b))
+            .map(|goal| goal["title"].as_str().unwrap())
+            .collect();
+
+        assert_eq!(visible_to_a, vec!["owned by A"]);
+        assert_eq!(visible_to_b, vec!["owned by B"]);
+    }
+
+    #[test]
+    fn prompt_goal_preserves_valid_id_and_rejects_unusable_ids() {
+        let goal_id: GoalId = "b5264016-e9cc-4fd1-83c6-d13626b404dc".parse().unwrap();
+        let stored_id = goal_id.to_string().to_uppercase();
+        let valid = serde_json::json!({
+            "id": stored_id,
+            "title": "owned goal",
+            "status": "in_progress",
+            "progress": 140,
+        });
+
+        let prompt_goal = active_goal_for_prompt(&valid).unwrap();
+        assert_eq!(prompt_goal.id, stored_id);
+        assert_eq!(prompt_goal.title, "owned goal");
+        assert_eq!(prompt_goal.status, "in_progress");
+        assert_eq!(prompt_goal.progress, 100);
+
+        assert!(active_goal_for_prompt(&serde_json::json!({"title": "missing id"})).is_none());
+        assert!(active_goal_for_prompt(
+            &serde_json::json!({"id": "not-a-uuid", "title": "malformed id"})
+        )
+        .is_none());
+    }
+}
+
+async fn run_workspace_metadata_job<F, T>(job: F) -> Result<T, tokio::task::JoinError>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(job).await
+}
+
+fn load_workspace_metadata(workspace: &Path, is_autonomous: bool) -> CachedWorkspaceMetadata {
+    let workspace_context = {
+        let mut context = librefang_runtime::workspace_context::WorkspaceContext::detect(workspace);
+        Some(context.build_context_section())
+    };
+    CachedWorkspaceMetadata {
+        workspace_context,
+        soul_md: read_identity_file(workspace, "SOUL.md"),
+        user_md: read_identity_file(workspace, "USER.md"),
+        memory_md: read_identity_file(workspace, "MEMORY.md"),
+        agents_md: read_identity_file(workspace, "AGENTS.md"),
+        bootstrap_md: read_identity_file(workspace, "BOOTSTRAP.md"),
+        identity_md: read_identity_file(workspace, "IDENTITY.md"),
+        heartbeat_md: is_autonomous
+            .then(|| read_identity_file(workspace, "HEARTBEAT.md"))
+            .flatten(),
+        tools_md: read_identity_file(workspace, "TOOLS.md"),
+        created_at: std::time::Instant::now(),
+    }
+}
+
+fn empty_workspace_metadata() -> CachedWorkspaceMetadata {
+    CachedWorkspaceMetadata {
+        workspace_context: None,
+        soul_md: None,
+        user_md: None,
+        memory_md: None,
+        agents_md: None,
+        bootstrap_md: None,
+        identity_md: None,
+        heartbeat_md: None,
+        tools_md: None,
+        created_at: std::time::Instant::now(),
+    }
+}
+
+#[cfg(test)]
+mod workspace_metadata_tests {
+    use super::{goal_progress_for_prompt, run_workspace_metadata_job};
+    use std::time::Duration;
+
+    #[test]
+    fn goal_progress_is_bounded_before_narrowing() {
+        assert_eq!(
+            goal_progress_for_prompt(&serde_json::json!({"progress": 42})),
+            42
+        );
+        assert_eq!(
+            goal_progress_for_prompt(&serde_json::json!({"progress": 300})),
+            100
+        );
+        assert_eq!(goal_progress_for_prompt(&serde_json::json!({})), 0);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn workspace_metadata_job_does_not_block_async_worker() {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+
+        let job = tokio::spawn(run_workspace_metadata_job(move || {
+            let _ = started_tx.send(());
+            release_rx.recv().expect("test releases metadata job");
+        }));
+        started_rx.await.expect("metadata job started");
+
+        tokio::time::timeout(Duration::from_millis(250), tokio::task::yield_now())
+            .await
+            .expect("async worker must remain responsive");
+
+        release_tx.send(()).unwrap();
+        job.await.unwrap().unwrap();
     }
 }

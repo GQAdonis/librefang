@@ -36,6 +36,7 @@ use librefang_types::error::{LibreFangError, LibreFangResult};
 use librefang_types::message::{ContentBlock, Message, MessageContent, Role, TokenUsage};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Redaction policy applied to message content before export.
 ///
@@ -115,8 +116,9 @@ impl CompiledPatterns {
                 // typically >= 20 chars.
                 jwt: Regex::new(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b")
                     .expect("jwt regex must compile"),
-                // Standalone base64-ish blob > 40 chars. Word-bounded.
-                long_b64: Regex::new(r"\b[A-Za-z0-9+/=]{40,}\b")
+                // Standalone base64 candidate > 40 chars.
+                // The replacement step preserves the candidate only when every character is a hex digit (0-9a-fA-F), so SHA-1/SHA-256-style digests pass through unredacted; anything containing a non-hex letter, `+`, `/`, or padding is masked.
+                long_b64: Regex::new(r"\b[A-Za-z0-9+/]{40,}={0,2}")
                     .expect("long_b64 regex must compile"),
             }
         })
@@ -233,10 +235,8 @@ pub fn compute_cache_hit_ratio(usage: &TokenUsage) -> Option<f32> {
 
 impl TrajectoryBundle {
     /// Serialize to a JSON value (full bundle as a single object).
-    pub fn to_json(&self) -> serde_json::Value {
-        // serde_json on a derive-ser type cannot fail unless a custom impl
-        // panics; bundle has only string/usize/Vec primitives so this is safe.
-        serde_json::to_value(self).unwrap_or(serde_json::Value::Null)
+    pub fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self)
     }
 
     /// Serialize to NDJSON (JSON Lines): first line is the metadata header,
@@ -467,8 +467,18 @@ impl TrajectoryExporter {
                 .api_key
                 .replace_all(&out, "<REDACTED:CREDENTIAL>")
                 .into_owned();
-            // Then catch-all long base64 (must come last; broadest).
-            out = p.long_b64.replace_all(&out, "<REDACTED:BLOB>").into_owned();
+            // Then catch high-confidence standalone base64 (must come last).
+            out = p
+                .long_b64
+                .replace_all(&out, |captures: &regex::Captures<'_>| {
+                    let candidate = &captures[0];
+                    if candidate.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                        candidate.to_string()
+                    } else {
+                        "<REDACTED:BLOB>".to_string()
+                    }
+                })
+                .into_owned();
         }
 
         for re in &self.policy.custom_patterns {
@@ -478,28 +488,91 @@ impl TrajectoryExporter {
         out
     }
 
-    /// Recursively redact every string inside a JSON value. Keys are left
-    /// untouched (they're typically not secret-bearing in tool inputs).
+    /// Redact every string inside a JSON value. Keys are left untouched (they're typically not secret-bearing in tool inputs).
+    ///
+    /// The traversal is an explicit work stack rather than recursion, and the over-depth value is dropped iteratively too.
+    /// `librefang-rl-export`'s `redact_metadata` was hardened this way and this function was not, which left two functions doing the same job in the same repository with only one of them safe on a deeply nested input.
+    ///
+    /// A `Value` that arrived through `serde_json::from_str` cannot exceed the parser's own 128-deep limit, but the tool inputs and outputs reaching here are not all parsed — a programmatically constructed value nests as far as its builder chose, and both the recursive walk and the recursive `Drop` glue for such a value run on the same stack frame budget.
     fn redact_json(&self, v: serde_json::Value) -> serde_json::Value {
         use serde_json::Value;
-        match v {
-            Value::String(s) => Value::String(self.redact_text(&s)),
-            Value::Array(arr) => {
-                Value::Array(arr.into_iter().map(|x| self.redact_json(x)).collect())
-            }
-            Value::Object(map) => {
-                let mut out = serde_json::Map::with_capacity(map.len());
-                for (k, val) in map {
-                    out.insert(k, self.redact_json(val));
-                }
-                Value::Object(out)
-            }
-            other => other,
+
+        enum Work {
+            Visit(Value, usize),
+            FinishArray(usize),
+            FinishObject(Vec<String>),
         }
+
+        let mut work = vec![Work::Visit(v, 0)];
+        let mut output: Vec<Value> = Vec::new();
+        while let Some(item) = work.pop() {
+            match item {
+                Work::Visit(Value::String(s), _) => {
+                    output.push(Value::String(self.redact_text(&s)));
+                }
+                Work::Visit(value @ (Value::Array(_) | Value::Object(_)), depth)
+                    if depth >= MAX_REDACT_DEPTH =>
+                {
+                    drop_value_iteratively(value);
+                    output.push(Value::String(TOO_DEEP_SENTINEL.to_string()));
+                }
+                Work::Visit(Value::Array(values), depth) => {
+                    work.push(Work::FinishArray(values.len()));
+                    work.extend(
+                        values
+                            .into_iter()
+                            .rev()
+                            .map(|value| Work::Visit(value, depth + 1)),
+                    );
+                }
+                Work::Visit(Value::Object(map), depth) => {
+                    let (keys, values): (Vec<_>, Vec<_>) = map.into_iter().unzip();
+                    work.push(Work::FinishObject(keys));
+                    work.extend(
+                        values
+                            .into_iter()
+                            .rev()
+                            .map(|value| Work::Visit(value, depth + 1)),
+                    );
+                }
+                Work::Visit(value, _) => output.push(value),
+                Work::FinishArray(len) => {
+                    let values = output.split_off(output.len() - len);
+                    output.push(Value::Array(values));
+                }
+                Work::FinishObject(keys) => {
+                    let values = output.split_off(output.len() - keys.len());
+                    output.push(Value::Object(keys.into_iter().zip(values).collect()));
+                }
+            }
+        }
+        output.pop().expect("redaction always produces one value")
     }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+/// Depth past which a nested JSON value is replaced by a sentinel rather than walked.
+/// Matches `MAX_METADATA_DEPTH` in `librefang-rl-export`, and matches `serde_json`'s own parser limit, so nothing that arrived over the wire is affected.
+const MAX_REDACT_DEPTH: usize = 128;
+
+/// Stand-in for a subtree that exceeded `MAX_REDACT_DEPTH`.
+const TOO_DEEP_SENTINEL: &str = "<REDACTED:TOO_DEEP>";
+
+/// Drop a `Value` without recursing.
+///
+/// Dropping a deeply nested value recurses through `Drop` glue, so a value too deep to walk is also too deep to drop the ordinary way — replacing the walk alone would move the overflow from the traversal to the end of the scope.
+fn drop_value_iteratively(value: serde_json::Value) {
+    use serde_json::Value;
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Array(values) => pending.extend(values),
+            Value::Object(map) => pending.extend(map.into_values()),
+            _ => {}
+        }
+    }
+}
 
 fn collapse_workspace_paths(input: &str, root: Option<&std::path::Path>) -> String {
     let Some(root) = root else {
@@ -513,119 +586,59 @@ fn collapse_workspace_paths(input: &str, root: Option<&std::path::Path>) -> Stri
     // backslashes here — the librefang workspace_root is normalized to
     // forward slashes upstream. Callers on Windows can pre-normalize if
     // needed.
-    let normalized = root_str.replace('\\', "/");
-    let mut out = input.replace(normalized.as_str(), "<WORKSPACE>");
+    let normalized = trim_workspace_root(&root_str.replace('\\', "/"));
+    let mut out = replace_workspace_root(input, &normalized);
     // Also handle the original (non-normalized) form for robustness.
-    if normalized != root_str.as_ref() {
-        out = out.replace(root_str.as_ref(), "<WORKSPACE>");
+    let original = trim_workspace_root(root_str.as_ref());
+    if normalized != original {
+        out = replace_workspace_root(&out, &original);
     }
     out
+}
+
+fn trim_workspace_root(root: &str) -> String {
+    let trimmed = root.trim_end_matches(['/', '\\']);
+    if trimmed.is_empty() {
+        root.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn replace_workspace_root(input: &str, root: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    let mut cursor = 0;
+    for (relative_start, _) in input.match_indices(root) {
+        let start = relative_start;
+        let end = start + root.len();
+        let path_start_boundary = input[..start].chars().next_back().is_none_or(|previous| {
+            !previous.is_alphanumeric() && !matches!(previous, '/' | '\\' | '.' | '_' | '-')
+        });
+        let filesystem_root = root == "/" || root == "\\";
+        let url_scheme_separator = filesystem_root
+            && root == "/"
+            && input[..start].ends_with(':')
+            && input[end..].starts_with('/');
+        let component_boundary = filesystem_root
+            || input[end..]
+                .chars()
+                .next()
+                .is_none_or(|next| !next.is_alphanumeric() && !matches!(next, '_' | '-' | '.'));
+        if path_start_boundary && component_boundary && !url_scheme_separator {
+            output.push_str(&input[cursor..start]);
+            output.push_str("<WORKSPACE>");
+            if filesystem_root {
+                output.push_str(root);
+            }
+            cursor = end;
+        }
+    }
+    output.push_str(&input[cursor..]);
+    output
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    // Minimal SHA-256 via the `sha2` crate would add a dep; we already
-    // have a kernel-internal need for prompt fingerprinting elsewhere,
-    // so we use a tiny inline implementation here that delegates to the
-    // kernel's existing hasher if present. To keep this module self-contained
-    // and avoid a new dependency, fall back to FNV-1a 64 if no sha is
-    // available — clearly labelled in the field name (`system_prompt_sha256`
-    // is misleading then). To avoid that mismatch, depend on the fact that
-    // `librefang-kernel` already pulls in `hex` and use a vendored sha256
-    // through the `chrono` chain… not viable.
-    //
-    // Pragmatic answer: use the existing `sha2`-shaped path through the
-    // hex crate by leveraging blake3 which the workspace ships? No — keep
-    // this module dep-free and emit a stable non-cryptographic digest with
-    // a clear field name. Rename field accordingly.
-    //
-    // Implementation: SHA-256 via a minimal inline implementation.
-    sha256(bytes)
-}
-
-/// Minimal SHA-256 implementation (RFC 6234). Inlined to keep this module
-/// dependency-free; the hash is used only as a stable fingerprint of the
-/// system prompt so consumers can correlate exports without leaking the
-/// prompt content itself.
-fn sha256(input: &[u8]) -> String {
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    // Pre-processing — pad to 512-bit blocks.
-    let bit_len = (input.len() as u64).wrapping_mul(8);
-    let mut data = input.to_vec();
-    data.push(0x80);
-    while data.len() % 64 != 56 {
-        data.push(0);
-    }
-    data.extend_from_slice(&bit_len.to_be_bytes());
-
-    for chunk in data.chunks_exact(64) {
-        let mut w = [0u32; 64];
-        for i in 0..16 {
-            w[i] = u32::from_be_bytes([
-                chunk[i * 4],
-                chunk[i * 4 + 1],
-                chunk[i * 4 + 2],
-                chunk[i * 4 + 3],
-            ]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
-            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ (!e & g);
-            let temp1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
-    }
-    let mut out = String::with_capacity(64);
-    for word in h {
-        out.push_str(&format!("{:08x}", word));
-    }
-    out
+    hex::encode(Sha256::digest(bytes))
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -643,6 +656,81 @@ mod tests {
         // throwaway in-memory substrate so Arc<MemorySubstrate> exists.
         let mem = MemorySubstrate::open_in_memory(0.01).expect("substrate boots");
         TrajectoryExporter::new(Arc::new(mem), policy)
+    }
+
+    /// Build `[[[ ... "leaf" ... ]]]` nested `depth` deep, without recursing.
+    fn nested_array(depth: usize, leaf: serde_json::Value) -> serde_json::Value {
+        let mut v = leaf;
+        for _ in 0..depth {
+            v = serde_json::Value::Array(vec![v]);
+        }
+        v
+    }
+
+    #[test]
+    fn redact_json_still_rewrites_strings_at_every_level() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let input = serde_json::json!({
+            "outer": {
+                "list": ["sk_live_abcdef0123456789ABCDEF", 7, true, null],
+                "kept": "ordinary text"
+            }
+        });
+        let out = exp.redact_json(input);
+        let rendered = out.to_string();
+        assert!(
+            !rendered.contains("sk_live_abcdef0123456789ABCDEF"),
+            "leaked: {rendered}"
+        );
+        assert!(rendered.contains("<REDACTED"), "no placeholder: {rendered}");
+        // Structure and non-string scalars survive the iterative rebuild.
+        assert_eq!(out["outer"]["kept"], serde_json::json!("ordinary text"));
+        assert_eq!(out["outer"]["list"][1], serde_json::json!(7));
+        assert_eq!(out["outer"]["list"][2], serde_json::json!(true));
+        assert!(out["outer"]["list"][3].is_null());
+    }
+
+    #[test]
+    fn redact_json_preserves_object_keys_and_ordering() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let input = serde_json::json!({"b": "two", "a": "one", "c": {"z": "zed"}});
+        let out = exp.redact_json(input.clone());
+        let before: Vec<&String> = input.as_object().unwrap().keys().collect();
+        let after: Vec<&String> = out.as_object().unwrap().keys().collect();
+        assert_eq!(before, after, "key order changed");
+        assert_eq!(out["c"]["z"], serde_json::json!("zed"));
+    }
+
+    #[test]
+    fn redact_json_replaces_a_subtree_past_the_depth_cap() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let deep = nested_array(MAX_REDACT_DEPTH + 5, serde_json::json!("leaf"));
+        let out = exp.redact_json(deep);
+
+        // Walk down to the sentinel without recursing.
+        let mut cur = &out;
+        let mut levels = 0usize;
+        while let Some(inner) = cur.get(0) {
+            cur = inner;
+            levels += 1;
+        }
+        assert_eq!(
+            cur,
+            &serde_json::Value::String(TOO_DEEP_SENTINEL.to_string()),
+            "over-depth subtree was not replaced"
+        );
+        assert_eq!(levels, MAX_REDACT_DEPTH, "cap applied at the wrong depth");
+    }
+
+    /// The recursive walk this replaced overflowed the stack on a value this deep, taking the whole daemon with it rather than returning an error.
+    /// A recursion-based implementation cannot pass this test at any depth cap, because the recursive `Drop` glue overflows even if the walk is bounded.
+    #[test]
+    fn redact_json_survives_a_value_far_deeper_than_any_stack() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let deep = nested_array(200_000, serde_json::json!("sk_live_abcdef0123456789ABCDEF"));
+        let out = exp.redact_json(deep);
+        // The credential is inside the discarded subtree, so it cannot survive.
+        assert!(!out.to_string().contains("sk_live_abcdef0123456789ABCDEF"));
     }
 
     #[test]
@@ -680,6 +768,82 @@ mod tests {
         let s = exp.redact_text("opened /home/alice/.librefang/workspaces/agent42/notes.md ok");
         assert!(s.contains("<WORKSPACE>/notes.md"), "got: {s}");
         assert!(!s.contains("/home/alice"), "leaked path: {s}");
+    }
+
+    #[test]
+    fn workspace_collapse_requires_component_boundary() {
+        let exp = dummy_exporter(policy_with_workspace("/home/alice"));
+        let s = exp.redact_text(
+            "keep /home/alicey/file and /backup/home/alice/file and https://host/home/alice/file; redact /home/alice/file",
+        );
+        assert_eq!(
+            s,
+            "keep /home/alicey/file and /backup/home/alice/file and https://host/home/alice/file; redact <WORKSPACE>/file"
+        );
+    }
+
+    #[test]
+    fn workspace_collapse_requires_component_boundary_at_end_too() {
+        // A bare mention of the workspace root followed by punctuation (not another path separator, and not end-of-string) must still count as a boundary — otherwise the path leaks whenever it's not immediately followed by `/` or `\`.
+        let exp = dummy_exporter(policy_with_workspace("/home/alice"));
+        assert_eq!(
+            exp.redact_text("workspace root is /home/alice, please don't touch it"),
+            "workspace root is <WORKSPACE>, please don't touch it"
+        );
+    }
+
+    #[test]
+    fn workspace_collapse_accepts_text_delimiters() {
+        let exp = dummy_exporter(policy_with_workspace("/home/alice"));
+        assert_eq!(
+            exp.redact_text("workspace:/home/alice/file and `/home/alice/notes`"),
+            "workspace:<WORKSPACE>/file and `<WORKSPACE>/notes`"
+        );
+    }
+
+    #[test]
+    fn workspace_collapse_normalizes_trailing_separators() {
+        let unix = dummy_exporter(policy_with_workspace("/home/alice/"));
+        assert_eq!(
+            unix.redact_text("opened /home/alice/file"),
+            "opened <WORKSPACE>/file"
+        );
+
+        let windows = dummy_exporter(policy_with_workspace(r"C:\Users\alice\"));
+        assert_eq!(
+            windows.redact_text(r"opened C:\Users\alice\file"),
+            r"opened <WORKSPACE>\file"
+        );
+    }
+
+    #[test]
+    fn workspace_collapse_handles_filesystem_root_once_per_absolute_path() {
+        let exp = dummy_exporter(policy_with_workspace("/"));
+        assert_eq!(
+            exp.redact_text("opened /etc/passwd and /var/lib/data; keep https://host/path"),
+            "opened <WORKSPACE>/etc/passwd and <WORKSPACE>/var/lib/data; keep https://host/path"
+        );
+    }
+
+    #[test]
+    fn blob_redaction_preserves_hex_digests() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let sha1 = "0123456789abcdef0123456789abcdef01234567";
+        let sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let blob = "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo/0123456789A";
+        let s = exp.redact_text(&format!("sha1={sha1} sha256={sha256} blob={blob}"));
+        assert!(s.contains(sha1), "SHA-1 digest was over-redacted: {s}");
+        assert!(s.contains(sha256), "SHA-256 digest was over-redacted: {s}");
+        assert!(s.contains("<REDACTED:BLOB>"), "base64 blob leaked: {s}");
+        assert!(!s.contains(blob), "base64 blob leaked: {s}");
+    }
+
+    #[test]
+    fn blob_redaction_masks_unpadded_alphanumeric_base64() {
+        let exp = dummy_exporter(RedactionPolicy::default());
+        let blob = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv";
+        let s = exp.redact_text(&format!("blob={blob}"));
+        assert_eq!(s, "blob=<REDACTED:BLOB>");
     }
 
     #[test]
@@ -731,6 +895,8 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("\"kind\":\"metadata\""));
         assert!(lines[1].contains("\"kind\":\"message\""));
+        let json = bundle.to_json().expect("bundle must serialize");
+        assert_eq!(json["schema_version"], 1);
     }
 
     // ── cache_hit_ratio metadata field (PR-2/2 M2) ─────────────────────────
@@ -832,12 +998,12 @@ mod tests {
     fn sha256_known_vector() {
         // SHA-256("abc") = ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
         assert_eq!(
-            sha256(b"abc"),
+            sha256_hex(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
         // SHA-256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
         assert_eq!(
-            sha256(b""),
+            sha256_hex(b""),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
     }

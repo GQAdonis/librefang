@@ -73,6 +73,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  TAURI_CLI_VERSION: "2.11.4"
   # Network resilience for crate downloads. A release that fails one
   # CLI build job ships without that platform's asset and becomes a
   # "stuck" release (see #6272). The dominant cause is a flaky
@@ -138,6 +139,7 @@ jobs:
     name: Sync tag to main HEAD (channel=current)
     if: github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -195,6 +197,7 @@ jobs:
       github.event.pull_request.merged == true &&
       startsWith(github.event.pull_request.head.ref, 'chore/bump-version-')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -247,6 +250,7 @@ jobs:
     name: Bump Version (${{ inputs.channel }})
     if: github.event_name == 'workflow_dispatch' && inputs.channel != 'current'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -290,6 +294,9 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      release_id: ${{ steps.release_id.outputs.id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -332,6 +339,29 @@ jobs:
 
           # Write to file for multiline output
           echo "$CHANGES" > /tmp/changelog.md
+
+          # The release API rejects a body over 125,000 characters with HTTP 422 "body is too long", which would fail this job after the tag is already pushed — the worst point in the pipeline to stop.
+          # A release that folds ~60 PRs of prose (v2026.7.31's section was 208 KB) clears that ceiling on its own, before the install block below adds its share.
+          # Cut to a line boundary with room to spare, and close a fence the kept prefix left open so the install section does not render inside a code block.
+          #
+          # Done in python rather than `head -c` because the cut has to land on a character boundary: these entries are full of em dashes and arrows, and slicing one in half yields invalid UTF-8.
+          python3 - <<'TRUNC'
+          import pathlib
+          MAX = 100_000
+          NOTICE = (
+              "\n\n_Changelog truncated — the release body is capped at 125,000 characters._\n"
+              "_Read the full section in [CHANGELOG.md](https://github.com/librefang/librefang/blob/main/CHANGELOG.md)._\n"
+          )
+          p = pathlib.Path("/tmp/changelog.md")
+          text = p.read_text(encoding="utf-8")
+          if len(text) > MAX:
+              print(f"::warning::changelog section is {len(text)} chars — truncating for the release body")
+              kept = text[: MAX - len(NOTICE)]
+              kept = kept[: kept.rfind("\n")]
+              if sum(1 for line in kept.splitlines() if line.lstrip().startswith("```")) % 2:
+                  kept += "\n```"
+              p.write_text(kept + NOTICE, encoding="utf-8")
+          TRUNC
 
       # Use HOMEBREW_TAP_TOKEN (PAT) instead of GITHUB_TOKEN so that the
       # `release: published` event fires downstream workflows. Releases
@@ -401,14 +431,34 @@ jobs:
 
           if gh release view "$TAG" &>/dev/null; then
             echo "Release $TAG already exists, updating..."
-            gh release edit "$TAG" \
+            gh release edit "$TAG" --draft \
               --title "$TAG" \
               --notes-file /tmp/release-body.md
           else
-            gh release create "$TAG" \
+            # Created as a draft on purpose.
+            # A published release is what users and every mirror read, so publishing one before a single artifact exists means any job failure leaves a permanently public, incomplete, unsigned release — which is exactly what v2026.8.30 became.
+            # `publish_release` flips it once the artifacts are all there and signed.
+            gh release create "$TAG" --draft \
               --title "$TAG" \
               --notes-file /tmp/release-body.md
           fi
+
+      # Published so the desktop matrix can address the release by id.
+      # tauri-action's `tagName` path calls getOrCreateRelease, which PATCHes an already-published release with whatever `releaseBody` holds — and we pass none, so it overwrites the notes above with an empty string.
+      # That is why v2026.7.21 and v2026.7.27 shipped with a blank body.
+      # Its `releaseId` path skips getOrCreateRelease entirely and only uploads assets, so handing it the id keeps the notes intact.
+      - name: Publish release id
+        id: release_id
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          ID=$(gh release view "$RELEASE_TAG" --json databaseId --jq '.databaseId')
+          if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+            echo "::error::could not resolve release id for $RELEASE_TAG"
+            exit 1
+          fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+          echo "Release $RELEASE_TAG has id $ID"
 
   # ═════════════════════════════════════════════════════════════════════════
   # LTS branch (from release-lts.yml)
@@ -423,6 +473,7 @@ jobs:
       && startsWith(github.ref, 'refs/tags/v')
       && endsWith(github.ref, '-lts')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -478,16 +529,17 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.RELEASE_REF }}
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          node-version: 24
       - name: Install dependencies
         working-directory: crates/librefang-api/dashboard
         run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
@@ -512,6 +564,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: macos-latest
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -530,7 +583,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # `rust-toolchain.toml` pins the workspace to its MSRV, so cargo builds with that toolchain no matter which one the step above installed.
+      # `targets:` adds the target to `stable`, leaving the pinned toolchain with no std for it, so every cross target fails with "can't find crate for `std`" while the native ones pass — which is exactly how v2026.8.30 shipped 23 of its 48 assets.
+      # rustup names the trap itself in that log: "the toolchain '1.94.1-aarch64-apple-darwin' is currently in use (overridden by .../rust-toolchain.toml)".
+      # `rustup target add` with no `--toolchain` applies to the overridden toolchain, which is the one that builds.
+      # A native target already has its std, so this is a no-op there.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-${{ matrix.target }}-${{ env.RELEASE_TAG }}
           # Cache the kernel workspace AND the sidecar's separate target/.
@@ -553,13 +614,33 @@ jobs:
           tar czf ../../../bossfang-${{ matrix.target }}.tar.gz bossfang librefang-sidecar-telegram
           cd ../../..
           shasum -a 256 bossfang-${{ matrix.target }}.tar.gz > bossfang-${{ matrix.target }}.tar.gz.sha256
+      - name: Package debug symbols
+        # A SEPARATE asset, deliberately not added to the tarball above: every user downloads that one, and only someone symbolizing a crash report needs this.
+        # `strip = "symbols"` keeps the shipped binary unchanged either way — the profile emits the debug info beside it rather than into it.
+        #
+        # Without this the profile change is inert for released builds: #6659 stalled precisely because no shipped build and no CI artifact carried symbols, and a crash report's offsets cannot be mapped onto a later rebuild.
+        # `atos -o <dSYM>/Contents/Resources/DWARF/librefang -l <base>` resolves them once this exists.
+        run: |
+          DSYM="target/${{ matrix.target }}/release/librefang.dSYM"
+          if [ ! -d "$DSYM" ]; then
+            echo "::error::$DSYM missing — [profile.release] must set debug + split-debuginfo=packed"
+            exit 1
+          fi
+          tar czf bossfang-${{ matrix.target }}-debug-symbols.tar.gz -C "$(dirname "$DSYM")" librefang.dSYM
+          shasum -a 256 bossfang-${{ matrix.target }}-debug-symbols.tar.gz \
+            > bossfang-${{ matrix.target }}-debug-symbols.tar.gz.sha256
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="$RELEASE_TAG"
+          # `librefang-<target>.*` alone would not match the debug-symbols asset: its name continues with `-debug-symbols` where that glob requires the `.` immediately after the target.
+          # Listing both patterns keeps the symbols from being silently dropped, which is the whole point of producing them (#6659).
           for attempt in $(seq 1 5); do
-            if gh release upload "$TAG" bossfang-${{ matrix.target }}.* --clobber; then
+            if gh release upload "$TAG" \
+                 bossfang-${{ matrix.target }}.* \
+                 bossfang-${{ matrix.target }}-debug-symbols.tar.gz* \
+                 --clobber; then
               echo "✓ Upload succeeded (attempt $attempt)"
               exit 0
             fi
@@ -576,6 +657,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -596,6 +678,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
       - name: Install build deps
         # libdbus-1-dev is required by libdbus-sys, pulled in transitively
         # by the keyring crate's secret-service backend on glibc Linux
@@ -604,7 +690,7 @@ jobs:
       - name: Install cross
         if: matrix.use_cross
         run: cargo install cross --locked
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-${{ matrix.target }}-${{ env.RELEASE_TAG }}
           # Cache the kernel workspace AND the sidecar's separate target/.
@@ -633,13 +719,33 @@ jobs:
           tar czf ../../../bossfang-${{ matrix.target }}.tar.gz bossfang librefang-sidecar-telegram
           cd ../../..
           sha256sum bossfang-${{ matrix.target }}.tar.gz > bossfang-${{ matrix.target }}.tar.gz.sha256
+      - name: Package debug symbols
+        # `split-debuginfo = "packed"` emits a `.dwp` here rather than the `.dSYM` bundle the macOS job gets.
+        # Same purpose (#6659): a separate asset so a crash report can be symbolized, never folded into the tarball every user downloads.
+        #
+        # A missing `.dwp` warns rather than fails, unlike the macOS job.
+        # These targets are cross-compiled and split-debuginfo support varies by linker, so an absent split file must not take a release down over a diagnostic aid — the warning surfaces it without blocking publish.
+        run: |
+          DWP="target/${{ matrix.target }}/release/librefang.dwp"
+          if [ ! -f "$DWP" ]; then
+            echo "::warning::$DWP missing — release published without symbols for ${{ matrix.target }}"
+            exit 0
+          fi
+          tar czf bossfang-${{ matrix.target }}-debug-symbols.tar.gz -C "$(dirname "$DWP")" librefang.dwp
+          sha256sum bossfang-${{ matrix.target }}-debug-symbols.tar.gz \
+            > bossfang-${{ matrix.target }}-debug-symbols.tar.gz.sha256
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="$RELEASE_TAG"
+          # Globbed separately and only when present: the symbols asset is optional on this job (see the warning branch above), and passing a non-matching literal to `gh release upload` fails the whole call, which would take the binaries down with it.
+          SYMS=""
+          if [ -f "bossfang-${{ matrix.target }}-debug-symbols.tar.gz" ]; then
+            SYMS="bossfang-${{ matrix.target }}-debug-symbols.tar.gz bossfang-${{ matrix.target }}-debug-symbols.tar.gz.sha256"
+          fi
           for attempt in $(seq 1 5); do
-            if gh release upload "$TAG" bossfang-${{ matrix.target }}.* --clobber; then
+            if gh release upload "$TAG" bossfang-${{ matrix.target }}.* $SYMS --clobber; then
               echo "✓ Upload succeeded (attempt $attempt)"
               exit 0
             fi
@@ -656,6 +762,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -668,7 +775,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - name: Install cross
         run: cargo install cross --locked
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-aarch64-linux-android-${{ env.RELEASE_TAG }}
       - name: Build CLI (Android aarch64)
@@ -704,6 +811,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -721,11 +829,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
       - name: Install build deps
         # libdbus-1-dev is required by libdbus-sys, pulled in transitively
         # by the keyring crate's secret-service backend on glibc Linux.
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev libdbus-1-dev
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-mini-${{ matrix.target }}-${{ env.RELEASE_TAG }}
       - name: Build CLI (mini)
@@ -759,6 +871,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -777,9 +890,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
       - name: Install cross
         run: cargo install cross --locked
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-${{ matrix.target }}-${{ env.RELEASE_TAG }}
           # Cache the kernel workspace AND the sidecar's separate target/.
@@ -835,6 +952,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: windows-latest
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -853,7 +971,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-${{ matrix.target }}-${{ env.RELEASE_TAG }}
           # Cache the kernel workspace AND the sidecar's separate target/.
@@ -895,6 +1017,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: macos-latest
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -912,7 +1035,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-mini-${{ matrix.target }}-${{ env.RELEASE_TAG }}
       - name: Build CLI (mini)
@@ -950,6 +1077,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release, build_dashboard]
     runs-on: windows-latest
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -967,7 +1095,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: cli-mini-${{ matrix.target }}-${{ env.RELEASE_TAG }}
       - name: Build CLI (mini)
@@ -1032,6 +1164,7 @@ jobs:
       - cli_mac_mini
       - cli_windows_mini
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write   # upload signed manifest as release asset
       id-token: write   # fetch OIDC token for cosign keyless signing
@@ -1063,6 +1196,11 @@ jobs:
             exit 1
           fi
 
+          # The list holds two kinds of sibling, and only one of them is one-per-matrix-target.
+          # Count them separately, or the debug-symbols assets #6677 added inflate the platform total and fail the release — which is exactly what happened on v2026.7.31 (expected 12, got 16), the first release cut after that PR landed.
+          grep -v -- '-debug-symbols\.tar\.gz\.sha256$' asset-list.txt > platform-list.txt || true
+          grep -- '-debug-symbols\.tar\.gz\.sha256$' asset-list.txt > symbol-list.txt || true
+
           # Exact-match sanity check: must equal the total number of matrix
           # targets across the cli_* jobs in `needs:` above (NOT the number of
           # jobs — most cli_* are matrix jobs that emit one .sha256 per target).
@@ -1082,11 +1220,24 @@ jobs:
           # decrementing it blocks all releases until corrected (the desired
           # loud failure). Update both together.
           EXPECTED_PLATFORMS=12
-          ACTUAL=$(wc -l < asset-list.txt | tr -d ' ')
+          ACTUAL=$(wc -l < platform-list.txt | tr -d ' ')
           if [ "$ACTUAL" -ne "$EXPECTED_PLATFORMS" ]; then
-            echo "::error::expected exactly $EXPECTED_PLATFORMS .sha256 siblings (one per matrix target across cli_* jobs), got $ACTUAL"
-            cat asset-list.txt
+            echo "::error::expected exactly $EXPECTED_PLATFORMS platform .sha256 siblings (one per matrix target across cli_* jobs), got $ACTUAL"
+            cat platform-list.txt
             exit 1
+          fi
+
+          # Debug symbols (#6677) are a diagnostic aid, not a platform target, so they get a range rather than an equality.
+          # `cli_mac` fails when its .dSYM is missing, so both macOS targets are guaranteed; the `cli_linux` targets are cross-compiled and only warn when the .dwp is absent, so 2 of the 4 are best-effort.
+          # A count outside 2..4 means the macOS hard-failure path did not hold, which is worth stopping for; a count of 2 or 3 only means Linux split-debuginfo did not materialize, which must not take a release down over a diagnostic.
+          SYMBOLS=$(wc -l < symbol-list.txt | tr -d ' ')
+          if [ "$SYMBOLS" -lt 2 ] || [ "$SYMBOLS" -gt 4 ]; then
+            echo "::error::expected 2-4 debug-symbols .sha256 siblings (2 macOS guaranteed + up to 2 best-effort Linux), got $SYMBOLS"
+            cat symbol-list.txt
+            exit 1
+          fi
+          if [ "$SYMBOLS" -lt 4 ]; then
+            echo "::warning::only $SYMBOLS/4 debug-symbols assets present — a Linux target's split debuginfo did not materialize"
           fi
 
           while IFS= read -r name; do
@@ -1136,6 +1287,30 @@ jobs:
             SHA256SUMS.pem \
             --clobber
 
+  # The release is a draft until here.
+  # `sign_release_artifacts` already waits for all eight CLI jobs and refuses to sign an incomplete platform set, but nothing depended on it, so its verdict changed nothing about what the world could already download.
+  # Gating publication on it is what turns that check into a gate.
+  #
+  # `desktop` joins it because its bundles are release assets too.
+  # `mobile_ios` and `mobile_android` deliberately do not: both are `continue-on-error`, so gating on them would let a best-effort job hold back a complete release.
+  # Neither do the distribution jobs — npm, PyPI, AUR and Homebrew publish to registries of their own, and a flaky mirror must not keep a finished release unpublished.
+  publish_release:
+    name: Publish release
+    needs: [create_release, sign_release_artifacts, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Flip the release out of draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --draft=false
+          echo "Published $RELEASE_TAG"
+
   cli_npm:
     name: CLI / npm
     if: >
@@ -1143,6 +1318,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [cli_mac, cli_linux, cli_musl, cli_windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1179,6 +1355,7 @@ jobs:
       )
     needs: [cli_mac, cli_linux, cli_musl, cli_windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       id-token: write  # OIDC trusted publishing to PyPI
       contents: read   # actions/checkout (job-level permissions block fully overrides top-level)
@@ -1206,7 +1383,7 @@ jobs:
         # OIDC trusted publishing — configure at:
         # pypi.org/manage/project/librefang/settings/publishing
         # workflow filename: release.yml, environment: (none)
-        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: ${{ runner.temp }}/cli-pypi-dist
           skip-existing: true
@@ -1217,7 +1394,8 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
-    needs: [cli_mac, cli_linux]
+    timeout-minutes: 15
+    needs: [cli_mac, cli_linux, publish_release]
     steps:
       - name: Check out tap repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -1540,6 +1718,7 @@ jobs:
             rust_target: aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1557,7 +1736,6 @@ jobs:
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
             librsvg2-dev \
             libdbus-1-dev \
             patchelf
@@ -1566,15 +1744,19 @@ jobs:
         with:
           targets: ${{ matrix.platform.rust_target }}
 
+      # The pinned toolchain needs the target too — see the note in the `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add ${{ matrix.platform.rust_target }}
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          node-version: 24
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: desktop-${{ matrix.platform.rust_target }}-${{ env.RELEASE_TAG }}
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
 
@@ -1686,10 +1868,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseName: "${{ env.RELEASE_TAG }}"
-          releaseDraft: false
-          prerelease: false
+          # Address the release by id, not tag: the tagName path re-runs
+          # getOrCreateRelease and PATCHes the notes to an empty body. See
+          # the `release_id` step in create_release.
+          releaseId: ${{ needs.create_release.outputs.release_id }}
           uploadUpdaterJson: true
           projectPath: crates/librefang-desktop
           args: ${{ matrix.platform.args }}
@@ -1706,10 +1888,8 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.MAC_NOTARIZE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.MAC_NOTARIZE_TEAM_ID }}
         with:
-          tagName: ${{ env.RELEASE_TAG }}
-          releaseName: "${{ env.RELEASE_TAG }}"
-          releaseDraft: false
-          prerelease: false
+          # See the note on the unsigned step above — id, not tag.
+          releaseId: ${{ needs.create_release.outputs.release_id }}
           uploadUpdaterJson: true
           projectPath: crates/librefang-desktop
           args: ${{ matrix.platform.args }}
@@ -1735,6 +1915,7 @@ jobs:
     needs: [create_release]
     continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       # ANDROID_HOME / ANDROID_SDK_ROOT are exported by setup-android; the
       # Tauri Android driver insists on NDK_HOME being set explicitly even
@@ -1746,7 +1927,7 @@ jobs:
           ref: ${{ env.RELEASE_REF }}
 
       - name: Set up JDK 17 (Temurin)
-        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
         with:
           distribution: temurin
           java-version: "17"
@@ -1773,6 +1954,10 @@ jobs:
         run: |
           NDK_BIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
           for tool in ar ranlib nm strip; do
+            [ -x "$NDK_BIN/llvm-$tool" ] || {
+              echo "::error::NDK tool not found: $NDK_BIN/llvm-$tool"
+              exit 1
+            }
             ln -sf "$NDK_BIN/llvm-$tool" "$NDK_BIN/aarch64-linux-android-$tool"
             ln -sf "$NDK_BIN/llvm-$tool" "$NDK_BIN/arm-linux-androideabi-$tool"
           done
@@ -1782,15 +1967,19 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
 
+      # The pinned toolchain needs the target too — see the note in release.yml's `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          node-version: 24
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: mobile-android-${{ env.RELEASE_TAG }}
           restore-keys: |
@@ -1810,13 +1999,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-tauri
-          key: tauri-cli-${{ runner.os }}-v2
+          key: tauri-cli-${{ runner.os }}-${{ env.TAURI_CLI_VERSION }}
 
       - name: Install Tauri CLI
         run: |
-          if ! command -v cargo-tauri >/dev/null; then
-            cargo install tauri-cli@^2 --locked
+          if [ "$(cargo tauri --version 2>/dev/null)" != "tauri-cli $TAURI_CLI_VERSION" ]; then
+            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
           fi
+          test "$(cargo tauri --version)" = "tauri-cli $TAURI_CLI_VERSION"
 
       - name: Build embedded dashboard assets
         working-directory: crates/librefang-api/dashboard
@@ -1993,6 +2183,7 @@ jobs:
     # SDK delta inside the 26.x line is irrelevant and skipping
     # setup-xcode saves 1–2 min per run.
     runs-on: macos-26
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -2008,15 +2199,19 @@ jobs:
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim
 
+      # The pinned toolchain needs the target too — see the note in release.yml's `cli_mac` job.
+      - name: Add the target to the pinned toolchain
+        run: rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
-          node-version: 20
+          node-version: 24
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 10
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@a45951ff880207c249adf57334cf2e9bd81d6e1e # v2
         with:
           key: mobile-ios-${{ env.RELEASE_TAG }}
           restore-keys: |
@@ -2026,13 +2221,14 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-tauri
-          key: tauri-cli-${{ runner.os }}-v2
+          key: tauri-cli-${{ runner.os }}-${{ env.TAURI_CLI_VERSION }}
 
       - name: Install Tauri CLI
         run: |
-          if ! command -v cargo-tauri >/dev/null; then
-            cargo install tauri-cli@^2 --locked
+          if [ "$(cargo tauri --version 2>/dev/null)" != "tauri-cli $TAURI_CLI_VERSION" ]; then
+            cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
           fi
+          test "$(cargo tauri --version)" = "tauri-cli $TAURI_CLI_VERSION"
 
       - name: Build embedded dashboard assets
         working-directory: crates/librefang-api/dashboard
@@ -2054,7 +2250,9 @@ jobs:
         # step patches that — see its comment for the full rationale.
         env:
           APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-        run: cargo tauri ios init
+        run: |
+          rm -rf gen/apple
+          cargo tauri ios init
 
       - name: Configure manual code signing via xcodebuild shim
         env:
@@ -2378,7 +2576,7 @@ jobs:
         # warning instead of failing the whole release. The .ipa still
         # landed on the GitHub Release in the prior step.
         continue-on-error: true
-        uses: Apple-Actions/upload-testflight-build@b72667704c7f5ecb2f1dddd131870b477d86a313 # v5.1.0
+        uses: Apple-Actions/upload-testflight-build@5e75ff58276689011512ba87a381d93dc67dbcf8 # v5.3.0
         with:
           app-path: ${{ steps.art.outputs.ipa }}
           issuer-id: ${{ secrets.APPLE_API_KEY_ISSUER_ID }}
@@ -2395,7 +2593,8 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
-    needs: [desktop]
+    timeout-minutes: 15
+    needs: [desktop, publish_release]
     steps:
       - name: Check out tap repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -2644,6 +2843,7 @@ jobs:
       && ( (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v')) )
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [cli_linux]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -2666,6 +2866,7 @@ jobs:
       && ( (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v')) )
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [desktop]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -2688,6 +2889,7 @@ jobs:
       && ( (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v')) )
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Pin only after the multi-arch image + tag exist, so `librefang-docker
     # pull` works the moment the package lands.
     needs: [docker-manifest]
@@ -2729,13 +2931,13 @@ jobs:
         with:
           ref: ${{ env.RELEASE_REF }}
       - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - name: Extract version & platform slug
         id: meta
         run: |
@@ -2767,22 +2969,125 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # ═════════════════════════════════════════════════════════════════════════
+  # Container vulnerability gate (#6694)
+  #
+  # Sits between `docker`, which pushes each native image to GHCR by digest and untagged, and `docker-manifest`, which promotes those digests to the shared :VERSION / :latest / :lts tags.
+  #
+  # It is therefore a TAG-PROMOTION gate, not a publish gate.
+  # The per-arch blobs are already in the registry by the time this job starts — that is inherent to `push-by-digest`, which is how the two native builds hand their results to the manifest step.
+  # What a failure here prevents is the digest becoming reachable under any user-facing tag, and it also blocks everything downstream of `docker-manifest`: sync_aur_docker, publish_arch_repo, deploy_fly, and deploy_render.
+  # An untagged digest left behind in GHCR is not pullable by name and is reaped with the package version it belongs to.
+  #
+  # Each architecture is scanned on its own native runner so the report describes the image as it will actually run, not a cross-emulated read.
+  #
+  # REPORT-ONLY today.
+  # The single enforcement threshold for the whole repository is the `fail-on` input of .github/actions/trivy-image-scan, which ships as `off`; see the comment on that input for what arming it means and why it is not armed yet.
+  # ═════════════════════════════════════════════════════════════════════════
+
+  docker-scan:
+    name: Docker Scan / ${{ matrix.platform }}
+    # Byte-identical to the `if:` on `docker` and `docker-manifest`.
+    # Job-level conditions are not inherited through `needs`, and a skipped dependency skips its dependents — so a divergent condition here would silently take the manifest publish down with it on the dispatch path.
+    if: >
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+      || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
+    needs: [docker]
+    timeout-minutes: 30
+    # Job-level permissions REPLACE the workflow-level block wholesale rather than merging with it, so every scope this job needs is spelled out.
+    # `packages: read` is deliberate: the scan pulls the digest and never writes to the registry.
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            os: ubuntu-24.04
+            slug: linux-amd64
+          - platform: linux/arm64
+            os: ubuntu-24.04-arm
+            slug: linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_REF }}
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # `slug` here must match the slug the `docker` job derives from its platform (`${platform//\//-}`), because that is what names the digest artifact this step downloads.
+      - name: Download the ${{ matrix.platform }} digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: docker-digest-${{ matrix.slug }}
+          path: ${{ runner.temp }}/digests
+      - name: Resolve the digest to scan
+        id: digest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          set -euo pipefail
+          # The `docker` job exports one empty file per pushed digest, named after the hex portion.
+          # Exactly one is expected per platform, and anything else means the upstream job's contract changed — scanning an arbitrary pick would report on an image the manifest may not even reference.
+          mapfile -t files < <(find . -maxdepth 1 -type f -printf '%f\n' | sort)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one digest file for ${{ matrix.platform }}, found ${#files[@]}: ${files[*]-none}"
+            exit 1
+          fi
+          echo "ref=ghcr.io/librefang/librefang@sha256:${files[0]}" >> "$GITHUB_OUTPUT"
+          echo "value=sha256:${files[0]}" >> "$GITHUB_OUTPUT"
+      # Paired with `fail-on: off` on the composite action: while the gate is report-only it must not be able to block a release at all, and that has to cover scanner *infrastructure* failure too — a cold arm64 database download, a GHCR hiccup, a Trivy release asset 404.
+      # None of those are true positives about image security, yet every one of them fails this step, and a failed `docker-scan` job would skip `docker-manifest` and with it the entire tag promotion.
+      # Findings still reach the job summary, the artifacts, and code scanning either way, and the step is still marked failed in the run, so an outage stays visible.
+      #
+      # This sits on the step rather than the job on purpose: a step-level `continue-on-error` unambiguously keeps the job green, whereas the job-level form interacts with `needs` in a way that is easy to get wrong.
+      #
+      # ARMING THE GATE IS A TWO-LINE CHANGE, NOT ONE: move `fail-on` off the `off` default in .github/actions/trivy-image-scan/action.yml AND delete this `continue-on-error`.
+      # Leaving it here would arm the threshold while keeping the scan unable to block anything.
+      - name: Scan the ${{ matrix.platform }} release digest
+        id: scan
+        continue-on-error: true
+        uses: ./.github/actions/trivy-image-scan
+        with:
+          image-ref: ${{ steps.digest.outputs.ref }}
+          platform: ${{ matrix.platform }}
+          digest: ${{ steps.digest.outputs.value }}
+          report-slug: release-${{ matrix.slug }}
+          report-dir: ${{ runner.temp }}/trivy-reports
+      - name: Upload SARIF to code scanning
+        # `!cancelled()` so a failed gate still publishes the findings that failed it; `conclusion != 'skipped'` keeps this quiet when the scan never ran; `continue-on-error` keeps a repository without code scanning enabled from turning a green scan red on the upload alone.
+        if: ${{ !cancelled() && steps.scan.conclusion != 'skipped' && github.repository == 'librefang/librefang' }}
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: ${{ runner.temp }}/trivy-reports/release-${{ matrix.slug }}.sarif
+          # Per-architecture: code scanning replaces the previous results for a category, so a shared one would discard one of the two platforms.
+          category: trivy-release-${{ matrix.slug }}
+
   docker-manifest:
     name: Docker Manifest
     if: >
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
-    needs: [docker]
+    timeout-minutes: 15
+    # `docker-scan` is what makes this a gate: the shared :VERSION / :latest tags are only created once both native digests have been scanned.
+    # Keep `docker` in the list too — `needs` is not transitive for the purposes of `steps.*` and artifact availability, and dropping it would make the dependency on the digest artifacts implicit.
+    needs: [docker, docker-scan]
     steps:
       - name: Log in to GHCR
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - name: Extract version
         id: version
         run: |
@@ -2826,6 +3131,7 @@ jobs:
       && ( (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v')) )
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [cli_linux, desktop, docker-manifest]
     concurrency:
       group: arch-pacman-repo
@@ -2849,14 +3155,24 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [docker-manifest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ env.RELEASE_REF }}
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1
-      - name: Deploy
-        run: flyctl deploy --remote-only --config deploy/fly/fly.toml
+      - name: Deploy public demo
+        # This job owns the intentionally unauthenticated official demo.
+        # Keep that exception out of fly.toml so user deployments remain secure by default and must explicitly provision authentication.
+        # The image is pinned to the tag being released for the same reason the auth exception lives here: fly.toml is a file users copy, and a release-specific tag baked into it goes stale the moment the next release lands.
+        # `docker-manifest`, which this job needs, has just pushed both `:$VERSION` and `:latest`, so the tag is guaranteed to exist.
+        # `${RELEASE_TAG#v}` strips the `v` prefix to match `$VERSION` as pushed by `docker-manifest` — `RELEASE_TAG` itself (e.g. `v2026.7.31`) was never a tag pushed to the registry.
+        # `--image` means there is nothing to build, which is why `--remote-only` is gone rather than merely unused.
+        run: >-
+          flyctl deploy --config deploy/fly/fly.toml
+          --image "ghcr.io/librefang/librefang:${RELEASE_TAG#v}"
+          --env LIBREFANG_ALLOW_NO_AUTH=1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -2866,6 +3182,7 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [docker-manifest]
     steps:
       - name: Trigger Render deploy
@@ -2889,6 +3206,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: sdk/javascript
@@ -2952,6 +3270,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: packages/cli-npm
@@ -2995,6 +3314,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       id-token: write  # OIDC trusted publishing to PyPI
       contents: read   # actions/checkout (job-level permissions block fully overrides top-level)
@@ -3030,7 +3350,7 @@ jobs:
       - name: Publish to PyPI
         # OIDC trusted publishing — configure at:
         # pypi.org/manage/project/librefang-sdk/settings/publishing
-        uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: sdk/python/dist/
           skip-existing: true
@@ -3047,6 +3367,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: sdk/rust
@@ -3106,6 +3427,7 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.channel == 'current' && startsWith(inputs.tag, 'v'))
     needs: [create_release]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

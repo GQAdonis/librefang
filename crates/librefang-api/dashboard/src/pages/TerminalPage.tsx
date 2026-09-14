@@ -143,6 +143,7 @@ export function TerminalPage() {
     const parsed = stored ? parseInt(stored, 10) : NaN;
     return Number.isFinite(parsed) ? Math.max(10, Math.min(20, parsed)) : 13;
   });
+  const initialFontSizeRef = useRef(fontSize);
 
   const terminalEnabled = useUIStore((s) => s.terminalEnabled);
   const addToast = useUIStore((s) => s.addToast);
@@ -176,6 +177,7 @@ export function TerminalPage() {
   const connect = useCallback(() => {
     if (terminalEnabled !== true) return;
 
+    intentionalDisconnectRef.current = false;
     const gen = ++wsGenerationRef.current;
 
     if (wsRef.current) {
@@ -382,19 +384,26 @@ export function TerminalPage() {
       setReconnectAttempt(attemptRef.current);
       setIsConnecting(true);
       reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectTimeoutRef.current = null;
         if (wsRef.current === null || wsRef.current.readyState === WebSocket.CLOSED) {
-          connect();
+          connectRef.current();
         }
       }, delay);
     };
-  }, [t, terminalEnabled, queryClient, addToast]);
+  }, [t, terminalEnabled, queryClient, addToast, removeToast]);
 
-  connectRef.current = connect;
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // #4675: explicit user-initiated connect resets both ceilings
   // (auto-reconnect attempts and consecutive fast-fail count) so the user
   // can recover after fixing host config without reloading the page.
   const manualConnect = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
     attemptRef.current = 0;
     consecutiveFastFailRef.current = 0;
     setReconnectAttempt(0);
@@ -508,7 +517,7 @@ export function TerminalPage() {
 
     const term = new Terminal({
       theme: TERMINAL_THEME,
-      fontSize: fontSize,
+      fontSize: initialFontSizeRef.current,
       fontFamily:
         "'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, 'Liberation Mono', monospace",
       lineHeight: 1.2,
@@ -596,24 +605,26 @@ export function TerminalPage() {
 
   // ── Derived UI state ─────────────────────────────────────────────────────────
 
-  const statusDotClass = error
-    ? "bg-red-400"
-    : isConnecting
-      ? "bg-amber-400 animate-pulse"
-      : isConnected
-        ? "bg-emerald-400"
-        : "bg-gray-500";
+  let statusDotClass = "bg-gray-500";
+  if (error) {
+    statusDotClass = "bg-red-400";
+  } else if (isConnecting) {
+    statusDotClass = "bg-amber-400 animate-pulse";
+  } else if (isConnected) {
+    statusDotClass = "bg-emerald-400";
+  }
 
-  const statusLabel = isConnecting
-    ? reconnectAttempt > 0
-      ? t("terminal.subtitle_reconnecting", {
-          attempt: reconnectAttempt,
-          max: MAX_RECONNECT_ATTEMPTS,
-        })
-      : t("terminal.subtitle_connecting")
-    : isConnected
-      ? t("terminal.subtitle_connected")
-      : t("terminal.subtitle_disconnected");
+  let statusLabel = t("terminal.subtitle_disconnected");
+  if (isConnecting && reconnectAttempt > 0) {
+    statusLabel = t("terminal.subtitle_reconnecting", {
+      attempt: reconnectAttempt,
+      max: MAX_RECONNECT_ATTEMPTS,
+    });
+  } else if (isConnecting) {
+    statusLabel = t("terminal.subtitle_connecting");
+  } else if (isConnected) {
+    statusLabel = t("terminal.subtitle_connected");
+  }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -719,9 +730,8 @@ export function TerminalPage() {
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                e.shiftKey
-                  ? searchAddonRef.current?.findPrevious(searchQuery)
-                  : searchAddonRef.current?.findNext(searchQuery);
+                if (e.shiftKey) searchAddonRef.current?.findPrevious(searchQuery);
+                else searchAddonRef.current?.findNext(searchQuery);
               }
               if (e.key === "Escape") {
                 setSearchVisible(false);

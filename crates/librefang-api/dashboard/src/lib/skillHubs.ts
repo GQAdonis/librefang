@@ -32,10 +32,50 @@ export type SkillHub = {
   desc: string;
   /** CLI install command template. `slug` is the registry slug. */
   cli: (slug: string) => string;
+  /** Public web page for one skill on this hub, or `null` when the hub has
+   *  no page we can address. FangHub ships no public web UI, and SkillHub is
+   *  self-hosted — its origin is only known when `VITE_SKILLHUB_REGISTRY_URL`
+   *  is configured at build time. Returning `null` is what keeps the UI from
+   *  offering a link that lands on an unrelated site. */
+  skillUrl: (slug: string) => string | null;
 };
 
-export const SKILL_HUBS: readonly SkillHub[] = [
-  {
+const normalizeRegistryUrl = (raw: string | undefined): string | undefined => {
+  if (!raw?.trim()) return undefined;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    if (url.username || url.password || url.search || url.hash) return undefined;
+    return url.href.replace(/\/+$/, "");
+  } catch {
+    return undefined;
+  }
+};
+
+const shellQuote = (value: string): string =>
+  `'${value.replace(/'/g, `'"'"'`)}'`;
+
+const skillHubRegistryUrl = normalizeRegistryUrl(
+  import.meta.env.VITE_SKILLHUB_REGISTRY_URL,
+);
+const skillHubDomain = skillHubRegistryUrl
+  ? new URL(skillHubRegistryUrl).host
+  : "deployment configured";
+const skillHubCliRegistry = skillHubRegistryUrl
+  ? shellQuote(skillHubRegistryUrl)
+  : '"$SKILLHUB_REGISTRY_URL"';
+// Web origin of the configured SkillHub deployment. `skillHubRegistryUrl` is
+// an API base (`…/api/v1`), so the browsable page hangs off its origin.
+const skillHubWebOrigin = skillHubRegistryUrl
+  ? new URL(skillHubRegistryUrl).origin
+  : undefined;
+
+type SkillHubIndex = {
+  readonly [K in SkillHubId]: SkillHub & { readonly id: K };
+};
+
+const HUB_INDEX = {
+  fanghub: {
     id: "fanghub",
     name: "FangHub",
     glyph: "🪝",
@@ -43,20 +83,25 @@ export const SKILL_HUBS: readonly SkillHub[] = [
     domain: "fanghub.librefang.ai",
     desc:
       "Official BossFang registry — curated hands, agents, MCP, providers, plugins.",
-    cli: (slug) => `librefang skill install ${slug}`,
+    cli: (slug) => `librefang skill install ${shellQuote(slug)}`,
+    skillUrl: () => null,
   },
-  {
+  skillhub: {
     id: "skillhub",
     name: "SkillHub",
     glyph: "🛡",
     color: "#a78bfa",
-    domain: "skillhub.your-co.com",
+    domain: skillHubDomain,
     desc:
       "Self-hosted enterprise skill registry — private namespaces behind your firewall.",
     cli: (slug) =>
-      `CLAWHUB_REGISTRY=https://skillhub.your-co.com clawhub install ${slug}`,
+      `CLAWHUB_REGISTRY=${skillHubCliRegistry} clawhub install ${shellQuote(slug)}`,
+    skillUrl: (slug) =>
+      skillHubWebOrigin
+        ? `${skillHubWebOrigin}/skills/${encodeURIComponent(slug)}`
+        : null,
   },
-  {
+  clawhub: {
     id: "clawhub",
     name: "ClawHub",
     glyph: "🦞",
@@ -64,9 +109,10 @@ export const SKILL_HUBS: readonly SkillHub[] = [
     domain: "clawhub.ai",
     desc:
       "OpenClaw public registry — thousands of community skills, vector search.",
-    cli: (slug) => `clawhub install ${slug}`,
+    cli: (slug) => `clawhub install ${shellQuote(slug)}`,
+    skillUrl: (slug) => `https://clawhub.ai/skills/${encodeURIComponent(slug)}`,
   },
-  {
+  "clawhub-cn": {
     id: "clawhub-cn",
     name: "ClawHub-CN",
     glyph: "🇨🇳",
@@ -75,14 +121,27 @@ export const SKILL_HUBS: readonly SkillHub[] = [
     desc:
       "ClawHub China mirror — accelerated access, CN-native skills.",
     cli: (slug) =>
-      `CLAWHUB_REGISTRY=https://clawhub.cn clawhub install ${slug}`,
+      `CLAWHUB_REGISTRY=https://clawhub.cn clawhub install ${shellQuote(slug)}`,
+    // The mirror the backend actually talks to (`CLAWHUB_CN_BASE_URL` in
+    // `routes/skills/mod.rs`) is `mirror-cn.clawhub.com`, which fronts the
+    // browsable pages too.
+    skillUrl: (slug) =>
+      `https://mirror-cn.clawhub.com/skills/${encodeURIComponent(slug)}`,
   },
-] as const;
+} as const satisfies SkillHubIndex;
 
-const HUB_INDEX: Readonly<Record<SkillHubId, SkillHub>> = Object.fromEntries(
-  SKILL_HUBS.map((h) => [h.id, h]),
-) as Record<SkillHubId, SkillHub>;
+export const SKILL_HUBS: readonly SkillHub[] = Object.values(HUB_INDEX);
+const HUB_LOOKUP: ReadonlyMap<string, SkillHub> = new Map(
+  SKILL_HUBS.map((hub) => [hub.id, hub]),
+);
 
-export function getSkillHub(id: SkillHubId): SkillHub {
-  return HUB_INDEX[id];
+export function getSkillHub(id: string): SkillHub | undefined {
+  return HUB_LOOKUP.get(id);
+}
+
+/** Public marketplace page for `slug` on hub `id`, or `null` when the hub is
+ *  unknown, the slug is empty, or the hub exposes no addressable page. */
+export function skillHubUrl(id: string | undefined, slug: string | undefined): string | null {
+  if (!id || !slug?.trim()) return null;
+  return getSkillHub(id)?.skillUrl(slug.trim()) ?? null;
 }

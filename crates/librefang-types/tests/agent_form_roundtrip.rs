@@ -20,8 +20,9 @@ fn parses_form_full_output_with_capabilities_and_resources() {
     let m: AgentManifest = toml::from_str(toml).expect("full manifest must parse");
     assert_eq!(m.tags, vec!["beta", "research"]);
     assert_eq!(m.skills, vec!["coder"]);
-    assert_eq!(m.model.temperature, 0.3);
-    assert_eq!(m.model.max_tokens, 8192);
+    // The TOML names both, so both are explicit rather than inherited.
+    assert_eq!(m.model.temperature, Some(0.3));
+    assert_eq!(m.model.max_tokens, Some(8192));
     assert_eq!(m.resources.max_tool_calls_per_minute, 30);
     assert_eq!(m.resources.max_cost_per_hour_usd, 1.5);
     assert_eq!(m.capabilities.network, vec!["api.openai.com:443"]);
@@ -96,7 +97,10 @@ position = "before_user"
     assert_eq!(m.autonomous.as_ref().unwrap().max_iterations, 100);
     assert!(m.routing.is_some());
     assert_eq!(m.routing.as_ref().unwrap().simple_model, "claude-haiku");
-    assert_eq!(m.capabilities.memory_read, vec!["user/*"]);
+    assert_eq!(
+        m.capabilities.memory_read.as_deref(),
+        Some(&["user/*".to_string()][..])
+    );
 }
 
 #[test]

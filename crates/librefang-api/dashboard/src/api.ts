@@ -80,6 +80,21 @@ export interface ProviderItem {
    *  otherwise the model's catalog `max_output_tokens`. Absent when the
    *  provider has no usable model or declares no output limit (#6209). */
   max_output_tokens?: number;
+  /** True when this provider takes part in live model discovery: the built-in
+   *  local ids always do, any other provider only once the operator opts in
+   *  via `PUT /api/providers/{id}/discovery` (#6702). */
+  discover_models?: boolean;
+  /** True for the built-in local provider ids (ollama / vllm / lmstudio /
+   *  lemonade). A claim about WHERE the provider runs — a probed custom
+   *  provider is not local — so it also means "discovery cannot be turned off
+   *  for this one". */
+  is_local?: boolean;
+  /** True when an API key is currently set for this provider's env var.
+   *  Distinct from `auth_status`, which reports `not_required` for every
+   *  `key_required: false` provider whether or not a key is stored — so this
+   *  is the only signal that tells a local-provider dialog to offer "replace"
+   *  / "remove" instead of "add" (#6703). Presence only; never the value. */
+  key_present?: boolean;
 }
 
 export type UarLifecycleState =
@@ -145,7 +160,7 @@ export interface MediaVideoResult {
 }
 
 export interface MediaVideoStatus {
-  status: string;
+  status: "submitted" | "pending" | "queued" | "processing" | "completed" | "failed";
   task_id?: string;
   result?: MediaVideoResult;
   error?: string;
@@ -191,15 +206,46 @@ export interface ChannelItem {
   /** Set on an unconfigured sidecar row when `--describe` failed at daemon boot and there is no static fallback — i.e. `fields` is empty and the configure form would otherwise be a blank drawer.
    *  Carries the actionable reason (typically: the Python sidecar SDK is not installed), surfaced in the configure form so the operator knows why the form is empty and how to fix it. */
   schema_error?: string;
+  /** `librefang-sdk` version the sidecar adapter reported on `--describe`, absent when it reported none (an SDK too old to carry the field, or a failed describe).
+   *  `--describe` resolves the same interpreter and PYTHONPATH as the eventual spawn, so this is the SDK that will actually serve traffic — the thing #7140 had no way to see short of shelling into the host. */
+  sdk_version?: string;
   /** Read-only TOML snippet the operator can copy into config.toml
    *  if they prefer hand-editing over the configure drawer. Emitted
    *  by the backend on every row. */
   config_template?: string;
-  /** Messages exchanged through this channel in the last 24 hours.
-   *  Computed via a single grouped query on `usage_events` keyed by
-   *  the `channel` column. Surfaced as the `kind · N msgs/24h`
-   *  meta-line on the Channels page card. */
-  msgs_24h?: number;
+  /** Channel type this instance speaks (`telegram`, `slack`, …).
+   *  Several `[[sidecar_channels]]` instances can share one type. */
+  channel_type?: string;
+  /** LLM calls in the last 24h for this channel **type**, NOT for this instance.
+   *  `usage_events.channel` stores the type (it is derived from `SenderContext.channel`, which also keys session derivation and so cannot be re-pointed at the instance name), so every sidecar of the same type reports the same number.
+   *  Label it as a per-type figure — presenting it per-bot is the defect #6606 documents.
+   *  Per-instance traffic is `messages_received` / `messages_sent`. */
+  msgs_24h_channel_type?: number;
+  /** Whether a live adapter is registered for this instance name at all.
+   *  False means the sidecar was never started, or its bridge start failed and the registration was rolled back — the API layer cannot tell those apart.
+   *  Everything below is meaningless when false, and all of it is absent on an unconfigured catalog row. */
+  supervised?: boolean;
+  /** Supervisor's live connection flag: true between a successful child spawn and the child going away.
+   *  The only real per-bot liveness signal on this payload. */
+  connected?: boolean;
+  /** RFC 3339 timestamp of the last successful child spawn — reset on every supervised restart, so it is "up since", not "created". */
+  started_at?: string | null;
+  /** RFC 3339 timestamp of the last inbound message. */
+  last_message_at?: string | null;
+  /** Inbound message count since the adapter was created.
+   *  Survives supervised restarts (the counter lives on the adapter, not the child), so it is NOT a 24h or since-`started_at` figure. */
+  messages_received?: number;
+  /** Outbound message count, same lifetime as `messages_received`. */
+  messages_sent?: number;
+  /** Last error the supervisor recorded — a sidecar `error` event, a failed spawn, or a circuit-break.
+   *  **Sticky**: never cleared, not even by the successful respawn that follows.
+   *  A connected channel carrying one is degraded, not dead. */
+  last_error?: string | null;
+  /** Per-instance default agent (`[[sidecar_channels]].agent`) — inbound
+   *  messages on this instance with no more specific binding route here.
+   *  `null` / absent when this instance has no default agent configured.
+   *  Only present on configured rows; a discovery (catalog) row never has one. */
+  agent?: string | null;
 }
 
 export interface SkillItem {
@@ -342,6 +388,8 @@ export interface AgentItem {
   supports_thinking?: boolean;
   ready?: boolean;
   profile?: string;
+  /** Template this agent was spawned from, if any (#8018). */
+  source_template?: string;
   /** Human-readable schedule summary: "manual" for reactive agents,
    *  the cron expression for periodic agents, "proactive", or
    *  "continuous · Ns" for continuous agents. */
@@ -363,7 +411,12 @@ export interface AgentItem {
   /** Raw serde field from `AgentEntry::parent` — present on endpoints that
    *  serialize the kernel struct directly. */
   parent?: string | null;
-  /** UUIDs of child agents spawned by this agent (fork tree). */
+  /** Disambiguates a null `parent_agent_id` (#7930).
+   *  `false` means the agent genuinely has no parent; `true` means the row predates the schema that started persisting lineage, so its parent was never recorded and is unrecoverable.
+   *  Render the latter as unknown, not as a root agent. */
+  parent_unknown?: boolean;
+  /** UUIDs of child agents spawned by this agent (fork tree).
+   *  Derived server-side from the stored parent links rather than persisted, so it cannot drift out of step with `parent_agent_id`. */
   children?: string[];
   /** Active session UUID. */
   session_id?: string;
@@ -584,6 +637,12 @@ export interface WorkflowStep {
   timeout_secs?: number;
   inherit_context?: boolean;
   depends_on?: string[];
+  /** Per-step `SessionMode` override. `null` / absent defers to the target
+   *  agent's manifest, which is how the API serializes an unset value. */
+  session_mode?: "persistent" | "new" | null;
+  /** Skill names the step's resolved agent must be able to use (#7721).
+   *  Empty when the step requires nothing; the API sorts and de-duplicates the list on persist. */
+  required_skills?: string[];
 }
 
 export interface WorkflowLastRunSummary {
@@ -697,6 +756,24 @@ export interface ScheduleItem {
    * (possibly empty) on round-trip.
    */
   delivery_targets?: CronDeliveryTarget[];
+  /**
+   * Primary output destination, in addition to any `delivery_targets`.
+   * Settable on create and patchable on update.
+   */
+  delivery?: CronDeliverySpec;
+  /**
+   * Peer/user id the fire runs under; `null` when unset. Settable on create
+   * only — `PUT /api/schedules/{id}` rejects a *change* with a 400 (the
+   * scheduler cannot patch it), though echoing the stored value back is a
+   * no-op so a read-modify-write round trip still works.
+   */
+  peer_id?: string | null;
+  /**
+   * Whether every fire shares one persistent session or gets an isolated
+   * one. `null` when unset — the job then follows the agent's own default.
+   * Same create-only write contract as `peer_id`.
+   */
+  session_mode?: "persistent" | "new" | null;
 }
 
 export interface TriggerItem {
@@ -845,6 +922,14 @@ export interface SessionDetailResponse {
   label?: string | null;
   messages?: AgentSessionMessage[];
   created_at?: string;
+  model_override?: string | null;
+  active?: boolean;
+  /** Aggregated from `usage_events`; `0` for a session with no metered calls. */
+  total_tokens?: number;
+  /** Aggregated from `usage_events`; `0` for a session with no metered calls. */
+  cost_usd?: number;
+  /** First-to-last stamped message span; `null` below two stamped messages. */
+  duration_ms?: number | null;
 }
 
 export interface MemoryItem {
@@ -873,6 +958,7 @@ export interface MemoryListResponse {
 
 export interface MemoryStatsResponse {
   total?: number;
+  by_agent?: Record<string, number>;
   user_count?: number;
   session_count?: number;
   agent_count?: number;
@@ -925,6 +1011,12 @@ export interface ModelPerformanceItem {
   avg_latency_ms?: number;
   min_latency_ms?: number;
   max_latency_ms?: number;
+  /**
+   * Nearest-rank 95th-percentile latency for the window (#8062).
+   *
+   * The percentile an SLO is written against — `avg_latency_ms` hides the tail and `max_latency_ms` is a single outlier.
+   */
+  p95_latency_ms?: number;
   cost_per_call?: number;
   avg_latency_per_call?: number;
 }
@@ -935,6 +1027,19 @@ export interface UsageByAgentItem {
   total_tokens?: number;
   tool_calls?: number;
   cost?: number;
+  /**
+   * Prompt / completion split, so a chatty agent is distinguishable from an expensive one.
+   * Both are served by `GET /api/usage`.
+   */
+  input_tokens?: number;
+  output_tokens?: number;
+  /** Same value as `cost`; the handler emits both names. */
+  total_cost_usd?: number;
+  call_count?: number;
+  /**
+   * `true` for a hand rather than a top-level agent. A hand's spend is real money, so the page labels these rows instead of dropping them.
+   */
+  is_hand?: boolean;
 }
 
 export interface UsageDailyItem {
@@ -947,7 +1052,45 @@ export interface UsageDailyItem {
 export interface UsageDailyResponse {
   days?: UsageDailyItem[];
   today_cost_usd?: number;
+  /**
+   * Timestamp of the oldest stored usage event, or `null` when the table is empty.
+   * Deliberately NOT filtered by the selected range — it answers "how far back does the stored data go".
+   *
+   * Despite the `_date` suffix this is `MIN(timestamp)`, so it carries a full RFC 3339 instant rather than a bare `YYYY-MM-DD`.
+   * Render the first 10 characters for a day.
+   */
   first_event_date?: string | null;
+  /**
+   * `usage.retention_days` from `config.toml` (#8062). `0` means the retention sweep is disabled and the table grows without bound.
+   *
+   * Paired with `first_event_date` this distinguishes "this deployment is young" from "the sweep already pruned the rest", which a cost report needs before anyone reads a total as complete.
+   */
+  retention_days?: number;
+}
+
+/**
+ * Inclusive reporting window accepted by every `/api/usage*` endpoint (#7891).
+ *
+ * Both bounds are `YYYY-MM-DD` **UTC calendar days** — see `lib/usageRange.ts` for why the dashboard resolves its presets in UTC rather than local time.
+ * An omitted bound means unbounded on that side; a malformed one is a `400`, so callers normalize before passing values in.
+ */
+export interface UsageRangeParams {
+  start_date?: string;
+  end_date?: string;
+}
+
+function usageRangeQuery(
+  range: UsageRangeParams = {},
+  extra: Record<string, string | number | undefined> = {},
+): string {
+  const params = new URLSearchParams();
+  if (range.start_date) params.set("start_date", range.start_date);
+  if (range.end_date) params.set("end_date", range.end_date);
+  for (const [key, value] of Object.entries(extra)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
 export interface CommsNode {
@@ -986,7 +1129,6 @@ export interface HandRequirementItem {
   optional?: boolean;
   type?: string;
   description?: string;
-  current_value?: string;
 }
 
 export interface HandDefinitionItem {
@@ -1163,6 +1305,23 @@ async function get<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+const AUTHENTICATED_IMAGE_PATH_RE = /^\/api\/(?:uploads|media\/artifacts)\/[A-Za-z0-9_-]+$/;
+
+export function isAuthenticatedImagePath(path: string): boolean {
+  return AUTHENTICATED_IMAGE_PATH_RE.test(path);
+}
+
+export async function fetchAuthenticatedImage(path: string, signal?: AbortSignal): Promise<Blob> {
+  if (!isAuthenticatedImagePath(path)) {
+    throw new Error("Authenticated image path is not allowed");
+  }
+  const response = await fetch(path, { headers: buildHeaders(), signal });
+  if (!response.ok) {
+    throw await parseError(response);
+  }
+  return response.blob();
+}
+
 async function post<T>(
   path: string,
   body: unknown,
@@ -1292,8 +1451,19 @@ export async function loadDashboardSnapshot(): Promise<DashboardSnapshot> {
 export interface AgentModelDetail {
   provider?: string;
   model?: string;
-  max_tokens?: number;
-  temperature?: number;
+  /**
+   * Tri-state on the wire. `null` is the inherit state — the agent has no
+   * opinion, so the per-model override supplies the value and, failing that,
+   * the system default. It is not zero and not "the default happens to be N".
+   */
+  max_tokens?: number | null;
+  temperature?: number | null;
+  top_p?: number | null;
+  frequency_penalty?: number | null;
+  presence_penalty?: number | null;
+  /** Endpoint limits rather than sampling preferences. */
+  context_window?: number | null;
+  max_output_tokens?: number | null;
 }
 
 export interface AgentDetail {
@@ -1324,6 +1494,13 @@ export interface AgentDetail {
   tools_disabled?: boolean;
   /** `agent.toml: skills_disabled` — hard off switch for every skill. */
   skills_disabled?: boolean;
+  /** Declared skills the daemon's registry does not have (#7713).
+   *  The manifest keeps the name; it activates on the next skills reload. */
+  pending_skills?: string[];
+  /** Declared MCP servers with no live connection (#7713).
+   *  Derived from the live connection pool, not the configured server list, so a
+   *  server that is configured here and unreachable is listed rather than hidden. */
+  pending_mcp_servers?: string[];
   /** Human-readable schedule summary derived from manifest.schedule:
    *  'manual' for reactive, the cron expression, 'proactive', or
    *  'continuous · Ns'. Matches what `enrich_agent_json` puts on the
@@ -1335,6 +1512,8 @@ export interface AgentDetail {
   is_hand?: boolean;
   web_search_augmentation?: "off" | "auto" | "always";
   auto_evolve?: boolean;
+  /** Template this agent was spawned from, if any (#8018). */
+  source_template?: string;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
@@ -1387,13 +1566,28 @@ export async function listAgentEvents(
   return data.events ?? [];
 }
 
+/**
+ * PATCH /api/agents/{id}/config.
+ *
+ * The numeric knobs are tri-state: omit a key to leave it unchanged, send
+ * `null` to hand the field back to inherit, send a number to pin it for this
+ * agent. A pinned value wins over the per-model override.
+ *
+ * An over-limit value is reported in `warnings` and stored as sent — never
+ * clamped. See `librefang_types::inference_params`.
+ */
 export async function patchAgentConfig(
   agentId: string,
   config: {
-    max_tokens?: number;
+    max_tokens?: number | null;
     model?: string;
     provider?: string;
-    temperature?: number;
+    temperature?: number | null;
+    top_p?: number | null;
+    frequency_penalty?: number | null;
+    presence_penalty?: number | null;
+    context_window?: number | null;
+    max_output_tokens?: number | null;
     web_search_augmentation?: "off" | "auto" | "always";
   },
 ): Promise<ApiActionResponse> {
@@ -1417,10 +1611,10 @@ function trimOptionalHandRuntimeString(value: string | undefined): string | unde
  * do not silently inherit those semantics.
  */
 function serializeHandAgentRuntimeConfigPatch(config: {
-  max_tokens?: number;
+  max_tokens?: number | null;
   model?: string;
   provider?: string;
-  temperature?: number;
+  temperature?: number | null;
   api_key_env?: string;
   base_url?: string;
   web_search_augmentation?: "off" | "auto" | "always";
@@ -1435,6 +1629,13 @@ function serializeHandAgentRuntimeConfigPatch(config: {
 } {
   return {
     ...config,
+    // A hand override has no per-field clear: `DELETE /hand-runtime-config`
+    // drops the whole thing. Dropping the key is therefore the honest
+    // translation of `null` here — sending it would read as "leave unchanged"
+    // on the backend anyway, and omitting it says the same thing without
+    // implying the endpoint supports a clear it does not.
+    max_tokens: config.max_tokens ?? undefined,
+    temperature: config.temperature ?? undefined,
     api_key_env: trimOptionalHandRuntimeString(config.api_key_env),
     base_url: trimOptionalHandRuntimeString(config.base_url),
   };
@@ -1448,10 +1649,10 @@ function serializeHandAgentRuntimeConfigPatch(config: {
 export async function patchHandAgentRuntimeConfig(
   agentId: string,
   config: {
-    max_tokens?: number;
+    max_tokens?: number | null;
     model?: string;
     provider?: string;
-    temperature?: number;
+    temperature?: number | null;
     api_key_env?: string;
     base_url?: string;
     web_search_augmentation?: "off" | "auto" | "always";
@@ -1540,10 +1741,37 @@ export interface AgentSkillsResponse {
   available: string[];
   mode: "all" | "allowlist" | "none";
   disabled: boolean;
+  /** Assigned names the registry does not have — declared but not installed (#7713). */
+  pending?: string[];
 }
 
 export async function getAgentSkills(agentId: string): Promise<AgentSkillsResponse> {
   return get<AgentSkillsResponse>(`/api/agents/${encodeURIComponent(agentId)}/skills`);
+}
+
+/**
+ * Per-agent MCP server assignment, returned by `GET /api/agents/{id}/mcp_servers`.
+ *
+ * - `assigned`: the manifest allowlist (`agent.toml: mcp_servers`).
+ * - `available`: server names the daemon currently has connected tools for.
+ * - `mode`: `"all"` (`["*"]`), `"allowlist"` (a pinned set), or `"none"` (empty list — no server is granted).
+ * - `pending`: assigned names with no live connection (#7713). A server that is
+ *   configured but unreachable appears here, which is the whole point: it is
+ *   indistinguishable from a healthy one in the configured server list.
+ */
+export interface AgentMcpServersResponse {
+  assigned: string[];
+  available: string[];
+  mode: "all" | "allowlist" | "none";
+  pending?: string[];
+}
+
+export async function getAgentMcpServers(
+  agentId: string,
+): Promise<AgentMcpServersResponse> {
+  return get<AgentMcpServersResponse>(
+    `/api/agents/${encodeURIComponent(agentId)}/mcp_servers`,
+  );
 }
 
 /**
@@ -1580,9 +1808,73 @@ export async function listAgents(
   return data.items ?? [];
 }
 
+/**
+ * Where a catalog row comes from, and therefore whether this API can write it.
+ *
+ * `"agent-type"` is an operator-authored document under `agent-types/` that the
+ * write verbs own. `"agent"` is a live agent's own `agent.toml`, which is listed
+ * here because it is spawnable-from but is edited through `/api/agents` — the
+ * server refuses a `PUT`/`DELETE` aimed at one, so the editor must not offer the
+ * control in the first place (#7731).
+ */
+export type AgentTypeSource = "agent-type" | "agent";
+
 export interface AgentTemplate {
   name: string;
   description: string;
+  provider: string;
+  model: string;
+  source: AgentTypeSource;
+  editable: boolean;
+}
+
+/**
+ * The flat agent-type shape, as a **patch** (#7740).
+ *
+ * Every field is optional and the server treats absent and empty as different
+ * instructions: an omitted key keeps whatever is on disk, an empty string or
+ * empty array clears it. So a partial object is a legitimate save — send only
+ * what the form actually edits and everything else on the manifest survives.
+ */
+export interface AgentTypeSpec {
+  name?: string;
+  description?: string;
+  system_prompt?: string;
+  provider?: string;
+  model?: string;
+  tools?: string[];
+  skills?: string[];
+}
+
+/**
+ * One privacy risk the promotion preview found in a manifest (mirrors
+ * `librefang_types::manifest_privacy::Finding`).
+ *
+ * `removed_by_sanitizer: true` means the published copy already drops the
+ * value; `false` means it sits inside a field worth keeping and the operator
+ * has to edit it by hand before publishing.
+ */
+export interface PromotionFinding {
+  field: string;
+  category: string;
+  preview: string;
+  removed_by_sanitizer: boolean;
+}
+
+/** Read-only privacy pass over a manifest, ahead of promoting it to a shared registry (#7771). */
+export interface PromotionPreview {
+  requires_review: boolean;
+  findings: PromotionFinding[];
+  manifest_toml: string | null;
+}
+
+export interface AgentTypeDetail {
+  name: string;
+  source: AgentTypeSource;
+  editable: boolean;
+  spec: AgentTypeSpec;
+  promotion_preview?: PromotionPreview;
+  manifest_toml: string;
 }
 
 export async function listAgentTemplates(): Promise<AgentTemplate[]> {
@@ -1592,6 +1884,105 @@ export async function listAgentTemplates(): Promise<AgentTemplate[]> {
 
 export async function getAgentTemplateToml(name: string): Promise<string> {
   return getText(`/api/templates/${encodeURIComponent(name)}/toml`);
+}
+
+export async function getAgentType(name: string): Promise<AgentTypeDetail> {
+  return get<AgentTypeDetail>(`/api/templates/${encodeURIComponent(name)}`);
+}
+
+export async function createAgentType(spec: AgentTypeSpec): Promise<AgentTypeDetail> {
+  return post<AgentTypeDetail>("/api/templates", spec);
+}
+
+export async function updateAgentType(
+  name: string,
+  spec: AgentTypeSpec,
+): Promise<AgentTypeDetail> {
+  return put<AgentTypeDetail>(`/api/templates/${encodeURIComponent(name)}`, spec);
+}
+
+export async function deleteAgentType(name: string): Promise<ApiActionResponse> {
+  return del<ApiActionResponse>(`/api/templates/${encodeURIComponent(name)}`);
+}
+
+/** Result of promoting an agent type to the public registry as a PR. */
+export interface PromoteAgentTypeResult {
+  pr_url: string;
+  repo: string;
+  branch: string;
+}
+
+/**
+ * Promote an agent type to the configured registry repo as a GitHub PR.
+ * Sanitizes the manifest for publication, pushes it to `agent-types/<name>/agent.toml`,
+ * and opens a pull request. Requires `GITHUB_TOKEN` on the daemon side.
+ */
+export async function promoteAgentType(name: string): Promise<PromoteAgentTypeResult> {
+  return post<PromoteAgentTypeResult>(`/api/templates/${encodeURIComponent(name)}/promote`, {});
+}
+
+// ---------------------------------------------------------------------------
+// Template version history
+// ---------------------------------------------------------------------------
+
+export interface TemplateVersionEntry {
+  id: number;
+  template_name: string;
+  timestamp: string;
+  manifest_toml: string;
+  change_source: string;
+}
+
+export async function getTemplateHistory(
+  name: string,
+  limit = 30,
+): Promise<{ versions: TemplateVersionEntry[] }> {
+  return get(`/api/templates/${encodeURIComponent(name)}/history?limit=${limit}`);
+}
+
+export async function restoreTemplateVersion(
+  name: string,
+  versionId: number,
+): Promise<AgentTypeDetail> {
+  return post<AgentTypeDetail>(
+    `/api/templates/${encodeURIComponent(name)}/history/${versionId}/restore`,
+    {},
+  );
+}
+
+/**
+ * One ephemeral worker run (#6699).
+ *
+ * `parent` is not a convenience field: an ephemeral worker has no registry entry,
+ * so it has no budget, no `[resources]` quota and no tool allowlist of its own.
+ * The parent supplies all three, is billed for the run, and caps the worker's
+ * tool set — the server refuses a request without one.
+ */
+export interface SpawnEphemeralRequest {
+  parent: string;
+  message: string;
+  label?: string;
+  agent_type?: string;
+  system_prompt?: string;
+  tools?: string[];
+  provider?: string;
+  model?: string;
+  max_iterations?: number;
+}
+
+/** What one ephemeral worker turn produced. The worker itself is already gone. */
+export interface SpawnEphemeralResult {
+  name: string;
+  response: string;
+  iterations: number;
+  cost_usd?: number;
+  tools: string[];
+}
+
+export async function spawnEphemeral(
+  body: SpawnEphemeralRequest,
+): Promise<SpawnEphemeralResult> {
+  return post<SpawnEphemeralResult>("/api/agents/spawn-ephemeral", body);
 }
 
 export async function deleteAgent(agentId: string): Promise<ApiActionResponse> {
@@ -1614,11 +2005,18 @@ export interface CloneAgentPayload {
   include_tools?: boolean;
 }
 
+export interface CloneAgentResult {
+  agent_id: string;
+  name: string;
+  partial: boolean;
+  warnings: string[];
+}
+
 export async function cloneAgent(
   agentId: string,
   payload: CloneAgentPayload
-): Promise<ApiActionResponse> {
-  return post<ApiActionResponse>(`/api/agents/${encodeURIComponent(agentId)}/clone`, payload);
+): Promise<CloneAgentResult> {
+  return post<CloneAgentResult>(`/api/agents/${encodeURIComponent(agentId)}/clone`, payload);
 }
 
 export async function stopAgent(agentId: string): Promise<ApiActionResponse> {
@@ -1652,6 +2050,19 @@ export async function loadAgentSession(
 export interface SessionContextResponse {
   used_tokens: number;
   max_context_tokens: number;
+  /**
+   * Which layer of the precedence chain produced `max_context_tokens` (refs #7774):
+   * `agent_override`, `model_override`, `catalog`, `session_hint` or `fallback`.
+   */
+  max_context_tokens_source: string;
+  /**
+   * True when `max_context_tokens` is the runtime's own guess rather than a fact
+   * about the model, i.e. the source is `fallback`.
+   *
+   * Render the warning off this flag rather than comparing the source string —
+   * the set of source names can grow, the meaning of "assumed" cannot.
+   */
+  max_context_tokens_assumed: boolean;
   pct: number;
   model: string;
   pressure: string;
@@ -1752,8 +2163,17 @@ export interface ModelItem {
   display_name?: string;
   provider: string;
   tier?: string;
+  // Effective (catalog ∘ operator override). `0` is the catalog's "unknown"
+  // sentinel — never a limit. Refs #7774.
   context_window?: number;
   max_output_tokens?: number;
+  /**
+   * Whether the two capacities above were actually sourced.
+   * `false` marks them as discovery placeholders rather than measurements (#7780) — the daemon has
+   * to put *some* number in for compaction and budget math, but nothing may present it as measured.
+   * Absent on older daemons, where the field did not exist; treat that as `true`.
+   */
+  limits_known?: boolean;
   input_cost_per_m?: number;
   output_cost_per_m?: number;
   pricing_known?: boolean;
@@ -1762,12 +2182,24 @@ export interface ModelItem {
   supports_vision?: boolean;
   supports_streaming?: boolean;
   supports_thinking?: boolean;
+  // Provenance of `supports_vision`, resolved through any operator override. Refs #7957.
+  // "supported" / "unsupported" mean a source declared it; "unknown" means the boolean above was
+  // inferred from the model's name, and the agent loop then keeps sending images rather than
+  // stripping them on a guess. Surface it wherever a text-only model is presented as a fact, so an
+  // operator can tell "this model cannot see" from "nobody has told us".
+  vision_support?: "supported" | "unsupported" | "unknown";
   // Raw catalog defaults — use for "Auto = revert target" in override editors.
   capabilities_catalog?: {
     supports_tools?: boolean;
     supports_vision?: boolean;
     supports_streaming?: boolean;
     supports_thinking?: boolean;
+  };
+  // Raw catalog capacity limits — the same "Auto = revert target" role for the
+  // limit editors. Refs #7774.
+  limits_catalog?: {
+    context_window?: number;
+    max_output_tokens?: number;
   };
   aliases?: string[];
   available?: boolean;
@@ -1825,6 +2257,13 @@ export interface ModelOverrides {
   supports_vision?: boolean;
   supports_streaming?: boolean;
   supports_thinking?: boolean;
+  // Refs #7774: operator corrections to the model's capacity limits —
+  // undefined = use the catalog value, a positive number = force it. These are
+  // facts about the model, not per-request parameters: `max_tokens` above is the
+  // output cap sent on the wire, `max_output_tokens` here is what the model can
+  // produce at most.
+  context_window?: number;
+  max_output_tokens?: number;
 }
 
 export async function getModelOverrides(modelKey: string): Promise<ModelOverrides> {
@@ -1855,6 +2294,12 @@ export async function setProviderUrl(providerId: string, baseUrl: string, proxyU
   const body: Record<string, string> = { base_url: baseUrl };
   if (proxyUrl !== undefined) body.proxy_url = proxyUrl;
   return put<ApiActionResponse>(`/api/providers/${encodeURIComponent(providerId)}/url`, body);
+}
+
+export async function setProviderDiscovery(providerId: string, discoverModels: boolean): Promise<ApiActionResponse> {
+  return put<ApiActionResponse>(`/api/providers/${encodeURIComponent(providerId)}/discovery`, {
+    discover_models: discoverModels,
+  });
 }
 
 export async function setDefaultProvider(providerId: string, model?: string): Promise<ApiActionResponse> {
@@ -1904,7 +2349,6 @@ export async function transcribeAudio(audioBlob: Blob): Promise<{ text: string; 
 // throws, and keeps the server-side label render-safe — no decode pass
 // needed at display time.
 function sanitizeFilenameForHeader(name: string): string {
-  // eslint-disable-next-line no-control-regex
   return name.replace(/[^\x20-\x7e]|["\r\n]/g, "_");
 }
 
@@ -1966,13 +2410,26 @@ export interface SidecarSaveResult {
 // else + the `[[sidecar_channels]]` boilerplate) on the server. Triggers
 // hot-reload of the channels registry; whether the sidecar child needs an
 // out-of-band restart is reported via `restart_required`.
+//
+// `channelType` is always the `SIDECAR_CATALOG` key (`telegram`, `ntfy`, …)
+// — it picks the adapter's schema/command/args and never changes across a
+// rename. `instanceName` is the `[[sidecar_channels]].name` actually
+// written; omit it (or pass the same value as `channelType`) to save the
+// type's default single instance, exactly as before multi-instance support.
+// Pass a distinct `instanceName` to configure a second (third, …) instance
+// of the same catalog type — e.g. two Telegram bots.
 export async function saveSidecarConfig(
-  name: string,
+  channelType: string,
   values: Record<string, string>,
+  options: { instanceName?: string; agent?: string | null } = {},
 ): Promise<SidecarSaveResult> {
   return post<SidecarSaveResult>(
-    `/api/channels/sidecar/${encodeURIComponent(name)}/configure`,
-    { values },
+    `/api/channels/sidecar/${encodeURIComponent(channelType)}/configure`,
+    {
+      values,
+      instance_name: options.instanceName,
+      agent: options.agent,
+    },
   );
 }
 
@@ -2558,6 +3015,9 @@ export interface DryRunStepPreview {
   resolved_prompt: string;
   skipped: boolean;
   skip_reason?: string;
+  /** Why the resolved agent cannot satisfy the step's `required_skills` (#7721).
+   *  Present only for a mismatch, and it is a step-level failure: the run stops here, so the dry run reports `valid: false` even though `agent_found` is true. */
+  skill_error?: string | null;
 }
 
 /** Response from the dry-run endpoint. */
@@ -2849,8 +3309,15 @@ export async function shutdownServer(): Promise<{ status: string }> {
   return post<{ status: string }>("/api/shutdown", {});
 }
 
-export async function reloadConfig(): Promise<{ status: string; restart_required?: boolean; restart_reasons?: string[] }> {
-  return post<{ status: string; restart_required?: boolean; restart_reasons?: string[] }>("/api/config/reload", {});
+export type ReloadConfigResult = {
+  status: string;
+  restart_required?: boolean;
+  restart_reasons?: string[];
+  warnings?: string[];
+};
+
+export async function reloadConfig(): Promise<ReloadConfigResult> {
+  return post<ReloadConfigResult>("/api/config/reload", {});
 }
 
 export interface HealthDetailResponse {
@@ -2953,15 +3420,52 @@ export async function getHealth(): Promise<{ status?: string }> {
 }
 
 export interface MemoryConfigResponse {
-  embedding_provider?: string;
+  embedding_provider?: string | null;
   embedding_model?: string;
-  embedding_api_key_env?: string;
+  embedding_api_key_env?: string | null;
   decay_rate?: number;
   proactive_memory?: {
     enabled?: boolean;
     auto_memorize?: boolean;
     auto_retrieve?: boolean;
+    /** The raw setting. Empty or absent means "inherit the kernel default",
+     *  which is why it cannot be shown on its own — see the two fields
+     *  below. */
     extraction_model?: string;
+    /** The model extraction actually runs on, whether or not anyone chose
+     *  it — split out of any `provider/model` spec and with the prefix
+     *  stripped, as the daemon resolved it at boot.
+     *
+     *  `null` whenever no model runs at all: extraction switched off, an
+     *  `extractor_sidecar` doing the work, or the driver having failed to
+     *  build so extraction fell back to substring matching. Check
+     *  `extraction_llm_active` before presenting this as what is running. */
+    effective_extraction_model?: string | null;
+    /** Provider the model above is called on. `null` under the same
+     *  conditions. */
+    effective_extraction_provider?: string | null;
+    /** `"configured"` when `extraction_model` is set, `"inherited_default"`
+     *  when it fell through to `[default_model]`. */
+    extraction_model_source?: "configured" | "inherited_default" | null;
+    /** What actually extracts memories, as resolved at boot. */
+    extraction_status?:
+      | "llm"
+      | "sidecar"
+      | "degraded_substring"
+      | "inactive"
+      | "unknown";
+    /** Whether an LLM performs extraction at all. `false` for the substring
+     *  fallback after a failed driver build — memory quality is degraded and
+     *  no model is involved. */
+    extraction_llm_active?: boolean | null;
+    /** Why extraction has no LLM, naming the provider and model that failed
+     *  to build. */
+    extraction_degraded_reason?: string | null;
+    /** The out-of-process extractor command, when one is what runs. */
+    extraction_sidecar_command?: string | null;
+    /** Whether an auto-memorized memory is recallable only from the session that produced it (#7605).
+     *  `false` restores the agent-wide pool, where one visitor's turn on a shared agent can be retrieved into another visitor's turn. */
+    session_scoped_recall?: boolean;
     max_retrieve?: number;
   };
   /**
@@ -2978,15 +3482,16 @@ export async function getMemoryConfig(): Promise<MemoryConfigResponse> {
 }
 
 export async function updateMemoryConfig(payload: {
-  embedding_provider?: string;
-  embedding_model?: string;
-  embedding_api_key_env?: string;
+  embedding_provider?: string | null;
+  embedding_model?: string | null;
+  embedding_api_key_env?: string | null;
   decay_rate?: number;
   proactive_memory?: {
     enabled?: boolean;
     auto_memorize?: boolean;
     auto_retrieve?: boolean;
     extraction_model?: string;
+    session_scoped_recall?: boolean;
     max_retrieve?: number;
   };
 }): Promise<MemoryConfigResponse> {
@@ -3001,6 +3506,108 @@ export async function getSecurityStatus(): Promise<SecurityStatusResponse> {
 
 export async function getFullConfig(): Promise<Record<string, unknown>> {
   return get<Record<string, unknown>>("/api/config");
+}
+
+/**
+ * Provenance of the effective configuration — where it was loaded from, and
+ * whether this daemon will accept a write to it (#6695).
+ *
+ * `writable` is the field to branch on. It is equivalent to
+ * `mode === "mutable"`, exposed separately by the server so a client uses a
+ * boolean rather than string-matching a mode name.
+ */
+export interface ConfigStatus {
+  /** `"mutable"` or `"managed"`. Widened to `string` so an unknown future mode does not break parsing — branch on `writable`, not on this. */
+  mode: string;
+  /** Absolute path the effective configuration was loaded from. */
+  source: string;
+  /** Whether the API will accept a write. */
+  writable: boolean;
+  /** `sha256:<hex>` over the file's raw bytes, or `null` when the file does not exist. */
+  checksum?: string | null;
+  /** RFC 3339 timestamp of the file's last modification, or `null` when unavailable. */
+  modified_at?: string | null;
+}
+
+export async function getConfigStatus(): Promise<ConfigStatus> {
+  return get<ConfigStatus>("/api/config/status");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Media model endpoints (refs #8038, #8011)                          */
+/* ------------------------------------------------------------------ */
+/* Custom / self-hosted media endpoints are plain `GET /api/config`    */
+/* sub-tables, not entries in the model catalogue:                    */
+/* `[media.custom_stt]`, `[media.custom_image]`, `[media.custom_video]`*/
+/* and `[tts.custom]`. The types below describe that existing shape so */
+/* the Models tab can render them next to LLM models — the config file */
+/* layout is deliberately unchanged.                                   */
+
+/** Modality of one row in the unified Models tab. `llm` covers the model catalogue. */
+export type ModelEntryKind = "llm" | "tts" | "stt" | "image" | "video";
+
+/** Modality of a custom media endpoint — `ModelEntryKind` minus the catalogue. */
+export type MediaModelKind = Exclude<ModelEntryKind, "llm">;
+
+/**
+ * One custom media endpoint table as `GET /api/config` returns it.
+ *
+ * `api_key_env` is the *name* of an environment variable, never a key — the
+ * secret itself never enters config.toml and never reaches the dashboard.
+ * `model` is `Option<String>` on the Rust side for STT / image / video and a
+ * plain `String` for TTS, so it is optional here; `voice` and `format` exist
+ * on `CustomTtsConfig` only.
+ */
+export interface MediaModelEndpointConfig {
+  base_url?: string;
+  api_key_env?: string;
+  key_required?: boolean;
+  model?: string | null;
+  /** TTS only. */
+  voice?: string;
+  /** TTS only. */
+  format?: string;
+}
+
+/** The subset of a media endpoint the dashboard lets an operator edit. */
+export interface MediaModelEndpointDraft {
+  base_url: string;
+  key_required: boolean;
+  model: string;
+  /** TTS only — ignored for the other kinds. */
+  voice?: string;
+  /** TTS only — ignored for the other kinds. */
+  format?: string;
+}
+
+/** A custom media endpoint projected into a Models-tab row. */
+export interface MediaModelEndpoint {
+  kind: MediaModelKind;
+  /** Dotted `POST /api/config/set` path of the endpoint table, e.g. `media.custom_stt`. */
+  config_path: string;
+  /** Dotted path of the scalar that selects this endpoint, e.g. `media.audio_provider`. */
+  provider_path: string;
+  /** Provider name currently selected for this modality, or `""` when unset. */
+  provider: string;
+  config: MediaModelEndpointConfig;
+  /** Whether a base URL is set — an endpoint without one is never consulted. */
+  configured: boolean;
+  /**
+   * Whether the modality's master switch is on (`[media] audio_transcription`,
+   * `[tts] enabled`, …). A fully filled-in endpoint whose modality is off is
+   * never reached at runtime, so the tab has to say so.
+   */
+  modality_enabled: boolean;
+  /** Dotted path of that master switch, for the warning text. */
+  modality_enabled_path: string;
+  /**
+   * Value of the `[media]` scalar that takes precedence over this table's
+   * `model` (`audio_model` / `image_model` / `video_model`), or `null` when it
+   * is unset or the modality has no such scalar. TTS has none.
+   */
+  model_override: string | null;
+  /** Dotted path of that scalar, or `null` when the modality has none. */
+  model_override_path: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -3068,6 +3675,15 @@ export interface ConfigSectionDescriptor {
 export interface ConfigSchemaRoot extends JsonSchema {
   "x-sections"?: ConfigSectionDescriptor[];
   "x-ui-options"?: Record<string, UiFieldOptions>;
+  /** Auxiliary side-task slugs, served from `AuxTask::ALL` so the UI editors never carry a hand-copied list (#8059). */
+  "x-aux-tasks"?: string[];
+  /**
+   * Dotted paths `POST /api/config/set` rejects with 403.
+   *
+   * The server sends the resolved verdict, not the allowlists: writability is decided by an exact-path list, section prefixes, a depth-2-only rule and a secret-suffix scrub, and re-deriving that here would make the SPA a third place to keep in sync.
+   * A path absent from this array is treated as writable, so an enumeration gap degrades to the previous behaviour.
+   */
+  "x-non-writable"?: string[];
 }
 
 export async function getConfigSchema(): Promise<ConfigSchemaRoot> {
@@ -3117,8 +3733,19 @@ export async function createBackup(): Promise<{ filename?: string; path?: string
   return post<{ filename?: string; path?: string; size_bytes?: number; components?: string[]; created_at?: string }>("/api/backup", {});
 }
 
-export async function restoreBackup(filename: string): Promise<{ restored_files?: number; errors?: string[]; message?: string }> {
-  return post<{ restored_files?: number; errors?: string[]; message?: string }>("/api/restore", { filename });
+// An empty component checklist means "restore everything", which the API spells
+// as an absent `components` field — it rejects `[]` rather than guess between
+// "everything" and "nothing". Dropping the field here is what keeps the
+// checklist's default state a full restore instead of a 400.
+export async function restoreBackup(
+  filename: string,
+  options?: { keepConfig?: boolean; components?: string[] },
+): Promise<{ restored_files?: number; errors?: string[]; message?: string }> {
+  return post<{ restored_files?: number; errors?: string[]; message?: string }>("/api/restore", {
+    filename,
+    keep_config: options?.keepConfig,
+    components: options?.components?.length ? options.components : undefined,
+  });
 }
 
 export async function deleteBackup(filename: string): Promise<{ deleted?: string }> {
@@ -3349,6 +3976,38 @@ export async function modifyAndRetryApproval(
   return post(`/api/approvals/${encodeURIComponent(id)}/modify`, { feedback });
 }
 
+/**
+ * Decision values the daemon is known to put on an `approval_audit` row.
+ *
+ * Cross-language contract (#6607) — the authoritative writers are:
+ * - `"pending"` — written at submission time by `ApprovalManager::request_approval` (`crates/librefang-kernel/src/approval.rs`) so a crash mid-flight still leaves a record of the request.
+ *   It is NOT a resolved decision.
+ * - `"approved" | "denied" | "timed_out" | "modify_and_retry" | "skipped"` — `ApprovalDecision::as_str()` (`crates/librefang-types/src/approval.rs`), written on resolution by `ApprovalManager::push_recent`.
+ *
+ * `"rejected"` is the spelling `crates/librefang-api/src/routes/approvals.rs` uses for `Denied` on sibling shapes (the `status` field of `GET /api/approvals`, and the `decision` field of the reject-all response), and `"approve"` / `"reject"` are the request verbs its batch endpoint accepts.
+ * No site persists those three onto an audit row today; they are carried here because the History table has always accepted them and dropping the aliases would be a silent behaviour regression if any surface ever does.
+ */
+export type KnownApprovalDecision =
+  | "pending"
+  | "approved"
+  | "approve"
+  | "denied"
+  | "rejected"
+  | "reject"
+  | "timed_out"
+  | "modify_and_retry"
+  | "skipped";
+
+/**
+ * `KnownApprovalDecision` plus an escape hatch for anything else the daemon sends.
+ *
+ * The union is what the UI is checked against; the `string` arm is the honest admission that a newer daemon can send a variant this build has never heard of.
+ * Consumers must keep a runtime fallback for that case — see `decisionPresentation` in `pages/ApprovalsPage.tsx`.
+ */
+export type ApprovalDecisionValue =
+  | KnownApprovalDecision
+  | (string & Record<never, never>);
+
 export interface ApprovalAuditEntry {
   id: string;
   request_id: string;
@@ -3357,11 +4016,17 @@ export interface ApprovalAuditEntry {
   description: string;
   action_summary: string;
   risk_level: string;
-  decision: string;
+  decision: ApprovalDecisionValue;
   decided_by?: string;
   decided_at: string;
   requested_at: string;
   feedback?: string;
+  /**
+   * Whether a TOTP second factor was used for this decision.
+   *
+   * Always present: the Rust field is a plain `bool` (not an `Option`), and `GET /api/approvals/audit` serializes `Vec<ApprovalAuditEntry>` straight through, so serde always emits it.
+   */
+  second_factor_used: boolean;
 }
 
 export async function queryApprovalAudit(params: {
@@ -3449,6 +4114,7 @@ export async function listMemories(params?: {
   offset?: number;
   limit?: number;
   category?: string;
+  level?: string;
 }): Promise<MemoryListResponse> {
   const offset = Number.isFinite(params?.offset) ? Math.max(0, Math.floor(params?.offset ?? 0)) : 0;
   const limit = Number.isFinite(params?.limit) ? Math.max(1, Math.floor(params?.limit ?? 20)) : 20;
@@ -3456,6 +4122,7 @@ export async function listMemories(params?: {
   query.set("offset", String(offset));
   query.set("limit", String(limit));
   if (params?.category) query.set("category", params.category);
+  if (params?.level) query.set("level", params.level);
 
   const path = params?.agentId
     ? `/api/memory/agents/${encodeURIComponent(params.agentId)}?${query.toString()}`
@@ -3466,12 +4133,14 @@ export async function listMemories(params?: {
 export async function searchMemories(params: {
   query: string;
   agentId?: string;
+  level?: string;
   limit?: number;
 }): Promise<MemoryItem[]> {
   const limit = Number.isFinite(params.limit) ? Math.max(1, Math.floor(params.limit ?? 20)) : 20;
   const query = new URLSearchParams();
   query.set("q", params.query);
   query.set("limit", String(limit));
+  if (params.level) query.set("level", params.level);
 
   const path = params.agentId
     ? `/api/memory/agents/${encodeURIComponent(params.agentId)}/search?${query.toString()}`
@@ -3524,27 +4193,55 @@ export async function decayMemories(): Promise<ApiActionResponse> {
   return post<ApiActionResponse>("/api/memory/decay", {});
 }
 
-export async function listUsageByAgent(): Promise<UsageByAgentItem[]> {
-  const data = await get<PaginatedResponse<UsageByAgentItem>>("/api/usage");
+export async function listUsageByAgent(
+  range: UsageRangeParams = {},
+): Promise<UsageByAgentItem[]> {
+  const data = await get<PaginatedResponse<UsageByAgentItem>>(
+    `/api/usage${usageRangeQuery(range)}`,
+  );
   return data.items ?? [];
 }
 
-export async function getUsageSummary(): Promise<UsageSummaryResponse> {
-  return get<UsageSummaryResponse>("/api/usage/summary");
+export async function getUsageSummary(
+  range: UsageRangeParams = {},
+): Promise<UsageSummaryResponse> {
+  return get<UsageSummaryResponse>(`/api/usage/summary${usageRangeQuery(range)}`);
 }
 
-export async function listUsageByModel(): Promise<UsageByModelItem[]> {
-  const data = await get<{ models?: UsageByModelItem[] }>("/api/usage/by-model");
+export async function listUsageByModel(
+  range: UsageRangeParams = {},
+): Promise<UsageByModelItem[]> {
+  const data = await get<{ models?: UsageByModelItem[] }>(
+    `/api/usage/by-model${usageRangeQuery(range)}`,
+  );
   return data.models ?? [];
 }
 
-export async function getUsageByModelPerformance(): Promise<ModelPerformanceItem[]> {
-  const data = await get<{ models?: ModelPerformanceItem[] }>("/api/usage/by-model/performance");
+export async function getUsageByModelPerformance(
+  range: UsageRangeParams = {},
+): Promise<ModelPerformanceItem[]> {
+  const data = await get<{ models?: ModelPerformanceItem[] }>(
+    `/api/usage/by-model/performance${usageRangeQuery(range)}`,
+  );
   return data.models ?? [];
 }
 
-export async function getUsageDaily(): Promise<UsageDailyResponse> {
-  return get<UsageDailyResponse>("/api/usage/daily");
+/**
+ * Daily breakdown for the window.
+ *
+ * `days` and an explicit range are mutually exclusive server-side (combining
+ * them is a `400`), so a bounded window passes dates only and `days` is used
+ * solely for the unbounded case. `dailyDaysFor` in `lib/usageRange.ts` picks
+ * between them.
+ */
+export async function getUsageDaily(
+  range: UsageRangeParams = {},
+  days?: number,
+): Promise<UsageDailyResponse> {
+  const bounded = Boolean(range.start_date || range.end_date);
+  return get<UsageDailyResponse>(
+    `/api/usage/daily${usageRangeQuery(range, bounded ? {} : { days })}`,
+  );
 }
 
 // Mirrors the kernel-side `BudgetStatus` (crates/librefang-kernel-metering)
@@ -3879,6 +4576,28 @@ export interface HandInstanceStatus {
 
 export async function getHandInstanceStatus(instanceId: string): Promise<HandInstanceStatus> {
   return get<HandInstanceStatus>(`/api/hands/instances/${encodeURIComponent(instanceId)}/status`);
+}
+
+/** One entry of the server-owned chat slash-command catalog.
+ *
+ *  Mirrors `librefang_channels::commands::CommandDef` projected through
+ *  `GET /api/commands`. `exec` is absent for commands the catalog lists but
+ *  the chat cannot run — those stay out of the slash menu. */
+export interface ChatCommand {
+  cmd: string;
+  desc: string;
+  /** i18n key under `chat.`; falls back to `desc` when the locale lacks it. */
+  desc_key?: string;
+  args_hint?: string;
+  no_args?: boolean;
+  exec?: "client" | "backend";
+  /** Present only on skill-derived entries. */
+  source?: string;
+}
+
+export async function listChatCommands(): Promise<ChatCommand[]> {
+  const data = await get<{ commands: ChatCommand[] }>("/api/commands");
+  return data.commands ?? [];
 }
 
 export async function listGoals(): Promise<GoalItem[]> {
@@ -5077,6 +5796,88 @@ export async function importUsers(
     rows,
     dry_run: options.dryRun ?? false,
   });
+}
+
+// ---------------------------------------------------------------------------
+// User groups (#7745)
+//
+// Shape mirrors `routes/groups.rs::GroupView` / `GroupUpsert`. Membership is
+// FLAT — a group has members and no parent or child; see the doc-comment on
+// `GroupConfig` in `librefang-types` for why.
+// ---------------------------------------------------------------------------
+
+export interface GroupItem {
+  name: string;
+  description: string;
+  members: string[];
+  roles: string[];
+  member_count: number;
+  // Members with no matching `[[users]]` entry. Not an error: membership can
+  // be synced from an external identity provider before the person has ever
+  // authenticated here. Surfaced so the UI can badge the row.
+  unknown_members: string[];
+}
+
+export interface GroupUpsertPayload {
+  name: string;
+  description?: string;
+  members?: string[];
+  roles?: string[];
+}
+
+export interface UserGroupsResult {
+  name: string;
+  groups: string[];
+  roles: string[];
+}
+
+export async function listGroups(): Promise<GroupItem[]> {
+  return get<GroupItem[]>("/api/groups");
+}
+
+export async function getGroup(name: string): Promise<GroupItem> {
+  return get<GroupItem>(`/api/groups/${encodeURIComponent(name)}`);
+}
+
+export async function createGroup(payload: GroupUpsertPayload): Promise<GroupItem> {
+  return post<GroupItem>("/api/groups", payload);
+}
+
+export async function updateGroup(
+  originalName: string,
+  payload: GroupUpsertPayload,
+): Promise<GroupItem> {
+  return put<GroupItem>(
+    `/api/groups/${encodeURIComponent(originalName)}`,
+    payload,
+  );
+}
+
+export async function deleteGroup(name: string): Promise<ApiActionResponse> {
+  return del<ApiActionResponse>(`/api/groups/${encodeURIComponent(name)}`);
+}
+
+export async function addGroupMember(
+  group: string,
+  user: string,
+): Promise<GroupItem> {
+  return put<GroupItem>(
+    `/api/groups/${encodeURIComponent(group)}/members/${encodeURIComponent(user)}`,
+    {},
+  );
+}
+
+export async function removeGroupMember(
+  group: string,
+  user: string,
+): Promise<GroupItem> {
+  return del<GroupItem>(
+    `/api/groups/${encodeURIComponent(group)}/members/${encodeURIComponent(user)}`,
+  );
+}
+
+export async function getUserGroups(name: string): Promise<UserGroupsResult> {
+  return get<UserGroupsResult>(`/api/users/${encodeURIComponent(name)}/groups`);
 }
 
 // ---------------------------------------------------------------------------

@@ -217,6 +217,24 @@ cd librefang/deploy
 docker compose up -d
 ```
 
+**Kubernetes**
+
+单副本有状态部署的 Kustomize manifest，满足 `restricted` Pod Security Standard：
+
+```bash
+git clone https://github.com/librefang/librefang.git
+cd librefang
+kubectl create namespace librefang
+kubectl -n librefang create secret generic librefang-auth \
+  --from-literal=api-key="$(openssl rand -hex 32)" \
+  --from-literal=vault-key="$(openssl rand -base64 32)" \
+  --from-literal=dashboard-user=admin \
+  --from-literal=dashboard-pass="$(openssl rand -hex 24)"
+kubectl -n librefang apply -k deploy/kubernetes/base
+```
+
+`replicas` 必须保持为 1 —— 支持边界、卷所有权要求和探针契约见 [deploy/kubernetes/README.md](https://github.com/librefang/librefang/tree/main/deploy/kubernetes)。
+
 **验证安装**
 
 ```bash
@@ -291,7 +309,7 @@ nix profile install github:librefang/librefang#librefang-desktop
 ```
 
 在 NixOS 上，桌面应用是更粗糙的一条路。
-它会链接完整的 GTK / webview 闭包（`gtk3`、`libsoup_3`、`webkitgtk_4_1`，以及运行时 `dlopen` 的 `libayatana-appindicator3`），因此构建耗时远高于 CLI，而且会走到 CLI 软件包根本不会触及的代码路径。
+它会链接完整的 GTK / webview 闭包（`gtk3`、`libsoup_3`、`webkitgtk_4_1`），因此构建耗时远高于 CLI，而且会走到 CLI 软件包根本不会触及的代码路径。
 如果它在你的机器上构建不出来或启动不了，请改为安装 `librefang-cli`，并通过 `http://127.0.0.1:4545/` 使用 Web Dashboard。
 
 **Debian / Ubuntu / deepin**
@@ -303,7 +321,6 @@ nix profile install github:librefang/librefang#librefang-desktop
 sudo apt-get install -y \
   libwebkit2gtk-4.1-dev \
   libgtk-3-dev \
-  libayatana-appindicator3-dev \
   librsvg2-dev \
   libdbus-1-dev
 ```
@@ -356,7 +373,8 @@ curl -sL https://raw.githubusercontent.com/librefang/librefang/main/deploy/fly/d
 ```bash
 cd deploy/gcp
 cp terraform.tfvars.example terraform.tfvars
-# 编辑 terraform.tfvars，填入 project_id 和 API keys
+# 编辑 terraform.tfvars，填入 project_id、限制访问的来源 CIDR、
+# 生成的 LibreFang API key，以及各服务商的 API keys
 terraform init && terraform apply
 ```
 

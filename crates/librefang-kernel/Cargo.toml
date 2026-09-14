@@ -3,6 +3,8 @@ name = "librefang-kernel"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 description = "Core kernel for the LibreFang Agent OS"
 readme = "README.md"
 
@@ -120,6 +122,7 @@ proptest = "1"
 tracing-subscriber = { workspace = true }
 librefang-testing = { path = "../librefang-testing" }
 librefang-kernel-handle = { path = "../librefang-kernel-handle" }
+wiremock = "0.6"
 
 [lints]
 workspace = true

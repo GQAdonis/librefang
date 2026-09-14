@@ -14,6 +14,13 @@
 use crate::browser::{BrowserCommand, BrowserManager};
 use crate::tool_runner::ToolError;
 
+/// The same body, inside the untrusted-content boundary, for a tool result.
+///
+/// The table belongs inside the fence: every URL in it comes from the page and is exactly as attacker-controlled as the prose it was lifted out of.
+fn render_page(source_url: &str, data: &serde_json::Value) -> String {
+    crate::web_content::wrap_external_content(source_url, &crate::browser::render_page_body(data))
+}
+
 pub async fn tool_browser_navigate(
     input: &serde_json::Value,
     mgr: &BrowserManager,
@@ -49,8 +56,7 @@ pub async fn tool_browser_navigate(
     let data = resp.data.unwrap_or_default();
     let title = data["title"].as_str().unwrap_or("(no title)");
     let page_url = data["url"].as_str().unwrap_or(url);
-    let content = data["content"].as_str().unwrap_or("");
-    let wrapped = crate::web_content::wrap_external_content(page_url, content);
+    let wrapped = render_page(page_url, &data);
 
     Ok(format!(
         "Navigated to: {page_url}\nTitle: {title}\n\n{wrapped}"
@@ -66,6 +72,12 @@ pub async fn tool_browser_click(
     let selector = input["selector"]
         .as_str()
         .ok_or(ToolError::MissingParameter("selector"))?;
+    if selector.trim().is_empty() {
+        return Err(ToolError::InvalidParameter {
+            name: "selector",
+            reason: "must not be empty".to_string(),
+        });
+    }
 
     let resp = mgr
         .send_command(
@@ -119,6 +131,32 @@ pub async fn tool_browser_type(
     Ok(format!("Typed into {selector}: {text}"))
 }
 
+/// Decode and persist browser-provided screenshot bytes when present.
+async fn persist_screenshot(
+    image_base64: Option<&serde_json::Value>,
+    upload_dir: &std::path::Path,
+) -> Result<Option<String>, ToolError> {
+    let image_base64 = match image_base64 {
+        None | Some(serde_json::Value::Null) => return Ok(None),
+        Some(serde_json::Value::String(value)) if value.is_empty() => return Ok(None),
+        Some(serde_json::Value::String(value)) => value,
+        Some(_) => {
+            return Err(ToolError::upstream_msg(
+                "Invalid screenshot data: image_base64 must be a string",
+            ));
+        }
+    };
+
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(image_base64)
+        .map_err(|error| ToolError::upstream_msg(format!("Invalid screenshot data: {error}")))?;
+    crate::uploaded_file::save_shared_upload(upload_dir, &decoded, "image/png", "screenshot.png")
+        .await
+        .map(Some)
+        .map_err(ToolError::upstream_msg)
+}
+
 /// browser_screenshot: Take a screenshot of the current page.
 pub async fn tool_browser_screenshot(
     _input: &serde_json::Value,
@@ -138,27 +176,12 @@ pub async fn tool_browser_screenshot(
     }
 
     let data = resp.data.unwrap_or_default();
-    let b64 = data["image_base64"].as_str().unwrap_or("");
     let url = data["url"].as_str().unwrap_or("");
 
-    let mut image_urls: Vec<String> = Vec::new();
-    if !b64.is_empty() {
-        use base64::Engine;
-        let _ = std::fs::create_dir_all(upload_dir);
-        let file_id = uuid::Uuid::new_v4().to_string();
-        if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
-            // Screenshots are PNG; persist as `<uuid>.png` (#6530). The URL
-            // keeps the bare file_id and serve_upload's resolver finds the file.
-            let path = upload_dir.join(librefang_types::media::on_disk_name(
-                &file_id,
-                "image/png",
-                "",
-            ));
-            if std::fs::write(&path, &decoded).is_ok() {
-                image_urls.push(format!("/api/uploads/{file_id}"));
-            }
-        }
-    }
+    let image_urls: Vec<String> = persist_screenshot(data.get("image_base64"), upload_dir)
+        .await?
+        .into_iter()
+        .collect();
 
     Ok(serde_json::json!({
         "screenshot": true,
@@ -187,8 +210,7 @@ pub async fn tool_browser_read_page(
     let data = resp.data.unwrap_or_default();
     let title = data["title"].as_str().unwrap_or("(no title)");
     let url = data["url"].as_str().unwrap_or("");
-    let content = data["content"].as_str().unwrap_or("");
-    let wrapped = crate::web_content::wrap_external_content(url, content);
+    let wrapped = render_page(url, &data);
 
     Ok(format!("Page: {title}\nURL: {url}\n\n{wrapped}"))
 }
@@ -305,4 +327,122 @@ pub async fn tool_browser_back(
     let title = data["title"].as_str().unwrap_or("(no title)");
     let url = data["url"].as_str().unwrap_or("");
     Ok(format!("Went back.\nPage: {title}\nURL: {url}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn page_with_links() -> serde_json::Value {
+        serde_json::json!({
+            "title": "Hacker News",
+            "url": "https://news.ycombinator.com/",
+            "content": "Ask HN\u{27e8}1\u{27e9}\nRust\u{27e8}2\u{27e9}",
+            "links": [
+                {"id": 1, "url": "/ask"},
+                {"id": 2, "url": "https://rust-lang.org/"},
+            ],
+            "links_base": "https://news.ycombinator.com",
+        })
+    }
+
+    #[tokio::test]
+    async fn empty_click_selector_is_invalid_input_without_opening_a_session() {
+        let manager = BrowserManager::new(Default::default());
+        let error = tool_browser_click(
+            &serde_json::json!({"selector": "   "}),
+            &manager,
+            "test-agent",
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            ToolError::InvalidParameter {
+                name: "selector",
+                ..
+            }
+        ));
+    }
+
+    /// The link table is content lifted out of the page, so it belongs inside the untrusted-content boundary rather than in the trusted preamble around it.
+    #[test]
+    fn test_link_table_stays_inside_the_untrusted_boundary() {
+        let out = render_page("https://news.ycombinator.com/", &page_with_links());
+        let boundary = crate::web_content::content_boundary("https://news.ycombinator.com/");
+        let close = format!("<<</{boundary}>>>");
+        let table_at = out
+            .find("\u{27e8}1\u{27e9} /ask")
+            .expect("table is rendered");
+        let close_at = out.find(&close).expect("boundary is closed");
+        assert!(
+            table_at < close_at,
+            "a URL taken from the page must not sit outside the untrusted-content fence"
+        );
+    }
+
+    #[test]
+    fn test_link_table_lists_every_marker_the_prose_carries() {
+        let out = render_page("https://news.ycombinator.com/", &page_with_links());
+        assert!(out.contains("\u{27e8}1\u{27e9} /ask"));
+        // Cross-origin entries stay absolute; same-origin ones are a path.
+        assert!(out.contains("\u{27e8}2\u{27e9} https://rust-lang.org/"));
+        assert!(out.contains("relative to https://news.ycombinator.com"));
+    }
+
+    /// A page with no links renders exactly as it did before the table existed.
+    #[test]
+    fn test_page_without_links_is_unchanged() {
+        let data = serde_json::json!({"content": "Just prose.", "links": [], "links_base": ""});
+        assert_eq!(
+            render_page("https://example.com/", &data),
+            crate::web_content::wrap_external_content("https://example.com/", "Just prose.")
+        );
+    }
+
+    /// An extraction that predates the table — or any caller that only sets `content` — must still render, since `links` is an additive field.
+    #[test]
+    fn test_missing_links_field_falls_back_to_content_only() {
+        let data = serde_json::json!({"content": "Just prose."});
+        assert_eq!(
+            render_page("https://example.com/", &data),
+            crate::web_content::wrap_external_content("https://example.com/", "Just prose.")
+        );
+    }
+
+    #[tokio::test]
+    async fn screenshot_rejects_invalid_base64() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = serde_json::json!("not base64!");
+        let error = persist_screenshot(Some(&image), dir.path())
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("Invalid screenshot data"));
+    }
+
+    #[tokio::test]
+    async fn screenshot_rejects_non_string_base64() {
+        let dir = tempfile::tempdir().unwrap();
+        let image = serde_json::json!({ "bytes": "cG5n" });
+        let error = persist_screenshot(Some(&image), dir.path())
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("image_base64 must be a string"));
+    }
+
+    #[tokio::test]
+    async fn screenshot_surfaces_shared_upload_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let upload_path = dir.path().join("not-a-directory");
+        tokio::fs::write(&upload_path, b"occupied").await.unwrap();
+
+        let image = serde_json::json!("cG5n");
+        let error = persist_screenshot(Some(&image), &upload_path)
+            .await
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Failed to create upload directory"));
+    }
 }

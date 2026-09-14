@@ -92,6 +92,7 @@ const LOCALE_ZH_CN: &str = include_str!("../static/locales/zh-CN.json");
 const LOCALE_JA: &str = include_str!("../static/locales/ja.json");
 const LOCALE_UK: &str = include_str!("../static/locales/uk.json");
 const LOCALE_KO: &str = include_str!("../static/locales/ko.json");
+const LOCALE_PL: &str = include_str!("../static/locales/pl.json");
 
 const DASHBOARD_SYNC_ERROR_FILE: &str = ".sync-error";
 
@@ -277,6 +278,16 @@ pub async fn locale_ko() -> impl IntoResponse {
     )
 }
 
+pub async fn locale_pl() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "application/json; charset=utf-8"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        LOCALE_PL,
+    )
+}
+
 /// GET / — Serve the React dashboard shell.
 pub async fn webchat_page(State(state): State<Arc<crate::routes::AppState>>) -> impl IntoResponse {
     let home_dir = Some(state.kernel.home_dir().to_path_buf());
@@ -333,14 +344,11 @@ fn is_safe_asset_path(path: &str) -> bool {
     if path.contains('\0') {
         return false;
     }
-    // Reject Windows UNC / authority-style prefixes outright. `\\server\share`
-    // and `//server/share` carry no `..` segment, so the per-segment check
-    // below passes them — but `Path::join` REPLACES the base with an absolute
-    // or UNC path on Windows, so `home/dashboard`.join("\\server\share")
-    // resolves to `\\server\share`, escaping the dashboard directory entirely.
-    // A legitimate dashboard asset is always a relative sub-path, never an
-    // authority reference, so refuse the prefix on every platform.
-    if path.starts_with("\\\\") || path.starts_with("//") {
+    // A legitimate dashboard asset is always a relative sub-path. Reject any
+    // separator-prefixed value, including Unix absolute paths, Windows rooted
+    // paths, UNC paths, and authority-style paths. Otherwise a future caller
+    // could let `Path::join` replace the dashboard base instead of extending it.
+    if path.starts_with('/') || path.starts_with('\\') {
         return false;
     }
     // Split on BOTH forward slash and backslash. Backslash is a path
@@ -383,6 +391,7 @@ fn is_safe_asset_path(path: &str) -> bool {
 /// scan over a handful of entries.
 const SPA_ROUTES: &[&str] = &[
     "a2a",
+    "agent-types",
     "agents",
     "analytics",
     "approvals",
@@ -394,6 +403,7 @@ const SPA_ROUTES: &[&str] = &[
     "config",
     "connect",
     "goals",
+    "groups",
     "hands",
     "logs",
     "mcp-servers",
@@ -525,10 +535,10 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
 
     // Skip if already synced for this version
     let current_version = env!("CARGO_PKG_VERSION");
-    if let Ok(cached) = std::fs::read_to_string(&version_file) {
+    if let Ok(cached) = tokio::fs::read_to_string(&version_file).await {
         if cached.trim() == current_version {
             tracing::debug!("Dashboard already synced for v{current_version}");
-            let _ = std::fs::remove_file(&sync_error_file);
+            let _ = tokio::fs::remove_file(&sync_error_file).await;
             return;
         }
     }
@@ -550,15 +560,17 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
                 "Dashboard sync skipped (HTTP {}), using embedded fallback",
                 r.status()
             );
-            let _ = std::fs::write(
+            let _ = tokio::fs::write(
                 &sync_error_file,
                 format!("dashboard sync skipped: HTTP {}", r.status()),
-            );
+            )
+            .await;
             return;
         }
         Err(e) => {
             tracing::debug!("Dashboard sync skipped ({e}), using embedded fallback");
-            let _ = std::fs::write(&sync_error_file, format!("dashboard sync skipped: {e}"));
+            let _ =
+                tokio::fs::write(&sync_error_file, format!("dashboard sync skipped: {e}")).await;
             return;
         }
     };
@@ -567,10 +579,47 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
         Ok(b) => b,
         Err(e) => {
             tracing::warn!("Failed to download dashboard: {e}");
-            let _ = std::fs::write(&sync_error_file, format!("dashboard download failed: {e}"));
+            let _ =
+                tokio::fs::write(&sync_error_file, format!("dashboard download failed: {e}")).await;
             return;
         }
     };
+
+    let install_home = home_dir.to_path_buf();
+    let install_result = tokio::task::spawn_blocking(move || {
+        install_dashboard(&install_home, &bytes, current_version)
+    })
+    .await;
+    match install_result {
+        Ok(Ok(())) => tracing::info!("Dashboard synced to v{current_version}"),
+        Ok(Err(e)) => {
+            tracing::warn!("Failed to install dashboard: {e}");
+            let _ =
+                tokio::fs::write(&sync_error_file, format!("dashboard install failed: {e}")).await;
+        }
+        Err(e) => {
+            tracing::warn!("Dashboard install task failed: {e}");
+            let _ = tokio::fs::write(
+                &sync_error_file,
+                format!("dashboard install task failed: {e}"),
+            )
+            .await;
+        }
+    }
+}
+
+/// Extract and install a downloaded dashboard archive.
+///
+/// This function performs blocking archive and filesystem operations and must
+/// run on Tokio's blocking pool when called from async startup code.
+fn install_dashboard(
+    home_dir: &std::path::Path,
+    bytes: &[u8],
+    current_version: &str,
+) -> std::io::Result<()> {
+    let dashboard_dir = home_dir.join("dashboard");
+    let version_file = dashboard_dir.join(".version");
+    let sync_error_file = dashboard_sync_error_path(home_dir);
 
     // Extract tarball
     let decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(&bytes));
@@ -581,14 +630,14 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
     if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
         tracing::warn!("Failed to create tmp dir: {e}");
         let _ = std::fs::write(&sync_error_file, format!("dashboard tmp dir failed: {e}"));
-        return;
+        return Err(e);
     }
 
     if let Err(e) = archive.unpack(&tmp_dir) {
         tracing::warn!("Failed to extract dashboard archive: {e}");
         let _ = std::fs::write(&sync_error_file, format!("dashboard extract failed: {e}"));
         let _ = std::fs::remove_dir_all(&tmp_dir);
-        return;
+        return Err(e);
     }
 
     // Find the extracted directory (tarball root may have a prefix)
@@ -618,7 +667,7 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
             tracing::warn!("Failed to back up old dashboard: {e}");
             let _ = std::fs::write(&sync_error_file, format!("dashboard backup failed: {e}"));
             let _ = std::fs::remove_dir_all(&tmp_dir);
-            return;
+            return Err(e);
         }
     }
 
@@ -632,7 +681,7 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
                 let _ = std::fs::rename(&backup_dir, &dashboard_dir);
             }
             let _ = std::fs::remove_dir_all(&tmp_dir);
-            return;
+            return Err(e);
         }
     }
 
@@ -640,9 +689,9 @@ pub async fn sync_dashboard(home_dir: &std::path::Path) {
     let _ = std::fs::remove_dir_all(&tmp_dir);
 
     // Write version marker
-    let _ = std::fs::write(&version_file, current_version);
+    std::fs::write(&version_file, current_version)?;
     let _ = std::fs::remove_file(&sync_error_file);
-    tracing::info!("Dashboard synced to v{current_version}");
+    Ok(())
 }
 
 fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
@@ -662,6 +711,39 @@ fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn install_dashboard_extracts_archive_and_writes_version() {
+        use std::io::Write;
+
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        {
+            let mut archive = tar::Builder::new(&mut encoder);
+            let body = b"<html>dashboard</html>";
+            let mut header = tar::Header::new_gnu();
+            header.set_size(body.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, "dashboard-dist/index.html", body.as_slice())
+                .expect("append dashboard asset");
+            archive.finish().expect("finish tar archive");
+        }
+        encoder.flush().expect("flush gzip encoder");
+        let bytes = encoder.finish().expect("finish gzip archive");
+        let home = tempfile::tempdir().expect("tempdir");
+
+        install_dashboard(home.path(), &bytes, "test-version").expect("install dashboard");
+
+        assert_eq!(
+            std::fs::read(home.path().join("dashboard/index.html")).expect("read asset"),
+            b"<html>dashboard</html>"
+        );
+        assert_eq!(
+            std::fs::read_to_string(home.path().join("dashboard/.version")).expect("read version"),
+            "test-version"
+        );
+    }
 
     #[test]
     fn embedded_only_unset_is_false() {
@@ -789,6 +871,14 @@ mod tests {
         assert_eq!(decoded, "../etc/passwd");
         assert!(!is_safe_asset_path(&decoded));
 
+        let decoded = percent_decode("%2Fetc%2Fpasswd");
+        assert_eq!(decoded, "/etc/passwd");
+        assert!(!is_safe_asset_path(&decoded));
+
+        let decoded = percent_decode("%5CWindows%5CSystem32");
+        assert_eq!(decoded, "\\Windows\\System32");
+        assert!(!is_safe_asset_path(&decoded));
+
         let decoded = percent_decode("%2e%2e%2fetc%2fpasswd");
         assert_eq!(decoded, "../etc/passwd");
         assert!(!is_safe_asset_path(&decoded));
@@ -810,13 +900,15 @@ mod tests {
     }
 
     #[test]
-    fn safe_asset_path_rejects_unc_and_authority_prefix() {
+    fn safe_asset_path_rejects_absolute_unc_and_authority_prefixes() {
         // Windows UNC (`\\server\share`) and protocol-relative authority
         // (`//server/share`) carry no `..` segment, so the per-segment guard
         // alone lets them through — but `Path::join` REPLACES the dashboard
         // base with the UNC/absolute path on Windows, escaping the directory.
         // The explicit leading-prefix reject closes that on every platform.
         for p in [
+            "/etc/passwd",
+            "\\Windows\\System32\\config\\SAM",
             "\\\\server\\share",
             "\\\\server\\share\\file.js",
             "//server/share",

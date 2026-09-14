@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { GoalsPage } from "./GoalsPage";
+import {
+  GoalsPage,
+  GoalRunPhaseBadge,
+  buildGoalRows,
+  goalStatusBadgeVariant,
+  progressForGoalStatus,
+  runIndependentBatch,
+} from "./GoalsPage";
 import { useGoals, useGoalTemplates, useGoalRun } from "../lib/queries/goals";
 import {
   useCreateGoal,
@@ -172,6 +179,35 @@ describe("GoalsPage", () => {
     expect(screen.getByText("goals.use_template")).toBeInTheDocument();
   });
 
+  // #6654: a failed load and an empty daemon are different things.
+  // The server now answers a goals storage failure with a 500 rather than an empty page, but the page had no error branch — the query yielded no goals and the template picker rendered over data that had failed to load, telling the operator to start from scratch.
+  it("renders the error state, not the template picker, when the goals query fails", () => {
+    useGoalsMock.mockReturnValue(
+      makeQuery<GoalItem[] | undefined>(undefined, { isError: true }),
+    );
+    useGoalTemplatesMock.mockReturnValue(
+      makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
+    );
+    renderPage();
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText("goals.loadError")).toBeInTheDocument();
+    expect(screen.queryByText("goals.pick_template")).not.toBeInTheDocument();
+    expect(screen.queryByText("goals.use_template")).not.toBeInTheDocument();
+  });
+
+  it("retries the goals query from the error state", () => {
+    const query = makeQuery<GoalItem[] | undefined>(undefined, {
+      isError: true,
+    });
+    useGoalsMock.mockReturnValue(query);
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    renderPage();
+
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button"));
+    expect(query.refetch).toHaveBeenCalled();
+  });
+
   it("applies a template by calling create once per goal in the template", async () => {
     useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
     useGoalTemplatesMock.mockReturnValue(
@@ -182,7 +218,7 @@ describe("GoalsPage", () => {
 
     fireEvent.click(screen.getByText("goals.use_template"));
 
-    // runBatch awaits sequentially; flush microtasks.
+    // Flush the allSettled batch.
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
@@ -328,19 +364,17 @@ describe("GoalsPage", () => {
     expect(screen.queryByText("goals.delete_confirm")).not.toBeInTheDocument();
   });
 
-  it("renders both parent and child goals in the tree", () => {
+  it("hides collapsed descendants and reveals them when expanded", () => {
     useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL, CHILD_GOAL]));
     useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
     renderPage();
 
     expect(screen.getByText("Parent goal")).toBeInTheDocument();
-    expect(screen.getByText("Child goal")).toBeInTheDocument();
-    // Parent has an expandable chevron because a child references it.
-    // Clicking it must not throw — exercises the expand toggle.
-    const headerRoot = screen.getByText("goals.goal_tree").closest("div")!;
-    const buttons = within(headerRoot.parentElement!).getAllByRole("button");
-    expect(buttons.length).toBeGreaterThan(0);
-    fireEvent.click(buttons[0]);
+    expect(screen.queryByText("Child goal")).not.toBeInTheDocument();
+
+    const parentRow = screen.getByText("Parent goal").closest("div.rounded-xl");
+    expect(parentRow).toBeTruthy();
+    fireEvent.click(within(parentRow as HTMLElement).getAllByRole("button")[0]);
     expect(screen.getByText("Child goal")).toBeInTheDocument();
   });
 
@@ -364,5 +398,224 @@ describe("GoalsPage", () => {
       id: "g-parent",
       data: expect.objectContaining({ title: "Renamed parent" }),
     });
+  });
+
+  // #8108: GoalRunInfo used to be gated on `status !== "completed"`, but
+  // `GoalRunPhase::Finished` only occurs once the goal is already completed —
+  // so the finished badge could never render.
+  it("shows the finished run badge on a completed goal (#8108)", () => {
+    const completedWithRun: GoalItem = { ...COMPLETED_GOAL, agent_id: "a1" };
+    useGoalsMock.mockReturnValue(makeQuery([completedWithRun]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    useGoalRunMock.mockReturnValue(
+      makeQuery({
+        running: false,
+        run: {
+          goal_id: completedWithRun.id,
+          agent_id: "a1",
+          phase: "finished",
+          iteration: 3,
+          max_iterations: 10,
+          last_progress: 100,
+          started_at: "",
+          updated_at: "",
+        },
+      }),
+    );
+    renderPage();
+
+    expect(
+      screen.getByText(
+        'goals.run_phase_finished:{"defaultValue":"finished"}',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("3/10")).toBeInTheDocument();
+  });
+});
+
+describe("GoalsPage helpers", () => {
+  it("builds only visible tree rows with child depth", () => {
+    expect(buildGoalRows([PARENT_GOAL, CHILD_GOAL], {})).toEqual([
+      { goal: PARENT_GOAL, depth: 0, hasChildren: true },
+    ]);
+    expect(
+      buildGoalRows([PARENT_GOAL, CHILD_GOAL], { "g-parent": true }),
+    ).toEqual([
+      { goal: PARENT_GOAL, depth: 0, hasChildren: true },
+      { goal: CHILD_GOAL, depth: 1, hasChildren: false },
+    ]);
+  });
+
+  it("starts independent batch actions before waiting for settlement", async () => {
+    let releaseFirst: () => void = () => undefined;
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const failure = new Error("second failed");
+    const action = vi.fn((item: number) =>
+      item === 1 ? first : Promise.reject(failure),
+    );
+
+    const pending = runIndependentBatch([1, 2], action);
+    expect(action).toHaveBeenCalledTimes(2);
+    releaseFirst();
+
+    await expect(pending).resolves.toEqual({
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      errors: [failure],
+    });
+  });
+
+  it("derives progress and badge variants without nested status branches", () => {
+    expect(progressForGoalStatus("completed", 12)).toBe(100);
+    expect(progressForGoalStatus("in_progress", 12)).toBe(50);
+    expect(progressForGoalStatus("in_progress", 80)).toBe(80);
+    expect(progressForGoalStatus("pending", 80)).toBe(0);
+    expect(goalStatusBadgeVariant("completed")).toBe("success");
+    expect(goalStatusBadgeVariant("in_progress")).toBe("warning");
+    expect(goalStatusBadgeVariant("pending")).toBe("default");
+  });
+});
+
+// #8067 review: the badge must reuse the already-translated `goals.run_phase_*`
+// keys, and an unknown phase must render honestly rather than as a confident "Stopped".
+describe("GoalRunPhaseBadge", () => {
+  const API_PHASES = [
+    "running",
+    "finished",
+    "max_iterations_reached",
+    "rate_limited",
+    "stopped",
+  ] as const;
+
+  it("renders each API-emittable phase from the existing translated goals.run_phase_* keys", () => {
+    render(
+      <div>
+        {API_PHASES.map((phase) => (
+          <GoalRunPhaseBadge key={phase} phase={phase} />
+        ))}
+      </div>,
+    );
+
+    for (const phase of API_PHASES) {
+      expect(
+        screen.getByText(
+          `goals.run_phase_${phase}:{"defaultValue":"${phase.replace(/_/g, " ")}"}`,
+        ),
+      ).toBeInTheDocument();
+    }
+  });
+
+  // `Badge` draws its own dot whenever `dot` is passed, so a known phase that
+  // also carried an icon showed a coloured dot AND a lucide glyph before its
+  // label. The two are mutually exclusive now: icon for a known phase, dot for
+  // the unknown one, which has nothing else to lead with.
+  it("leads a known phase with one glyph, not a dot and an icon", () => {
+    const { container } = render(<GoalRunPhaseBadge phase="running" />);
+    const badge = container.querySelector("span.inline-flex");
+    expect(badge).not.toBeNull();
+
+    // `Badge`'s dot is the only `aria-hidden` span it renders.
+    expect(badge!.querySelectorAll("span[aria-hidden='true']")).toHaveLength(0);
+    expect(badge!.querySelectorAll("svg")).toHaveLength(1);
+    // No `mr-*` on the icon: `Badge`'s own `gap-1.5` already spaces every child,
+    // and a second margin made the icon→label gap disagree with the dot→label one.
+    expect(badge!.querySelector("svg")!.getAttribute("class")).not.toMatch(/\bmr-/);
+  });
+
+  it("renders an unknown phase under the neutral variant with its own key, not a confident Stopped", () => {
+    // "paused" is the phase #7973 adds — the unknown-phase case that fires first here.
+    const { container } = render(<GoalRunPhaseBadge phase="paused" />);
+
+    // The label is asked of i18n by the phase's own key with the raw phase as
+    // the fallback, so a locale that gains `run_phase_paused` starts using it
+    // with no code change. The previous shape gated translation on a hardcoded
+    // `labelKey` per phase, so an unknown phase could never pick one up.
+    // (`t` is mocked here as `key:{options}`; in production this renders the
+    // translation when the key exists and "paused" when it does not.)
+    expect(
+      screen.getByText('goals.run_phase_paused:{"defaultValue":"paused"}'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/goals\.run_phase_stopped/)).not.toBeInTheDocument();
+
+    // Assert the variant itself, not just the text: the classes `Badge` applies
+    // for `default` (Badge.tsx:13). Without this the test passed under any
+    // variant, including the `error` styling of a phase it does not know.
+    const badge = container.querySelector("span.inline-flex")!;
+    expect(badge.className).toContain("bg-main");
+    expect(badge.className).toContain("text-text-dim");
+    // The unknown branch is the one that keeps the dot, having no icon.
+    expect(badge.querySelectorAll("span[aria-hidden='true']")).toHaveLength(1);
+    expect(badge.querySelectorAll("svg")).toHaveLength(0);
+  });
+});
+
+// The duplicate-badge regression the standalone suite above cannot reach: it
+// renders `GoalRunPhaseBadge` directly, while the bug was that the *page*
+// rendered the phase twice in one row — once in `GoalRunControl`'s action
+// cluster and once in `GoalRunInfo` below it. Only `renderPage()` sees both.
+describe("GoalsPage run phase is rendered once per row", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setMutations();
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+  });
+
+  // `in_progress`, deliberately: `GoalRunControl` is gated on
+  // `status !== "completed"`, so a completed goal renders only one of the two
+  // sites and could never have caught this.
+  it("shows a running goal's phase exactly once, not once per render site", () => {
+    const runningGoal: GoalItem = { ...PARENT_GOAL, agent_id: "a1" };
+    useGoalsMock.mockReturnValue(makeQuery([runningGoal]));
+    useGoalRunMock.mockReturnValue(
+      makeQuery({
+        running: true,
+        run: {
+          goal_id: runningGoal.id,
+          agent_id: "a1",
+          phase: "running",
+          iteration: 3,
+          max_iterations: 10,
+          last_progress: 30,
+          started_at: "",
+          updated_at: "",
+        },
+      }),
+    );
+    renderPage();
+
+    expect(
+      screen.getAllByText('goals.run_phase_running:{"defaultValue":"running"}'),
+    ).toHaveLength(1);
+    // The iteration count has one home too — it used to appear in the badge and
+    // again in the info row.
+    expect(screen.getAllByText("3/10")).toHaveLength(1);
+  });
+
+  it("shows a stopped goal's phase exactly once", () => {
+    const stoppedGoal: GoalItem = { ...PARENT_GOAL, agent_id: "a1" };
+    useGoalsMock.mockReturnValue(makeQuery([stoppedGoal]));
+    useGoalRunMock.mockReturnValue(
+      makeQuery({
+        running: false,
+        run: {
+          goal_id: stoppedGoal.id,
+          agent_id: "a1",
+          phase: "stopped",
+          iteration: 4,
+          max_iterations: 10,
+          last_progress: 40,
+          started_at: "",
+          updated_at: "",
+        },
+      }),
+    );
+    renderPage();
+
+    expect(
+      screen.getAllByText('goals.run_phase_stopped:{"defaultValue":"stopped"}'),
+    ).toHaveLength(1);
   });
 });
