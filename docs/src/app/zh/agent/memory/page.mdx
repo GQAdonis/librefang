@@ -358,9 +358,9 @@ base URL 会去掉尾部斜杠后原样使用，路径直接拼接在它后面�
 
 ### 后端无权决定的部分
 
-`/search` 返回的一切都被当作不可信数据，因为搜索结果是一个来自 LibreFang 无法控制的进程的 ID 列表。
+`/search` 返回的一切都被当作不可信数据，因为搜索结果是一个来自 BossFang 无法控制的进程的 ID 列表。
 
-- **ID 从 SQLite 水合，绝不从后端的 payload 水合。** 后端返回的 `payload` 和 `metadata` 不会进入 prompt，进入 prompt 的是 LibreFang 本地那条 ID 对应的行。
+- **ID 从 SQLite 水合，绝不从后端的 payload 水合。** 后端返回的 `payload` 和 `metadata` 不会进入 prompt，进入 prompt 的是 BossFang 本地那条 ID 对应的行。
 - **水合之后会重新应用调用方的 `MemoryFilter`。** 忽略了所收到 filter 的后端无法扩大调用方的范围：agent、scope、source、置信度下限、创建时间上下界和 metadata 等值都会在水合后的行上重新校验，而 `peer_id` 因为不由 `MemoryFragment` 承载，会在水合查询中作为 SQL 谓词强制执行。
 - **跨会话（`chat_scope`）与跨 session（`session_scope`）隔离在其之后运行**，走的是与进程内后端相同的 recall 后置路径，所以接入后端不会重新打开这两道守卫中的任何一道。
 

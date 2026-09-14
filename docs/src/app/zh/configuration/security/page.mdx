@@ -51,7 +51,7 @@ claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
 | `session_ttl_secs` | u64 | `86400` | 会话令牌有效期（秒）。默认 24 小时。 |
 | `require_email_verified` | bool | `true` | 拒绝 ID 令牌中没有 `email_verified = true` 的登录。仅当提供商不签发该声明时才设为 `false`。 |
 | `providers` | list of objects | `[]` | 多个 OIDC/OAuth2 提供商。配置后优先于上述单提供商字段。 |
-| `role_map` | table of string → string | `{}` | IdP 角色/群组声明值 → LibreFang 角色（`owner` / `admin` / `user` / `viewer` / `guest`）。详见下文。 |
+| `role_map` | table of string → string | `{}` | IdP 角色/群组声明值 → BossFang 角色（`owner` / `admin` / `user` / `viewer` / `guest`）。详见下文。 |
 | `group_map` | table of string → string | `{}` | IdP 群组/角色/scope 声明值 → 调用方将被视为其成员的 `[[groups]]` 条目名称。详见下文。 |
 | `claim_paths` | list of strings | `["roles","groups"]` | 两份映射所匹配的声明的点号路径。`<client>` 会被替换为提供商的 `client_id`。详见下文。 |
 
@@ -60,7 +60,7 @@ claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
 在这里添加条目之前，通过验证的 OIDC bearer 令牌不会授予任何权限——守护进程会用提供商的 JWKS 验证令牌，而调用方仍然收到与完全不带令牌时相同的 401。
 授予权限的是这份映射本身，因此权限始终来自运维人员写下的配置，而不是身份提供商单方面的决定。
 
-键是 `claim_paths` 解析出的声明值（默认为 `roles` 和 `groups` 两个声明），值是 LibreFang 角色，使用与 `[[users]] role` 和 `[channel_role_mapping]` 相同的 `viewer` < `user` < `admin` < `owner` 阶梯。
+键是 `claim_paths` 解析出的声明值（默认为 `roles` 和 `groups` 两个声明），值是 BossFang 角色，使用与 `[[users]] role` 和 `[channel_role_mapping]` 相同的 `viewer` < `user` < `admin` < `owner` 阶梯。
 持有多个已映射群组的调用方会获得**权限最高**的匹配项，因此声明的顺序（那是提供商的事，不是你的）无法决定最终生效的角色。
 
 以下三种情况有意不授予任何权限，而不是回退到某个默认值：
@@ -74,7 +74,7 @@ claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
 该映射从配置快照中实时读取，因此 `POST /api/config/reload` 会让修改在下一个请求生效，无需重启。
 它有意**不能**通过 `POST /api/config/set` 写入——能编辑它的调用方可以通过写入自己已持有的群组名把自己提升为 `owner`——但 `GET /api/config` 可以读回它，以便确认当前哪些群组携带权限。
 
-#### `group_map`：把 IdP 群组接到 LibreFang 团队上
+#### `group_map`：把 IdP 群组接到 BossFang 团队上
 
 `[[groups]]`（见身份一节）为团队命名——值班轮换、项目组、部门——好让权限和归属可以指向团队，而不必逐个列出成员。
 `group_map` 让这些团队的成员身份来自你的身份提供商，而不是靠手工录入、然后在有人换岗时悄悄过期。

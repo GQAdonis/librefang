@@ -1580,7 +1580,7 @@ no_output_timeout_secs = 30
 少了这一步，把它设为 `false` 看起来就像静默失效：没有任何新的审批提示出现，而最自然的解读会是"没有命令需要审批"。
 
 危险命令黑名单与 `mode` 无关，在 `deny`、`allowlist`、`full` 下都会扫描每条命令——`full` 关闭的是白名单*校验*，而不是这份黑名单。
-其覆盖范围包括 LibreFang 守护进程生命周期命令（`librefang stop` / `start` / `restart`，含 `gateway` 别名与带路径的调用形式），它们会连带重启同一守护进程上的所有 Agent 与频道适配器；以及针对守护进程自身 `librefang.db` 的写入型 SQL 与输出重定向。
+其覆盖范围包括 BossFang 守护进程生命周期命令（`librefang stop` / `start` / `restart`，含 `gateway` 别名与带路径的调用形式），它们会连带重启同一守护进程上的所有 Agent 与频道适配器；以及针对守护进程自身 `librefang.db` 的写入型 SQL 与输出重定向。
 对该数据库的只读检查（`select`、`.schema`、`.dump`）以及 `librefang status` 被有意排除在外。
 
 ---

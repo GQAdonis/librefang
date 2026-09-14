@@ -44,7 +44,7 @@
     },
     "api_listen": {
       "description": "API listen address (e.g., \"0.0.0.0:4545\").",
-      "default": "127.0.0.1:4545",
+      "default": "0.0.0.0:4545",
       "type": "string"
     },
     "approval": {
@@ -65,7 +65,7 @@
         "timeout_fallback": "deny",
         "routing": [],
         "second_factor": "none",
-        "totp_issuer": "LibreFang",
+        "totp_issuer": "BossFang",
         "totp_grace_period_secs": 300,
         "totp_tools": [],
         "audit_retention_days": 90,
@@ -1303,6 +1303,22 @@
       "default": false,
       "type": "boolean"
     },
+    "storage": {
+      "description": "Storage backend configuration (Phase 4 of `surrealdb-storage-swap`).\n\nDefaults to embedded SurrealDB at `<data_dir>/librefang.surreal`. When the user promotes to a remote SurrealDB through the wizard or `librefang storage link-uar`, this struct holds the connection parameters and credential references.",
+      "default": {
+        "backend": {
+          "kind": "embedded",
+          "path": ".librefang/librefang.surreal"
+        },
+        "namespace": "librefang",
+        "database": "main"
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/StorageConfig"
+        }
+      ]
+    },
     "strict_config": {
       "description": "Strict config mode: when `true`, the daemon refuses to start if the config file contains unknown or unrecognised fields. When `false` (the default), unknown fields are logged as warnings but the daemon boots normally. This is the \"tolerant mode\" toggle.",
       "default": false,
@@ -1529,6 +1545,17 @@
         }
       ]
     },
+    "uar": {
+      "description": "Universal Agent Runtime (UAR) integration configuration.\n\nWhen `None` (the default) the UAR driver is not active; agents use the provider configured in `default_model`.  Set `[uar]` in `config.toml` to route requests through the UAR's unified `provider/model` addressing (142+ providers via liter-llm), enable the embedded SurrealDB memory layer, and unlock cross-framework A2A discovery.\n\n```toml [uar] # API key for the UAR LLM backend (overrides UAR_LLM__API_KEY env var). # api_key = \"sk-...\"\n\n# Model in `provider/model` format.  Defaults to UAR_LLM__MODEL env var. # model = \"openai/gpt-4o\"\n\n# Path for the embedded SurrealDB data directory. # Defaults to `<data_dir>/uar-surreal`. # surreal_data_dir = \"/var/lib/librefang/uar-surreal\" ```",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/UarConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "update_channel": {
       "description": "CLI update channel (stable, beta, rc). Controls which releases `librefang update` considers.",
       "default": "stable",
@@ -1707,7 +1734,7 @@
         },
         "name": {
           "description": "Service-level display name for the well-known agent card.",
-          "default": "LibreFang Agent OS",
+          "default": "BossFang Agent OS",
           "type": "string"
         }
       }
@@ -1853,7 +1880,7 @@
         },
         "totp_issuer": {
           "description": "Issuer name shown in authenticator apps (e.g. \"LibreFang\").",
-          "default": "LibreFang",
+          "default": "BossFang",
           "type": "string"
         },
         "totp_tools": {
@@ -5013,7 +5040,7 @@
           ]
         },
         "vector_backend": {
-          "description": "Vector store backend: `\"sqlite\"` (default) or `\"http\"`.",
+          "description": "Vector store backend selection.\n\n| Value | Behaviour | |-------|-----------| | `\"auto\"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in; SQLite otherwise. | | `\"surreal\"` | Force SurrealDB HNSW+BM25 hybrid search via `SurrealSemanticBackend`. Requires `surreal-backend` feature. | | `\"sqlite\"` | Force SQLite cosine-similarity in-process store (`SqliteVectorStore`). | | `\"http\"` | Remote HTTP vector store (`HttpVectorStore`); see `vector_store_url`. |",
           "default": null,
           "type": [
             "string",
@@ -6160,7 +6187,7 @@
       ]
     },
     "RegistryConfig": {
-      "description": "Registry sync configuration.\n\nConfigure in config.toml: ```toml [registry] cache_ttl_secs = 86400 # Optional: proxy/mirror prefix for users behind the GFW. # All GitHub URLs are prefixed with this value, e.g. #   registry_mirror = \"https://ghproxy.cn\" # turns \"https://github.com/...\" into \"https://ghproxy.cn/https://github.com/...\" registry_mirror = \"\" # Optional: full base URL of the forge that hosts the registry repo. # Default unset = GitHub. Set to consume a Codeberg-hosted registry, e.g. #   registry_host = \"https://codeberg.org\" ```",
+      "description": "Registry sync configuration.\n\nConfigure in config.toml: ```toml [registry] cache_ttl_secs = 86400 # Optional: proxy/mirror prefix for users behind the GFW. # All GitHub URLs are prefixed with this value, e.g. #   registry_mirror = \"https://ghproxy.cn\" # turns \"https://github.com/...\" into \"https://ghproxy.cn/https://github.com/...\" registry_mirror = \"\" # Optional: full base URL of the forge that hosts the registry repo. # Default unset = GitHub at GQAdonis/librefang-registry (the BossFang fork # default; the owner lives in the REGISTRY_REPO_PATH constant). Set to # consume a Codeberg/Forgejo-hosted registry, e.g. #   registry_host = \"https://codeberg.org\" ```",
       "type": "object",
       "properties": {
         "auto_sync": {
@@ -6176,7 +6203,7 @@
           "minimum": 0.0
         },
         "registry_host": {
-          "description": "Full base URL of the forge hosting the registry repository (`librefang/librefang-registry`). When `None` (the default), the registry is fetched from GitHub, producing byte-identical URLs to previous releases. Set to a full base URL such as `\"https://codeberg.org\"` to consume a Codeberg-hosted registry; the tarball, git-clone, and tarball-prefix values are all derived from it.",
+          "description": "Full base URL of the forge hosting the registry repository.\n\nWhen `None` (the default), the registry is fetched from GitHub at the BossFang-owned `GQAdonis/librefang-registry` (the owner/repo is the `REGISTRY_REPO_PATH` constant in `librefang-runtime::registry_sync`). Set to a full base URL such as `\"https://codeberg.org\"` to consume a Codeberg/Forgejo-hosted registry (upstream #6095); the tarball, git-clone, and tarball-prefix values are all derived from it.\n\nThis replaced the fork's earlier `base_url` full-URL knob: the default registry owner now lives in one place (the `REGISTRY_REPO_PATH` constant), and `registry_host` only selects the forge, eliminating the per-merge conflict the parallel `base_url` field caused.",
           "default": null,
           "type": [
             "string",
@@ -6184,7 +6211,7 @@
           ]
         },
         "registry_mirror": {
-          "description": "Mirror/proxy prefix for GitHub URLs. When non-empty, all outbound GitHub requests (tarball downloads, git clones, raw content fetches) are prefixed with this URL. Useful for users in China Mainland where direct GitHub access is slow or blocked.\n\nExample: `\"https://ghproxy.cn\"` rewrites `https://github.com/...` → `https://ghproxy.cn/https://github.com/...`",
+          "description": "Mirror/proxy prefix for GitHub URLs. When non-empty, all outbound GitHub requests (tarball downloads, git clones, raw content fetches) are prefixed with this value. Useful for users in China Mainland where direct GitHub access is slow or blocked.\n\nExample: `\"https://ghproxy.cn\"` rewrites `https://github.com/...` → `https://ghproxy.cn/https://github.com/...`",
           "default": "",
           "type": "string"
         }
@@ -6244,6 +6271,44 @@
           ]
         }
       ]
+    },
+    "RemoteSurrealConfig": {
+      "description": "Connection details for a remote SurrealDB 3.0 instance.\n\nThe same struct is reused by [`crate::config::StorageConfig`] (for librefang's own session) and by `librefang_types::config::UarConfig` (when UAR is configured to reuse the same instance).",
+      "type": "object",
+      "required": [
+        "database",
+        "namespace",
+        "password_env",
+        "url",
+        "username"
+      ],
+      "properties": {
+        "database": {
+          "description": "SurrealDB database (per-namespace logical store).",
+          "type": "string"
+        },
+        "namespace": {
+          "description": "SurrealDB namespace (top-level tenant).",
+          "type": "string"
+        },
+        "password_env": {
+          "description": "Name of the environment variable (or `vault:` reference) that holds the password. We never persist the password itself in config files.",
+          "type": "string"
+        },
+        "tls_skip_verify": {
+          "description": "Skip TLS certificate verification. **Never** enable in production.",
+          "default": false,
+          "type": "boolean"
+        },
+        "url": {
+          "description": "Endpoint URL — `ws://`, `wss://`, `http://`, or `https://`.",
+          "type": "string"
+        },
+        "username": {
+          "description": "Username for namespace- or database-level authentication.",
+          "type": "string"
+        }
+      }
     },
     "RlExportConfig": {
       "description": "RL rollout trajectory export configuration (issues #3330 / #3331).\n\nWhen `enabled`, a finished agent turn's session trajectory is serialized and uploaded to the configured upstream RL-tracking service via `librefang_rl_export::export`. Default disabled — opt-in. A per-agent override lives on the agent manifest (`agent.toml: [rl_export] enabled = …`), which supersedes this global toggle for that one agent.\n\nThe `target` shape mirrors `librefang_rl_export::ExportTarget`; the config carries env-var **names** for any secret (`api_key_env`), never the secret material, matching the rest of the workspace's `*_env` indirection convention. The kernel converts this config-side enum into the exporter's `ExportTarget` at upload time.\n\nConfigure in `config.toml`: ```toml [rl_export] enabled = true target = { type = \"wandb\", project = \"my-rollouts\", entity = \"my-team\", api_key_env = \"WANDB_API_KEY\" } ```",
@@ -7085,6 +7150,110 @@
         }
       }
     },
+    "StorageBackendKind": {
+      "description": "Where the storage backend lives.\n\n`Embedded` uses the bundled RocksDB engine and is the default chosen by the wizard. `Remote` connects to an external SurrealDB 3.0 instance and can be shared with the Universal Agent Runtime via separate namespaces.",
+      "oneOf": [
+        {
+          "description": "Single-process embedded SurrealDB. Cannot be shared between processes — see surreal-memory-server's CLAUDE.md.",
+          "type": "object",
+          "required": [
+            "kind",
+            "path"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "embedded"
+              ]
+            },
+            "path": {
+              "description": "Filesystem path of the RocksDB directory.",
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Remote SurrealDB 3.0 instance reachable over WebSocket or HTTP.",
+          "type": "object",
+          "required": [
+            "database",
+            "kind",
+            "namespace",
+            "password_env",
+            "url",
+            "username"
+          ],
+          "properties": {
+            "database": {
+              "description": "SurrealDB database (per-namespace logical store).",
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "remote"
+              ]
+            },
+            "namespace": {
+              "description": "SurrealDB namespace (top-level tenant).",
+              "type": "string"
+            },
+            "password_env": {
+              "description": "Name of the environment variable (or `vault:` reference) that holds the password. We never persist the password itself in config files.",
+              "type": "string"
+            },
+            "tls_skip_verify": {
+              "description": "Skip TLS certificate verification. **Never** enable in production.",
+              "default": false,
+              "type": "boolean"
+            },
+            "url": {
+              "description": "Endpoint URL — `ws://`, `wss://`, `http://`, or `https://`.",
+              "type": "string"
+            },
+            "username": {
+              "description": "Username for namespace- or database-level authentication.",
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "StorageConfig": {
+      "description": "Top-level storage configuration on `KernelConfig`.\n\nDefaults to embedded SurrealDB at `<data_dir>/librefang.surreal`.",
+      "type": "object",
+      "required": [
+        "backend",
+        "database",
+        "namespace"
+      ],
+      "properties": {
+        "backend": {
+          "description": "Which backend to use at startup.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/StorageBackendKind"
+            }
+          ]
+        },
+        "database": {
+          "description": "Default database when [`Self::backend`] is `Embedded`.",
+          "type": "string"
+        },
+        "legacy_sqlite_path": {
+          "description": "Optional path to a legacy `librefang.db` SQLite file. When set, the `storage migrate` CLI / `POST /api/storage/migrate` endpoint can stream rows from it into the active SurrealDB store.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "namespace": {
+          "description": "Default namespace when [`Self::backend`] is `Embedded`. For `Remote` the namespace inside the [`RemoteSurrealConfig`] takes precedence.",
+          "type": "string"
+        }
+      }
+    },
     "TaintRuleId": {
       "description": "Identifies a specific taint detection rule.\n\nUsed by [`check_outbound_text_violation_with_skip`] to let callers opt out of individual rules without touching the main code path.  Per-tool, per-path exemptions in `McpTaintPolicy` map directly to these variants.",
       "oneOf": [
@@ -7836,6 +8005,223 @@
           "description": "Voice: alloy, echo, fable, onyx, nova, shimmer. Default: \"alloy\".",
           "default": "alloy",
           "type": "string"
+        }
+      }
+    },
+    "UarConfig": {
+      "description": "Configuration for the Universal Agent Runtime (UAR) integration.\n\nAll fields are optional; unset values fall back to the corresponding `UAR_LLM__*` / `LLM_*` environment variables that the UAR driver already consults at runtime.",
+      "type": "object",
+      "properties": {
+        "api_key": {
+          "description": "LLM API key forwarded to the UAR `LiterLlmDriver`.\n\nTakes precedence over `UAR_LLM__API_KEY` and `LLM_API_KEY` env vars. Use `vault:KEY` syntax to store securely: `api_key = \"vault:uar_api_key\"`.",
+          "type": "string"
+        },
+        "base_url": {
+          "description": "Optional base URL override for the UAR LLM backend.\n\nUseful for pointing at a local proxy (e.g. `\"http://localhost:4000\"`) without changing the model string.  Takes precedence over `UAR_LLM__BASE_URL` and `LLM_BASE_URL` env vars.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command": {
+          "description": "Direct sidecar command override (`[uar] command = \"uar-sidecar\"`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "description": "Direct sidecar enable flag (`[uar] enabled = true`).\n\n`None` preserves the nested `[uar.sidecar]` value for compatibility.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "endpoint": {
+          "description": "Direct endpoint for an already-running UAR. This takes precedence over spawning and over the retained nested sidecar endpoint.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "description": "Default model in `provider/model` format (e.g. `\"openai/gpt-4o\"`).\n\nTakes precedence over `UAR_LLM__MODEL` and `LLM_MODEL` env vars.",
+          "type": "string"
+        },
+        "ready_timeout_ms": {
+          "description": "Direct READY-handshake budget in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "remote": {
+          "description": "When set, UAR connects to this remote SurrealDB instance instead of the embedded path in [`Self::surreal_data_dir`].\n\nIf both fields are set, [`Self::remote`] wins. This is the second half of the shared-remote-instance design from Phase 4b of the `surrealdb-storage-swap` plan.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RemoteSurrealConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "restart": {
+          "description": "Direct sidecar restart toggle.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "restart_initial_backoff_ms": {
+          "description": "Direct initial restart backoff in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "restart_max_backoff_ms": {
+          "description": "Direct restart backoff ceiling in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "restart_max_retries": {
+          "description": "Direct cap on consecutive restart attempts.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "restart_reset_after_secs": {
+          "description": "Direct stable-uptime interval that resets the retry counter.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "share_librefang_storage": {
+          "description": "When `true`, UAR reuses the same `RemoteSurrealConfig` as `KernelConfig.storage` (with `namespace = \"uar\"` so isolation is preserved). Defaults to `false`.",
+          "default": false,
+          "type": "boolean"
+        },
+        "sidecar": {
+          "description": "Supervision of UAR as an out-of-process sidecar (`[uar.sidecar]`).\n\nDeliberately a nested block rather than more fields on `UarConfig`: the fields above configure the UAR *LLM driver* (which provider to call, with which key), while these configure a *process* (whether to spawn it, how to restart it). Flattening the two invites exactly the confusion called out on [`Self::base_url`].",
+          "default": {
+            "enabled": false,
+            "command": "",
+            "endpoint": null,
+            "restart": true,
+            "restart_initial_backoff_ms": 500,
+            "restart_max_backoff_ms": 30000,
+            "restart_max_retries": 10,
+            "restart_reset_after_secs": 60,
+            "ready_timeout_ms": 30000,
+            "shutdown_grace_secs": 5
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/UarSidecarConfig"
+            }
+          ]
+        },
+        "surreal_data_dir": {
+          "description": "Filesystem path for the embedded SurrealDB (RocksDB) data store.\n\nDefaults to `<kernel.data_dir>/uar-surreal`.  Set an explicit path when you want to place the UAR database on a separate volume.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "UarSidecarConfig": {
+      "description": "Supervision settings for UAR running as an out-of-process sidecar.\n\nUAR ships a purpose-built `uar-sidecar` binary that binds `127.0.0.1:0`, prints one `READY:{port}` line to stdout once its listener is bound, and exits cleanly on stdin EOF. When [`Self::enabled`] is set, the daemon spawns and supervises that binary; the driver then talks to it over loopback HTTP.\n\nField names deliberately mirror [`SidecarChannelConfig`] so operators learn one vocabulary for every supervised child process, not two.",
+      "type": "object",
+      "properties": {
+        "command": {
+          "description": "Program to execute.\n\nEmpty (the default) or the bare stem `uar-sidecar` is *implicit*: the daemon resolves the bundled binary next to its own executable, then in `<home>/bin/`, and only then falls back to `PATH`. An absolute or relative path is *explicit* and is used verbatim — operator intent always wins.\n\nLeave this empty unless you are running a custom build. Pointing it at a binary that does not exist is the one way to reintroduce a `PATH` dependency.",
+          "default": "",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Spawn and supervise the UAR sidecar. Defaults to `false` — UAR is opt-in, matching the `uar-driver` cargo feature it pairs with.",
+          "default": false,
+          "type": "boolean"
+        },
+        "endpoint": {
+          "description": "Connect to an already-running UAR at this base URL instead of spawning one (e.g. `\"http://uar-svc.uar.svc.cluster.local:1906\"`).\n\n**Takes precedence over spawning.** When set, no child process is started and [`Self::command`] is ignored — the daemon health-checks the remote and uses it. This is how an existing standalone UAR deployment stays usable.\n\nNot to be confused with [`UarConfig::base_url`], which overrides the *LLM provider* endpoint passed through to liter-llm. This one addresses UAR itself.",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready_timeout_ms": {
+          "description": "How long to wait for the child's `READY:{port}` line before declaring the spawn failed. A child that never announces itself must not hang boot.",
+          "default": 30000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "ready_timeout_secs": {
+          "description": "Backward-compatible read path for the original seconds-based key.\n\nNew configuration is always serialized as `ready_timeout_ms`. When this legacy key is present, its seconds value is converted at the consumer boundary so an existing operator config keeps the same timeout.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "restart": {
+          "description": "Restart the sidecar when it exits unexpectedly.",
+          "default": true,
+          "type": "boolean"
+        },
+        "restart_initial_backoff_ms": {
+          "description": "Initial reconnect backoff, in milliseconds.",
+          "default": 500,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "restart_max_backoff_ms": {
+          "description": "Ceiling for the exponential reconnect backoff, in milliseconds.",
+          "default": 30000,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "restart_max_retries": {
+          "description": "Give up after this many consecutive failed restarts. A crash-loop is an operator problem (bad key, bad config); retrying it forever hides that.",
+          "default": 10,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "restart_reset_after_secs": {
+          "description": "Reset the consecutive-failure counter after the child has stayed up this long, so an occasional fault does not eventually exhaust the retry budget.",
+          "default": 60,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "shutdown_grace_secs": {
+          "description": "Grace period after closing the child's stdin — UAR's documented shutdown signal, chosen because SIGTERM is unreliable on Windows — before escalating to a kill.",
+          "default": 5,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       }
     },

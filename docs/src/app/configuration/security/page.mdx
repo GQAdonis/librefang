@@ -51,7 +51,7 @@ claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
 | `session_ttl_secs` | u64 | `86400` | Session token lifetime in seconds (24 hours default). |
 | `require_email_verified` | bool | `true` | Reject logins whose ID token does not carry `email_verified = true`. Set to `false` only for a provider that does not issue the claim. |
 | `providers` | list of objects | `[]` | Multiple OIDC/OAuth2 providers. When configured, takes precedence over the single-provider fields above. |
-| `role_map` | table of string → string | `{}` | IdP role/group claim value → LibreFang role (`owner` / `admin` / `user` / `viewer` / `guest`). See below. |
+| `role_map` | table of string → string | `{}` | IdP role/group claim value → BossFang role (`owner` / `admin` / `user` / `viewer` / `guest`). See below. |
 | `group_map` | table of string → string | `{}` | IdP group/role/scope claim value → the name of a `[[groups]]` entry the caller is treated as a member of. See below. |
 | `claim_paths` | list of strings | `["roles","groups"]` | Dotted paths to the claims both maps are matched against. `<client>` is substituted with the provider's `client_id`. See below. |
 
@@ -60,7 +60,7 @@ claim_paths = ["realm_access.roles", "resource_access.<client>.roles", "groups"]
 Until an entry exists here, a validated OIDC bearer authorizes nothing — the daemon verifies the token against the provider's JWKS and the caller still gets the same 401 they would get with no token at all.
 Declaring a mapping is what grants privilege, so the grant is always something an operator wrote down rather than something the identity provider decided on its own.
 
-The keys are values of whichever claims `claim_paths` resolves — the `roles` and `groups` claims by default — and the values are LibreFang roles in the same `viewer` < `user` < `admin` < `owner` ladder that `[[users]] role` and `[channel_role_mapping]` use.
+The keys are values of whichever claims `claim_paths` resolves — the `roles` and `groups` claims by default — and the values are BossFang roles in the same `viewer` < `user` < `admin` < `owner` ladder that `[[users]] role` and `[channel_role_mapping]` use.
 A caller holding several mapped groups gets the **highest-privilege** match, so claim ordering — which is the provider's business, not yours — cannot decide the effective role.
 
 Three things deliberately grant nothing rather than falling back to a default:
@@ -74,7 +74,7 @@ Three things deliberately grant nothing rather than falling back to a default:
 The mapping is read live from the config swap, so `POST /api/config/reload` applies an edit on the next request with no restart.
 It is deliberately **not** writable through `POST /api/config/set` — a caller who could edit it could grant themselves `owner` by naming a group they already hold — but `GET /api/config` reads it back so you can confirm which groups currently carry privilege.
 
-#### `group_map`: putting an IdP group on a LibreFang team
+#### `group_map`: putting an IdP group on a BossFang team
 
 `[[groups]]` (see the identity section) names a team — an on-call rota, a project group, a department — that permissions and ownership can refer to instead of enumerating individuals.
 `group_map` is how membership in one of those teams comes from your identity provider instead of being typed in by hand and then going stale when someone changes roles.

@@ -531,7 +531,7 @@ function ModelDetailBody({
 // LLM models come from the model catalogue; the four custom media endpoints
 // come from `[media.custom_*]` / `[tts.custom]` in config.toml. They are
 // rendered in the same tab so an operator pointing a self-hosted Whisper or a
-// local Stable Diffusion at LibreFang does not have to know which config
+// local Stable Diffusion at BossFang does not have to know which config
 // section owns which modality. Nothing is moved out of `[media]` / `[tts]` —
 // this is a surface over the config API, not a config migration.
 

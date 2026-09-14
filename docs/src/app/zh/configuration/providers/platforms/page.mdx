@@ -494,7 +494,7 @@ BossFang 通过 EveryAPI CLI 的凭据进程获取当前网关与 relay 凭据�
    ```
 
 托管发现模式下，EveryAPI 始终是凭据权威。
-LibreFang 在需要凭据时调用 `everyapi auth credential --format=json`，且不会持久化返回的密钥。
+BossFang 在需要凭据时调用 `everyapi auth credential --format=json`，且不会持久化返回的密钥。
 旧版兼容 CLI 的凭据仍可作为回退读取。
 显式端点或环境变量配置仍然可用，并优先于托管发现。
 

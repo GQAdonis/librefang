@@ -1,19 +1,19 @@
-# LibreFang × EveryAPI
+# BossFang × EveryAPI
 
 **Agent OS + unified AI infrastructure.**
 
-LibreFang runs autonomous agents.
+BossFang runs autonomous agents.
 EveryAPI connects those agents to a managed model gateway, live model catalog, pricing, and account operations.
-The integration is native on both sides and remains non-exclusive: LibreFang continues to support other providers, and EveryAPI continues to work with other clients.
+The integration is native on both sides and remains non-exclusive: BossFang continues to support other providers, and EveryAPI continues to work with other clients.
 
 [Explore the EveryAPI integration →](https://everyapi.ai/integrations/librefang?utm_source=librefang_docs&utm_medium=partner&utm_campaign=librefang_everyapi)
 
 ## What works today
 
-- **Automatic credential discovery.** LibreFang detects an existing EveryAPI CLI login and resolves managed gateway credentials without copying a key into LibreFang configuration.
-- **Live models and pricing.** LibreFang refreshes the EveryAPI model catalog from the gateway and uses provider-scoped routing for EveryAPI-backed agents.
-- **Gateway operations through MCP.** `everyapi mcp` exposes account status, top-up, seller, marketplace, and edge-node tools to approved LibreFang agents.
-- **First-class CLI guidance.** EveryAPI CLI recognizes `librefang` as an MCP client and prints LibreFang-specific installation, configuration, and approval guidance.
+- **Automatic credential discovery.** BossFang detects an existing EveryAPI CLI login and resolves managed gateway credentials without copying a key into BossFang configuration.
+- **Live models and pricing.** BossFang refreshes the EveryAPI model catalog from the gateway and uses provider-scoped routing for EveryAPI-backed agents.
+- **Gateway operations through MCP.** `everyapi mcp` exposes account status, top-up, seller, marketplace, and edge-node tools to approved BossFang agents.
+- **First-class CLI guidance.** EveryAPI CLI recognizes `librefang` as an MCP client and prints BossFang-specific installation, configuration, and approval guidance.
 
 ## Connect the products
 
@@ -23,8 +23,8 @@ Install and sign in to the public [EveryAPI CLI](https://github.com/everyapi-ai/
 everyapi auth login
 ```
 
-Start LibreFang normally.
-On boot, LibreFang detects the EveryAPI credential process and adds the managed provider when the account is available.
+Start BossFang normally.
+On boot, BossFang detects the EveryAPI credential process and adds the managed provider when the account is available.
 
 ```bash
 librefang start
@@ -43,4 +43,4 @@ See [EveryAPI provider configuration](/configuration/providers/platforms#everyap
 
 - [EveryAPI integration guide](https://everyapi.ai/integrations/librefang?utm_source=librefang_docs&utm_medium=partner&utm_campaign=librefang_everyapi)
 - [EveryAPI](https://everyapi.ai/)
-- [LibreFang source](https://github.com/librefang/librefang)
+- [BossFang source](https://github.com/librefang/librefang)

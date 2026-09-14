@@ -323,7 +323,7 @@ const zhNavigation: Array<NavGroup> = [
 	{
 		title: "合作伙伴",
 		links: [
-			{ title: "LibreFang × EveryAPI", href: withPrefix("/zh/partners/everyapi") },
+			{ title: "BossFang × EveryAPI", href: withPrefix("/zh/partners/everyapi") },
 		],
 	},
 	{
@@ -434,7 +434,7 @@ export const enNavigation: Array<NavGroup> = [
 	{
 		title: "Partners",
 		links: [
-			{ title: "LibreFang × EveryAPI", href: withPrefix("/partners/everyapi") },
+			{ title: "BossFang × EveryAPI", href: withPrefix("/partners/everyapi") },
 		],
 	},
 	{

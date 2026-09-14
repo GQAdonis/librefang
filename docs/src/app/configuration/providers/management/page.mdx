@@ -47,7 +47,7 @@ Files in `~/.librefang/providers/` are loaded at startup and merged into the cat
 
 ### Model Auto-Discovery for Custom Providers
 
-LibreFang polls the built-in local providers (`ollama`, `vllm`, `lmstudio`, `lemonade`) every 60 seconds and merges whatever their `/v1/models` endpoint reports into the catalog.
+BossFang polls the built-in local providers (`ollama`, `vllm`, `lmstudio`, `lemonade`) every 60 seconds and merges whatever their `/v1/models` endpoint reports into the catalog.
 A provider registered under any other id — a self-hosted vLLM at `vllm-local`, say — is not polled by default, because an arbitrary OpenAI-compatible endpoint need not serve a model listing.
 Opt in per provider with `discover_models`:
 
@@ -77,7 +77,7 @@ That is only a limitation on paper for the built-in local ids, whose discovery i
 
 A discovered model's `supports_vision` decides whether image attachments reach the model at all: a model recorded as text-only has every image block replaced by a placeholder before the request is built, because a text-only OpenAI-compatible endpoint rejects `image_url` content parts with HTTP 400.
 
-LibreFang reads that flag from the gateway when the gateway states it.
+BossFang reads that flag from the gateway when the gateway states it.
 LiteLLM and similar proxies expose a per-model `supports_vision` / `supports_function_calling` on `/v1/models` (top level or under `model_info`), and OpenRouter-shaped listings expose `architecture.input_modalities`; an explicit flag is believed in both directions, because the gateway is the authority on its own models.
 
 When nothing states it, the flag is **inferred from the model's name** — and a name you chose (`team-default`, `fast`, an internal ticket id) carries no capability information.

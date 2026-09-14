@@ -1588,7 +1588,7 @@ Like every other `exec_policy` field, this one is copied into each agent's manif
 Without that step, setting it to `false` looks like a silent no-op: no new prompts appear, and the natural reading is that nothing needed approval.
 
 The dangerous-command denylist is independent of `mode` and screens every command under `deny`, `allowlist`, and `full` alike -- `full` disables allowlist *validation*, not the denylist.
-It covers, among others, LibreFang daemon lifecycle commands (`librefang stop` / `start` / `restart`, including the `gateway` alias and path-qualified invocations), which bounce every agent and channel adapter sharing the daemon, and mutating SQL or output redirection against the daemon's own `librefang.db`.
+It covers, among others, BossFang daemon lifecycle commands (`librefang stop` / `start` / `restart`, including the `gateway` alias and path-qualified invocations), which bounce every agent and channel adapter sharing the daemon, and mutating SQL or output redirection against the daemon's own `librefang.db`.
 Read-only inspection of that database (`select`, `.schema`, `.dump`) and `librefang status` are deliberately not matched.
 
 ---

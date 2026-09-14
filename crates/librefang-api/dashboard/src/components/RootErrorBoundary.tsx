@@ -34,7 +34,7 @@ export class RootErrorBoundary extends React.Component<
             style={{
               marginTop: "1rem",
               borderRadius: "0.75rem",
-              backgroundColor: "#0ea5e9",
+              backgroundColor: "#FF6A3D",
               padding: "0.625rem 1.5rem",
               fontSize: "0.875rem",
               fontWeight: 700,

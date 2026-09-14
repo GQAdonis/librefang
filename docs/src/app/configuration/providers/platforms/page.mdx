@@ -494,7 +494,7 @@ BossFang asks the EveryAPI CLI credential process for the current gateway and re
    ```
 
 For managed discovery, EveryAPI remains the credential authority.
-LibreFang invokes `everyapi auth credential --format=json` when it needs a credential and never persists the returned secret.
+BossFang invokes `everyapi auth credential --format=json` when it needs a credential and never persists the returned secret.
 Older compatible CLI credentials can still be read as a fallback.
 Explicit endpoint or environment-variable configuration remains available and takes precedence over managed discovery.
 

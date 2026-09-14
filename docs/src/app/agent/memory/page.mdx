@@ -428,9 +428,9 @@ Honouring it lets the backend prune before it ranks, which is the whole reason i
 
 ### What the backend does not get to decide
 
-Everything `/search` returns is treated as untrusted, because the search result is an ID list from a process LibreFang does not control.
+Everything `/search` returns is treated as untrusted, because the search result is an ID list from a process BossFang does not control.
 
-- **IDs are hydrated from SQLite, never from the backend's payload.** The `payload` and `metadata` a backend returns are not what reaches the prompt; the row LibreFang already has under that ID is.
+- **IDs are hydrated from SQLite, never from the backend's payload.** The `payload` and `metadata` a backend returns are not what reaches the prompt; the row BossFang already has under that ID is.
 - **The caller's `MemoryFilter` is re-applied after hydration.** A backend that ignores the filter it was handed cannot widen the caller's scope: agent, scope, source, confidence floor, created-at bounds and metadata equality are all re-checked against the hydrated rows, and `peer_id` is enforced as a SQL predicate during hydration because `MemoryFragment` does not carry it.
 - **Cross-chat (`chat_scope`) and cross-session (`session_scope`) isolation run after that**, on the same post-recall path as the in-process backend, so attaching a backend cannot reopen either guard.
 

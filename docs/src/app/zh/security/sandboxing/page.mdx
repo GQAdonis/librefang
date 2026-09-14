@@ -391,7 +391,7 @@ pub fn validate_executable_path(path: &str) -> Result<(), String> {
 | **SQL 删除** | 破坏性数据库语句 | `DROP TABLE`、`DROP DATABASE`、`TRUNCATE` |
 | **守护进程数据库写入** | 针对守护进程自身 `librefang.db` 的写入——该文件保存了主机上所有 Agent、会话与审批记录 | `sqlite3 librefang.db "DELETE FROM …"`、`> librefang.db` |
 | **系统文件覆写** | 直接写入关键 OS 路径 | `> /etc/passwd`、`> /etc/shadow`、`> /boot/` |
-| **服务管理** | 停止或禁用系统服务，以及重启共享的 LibreFang 守护进程 | `systemctl stop`、`systemctl disable`、`librefang stop`、`librefang gateway restart` |
+| **服务管理** | 停止或禁用系统服务，以及重启共享的 BossFang 守护进程 | `systemctl stop`、`systemctl disable`、`librefang stop`、`librefang gateway restart` |
 | **进程杀死** | 向进程发送致命信号 | `kill -9`、`killall`、`pkill -9` |
 | **Fork 炸弹** | 耗尽资源的自复制进程 | `:()&#123; :\|:& &#125;;:` 及其变体 |
 | **任意代码执行** | 将远程内容直接管道到 shell | `curl … \| bash`、`wget … \| sh`、`eval $(…)` |
