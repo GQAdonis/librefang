@@ -1024,6 +1024,13 @@ pub struct RateLimitConfig {
     /// WebSocket idle timeout in seconds (close after inactivity). Default: 1800.
     #[serde(default = "default_ws_idle_timeout_secs")]
     pub ws_idle_timeout_secs: u64,
+    /// WebSocket ping interval in seconds. Default: 30. Set to 0 to disable.
+    ///
+    /// The server sends a Ping frame after this much silence from the peer and closes the connection if a further interval passes with still nothing received, so a half-open socket is detected in at most twice this value.
+    /// Without it the only thing that ever discovers a dead peer is a failing write, which means a connection sitting idle between turns — the state a chat socket spends most of its life in — is never probed at all.
+    /// Detection is deliberately not tied to `ws_idle_timeout_secs`: an answered Ping must not count as activity, or an open browser tab would keep the idle timeout from ever firing.
+    #[serde(default = "default_ws_ping_interval_secs")]
+    pub ws_ping_interval_secs: u64,
     /// Text delta debounce interval in milliseconds. Default: 100.
     #[serde(default = "default_ws_debounce_ms")]
     pub ws_debounce_ms: u64,
@@ -1055,6 +1062,11 @@ fn default_ws_terminal_messages_per_minute() -> u32 {
 fn default_ws_idle_timeout_secs() -> u64 {
     1800
 }
+/// 30 s keeps detection (two intervals, 60 s) under the dashboard's 180 s duplicate-resend watchdog, so a dead socket is closed and the client's own recovery runs before that watchdog re-sends the message over HTTP.
+/// It is also under the 60 s `proxy_read_timeout` most reverse proxies default to, so the same frame doubles as the keep-alive those deployments need.
+fn default_ws_ping_interval_secs() -> u64 {
+    30
+}
 fn default_ws_debounce_ms() -> u64 {
     100
 }
@@ -1074,6 +1086,7 @@ impl Default for RateLimitConfig {
             ws_messages_per_minute: default_ws_messages_per_minute(),
             ws_terminal_messages_per_minute: default_ws_terminal_messages_per_minute(),
             ws_idle_timeout_secs: default_ws_idle_timeout_secs(),
+            ws_ping_interval_secs: default_ws_ping_interval_secs(),
             ws_debounce_ms: default_ws_debounce_ms(),
             ws_debounce_chars: default_ws_debounce_chars(),
             auth_rate_limit_per_ip: default_auth_rate_limit_per_ip(),
@@ -1417,12 +1430,45 @@ impl Default for CustomTtsConfig {
     }
 }
 
+/// Accepted values of the `text_to_speech` tool's `output_format` argument,
+/// and therefore of the `[tts] output_format` operator default that supplies
+/// it. Single source for the tool's JSON-schema `enum` and for the config
+/// validation warning, so the two cannot drift apart (#8272).
+pub const TTS_OUTPUT_FORMATS: [&str; 2] = ["mp3", "ogg_opus"];
+
+/// Fallback for the `text_to_speech` tool's `output_format` when neither the
+/// tool call nor `[tts] output_format` names one. Kept at `"mp3"` so an
+/// existing deployment that sets nothing keeps its current behaviour.
+pub const DEFAULT_TTS_OUTPUT_FORMAT: &str = "mp3";
+
 /// Text-to-speech configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct TtsConfig {
     /// Enable TTS. Default: false.
     pub enabled: bool,
+    /// Operator default for the `text_to_speech` tool's `output_format`
+    /// argument — the container the tool finally writes to `output/`, applied
+    /// to every provider. One of [`TTS_OUTPUT_FORMATS`]. Unset (`None`) keeps
+    /// the built-in [`DEFAULT_TTS_OUTPUT_FORMAT`]; an `output_format` passed in
+    /// the tool call always wins over this.
+    ///
+    /// `"mp3"` is the name of the no-op, not a conversion target: it keeps
+    /// whatever the provider returned, so a provider configured to emit Opus
+    /// still emits Opus. Only `"ogg_opus"` triggers a conversion.
+    ///
+    /// Set it to `"ogg_opus"` when the audio is destined for a messaging
+    /// channel: a voice note has to be Ogg/Opus, and most providers return MP3,
+    /// which such a channel rejects. Synthesis still reports success in that
+    /// case — the file exists, it simply cannot be delivered — so without this
+    /// key the mismatch surfaces only as a reply that never arrives (#8272).
+    /// The conversion runs through ffmpeg and falls back to the provider format
+    /// when ffmpeg is missing.
+    ///
+    /// Distinct from `[tts.elevenlabs] output_format`: that one is a provider
+    /// query parameter with its own vocabulary (`opus_48000_32`, …) and already
+    /// defaults to Opus (#6116), so ElevenLabs needs no conversion step here.
+    pub output_format: Option<String>,
     /// Default provider: "openai", "elevenlabs", "google_tts", or any custom
     /// name. When set to a name other than the three built-in ones, the
     /// `[tts.custom]` block must supply the endpoint URL.
@@ -1450,6 +1496,7 @@ impl Default for TtsConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            output_format: None,
             provider: None,
             openai: TtsOpenAiConfig::default(),
             elevenlabs: TtsElevenLabsConfig::default(),
@@ -1581,13 +1628,13 @@ pub struct DockerSandboxConfig {
     /// Container lifecycle scope. Default: session.
     #[serde(default)]
     pub scope: DockerScope,
-    /// Cooldown before reusing a released container (seconds). Default: 300.
+    /// Settling time before a container released by one agent may be handed to a different agent; applies to scope = shared only, and never to an agent re-acquiring its own container. Default: 300.
     #[serde(default = "default_reuse_cool_secs")]
     pub reuse_cool_secs: u64,
-    /// Idle timeout — destroy containers after N seconds of inactivity. Default: 86400 (24h).
+    /// Idle timeout — destroy pooled containers after N seconds of inactivity; 0 disables. Default: 86400 (24h).
     #[serde(default = "default_docker_idle_timeout")]
     pub idle_timeout_secs: u64,
-    /// Maximum age before forced destruction (seconds). Default: 604800 (7 days).
+    /// Maximum age, measured from container creation rather than from the last release, before forced destruction (seconds); 0 disables. Default: 604800 (7 days).
     #[serde(default = "default_docker_max_age")]
     pub max_age_secs: u64,
     /// Paths blocked from bind mounting.
@@ -1712,6 +1759,92 @@ pub struct SkillsConfig {
     /// upstream.
     #[serde(default)]
     pub registry_repo: Option<String>,
+    /// GitHub-side settings for the promotion flow that `registry_repo`
+    /// names its target for.
+    /// Every field defaults to the behaviour the flow had before the section
+    /// existed, so an installation that omits `[skills.promotion]` entirely is
+    /// unaffected.
+    #[serde(default)]
+    pub promotion: RegistryPromotionConfig,
+}
+
+/// How the promotion flow gets a branch onto the registry repository.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RegistryPromotionMode {
+    /// Fork the upstream registry under the promoting account, push the
+    /// branch to that fork, and open a cross-repository pull request.
+    /// This is what the flow has always done.
+    #[default]
+    Fork,
+    /// Push the branch straight to the upstream registry and open a
+    /// same-repository pull request.
+    /// Requires the token to carry write access to the registry, and is the
+    /// mode to pick when the registry is an internal repository nobody is
+    /// meant to fork.
+    DirectPush,
+}
+
+/// GitHub-side settings for promoting a skill or an agent type to the
+/// registry repository named by `skills.registry_repo`.
+///
+/// The engine lives in `librefang-skills::registry_pr` and is shared by
+/// `POST /api/skills/{name}/propose` and `POST /api/templates/{name}/promote`.
+/// Each field is optional and, when unset, reproduces exactly what the flow
+/// did before this section existed: `api.github.com`, a fork under whoever
+/// owns the token, the fork's own default branch as the PR base, a
+/// path-derived head-branch prefix, and no explicit commit author.
+///
+/// The GitHub token is deliberately *not* configured here.
+/// It continues to resolve from the `GITHUB_TOKEN` environment variable and
+/// then the vault, so no credential is readable back out of `GET /api/config`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct RegistryPromotionConfig {
+    /// Base URL of the GitHub REST API, without a trailing slash.
+    /// Defaults to `https://api.github.com`.
+    /// Set it to something like `https://github.example.com/api/v3` to promote
+    /// against a GitHub Enterprise Server installation, which the flow could
+    /// not reach at all while the host was a compiled-in constant.
+    /// Must be `https://` — plain `http` is accepted only for loopback hosts —
+    /// and it is not writable through `POST /api/config/set`: the promotion
+    /// flow attaches the repo-scoped GitHub token to every request built from
+    /// it, so the value is an edit-on-disk destination field (#8179 review).
+    #[serde(default)]
+    pub api_base_url: Option<String>,
+    /// Account or organisation the fork is created under.
+    /// Defaults to the login `GET /user` reports for the token, which is the
+    /// right answer whenever the fork belongs to the token's owner and the
+    /// wrong one whenever an organisation owns it.
+    /// Ignored in `direct_push` mode, where there is no fork.
+    #[serde(default)]
+    pub fork_owner: Option<String>,
+    /// Branch the pull request targets on the upstream registry, and the
+    /// branch the head branch is cut from.
+    /// Defaults to the default branch of the repository being pushed to.
+    #[serde(default)]
+    pub base_branch: Option<String>,
+    /// First path component of the generated head branch name, which is
+    /// otherwise `<prefix>/<name>-<timestamp>`.
+    /// Defaults to `skill` for skill promotions and to the registry directory
+    /// (`agent-types`, …) for everything else.
+    #[serde(default)]
+    pub head_branch_prefix: Option<String>,
+    /// Name recorded as the commit author and committer.
+    /// Takes effect only together with `commit_author_email`; with either half
+    /// missing, no author is sent and GitHub attributes the commit to the
+    /// account that owns the token.
+    #[serde(default)]
+    pub commit_author_name: Option<String>,
+    /// Email recorded as the commit author and committer.
+    /// See `commit_author_name` — both are required for either to apply.
+    #[serde(default)]
+    pub commit_author_email: Option<String>,
+    /// Whether to fork the registry or push to it directly.
+    #[serde(default)]
+    pub mode: RegistryPromotionMode,
 }
 
 /// Operator-side gate over skill `env_passthrough` requests.
@@ -1783,6 +1916,7 @@ impl Default for SkillsConfig {
             env_passthrough_denied_patterns: default_env_passthrough_denied_patterns(),
             env_passthrough_per_skill: std::collections::HashMap::new(),
             registry_repo: None,
+            promotion: RegistryPromotionConfig::default(),
         }
     }
 }
@@ -2350,12 +2484,12 @@ pub enum DockerSandboxMode {
 )]
 #[serde(rename_all = "snake_case")]
 pub enum DockerScope {
-    /// Container per session (destroyed when session ends).
+    /// Container per (agent, session), reused by every tool call in that session.
     #[default]
     Session,
-    /// Container per agent (reused across sessions).
+    /// Container per agent, reused across that agent's sessions.
     Agent,
-    /// Shared container pool.
+    /// Container per (config, workspace), reused by any agent that mounts the same workspace.
     Shared,
 }
 
@@ -3856,6 +3990,13 @@ pub struct KernelConfig {
     /// `routing` always wins when present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_routing: Option<crate::agent::ModelRoutingConfig>,
+    /// Profile router settings. Complements `default_routing` above: the tier
+    /// router maps a scored request onto three fixed model slots, while the
+    /// profile router matches the task against named profiles that also carry
+    /// a cost tier and a complexity ceiling. Off by default; an agent opts in
+    /// with `mode = "flexible"` in its manifest `[model]` block.
+    #[serde(default)]
+    pub model_router: crate::model_profile::ModelRouterConfig,
     /// Default LLM provider configuration.
     pub default_model: DefaultModelConfig,
     /// Memory substrate configuration.
@@ -4129,6 +4270,21 @@ pub struct KernelConfig {
     /// Media understanding configuration.
     #[serde(default)]
     pub media: crate::media::MediaConfig,
+    /// Kernel-global media capability routing — which provider and model
+    /// services each modality the agent's own model cannot handle.
+    ///
+    /// ```toml
+    /// [capabilities]
+    /// image_understanding = "openai/gpt-4o"
+    /// speech_to_text = { provider = "groq", model = "whisper-large-v3" }
+    /// ```
+    ///
+    /// Every agent inherits this block; `agent.toml`'s own `[capabilities]`
+    /// overrides it key by key. Resolution is agent > global > the historical
+    /// `[media] image_provider` / `audio_provider` selectors > env-var
+    /// auto-detection.
+    #[serde(default)]
+    pub capabilities: crate::media::CapabilityRouting,
     /// Link understanding configuration.
     #[serde(default)]
     pub links: crate::media::LinkConfig,
@@ -4505,6 +4661,14 @@ pub struct KernelConfig {
     /// Enterprise deployments may need larger file uploads.
     #[serde(default = "default_max_upload_size_bytes")]
     pub max_upload_size_bytes: usize,
+    /// Maximum number of `POST /api/agents/{id}/upload` requests allowed to be
+    /// mid-flight at once (default: 8).
+    /// `upload_file` extracts `axum::body::Bytes`, buffering the whole body in
+    /// RAM before the handler runs, so uncapped concurrency at `max_upload_size_bytes`
+    /// costs `concurrent_requests * max_upload_size_bytes` in RSS. This bounds
+    /// worst-case peak RAM from the upload path to `max_concurrent_uploads * max_upload_size_bytes`.
+    #[serde(default = "default_max_concurrent_uploads")]
+    pub max_concurrent_uploads: usize,
     /// Maximum number of concurrent background LLM calls across all agents.
     /// Increase on high-core servers that can handle more parallel inference.
     #[serde(default = "default_max_concurrent_bg_llm")]
@@ -5829,6 +5993,11 @@ fn default_tool_timeout_secs() -> u64 {
 /// Default maximum upload size in bytes (10 MB).
 fn default_max_upload_size_bytes() -> usize {
     10 * 1024 * 1024
+}
+
+/// Default maximum number of concurrent in-flight uploads (8).
+fn default_max_concurrent_uploads() -> usize {
+    8
 }
 
 /// Default maximum concurrent background LLM calls.
@@ -7173,6 +7342,7 @@ impl Default for KernelConfig {
             memory_fact_budget_percent: None,
             max_history_messages: None,
             default_routing: None,
+            model_router: crate::model_profile::ModelRouterConfig::default(),
             default_model: DefaultModelConfig::default(),
             memory: MemoryConfig::default(),
             memory_wiki: MemoryWikiConfig::default(),
@@ -7213,6 +7383,7 @@ impl Default for KernelConfig {
             workspaces_dir: None,
             log_dir: None,
             media: crate::media::MediaConfig::default(),
+            capabilities: crate::media::CapabilityRouting::default(),
             links: crate::media::LinkConfig::default(),
             reload: ReloadConfig::default(),
             webhook_triggers: None,
@@ -7288,6 +7459,7 @@ impl Default for KernelConfig {
             tool_timeout_secs: default_tool_timeout_secs(),
             tool_timeouts: std::collections::BTreeMap::new(),
             max_upload_size_bytes: default_max_upload_size_bytes(),
+            max_concurrent_uploads: default_max_concurrent_uploads(),
             max_concurrent_bg_llm: default_max_concurrent_bg_llm(),
             max_agent_call_depth: default_max_agent_call_depth(),
             max_request_body_bytes: default_max_request_body_bytes(),

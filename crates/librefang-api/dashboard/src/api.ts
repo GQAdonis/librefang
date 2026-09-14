@@ -27,9 +27,10 @@ export interface StatusResponse {
   api_listen?: string;
   home_dir?: string;
   log_level?: string;
-  /** Machine hostname. Only populated on authenticated endpoints
-   *  (`/api/status`, `/api/dashboard/snapshot`) — `/api/version` is public
-   *  and deliberately omits it. */
+  /** Machine hostname. Populated on `/api/status` and
+   *  `/api/dashboard/snapshot`, which are dashboard-read routes and so
+   *  require auth whenever any is configured — `/api/version` is public
+   *  unconditionally and deliberately omits it. */
   hostname?: string;
   network_enabled?: boolean;
   terminal_enabled?: boolean;
@@ -652,10 +653,19 @@ export interface WorkflowLastRunSummary {
   completed_at: string | null;
 }
 
+export interface WorkflowInputParam {
+  name: string;
+  param_type?: string;
+  required?: boolean;
+  description?: string;
+  default?: unknown;
+}
+
 export interface WorkflowItem {
   id: string;
   name: string;
   description?: string;
+  input_schema?: WorkflowInputParam[];
   steps?: number | WorkflowStep[];
   created_at?: string;
   layout?: unknown;
@@ -1181,6 +1191,12 @@ export interface GoalItem {
   agent_id?: string;
   status?: string;
   progress?: number;
+  /** Opt into the verifier gate, the evaluator and captured lessons. */
+  loop_engineering?: boolean;
+  /** Agent that judges the worker's output; only used with loop_engineering. */
+  verify_agent_id?: string;
+  /** Model that judges goal completion; only used with loop_engineering. */
+  evaluator_model?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -1514,6 +1530,8 @@ export interface AgentDetail {
   auto_evolve?: boolean;
   /** Template this agent was spawned from, if any (#8018). */
   source_template?: string;
+  /** Tokens the daemon injects into every request for this agent — identity, tools, skills (#7976). */
+  injected_footprint_tokens?: number;
 }
 
 export async function getAgentDetail(agentId: string): Promise<AgentDetail> {
@@ -1771,6 +1789,50 @@ export async function getAgentMcpServers(
 ): Promise<AgentMcpServersResponse> {
   return get<AgentMcpServersResponse>(
     `/api/agents/${encodeURIComponent(agentId)}/mcp_servers`,
+  );
+}
+
+/**
+ * Per-agent channel assignment, returned by `GET /api/agents/{id}/channels`.
+ *
+ * Two different mechanisms, deliberately reported together:
+ *
+ * - `assigned` / `available` / `mode` are the manifest allowlist
+ *   (`agent.toml: channels`), matched against a bare channel **type** —
+ *   `agent_allows_channel` in `librefang-channels` compares
+ *   `channel_type_str(&message.channel)` — so `available` is one entry per
+ *   type, not per configured instance.
+ * - `instances` is the per-instance binding (`[[sidecar_channels]].agent`,
+ *   #6131): which specific bot delivers to which agent. Three Telegram bots
+ *   are three instances of one type, and only this tells them apart.
+ *
+ * Reading both from one place is what lets an agent's own editor answer
+ * "which of these bots is mine?", which previously could only be seen from
+ * the channel's side.
+ */
+export interface AgentChannelInstance {
+  /** `[[sidecar_channels]].name` — unique per instance. */
+  name: string;
+  /** The channel type this instance speaks; several instances share one. */
+  channel_type: string;
+  /** Agent this instance delivers to, or `null` when it has no binding. */
+  agent: string | null;
+  /** True when `agent` is the agent this response is about. */
+  bound_to_this_agent: boolean;
+}
+
+export interface AgentChannelsResponse {
+  assigned: string[];
+  available: string[];
+  instances: AgentChannelInstance[];
+  mode: "all" | "allowlist";
+}
+
+export async function getAgentChannels(
+  agentId: string,
+): Promise<AgentChannelsResponse> {
+  return get<AgentChannelsResponse>(
+    `/api/agents/${encodeURIComponent(agentId)}/channels`,
   );
 }
 
@@ -2209,6 +2271,58 @@ export interface ModelItem {
   source?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Model router (profile-based routing)
+// ---------------------------------------------------------------------------
+
+export type CostTier = "cheap" | "medium" | "expensive";
+
+export interface ModelProfile {
+  name: string;
+  tags: string[];
+  provider: string;
+  model: string;
+  context_window?: number;
+  cost_tier: CostTier;
+  priority: number;
+  max_complexity: number;
+  description?: string;
+}
+
+export interface ModelRouterProfiles {
+  enabled: boolean;
+  default_profile?: string | null;
+  profiles: ModelProfile[];
+}
+
+/// The resolved profile catalog: the builtin asset with
+/// `~/.librefang/model_profiles.toml` merged over it.
+export async function listModelRouterProfiles(): Promise<ModelRouterProfiles> {
+  return get<ModelRouterProfiles>("/api/model-router/profiles");
+}
+
+export interface AgentModelRouting {
+  mode: "fixed" | "flexible";
+  allowed_profiles: string[];
+  cost_budget?: CostTier | null;
+  default_profile?: string | null;
+  /// Per-agent router opt-out (#7781 review). `true` means the router never
+  /// touches this agent even in `flexible` mode — surfaced so the panel can
+  /// warn an operator their allowlist/budget edits have no effect.
+  fixed?: boolean;
+}
+
+export async function getAgentModelRouting(agentId: string): Promise<AgentModelRouting> {
+  return get<AgentModelRouting>(`/api/agents/${encodeURIComponent(agentId)}/model_routing`);
+}
+
+export async function updateAgentModelRouting(
+  agentId: string,
+  routing: AgentModelRouting,
+): Promise<AgentModelRouting> {
+  return put<AgentModelRouting>(`/api/agents/${encodeURIComponent(agentId)}/model_routing`, routing);
+}
+
 export async function listModels(params?: { provider?: string; tier?: string; available?: boolean }): Promise<{ models: ModelItem[]; total: number; available: number }> {
   const query = new URLSearchParams();
   if (params?.provider) query.set("provider", params.provider);
@@ -2354,8 +2468,10 @@ function sanitizeFilenameForHeader(name: string): string {
 
 // Upload a chat attachment for an agent. Body is the raw file bytes; backend
 // expects `Content-Type` to match the file MIME and `X-Filename` for the
-// original name. Server-side limits: 10MB and an exact MIME allowlist
-// (image/audio/text/pdf) — callers should still pre-validate to fail fast.
+// original name. Server-side limits: the operator-configurable
+// `max_upload_size_bytes` (10MB default, read via `GET /api/config`) and an
+// exact MIME allowlist (image/audio/text/pdf) — callers should still
+// pre-validate to fail fast.
 export async function uploadAgentFile(agentId: string, file: File): Promise<AgentFileUploadResult> {
   const response = await fetchWithTimeout(
     `/api/agents/${encodeURIComponent(agentId)}/upload`,
@@ -2991,6 +3107,15 @@ export interface WorkflowStepResult {
   duration_ms: number;
   /** Step-level failure message; present on the step that failed. */
   error?: string;
+  /**
+   * Variable bindings live at this step, as `routes/workflows/workflow.rs`
+   * serialises them from `StepResult::variables`.
+   *
+   * Optional because a run recorded before the field existed carries no
+   * snapshot; every current construction site populates it through
+   * `snapshot_variables`.
+   */
+  variables?: Record<string, string>;
 }
 
 /** Full detail for a single workflow run. */
@@ -3005,6 +3130,7 @@ export interface WorkflowRunDetail {
   started_at: string;
   completed_at?: string | null;
   step_results: WorkflowStepResult[];
+  total_steps?: number;
 }
 
 /** Per-step preview returned by dry-run. */
@@ -3299,6 +3425,18 @@ export async function getVersionInfo(): Promise<VersionResponse> {
 
 export async function getStatus(): Promise<StatusResponse> {
   return get<StatusResponse>("/api/status");
+}
+
+export interface WhoamiResponse {
+  name: string;
+}
+
+/** The calling credential's own resolved identity — `GET /api/authz/whoami`.
+ *  Authenticated, unlike `/api/auth/dashboard-check`, so `name` is always
+ *  the real login rather than the empty string that endpoint deliberately
+ *  sends to anonymous callers. */
+export async function getWhoami(): Promise<WhoamiResponse> {
+  return get<WhoamiResponse>("/api/authz/whoami");
 }
 
 export async function getQueueStatus(): Promise<QueueStatusResponse> {
@@ -4625,6 +4763,9 @@ export async function createGoal(payload: {
   agent_id?: string;
   status?: string;
   progress?: number;
+  loop_engineering?: boolean;
+  verify_agent_id?: string;
+  evaluator_model?: string;
 }): Promise<GoalItem> {
   return post<GoalItem>("/api/goals", payload);
 }
@@ -4638,6 +4779,9 @@ export async function updateGoal(
     progress?: number;
     parent_id?: string | null;
     agent_id?: string | null;
+    loop_engineering?: boolean;
+    verify_agent_id?: string | null;
+    evaluator_model?: string | null;
   }
 ): Promise<GoalItem> {
   // Issue #3832: handler now returns the mutated GoalItem instead of an ack
@@ -4654,11 +4798,14 @@ export async function deleteGoal(goalId: string): Promise<ApiActionResponse> {
 export interface GoalRunState {
   goal_id: string;
   agent_id: string;
-  phase: "running" | "finished" | "max_iterations_reached" | "rate_limited" | "stopped";
+  phase: "running" | "paused" | "finished" | "max_iterations_reached" | "rate_limited" | "stopped";
   iteration: number;
   max_iterations: number;
   last_progress: number;
   last_error?: string;
+  verify_agent_id?: string;
+  verify_max_retries?: number;
+  evaluator_model?: string;
   started_at: string;
   updated_at: string;
 }
@@ -4666,7 +4813,7 @@ export interface GoalRunState {
 /** Begin an autonomous run that drives the goal's assigned agent. */
 export async function startGoalRun(
   goalId: string,
-  payload?: { max_iterations?: number }
+  payload?: { max_iterations?: number; verify_max_retries?: number }
 ): Promise<{ ok: boolean; run: GoalRunState | null }> {
   return post<{ ok: boolean; run: GoalRunState | null }>(
     `/api/goals/${encodeURIComponent(goalId)}/start`,

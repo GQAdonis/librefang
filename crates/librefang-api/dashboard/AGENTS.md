@@ -218,3 +218,10 @@ python3 scripts/enforce-branding.py
 It automatically replaces all sky-blue upstream tokens with ember equivalents across
 the entire `dashboard/src/` tree. Review the diff afterward to catch any SVG-glyph
 or gradient-box logo regressions that the script cannot handle automatically.
+
+## Locale parity
+
+`pnpm test:i18n-parity` and `src/lib/__tests__/locale-parity.test.ts` use the shared `compareKeys` function in `scripts/i18n-parity.mjs`.
+Ordinary keys must match English; each English plural family must supply the cardinal categories selected by `Intl.PluralRules` for the target locale.
+Unused plural suffixes remain tolerated, matching the existing CI policy.
+Keep the CLI and CI on this shared comparison; regression fixtures in `i18n-parity-script.test.ts` cover missing categories, ordinary drift, and CLI failure status.

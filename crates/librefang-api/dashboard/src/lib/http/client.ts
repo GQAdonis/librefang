@@ -81,6 +81,9 @@ export {
   // models
   listModels,
   getModelOverrides,
+  // model router (profile-based routing)
+  listModelRouterProfiles,
+  getAgentModelRouting,
   // providers
   listProviders,
   getUarStatus,
@@ -145,6 +148,7 @@ export {
   getAgentSkills,
   // per-agent MCP server assignment — read (#7713)
   getAgentMcpServers,
+  getAgentChannels,
   getAgentTemplateToml,
   getTemplateHistory,
   // overview
@@ -189,6 +193,8 @@ export type {
   ListSessionsResult,
   SidecarSaveResult,
   ReloadConfigResult,
+  // workflows
+  WorkflowRunDetail,
   // workflows — HITL operator-step (#4977)
   OperatorPause,
   OperatorActionVerb,
@@ -296,6 +302,8 @@ export {
   removeCustomModel,
   updateModelOverrides,
   deleteModelOverrides,
+  // model router (profile-based routing)
+  updateAgentModelRouting,
   // providers
   testProvider,
   startUar,
@@ -397,6 +405,10 @@ export {
 // Type re-exports used by hooks and pages
 // ---------------------------------------------------------------------------
 export type {
+  AgentModelRouting,
+  ModelProfile,
+  ModelRouterProfiles,
+  CostTier,
   A2AAgentItem,
   A2ATaskStatus,
   AutoDreamAbortOutcome,

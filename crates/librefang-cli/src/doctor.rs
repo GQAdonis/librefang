@@ -894,53 +894,21 @@ mod tests {
 
     // ── VaultKeyCheck ──────────────────────────────────────────────────────
 
-    /// Process-wide lock for tests that mutate `LIBREFANG_VAULT_KEY`.
-    /// `cargo test` runs tests in parallel by default, and env-var mutation is process-global, so without serialization these races clobber each other (and `run_all_returns_one_result_per_check`, which also reads the env var).
-    /// No external dep needed — std `Mutex` is enough.
-    fn env_lock() -> &'static std::sync::Mutex<()> {
-        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
-        LOCK.get_or_init(|| std::sync::Mutex::new(()))
-    }
-
     /// Run a closure with `LIBREFANG_VAULT_KEY` temporarily set to `value`
-    /// AND `BOSSFANG_VAULT_KEY` explicitly cleared. Holds [`env_lock`] for
-    /// the entire body so concurrent vault-key tests (and any other
-    /// env-var test in this binary) don't race. Both originals are
-    /// restored before the lock is released.
+    /// AND `BOSSFANG_VAULT_KEY` explicitly cleared.
+    /// Holds the shared env lock for the entire body so concurrent vault-key tests — and any other env-var test in this binary — don't race.
+    /// `crate::test_env::with_env_vars` takes `crate::test_env_lock::env_lock`, the same crate-wide mutex `templates.rs` and `launcher.rs` take for `LIBREFANG_HOME` (#8239), so the two families of env-mutating tests serialize against each other rather than against a module-private lock apiece.
+    /// Both originals are restored before the lock is released.
     ///
-    /// BossFang fork: the audit now reads `BOSSFANG_VAULT_KEY` first and
-    /// falls back to `LIBREFANG_VAULT_KEY`. Tests set the legacy name
-    /// (to keep the existing assertions accurate against the
-    /// "{source} ..." messages) and must guarantee no stray
-    /// `BOSSFANG_VAULT_KEY` from the developer's shell wins the lookup.
+    /// BossFang fork: the audit reads `BOSSFANG_VAULT_KEY` first and falls back to
+    /// `LIBREFANG_VAULT_KEY`. Tests set the legacy name (to keep the existing
+    /// assertions accurate against the "{source} ..." messages), so the primary
+    /// name must be cleared or a stray value from the developer's shell wins.
     fn with_vault_key<F: FnOnce() -> AuditResult>(value: Option<&str>, f: F) -> AuditResult {
-        // poison is fine — a panicking sibling test shouldn't make the rest
-        // hang or incorrectly skip.
-        let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
-        let prev_librefang = std::env::var("LIBREFANG_VAULT_KEY").ok();
-        let prev_bossfang = std::env::var("BOSSFANG_VAULT_KEY").ok();
-        // SAFETY: guarded by env_lock() mutex; no concurrent thread reads/writes
-        // either vault-key env var while the lock is held.
-        unsafe {
-            std::env::remove_var("BOSSFANG_VAULT_KEY");
-            match value {
-                Some(v) => std::env::set_var("LIBREFANG_VAULT_KEY", v),
-                None => std::env::remove_var("LIBREFANG_VAULT_KEY"),
-            }
-        }
-        let result = f();
-        // SAFETY: same as above.
-        unsafe {
-            match prev_librefang {
-                Some(p) => std::env::set_var("LIBREFANG_VAULT_KEY", p),
-                None => std::env::remove_var("LIBREFANG_VAULT_KEY"),
-            }
-            match prev_bossfang {
-                Some(p) => std::env::set_var("BOSSFANG_VAULT_KEY", p),
-                None => std::env::remove_var("BOSSFANG_VAULT_KEY"),
-            }
-        }
-        result
+        crate::test_env::with_env_vars(
+            &[("BOSSFANG_VAULT_KEY", None), ("LIBREFANG_VAULT_KEY", value)],
+            f,
+        )
     }
 
     #[test]
@@ -1455,7 +1423,7 @@ mod tests {
         // Hold `env_lock` so this can't race with `with_vault_key` callers
         // mid-flight — otherwise the result count is fine, but the
         // observed env state is non-deterministic for any future asserts here.
-        let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = crate::test_env::env_lock();
         let tmp = tmp_home();
         let ctx = ctx_with_home(tmp.path().to_path_buf());
         let results = run_all(&ctx);

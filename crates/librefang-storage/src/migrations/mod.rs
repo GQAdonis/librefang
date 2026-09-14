@@ -193,4 +193,14 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "knowledge_graph_peer_scope_v1",
         sql: include_str!("sql/033_knowledge_graph_peer_scope.surql"),
     },
+    Migration {
+        version: 34,
+        name: "workflow_runs_total_steps_v1",
+        sql: include_str!("sql/034_workflow_runs_total_steps.surql"),
+    },
+    Migration {
+        version: 35,
+        name: "manifest_versions_v1",
+        sql: include_str!("sql/035_manifest_versions.surql"),
+    },
 ];
