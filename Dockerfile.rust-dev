@@ -141,23 +141,41 @@ RUN cargo install \
 
 # ── Go 1.26.3 ─────────────────────────────────────────────────────────────────
 # Exact version pin. Trixie's golang-go package may lag; use upstream tarball.
-RUN curl -fsSL https://go.dev/dl/go1.26.3.linux-amd64.tar.gz \
+RUN set -eux; \
+    case "$(uname -m)" in \
+        x86_64)  go_arch="amd64" ;; \
+        aarch64) go_arch="arm64" ;; \
+        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://go.dev/dl/go1.26.3.linux-${go_arch}.tar.gz" \
     | tar -xz -C /usr/local
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # ── TinyGo 0.41.1 (Go → WASM/WASI optimised compiler) ────────────────────────
-RUN curl -fsSL \
-    https://github.com/tinygo-org/tinygo/releases/download/v0.41.1/tinygo_0.41.1_amd64.deb \
-    -o /tmp/tinygo.deb \
-    && dpkg -i /tmp/tinygo.deb \
-    && rm /tmp/tinygo.deb
+RUN set -eux; \
+    case "$(uname -m)" in \
+        x86_64)  tg_arch="amd64" ;; \
+        aarch64) tg_arch="arm64" ;; \
+        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL \
+    "https://github.com/tinygo-org/tinygo/releases/download/v0.41.1/tinygo_0.41.1_${tg_arch}.deb" \
+    -o /tmp/tinygo.deb; \
+    dpkg -i /tmp/tinygo.deb; \
+    rm /tmp/tinygo.deb
 
 # ── WASI-SDK 27.0 (C/C++ → WASM/WASI toolchain) ──────────────────────────────
 ENV WASI_SDK_PATH=/opt/wasi-sdk
-RUN curl -fsSL \
-    https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-x86_64-linux.tar.gz \
-    | tar -xz -C /opt \
-    && mv /opt/wasi-sdk-27.0-x86_64-linux /opt/wasi-sdk
+RUN set -eux; \
+    case "$(uname -m)" in \
+        x86_64)  ws_arch="x86_64" ;; \
+        aarch64) ws_arch="arm64" ;; \
+        *) echo "unsupported arch: $(uname -m)" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL \
+    "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-27/wasi-sdk-27.0-${ws_arch}-linux.tar.gz" \
+    | tar -xz -C /opt; \
+    mv "/opt/wasi-sdk-27.0-${ws_arch}-linux" /opt/wasi-sdk
 ENV CC_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
 
 # ── Node.js 24 LTS + pnpm + bun + JS WASM tools ──────────────────────────────
@@ -165,13 +183,19 @@ ENV CC_wasm32_wasip1="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/shar
 #   assemblyscript          — TypeScript-subset → WASM (Binaryen backend)
 #   @bytecodealliance/componentize-js — ESM → WASM Component (SpiderMonkey AOT)
 #   wabt                    — npm-distributed WABT for browser/Node tooling
+# `--force` on the global install: the apt `wabt` package (installed above)
+# already owns /usr/bin/wasm2c, and the npm package ships a binary of the same
+# name, so npm aborts with EEXIST without it. The two are intentionally both
+# present — apt provides the system CLI toolkit, npm the Node-importable
+# build — and --force lets npm place its own shims over the colliding names
+# rather than dropping either package.
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/* \
     && npm install --global corepack@latest \
     && corepack enable \
     && corepack prepare pnpm@10.33.0 --activate \
-    && npm install -g \
+    && npm install -g --force \
         assemblyscript \
         @bytecodealliance/componentize-js \
         wabt
