@@ -2021,9 +2021,14 @@ async fn memory_config_patch_surreal(
         read_config_overrides, resolve_config_with_overrides, write_config_overrides,
     };
 
-    // Serialize the read-modify-write of the single `config_overrides` row so a
-    // concurrent budget/channel/memory PATCH can't lose this update.
-    let _guard = state.config_write_lock.lock().await;
+    // Callers must already hold `state.config_write_lock`, which serializes the
+    // read-modify-write of the single `config_overrides` row against every other
+    // config writer. It is a non-reentrant `tokio::sync::Mutex`, so re-acquiring
+    // it here would deadlock the request.
+    debug_assert!(
+        state.config_write_lock.try_lock().is_err(),
+        "memory_config_patch_surreal requires config_write_lock to be held by the caller"
+    );
 
     // Build the new sections from the LIVE config so prior runtime overrides are
     // preserved (config.toml under surreal is read-only bootstrap defaults).
