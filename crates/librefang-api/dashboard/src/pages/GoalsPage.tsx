@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type GoalItem, type GoalRunState, type GoalTemplate } from "../api";
+import { useAgents } from "../lib/queries/agents";
 import { useGoals, useGoalTemplates, useGoalRun } from "../lib/queries/goals";
 import {
   useCreateGoal,
@@ -12,12 +13,14 @@ import {
 import { PageHeader } from "../components/ui/PageHeader";
 import { ListSkeleton } from "../components/ui/Skeleton";
 import { ErrorState } from "../components/ui/ErrorState";
+import { EmptyState } from "../components/ui/EmptyState";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Badge, type BadgeVariant } from "../components/ui/Badge";
 import { useUIStore } from "../lib/store";
+import { useCreateShortcut } from "../lib/useCreateShortcut";
 import { toastErr } from "../lib/errors";
-import { Shield, Trash2, Edit2, Plus, Target, Rocket, Bot, Database, Users, AlertTriangle, Loader2, CheckCircle2, Clock, Play, Square, ChevronDown, ChevronRight, Zap, Ban, Activity } from "lucide-react";
+import { Shield, Trash2, Edit2, Plus, Target, Rocket, Bot, Database, Users, AlertTriangle, Loader2, CheckCircle2, Clock, Play, Pause, Square, ChevronDown, ChevronRight, Zap, Ban, Activity } from "lucide-react";
 import { StaggerList } from "../components/ui/StaggerList";
 
 const TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -134,6 +137,9 @@ const goalRunPhaseBadge = (
 ): { variant: BadgeVariant; icon?: React.ComponentType<{ className?: string }> } => {
   switch (phase) {
     case "running":                 return { variant: "brand",   icon: Activity };
+    // #7973's phase, carried over into #8067's `BadgeVariant` vocabulary
+    // rather than the `{bg,text,dot}` shape it was written against.
+    case "paused":                  return { variant: "warning", icon: Pause };
     case "finished":                return { variant: "success", icon: CheckCircle2 };
     case "stopped":                 return { variant: "warning", icon: Ban };
     case "rate_limited":            return { variant: "error",   icon: AlertTriangle };
@@ -261,12 +267,17 @@ export function GoalsPage() {
   const { t } = useTranslation();
   const addToast = useUIStore((s) => s.addToast);
   const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
-  const [createDraft, setCreateDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0 });
+  const [createDraft, setCreateDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0, parent_id: "", agent_id: "", loop_engineering: false, verify_agent_id: "", evaluator_model: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0 });
+  const [editDraft, setEditDraft] = useState({ title: "", description: "", status: "pending" as "pending" | "in_progress" | "completed", progress: 0, agent_id: "", loop_engineering: false, verify_agent_id: "", evaluator_model: "" });
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState<"goals" | "templates">("goals");
+  const createTitleRef = useRef<HTMLInputElement>(null);
+  const [focusCreateNonce, setFocusCreateNonce] = useState(0);
 
+  const agentsQuery = useAgents();
+  const agents = useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
   const goalsQuery = useGoals();
   const templatesQuery = useGoalTemplates();
   const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
@@ -277,13 +288,36 @@ export function GoalsPage() {
   const goals = useMemo(() => goalsQuery.data ?? [], [goalsQuery.data]);
   const templates = templatesQuery.data ?? [];
 
+  // The create form lives in the goals tab panel, so on the templates tab the input does not exist yet when the operator asks for a new goal — it only mounts on the render `setActiveTab` triggers.
+  // Focusing through an effect keyed on a nonce covers both cases with one path, and repeats correctly when the operator is already on the goals tab with the input blurred.
+  useEffect(() => {
+    if (focusCreateNonce === 0) return;
+    createTitleRef.current?.focus();
+  }, [focusCreateNonce]);
+
+  const handleNewGoal = () => {
+    setActiveTab("goals");
+    setFocusCreateNonce((n) => n + 1);
+  };
+  useCreateShortcut(handleNewGoal);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!createDraft.title.trim()) return;
     try {
-      await createMutation.mutateAsync(createDraft);
+      // Drop blank parent_id / agent_id instead of posting `""` (#6562): the form seeds both as empty strings, and an empty parent_id used to fail the backend's parent-existence check with "Parent goal '' not found".
+      // The verifier and the evaluator model get the same treatment for the
+      // same reason: the backend rejects a non-UUID verify_agent_id outright.
+      const { parent_id, agent_id, verify_agent_id, evaluator_model, ...rest } = createDraft;
+      await createMutation.mutateAsync({
+        ...rest,
+        ...(parent_id.trim() ? { parent_id: parent_id.trim() } : {}),
+        ...(agent_id.trim() ? { agent_id: agent_id.trim() } : {}),
+        ...(verify_agent_id.trim() ? { verify_agent_id: verify_agent_id.trim() } : {}),
+        ...(evaluator_model.trim() ? { evaluator_model: evaluator_model.trim() } : {}),
+      });
       addToast(t("common.success"), "success");
-      setCreateDraft({ title: "", description: "", status: "pending", progress: 0 });
+      setCreateDraft({ title: "", description: "", status: "pending", progress: 0, parent_id: "", agent_id: "", loop_engineering: false, verify_agent_id: "", evaluator_model: "" });
     } catch (err) {
       addToast(toastErr(err, t("common.error")), "error");
     }
@@ -321,14 +355,27 @@ export function GoalsPage() {
         goal.status === "in_progress" || goal.status === "completed"
           ? goal.status
           : "pending",
-      progress: goal.progress || 0
+      progress: goal.progress || 0,
+      agent_id: goal.agent_id || "",
+      loop_engineering: goal.loop_engineering ?? false,
+      verify_agent_id: goal.verify_agent_id || "",
+      evaluator_model: goal.evaluator_model || "",
     });
   };
 
   const handleSaveEdit = async () => {
     if (!editingId || !editDraft.title.trim()) return;
     try {
-      await updateMutation.mutateAsync({ id: editingId, data: editDraft });
+      // `null` is the backend's clear signal; an empty select means "none".
+      await updateMutation.mutateAsync({
+        id: editingId,
+        data: {
+          ...editDraft,
+          agent_id: editDraft.agent_id.trim() || null,
+          verify_agent_id: editDraft.verify_agent_id.trim() || null,
+          evaluator_model: editDraft.evaluator_model.trim() || null,
+        },
+      });
       addToast(t("common.success"), "success");
       setEditingId(null);
     } catch (err) {
@@ -413,11 +460,25 @@ export function GoalsPage() {
       <PageHeader
         badge={t("nav.automation")}
         title={t("goals.title")}
-        subtitle={t("goals.subtitle")}
+        subtitle={
+          <span>
+            {t("goals.subtitle")}
+            <span className="px-1.5 text-text-dim/40">·</span>
+            <span className="font-mono text-text-dim/50">/api/goals</span>
+          </span>
+        }
         isFetching={goalsQuery.isFetching}
         onRefresh={() => void goalsQuery.refetch()}
         icon={<Shield className="h-4 w-4" />}
         helpText={t("goals.help")}
+        // Unconditional, unlike the Workflows header this is modelled on: gating the create action on `goals.length > 0` is exactly the defect being fixed, since the page with no goals is the one where creating a goal is the only thing left to do.
+        actions={
+          <Button variant="primary" onClick={handleNewGoal} title={`${t("goals.create_goal")} (n)`}>
+            <Plus className="h-4 w-4" />
+            <span>{t("goals.create_goal")}</span>
+            <kbd className="hidden sm:inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-white/30 bg-white/10 px-1 text-[9px] font-mono font-semibold">n</kbd>
+          </Button>
+        }
       />
 
       {goalsQuery.isLoading ? (
@@ -429,221 +490,344 @@ export function GoalsPage() {
           message={t("goals.loadError")}
           onRetry={() => void goalsQuery.refetch()}
         />
-      ) : goals.length === 0 ? (
-        <div className="flex flex-col gap-6">
-          <div className="text-center py-8">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <Target className="h-7 w-7 text-primary" />
-            </div>
-            <h3 className="text-lg font-black tracking-tight mb-1">{t("goals.pick_template")}</h3>
-            <p className="text-sm text-text-dim">{t("goals.pick_template_desc")}</p>
-          </div>
-          <StaggerList className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-            {templates.map((tpl) => {
-              const Icon = TEMPLATE_ICONS[tpl.icon] ?? Target;
-              const isApplying = applyingTemplate === tpl.id;
-              return (
-                <Card key={tpl.id} hover padding="lg" className="flex flex-col">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                      <Icon className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-black tracking-tight">{tpl.name}</h4>
-                      <p className="text-xs text-text-dim mt-0.5">{tpl.description}</p>
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-1.5 mb-4">
-                    {tpl.goals.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-text-dim">
-                        <span className="w-5 h-5 rounded-md bg-main flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
-                        <span className="truncate">{g.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    disabled={isApplying || applyingTemplate !== null}
-                    onClick={() => handleApplyTemplate(tpl)}
-                  >
-                    {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    {isApplying ? t("common.loading") : t("goals.use_template")}
-                  </Button>
-                </Card>
-              );
-            })}
-          </StaggerList>
-        </div>
       ) : (
         <>
-          {/* KPI row */}
-          <StaggerList className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4">
-            {[
-              { label: t("goals.total"), value: stats.total, color: "text-primary", bg: "bg-primary/10", icon: Target },
-              { label: t("goals.pending"), value: stats.pending, color: "text-text-dim", bg: "bg-main", icon: Clock },
-              { label: t("goals.in_progress"), value: stats.inProgress, color: "text-warning", bg: "bg-warning/10", icon: Play },
-              { label: t("goals.completed"), value: stats.completed, color: "text-success", bg: "bg-success/10", icon: CheckCircle2 },
-            ].map((s, i) => (
-              <Card key={i} hover padding="md">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-text-dim/60">{s.label}</span>
-                  <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center`}>
-                    <s.icon className={`w-4 h-4 ${s.color}`} />
-                  </div>
-                </div>
-                <div className="mt-2"><strong className={`text-3xl font-black tracking-tight ${s.color}`}>{s.value}</strong></div>
-              </Card>
-            ))}
-          </StaggerList>
+          {/* Tabs, on the Workflows page's anatomy.
+              The goals tab is the landing tab whether or not any goals exist: Workflows auto-switches an empty page to its template library, and that jump is what strands the create action on the tab the operator has just been moved off. */}
+          <div role="tablist" aria-label={t("nav.goals", { defaultValue: "Goals" })} className="flex items-center gap-1 border-b border-border-subtle">
+            <button
+              id="goals-tab-goals"
+              role="tab"
+              aria-selected={activeTab === "goals"}
+              aria-controls="goals-panel-goals"
+              tabIndex={activeTab === "goals" ? 0 : -1}
+              onClick={() => setActiveTab("goals")}
+              className={`px-4 py-2.5 text-sm font-bold transition-colors border-b-2 -mb-px ${
+                activeTab === "goals"
+                  ? "border-brand text-brand"
+                  : "border-transparent text-text-dim hover:text-brand/70"
+              }`}
+            >
+              {t("goals.my_goals", { defaultValue: "My goals" })}
+              {goals.length > 0 && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-brand/10 text-brand">{goals.length}</span>}
+            </button>
+            <button
+              id="goals-tab-templates"
+              role="tab"
+              aria-selected={activeTab === "templates"}
+              aria-controls="goals-panel-templates"
+              tabIndex={activeTab === "templates" ? 0 : -1}
+              onClick={() => setActiveTab("templates")}
+              className={`px-4 py-2.5 text-sm font-bold transition-colors border-b-2 -mb-px ${
+                activeTab === "templates"
+                  ? "border-brand text-brand"
+                  : "border-transparent text-text-dim hover:text-brand/70"
+              }`}
+            >
+              {t("goals.template_library", { defaultValue: "Templates" })}
+              {templates.length > 0 && <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-brand/10 text-brand">{templates.length}</span>}
+            </button>
+          </div>
 
-          {/* Overall progress */}
-          <Card padding="md">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-text-dim">{t("goals.overall_progress")}</span>
-              <span className="text-sm font-black text-primary">{stats.pct}%</span>
+          {activeTab === "templates" && (
+            <div id="goals-panel-templates" role="tabpanel" aria-labelledby="goals-tab-templates" className="flex flex-col gap-6">
+              <div className="text-center py-8">
+                <div className="w-14 h-14 rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-4">
+                  <Target className="h-7 w-7 text-brand" />
+                </div>
+                <h3 className="text-lg font-black tracking-tight mb-1">{t("goals.pick_template")}</h3>
+                <p className="text-sm text-text-dim">{t("goals.pick_template_desc")}</p>
+              </div>
+              <StaggerList className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                {templates.map((tpl) => {
+                  const Icon = TEMPLATE_ICONS[tpl.icon] ?? Target;
+                  const isApplying = applyingTemplate === tpl.id;
+                  return (
+                    <Card key={tpl.id} hover padding="lg" className="flex flex-col">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center shrink-0">
+                          <Icon className="w-5 h-5 text-brand" />
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-black tracking-tight">{tpl.name}</h4>
+                          <p className="text-xs text-text-dim mt-0.5">{tpl.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1.5 mb-4">
+                        {tpl.goals.map((g, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-text-dim">
+                            <span className="w-5 h-5 rounded-md bg-main flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
+                            <span className="truncate">{g.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        disabled={isApplying || applyingTemplate !== null}
+                        onClick={() => handleApplyTemplate(tpl)}
+                      >
+                        {isApplying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                        {isApplying ? t("common.loading") : t("goals.use_template")}
+                      </Button>
+                    </Card>
+                  );
+                })}
+              </StaggerList>
             </div>
-            <div className="h-2.5 rounded-full bg-main overflow-hidden">
-              <div
-                className="h-full rounded-full bg-linear-to-r from-brand to-success transition-all duration-700"
-                style={{ width: `${stats.pct}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2 text-[10px] text-text-dim">
-              <span>{stats.completed} / {stats.total} {t("goals.completed").toLocaleLowerCase()}</span>
-              <div className="flex items-center gap-2">
-                {showClearConfirm ? (
-                  <>
-                    <span className="text-error">{t("goals.clear_all_confirm")}</span>
-                    <button onClick={() => void handleClearAll()} className="text-error font-bold hover:underline">{t("common.confirm")}</button>
-                    <button onClick={() => setShowClearConfirm(false)} className="hover:underline">{t("common.cancel")}</button>
-                  </>
+          )}
+
+          {activeTab === "goals" && (
+            <div id="goals-panel-goals" role="tabpanel" aria-labelledby="goals-tab-goals" className="flex flex-col gap-6">
+              {/* KPIs and the global progress bar stay off an empty page: four counters reading zero and a bar at 0% describe nothing the operator does not already see. */}
+              {goals.length > 0 && (
+                <>
+                  {/* KPI row */}
+                  <StaggerList className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4">
+                    {[
+                      { label: t("goals.total"), value: stats.total, color: "text-brand", bg: "bg-brand/10", icon: Target },
+                      { label: t("goals.pending"), value: stats.pending, color: "text-text-dim", bg: "bg-main", icon: Clock },
+                      { label: t("goals.in_progress"), value: stats.inProgress, color: "text-warning", bg: "bg-warning/10", icon: Play },
+                      { label: t("goals.completed"), value: stats.completed, color: "text-success", bg: "bg-success/10", icon: CheckCircle2 },
+                    ].map((s, i) => (
+                      <Card key={i} hover padding="md">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-text-dim/60">{s.label}</span>
+                          <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center`}>
+                            <s.icon className={`w-4 h-4 ${s.color}`} />
+                          </div>
+                        </div>
+                        <div className="mt-2"><strong className={`text-3xl font-black tracking-tight ${s.color}`}>{s.value}</strong></div>
+                      </Card>
+                    ))}
+                  </StaggerList>
+
+                  {/* Overall progress */}
+                  <Card padding="md">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-text-dim">{t("goals.overall_progress")}</span>
+                      <span className="text-sm font-black text-brand">{stats.pct}%</span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-main overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-linear-to-r from-brand to-success transition-all duration-700"
+                        style={{ width: `${stats.pct}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-[10px] text-text-dim">
+                      <span>{stats.completed} / {stats.total} {t("goals.completed").toLocaleLowerCase()}</span>
+                      <div className="flex items-center gap-2">
+                        {showClearConfirm ? (
+                          <>
+                            <span className="text-error">{t("goals.clear_all_confirm")}</span>
+                            <button onClick={() => void handleClearAll()} className="text-error font-bold hover:underline">{t("common.confirm")}</button>
+                            <button onClick={() => setShowClearConfirm(false)} className="hover:underline">{t("common.cancel")}</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setShowClearConfirm(true)} className="text-text-dim hover:text-error transition-colors">{t("goals.clear_all")}</button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </>
+              )}
+
+              {/* Create + Goal tree */}
+              <div className="grid gap-6 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr]">
+                <Card padding="lg" hover>
+                  <div className="flex items-center gap-2 mb-5">
+                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center"><Plus className="w-4 h-4 text-brand" /></div>
+                    <h2 className="text-sm font-black tracking-tight uppercase">{t("goals.create_goal")}</h2>
+                  </div>
+                  <form className="flex flex-col gap-4" onSubmit={handleCreate}>
+                    <label htmlFor="goal-create-title" className="sr-only">{t("goals.goal_title_placeholder")}</label>
+                    <input ref={createTitleRef} id="goal-create-title" value={createDraft.title} onChange={e => setCreateDraft({...createDraft, title: e.target.value})} placeholder={t("goals.goal_title_placeholder")} className={inputClass} />
+                    <label htmlFor="goal-create-description" className="sr-only">{t("goals.goal_desc_placeholder")}</label>
+                    <textarea id="goal-create-description" value={createDraft.description} onChange={e => setCreateDraft({...createDraft, description: e.target.value})} placeholder={t("goals.goal_desc_placeholder")} className={`${inputClass} resize-none`} rows={3} />
+                    <label htmlFor="goal-create-agent" className="sr-only">{t("goals.assigned_agent")}</label>
+                    {/* Picking the agent that is already the verifier drops the verifier: the option below is filtered out for that pair, so keeping the id would leave a blank select carrying a value the backend rejects with a 400. */}
+                    <select id="goal-create-agent" value={createDraft.agent_id} onChange={e => setCreateDraft({...createDraft, agent_id: e.target.value, verify_agent_id: createDraft.verify_agent_id === e.target.value ? "" : createDraft.verify_agent_id})} className={inputClass}>
+                      <option value="">{t("goals.no_agent_selected")}</option>
+                      {agents.map(a => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                    </select>
+                    <label className="flex items-center gap-2 text-xs text-text-dim cursor-pointer">
+                      <input type="checkbox" checked={createDraft.loop_engineering} onChange={e => setCreateDraft({...createDraft, loop_engineering: e.target.checked})} className="rounded" />
+                      {t("goals.loop_engineering")}
+                    </label>
+                    {createDraft.loop_engineering && (
+                      <>
+                        <label htmlFor="goal-create-verifier" className="sr-only">{t("goals.verifier_agent")}</label>
+                        <select id="goal-create-verifier" value={createDraft.verify_agent_id} onChange={e => setCreateDraft({...createDraft, verify_agent_id: e.target.value})} className={inputClass}>
+                          <option value="">{t("goals.no_verifier_selected")}</option>
+                          {/* The assigned agent is not offered: it would be grading its own work, which is the one rule the pattern exists for, and the backend now rejects the pair with a 400. */}
+                          {agents.filter(a => a.id !== createDraft.agent_id).map(a => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                        </select>
+                        <label htmlFor="goal-create-evaluator" className="sr-only">{t("goals.evaluator_model")}</label>
+                        <input id="goal-create-evaluator" value={createDraft.evaluator_model} onChange={e => setCreateDraft({...createDraft, evaluator_model: e.target.value})} placeholder={t("goals.evaluator_model_placeholder")} className={inputClass} />
+                      </>
+                    )}
+                    <Button type="submit" variant="primary" disabled={createMutation.isPending || !createDraft.title.trim()} className="mt-2">
+                      {createMutation.isPending ? t("common.loading") : t("goals.create_goal")}
+                    </Button>
+                  </form>
+                </Card>
+
+                {/* The empty state takes the tree's column rather than the whole page, so creating the first goal swaps one panel and leaves the rest of the layout where it was.
+                    Wrapped in a plain div because `EmptyState` carries `col-span-full`, which would otherwise stretch it across the form's column too. */}
+                {goals.length === 0 ? (
+                  <div>
+                    <EmptyState
+                      icon={<Target className="h-7 w-7" />}
+                      title={t("goals.no_goals_yet", { defaultValue: "No goals yet" })}
+                      description={t("goals.no_goals_desc", { defaultValue: "Create one with the form, or start from a template." })}
+                      action={
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="primary" onClick={handleNewGoal}>
+                            <Plus className="h-4 w-4" />
+                            {t("goals.create_goal")}
+                          </Button>
+                          {/* Offered only when the templates query actually returned something: it has no error branch on this page, so a failed fetch is indistinguishable from an empty library, and a button onto an empty tab is worse than no button. */}
+                          {templates.length > 0 && (
+                            <Button variant="secondary" onClick={() => setActiveTab("templates")}>
+                              {t("goals.browse_templates", { defaultValue: "Browse templates" })}
+                            </Button>
+                          )}
+                        </div>
+                      }
+                    />
+                  </div>
                 ) : (
-                  <button onClick={() => setShowClearConfirm(true)} className="text-text-dim hover:text-error transition-colors">{t("goals.clear_all")}</button>
+                  <Card padding="lg">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-black tracking-tight">{t("goals.goal_tree")}</h2>
+                    </div>
+                    <div className="space-y-2">
+                      {rows.map(r => {
+                        const status = r.goal.status || "pending";
+                        const progress = r.goal.progress ?? 0;
+                        return (
+                          <div key={r.goal.id} className="rounded-xl bg-main/40 border border-border-subtle hover:border-brand/30 transition-colors" style={{ marginLeft: `${r.depth * 16}px` }}>
+                            {editingId === r.goal.id ? (
+                              <div className="p-3 sm:p-4 flex flex-col gap-2">
+                                <label htmlFor="goal-edit-title" className="sr-only">{t("goals.title_label")}</label>
+                                <input id="goal-edit-title" value={editDraft.title} onChange={e => setEditDraft({...editDraft, title: e.target.value})} className={inputClass} placeholder={t("goals.title_label")} />
+                                <label htmlFor="goal-edit-description" className="sr-only">{t("goals.desc_label")}</label>
+                                <textarea id="goal-edit-description" value={editDraft.description} onChange={e => setEditDraft({...editDraft, description: e.target.value})} className={`${inputClass} resize-none`} rows={2} placeholder={t("goals.desc_label")} />
+                                <div className="flex flex-wrap gap-2">
+                                  <label htmlFor="goal-edit-status" className="sr-only">{t("goals.status")}</label>
+                                  <select id="goal-edit-status" value={editDraft.status} onChange={e => setEditDraft({...editDraft, status: e.target.value as "pending" | "in_progress" | "completed"})} className={`${inputClass} flex-1 min-w-[120px]`}>
+                                    <option value="pending">{t("goals.pending")}</option>
+                                    <option value="in_progress">{t("goals.in_progress")}</option>
+                                    <option value="completed">{t("goals.completed")}</option>
+                                  </select>
+                                  <label htmlFor="goal-edit-progress" className="sr-only">{t("goals.progress")}</label>
+                                  <input id="goal-edit-progress" type="number" value={editDraft.progress} onChange={e => setEditDraft({...editDraft, progress: Number(e.target.value)})} className={inputClass} min={0} max={100} style={{ width: "80px" }} />
+                                  <label htmlFor="goal-edit-agent" className="sr-only">{t("goals.assigned_agent")}</label>
+                                  {/* Same rule as the create form: reassigning the goal to its own verifier clears the verifier instead of leaving a blank select. */}
+                                  <select id="goal-edit-agent" value={editDraft.agent_id} onChange={e => setEditDraft({...editDraft, agent_id: e.target.value, verify_agent_id: editDraft.verify_agent_id === e.target.value ? "" : editDraft.verify_agent_id})} className={`${inputClass} flex-1 min-w-[120px]`}>
+                                    <option value="">{t("goals.no_agent_selected")}</option>
+                                    {agents.map(a => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                                  </select>
+                                  <Button variant="primary" size="sm" onClick={handleSaveEdit}>{t("common.save")}</Button>
+                                  <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>{t("common.cancel")}</Button>
+                                </div>
+                                <label className="flex items-center gap-2 text-xs text-text-dim cursor-pointer">
+                                  <input type="checkbox" checked={editDraft.loop_engineering} onChange={e => setEditDraft({...editDraft, loop_engineering: e.target.checked})} className="rounded" />
+                                  {t("goals.loop_engineering")}
+                                </label>
+                                {editDraft.loop_engineering && (
+                                  <div className="flex flex-wrap gap-2">
+                                    <label htmlFor="goal-edit-verifier" className="sr-only">{t("goals.verifier_agent")}</label>
+                                    <select id="goal-edit-verifier" value={editDraft.verify_agent_id} onChange={e => setEditDraft({...editDraft, verify_agent_id: e.target.value})} className={`${inputClass} flex-1 min-w-[120px]`}>
+                                      <option value="">{t("goals.no_verifier_selected")}</option>
+                                      {/* Same rule as the create form: an agent cannot verify its own work. */}
+                                      {agents.filter(a => a.id !== editDraft.agent_id).map(a => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                                    </select>
+                                    <label htmlFor="goal-edit-evaluator" className="sr-only">{t("goals.evaluator_model")}</label>
+                                    <input id="goal-edit-evaluator" value={editDraft.evaluator_model} onChange={e => setEditDraft({...editDraft, evaluator_model: e.target.value})} placeholder={t("goals.evaluator_model_placeholder")} className={`${inputClass} flex-1 min-w-[120px]`} />
+                                  </div>
+                                )}
+                              </div>
+                            ) : confirmDeleteId === r.goal.id ? (
+                              <div className="p-3 sm:p-4 flex items-center justify-between gap-3">
+                                <span className="text-sm text-text-dim">{t("goals.delete_confirm")}</span>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="primary" size="sm" onClick={() => handleDelete(r.goal.id)} className="bg-error! hover:bg-error/80!">{t("common.confirm")}</Button>
+                                  <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>{t("common.cancel")}</Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 sm:p-4">
+                                <div className="flex items-center justify-between gap-2 sm:gap-3">
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    {r.hasChildren && (
+                                      <button onClick={() => setExpandedById({...expandedById, [r.goal.id]: !expandedById[r.goal.id]})} className="text-text-dim hover:text-brand transition-colors shrink-0">
+                                        {expandedById[r.goal.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleStatusChange(r.goal.id, status)}
+                                      className="shrink-0 hover:scale-110 transition-transform"
+                                      title={t("goals.toggle_reset")}
+                                    >
+                                      <GoalStatusIcon status={status} />
+                                    </button>
+                                    <span className={`text-sm font-bold truncate ${status === "completed" ? "line-through text-text-dim" : ""}`}>
+                                      {r.goal.title}
+                                    </span>
+                                    <Badge variant={goalStatusBadgeVariant(status)} className="shrink-0">
+                                      {statusLabel(status)}
+                                    </Badge>
+                                    {r.goal.loop_engineering && (
+                                      <Badge variant="info" className="shrink-0" title={t("goals.loop_engineering_hint")}>
+                                        {t("goals.loop_engineering")}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {status !== "completed" && <GoalRunControl goal={r.goal} />}
+                                    <button onClick={() => handleStartEdit(r.goal)} className="p-1.5 rounded-lg hover:bg-brand/10 text-text-dim hover:text-brand transition-colors" title={t("common.edit")}>
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button onClick={() => setConfirmDeleteId(r.goal.id)} className="p-1.5 rounded-lg hover:bg-error/10 text-text-dim hover:text-error transition-colors" title={t("common.delete")}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                                {/* Description */}
+                                {r.goal.description && (
+                                  <p className="text-xs text-text-dim mt-1.5 ml-[calc(1rem+4px)] line-clamp-2">{r.goal.description}</p>
+                                )}
+                                {/* Progress bar */}
+                                {progress > 0 && status !== "completed" && (
+                                  <div className="mt-2 ml-[calc(1rem+4px)]">
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1 h-1.5 rounded-full bg-main overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full transition-all duration-500 ${status === "in_progress" ? "bg-warning" : "bg-brand"}`}
+                                          style={{ width: `${progress}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[10px] font-mono text-text-dim">{progress}%</span>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Run state — phase, iterations and last error, like workflow runs.
+                                    Deliberately not gated on status: `GoalRunPhase::Finished` is documented as "the goal reached Completed/Cancelled", so a `status !== "completed"` gate made the `finished` badge — and its five translations — unreachable, and hid the outcome exactly when it is most worth reading (did the run finish on its own, or stop at the iteration cap?).
+                                    `GoalRunInfo` already renders nothing when the goal has no run, so a completed goal that never ran stays as quiet as before. */}
+                                <GoalRunInfo goal={r.goal} />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
                 )}
               </div>
             </div>
-          </Card>
-
-          {/* Create + Goal tree */}
-          <div className="grid gap-6 lg:grid-cols-[320px_1fr] xl:grid-cols-[360px_1fr]">
-            <Card padding="lg" hover>
-              <div className="flex items-center gap-2 mb-5">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center"><Plus className="w-4 h-4 text-primary" /></div>
-                <h2 className="text-sm font-black tracking-tight uppercase">{t("goals.create_goal")}</h2>
-              </div>
-              <form className="flex flex-col gap-4" onSubmit={handleCreate}>
-                <label htmlFor="goal-create-title" className="sr-only">{t("goals.goal_title_placeholder")}</label>
-                <input id="goal-create-title" value={createDraft.title} onChange={e => setCreateDraft({...createDraft, title: e.target.value})} placeholder={t("goals.goal_title_placeholder")} className={inputClass} />
-                <label htmlFor="goal-create-description" className="sr-only">{t("goals.goal_desc_placeholder")}</label>
-                <textarea id="goal-create-description" value={createDraft.description} onChange={e => setCreateDraft({...createDraft, description: e.target.value})} placeholder={t("goals.goal_desc_placeholder")} className={`${inputClass} resize-none`} rows={3} />
-                <Button type="submit" variant="primary" disabled={createMutation.isPending || !createDraft.title.trim()} className="mt-2">
-                  {createMutation.isPending ? t("common.loading") : t("goals.create_goal")}
-                </Button>
-              </form>
-            </Card>
-
-            <Card padding="lg">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-black tracking-tight">{t("goals.goal_tree")}</h2>
-              </div>
-              <div className="space-y-2">
-                {rows.map(r => {
-                  const status = r.goal.status || "pending";
-                  const progress = r.goal.progress ?? 0;
-                  return (
-                    <div key={r.goal.id} className="rounded-xl bg-main/40 border border-border-subtle hover:border-primary/30 transition-colors" style={{ marginLeft: `${r.depth * 16}px` }}>
-                      {editingId === r.goal.id ? (
-                        <div className="p-3 sm:p-4 flex flex-col gap-2">
-                          <label htmlFor="goal-edit-title" className="sr-only">{t("goals.title_label")}</label>
-                          <input id="goal-edit-title" value={editDraft.title} onChange={e => setEditDraft({...editDraft, title: e.target.value})} className={inputClass} placeholder={t("goals.title_label")} />
-                          <label htmlFor="goal-edit-description" className="sr-only">{t("goals.desc_label")}</label>
-                          <textarea id="goal-edit-description" value={editDraft.description} onChange={e => setEditDraft({...editDraft, description: e.target.value})} className={`${inputClass} resize-none`} rows={2} placeholder={t("goals.desc_label")} />
-                          <div className="flex flex-wrap gap-2">
-                            <label htmlFor="goal-edit-status" className="sr-only">{t("goals.status")}</label>
-                            <select id="goal-edit-status" value={editDraft.status} onChange={e => setEditDraft({...editDraft, status: e.target.value as "pending" | "in_progress" | "completed"})} className={`${inputClass} flex-1 min-w-[120px]`}>
-                              <option value="pending">{t("goals.pending")}</option>
-                              <option value="in_progress">{t("goals.in_progress")}</option>
-                              <option value="completed">{t("goals.completed")}</option>
-                            </select>
-                            <label htmlFor="goal-edit-progress" className="sr-only">{t("goals.progress")}</label>
-                            <input id="goal-edit-progress" type="number" value={editDraft.progress} onChange={e => setEditDraft({...editDraft, progress: Number(e.target.value)})} className={inputClass} min={0} max={100} style={{ width: "80px" }} />
-                            <Button variant="primary" size="sm" onClick={handleSaveEdit}>{t("common.save")}</Button>
-                            <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>{t("common.cancel")}</Button>
-                          </div>
-                        </div>
-                      ) : confirmDeleteId === r.goal.id ? (
-                        <div className="p-3 sm:p-4 flex items-center justify-between gap-3">
-                          <span className="text-sm text-text-dim">{t("goals.delete_confirm")}</span>
-                          <div className="flex items-center gap-2">
-                            <Button variant="primary" size="sm" onClick={() => handleDelete(r.goal.id)} className="bg-error! hover:bg-error/80!">{t("common.confirm")}</Button>
-                            <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(null)}>{t("common.cancel")}</Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-3 sm:p-4">
-                          <div className="flex items-center justify-between gap-2 sm:gap-3">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              {r.hasChildren && (
-                                <button onClick={() => setExpandedById({...expandedById, [r.goal.id]: !expandedById[r.goal.id]})} className="text-text-dim hover:text-primary transition-colors shrink-0">
-                                  {expandedById[r.goal.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleStatusChange(r.goal.id, status)}
-                                className="shrink-0 hover:scale-110 transition-transform"
-                                title={t("goals.toggle_reset")}
-                              >
-                                <GoalStatusIcon status={status} />
-                              </button>
-                              <span className={`text-sm font-bold truncate ${status === "completed" ? "line-through text-text-dim" : ""}`}>
-                                {r.goal.title}
-                              </span>
-                              <Badge variant={goalStatusBadgeVariant(status)} className="shrink-0">
-                                {statusLabel(status)}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {status !== "completed" && <GoalRunControl goal={r.goal} />}
-                              <button onClick={() => handleStartEdit(r.goal)} className="p-1.5 rounded-lg hover:bg-brand/10 text-text-dim hover:text-brand transition-colors" title={t("common.edit")}>
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button onClick={() => setConfirmDeleteId(r.goal.id)} className="p-1.5 rounded-lg hover:bg-error/10 text-text-dim hover:text-error transition-colors" title={t("common.delete")}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          {/* Description */}
-                          {r.goal.description && (
-                            <p className="text-xs text-text-dim mt-1.5 ml-[calc(1rem+4px)] line-clamp-2">{r.goal.description}</p>
-                          )}
-                          {/* Progress bar */}
-                          {progress > 0 && status !== "completed" && (
-                            <div className="mt-2 ml-[calc(1rem+4px)]">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 rounded-full bg-main overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all duration-500 ${status === "in_progress" ? "bg-warning" : "bg-primary"}`}
-                                    style={{ width: `${progress}%` }}
-                                  />
-                                </div>
-                                <span className="text-[10px] font-mono text-text-dim">{progress}%</span>
-                              </div>
-                            </div>
-                          )}
-                          {/* Run state — phase, iterations and last error, like workflow runs.
-                              Deliberately not gated on status: `GoalRunPhase::Finished` is documented as "the goal reached Completed/Cancelled", so a `status !== "completed"` gate made the `finished` badge — and its five translations — unreachable, and hid the outcome exactly when it is most worth reading (did the run finish on its own, or stop at the iteration cap?).
-                              `GoalRunInfo` already renders nothing when the goal has no run, so a completed goal that never ran stays as quiet as before. */}
-                          <GoalRunInfo goal={r.goal} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </div>
+          )}
         </>
       )}
     </div>

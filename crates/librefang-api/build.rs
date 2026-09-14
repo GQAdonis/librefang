@@ -1,10 +1,21 @@
 use std::process::Command;
 
+mod build_paths;
+
 fn main() {
     // Ensure the dashboard embed directory exists so `include_dir!` never
-    // fails on fresh clones/worktrees.
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let dashboard_dir = manifest_dir.join("static").join("react");
+    // fails on fresh clones/worktrees. The directory is gitignored because
+    // it contains build artifacts produced by `npm run build` in the
+    // dashboard subcrate (or downloaded from release assets at runtime).
+    // When empty, `include_dir!` embeds nothing and the runtime directory
+    // `~/.librefang/dashboard/` serves the actual assets.
+    // Read CARGO_MANIFEST_DIR when this cached build-script binary runs.
+    // Compile-time `env!` would keep pointing at the worktree that originally
+    // compiled it when another worktree reuses the same target directory.
+    let dashboard_dir = build_paths::dashboard_dir();
+    // A second worktree sharing this target directory needs a fresh run when
+    // its placeholder is absent, even if all environment inputs are unchanged.
+    println!("cargo:rerun-if-changed=static/react");
     if !dashboard_dir.exists() {
         std::fs::create_dir_all(&dashboard_dir)
             .expect("failed to create static/react placeholder directory");
@@ -39,7 +50,19 @@ fn main() {
         if std::env::var("SKIP_DASHBOARD_BUILD").as_deref() == Ok("1") {
             break 'dashboard;
         }
-        let dashboard_src = manifest_dir.join("dashboard");
+        // Resolve the dashboard SOURCE directory (`<manifest>/dashboard`), which is
+        // distinct from `build_paths::dashboard_dir()` — that one points at the
+        // build OUTPUT (`<manifest>/static/react`) which `include_dir!` embeds.
+        //
+        // Read CARGO_MANIFEST_DIR at runtime rather than via compile-time `env!`:
+        // when a second worktree reuses this target directory, the cached build
+        // script binary would otherwise keep pointing at the worktree that first
+        // compiled it. Same reasoning as `build_paths::dashboard_dir`.
+        let dashboard_src = std::path::PathBuf::from(
+            std::env::var_os("CARGO_MANIFEST_DIR")
+                .expect("Cargo must provide CARGO_MANIFEST_DIR when the build script runs"),
+        )
+        .join("dashboard");
 
         // Set CI=true so pnpm never prompts for TTY confirmation when it needs
         // to purge the node_modules directory (e.g. after a lockfile change).

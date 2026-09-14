@@ -221,6 +221,7 @@ audit-failed = 审计追踪完整性检查失败。
 
 # --- Health ---
 health-ok = 守护进程运行正常
+health-degraded = 守护进程可访问，但报告有子系统异常
 health-not-running = 守护进程未运行。
 
 # --- Channel setup ---
@@ -1146,6 +1147,9 @@ tui-agents-title-templates = 模板
 tui-agents-title-custom-name = 自定义 — 名称
 tui-agents-title-custom-desc = 自定义 — 描述
 tui-agents-title-custom-prompt = 自定义 — 系统提示词
+tui-agents-detail-tokens = 令牌占用（$ 刷新）
+tui-agents-detail-tokens-injected = 已注入
+tui-agents-token-usage-failed = 无法加载令牌占用
 tui-agents-title-custom-tools = 自定义 — 工具
 tui-agents-title-custom-skills = 自定义 — Skill
 tui-agents-title-custom-mcp = 自定义 — MCP 服务
@@ -1180,7 +1184,7 @@ tui-agents-opt-create-new = 创建新 Agent
 
 tui-agents-hints-filter =   [输入] 过滤  [Enter] 应用  [Esc] 取消搜索
 tui-agents-hints-list =   [↑↓] 导航  [Enter] 详情  [/] 搜索  [Esc] 返回
-tui-agents-hints-detail =   [s] 编辑 Skill  [m] 编辑 MCP  [n] 编辑频道  [p] 模型参数  [c] 聊天  [k] 停止  [Esc] 返回
+tui-agents-hints-detail =   [s] 编辑 Skill  [m] 编辑 MCP  [n] 编辑频道  [p] 模型参数  [$] 令牌  [c] 聊天  [k] 停止  [Esc] 返回
 tui-agents-title-model-params = 模型参数
 tui-agents-prompt-model-params = 该代理自己的设置优先于模型设置。`inherit` 表示使用模型的设置。
 tui-agents-hints-model-params =   [←→] 修改  [i] 继承  [e] 自定义值  [Enter] 保存  [Esc] 取消
@@ -2306,7 +2310,7 @@ skill-bundle-size =   大小：{ $size } 字节
 skill-dry-run = 仅试运行。
 skill-dry-run-repo =   Repo：{ $repo }
 skill-dry-run-tag =   Tag：{ $tag }
-skill-github-token-required = 请设置 GITHUB_TOKEN 或 GH_TOKEN 才能发布，或使用 --dry-run 重新运行。
+skill-github-token-required = 未找到 GitHub 令牌。请设置 GITHUB_TOKEN 或 GH_TOKEN，或使用 `librefang vault set GITHUB_TOKEN` 将其存入保险库，或使用 --dry-run 重新运行。
 skill-publishing-progress = 正在发布 { $name }@{ $tag }
 skill-publish-success = 已将 { $name } 发布到 { $repo }@{ $tag }
 skill-publish-release-url = Release：{ $url }
@@ -2463,6 +2467,7 @@ cmd-goal-finished = 目标已成功完成。
 cmd-goal-max-iterations = 目标已停止：已达迭代上限。
 cmd-goal-rate-limited = 目标已停止：提供商限流。
 cmd-goal-stopped = 目标运行已停止。
+cmd-goal-paused = 目标运行已暂停。
 cmd-goal-error = 错误：{ $error }
 cmd-goal-unknown-error = 未知错误
 cmd-goal-watch-poll-error = 无法读取运行状态（{ $count }/{ $max }）；正在重试…
@@ -2519,6 +2524,39 @@ tui-event-channels-not-available-in-process = 通道管理需要正在运行的�
 tui-event-channel-save-failed = 保存通道实例 { $name } 失败：{ $error }
 tui-event-channel-delete-failed = 删除通道实例 { $name } 失败：{ $error }
 tui-event-channels-reload-failed = 重载通道失败：{ $error }
+# Model routing editor (profile-based routing)
+tui-agents-title-model-routing = 模型路由
+tui-agents-label-routing-fixed = 固定 — 始终使用该智能体自己的模型
+tui-agents-label-routing-flexible = 灵活 — 由路由器按任务选择
+tui-agents-hint-routing-mode = [Tab] 切换模式
+tui-agents-label-routing-fixed-explainer = 该智能体始终使用其清单中的模型。按 Tab 让路由器按任务选择。
+tui-agents-label-no-router-profiles = 没有可用的模型配置。请添加到 ~/.librefang/model_profiles.toml。
+tui-agents-label-routing-any-profile = 全部
+tui-agents-hints-model-routing = [Tab] 模式  [↑↓] 导航  [Space] 切换配置  [+/-] 费用预算  [Enter] 保存  [Esc] 取消
+tui-agents-model-routing-not-loaded = 该智能体的路由设置尚未加载 — 请稍候片刻；若加载失败，请按 Esc 退出并用 r 重新打开。
+tui-event-model-routing-fetch-failed = 获取模型路由失败
+tui-event-model-routing-update-failed = 更新模型路由失败
+tui-mod-agent-model-routing-updated = 已更新智能体 { $id } 的模型路由。
+
+# Model routing CLI commands
+agent-routing-label-mode = 模式
+agent-routing-label-allowed = 允许的配置
+agent-routing-label-budget = 费用预算
+agent-routing-label-default = 默认配置
+agent-routing-any-profile = 全部
+agent-routing-no-cap = 无上限
+agent-routing-fixed-explainer = 该智能体始终使用其清单中的模型。
+agent-routing-label-fixed = 路由排除
+agent-routing-fixed-opt-out = 已固定 — 路由器不会处理该智能体
+agent-routing-updated = 智能体 { $id } 的模型路由已设置为 { $mode }。
+agent-routing-failed = 更新模型路由失败: { $error }
+agent-routing-profiles-header = 模型路由配置 (路由器: { $enabled }):
+tui-agents-line-routing-mode =   模式: { $mode }
+tui-agents-line-routing-summary =   费用预算: { $budget }    允许的配置: { $allowed }
+tui-agents-label-routing-no-cap = 无上限
+tui-agents-label-routing-cheap = 低价
+tui-agents-label-routing-medium = 中等
+tui-agents-label-routing-expensive = 高价
 
 tui-event-model-params-fetch-failed = 无法加载该代理的模型参数
 tui-event-model-params-update-failed = 无法保存模型参数
@@ -2550,3 +2588,32 @@ tui-memory-config-requires-daemon = 记忆设置来自守护进程 API —— TU
 tui-memory-config-fetch-failed = 无法读取记忆设置：{ $error }
 tui-goals-run-requires-daemon = 运行状态来自守护进程 API —— TUI 以进程内方式接入时不可用。
 tui-goals-run-fetch-failed = 无法读取 { $id } 的运行状态：{ $error }
+
+# config_editor.rs —— 通用配置分区编辑器 (#8165)
+tui-settings-tab-config = 6 配置
+tui-settings-hints-config =   [↑↓] 导航  [Enter] 打开分区  [r] 刷新
+tui-settings-hints-config-fields =   [↑↓] 导航  [Enter] 编辑 / 切换  [Esc] 返回  [r] 刷新
+tui-settings-config-loading = 正在加载配置…
+tui-settings-config-empty = 没有可用的配置分区。守护进程必须正在运行。
+tui-settings-config-select-section = 在左侧选择一个分区并按 [Enter] 查看其设置。
+tui-settings-config-header-section = 分区
+tui-settings-config-header-setting = 设置项
+tui-settings-config-header-value = 值
+tui-settings-config-unset = 未设置
+tui-settings-config-on = 开
+tui-settings-config-off = 关
+tui-settings-config-readonly = 只读
+tui-settings-config-readonly-msg = { $path } 在此处为只读 —— 请直接编辑 ~/.librefang/config.toml。
+tui-settings-config-complex = { $path } 保存的是列表或表 —— 请直接编辑 ~/.librefang/config.toml。
+tui-settings-config-invalid = 这不是 { $path } 的有效值。
+tui-settings-config-redacted = { $path } 以脱敏形式显示 — 请完整输入新值；此处不接受空值。
+tui-settings-config-prompt = 设置 { $path }（留空则清除）：
+tui-mod-config-value-saved = 已保存 { $path }
+tui-mod-config-value-saved-restart = 已保存 { $path } — 需重启守护进程后生效
+tui-mod-config-value-saved-reload-failed = 已将 { $path } 保存到 config.toml，但重新加载失败：{ $error }
+tui-event-config-schema-failed = 无法加载配置架构
+tui-event-config-schema-unreadable = 守护进程已响应，但无法读取配置模式：{ $error }
+tui-event-config-failed = 无法加载当前配置
+tui-event-config-unreadable = 守护进程已响应，但无法读取当前配置：{ $error }
+tui-event-config-set-failed = 无法保存 { $path }
+tui-event-config-need-daemon = 编辑配置需要正在运行的守护进程

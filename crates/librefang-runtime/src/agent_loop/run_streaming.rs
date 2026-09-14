@@ -8,6 +8,12 @@
 use super::retry::stream_with_retry;
 use super::*;
 
+/// The note left in session history when a non-timeout provider failure kills a turn.
+///
+/// Deliberately opaque, for the same reason `IMAGE_DESCRIPTION_UNAVAILABLE` is on the media path: the driver error's `Display` carries endpoint URLs, model ids and upstream response bodies, and `build_user_facing_llm_error` appends that raw string verbatim for the `Format` category — which is also where an unrecognised provider error lands by default.
+/// The raw error goes to the `warn!` at the push site and nowhere else.
+const PROVIDER_FAILURE_NOTE: &str = "[System: the model provider failed and the task could not be completed. No response was produced; the provider error is recorded in the daemon log.]";
+
 /// Run the agent execution loop with streaming support.
 ///
 /// Like `run_agent_loop`, but sends `StreamEvent`s to the provided channel
@@ -256,6 +262,8 @@ async fn run_agent_loop_streaming_inner(
     } = setup_recalled_memories(RecallSetupContext {
         session,
         user_message,
+        agent_name: &manifest.name,
+        memory_read_allowed: manifest.capabilities.allows_own_memory_read(),
         memory,
         embedding_driver,
         proactive_memory: gated_proactive_memory_for_retrieve(manifest, proactive_memory.as_ref()),
@@ -373,6 +381,17 @@ async fn run_agent_loop_streaming_inner(
             (user_message, user_content_blocks)
         };
 
+    // Mirror the non-streaming capability-routing hop: describe an inbound
+    // image once, before it enters history, when the agent's model cannot see
+    // it. See `agent_loop::media_routing` for the full contract.
+    let guarded_user_content_blocks = super::media_routing::describe_images_for_text_only_model(
+        guarded_user_content_blocks,
+        manifest,
+        kernel.as_ref(),
+        media_engine,
+    )
+    .await;
+
     // Add the user message to session history.
     // When content blocks are provided (e.g. text + image from a channel),
     // use multimodal message format so the LLM receives the image for vision.
@@ -384,6 +403,20 @@ async fn run_agent_loop_streaming_inner(
         &privacy_config,
         combined_prefix.as_deref(),
     );
+
+    // Mirror of the non-streaming loop: persist the inbound message before the
+    // first LLM call. This is the path the dashboard takes, so it is the one
+    // where a daemon restart, or a hang that outlives the surrounding timeout,
+    // between the push and the first interim save silently loses the
+    // operator's message. The provider-failure note added further down covers
+    // only `stream_with_retry` returning `Err` — not a crash, not a restart,
+    // not a cancellation. Same guards as the interim save: fork and incognito
+    // turns stay ephemeral even on mid-turn crashes.
+    if !opts.is_fork && !opts.incognito {
+        if let Err(e) = memory.save_session_async(session).await {
+            warn!("Failed to save inbound message: {e}");
+        }
+    }
 
     let max_history = resolve_max_history(manifest, opts);
     let PreparedMessages {
@@ -843,6 +876,10 @@ async fn run_agent_loop_streaming_inner(
         };
         // The stripped-tools request has been built; restore tools for any
         // subsequent iteration (the degrade is a single forced prose turn).
+        // Capture this turn's value before resetting — see the non-streaming
+        // mirror in `mod.rs` for why recovery below must not re-arm the
+        // #5979 block-stall loop (#8236).
+        let forced_tools_stripped_this_turn = force_tools_stripped;
         force_tools_stripped = false;
 
         // Notify phase: on first iteration emit Streaming; on subsequent
@@ -900,6 +937,38 @@ async fn run_agent_loop_streaming_inner(
                             warn!(
                                 "Failed to persist timeout note to session: {save_err}. \
                                  The timeout marker will not appear on next session load."
+                            );
+                        }
+                    }
+                } else {
+                    // Non-timeout provider failure: the turn is about to end
+                    // with an error, and unless a visible note is saved the
+                    // session shows NOTHING — the operator's message appears
+                    // to vanish from the chat, and there is no trace of why.
+                    // This is the failure mode observed live: the circuit
+                    // breaker opened after a stream error, the turn ended,
+                    // and neither the chat nor the history explained it.
+                    //
+                    // `Role::Assistant`, matching the timeout note above, with the `[System: …]` text prefix carrying the "this is the daemon speaking" framing.
+                    // A `Role::System` message in the middle of history reaches no hosted model: `anthropic.rs` filters it out of the request, `gemini.rs` and `bedrock.rs` skip it, and `openai.rs` / `ollama.rs` only emit one when the request carries no system prompt — which the agent loop always sets.
+                    // Worse, it survives long enough to break alternation: `session_repair` merges *adjacent* same-role messages, so a system note interposed between two user turns blocks that merge and the driver then strips it, handing the provider the `user, user` pair the merge exists to prevent.
+                    warn!(
+                        event = "provider_failure_note",
+                        agent = %manifest.name,
+                        error = %err_str,
+                        "Provider failed on the streaming path — the session gets an opaque note, and this line is the only place the raw provider error appears"
+                    );
+                    session.push_message(Message::assistant(PROVIDER_FAILURE_NOTE));
+                    repair_session_before_save(
+                        session,
+                        agent_id_str.as_str(),
+                        "streaming_provider_error",
+                    );
+                    if !opts.is_fork && !opts.incognito {
+                        if let Err(save_err) = memory.save_session_async(session).await {
+                            warn!(
+                                "Failed to persist provider-error note to session: {save_err}. \
+                                 The error will not appear on next session load."
                             );
                         }
                     }
@@ -977,11 +1046,11 @@ async fn run_agent_loop_streaming_inner(
 
         // Recover tool calls output as text (streaming path)
         let mut tools_recovered_from_text = false;
-        if matches!(
+        if text_recovery::should_attempt_text_recovery(
+            forced_tools_stripped_this_turn,
             response.stop_reason,
-            StopReason::EndTurn | StopReason::StopSequence
-        ) && response.tool_calls.is_empty()
-        {
+            response.tool_calls.is_empty(),
+        ) {
             let recovered = recover_text_tool_calls(&response.text(), available_tools);
             if !recovered.is_empty() {
                 info!(
@@ -1042,10 +1111,7 @@ async fn run_agent_loop_streaming_inner(
                 // Cascade scaffolding-leak guard (streaming path) — see
                 // non-stream mirror above. Drops text-only EndTurn replies
                 // that contain 2+ structural prompt/memory markers.
-                if response.tool_calls.is_empty()
-                    && !tools_recovered_from_text
-                    && is_cascade_leak(&text)
-                {
+                if response.tool_calls.is_empty() && is_cascade_leak(&text) {
                     warn!(
                         agent = %manifest.name,
                         text_excerpt = %text.chars().take(120).collect::<String>(),
@@ -1074,10 +1140,7 @@ async fn run_agent_loop_streaming_inner(
                 // Progress-text-leak guard (streaming path) — see non-stream
                 // mirror above. Drops ellipsis-terminated short preambles
                 // that arrive without the promised tool_use.
-                if response.tool_calls.is_empty()
-                    && !tools_recovered_from_text
-                    && is_progress_text_leak(&text)
-                {
+                if response.tool_calls.is_empty() && is_progress_text_leak(&text) {
                     warn!(
                         agent = %manifest.name,
                         text_excerpt = %text.chars().take(80).collect::<String>(),
@@ -1158,6 +1221,27 @@ async fn run_agent_loop_streaming_inner(
                         continue;
                     }
                     None => {}
+                }
+
+                // #8235/#8236: see the non-streaming mirror in `mod.rs` for
+                // why this runs here — after retry classification, right
+                // before delivery — rather than right after directive
+                // parsing. `tools_recovered_from_text` is always false on
+                // this arm for the same reason as the non-streaming loop.
+                let text = match replace_unrecoverable_tool_call_reply(&text) {
+                    std::borrow::Cow::Borrowed(_) => text,
+                    std::borrow::Cow::Owned(replacement) => replacement,
+                };
+
+                // #8236: the incremental guard in `stream_with_retry`
+                // withholds a delta while it might still resolve to pure
+                // markup, so nothing reached the client live for a reply
+                // that turns out to need replacing. Send the corrected text
+                // now, as the one delta the client will ever see for it.
+                if stream_result.withheld_markup.is_some() {
+                    let _ = stream_tx
+                        .send(StreamEvent::TextDelta { text: text.clone() })
+                        .await;
                 }
 
                 let text = finalize_end_turn_text(
@@ -1637,6 +1721,22 @@ async fn run_agent_loop_streaming_inner(
                     let (cleaned_text, parsed_directives) =
                         crate::reply_directives::parse_directives(&text);
                     let text = cleaned_text;
+                    // #8236: same guard as the non-streaming mirror in
+                    // `mod.rs` — the token cap can cut a tool-call markup
+                    // span off mid-call, leaving it permanently unterminated.
+                    let text = match replace_unrecoverable_tool_call_reply(&text) {
+                        std::borrow::Cow::Borrowed(_) => text,
+                        std::borrow::Cow::Owned(replacement) => replacement,
+                    };
+                    // …and the same catch-up send as the EndTurn arm below:
+                    // a reply that opened with a candidate opener was withheld
+                    // delta by delta, so without this the client gets no delta
+                    // at all for this turn.
+                    if stream_result.withheld_markup.is_some() {
+                        let _ = stream_tx
+                            .send(StreamEvent::TextDelta { text: text.clone() })
+                            .await;
+                    }
                     session.push_message(Message::assistant(&text));
                     if !opts.is_fork && !opts.incognito {
                         if let Err(e) = memory.save_session_async(session).await {
