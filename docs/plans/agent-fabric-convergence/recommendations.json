@@ -14,8 +14,8 @@
       ],
       "acceptance": "One traced delegated operation has one executor and one set of tool effects.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §3; R2 §4; exact acceptance and current-source recheck assigned to C05 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-001; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
     },
     {
       "id": "REC-002",
@@ -30,8 +30,8 @@
       ],
       "acceptance": "Closing a nonowner client cannot stop a service; workflow and child identities remain separate.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §3.2; R5 §4; exact acceptance and current-source recheck assigned to C04 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-002; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
     },
     {
       "id": "REC-003",
@@ -45,8 +45,8 @@
       ],
       "acceptance": "Two UAR instances are selectable; wrong identity/version/required capability is visibly refused.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §3.3; R2 §7; exact acceptance and current-source recheck assigned to C04 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-003; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
     },
     {
       "id": "REC-004",
@@ -60,8 +60,8 @@
       ],
       "acceptance": "A timed-out remote run is reconciled by identity and never silently started locally.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §3.4; exact acceptance and current-source recheck assigned to C04 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-004; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
     },
     {
       "id": "REC-005",
@@ -75,8 +75,8 @@
       ],
       "acceptance": "Dropped admission/cancel responses recover without double execution; cancellation acknowledgement is not completion.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §5.1–5.3; exact acceptance and current-source recheck assigned to C05 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-005; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
     },
     {
       "id": "REC-006",
@@ -89,8 +89,8 @@
       ],
       "acceptance": "Viewer loss follows declared policy; restart recovery does not claim missing event replay.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §5.2; R3 §7; exact acceptance and current-source recheck assigned to C06 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-006; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-007",
@@ -103,8 +103,8 @@
       ],
       "acceptance": "State authority table agrees with P1 host-owned conversation history and UAR-owned execution.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §5.4; R2 §5; exact acceptance and current-source recheck assigned to C01 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-007; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
     },
     {
       "id": "REC-008",
@@ -119,8 +119,8 @@
       ],
       "acceptance": "Mirrored usage counted once; concurrent children cannot exceed reserved aggregate limits.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §5.4; exact acceptance and current-source recheck assigned to C09 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-008; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-009",
@@ -134,8 +134,8 @@
       ],
       "acceptance": "Per-instance/account isolation, restricted origin, credential handoff and external-browser fallback are exercised.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §6; R2 §8; exact acceptance and current-source recheck assigned to C14 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-009; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
     },
     {
       "id": "REC-010",
@@ -149,8 +149,8 @@
       ],
       "acceptance": "Direct, managed, embedded and proxied paths produce equivalent protected-effect decisions for their advertised profile.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §7; R2 §6; exact acceptance and current-source recheck assigned to C02 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-010; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-011",
@@ -163,8 +163,8 @@
       ],
       "acceptance": "Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §1.8; R2 §10; exact acceptance and current-source recheck assigned to C01 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-011; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
     },
     {
       "id": "REC-012",
@@ -179,8 +179,8 @@
       ],
       "acceptance": "Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1.",
       "implemented": false,
-      "currentSourceVerdict": "superseded in part",
-      "currentEvidence": "source-evidence.json: UAR driver and HTTP provider adapter"
+      "currentSourceVerdict": "superseded",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-012; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
     },
     {
       "id": "REC-013",
@@ -194,8 +194,8 @@
       ],
       "acceptance": "Every exposed task resolves to one authoritative record and accurately advertised persistence.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §1.7; exact acceptance and current-source recheck assigned to C05 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-013; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
     },
     {
       "id": "REC-014",
@@ -210,8 +210,8 @@
       ],
       "acceptance": "Authorized peers converge permitted documents; business grants and task ownership cannot be CRDT-written.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §5; exact acceptance and current-source recheck assigned to C12 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-014; SRC-030, SRC-031, SRC-035, SRC-038; source-only, runtime unverified"
     },
     {
       "id": "REC-015",
@@ -226,8 +226,8 @@
       ],
       "acceptance": "Tenant-filtered updates/deletes survive disconnect or explicitly require a resnapshot.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §5; exact acceptance and current-source recheck assigned to C11 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-015; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
     },
     {
       "id": "REC-016",
@@ -242,8 +242,8 @@
       ],
       "acceptance": "Crash/retry retains one command identity; domain commit is distinct from broker acknowledgement.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §5; exact acceptance and current-source recheck assigned to C11 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-016; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
     },
     {
       "id": "REC-017",
@@ -257,8 +257,8 @@
       ],
       "acceptance": "Revoked or expired grants cannot authorize fresh protected operations; offline limitations are visible.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §6; exact acceptance and current-source recheck assigned to C12 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-017; SRC-030, SRC-031, SRC-035, SRC-038; source-only, runtime unverified"
     },
     {
       "id": "REC-018",
@@ -273,8 +273,8 @@
       ],
       "acceptance": "Caller-supplied tenant/actor strings cannot create authority; unsupported multi-hop exchange is rejected.",
       "implemented": false,
-      "currentSourceVerdict": "confirmed partial gap",
-      "currentEvidence": "source-evidence.json; narrow source conclusion only"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-018; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-019",
@@ -290,8 +290,8 @@
       ],
       "acceptance": "Repeated challenge is deduplicated; distinct issuer challenges stay distinct and a policy denial remains binding.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §6 approval; R5 §8; exact acceptance and current-source recheck assigned to C02 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-019; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-020",
@@ -306,8 +306,8 @@
       ],
       "acceptance": "Each required/optional service and loss behavior is explicit and exercised for the chosen profile.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §7; exact acceptance and current-source recheck assigned to C13 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-020; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
     },
     {
       "id": "REC-021",
@@ -322,8 +322,8 @@
       ],
       "acceptance": "Route inventory and migration preserve behavior; exactly one loop owns each run.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §3 KnowMe; exact acceptance and current-source recheck assigned to C13 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-021; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
     },
     {
       "id": "REC-022",
@@ -339,8 +339,8 @@
       ],
       "acceptance": "Tampered capability manifest fails admission; imported package receives fresh install identity and scoped grants.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §8; exact acceptance and current-source recheck assigned to C15 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-022; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
     },
     {
       "id": "REC-023",
@@ -356,8 +356,8 @@
       ],
       "acceptance": "Rendered action reaches its bound authority with current identity; the rendering host cannot mint authority.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §8; exact acceptance and current-source recheck assigned to C14 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-023; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
     },
     {
       "id": "REC-024",
@@ -372,8 +372,8 @@
       ],
       "acceptance": "Cancel reaches the owning runtime or reports unsupported; stopping delivery is labeled detach.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §3 Fabric; R2 §7; exact acceptance and current-source recheck assigned to C08 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-024; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
     },
     {
       "id": "REC-025",
@@ -387,8 +387,8 @@
       ],
       "acceptance": "GraphQL/REST/reflection effects enforce the declared contract and documented differences.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §3 Forge; exact acceptance and current-source recheck assigned to C11 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-025; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
     },
     {
       "id": "REC-026",
@@ -401,8 +401,8 @@
       ],
       "acceptance": "Two tenants instantiate one definition without sharing state; restarts preserve logical identity.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §§1–3; exact acceptance and current-source recheck assigned to C06 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-026; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-027",
@@ -415,8 +415,8 @@
       ],
       "acceptance": "Warm workers get fresh contexts; resident activation is opt-in with measured resource justification.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §§3–4; exact acceptance and current-source recheck assigned to C06 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-027; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-028",
@@ -429,8 +429,8 @@
       ],
       "acceptance": "No identity depends on a private port; stale activation cannot commit protected state.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §5; exact acceptance and current-source recheck assigned to C06 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-028; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-029",
@@ -443,8 +443,8 @@
       ],
       "acceptance": "Crash between source commit, publication and inbox admission does not silently lose admitted work.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6; exact acceptance and current-source recheck assigned to C07 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-029; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
     },
     {
       "id": "REC-030",
@@ -457,8 +457,8 @@
       ],
       "acceptance": "Two observers have independent cursors; agent-A/conversation-C scope excludes other conversations.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6.1–6.4; exact acceptance and current-source recheck assigned to C07 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-030; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
     },
     {
       "id": "REC-031",
@@ -473,8 +473,8 @@
       ],
       "acceptance": "Host authorizes requested filter; channel/account/thread provenance survives the bridge.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6.5; exact acceptance and current-source recheck assigned to C08 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-031; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
     },
     {
       "id": "REC-032",
@@ -488,8 +488,8 @@
       ],
       "acceptance": "Two handler matches have an explicit winner/conflict; observing does not grant posting.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6.6; exact acceptance and current-source recheck assigned to C08 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-032; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
     },
     {
       "id": "REC-033",
@@ -504,8 +504,8 @@
       ],
       "acceptance": "Historical replay cannot repost; A-to-B-to-A chains stop within declared budgets.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6.6–6.7; exact acceptance and current-source recheck assigned to C08 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-033; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
     },
     {
       "id": "REC-034",
@@ -519,8 +519,8 @@
       ],
       "acceptance": "Attach has no unreported gap; expired retention reports missing coverage and resnapshot choices.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §6.7; exact acceptance and current-source recheck assigned to C07 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-034; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
     },
     {
       "id": "REC-035",
@@ -533,8 +533,8 @@
       ],
       "acceptance": "Cancel/drain respond during blocked turns; repeated activation crashes reach an inspectable failed state.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §7; exact acceptance and current-source recheck assigned to C06 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-035; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-036",
@@ -549,8 +549,8 @@
       ],
       "acceptance": "A schedule fires once under one owner; suspended local work never masquerades as remotely running.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §8; exact acceptance and current-source recheck assigned to C13 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-036; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
     },
     {
       "id": "REC-037",
@@ -564,8 +564,8 @@
       ],
       "acceptance": "Handoff carries revision/task/evidence and preserves four completion dimensions; logs cannot mark execution complete.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R4 Parts I–II; exact acceptance and current-source recheck assigned to C15 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-037; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
     },
     {
       "id": "REC-038",
@@ -579,8 +579,8 @@
       ],
       "acceptance": "UI/UX, mobile, security, product, documentation and code-review presets have bounded assignments and role-specific acceptance.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R4 Part III; Addendum A; exact acceptance and current-source recheck assigned to C16 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-038; SRC-014, SRC-018; source-only, runtime unverified"
     },
     {
       "id": "REC-039",
@@ -595,8 +595,8 @@
       ],
       "acceptance": "Authorized intake creates one sanitized issue; an issue does not authorize implementation or roadmap commitments.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Prior research recommendation; current conformance requires C01 evidence."
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-039; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-040",
@@ -610,8 +610,8 @@
       ],
       "acceptance": "Required skill/version/config reaches runtime; unsupported required tools block binding.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R4 Addendum C; exact acceptance and current-source recheck assigned to C15 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-040; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
     },
     {
       "id": "REC-041",
@@ -625,8 +625,8 @@
       ],
       "acceptance": "UAR/Codex/Claude Code/Copilot/Kimi Code/MiniMax CLI/OpenCode/DeepSeek Harness each retain exact supported options or report loss.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R4 Part IV–V; exact acceptance and current-source recheck assigned to C15 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-041; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
     },
     {
       "id": "REC-042",
@@ -639,8 +639,8 @@
       ],
       "acceptance": "All branches match requested name; original checkouts preserved; integration checkpoints remain separate.",
       "implemented": false,
-      "currentSourceVerdict": "confirmed setup",
-      "currentEvidence": "repository-manifest.json"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-042; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
     },
     {
       "id": "REC-043",
@@ -653,8 +653,8 @@
       ],
       "acceptance": "Team tasks execute through the trusted existing host with original lineage and attenuation.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §§1–4; exact acceptance and current-source recheck assigned to C09 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-043; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-044",
@@ -667,8 +667,8 @@
       ],
       "acceptance": "Stale assignment cannot commit; removal prevents new access; peer team is not forced into one parent thread.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §5; exact acceptance and current-source recheck assigned to C09 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-044; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-045",
@@ -682,8 +682,8 @@
       ],
       "acceptance": "No implicit team-wide private memory union; cross-tenant reads and writes are denied.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §5; exact acceptance and current-source recheck assigned to C09 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-045; SRC-006, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-046",
@@ -697,8 +697,8 @@
       ],
       "acceptance": "Restart resumes pinned workflow without duplicate external action; uncertain effects require reconciliation.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §5; §10; exact acceptance and current-source recheck assigned to C10 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-046; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-047",
@@ -713,8 +713,8 @@
       ],
       "acceptance": "Representative task produces accepted artifact with independent review and measured cost versus single-agent baseline.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §6; exact acceptance and current-source recheck assigned to C16 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-047; SRC-014, SRC-018; source-only, runtime unverified"
     },
     {
       "id": "REC-048",
@@ -729,8 +729,8 @@
       ],
       "acceptance": "CEO/CFO/CIO/intelligence/security/marketing/product role titles confer no privileges.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §7; exact acceptance and current-source recheck assigned to C17 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-048; SRC-003, SRC-008, SRC-035; source-only, runtime unverified"
     },
     {
       "id": "REC-049",
@@ -745,8 +745,8 @@
       ],
       "acceptance": "Offboarding and revocation stop new access/effects; a twin cannot satisfy required human approval.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Prior research recommendation; current conformance requires C01 evidence."
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-049; SRC-003, SRC-008, SRC-035; source-only, runtime unverified"
     },
     {
       "id": "REC-050",
@@ -759,8 +759,8 @@
       ],
       "acceptance": "Invalid/missing required policy prevents protected effects and exposes effective posture.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §8; exact acceptance and current-source recheck assigned to C02 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-050; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-051",
@@ -774,8 +774,8 @@
       ],
       "acceptance": "A broad permit in one boundary cannot override another denial; compiled policy is proven active.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §8; exact acceptance and current-source recheck assigned to C02 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-051; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-052",
@@ -789,8 +789,8 @@
       ],
       "acceptance": "Revoked or altered approval cannot authorize an effect; exact target/payload identity is retained.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §8; exact acceptance and current-source recheck assigned to C02 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-052; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
     },
     {
       "id": "REC-053",
@@ -805,8 +805,8 @@
       ],
       "acceptance": "Private input cannot be posted to a disallowed destination; every effect has decision and outcome references.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §8; exact acceptance and current-source recheck assigned to C10 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-053; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-054",
@@ -821,8 +821,8 @@
       ],
       "acceptance": "Existing documents remain readable; required collaboration fields survive authoring-to-runtime or are rejected.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §9; R6 §§1–3; exact acceptance and current-source recheck assigned to C03 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-054; SRC-005, SRC-014, SRC-018; source-only, runtime unverified"
     },
     {
       "id": "REC-055",
@@ -837,8 +837,8 @@
       ],
       "acceptance": "Required unsupported semantics prohibit execution; running definitions do not float with aliases.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §9; R6 §11; exact acceptance and current-source recheck assigned to C03 under C01"
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-055; SRC-005, SRC-014, SRC-018; source-only, runtime unverified"
     },
     {
       "id": "REC-056",
@@ -853,8 +853,8 @@
       ],
       "acceptance": "Scoped event yields one governed issue plus product/design review with complete causal evidence.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §10; R6 §12; exact acceptance and current-source recheck assigned to C10 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-056; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-057",
@@ -867,8 +867,8 @@
       ],
       "acceptance": "Coding/design/marketing/feedback/executive-support results report failures and supported confidence limits.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §10; exact acceptance and current-source recheck assigned to C18 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-057; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
     },
     {
       "id": "REC-058",
@@ -883,8 +883,8 @@
       ],
       "acceptance": "External harness cannot receive protected authority it cannot enforce; negative capability negotiation is demonstrated.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R5 §8; §10; R6 §6; exact acceptance and current-source recheck assigned to C18 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-058; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
     },
     {
       "id": "REC-059",
@@ -897,8 +897,8 @@
       ],
       "acceptance": "Compare embedded-compatible reuse against explicit durability/throughput needs before selecting a new engine.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R1 §8; R5 §10; exact acceptance and current-source recheck assigned to C10 under C01"
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-059; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
     },
     {
       "id": "REC-060",
@@ -911,8 +911,8 @@
       ],
       "acceptance": "No automatic failover until state/effect fencing is demonstrated; residency chosen from measurements.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R3 §10; exact acceptance and current-source recheck assigned to C18 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-060; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
     },
     {
       "id": "REC-061",
@@ -925,8 +925,8 @@
       ],
       "acceptance": "Exact provider/consumer/payload pins pass supported deployment modes; rollback preserves migrated data.",
       "implemented": false,
-      "currentSourceVerdict": "not fully rechecked",
-      "currentEvidence": "Historical R2 §7; R5 §10; exact acceptance and current-source recheck assigned to C18 under C01"
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-061; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
     }
   ]
 }

@@ -2,10 +2,10 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 85,
-  "derivedRevision": 85,
+  "sourceRevision": 91,
+  "derivedRevision": 91,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 85
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 91
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -22,18 +22,18 @@
   "parentPhase": null,
   "childPointer": null,
   "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "currentTask": "C01.1",
+  "currentTask": "C01.2",
   "status": "ready",
   "lifecycle": "ready",
-  "stageId": null,
-  "stageStatus": null,
+  "stageId": "execute",
+  "stageStatus": "IN_PROGRESS",
   "completionMetric": "implementation",
   "implementationCompleted": 0,
   "implementationTotal": 18,
   "planRevision": 1,
-  "revision": 85,
+  "revision": 91,
   "exactNextCommand": "/kbd-apply afc-c01-baseline-reconciliation-and-shared-contracts — planning-root documentation only; read the plan handoff and reconcile source/owner checkpoints before any product dispatch.",
   "nextChange": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "nextTask": "C01.1",
-  "updatedAt": "2026-09-24T18:42:25.267630Z"
+  "nextTask": "C01.2",
+  "updatedAt": "2026-09-24T19:00:24.595862Z"
 }

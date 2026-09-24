@@ -2,17 +2,18 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 85,
-  "derivedRevision": 85,
+  "sourceRevision": 91,
+  "derivedRevision": 91,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 85
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 91
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-24T18:42:25.267630Z",
+  "updatedAt": "2026-09-24T19:00:24.595862Z",
   "cursor": [
     "agent-fabric-convergence",
+    "execute",
     "afc-c01-baseline-reconciliation-and-shared-contracts",
-    "C01.1"
+    "C01.2"
   ],
   "root": {
     "type": "phase",
@@ -38,7 +39,7 @@
             "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
             "status": "PENDING",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },

@@ -1,0 +1,444 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-24T18:55:58.530Z",
+  "task": "C01.1",
+  "scope": "Eleven repository baselines and report recommendation dispositions. No merge/adoption, owner agreement or runtime compatibility certification.",
+  "repositories": [
+    {
+      "repository": "librefang",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "currentConvergenceHead": "7599daaed6ae18a5efc07b29d98c011b3aa3c77a",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "sourceRevision": "c719a4d683e4d3fb42e436f812e0193f865c9d2c",
+      "sourceBranch": "codex/deploy-uar-bossfang-runtime",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-UAR-P1"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "sourceEvidence": [
+        "SRC-001",
+        "SRC-013",
+        "SRC-022",
+        "SRC-023",
+        "SRC-024",
+        "SRC-025"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#librefang",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "currentConvergenceHead": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sourceRevision": "ba12845138104d3c8c3b8bca8bc7c5be24004e91",
+      "sourceBranch": "feat/context-history-integrity",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-UAR-P1"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "sourceEvidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-005",
+        "SRC-006",
+        "SRC-007",
+        "SRC-040",
+        "SRC-041"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#universal-agent-runtime",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "the-boss",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+      "currentConvergenceHead": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "f1314b46ad464aedb5d446c586a824b326bae7a4",
+      "sourceRevision": "8344b485203427952716cd142da28c181162be61",
+      "sourceBranch": "fix/window-titles-branding",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t1",
+      "disposition": "defer-adoption",
+      "incoming": "M\tRELEASES.md\nM\trelease-manifest.json",
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-UAR-P1"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "sourceEvidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#the-boss",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "flint-gate",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "currentConvergenceHead": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "sourceRevision": "39c40d6b97be1b346969acead1e943c0bd68d5b7",
+      "sourceBranch": "codex/aso-task-status-projection",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-GATE"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-GATE"
+      ],
+      "sourceEvidence": [
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#flint-gate",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "flint-realtime-fabric",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "currentConvergenceHead": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "sourceRevision": "ae26f45d8afa037677004cd118b0571b8b552131",
+      "sourceBranch": "codex/production-readiness-integration",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-FRF"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-FRF"
+      ],
+      "sourceEvidence": [
+        "SRC-009",
+        "SRC-028",
+        "SRC-029",
+        "SRC-030",
+        "SRC-031"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#flint-realtime-fabric",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "flint-forge",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-forge",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "currentConvergenceHead": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "sourceRevision": "ed7201851bb4feb068518912316b75cb869add14",
+      "sourceBranch": "codex/production-readiness-integration",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-FORGE"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-FORGE"
+      ],
+      "sourceEvidence": [
+        "SRC-032",
+        "SRC-033",
+        "SRC-034"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#flint-forge",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "surreal-memory-server",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "currentConvergenceHead": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "sourceRevision": "dd7fdcd6d8974af4059d1d51401bd33ae29f65db",
+      "sourceBranch": "chore/update-dependencies",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-MEMORY"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-MEMORY"
+      ],
+      "sourceEvidence": [
+        "SRC-010",
+        "SRC-039"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#surreal-memory-server",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "currentConvergenceHead": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sourceRevision": "10a416589b06c5f22f4ca32b3c0414fdd3026603",
+      "sourceBranch": "main",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-MINI"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "sourceEvidence": [
+        "SRC-018",
+        "SRC-019",
+        "SRC-020",
+        "SRC-021"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#prometheus-skill-pack",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "currentConvergenceHead": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sourceRevision": "35b05ca5ec2e6085090b59bf017e3815a0f46f27",
+      "sourceBranch": "main",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-MINI"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "sourceEvidence": [
+        "SRC-014",
+        "SRC-015",
+        "SRC-016",
+        "SRC-017"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#prometheus-skills-mini",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "know-me-app",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "currentConvergenceHead": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "sourceRevision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "sourceBranch": "main",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-KNOWME"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-KNOWME"
+      ],
+      "sourceEvidence": [
+        "SRC-011",
+        "SRC-038",
+        "SRC-044",
+        "SRC-045"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#know-me-app",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "repository": "know-me-system",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system",
+      "branch": "codex/agent-fabric-convergence",
+      "planningBaseline": "c561d89e783264ef1215764db69e57493c4b815b",
+      "currentConvergenceHead": "c561d89e783264ef1215764db69e57493c4b815b",
+      "fetchedDefaultRef": "refs/remotes/origin/main",
+      "fetchedDefaultRevision": "c561d89e783264ef1215764db69e57493c4b815b",
+      "sourceRevision": "68f7ab83b72c8bed37d1e7d19a5371a45b4f8f52",
+      "sourceBranch": "feat/embedded-memory-crud",
+      "sourceDirty": true,
+      "baselineVsFetched": "0\t0",
+      "disposition": "retain-current-baseline",
+      "incoming": null,
+      "owner": {
+        "planning": "agent-fabric-convergence / current Codex task",
+        "productReservation": [
+          "D-KNOWME"
+        ],
+        "agreementAccepted": false,
+        "reason": "Recorded external work remains reserved; C01.2 must establish agreement or accepted merged checkpoint."
+      },
+      "blockingDependencies": [
+        "D-KNOWME"
+      ],
+      "sourceEvidence": [
+        "SRC-012",
+        "SRC-035",
+        "SRC-036",
+        "SRC-037"
+      ],
+      "dependencyInventory": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json#know-me-system",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "implementationReady": false,
+      "referenceRoot": "initiative directory"
+    }
+  ],
+  "findings": [
+    {
+      "id": "BASE-001",
+      "summary": "The Boss default branch advanced by one release-metadata-only commit; do not equate published metadata with installed acceptance.",
+      "evidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/repository-refresh.json",
+      "disposition": "defer adoption to an agreed checkpoint"
+    },
+    {
+      "id": "BASE-002",
+      "summary": "UAR main Cargo.lock uses SurrealDB 3.2.4/Cedar 4.12.0, while its desktop lockfile lists SurrealDB 3.2.3/Cedar 4.11.2. These are distinct observed profile inputs, not an automatic upgrade instruction.",
+      "evidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json",
+      "disposition": "C01.3 and D-UAR-P1 reconcile active build inputs"
+    },
+    {
+      "id": "BASE-003",
+      "summary": "UAR immutable gitlink resolves liter-llm e627af981bcb06c7fc5da027731c182b044e25d1; prose still names c5c6caac617eb931cd5009146a70831422ec236c. Documentation correction/adoption remains owner work.",
+      "evidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json and SRC-041",
+      "disposition": "source observation resolved; correction assigned to C01.2/D-UAR-P1"
+    },
+    {
+      "id": "BASE-004",
+      "summary": "External administration plan contains stale hold prose; newer committed revision-658 task projection records 18/37 completed and active worktrees are dirty.",
+      "evidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/external-checkpoints.json",
+      "disposition": "preserve ownership; use newer task state, not stale hold text"
+    }
+  ],
+  "recommendationDispositionCounts": {
+    "retained": 25,
+    "externally-owned": 9,
+    "unresolved": 26,
+    "superseded": 1
+  },
+  "acceptance": {
+    "repositoriesAccountedFor": 11,
+    "recommendationsAccountedFor": 61,
+    "unresolvedOwnershipExecutionReady": false,
+    "productChanges": 0,
+    "externalMessagesSent": 0
+  }
+}

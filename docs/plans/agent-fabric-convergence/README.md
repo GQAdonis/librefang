@@ -61,3 +61,7 @@ The OpenSpec changes are initiative-level contracts. Product implementation must
 Assess, analyze, spec and plan have independent review receipts under `.kbd-orchestrator/phases/agent-fabric-convergence/review/`. The plan passed with one carried source-documentation warning: UAR’s liter-llm prose pin differs from its verified immutable Git tree; C01 records reconciliation and C15 waits for the accepted integration checkpoint. All product work remains pending. OpenSpec strict validation passes for 18 changes; [planning validation](.kbd-orchestrator/phases/agent-fabric-convergence/planning-validation.json) records the checks.
 
 The optional shared-memory recall/mirror hook could not reach its endpoint during this turn. Local artifacts and the separate canonical KBD journal remain available; no source or acceptance evidence is claimed from that hook. The system openspec shim points to a missing temporary payload, so validation used the existing `/opt/homebrew/lib/node_modules/@fission-ai/openspec/bin/openspec.js` directly without changing installed tooling.
+
+## C01.1 baseline reconciliation
+
+The [baseline ledger](baseline-ledger.md) is the latest source-disposition record, superseding earlier assessment-era current-source labels. It records 11 fetched repository revisions and all 61 recommendation dispositions, preserves active integration ownership, and distinguishes unresolved conformance from missing source. C01.2/C01.3 still own agreement and adoption decisions.

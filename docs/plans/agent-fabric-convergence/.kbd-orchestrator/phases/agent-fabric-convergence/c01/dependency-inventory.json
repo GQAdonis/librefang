@@ -1,0 +1,1044 @@
+{
+  "capturedAt": "2026-09-24T18:51:12.019Z",
+  "scope": "Observed manifests, features, lockfile hashes and gitlinks; no compatibility certification or adoption",
+  "repositories": [
+    {
+      "repository": "librefang",
+      "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "manifests": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "46924caaa045ca9c5afe37c473c1f7f4e29b913f7d07e04b8d535e088d00ba95",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "surrealdb",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "51dcbfaee466348ccdd0e9ab2eb10ee193f0c69fa20841c7ff1cd4161b1ee0bc",
+          "extracted": [
+            {
+              "line": 42,
+              "text": "rust-version = \"1.94.1\""
+            },
+            {
+              "line": 120,
+              "text": "# SurrealDB — pinned exactly so librefang, surreal-memory, and UAR all link the"
+            },
+            {
+              "line": 121,
+              "text": "# same client crate (see Phase 4b of plan surrealdb-storage-swap)."
+            },
+            {
+              "line": 122,
+              "text": "# ALSO pin surrealdb-core explicitly: surrealdb = \"=x.y.z\" does NOT transitively"
+            },
+            {
+              "line": 123,
+              "text": "# constrain surrealdb-core because Cargo's `=` applies only to the top-level crate."
+            },
+            {
+              "line": 125,
+              "text": "# surrealdb-core onto a newer minor whose internal API surface breaks the"
+            },
+            {
+              "line": 126,
+              "text": "# surrealdb client we pin. This pin makes the alignment structural."
+            },
+            {
+              "line": 127,
+              "text": "surrealdb = { version = \"=3.2.4\", default-features = false, features = [\"kv-rocksdb\", \"protocol-ws\", \"protocol-http\"] }"
+            },
+            {
+              "line": 128,
+              "text": "surrealdb-core = { version = \"=3.2.4\", default-features = false }"
+            },
+            {
+              "line": 129,
+              "text": "# surreal-memory — pinned by `rev`, and the URL/rev form is kept BYTE-IDENTICAL to"
+            },
+            {
+              "line": 131,
+              "text": "# `…/surreal-memory-server?branch=main` and `…/surreal-memory-server.git?rev=<sha>`"
+            },
+            {
+              "line": 133,
+              "text": "# compiles surreal-memory twice and the two copies' types don't interoperate."
+            },
+            {
+              "line": 135,
+              "text": "surreal-memory = { git = \"https://github.com/Prometheus-AGS/surreal-memory-server.git\", rev = \"f9ab1c29944b86d44c23ea0e6192fa3d39acbde8\", default-features = false, features = [\"embedded\"] }"
+            },
+            {
+              "line": 229,
+              "text": "# under us between minor releases (same reasoning as the surrealdb = \"=3.2.4\""
+            }
+          ]
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "f9040c4404894f2df2329d37b7cf9e44fc5b073635b69cd554749270f8760b0d",
+          "extracted": [
+            {
+              "line": 11,
+              "text": "[submodule \"vendor/git/liter-llm\"]"
+            },
+            {
+              "line": 12,
+              "text": "\tpath = vendor/git/liter-llm"
+            },
+            {
+              "line": 13,
+              "text": "\turl = https://github.com/GQAdonis/liter-llm.git"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.lock",
+          "sha256": "13230266a53b6c047f0764473314d52599c80918a7fc5f5ed8b6febbe2f1715f",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "cedar-policy",
+              "version": "4.12.0",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "liter-llm",
+              "version": "1.18.2"
+            },
+            {
+              "name": "surrealdb",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "universal-agent-runtime",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "d0787df925bf8208290e7ad9caa62f7d35dbbcf8865d53b88e7878b40d3dd9b3",
+          "extracted": [
+            {
+              "line": 8,
+              "text": "  \"vendor/git/surreal-memory-server\","
+            },
+            {
+              "line": 9,
+              "text": "  \"vendor/git/surreal-memory-server/crates/surreal-memory\","
+            },
+            {
+              "line": 12,
+              "text": "  \"vendor/git/liter-llm\","
+            },
+            {
+              "line": 13,
+              "text": "  \"vendor/git/liter-llm/crates/liter-llm\","
+            },
+            {
+              "line": 32,
+              "text": "name = \"universal-agent-runtime\""
+            },
+            {
+              "line": 41,
+              "text": "name = \"universal-agent-runtime\""
+            },
+            {
+              "line": 51,
+              "text": "# build under every profile including `embedded-mobile`, where they have no"
+            },
+            {
+              "line": 105,
+              "text": "# `server-full` includes this feature and remains the authoritative release run."
+            },
+            {
+              "line": 112,
+              "text": "# Profiles without local inference must not execute it; `server-full` does."
+            },
+            {
+              "line": 171,
+              "text": "# version and feature set surrealdb-core already resolves, so no new lock entry."
+            },
+            {
+              "line": 178,
+              "text": "[features]"
+            },
+            {
+              "line": 179,
+              "text": "## Default backend stack: SurrealDB embedded only (SurrealKV), no Postgres/SQLite."
+            },
+            {
+              "line": 183,
+              "text": "default = [\"minimal\"]"
+            },
+            {
+              "line": 186,
+              "text": "minimal = [\"server\", \"surreal-backend\"]"
+            },
+            {
+              "line": 187,
+              "text": "server-full = [\"minimal\", \"a2a-transport\", \"local-models\", \"cedar-governance\", \"response-quality\", \"document-intelligence\", \"telemetry\", \"api-docs\", \"admin-ui\", \"wasm-runtime\"]"
+            },
+            {
+              "line": 188,
+              "text": "desktop-full = [\"server-full\", \"tauri\"]"
+            },
+            {
+              "line": 193,
+              "text": "embedded-mobile = [\"host-persistence\"]"
+            },
+            {
+              "line": 210,
+              "text": "## fully embedded — no external services required. Required for UAR to function"
+            },
+            {
+              "line": 212,
+              "text": "surreal-backend = [\"dep:surrealdb\"]"
+            },
+            {
+              "line": 237,
+              "text": "cedar-governance = [\"dep:cedar-policy\"]"
+            },
+            {
+              "line": 303,
+              "text": "cedar-policy = { version = \"4.9.1\", optional = true }"
+            },
+            {
+              "line": 317,
+              "text": "# a lockfile conflict: `server-full` stopped compiling on main, and the errors"
+            },
+            {
+              "line": 366,
+              "text": "# resolution; it does not constrain the next one. tools/surreal-memory-server"
+            },
+            {
+              "line": 371,
+              "text": "# Memory system — surreal-memory library backed by embedded SurrealDB (SurrealKV)."
+            },
+            {
+              "line": 382,
+              "text": "# It pulls candle 0.9.2 (surreal-memory's own pin) alongside the 0.11.0 UAR's"
+            },
+            {
+              "line": 384,
+              "text": "surreal-memory = { path = \"vendor/git/surreal-memory-server/crates/surreal-memory\", default-features = false, features = ["
+            },
+            {
+              "line": 415,
+              "text": "# Major-version 4 (not 5.x): surreal-memory → mempalace-core already depends on"
+            },
+            {
+              "line": 467,
+              "text": "## Pinned to =3.2.4 (exact) so UAR, librefang, surreal-memory, and the deployed"
+            },
+            {
+              "line": 469,
+              "text": "## surreal-memory manifest carries the matching exact SDK and schema-type pins."
+            },
+            {
+              "line": 470,
+              "text": "surrealdb = { version = \"=3.2.4\", optional = true, features = [\"kv-surrealkv\"] }"
+            },
+            {
+              "line": 540,
+              "text": "# Vendored as a git submodule (vendor/git/liter-llm, tracking GQAdonis/liter-llm)"
+            },
+            {
+              "line": 547,
+              "text": "liter-llm = { path = \"vendor/git/liter-llm/crates/liter-llm\", features = [\"full\"] }"
+            },
+            {
+              "line": 592,
+              "text": "# Dev/test build speed. The dependency graph here (burn, cedar-policy,"
+            },
+            {
+              "line": 593,
+              "text": "# surrealdb, kreuzberg-tesseract, tokenizers, ...) produces very large debug"
+            },
+            {
+              "line": 594,
+              "text": "# binaries; full DWARF (debug=2) embedded in each of the ~50+ test binaries"
+            }
+          ]
+        },
+        {
+          "path": "package.json",
+          "sha256": "b3966ff889173de076d57d01c32be9ff823f6bac59a46a45710e6a677e5e4f7c",
+          "extracted": {
+            "name": "universal-agent-runtime",
+            "version": "1.0.0",
+            "packageManager": "pnpm@11.15.0",
+            "typescript": "^6.0.3"
+          }
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "2c835619e74a6592892a5448e00d303ee2b5b996edc28d4618da3e6611898f1f",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        },
+        {
+          "path": "src-tauri/Cargo.lock",
+          "sha256": "1ec6ef09cc016d0ea039663cbeb0a3d3b76e837b9865bb7d930cf98a19dfc6bf",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "cedar-policy",
+              "version": "4.11.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "liter-llm",
+              "version": "1.12.0"
+            },
+            {
+              "name": "surrealdb",
+              "version": "3.2.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.2.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.2.3",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "universal-agent-runtime",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        {
+          "path": "src-tauri/Cargo.toml",
+          "sha256": "16a22bc624fcadba1ae88a17e696236f514873c0ef6f9743e14aa8fa22a769b6",
+          "extracted": [
+            {
+              "line": 11,
+              "text": "rust-version = \"1.92.0\""
+            },
+            {
+              "line": 27,
+              "text": "universal-agent-runtime = { path = \"..\", features = [\"desktop-full\"] }"
+            }
+          ]
+        },
+        {
+          "path": "versions.toml",
+          "sha256": "b4b7ea00a0f62460fe7981fedf96cf3686ee49f189f8cc77d987301580037307",
+          "extracted": [
+            {
+              "line": 20,
+              "text": "liter_llm = \"1.18.2\""
+            },
+            {
+              "line": 21,
+              "text": "liter_llm_commit = \"c5c6caac617eb931cd5009146a70831422ec236c\""
+            },
+            {
+              "line": 24,
+              "text": "surreal_memory_server_base_commit = \"e5f48916048a8e26d3ace83c44746b8105f0696c\""
+            },
+            {
+              "line": 25,
+              "text": "surreal_memory_server_commit = \"432eaa1ebbef66fc02b9bb1a1e63cc2fdb2149e8\""
+            },
+            {
+              "line": 32,
+              "text": "surrealdb = \"3.2.4\""
+            },
+            {
+              "line": 33,
+              "text": "surrealdb_types = \"3.2.4\""
+            },
+            {
+              "line": 34,
+              "text": "surrealdb_server = \"3.2.4\""
+            },
+            {
+              "line": 35,
+              "text": "surrealdb_image = \"surrealdb/surrealdb:v3.2.4@sha256:51baed8709f57f67dcf04b30e3177db846803fa9342dae2be58c6fa5f8d59843\""
+            }
+          ]
+        }
+      ],
+      "gitlinks": [
+        "160000 commit e57421a86fae08ac4d1e3a625a213cf3f3eb98bc\tcrates/prometheus-skill-system",
+        "160000 commit 959839a88e65704014bab0bdd055df17fb210298\tfrontend/packages/prometheus-entity-management",
+        "160000 commit f97df19af40bc322ccbffc91138f360154940a63\tmodels.dev",
+        "160000 commit e627af981bcb06c7fc5da027731c182b044e25d1\tvendor/git/liter-llm",
+        "160000 commit 21f5f684c0a15a7536b947c5c02a8949e49d3062\tvendor/git/rust-mcp-filesystem"
+      ]
+    },
+    {
+      "repository": "the-boss",
+      "commit": "f1314b46ad464aedb5d446c586a824b326bae7a4",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "9b6c6481f2a990d78f542f840443358fd65a7927e81e6c7931fbe1959e029256",
+          "extracted": []
+        },
+        {
+          "path": "package.json",
+          "sha256": "8304c59519dd0781629823d8d70507826221c443bfbbd1a1eaf5763b7ae9d4ff",
+          "extracted": {
+            "name": "TheBoss",
+            "version": "2.2.0",
+            "engines": {
+              "node": ">=24.11.1 <24.16.0"
+            },
+            "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457",
+            "typescript": "5.9.3"
+          }
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "fcc1c6a273fce24b7c48a5c24c016deee0961bf025251f2c7d46539f1de6c56a",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        }
+      ],
+      "gitlinks": [
+        "160000 commit 2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6\tresources/prometheus-skills-mini"
+      ]
+    },
+    {
+      "repository": "flint-gate",
+      "commit": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "manifests": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "f7a12663aae6b35a2956bcb4a864452551b8edfa4c3cb0559ac155893dffcf11",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "cedar-policy",
+              "version": "4.10.0",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "e9ba1b3082f630761d1bdfee852e51057999330ed08cf0daeabc613805f43ba3",
+          "extracted": [
+            {
+              "line": 9,
+              "text": "repository = \"https://github.com/Know-Me-Tools/flint-gate\""
+            }
+          ]
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "flint-realtime-fabric",
+      "commit": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "manifests": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "605fe98e98ea824f057c9f38190977806be442a65a0a709c2007f41e00430736",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "cedar-policy",
+              "version": "4.11.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb",
+              "version": "3.1.5",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.1.5",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.1.5",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "d6fbddcf679bc8c4ee8236f708f0627da346f76d677a682bf1b3271d11d40111",
+          "extracted": [
+            {
+              "line": 22,
+              "text": "    \"crates/frf-store-surreal\","
+            },
+            {
+              "line": 30,
+              "text": "    \"crates/frf-policy-cedar\","
+            },
+            {
+              "line": 38,
+              "text": "repository = \"https://github.com/prometheusags/flint-realtime-fabric\""
+            },
+            {
+              "line": 39,
+              "text": "rust-version = \"1.94\""
+            },
+            {
+              "line": 152,
+              "text": "cedar-policy = { version = \"4\" }"
+            },
+            {
+              "line": 155,
+              "text": "surrealdb = { version = \"3.1.5\" }"
+            }
+          ]
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "caf66ce216305b89e9db52bcc1251b17107fb8c03875e224245c22a3ff7f74ad",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "flint-forge",
+      "commit": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "manifests": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "64a0679137e231fcbd474d38fa80160180ae75a394a90f139f01be8592d2aa42",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "cedar-policy",
+              "version": "4.11.2",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "1946ad9f5f1258ee0664799a153c2d0214b54a2e958159ae415974210185b99b",
+          "extracted": [
+            {
+              "line": 11,
+              "text": "  \"crates/flint-skill\","
+            },
+            {
+              "line": 15,
+              "text": "exclude = [\"crates/ext-flint-auth\", \"crates/ext-flint-hooks\", \"crates/ext-flint-llm\", \"crates/ext-flint-vault\", \"crates/ext-flint-meta\"]"
+            },
+            {
+              "line": 20,
+              "text": "rust-version = \"1.96\""
+            },
+            {
+              "line": 53,
+              "text": "cedar-policy = \"4\""
+            },
+            {
+              "line": 145,
+              "text": "#   of cedar-policy-core's parser generator) pins petgraph 0.7.1/fixedbitset"
+            },
+            {
+              "line": 158,
+              "text": "#   itertools 0.10; cedar-policy/lalrpop/wasmtime-internal-cranelift use"
+            },
+            {
+              "line": 164,
+              "text": "#   thiserror 1; cedar-policy-core pins nonempty 0.12 and our own workspace"
+            },
+            {
+              "line": 196,
+              "text": "doc_markdown       = \"allow\"  # domain vocabulary: flint-gate, pg_graphql, pgvector, WatchEntityType, ProxyPre"
+            }
+          ]
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "surreal-memory-server",
+      "commit": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "manifests": [
+        {
+          "path": "Cargo.lock",
+          "sha256": "08354da1737528d6803b121e6ede2cdb79cfd254bb93f51eee9bf35ebd221ae5",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "surrealdb",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.2.4",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            }
+          ]
+        },
+        {
+          "path": "Cargo.toml",
+          "sha256": "ef15a9315fc6f69372d3ac7dd6c4495a1824c68088e9da436d23cd1657434e37",
+          "extracted": [
+            {
+              "line": 3,
+              "text": "    \".\",                     # surreal-memory-server binary (root)"
+            },
+            {
+              "line": 4,
+              "text": "    \"crates/surreal-memory\", # embeddable library crate"
+            },
+            {
+              "line": 14,
+              "text": "surrealdb = { version = \"=3.2.4\" }"
+            },
+            {
+              "line": 15,
+              "text": "surrealdb_types = { package = \"surrealdb-types\", version = \"=3.2.4\" }"
+            },
+            {
+              "line": 34,
+              "text": "name = \"surreal-memory-server\""
+            },
+            {
+              "line": 40,
+              "text": "surreal-memory = { path = \"crates/surreal-memory\", default-features = false }"
+            },
+            {
+              "line": 65,
+              "text": "surrealdb = { workspace = true }"
+            },
+            {
+              "line": 66,
+              "text": "surrealdb_types = { workspace = true }"
+            },
+            {
+              "line": 100,
+              "text": "[features]"
+            },
+            {
+              "line": 101,
+              "text": "default = [\"embedded\"]"
+            },
+            {
+              "line": 102,
+              "text": "embedded = [\"surreal-memory/embedded\"]"
+            },
+            {
+              "line": 104,
+              "text": "palace = [\"surreal-memory/palace\"]"
+            },
+            {
+              "line": 111,
+              "text": "    \"surreal-memory/local-embeddings\","
+            },
+            {
+              "line": 118,
+              "text": "    \"surreal-memory/cuda\","
+            },
+            {
+              "line": 125,
+              "text": "    \"surreal-memory/metal\","
+            }
+          ]
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "commit": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "0464b8b468698f94d03ed57376d19b9fb4e527ab1b91385dcb6801f81a1ec7e2",
+          "extracted": [
+            {
+              "line": 10,
+              "text": "[submodule \"tools/surreal-memory-server\"]"
+            },
+            {
+              "line": 11,
+              "text": "\tpath = tools/surreal-memory-server"
+            },
+            {
+              "line": 12,
+              "text": "\turl = https://github.com/Prometheus-AGS/surreal-memory-server.git"
+            },
+            {
+              "line": 18,
+              "text": "[submodule \"tools/liter-llm\"]"
+            },
+            {
+              "line": 19,
+              "text": "\tpath = tools/liter-llm"
+            },
+            {
+              "line": 20,
+              "text": "\turl = https://github.com/GQAdonis/liter-llm.git"
+            }
+          ]
+        },
+        {
+          "path": "package-lock.json",
+          "sha256": "f8b1a1330ca75d030d52d66aaa45ad3cc9493ca477dd7080bc15ca7e7da41728",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        },
+        {
+          "path": "package.json",
+          "sha256": "0cb2adb369ba6ed880cdfcc06cb0b1d07584ea368dc88023ca297947990d2856",
+          "extracted": {
+            "name": "prometheus-skill-pack",
+            "version": "1.10.0",
+            "engines": {
+              "node": ">=18.0.0"
+            },
+            "typescript": "^6.0.3"
+          }
+        }
+      ],
+      "gitlinks": [
+        "160000 commit 18d000f3e46952418f682159b227dbf71ce61dcb\tskills/imported/artifact-refiner",
+        "160000 commit d1588d8c93cc267774d1911e8bd53bd3918a7f12\tskills/imported/prometheus-entity-management",
+        "160000 commit bc348fffb4b622c142c1082b281dd2f44b74d37b\tskills/imported/sycophancy-correction",
+        "160000 commit 77edcf8a49237dc9b8f6733e794c48fa4e6da832\ttools/cowork-skills",
+        "160000 commit 26487db64d5c44b00b57d19a649a82632dfe94d3\ttools/disk-space-guardian",
+        "160000 commit c5c6caac617eb931cd5009146a70831422ec236c\ttools/liter-llm",
+        "160000 commit 7833663d3b46f7467f2017f2cce392c09ec1b7ac\ttools/openai-proxy",
+        "160000 commit 01a1dbe0d97156b27c82ee0ec4a0a5b746f18df1\ttools/prometheus-knowledge",
+        "160000 commit 4161fc4845d59fc06fc748f310410a0011353ec7\ttools/surreal-memory-server"
+      ]
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "commit": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "87027c31c1270293a20cd43edac0801eb2346cb176607b5008e764958561ddfa",
+          "extracted": [
+            {
+              "line": 5,
+              "text": "[submodule \"tools/liter-llm\"]"
+            },
+            {
+              "line": 6,
+              "text": "\tpath = tools/liter-llm"
+            },
+            {
+              "line": 7,
+              "text": "\turl = https://github.com/GQAdonis/liter-llm.git"
+            },
+            {
+              "line": 8,
+              "text": "[submodule \"tools/surreal-memory-server\"]"
+            },
+            {
+              "line": 9,
+              "text": "\tpath = tools/surreal-memory-server"
+            },
+            {
+              "line": 10,
+              "text": "\turl = https://github.com/Prometheus-AGS/surreal-memory-server.git"
+            }
+          ]
+        },
+        {
+          "path": "package-lock.json",
+          "sha256": "8d7d3bc0513f980eb8888a77f076be7b09d5cf9aeebd599597dcd29e4e89fed4",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        },
+        {
+          "path": "package.json",
+          "sha256": "5712fdd3be0b10569075b68d4452e8e0e25822f61ef2070dde1ddafe00bcd9c0",
+          "extracted": {
+            "name": "prometheus-skills-mini",
+            "version": "0.1.0",
+            "engines": {
+              "node": ">=22"
+            }
+          }
+        },
+        {
+          "path": "versions.toml",
+          "sha256": "e3678706bdb0e405b349f4b02b97c1f63393f3fa091bcf750cbc132f2d60858e",
+          "extracted": [
+            {
+              "line": 3,
+              "text": "# First written 2026-09-22 at the operator's explicit instruction (\"bump the surrealdb image to"
+            },
+            {
+              "line": 15,
+              "text": "\"tools/liter-llm\"               = \"c5c6caac\"   # the full skill pack's own pin"
+            },
+            {
+              "line": 16,
+              "text": "\"tools/surreal-memory-server\"   = \"6acb60565949334beda22f52bcd36b33895b1db6\"    # Scoped authentication for the approved The Boss release"
+            },
+            {
+              "line": 20,
+              "text": "# Runtime both pin the surrealdb crate at =3.2.4, and UAR's own versions.toml pins this exact"
+            },
+            {
+              "line": 21,
+              "text": "# digest. The one SurrealDB container is shared by surreal-memory, compass and UAR."
+            },
+            {
+              "line": 22,
+              "text": "# surreal-memory also links surrealdb =3.2.4, so all three clients match this server."
+            },
+            {
+              "line": 23,
+              "text": "\"surrealdb\"      = { image = \"surrealdb/surrealdb:v3.2.4\", digest = \"sha256:51baed8709f57f67dcf04b30e3177db846803fa9342dae2be58c6fa5f8d59843\" }"
+            },
+            {
+              "line": 25,
+              "text": "\"liter-llm\"      = { built_from_submodule = true, submodule = \"tools/liter-llm\" }"
+            },
+            {
+              "line": 26,
+              "text": "\"surreal-memory\" = { built_from_submodule = true, submodule = \"tools/surreal-memory-server\" }"
+            }
+          ]
+        }
+      ],
+      "gitlinks": [
+        "160000 commit c5c6caac617eb931cd5009146a70831422ec236c\ttools/liter-llm",
+        "160000 commit abb6745e31da7577611d7c32005af26a72254484\ttools/prometheus-knowledge",
+        "160000 commit 6acb60565949334beda22f52bcd36b33895b1db6\ttools/surreal-memory-server"
+      ]
+    },
+    {
+      "repository": "know-me-app",
+      "commit": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "2d7b3da05dcdd369534b99482ac45d3e40501a29b5b14a5e7b517cc04e98f355",
+          "extracted": [
+            {
+              "line": 5,
+              "text": "[submodule \"vendor/universal-agent-runtime\"]"
+            },
+            {
+              "line": 6,
+              "text": "\tpath   = vendor/universal-agent-runtime"
+            },
+            {
+              "line": 7,
+              "text": "\turl    = git@github.com:Prometheus-AGI/universal-agent-runtime.git"
+            }
+          ]
+        },
+        {
+          "path": "package.json",
+          "sha256": "2a57c7838a66fffb715cd05adf045a8b846145a8b31e4e81d0f511e80feb4c4c",
+          "extracted": {
+            "name": "knowme",
+            "version": "0.1.0",
+            "typescript": "^5.6"
+          }
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "sha256": "1ae6145cf578e64b89795f64fe16791040599384691dcb79eb1f40b662dfc1be",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names."
+        },
+        {
+          "path": "src-tauri/Cargo.toml",
+          "sha256": "45841ec66bf01900565ad4551608a2b10493498ba90a8651080ca2ecc22d2272",
+          "extracted": [
+            {
+              "line": 7,
+              "text": "rust-version = \"1.82\""
+            },
+            {
+              "line": 39,
+              "text": "surrealdb = { version = \"=3.0.5\", features = [\"kv-rocksdb\"] }"
+            },
+            {
+              "line": 43,
+              "text": "# Universal Agent Runtime — embedded library mode"
+            },
+            {
+              "line": 44,
+              "text": "universal-agent-runtime = { path = \"../vendor/universal-agent-runtime\", features = [\"tauri\"] }"
+            },
+            {
+              "line": 58,
+              "text": "cedar-policy = \"4\""
+            },
+            {
+              "line": 68,
+              "text": "[features]"
+            },
+            {
+              "line": 69,
+              "text": "default        = [\"desktop\"]"
+            }
+          ]
+        }
+      ],
+      "gitlinks": []
+    },
+    {
+      "repository": "know-me-system",
+      "commit": "c561d89e783264ef1215764db69e57493c4b815b",
+      "manifests": [
+        {
+          "path": ".gitmodules",
+          "sha256": "1a703ad4d72c48218cb94df72ae7d5c66ea85e23b18d355c939483a695cc5d8c",
+          "extracted": [
+            {
+              "line": 4,
+              "text": "[submodule \"rust/vendor/universal-agent-runtime\"]"
+            },
+            {
+              "line": 5,
+              "text": "\tpath = rust/vendor/universal-agent-runtime"
+            },
+            {
+              "line": 6,
+              "text": "\turl = git@github.com:Prometheus-AGS/universal-agent-runtime.git"
+            }
+          ]
+        },
+        {
+          "path": "rust/Cargo.lock",
+          "sha256": "84211e204aa38074a394bb0ca285c44a2f61cbc02787a460cd331db04958a942",
+          "extracted": "Whole-file hash recorded; lock compatibility is not inferred from names.",
+          "relevantLockedPackages": [
+            {
+              "name": "liter-llm",
+              "version": "1.9.3"
+            },
+            {
+              "name": "liter-llm",
+              "version": "1.9.3",
+              "source": "git+https://github.com/GQAdonis/liter-llm.git?rev=c37e98411ff154fb2c256856428c15d7340b1325#c37e98411ff154fb2c256856428c15d7340b1325"
+            },
+            {
+              "name": "surrealdb",
+              "version": "3.2.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-core",
+              "version": "3.2.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "surrealdb-types",
+              "version": "3.2.1",
+              "source": "registry+https://github.com/rust-lang/crates.io-index"
+            },
+            {
+              "name": "universal-agent-runtime",
+              "version": "1.0.0"
+            }
+          ]
+        },
+        {
+          "path": "rust/Cargo.toml",
+          "sha256": "05e43cdc379f2aeed65c4c876176a73d9e917e105bfe9a6bb6336b50c14d7208",
+          "extracted": [
+            {
+              "line": 28,
+              "text": "    \"vendor/universal-agent-runtime\","
+            },
+            {
+              "line": 29,
+              "text": "    \"vendor/universal-agent-runtime/sdks/rust\","
+            },
+            {
+              "line": 41,
+              "text": "rust-version = \"1.97.1\""
+            },
+            {
+              "line": 83,
+              "text": "#       frf-sdk-rust = { git = \"ssh://git@github.com/Prometheus-AGS/flint-realtime-fabric\", rev = \"9ba04ae6ce41be796ae149609414b17a0d0d376b\" }"
+            },
+            {
+              "line": 105,
+              "text": "# frf-sdk-rust      = { git = \"ssh://git@github.com/Prometheus-AGS/flint-realtime-fabric\", rev = \"9ba04ae6ce41be796ae149609414b17a0d0d376b\", default-features = false }"
+            },
+            {
+              "line": 106,
+              "text": "# frf-crdt          = { git = \"ssh://git@github.com/Prometheus-AGS/flint-realtime-fabric\", rev = \"9ba04ae6ce41be796ae149609414b17a0d0d376b\", default-features = false }"
+            },
+            {
+              "line": 107,
+              "text": "# frf-store-redb    = { git = \"ssh://git@github.com/Prometheus-AGS/flint-realtime-fabric\", rev = \"9ba04ae6ce41be796ae149609414b17a0d0d376b\", default-features = false }"
+            },
+            {
+              "line": 111,
+              "text": "surrealdb         = { version = \"3.2.1\",  default-features = false }"
+            },
+            {
+              "line": 141,
+              "text": "liter-llm         = { git = \"https://github.com/GQAdonis/liter-llm.git\", rev = \"c37e98411ff154fb2c256856428c15d7340b1325\", default-features = false }"
+            }
+          ]
+        },
+        {
+          "path": "versions.toml",
+          "sha256": "28188ac64eec82faff5d2319930c0056f8868774930400b3ed1490541e1a844d",
+          "extracted": [
+            {
+              "line": 39,
+              "text": "surrealdb = \"3.2.1\"             # embedded graph/vector/FTS, kv-rocksdb native / kv-indxdb wasm"
+            }
+          ]
+        }
+      ],
+      "gitlinks": [
+        "160000 commit 0493da782a5b6a716d3acbdbfa3112524a0a25bf\trust/vendor/librefang",
+        "160000 commit 2f7c46b7ed026b9831919746fea4cef67ea71d81\trust/vendor/universal-agent-runtime"
+      ]
+    }
+  ]
+}

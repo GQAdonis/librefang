@@ -1,0 +1,24 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [],
+  "checked_classes": [
+    "source support \u2014 source-receipts.json provides concrete SRC records for the ledger's source-level claims, and the ledger distinguishes source inspection from runtime validation",
+    "exact pin versus prose/lockfile distinctions \u2014 dependency-inventory.json records manifest excerpts, lockfile hashes, relevant locked versions, and the liter-llm gitlink/prose mismatch without inferring compatibility",
+    "all 61 dispositions \u2014 recommendation-dispositions.json contains REC-001 through REC-061 with a disposition in the allowed set and the counts sum to 61",
+    "all 11 repository baseline rows \u2014 baseline-ledger.json lists the 11 repositories with planning/current/fetched/source revisions, disposition, owner object, blockingDependencies, and acceptanceReference",
+    "unjustified completion claims \u2014 the artifacts mark implementationReady false, runtimeVerified false, agreementAccepted false, productChanges 0, and explicitly leave C01.2/C01.3 pending",
+    "ownership agreement inference \u2014 external reservations are recorded as blocking dependencies with agreementAccepted false and no external messages sent",
+    "stale external-plan hold versus newer progress \u2014 external-checkpoints.json records both stale hold prose and newer revision-658 progress, and baseline-ledger.md treats the stale hold as not current",
+    "missing reference paths \u2014 the ledger links the machine ledger, recommendation details, source receipts, dependency inventory, and external checkpoints; acceptance references are present on repository and recommendation records"
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

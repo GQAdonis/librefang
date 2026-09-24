@@ -1,6 +1,6 @@
 # Plan: Agent Fabric Convergence
 
-Date: 2026-09-24. Scope: implement the report recommendations through coordinated, dependency-gated delivery. This turn creates worktrees and planning artifacts only. OpenSpec backend: YES. Proposed changes: 18. Pending delivery groups: 54. Product implementation completed by this initiative: 0.
+Date: 2026-09-24. Scope: implement the report recommendations through coordinated, dependency-gated delivery. This turn creates worktrees and planning artifacts only. OpenSpec backend: YES. Proposed changes: 18. Pending delivery groups: 53; C01.1 complete at canonical revision 91. Product implementation completed by this initiative: 0.
 
 OpenSpec artifact completeness is not permission to apply this cross-repository roadmap directly. The initiative root permits planning edits only. Product work requires repository-scoped child changes with single-session tasks and explicit file ownership. The 54 parent groups remain pending until their children pass; C01 is the first coordination step.
 
@@ -44,7 +44,7 @@ Rebind every REC item to current source or accepted dependency, with exact commi
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size M; complexity Medium; model class medium. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-007, REC-011, REC-012, REC-042.
 
-- [ ] C01.1: Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.
+- [x] C01.1: Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.
 - [ ] C01.2: Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.
 - [ ] C01.3: Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.
 

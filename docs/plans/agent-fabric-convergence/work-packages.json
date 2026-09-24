@@ -35,7 +35,7 @@
         {
           "id": "C01.1",
           "text": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
@@ -67,7 +67,7 @@
         "REC-012",
         "REC-042"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
       "kbdChangeId": "afc-c01-baseline-reconciliation-and-shared-contracts"
     },
@@ -1149,5 +1149,10 @@
       "executionReady": false,
       "kbdChangeId": "afc-c18-federated-compatibility-and-release-evidence"
     }
-  ]
+  ],
+  "progressSource": {
+    "canonicalRevision": 91,
+    "path": ".kbd-orchestrator/phases/agent-fabric-convergence/progress.json",
+    "note": "Canonical KBD state governs progress; this index reflects the C01.1 checkpoint."
+  }
 }

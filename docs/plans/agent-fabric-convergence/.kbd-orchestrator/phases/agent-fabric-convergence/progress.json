@@ -2,16 +2,16 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 84,
-  "derivedRevision": 84,
+  "sourceRevision": 91,
+  "derivedRevision": 91,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 84
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 91
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-24T18:42:24.819752Z",
+  "last_updated": "2026-09-24T19:00:24.595862Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 0,
@@ -76,9 +76,9 @@
       "status": "PENDING",
       "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+      "tasks_done": 1,
+      "last_task_completed": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+      "next_task_pending": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
       "blockers": []
     },
     {
