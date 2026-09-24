@@ -1,0 +1,39 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "library-candidates.json",
+      "line": 0,
+      "claim": "The candidate sidecar claims all 61 recommendation gaps are addressed even though several required change areas have no corresponding candidate evaluation or build/adopt verdict in the JSON.",
+      "evidence": "`gaps_addressed` lists `REC-001` through `REC-061`, but the candidate `fit_for_gap` values cover only `C02`, `C03`, `C04`, `C05`, `C06`, `C07`, `C08`, `C09`, `C10`, `C11`, `C12`, `C14`, `C15`, `C16`, and `C18`; there is no JSON candidate or build-required item for `C01`, `C13`, or `C17`, despite the assessment assigning recommendations to those changes, e.g. `REC-048 ... C17`, `REC-049 ... C17`, `REC-020 ... C13`, and `REC-021 ... C13`.",
+      "suggested_fix": "Either remove the blanket `gaps_addressed` claim or add explicit candidate/build-required entries and verdicts for C01 baseline contracts, C13 deployment profiles, and C17 human representation/office grants."
+    },
+    {
+      "severity": "WARNING",
+      "file": "library-candidates.json",
+      "line": 0,
+      "claim": "The JSON candidate list omits a reuse/reject decision that the analysis document makes for executive personas and implicit office powers, leaving the human-representation build-vs-adopt decision untracked in the machine-readable handoff.",
+      "evidence": "analysis.md includes the table row `Executive personas with implicit office powers | Reject | R5/R6: consent, role assignment and delegated actions require distinct trusted grants.`, but `library-candidates.json` contains no candidate named or scoped to executive personas, human representation, office powers, consent grants, or C17.",
+      "suggested_fix": "Add a candidate entry for executive personas/implicit office powers with verdict `reject`, mapped to C17/REC-048/REC-049, and state the adopted alternative as explicit consent and organizational action grants."
+    },
+    {
+      "severity": "WARNING",
+      "file": "analysis.md",
+      "line": 0,
+      "claim": "The workflow-engine decision defers evaluation without recording concrete alternatives or criteria sufficient for the planning stage to order a build-vs-adopt gate.",
+      "evidence": "The analysis table says `New external durable workflow engine | Conditional evaluation | C10 specifies workload, recovery and embedding requirements before choosing. Prefer existing substrate if sufficient; prohibit dual schedulers.`, while the candidates sidecar has only `External durable workflow engine` with verdict `reference` and rationale `Decide only after measured durability/throughput/embedded-fit analysis`; no actual durable workflow candidates or acceptance criteria are listed.",
+      "suggested_fix": "Record the concrete comparison set or explicitly state that C10 must first produce requirements before any engine selection, with acceptance criteria such as recovery model, embedding constraints, mobile/offline support, idempotency/effect handling, and scheduler ownership."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

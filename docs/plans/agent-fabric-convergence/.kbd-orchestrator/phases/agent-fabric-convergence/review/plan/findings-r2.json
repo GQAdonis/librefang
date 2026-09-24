@@ -1,0 +1,23 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "C15 asserts an exact `liter-llm` gitlink as a pinned current source even though the packet contains conflicting source evidence for that same dependency.",
+      "evidence": "C15 states: \"UAR baseline c29af47be3439c69e1a3c124fdcf09ce4cbb5cba pins vendor/git/liter-llm at e627af981bcb06c7fc5da027731c182b044e25d1\". But the provided `liter_llm_evidence.files` excerpt from `docs/DEPENDENCY_MANAGEMENT.md` says: \"liter-llm     = gitlink \\\"c5c6caac617eb931cd5009146a70831422ec236c\\\" (1.18.2)\" and also says to \"Re-verify this table against those authorities whenever either input moves.\"",
+      "suggested_fix": "Do not state a single exact `liter-llm` pin in C15 until C01/D-UAR-P1 resolves the conflicting evidence; record both observed SHAs in the baseline ledger and make C15 consume the resolved dependency receipt."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

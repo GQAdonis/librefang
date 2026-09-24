@@ -1,0 +1,501 @@
+[
+  {
+    "id": "C01",
+    "slug": "afc-c01-baseline-reconciliation-and-shared-contracts",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C02",
+    "slug": "afc-c02-governed-action-and-approval-boundary",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c02-governed-action-and-approval-boundary/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c02-governed-action-and-approval-boundary/specs/governed-action-and-approval-boundary/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c02-governed-action-and-approval-boundary/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C03",
+    "slug": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/specs/lossless-definitions-and-collaboration-document-profile/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C04",
+    "slug": "afc-c04-replaceable-service-instances-and-placement",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c04-replaceable-service-instances-and-placement/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c04-replaceable-service-instances-and-placement/specs/replaceable-service-instances-and-placement/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c04-replaceable-service-instances-and-placement/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c04-replaceable-service-instances-and-placement/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C05",
+    "slug": "afc-c05-bossfang-full-run-delegation",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c05-bossfang-full-run-delegation/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c05-bossfang-full-run-delegation/specs/bossfang-full-run-delegation/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c05-bossfang-full-run-delegation/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c05-bossfang-full-run-delegation/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C06",
+    "slug": "afc-c06-durable-addressable-instances-and-bounded-turns",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/specs/durable-addressable-instances-and-bounded-turns/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C07",
+    "slug": "afc-c07-local-scoped-observers-with-durable-delivery",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/specs/local-scoped-observers-with-durable-delivery/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C08",
+    "slug": "afc-c08-bossfang-and-fabric-observer-routing",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/specs/bossfang-and-fabric-observer-routing/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C09",
+    "slug": "afc-c09-bounded-teams-and-shared-task-board",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c09-bounded-teams-and-shared-task-board/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c09-bounded-teams-and-shared-task-board/specs/bounded-teams-and-shared-task-board/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c09-bounded-teams-and-shared-task-board/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c09-bounded-teams-and-shared-task-board/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C10",
+    "slug": "afc-c10-feedback-workflow-and-governed-connector-effects",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/specs/feedback-workflow-and-governed-connector-effects/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C11",
+    "slug": "afc-c11-authoritative-business-data-and-offline-commands",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/specs/authoritative-business-data-and-offline-commands/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C12",
+    "slug": "afc-c12-personal-peer-sovereignty-and-consent",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/specs/personal-peer-sovereignty-and-consent/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C13",
+    "slug": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/specs/embedded-mobile-and-home-cloud-execution-profiles/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C14",
+    "slug": "afc-c14-studio-administration-and-isolated-service-consoles",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/specs/studio-administration-and-isolated-service-consoles/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C15",
+    "slug": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/specs/portable-skills-plugin-contracts-and-cross-harness-handoff/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C16",
+    "slug": "afc-c16-specialist-marketing-product-and-design-teams",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/specs/specialist-marketing-product-and-design-teams/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C17",
+    "slug": "afc-c17-executive-assistants-and-consented-human-representation",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/specs/executive-assistants-and-consented-human-representation/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/tasks.md",
+        "status": "done"
+      }
+    ]
+  },
+  {
+    "id": "C18",
+    "slug": "afc-c18-federated-compatibility-and-release-evidence",
+    "isPlanningComplete": true,
+    "implementationReady": false,
+    "artifacts": [
+      {
+        "artifact": "proposal",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c18-federated-compatibility-and-release-evidence/proposal.md",
+        "status": "done"
+      },
+      {
+        "artifact": "specs",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c18-federated-compatibility-and-release-evidence/specs/federated-compatibility-and-release-evidence/spec.md",
+        "status": "done"
+      },
+      {
+        "artifact": "design",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+        "status": "done"
+      },
+      {
+        "artifact": "tasks",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-c18-federated-compatibility-and-release-evidence/tasks.md",
+        "status": "done"
+      }
+    ]
+  }
+]

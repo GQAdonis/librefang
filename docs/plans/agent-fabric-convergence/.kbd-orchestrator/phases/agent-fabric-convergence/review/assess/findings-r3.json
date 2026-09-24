@@ -1,0 +1,22 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "claim": "The dependency compatibility finding makes an unsupported BossFang SurrealDB pin claim.",
+      "evidence": "The assessment states: \"Current UAR, BossFang and surreal-memory source pins include SurrealDB 3.2.4.\" The packet's source_evidence includes SurrealDB pin excerpts for universal-agent-runtime (`surrealdb = { version = \"=3.2.4\" }`) and surreal-memory-server (`surrealdb = { version = \"=3.2.4\" }`), plus differing pins for Fabric, KnowMe app, and KnowMe system, but it provides no BossFang/librefang SurrealDB pin excerpt supporting 3.2.4.",
+      "suggested_fix": "Add the exact BossFang/librefang dependency path and excerpt proving the 3.2.4 pin, or weaken the sentence to only name repositories whose pins are evidenced in the packet."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

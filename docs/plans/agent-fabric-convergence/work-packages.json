@@ -1,0 +1,1153 @@
+{
+  "schemaVersion": 1,
+  "executionPolicy": "Planning only. These are cross-repository change specifications; before dispatch, split any task that cannot fit one bounded assignment and claim explicit files. C01 is the first future change. All implementation statuses are pending.",
+  "changes": [
+    {
+      "id": "C01",
+      "slug": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "title": "Baseline reconciliation and shared contracts",
+      "repositories": [
+        "librefang",
+        "universal-agent-runtime",
+        "the-boss",
+        "flint-gate",
+        "flint-realtime-fabric",
+        "flint-forge",
+        "surreal-memory-server",
+        "know-me-app",
+        "know-me-system",
+        "prometheus-skill-pack",
+        "prometheus-skills-mini"
+      ],
+      "dependsOn": [],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "scope": "Planning directory; read-only product source and existing phase records",
+      "outcome": "Rebind every REC item to current source or accepted dependency, with exact commits and explicit owner.",
+      "tasks": [
+        {
+          "id": "C01.1",
+          "text": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C01.2",
+          "text": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C01.3",
+          "text": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Every REC has a source disposition, owner and acceptance reference; all 11 baselines resolve; no unresolved ownership is labeled execution-ready.",
+      "limits": "No product code; later changes may start only after their relevant dependency checkpoint is satisfied.",
+      "size": "M",
+      "complexity": "Medium",
+      "modelClass": "medium",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 1,
+      "recommendations": [
+        "REC-007",
+        "REC-011",
+        "REC-012",
+        "REC-042"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c01-baseline-reconciliation-and-shared-contracts"
+    },
+    {
+      "id": "C02",
+      "slug": "afc-c02-governed-action-and-approval-boundary",
+      "title": "Governed action and approval boundary",
+      "repositories": [
+        "universal-agent-runtime",
+        "flint-gate"
+      ],
+      "dependsOn": [
+        "C01"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "scope": "UAR governance composition, direct/managed/embedded effect admission, policy installation and approval adapters; Gate token/approval boundary",
+      "outcome": "Protected actions use verified identity, typed context and current policy before any effect.",
+      "tasks": [
+        {
+          "id": "C02.1",
+          "text": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C02.2",
+          "text": "Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C02.3",
+          "text": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Exercise real direct/managed/embedded/proxied routes with forged identity, policy errors, revoked approval and changed payload; denied effects do not occur.",
+      "limits": "Do not change current P1 launch/history contracts without D-UAR-P1 agreement; no arbitrary multi-hop delegation claim.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 2,
+      "recommendations": [
+        "REC-010",
+        "REC-018",
+        "REC-019",
+        "REC-050",
+        "REC-051",
+        "REC-052"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c02-governed-action-and-approval-boundary"
+    },
+    {
+      "id": "C03",
+      "slug": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "title": "Lossless definitions and collaboration document profile",
+      "repositories": [
+        "universal-agent-runtime",
+        "librefang",
+        "prometheus-skill-pack",
+        "prometheus-skills-mini"
+      ],
+      "dependsOn": [
+        "C01",
+        "C02"
+      ],
+      "externalDependencies": [
+        "D-MINI"
+      ],
+      "scope": "UAR compiler/IR/artifact persistence; BossFang translator; existing skill document adapters",
+      "outcome": "Authored required semantics survive compile, storage, binding and actual execution.",
+      "tasks": [
+        {
+          "id": "C03.1",
+          "text": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C03.2",
+          "text": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C03.3",
+          "text": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Round-trip legacy and new definitions through persisted runtime, prove required skills/policies effective, reject unknown mandatory fields and required-unsupported exports.",
+      "limits": "Existing format remains supported; draft examples are not executable until schema/adapter implementation passes.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 3,
+      "recommendations": [
+        "REC-054",
+        "REC-055"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c03-lossless-definitions-and-collaboration-document-profile"
+    },
+    {
+      "id": "C04",
+      "slug": "afc-c04-replaceable-service-instances-and-placement",
+      "title": "Replaceable service instances and placement",
+      "repositories": [
+        "universal-agent-runtime",
+        "the-boss",
+        "librefang"
+      ],
+      "dependsOn": [
+        "C01",
+        "C02",
+        "C03"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1"
+      ],
+      "scope": "Existing runtime driver/service registry, connection inventory and service capability endpoints",
+      "outcome": "Choose local, managed, external or remote instances with explicit identity and ownership.",
+      "tasks": [
+        {
+          "id": "C04.1",
+          "text": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C04.2",
+          "text": "Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C04.3",
+          "text": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Select two UAR instances, refuse unsupported required capability and wrong identity, close a nonowner client without stopping service, distinguish new run from migration.",
+      "limits": "No live-session migration implied; credentials stay in host stores.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 4,
+      "recommendations": [
+        "REC-002",
+        "REC-003",
+        "REC-004"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c04-replaceable-service-instances-and-placement"
+    },
+    {
+      "id": "C05",
+      "slug": "afc-c05-bossfang-full-run-delegation",
+      "title": "BossFang full-run delegation",
+      "repositories": [
+        "librefang",
+        "universal-agent-runtime"
+      ],
+      "dependsOn": [
+        "C02",
+        "C03",
+        "C04"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1"
+      ],
+      "scope": "BossFang runtime/task delegation, channel workflow references and UAR public run adapter; no librefang-cli edits",
+      "outcome": "A BossFang task can delegate one complete run while retaining its own workflow.",
+      "tasks": [
+        {
+          "id": "C05.1",
+          "text": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C05.2",
+          "text": "Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C05.3",
+          "text": "Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Trace direct versus delegated execution; lose responses and reconnect; one executor and one side effect remain, cancellation reaches UAR, unsupported recovery is explicit.",
+      "limits": "Retain existing native route; stage consumer capability requirements after provider support.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 5,
+      "recommendations": [
+        "REC-001",
+        "REC-005",
+        "REC-013"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c05-bossfang-full-run-delegation"
+    },
+    {
+      "id": "C06",
+      "slug": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "title": "Durable addressable instances and bounded turns",
+      "repositories": [
+        "universal-agent-runtime",
+        "surreal-memory-server"
+      ],
+      "dependsOn": [
+        "C02",
+        "C03",
+        "C04"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "scope": "UAR existing actor/thread host, instance store and activation ownership; memory API only if an evidenced gap requires it",
+      "outcome": "Stateful instances survive activation changes without becoming immortal model loops.",
+      "tasks": [
+        {
+          "id": "C06.1",
+          "text": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C06.2",
+          "text": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C06.3",
+          "text": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Two users instantiate one definition without leakage; crash/passivate/reactivate preserves admitted work; stale owner cannot commit; cancel remains responsive during a blocked tool.",
+      "limits": "Single-host ownership first; cross-host automatic takeover stays disabled until C18 fencing evidence.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 6,
+      "recommendations": [
+        "REC-006",
+        "REC-026",
+        "REC-027",
+        "REC-028",
+        "REC-035"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c06-durable-addressable-instances-and-bounded-turns"
+    },
+    {
+      "id": "C07",
+      "slug": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "title": "Local scoped observers with durable delivery",
+      "repositories": [
+        "universal-agent-runtime"
+      ],
+      "dependsOn": [
+        "C02",
+        "C03",
+        "C06"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1"
+      ],
+      "scope": "UAR committed-event publication, subscription store/inbox and monitor admission API",
+      "outcome": "An authorized observer watches selected agents/conversations and recovers missed work.",
+      "tasks": [
+        {
+          "id": "C07.1",
+          "text": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C07.2",
+          "text": "Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C07.3",
+          "text": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Two monitors receive independent copies; producer/conversation filters prevent leakage; crash at publish/admit/ack boundaries recovers without silent loss; revocation blocks queued content.",
+      "limits": "No forged shared parent root and no UI-SSE lifetime coupling; optional Fabric adapter follows C08.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 7,
+      "recommendations": [
+        "REC-029",
+        "REC-030",
+        "REC-034"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c07-local-scoped-observers-with-durable-delivery"
+    },
+    {
+      "id": "C08",
+      "slug": "afc-c08-bossfang-and-fabric-observer-routing",
+      "title": "BossFang and Fabric observer routing",
+      "repositories": [
+        "librefang",
+        "universal-agent-runtime",
+        "flint-realtime-fabric",
+        "flint-gate"
+      ],
+      "dependsOn": [
+        "C05",
+        "C07"
+      ],
+      "externalDependencies": [
+        "D-FRF",
+        "D-GATE"
+      ],
+      "scope": "BossFang source adapters/routing, Fabric envelope/consumer adapter and UAR recipient bridge",
+      "outcome": "Channel messages reach their declared handler and authorized observer copies across hosts.",
+      "tasks": [
+        {
+          "id": "C08.1",
+          "text": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C08.2",
+          "text": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C08.3",
+          "text": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Restart each host while forwarding, match two handlers, replay and echo posts, revoke a queued subscription and test A-B-A reactions; no wrong recipient, duplicate action or hidden gap.",
+      "limits": "Adapt accepted D-FRF control semantics before changing APIs; transport never becomes the agent executor.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 8,
+      "recommendations": [
+        "REC-024",
+        "REC-031",
+        "REC-032",
+        "REC-033"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c08-bossfang-and-fabric-observer-routing"
+    },
+    {
+      "id": "C09",
+      "slug": "afc-c09-bounded-teams-and-shared-task-board",
+      "title": "Bounded teams and shared task board",
+      "repositories": [
+        "universal-agent-runtime",
+        "surreal-memory-server"
+      ],
+      "dependsOn": [
+        "C02",
+        "C03",
+        "C04",
+        "C06"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "scope": "UAR team domain/store, existing thread admission and memory scopes",
+      "outcome": "Reusable teams coordinate bounded tasks without sharing all authority or memory.",
+      "tasks": [
+        {
+          "id": "C09.1",
+          "text": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C09.2",
+          "text": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C09.3",
+          "text": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Competing workers cannot own one revision; stale worker/removal cannot cause new protected effect; parent cancel and independent peer lifetime remain distinct; team cap holds under concurrency.",
+      "limits": "No replacement thread engine, global shared transcript or union of member permissions.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 9,
+      "recommendations": [
+        "REC-008",
+        "REC-043",
+        "REC-044",
+        "REC-045"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c09-bounded-teams-and-shared-task-board"
+    },
+    {
+      "id": "C10",
+      "slug": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "title": "Feedback workflow and governed connector effects",
+      "repositories": [
+        "universal-agent-runtime",
+        "librefang",
+        "the-boss",
+        "prometheus-skill-pack",
+        "prometheus-skills-mini",
+        "flint-gate",
+        "surreal-memory-server"
+      ],
+      "dependsOn": [
+        "C05",
+        "C07",
+        "C08",
+        "C09"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "scope": "UAR workflow/effect records and connector boundary; BossFang feedback ingress; existing studio approval/artifact views; consume C02 Gate policy and C09 memory-scope/effect evidence; modify Gate or memory adapters only for a demonstrated integration gap with its owner",
+      "outcome": "A product-feedback team produces one authorized issue and reviewable product/design follow-up.",
+      "tasks": [
+        {
+          "id": "C10.1",
+          "text": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C10.2",
+          "text": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C10.3",
+          "text": "Wire observe/classify/deduplicate/draft/standing-policy intake and product/design/reviewer outputs with durable approvals and explicit implementation admission.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Real configured test accounts or controlled production-compatible endpoints demonstrate one issue after timeout/restart, no sensitive egress, no replay posts, no issue-to-implementation auto-authorization.",
+      "limits": "Connector-specific idempotency and regulated-data eligibility are prerequisite evidence; no financial action in first slice.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 10,
+      "recommendations": [
+        "REC-039",
+        "REC-046",
+        "REC-053",
+        "REC-056",
+        "REC-059"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c10-feedback-workflow-and-governed-connector-effects"
+    },
+    {
+      "id": "C11",
+      "slug": "afc-c11-authoritative-business-data-and-offline-commands",
+      "title": "Authoritative business data and offline commands",
+      "repositories": [
+        "flint-forge",
+        "flint-realtime-fabric",
+        "flint-gate",
+        "know-me-system",
+        "know-me-app"
+      ],
+      "dependsOn": [
+        "C01",
+        "C02",
+        "C04"
+      ],
+      "externalDependencies": [
+        "D-FORGE",
+        "D-FRF",
+        "D-GATE",
+        "D-KNOWME"
+      ],
+      "scope": "Forge domain commands/RLS/realtime adapters; KnowMe durable intent/read-model lanes; Fabric delivery",
+      "outcome": "Offline business edits reconcile to one domain transaction and authorized read projections.",
+      "tasks": [
+        {
+          "id": "C11.1",
+          "text": "Adopt accepted production-readiness changes; document route-specific auth/RLS and cursor/tombstone semantics.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C11.2",
+          "text": "Persist pending command atomically with local state; preserve idempotency through Forge transaction and authoritative result lookup.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C11.3",
+          "text": "Publish committed outbox/CDC facts and rebuild scoped read models with deletion/revocation and explicit retention-gap resnapshot.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Crash before/after commit and publication; replay duplicate/out-of-order commands and deletes; prove tenant isolation and pending versus committed UI states through real storage/network boundaries.",
+      "limits": "Keep Forge-only applications independent of agent runtimes; schema changes append migrations and preserve rollback constraints.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 11,
+      "recommendations": [
+        "REC-015",
+        "REC-016",
+        "REC-025"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c11-authoritative-business-data-and-offline-commands"
+    },
+    {
+      "id": "C12",
+      "slug": "afc-c12-personal-peer-sovereignty-and-consent",
+      "title": "Personal peer sovereignty and consent",
+      "repositories": [
+        "know-me-system",
+        "know-me-app",
+        "flint-realtime-fabric",
+        "universal-agent-runtime"
+      ],
+      "dependsOn": [
+        "C01",
+        "C02",
+        "C04"
+      ],
+      "externalDependencies": [
+        "D-KNOWME",
+        "D-FRF"
+      ],
+      "scope": "KnowMe personal-data consent/pairing; embeddable Fabric peer profile and grant verification",
+      "outcome": "Authorized devices synchronize selected personal documents without requiring vendor cloud.",
+      "tasks": [
+        {
+          "id": "C12.1",
+          "text": "Define eligible personal data classes, peer identity/membership, key rotation/recovery and explicit offline grant validity; keep organization/runtime authority outside CRDT writes.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C12.2",
+          "text": "Compose durable authenticated peer transport and CRDT storage from existing modules; project personal context through consented scopes.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C12.3",
+          "text": "Implement removal/revocation/tombstone behavior, reconnection and inspectable consent history without claiming deletion of previously disclosed plaintext.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Pair two devices, disconnect/edit/reconnect, rotate/recover keys, revoke a peer and exceed offline validity; authorized documents converge and disallowed authority/data do not propagate.",
+      "limits": "No blanket storage pin upgrade; measure and negotiate embedded dependency footprint.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 12,
+      "recommendations": [
+        "REC-014",
+        "REC-017"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c12-personal-peer-sovereignty-and-consent"
+    },
+    {
+      "id": "C13",
+      "slug": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "title": "Embedded mobile and home/cloud execution profiles",
+      "repositories": [
+        "know-me-system",
+        "know-me-app",
+        "universal-agent-runtime",
+        "librefang"
+      ],
+      "dependsOn": [
+        "C04",
+        "C06"
+      ],
+      "externalDependencies": [
+        "D-KNOWME",
+        "D-UAR-P1"
+      ],
+      "scope": "KnowMe Rust core runtime routes, mobile lifecycle adapter and selected home/cloud binding",
+      "outcome": "KnowMe chooses an honest local or remote execution path across suspension and outages.",
+      "tasks": [
+        {
+          "id": "C13.1",
+          "text": "Reconcile local model/tool loop with embedded UAR route; pin SDK/features and preserve each product layer contract.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C13.2",
+          "text": "Specify offline/local, home, personal-cloud and enterprise profiles with required/optional services, inference availability and approved context placement.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C13.3",
+          "text": "Wire suspend/resume, pending/offline authority and persistent remote job observation; consume C11/C12 when enabling their data profiles.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Physical supported mobile device and desktop prove local useful work offline, correct suspension and remote continuity, no duplicate fallback and no private-memory upload without grant.",
+      "limits": "C11/C12 are additional prerequisites for enterprise-sync/peer modes; basic standalone embedding does not depend on them. Acceptance is evaluated per profile: standalone embedding requires C04/C06; enterprise sync additionally requires C11; personal peer or home/cloud context requires C12; combined profiles require both C11 and C12. Private context upload is blocked until the corresponding grant boundary is proven.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 13,
+      "recommendations": [
+        "REC-020",
+        "REC-021",
+        "REC-036"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "profileDependencies": {
+        "standalone-embedded": [
+          "C04",
+          "C06"
+        ],
+        "enterprise-sync": [
+          "C04",
+          "C06",
+          "C11"
+        ],
+        "personal-peer-home-cloud": [
+          "C04",
+          "C06",
+          "C12"
+        ],
+        "combined-personal-and-business": [
+          "C04",
+          "C06",
+          "C11",
+          "C12"
+        ]
+      },
+      "releaseDependencies": {
+        "standalone-embedded": [
+          "C18"
+        ],
+        "enterprise-sync": [
+          "C18"
+        ],
+        "personal-peer-home-cloud": [
+          "C18"
+        ],
+        "combined-personal-and-business": [
+          "C18"
+        ]
+      }
+    },
+    {
+      "id": "C14",
+      "slug": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "title": "Studio administration and isolated service consoles",
+      "repositories": [
+        "the-boss",
+        "librefang",
+        "universal-agent-runtime"
+      ],
+      "dependsOn": [
+        "C04",
+        "C05",
+        "C07",
+        "C09",
+        "C10"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1"
+      ],
+      "scope": "Existing Boss connection/run/approval views and site-view host; BossFang console API",
+      "outcome": "Operators can understand ownership, placement, grants and observer behavior from one studio.",
+      "tasks": [
+        {
+          "id": "C14.1",
+          "text": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C14.2",
+          "text": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C14.3",
+          "text": "Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Two clients decide one challenge consistently; console account isolation/navigation and no generic privileged bridge are verified; unsupported controls and private data stay hidden.",
+      "limits": "Preserve P1 product history and lifecycle architecture; do not duplicate specialized BossFang administration.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 14,
+      "recommendations": [
+        "REC-009",
+        "REC-023"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c14-studio-administration-and-isolated-service-consoles"
+    },
+    {
+      "id": "C15",
+      "slug": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "title": "Portable skills, plugin contracts and cross-harness handoff",
+      "repositories": [
+        "prometheus-skill-pack",
+        "prometheus-skills-mini",
+        "universal-agent-runtime",
+        "librefang",
+        "flint-forge",
+        "know-me-system",
+        "know-me-app"
+      ],
+      "dependsOn": [
+        "C03",
+        "C09"
+      ],
+      "externalDependencies": [
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1"
+      ],
+      "scope": "Existing agent-team skill family/adapters; UAR/KnowMe/Kiln portable host interfaces and signed artifact admission",
+      "outcome": "Teams can be configured and handed off with truthful native capabilities and bounded shared knowledge.",
+      "tasks": [
+        {
+          "id": "C15.1",
+          "text": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C15.2",
+          "text": "Validate all eight harness adapters against pinned CLI schemas; preserve native options/extensions and report unsupported agent/plugin/marketplace features; use Node.js/TypeScript 7 for authored shared hooks/scripts. Before authoring helpers, pin the exact Node.js and TypeScript 7 distribution and prove full/mini and harness adapter compatibility at D-MINI; if unavailable, record a blocker rather than substituting another language/version.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C15.3",
+          "text": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Full/mini parity fixtures plus actual harness smoke workflows prove supported configuration round-trips and explicit refusal of required loss; tampered manifest or stale handoff cannot expand authority.",
+      "limits": "Refresh primary CLI docs/Context7 before changing adapters. No claim of portable native sessions or Cedar enforcement inside arbitrary external harnesses.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 15,
+      "recommendations": [
+        "REC-022",
+        "REC-037",
+        "REC-040",
+        "REC-041"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff"
+    },
+    {
+      "id": "C16",
+      "slug": "afc-c16-specialist-marketing-product-and-design-teams",
+      "title": "Specialist, marketing, product and design teams",
+      "repositories": [
+        "prometheus-skill-pack",
+        "prometheus-skills-mini",
+        "universal-agent-runtime",
+        "the-boss"
+      ],
+      "dependsOn": [
+        "C10",
+        "C14",
+        "C15"
+      ],
+      "externalDependencies": [
+        "D-MINI"
+      ],
+      "scope": "Role/team templates, skill selection guidance and studio team creation",
+      "outcome": "A user can choose the smallest useful team and get accountable specialist outputs.",
+      "tasks": [
+        {
+          "id": "C16.1",
+          "text": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C16.2",
+          "text": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C16.3",
+          "text": "Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Representative coding/design/marketing/documentation tasks produce accepted artifacts and independent findings; each generated team proposal contains a role-selection rationale, allowed-write scopes, estimated model/cost class and a complete operator-review checklist.",
+      "limits": "Do not auto-install every catalog skill or confer send/publish/roadmap authority from a role title.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 16,
+      "recommendations": [
+        "REC-038",
+        "REC-047"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c16-specialist-marketing-product-and-design-teams"
+    },
+    {
+      "id": "C17",
+      "slug": "afc-c17-executive-assistants-and-consented-human-representation",
+      "title": "Executive assistants and consented human representation",
+      "repositories": [
+        "universal-agent-runtime",
+        "know-me-system",
+        "know-me-app",
+        "flint-gate",
+        "the-boss"
+      ],
+      "dependsOn": [
+        "C02",
+        "C09",
+        "C10",
+        "C12",
+        "C16"
+      ],
+      "externalDependencies": [
+        "D-KNOWME",
+        "D-GATE"
+      ],
+      "scope": "Private representation/office grants, context selection, trusted issuer workflow and audit UI",
+      "outcome": "Executive support distinguishes role assistance, simulation, disclosed representation and delegated action.",
+      "tasks": [
+        {
+          "id": "C17.1",
+          "text": "Define CEO/CFO/CIO/Chief Intelligence/Security/Marketing/Product and configurable office roles separately from human profiles; identify trusted grant issuers.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C17.2",
+          "text": "Implement consent, organizational assignment, data-use/communication/action scopes, expiry/revocation, offboarding and disclosure with pinned evidence.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C17.3",
+          "text": "Evaluate person-specific behavior on approved held-out scenarios; enforce separation of duties and real-human approval requirements.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Revoked/offboarded twin cannot gain new access or effects; simulated approvals never satisfy human checks; personal consent alone cannot authorize organizational spending.",
+      "limits": "High-impact autonomous finance remains gated on separate authorized policy and connector evidence; no role title implies permission.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 17,
+      "recommendations": [
+        "REC-048",
+        "REC-049"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c17-executive-assistants-and-consented-human-representation"
+    },
+    {
+      "id": "C18",
+      "slug": "afc-c18-federated-compatibility-and-release-evidence",
+      "title": "Federated compatibility and release evidence",
+      "repositories": [
+        "universal-agent-runtime",
+        "librefang",
+        "the-boss",
+        "know-me-system",
+        "know-me-app",
+        "flint-gate",
+        "flint-realtime-fabric",
+        "flint-forge",
+        "surreal-memory-server",
+        "prometheus-skill-pack",
+        "prometheus-skills-mini"
+      ],
+      "dependsOn": [
+        "C05",
+        "C06",
+        "C08",
+        "C09",
+        "C10",
+        "C11",
+        "C12",
+        "C13",
+        "C14",
+        "C15",
+        "C16",
+        "C17"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "scope": "Cross-repository manifests, conformance runners, scoped federation adapters and release documentation",
+      "outcome": "Supported profiles have reproducible interoperability, recovery and quality evidence.",
+      "tasks": [
+        {
+          "id": "C18.1",
+          "text": "Implement only required remaining federation/trust adapters with independent resource-side enforcement and capability refusal; prove state/effect fencing before optional takeover.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C18.2",
+          "text": "Run operational-mode matrix on exact source/payload/policy combinations; test upgrade, rollback, outage, retention gaps, restart and revoked authority.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C18.3",
+          "text": "Benchmark task quality, human correction, cost/latency, duplicate/unknown effects and administration effort against controlled baselines; publish supported/unsupported matrix and release evidence after authorization.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "parent-delivery-group"
+        }
+      ],
+      "acceptance": "Each advertised mode passes real boundary scenarios on named hosts/platforms; unsupported features remain disabled; immutable pins and rollback constraints are auditable.",
+      "limits": "One local Rust build writer while sharing host; no single green unit suite substitutes for installed multi-product acceptance.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex; use an independent reviewer at acceptance",
+      "sequence": 18,
+      "recommendations": [
+        "REC-057",
+        "REC-058",
+        "REC-060",
+        "REC-061"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-c18-federated-compatibility-and-release-evidence"
+    }
+  ]
+}

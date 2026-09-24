@@ -1,0 +1,279 @@
+{
+  "phase": "agent-fabric-convergence",
+  "generated_at": "2026-09-24T18:19:11.361Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier1": 0,
+      "tier2": 0,
+      "tier3": 0,
+      "tier4": 0
+    }
+  },
+  "gaps_addressed": [
+    "REC-001",
+    "REC-002",
+    "REC-003",
+    "REC-004",
+    "REC-005",
+    "REC-006",
+    "REC-007",
+    "REC-008",
+    "REC-009",
+    "REC-010",
+    "REC-011",
+    "REC-012",
+    "REC-013",
+    "REC-014",
+    "REC-015",
+    "REC-016",
+    "REC-017",
+    "REC-018",
+    "REC-019",
+    "REC-020",
+    "REC-021",
+    "REC-022",
+    "REC-023",
+    "REC-024",
+    "REC-025",
+    "REC-026",
+    "REC-027",
+    "REC-028",
+    "REC-029",
+    "REC-030",
+    "REC-031",
+    "REC-032",
+    "REC-033",
+    "REC-034",
+    "REC-035",
+    "REC-036",
+    "REC-037",
+    "REC-038",
+    "REC-039",
+    "REC-040",
+    "REC-041",
+    "REC-042",
+    "REC-043",
+    "REC-044",
+    "REC-045",
+    "REC-046",
+    "REC-047",
+    "REC-048",
+    "REC-049",
+    "REC-050",
+    "REC-051",
+    "REC-052",
+    "REC-053",
+    "REC-054",
+    "REC-055",
+    "REC-056",
+    "REC-057",
+    "REC-058",
+    "REC-059",
+    "REC-060",
+    "REC-061"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Existing UAR execution/thread/actor/compiler",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C03/C06/C09",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R3 and R5; source-evidence.json; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Keep the existing trusted host; add missing lifecycle/team contracts."
+    },
+    {
+      "id": "cand-002",
+      "name": "Accepted P1 UAR driver and host bridge",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C04/C05/C14",
+      "verdict": "adopt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "source-evidence.json and D-UAR-P1; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Adopt only an agreed immutable checkpoint; do not duplicate current integration."
+    },
+    {
+      "id": "cand-003",
+      "name": "Cedar and host approvals",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C02",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R5 §8; source-evidence.json; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Close route and failure-policy gaps; keep data and budget transactions outside Cedar."
+    },
+    {
+      "id": "cand-004",
+      "name": "Fabric and Forge production-readiness work",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C08/C11/C12",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R2 and D-FRF/D-FORGE; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Reuse data and transport authority after dependency reconciliation."
+    },
+    {
+      "id": "cand-005",
+      "name": "Merged agent-team skills and Agent Skills format",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C15/C16",
+      "verdict": "adopt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R4; source-evidence.json; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Extend existing guides and adapters, keeping exact pinned skill identities."
+    },
+    {
+      "id": "cand-006",
+      "name": "A2A/MCP/AG-UI/CloudEvents boundary conventions",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C04/C05/C07/C08/C14/C18",
+      "verdict": "reference",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "Primary references indexed by R1–R6; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Revalidate selected versions before adoption; protocols do not establish authority/durability."
+    },
+    {
+      "id": "cand-007",
+      "name": "External durable workflow engine",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C10",
+      "verdict": "reference",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R5 §10; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "C10 first produces workflow requirements and a measured comparison before any engine selection: recovery guarantees, embedding/mobile/offline constraints, idempotency and external-effect handling, scheduler ownership, throughput and operational cost. No engine is selected by this plan."
+    },
+    {
+      "id": "cand-008",
+      "name": "Hidden-port identity and universal shared store",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C04/C06/C11/C12",
+      "verdict": "reject",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R1 §5; R2 §5; R3 §5; prior research/source evidence reused, no new registry verification"
+        }
+      ],
+      "risks": [
+        "Current runtime conformance and dependency compatibility require the assigned acceptance gate."
+      ],
+      "decision_rationale": "Separate logical identity, grants, data authority and process storage."
+    },
+    {
+      "id": "cand-009",
+      "name": "Executive personas with implicit office powers",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "C17",
+      "verdict": "reject",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "R5/R6: prior research distinguishes persona, human consent, office assignment and action grants."
+        }
+      ],
+      "risks": [
+        "A role title can be mistaken for organizational authority."
+      ],
+      "decision_rationale": "Implement explicit consent and organizational action grants, never implicit office powers."
+    },
+    {
+      "id": "cand-010",
+      "name": "Existing Rust liter-llm provider library and configured model-discovery gateway",
+      "kind": "library",
+      "registry": "none",
+      "repo_url": "https://github.com/GQAdonis/liter-llm",
+      "fit_for_gap": "C15",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 3,
+          "claim": "Pinned UAR c29af47be3439c69e1a3c124fdcf09ce4cbb5cba uses liter_llm in src/llm/liter_driver.rs; git tree pins vendor/git/liter-llm to e627af981bcb06c7fc5da027731c182b044e25d1. Existing full-pack skills/process/agent-team-models/SKILL.md supports configured gateway discovery. Local source evidence, not an upstream maintenance audit."
+        }
+      ],
+      "risks": [
+        "No submodule initialization or dependency upgrade occurred. Refresh exact version, license/maintenance and gateway/catalog compatibility before adoption; declared metadata is not proven model capability."
+      ],
+      "decision_rationale": "Reuse this existing Rust library/gateway integration at D-UAR-P1 and D-MINI checkpoints; this is liter-llm, not the separate LiteLLM product. Exact availability/price/capability must be discovered at dispatch."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "Governed collaboration control contracts and integrations",
+      "why_no_candidate": "Existing local primitives require cohesive lifecycle, identity, durable effect and product UI integration; no report proves an off-the-shelf replacement preserves embedding and authority.",
+      "capability_gap_id": "agent-fabric-convergence"
+    },
+    {
+      "need": "C01 baseline contracts",
+      "why_no_candidate": "Local cross-repository source dispositions and owner checkpoint agreements must be produced for this initiative."
+    },
+    {
+      "need": "C13 deployment profiles",
+      "why_no_candidate": "Compose existing embedding and sidecar primitives into verified supported profiles; do not assume mobile/cloud feature parity."
+    },
+    {
+      "need": "C17 representation grants",
+      "why_no_candidate": "Build explicit consent, office assignment and action-grant composition over existing governance; reject persona-based authority."
+    }
+  ]
+}

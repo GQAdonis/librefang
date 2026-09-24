@@ -1,0 +1,15 @@
+{
+  "name": "agent-fabric-convergence",
+  "description": "Independent cross-repository planning initiative; not a replica of a product KBD run.",
+  "specBackend": "openspec",
+  "openspec_available": true,
+  "focus_project_path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence",
+  "worktreeRoot": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence",
+  "spec_paths": [
+    "openspec/specs/**/*.md",
+    "openspec/changes/**/*.md"
+  ],
+  "scope": "planning-only; no product implementation or deployment authorized by this phase setup",
+  "sourceTool": "codex",
+  "activePhase": "agent-fabric-convergence"
+}

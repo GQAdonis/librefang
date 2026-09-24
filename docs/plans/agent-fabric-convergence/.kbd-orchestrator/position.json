@@ -1,0 +1,204 @@
+{
+  "schemaVersion": "1",
+  "generatedBy": "kbd-runtime",
+  "projectionContractVersion": 2,
+  "sourceRevision": 85,
+  "derivedRevision": 85,
+  "frontier": {
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 85
+  },
+  "conflictCount": 0,
+  "updatedAt": "2026-09-24T18:42:25.267630Z",
+  "cursor": [
+    "agent-fabric-convergence",
+    "afc-c01-baseline-reconciliation-and-shared-contracts",
+    "C01.1"
+  ],
+  "root": {
+    "type": "phase",
+    "id": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "status": "ready",
+    "progress": {
+      "done": 0,
+      "total": 18
+    },
+    "children": [
+      {
+        "type": "phase",
+        "id": "agent-fabric-convergence",
+        "canonicalId": "agent-fabric-convergence",
+        "status": "IN_PROGRESS",
+        "progress": {
+          "done": 0,
+          "total": 18
+        },
+        "children": [
+          {
+            "type": "change",
+            "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c02-governed-action-and-approval-boundary",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c04-replaceable-service-instances-and-placement",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c05-bossfang-full-run-delegation",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c07-local-scoped-observers-with-durable-delivery",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c08-bossfang-and-fabric-observer-routing",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c09-bounded-teams-and-shared-task-board",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c11-authoritative-business-data-and-offline-commands",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c12-personal-peer-sovereignty-and-consent",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c16-specialist-marketing-product-and-design-teams",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c17-executive-assistants-and-consented-human-representation",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-c18-federated-compatibility-and-release-evidence",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 3
+            }
+          }
+        ],
+        "annotations": []
+      }
+    ],
+    "annotations": []
+  }
+}

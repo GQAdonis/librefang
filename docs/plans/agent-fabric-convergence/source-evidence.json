@@ -1,0 +1,234 @@
+{
+  "capturedAt": "2026-09-24T18:11:57.234Z",
+  "method": "read-only source inspection; not runtime validation",
+  "evidence": [
+    {
+      "repository": "librefang",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "relativePath": "crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "sha256": "6610e35bc1f47411b9139f93af49944b55324dfbbe899ad61793fb9d92f9eba6",
+      "firstLine": 1,
+      "lastLine": 85,
+      "excerpt": "//! UAR (Universal Agent Runtime) LLM driver.\n//!\n//! Connects to a supervised UAR sidecar over its OpenAI-compatible HTTP\n//! surface, giving LibreFang agents access to 142+\n//! providers via unified `provider/model` addressing (e.g.\n//! `\"openai/gpt-4o\"`, `\"anthropic/claude-opus-4\"`,\n//! `\"groq/llama-3.3-70b-versatile\"`).\n//!\n//! # Usage in an agent manifest\n//!\n//! ```toml\n//! [model]\n//! provider = \"uar\"\n//! model    = \"openai/gpt-4o\"   # any liter-llm provider/model string\n//!\n//! [env]\n//! UAR_LLM__API_KEY = \"sk-...\"  # or a provider-specific key\n//! ```\n//!\n//! `UarConfig::base_url` remains an LLM-provider override used by UAR itself.\n//! It is intentionally never treated as the UAR process endpoint.\n\nuse std::sync::{Arc, OnceLock, RwLock};\nuse std::time::Duration;\n\nuse async_trait::async_trait;\nuse futures::StreamExt;\nuse librefang_types::{\n    message::{ContentBlock, MessageContent, Role, StopReason, TokenUsage},\n    tool::{ToolCall, ToolDefinition},\n};\n\nuse crate::llm_driver::{\n    CompletionRequest, CompletionResponse, DriverConfig, LlmDriver, LlmError, StreamEvent,\n};\n\n// ---------------------------------------------------------------------------\n// Driver struct\n// ---------------------------------------------------------------------------\n\n#[derive(Clone, Default)]\nstruct PublishedEndpoint {\n    url: Option<String>,\n    generation: u64,\n}\n\nstatic SUPERVISED_ENDPOINT: OnceLock<RwLock<PublishedEndpoint>> = OnceLock::new();\n\nfn endpoint_cell() -> &'static RwLock<PublishedEndpoint> {\n    SUPERVISED_ENDPOINT.get_or_init(|| RwLock::new(PublishedEndpoint::default()))\n}\n\n/// Publish the endpoint selected by the UAR supervisor.\n///\n/// The port is ephemeral, so it cannot be stored in `DriverConfig` at kernel\n/// boot. Drivers resolve this shared value at call time, which also makes a\n/// dashboard restart immediately visible without rebuilding every agent.\npub fn set_supervised_endpoint(endpoint: Option<String>) {\n    let mut guard = endpoint_cell()\n        .write()\n        .unwrap_or_else(std::sync::PoisonError::into_inner);\n    guard.url = endpoint.map(|value| value.trim_end_matches('/').to_string());\n    guard.generation = guard.generation.wrapping_add(1);\n}\n\nfn supervised_endpoint() -> Result<(String, u64), LlmError> {\n    let published = endpoint_cell()\n        .read()\n        .unwrap_or_else(std::sync::PoisonError::into_inner)\n        .clone();\n    published\n        .url\n        .map(|url| (url, published.generation))\n        .ok_or_else(|| {\n            LlmError::Http(\n                \"UAR sidecar is not available; start it in the dashboard or configure \\\n                 [uar.sidecar] endpoint\"\n                    .to_string(),\n            )\n        })\n}\n\n/// LLM driver backed by the supervised UAR HTTP API.\n///\n/// Created via `provider = \"uar\"` in an agent manifest; the model string"
+    },
+    {
+      "repository": "the-boss",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss/src/main/ai/runtime/registerDrivers.ts",
+      "relativePath": "src/main/ai/runtime/registerDrivers.ts",
+      "commit": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+      "sha256": "ddc5ee58ce45f4471b4d6e2eb7e59f173ca6101f84922d387a3bc3d2664b3bd1",
+      "firstLine": 95,
+      "lastLine": 125,
+      "excerpt": "    this.implementationPromise ??= createClaudeCodeRuntimeDriver()\n    return this.implementationPromise\n  }\n}\n\n/** Register every built-in runtime at the AgentSessionRuntimeService lifecycle boundary. */\nexport function registerRuntimeDrivers(): void {\n  runtimeDriverRegistry.register(new LazyClaudeCodeRuntimeDriver())\n  runtimeDriverRegistry.register(new PiRuntimeDriver())\n  runtimeDriverRegistry.register(new DshRuntimeDriver())\n  runtimeDriverRegistry.register(new UarRuntimeDriver())\n}\n"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/server.rs",
+      "relativePath": "src/server.rs",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sha256": "4ebd8442eae64d193d2f787407bf7b9c50eb6a219b4e15007cb68d7fd1f8fdd9",
+      "firstLine": 1145,
+      "lastLine": 1192,
+      "excerpt": "        effective_enabled = governance_boot_status.effective_enabled,\n        may_disable = governance_boot_status.may_disable,\n        \"Governance boot posture finalized\"\n    );\n\n    // Initialize Governance Policy Engine (before RunManager so it can gate the\n    // orchestrator tool loop in addition to the HTTP governance layer).\n    info!(name: \"startup.step\", step = 5, stage = \"governance_engine\", \"UAR startup progress\");\n    // Say plainly when no policy engine exists, rather than letting it look\n    // like a recoverable policy-load failure.\n    //\n    // Without `cedar-governance`, `GovernanceEngine` is the facade in\n    // `engine_disabled.rs`: `is_allowed` and `is_tool_allowed` return `true`\n    // unconditionally, so the middleware mounted below authorizes every\n    // request carrying `X-Agent-Id`. `load_from_dir` also always fails in that\n    // build, so the \"failed to load policies\" warning below fires on every\n    // boot and reads like a missing directory -- understating it.\n    //\n    // The permissive baseline is deliberate (governance is opt-in via\n    // `server-full`), and this line is here so an operator can tell a build\n    // that authorizes nothing from one that authorizes everything.\n    #[cfg(not(feature = \"cedar-governance\"))]\n    warn!(\n        name: \"governance.engine.absent\",\n        feature = \"cedar-governance\",\n        \"No policy engine is compiled in — every X-Agent-Id request is authorized. Rebuild with `cedar-governance` to enforce policy.\"\n    );\n    let governance_engine = match GovernanceEngine::load_from_dir(\"policies\").await {\n        Ok(engine) => {\n            info!(\n                policy_count = engine.policy_count().await,\n                \"Governance policy engine loaded\"\n            );\n            Arc::new(engine)\n        }\n        Err(e) => {\n            warn!(\n                error = %e,\n                \"Failed to load policies from directory — using permissive default\"\n            );\n            Arc::new(\n                GovernanceEngine::with_default_permit()\n                    .expect(\"default permit policy should parse\"),\n            )\n        }\n    };\n\n    let a2ui_realtime_backbone = uar::a2ui::realtime::InMemoryReplayBackbone::new();"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/api/discovery.rs",
+      "relativePath": "src/uar/api/discovery.rs",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sha256": "8b1f8b69db9ac8b134e6d62428cfddde962369e8330a3eb585cf243fb0682fa7",
+      "firstLine": 460,
+      "lastLine": 510,
+      "excerpt": "    duration_ms: u128,\n    success: bool,\n}\n\n/// POST /api/tools/{name}/execute — execute a registered tool by namespaced name.\npub async fn execute_tool(\n    State(state): State<AppState>,\n    Path(name): Path<String>,\n    Json(body): Json<ExecuteToolRequest>,\n) -> impl IntoResponse {\n    // Verify the tool exists before attempting execution.\n    let tool_exists = state\n        .mcp\n        .tools()\n        .iter()\n        .any(|(ns_name, _)| ns_name == &name);\n\n    if !tool_exists {\n        return (\n            StatusCode::NOT_FOUND,\n            Json(ExecuteToolResponse {\n                result: None,\n                error: Some(format!(\"unknown tool: {name}\")),\n                duration_ms: 0,\n                success: false,\n            }),\n        )\n            .into_response();\n    }\n\n    let start = std::time::Instant::now();\n    match state.mcp.call_namespaced_tool(&name, body.arguments).await {\n        Ok(result) => {\n            let duration_ms = start.elapsed().as_millis();\n            (\n                StatusCode::OK,\n                Json(ExecuteToolResponse {\n                    result: Some(result),\n                    error: None,\n                    duration_ms,\n                    success: true,\n                }),\n            )\n                .into_response()\n        }\n        Err(err) => {\n            let duration_ms = start.elapsed().as_millis();\n            (\n                StatusCode::INTERNAL_SERVER_ERROR,\n                Json(ExecuteToolResponse {\n                    result: None,"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/compiler/to_artifact.rs",
+      "relativePath": "src/uar/compiler/to_artifact.rs",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sha256": "ddabcf143e9a00b0fd1d1bfeb3a627fd1ddf59ffad710e513d1f55b7f2327125",
+      "firstLine": 118,
+      "lastLine": 151,
+      "excerpt": "\n        // ── tool / skill policy ───────────────────────────────────────────\n        let tools_policy = ToolPolicy {\n            allow: if ir.tools.allow.is_empty() {\n                defaults.policy.tools.allow.clone()\n            } else {\n                ir.tools.allow.clone()\n            },\n            deny: ir.tools.deny.clone(),\n            max_concurrent: defaults.policy.tools.max_concurrent,\n            execution_mode: defaults.policy.tools.execution_mode.clone(),\n        };\n\n        let skills_policy = SkillPolicy {\n            prefer: ir.skills.skills.iter().map(|s| s.id.clone()).collect(),\n            max_active: defaults.policy.skills.max_active,\n        };\n\n        let policy = AgentPolicy {\n            provider: ProviderPolicy {\n                default: provider_default,\n                fallbacks: vec![],\n            },\n            tools: tools_policy,\n            skills: skills_policy,\n        };\n\n        // ── prompt ────────────────────────────────────────────────────────\n        let prompt = AgentPrompt {\n            system: system_prompt(ir),\n            instructions: ir.identity.instructions.clone(),\n        };\n\n        // ── memory ────────────────────────────────────────────────────────"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/runtime/actor/agent_actor.rs",
+      "relativePath": "src/uar/runtime/actor/agent_actor.rs",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sha256": "0a3b1a222eda3b7429116055d66b506a842fa09db71ee8844d95b370196f2e15",
+      "firstLine": 1,
+      "lastLine": 85,
+      "excerpt": "//! An actor mailbox over the shared thread/run host. Actors do not construct\n//! an LLM driver, orchestrator, tool registry, or private conversation history.\n\nuse std::sync::Arc;\n\nuse ractor::{Actor, ActorProcessingErr, ActorRef};\nuse tokio_util::sync::CancellationToken;\n\nuse crate::uar::runtime::thread::{AgentThreadResult, actor_host::ActorThreadSession};\n\nuse super::messages::{ActorStatus, AgentMessage, AgentReply};\n\n/// Mailbox-owned state. The host owns thread persistence and run execution.\npub struct AgentActorState {\n    pub agent_id: String,\n    pub status: ActorStatus,\n    session: Arc<tokio::sync::Mutex<ActorThreadSession>>,\n    cancellation: CancellationToken,\n}\n\nimpl std::fmt::Debug for AgentActorState {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        f.debug_struct(\"AgentActorState\")\n            .field(\"agent_id\", &self.agent_id)\n            .field(\"status\", &self.status)\n            .finish_non_exhaustive()\n    }\n}\n\n/// Serialized mailbox adapter, not an alternative agent execution kernel.\n#[derive(Debug)]\npub struct AgentActor;\n\n/// Trusted-host arguments. Identity and artifact are resolved before spawning.\npub struct AgentActorArgs {\n    pub agent_id: String,\n    pub cancellation: CancellationToken,\n    pub(crate) session: Arc<tokio::sync::Mutex<ActorThreadSession>>,\n}\n\nimpl std::fmt::Debug for AgentActorArgs {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        f.debug_struct(\"AgentActorArgs\")\n            .field(\"agent_id\", &self.agent_id)\n            .finish_non_exhaustive()\n    }\n}\n\nimpl AgentActorState {\n    async fn execute(&mut self, content: String) -> AgentReply {\n        if self.cancellation.is_cancelled() {\n            return AgentReply {\n                content: \"Actor has been stopped\".into(),\n                success: false,\n                metadata: serde_json::json!({\"code\": \"actor_stopped\"}),\n            };\n        }\n        match self.session.lock().await.execute(content).await {\n            Ok(record) => {\n                let metadata = serde_json::json!({\n                    \"thread_id\": record.thread.thread_id,\n                    \"root_run_id\": record.thread.root_run_id,\n                    \"run_id\": record.thread.run_id,\n                    \"status\": record.thread.status,\n                });\n                let (content, success) = match record.thread.result {\n                    Some(AgentThreadResult::Completed { output }) => (output, true),\n                    Some(AgentThreadResult::Failed { message, .. }) => (message, false),\n                    Some(AgentThreadResult::Cancelled) => (\"Run cancelled\".into(), false),\n                    None => (\"Thread returned without a terminal result\".into(), false),\n                };\n                AgentReply {\n                    content,\n                    success,\n                    metadata,\n                }\n            }\n            Err(error) => {\n                tracing::error!(agent_id = %self.agent_id, error = %error, \"Actor host execution failed\");\n                AgentReply {\n                    content: \"Actor host execution failed\".into(),\n                    success: false,\n                    metadata: serde_json::json!({\"code\": \"actor_host_failed\"}),\n                }\n            }"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/Cargo.toml",
+      "relativePath": "Cargo.toml",
+      "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sha256": "d0787df925bf8208290e7ad9caa62f7d35dbbcf8865d53b88e7878b40d3dd9b3",
+      "firstLine": 460,
+      "lastLine": 477,
+      "excerpt": "# JSON Schema generation for AppConfig, exposed at GET /.well-known/uar-config\n# (openspec/changes/config-rs-schemars-migration).\nschemars = \"1\"\n# Lock-free runtime config hot-reload (openspec/changes/config-hot-reload-vault).\narc-swap = \"1.6\"\n# Optional HashiCorp Vault KV-v2 source, gated behind the `vault` feature.\nvaultrs = { version = \"0.8\", optional = true }\n## Pinned to =3.2.4 (exact) so UAR, librefang, surreal-memory, and the deployed\n## SurrealDB server remain on the same verified release baseline. The curated\n## surreal-memory manifest carries the matching exact SDK and schema-type pins.\nsurrealdb = { version = \"=3.2.4\", optional = true, features = [\"kv-surrealkv\"] }\njsonschema = { version = \"0.49.4\", default-features = false }\ngovernor = { version = \"0.10.4\", features = [\"std\", \"jitter\", \"quanta\"] }\nnonzero_ext = \"0.3.0\"\n\n# Compiler pipeline (UAR-AGENT-MD → descriptor)\npulldown-cmark = \"0.13.3\"\nsha2 = \"0.11.0\""
+    },
+    {
+      "repository": "flint-gate",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate/crates/flint-gate-core/src/auth/token_exchange.rs",
+      "relativePath": "crates/flint-gate-core/src/auth/token_exchange.rs",
+      "commit": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "sha256": "ed751d1d0337a1600ae5a75e9696940793209d38719c9c48f46a3c7cd2b16451",
+      "firstLine": 212,
+      "lastLine": 233,
+      "excerpt": "    }\n    if req.subject_token.trim().is_empty() {\n        return Err(ExchangeError::InvalidSubjectToken(\n            \"subject_token is required\".to_string(),\n        ));\n    }\n    // Fail-closed on an actor_token: multi-hop `act` chaining is not supported\n    // this phase. Rejecting (rather than silently ignoring the security-relevant\n    // parameter) prevents a caller from believing a delegation constraint was\n    // applied when it was not.\n    if req\n        .actor_token\n        .as_deref()\n        .map(str::trim)\n        .is_some_and(|s| !s.is_empty())\n    {\n        return Err(ExchangeError::UnsupportedActorToken);\n    }\n    Ok(())\n}\n\n/// Downscope the requested scope to the subject token's granted scopes."
+    },
+    {
+      "repository": "flint-realtime-fabric",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric/Cargo.toml",
+      "relativePath": "Cargo.toml",
+      "commit": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "sha256": "d6fbddcf679bc8c4ee8236f708f0627da346f76d677a682bf1b3271d11d40111",
+      "firstLine": 150,
+      "lastLine": 161,
+      "excerpt": "\n# Phase 8: Cedar policy engine\ncedar-policy = { version = \"4\" }\nloro-ffi = { version = \"1.13.1\" }\nredb = { version = \"4.1.0\" }\nsurrealdb = { version = \"3.1.5\" }\nuniffi = { version = \"0.31.2\" }\n\n[profile.release]\nopt-level = 3\nlto = \"thin\"\ncodegen-units = 1"
+    },
+    {
+      "repository": "surreal-memory-server",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server/Cargo.toml",
+      "relativePath": "Cargo.toml",
+      "commit": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "sha256": "ef15a9315fc6f69372d3ac7dd6c4495a1824c68088e9da436d23cd1657434e37",
+      "firstLine": 1,
+      "lastLine": 20,
+      "excerpt": "[workspace]\nmembers = [\n    \".\",                     # surreal-memory-server binary (root)\n    \"crates/surreal-memory\", # embeddable library crate\n]\nresolver = \"2\"\n\n[workspace.dependencies]\nmempalace-core = { git = \"https://github.com/GQAdonis/mempalace-rs.git\", branch = \"main\" }\ntokio = { version = \"1.50.0\", features = [\"full\"] }\nserde = { version = \"1.0\", features = [\"derive\"] }\nserde_json = \"1.0\"\n# Keep the SDK and schema types aligned with the deployed SurrealDB server.\nsurrealdb = { version = \"=3.2.4\" }\nsurrealdb_types = { package = \"surrealdb-types\", version = \"=3.2.4\" }\nanyhow = \"1.0.102\"\nthiserror = \"2.0.18\"\nsha2 = \"0.11.0\"\ntracing = \"0.1.44\"\ntracing-subscriber = { version = \"0.3.23\", features = [\"fmt\", \"env-filter\"] }"
+    },
+    {
+      "repository": "know-me-app",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app/src-tauri/Cargo.toml",
+      "relativePath": "src-tauri/Cargo.toml",
+      "commit": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "sha256": "45841ec66bf01900565ad4551608a2b10493498ba90a8651080ca2ecc22d2272",
+      "firstLine": 30,
+      "lastLine": 45,
+      "excerpt": "serde_json = \"1\"\n\n# Errors / logging\nthiserror = \"2\"\nanyhow    = \"1\"\ntracing   = \"0.1\"\ntracing-subscriber = { version = \"0.3\", features = [\"env-filter\"] }\n\n# Database — pin exactly to match UAR + librefang\nsurrealdb = { version = \"=3.0.5\", features = [\"kv-rocksdb\"] }\nuuid      = { version = \"1\", features = [\"v4\", \"serde\"] }\nchrono    = { version = \"0.4\", features = [\"serde\"] }\n\n# Universal Agent Runtime — embedded library mode\nuniversal-agent-runtime = { path = \"../vendor/universal-agent-runtime\", features = [\"tauri\"] }\n"
+    },
+    {
+      "repository": "know-me-system",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system/versions.toml",
+      "relativePath": "versions.toml",
+      "commit": "c561d89e783264ef1215764db69e57493c4b815b",
+      "sha256": "28188ac64eec82faff5d2319930c0056f8868774930400b3ed1490541e1a844d",
+      "firstLine": 32,
+      "lastLine": 44,
+      "excerpt": "[android_build]\ngradle = \"9.7.0-rc-1\"\nandroid_gradle_plugin = \"9.4.0-alpha05\"\nkotlin_android_plugin = \"2.4.20-Beta1\"\nlitert_lm_android = \"0.14.0\"\n\n[data]\nsurrealdb = \"3.2.1\"             # embedded graph/vector/FTS, kv-rocksdb native / kv-indxdb wasm\npglite_oxide = \"0.5.1\"          # desktop config-DB only (macOS arm64 / Win x64 / Linux x64+arm64)\n\n# Inference engines are per-lane decisions, not one global choice. Android uses\n# LiteRT-LM as the universal recovery baseline; llama.cpp remains quarantined\n# outside Android production because OpenCL/Adreno proved device-specific."
+    },
+    {
+      "repository": "librefang",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/sdk/python/librefang/sidecar/adapters/slack.py",
+      "relativePath": "sdk/python/librefang/sidecar/adapters/slack.py",
+      "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "sha256": "632546029f1f42b959d9b2dbde126d0272c77d043a6471210711a89f9e5f3d0d",
+      "firstLine": 1,
+      "lastLine": 45,
+      "excerpt": "#!/usr/bin/env python3\n\"\"\"Slack Socket Mode sidecar channel adapter for LibreFang.\n\nReplaces the former in-process Rust ``librefang-channels::slack``\nadapter (removed in this sidecar migration; same pattern as ntfy\n#5224, telegram #5241, gotify #5263, mastodon #5264, bluesky #5277,\nreddit #5281, discord #5299).\n\nBehaviour parity with the Rust adapter:\n\n* **Auth probe**: ``POST /api/auth.test`` with the bot token at\n  startup to discover the bot's own ``user_id`` (used for self-skip).\n* **Socket Mode**: ``POST /api/apps.connections.open`` with the\n  app-level token (``xapp-…``) returns a WSS URL. We connect and\n  read JSON envelopes (``hello`` / ``events_api`` / ``interactive`` /\n  ``disconnect``). Each ``events_api`` / ``interactive`` envelope\n  must be ACK'd by echoing back ``{\"envelope_id\": \"...\"}``.\n* **Event handling**: only ``message`` and ``app_mention`` types produce ``message`` events.\n  Subtype filter: bare messages pass, ``message_changed`` extracts ``event.message`` (edit), ``file_share`` passes as an ordinary message carrying ``files`` (#7087), every other subtype is dropped (joins, leaves, topic changes, etc.).\n  Self-skip on ``bot_id`` present OR ``user == bot_user_id``.\n* **Inbound attachments** (#7087): a message's ``files`` array becomes an ``Image`` / ``Video`` / ``Audio`` / ``File`` content variant carrying ``url_private_download``, and the adapter declares ``header_rules`` so the daemon fetches that URL with the bot token — Slack's private file URLs 302 to a login page without it.\n  The URL is forwarded rather than the bytes because the daemon's media pipeline is what produces a vision image block, an audio transcription or a saved document path; inbound ``FileData`` is rendered as a text placeholder and its payload discarded, so inlining bytes would deliver nothing.\n  One attachment per message (the wire carries one ``ChannelContent``), the attachment outranks the message text including a slash command, and the message text rides along as the caption for every variant that has one.\n  Policy knobs: ``SLACK_FILE_DOWNLOADS``, ``SLACK_FILE_MAX_BYTES``, ``SLACK_FILE_ALLOWED_EXTENSIONS``, ``SLACK_FILE_DOWNLOAD_CHANNELS`` and ``SLACK_FILE_DOWNLOAD_EXCLUDE_CHANNELS``.\n  Link-unfurl ``attachments[].image_url`` is deliberately **not** followed: it is preview metadata for a URL somebody pasted, not an upload, and fetching it would point the daemon at an arbitrary host.\n* **Allowed channels**: empty list = allow all. When non-empty,\n  channel must be in the list; DMs (``channel`` starts with ``D``)\n  are exempt (the operator's per-user DM allowlist handles those).\n* **Display name**: the raw ``Uxxxxxxx`` id by default (DM resolution and the kernel user mapping run on the id, not the human name, and the in-process Rust adapter never spent a call to improve on it).\n  Set ``SLACK_RESOLVE_DISPLAY_NAMES=true`` (#7086) to resolve it through ``users.info`` instead, cached per user id for ``SLACK_DISPLAY_NAME_TTL`` seconds so a busy channel costs a handful of calls a day rather than one per message.\n  Requires the ``users:read`` bot scope; without it every lookup fails and the adapter keeps reporting the id.\n  Off by default because turning it on changes what the daemon *stores*, not only what it shows: the roster row the bridge persists for each group sender carries whatever ``user_name`` this adapter reports.\n  Operators who prefer explicit mappings keep using ``[users]``, which stays authoritative.\n* **Slash commands**: ``/cmd args`` → ``Command`` (text otherwise).\n* **Thread context**: ``thread_ts`` is surfaced as ``thread_id`` so\n  replies thread under the originating message.\n* **DM vs group**: ``is_group = not channel.startswith('D')``.\n* **Bulk member enumeration** (#7086): with ``SLACK_ENUMERATE_MEMBERS=true`` every inbound group message carries the channel's full ``conversations.members`` list as ``group_members`` metadata, so an agent can answer \"who is in this channel?\" for people who have never spoken rather than only for those who have.\n  Cached per channel for ``SLACK_MEMBER_LIST_TTL`` seconds and capped at ``SLACK_MEMBER_LIST_MAX`` members; needs ``channels:read`` / ``groups:read``.\n  Names on this path come from the display-name cache only — a sweep never issues ``users.info``, because resolving hundreds of people who have not spoken would spend the whole per-method budget.\n  Off by default, and for a larger reason than the display-name knob: this changes *how many people* the daemon stores, from those who addressed the agent to everyone the workspace lists in the channel.\n  The daemon keeps those rows classified apart from the observational ones, so ``channel_dm`` still refuses anyone who has never addressed the agent — enumeration widens what can be *reported*, never what can be *messaged*.\n* **Block Kit interactive**: ``block_actions`` payloads → first\n  action's ``value`` becomes ``ButtonCallback.action``; ``action_id``,\n  ``trigger_id``, and the ``block_action`` flag ride in metadata."
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini/skills/agent-team-creator/SKILL.md",
+      "relativePath": "skills/agent-team-creator/SKILL.md",
+      "commit": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sha256": "f9499c34faf89af0b11c8a791998ed4b8dfc643df5e4d976e60885c49a4a4e8b",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-creator\ndescription: \"Create the smallest useful coding agent team for a task, with guided role discovery and native exports for UAR, Codex, Claude Code, Copilot, Kimi Code, MiniMax CLI, OpenCode and DeepSeek. Use when a user asks to create, configure or choose an agent team; use agent-team-manage for existing task state. Do not use for existing task updates (see agent-team-manage).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Creator\n\nHelp the user choose a useful team, then create inspectable definitions. A role\ndescribes responsibility; a skill provides reusable instructions; a model supplies\ncapability; a harness owns execution. Do not turn these into one interchangeable\nconcept or start a second agent loop.\n\n## Start with the task"
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini/skills/agent-team-handoff/SKILL.md",
+      "relativePath": "skills/agent-team-handoff/SKILL.md",
+      "commit": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sha256": "ce8e6c64a50e35ee5f7ce44a07fc98bafd9592cbb896c3dbc076df04d7c5db3e",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-handoff\ndescription: \"Prepare and accept a durable handoff between agent roles or coding harnesses using task context, Git identity, evidence and memory references. Use when work must continue in another harness or agent; use agent-team-manage for ordinary same-owner task updates. Do not use for ordinary same-owner task updates (see agent-team-manage).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Handoff\n\nLoad the existing state and companion `agent-team-creator` runtime. Read its\n`references/task-handoff.md` for exact request shapes. Preserve the active KBD\nidentity if present; do not create a competing canonical task.\n\n1. Read current state and task revisions. Identify the actual source owner and\n   destination role/harness. Capture completed work, concrete evidence, remaining"
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini/skills/agent-team-manage/SKILL.md",
+      "relativePath": "skills/agent-team-manage/SKILL.md",
+      "commit": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sha256": "851a75e5854ad0a2778d274c00585d7da796e96e11b2903d2fd35efd911bc224",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-manage\ndescription: \"Manage an existing agent team: assign tasks, dependencies and owners, update definitions, track evidence, cancel or reassign work, and reconcile KBD-linked completion. Use when managing team lifecycle requests; use agent-team-creator for initial team discovery and agent-team-handoff to transfer work across harnesses. Do not use for initial team creation (see agent-team-creator).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Manager\n\nLocate the existing team state and load the companion `agent-team-creator` skill.\nUse its compiled `<agent-team-creator>/scripts/cli.mjs`; do not recreate its runtime. If that companion\nis absent, report the missing package and resolve it through the authorized skill\ninstallation flow. Read its `references/task-handoff.md` for exact JSON requests.\n\n1. Read project instructions and `status`. Inspect the current state revision,"
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini/skills/agent-team-models/SKILL.md",
+      "relativePath": "skills/agent-team-models/SKILL.md",
+      "commit": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sha256": "1d5bdc4306a02986129563954cbac2b7697b13d3a87771168b4cb6006f912a5c",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-models\ndescription: \"Discover configured models and choose explicit capability, strength and cost policies at team, role, skill and task levels. Use when selecting models or controlling an agent team budget; use agent-team-creator for role discovery. Unknown prices and capabilities remain unknown. Do not use for role selection (see agent-team-creator).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Models\n\nUse the companion `agent-team-creator` compiled runtime and read its\n`references/models-memory.md`. Discover the currently configured provider/model\nidentifiers; do not infer availability, strength or price from a model name.\n\nAsk for missing constraints in task terms: difficult reasoning, routine\nimplementation, mechanical edits, tools, vision, context size or cost. Reuse"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack/skills/process/agent-team-creator/SKILL.md",
+      "relativePath": "skills/process/agent-team-creator/SKILL.md",
+      "commit": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sha256": "f9499c34faf89af0b11c8a791998ed4b8dfc643df5e4d976e60885c49a4a4e8b",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-creator\ndescription: \"Create the smallest useful coding agent team for a task, with guided role discovery and native exports for UAR, Codex, Claude Code, Copilot, Kimi Code, MiniMax CLI, OpenCode and DeepSeek. Use when a user asks to create, configure or choose an agent team; use agent-team-manage for existing task state. Do not use for existing task updates (see agent-team-manage).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Creator\n\nHelp the user choose a useful team, then create inspectable definitions. A role\ndescribes responsibility; a skill provides reusable instructions; a model supplies\ncapability; a harness owns execution. Do not turn these into one interchangeable\nconcept or start a second agent loop.\n\n## Start with the task"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack/skills/process/agent-team-handoff/SKILL.md",
+      "relativePath": "skills/process/agent-team-handoff/SKILL.md",
+      "commit": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sha256": "ce8e6c64a50e35ee5f7ce44a07fc98bafd9592cbb896c3dbc076df04d7c5db3e",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-handoff\ndescription: \"Prepare and accept a durable handoff between agent roles or coding harnesses using task context, Git identity, evidence and memory references. Use when work must continue in another harness or agent; use agent-team-manage for ordinary same-owner task updates. Do not use for ordinary same-owner task updates (see agent-team-manage).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Handoff\n\nLoad the existing state and companion `agent-team-creator` runtime. Read its\n`references/task-handoff.md` for exact request shapes. Preserve the active KBD\nidentity if present; do not create a competing canonical task.\n\n1. Read current state and task revisions. Identify the actual source owner and\n   destination role/harness. Capture completed work, concrete evidence, remaining"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack/skills/process/agent-team-manage/SKILL.md",
+      "relativePath": "skills/process/agent-team-manage/SKILL.md",
+      "commit": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sha256": "851a75e5854ad0a2778d274c00585d7da796e96e11b2903d2fd35efd911bc224",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-manage\ndescription: \"Manage an existing agent team: assign tasks, dependencies and owners, update definitions, track evidence, cancel or reassign work, and reconcile KBD-linked completion. Use when managing team lifecycle requests; use agent-team-creator for initial team discovery and agent-team-handoff to transfer work across harnesses. Do not use for initial team creation (see agent-team-creator).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Manager\n\nLocate the existing team state and load the companion `agent-team-creator` skill.\nUse its compiled `<agent-team-creator>/scripts/cli.mjs`; do not recreate its runtime. If that companion\nis absent, report the missing package and resolve it through the authorized skill\ninstallation flow. Read its `references/task-handoff.md` for exact JSON requests.\n\n1. Read project instructions and `status`. Inspect the current state revision,"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack/skills/process/agent-team-models/SKILL.md",
+      "relativePath": "skills/process/agent-team-models/SKILL.md",
+      "commit": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sha256": "1d5bdc4306a02986129563954cbac2b7697b13d3a87771168b4cb6006f912a5c",
+      "firstLine": 1,
+      "lastLine": 18,
+      "excerpt": "---\nname: agent-team-models\ndescription: \"Discover configured models and choose explicit capability, strength and cost policies at team, role, skill and task levels. Use when selecting models or controlling an agent team budget; use agent-team-creator for role discovery. Unknown prices and capabilities remain unknown. Do not use for role selection (see agent-team-creator).\"\nlicense: MIT\ncompatibility: Requires Node.js 22 or newer. Git is optional for handoff snapshots. Model gateways, memory services and native harness CLIs are optional and separately configured.\nmetadata:\n  version: \"1.0.0\"\n  tags: \"agents, teams, orchestration, coding\"\n---\n\n# Agent Team Models\n\nUse the companion `agent-team-creator` compiled runtime and read its\n`references/models-memory.md`. Discover the currently configured provider/model\nidentifiers; do not infer availability, strength or price from a model name.\n\nAsk for missing constraints in task terms: difficult reasoning, routine\nimplementation, mechanical edits, tools, vision, context size or cost. Reuse"
+    },
+    {
+      "repository": "librefang",
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/Cargo.toml",
+      "relativePath": "Cargo.toml",
+      "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "sha256": "51dcbfaee466348ccdd0e9ab2eb10ee193f0c69fa20841c7ff1cd4161b1ee0bc",
+      "firstLine": 120,
+      "lastLine": 130,
+      "excerpt": "# SurrealDB — pinned exactly so librefang, surreal-memory, and UAR all link the\n# same client crate (see Phase 4b of plan surrealdb-storage-swap).\n# ALSO pin surrealdb-core explicitly: surrealdb = \"=x.y.z\" does NOT transitively\n# constrain surrealdb-core because Cargo's `=` applies only to the top-level crate.\n# Without this pin, `cargo generate-lockfile` / `cargo update` can drift\n# surrealdb-core onto a newer minor whose internal API surface breaks the\n# surrealdb client we pin. This pin makes the alignment structural.\nsurrealdb = { version = \"=3.2.4\", default-features = false, features = [\"kv-rocksdb\", \"protocol-ws\", \"protocol-http\"] }\nsurrealdb-core = { version = \"=3.2.4\", default-features = false }\n# surreal-memory — pinned by `rev`, and the URL/rev form is kept BYTE-IDENTICAL to\n# the one UAR declares. Cargo keys a git source on the literal URL + ref, so"
+    }
+  ],
+  "mergeEvidence": {
+    "repository": "the-boss",
+    "pr": 3,
+    "state": "MERGED",
+    "mergedAt": "2026-09-24T17:51:49Z",
+    "commit": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+    "method": "gh pr view 3 --repo Prometheus-AGS/the-boss --json state,mergedAt,mergeCommit,url,title"
+  }
+}

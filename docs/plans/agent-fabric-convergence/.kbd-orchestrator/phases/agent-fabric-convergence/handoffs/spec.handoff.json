@@ -1,0 +1,11 @@
+{
+  "stage": "spec",
+  "completedAt": "2026-09-24T18:35:34Z",
+  "outputs": [
+    "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md"
+  ],
+  "nextStage": "plan",
+  "summaryForNext": "18 initiative changes; 17 behavioral specs and documentation-only C01. ZeeSpec n/a (no subject directory). Independent revision review PASS, no remaining findings. Product dispatch requires repository-scoped child tasks.",
+  "skipped": false,
+  "skipReason": null
+}

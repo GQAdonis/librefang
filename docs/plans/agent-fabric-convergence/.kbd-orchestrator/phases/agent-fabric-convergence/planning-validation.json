@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-09-24T18:41:56.395Z",
+  "repositories": 11,
+  "branch": "codex/agent-fabric-convergence",
+  "changes": 18,
+  "parentDeliveryGroups": 54,
+  "recommendationClusters": 61,
+  "acyclicOrderedDependencies": true,
+  "allRecommendationsAssigned": true,
+  "productImplementationComplete": 0,
+  "errors": [],
+  "profilePrerequisitesOrdered": true,
+  "releaseDependenciesSeparate": true,
+  "openSpecStrict": {
+    "passed": 18,
+    "failed": 0
+  },
+  "localLinks": {
+    "checked": 33,
+    "broken": 0
+  },
+  "brandingCheck": "python3 scripts/enforce-branding.py --check: passed",
+  "productBuilds": "Not run: documentation-only planning; preserve active integration build ownership."
+}

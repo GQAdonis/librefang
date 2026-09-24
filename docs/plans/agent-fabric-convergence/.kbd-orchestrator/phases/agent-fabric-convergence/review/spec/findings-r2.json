@@ -1,0 +1,23 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [],
+  "checked_classes": [
+    "recommendation coverage \u2014 all REC-001 through REC-061 are assigned to a change and each assigned spec includes a report acceptance coverage requirement or C01 reconciliation gate",
+    "dependency ordering \u2014 later changes declare prerequisite changes or profile-specific gates before depending on their capabilities; C13 adds explicit profile prerequisite gates for C11/C12-dependent modes",
+    "scope and implementation readiness \u2014 artifacts consistently mark initiative tasks as planning delivery groups and require repository-scoped child tasks, file claims, checkpoints and acceptance links before product implementation",
+    "authority boundary contradictions \u2014 specs consistently separate execution, supervision, approval, data, observer, connector, human-representation and console authorities without granting authority from role titles, transport, UI rendering, CRDT writes or harness portability",
+    "acceptance testability \u2014 acceptance clauses use observable outcomes such as denied effects, preserved identities, refusal diagnostics, crash/restart behavior, revocation behavior, exact revisions and real-boundary scenarios rather than relying only on subjective success claims",
+    "previous findings regression \u2014 C01 now names baseline-ledger.json, C10 includes Gate/memory owners and checkpoints, C13 has profile-specific prerequisite gates, C16 replaces user-understanding acceptance with generated rationale/scope/cost/checklist evidence, and C15 treats Node.js/TypeScript 7 as a gated operator constraint rather than a verified availability claim",
+    "constraint violations \u2014 the planning-only constraint, active-worktree preservation, no product-source modification, and mandatory Node.js/TypeScript 7 operator constraint are retained as gates rather than bypassed"
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

@@ -1,0 +1,351 @@
+{
+  "packet_version": 1,
+  "mode": "artifact",
+  "phase": "agent-fabric-convergence",
+  "target": "assess",
+  "producer_model": "gpt-6",
+  "constraints": null,
+  "file_tree": ".\n./.kbd-orchestrator\n./.kbd-orchestrator/current-waypoint.json\n./.kbd-orchestrator/model-preflight.json\n./.kbd-orchestrator/phases\n./.kbd-orchestrator/position-reminder.txt\n./.kbd-orchestrator/position.json\n./.kbd-orchestrator/project.json\n./.prometheus\n./.prometheus/project.json\n./AGENTS.md\n./README.md\n./dependencies.md\n./openspec\n./openspec/config.yaml\n./recommendations.json\n./recommendations.md\n./report-sources.json\n./repository-manifest.json\n./source-evidence.json\n",
+  "artifact": "===== assessment.md =====\n# Assessment: agent-fabric-convergence\n\nDate: 2026-09-24. Scope: cross-repository planning and source reconciliation. Build health and runtime conformance: **UNKNOWN — no product builds or tests were run**. Source evidence is not installed acceptance.\n\n## Baseline and method\n\nAll 11 repositories were fetched from their configured `origin`, then branched from the resolved default-branch commit into separate worktrees. `repository-manifest.json` records the exact commits. Existing uncommitted files were not copied. Their original checkouts were not switched, reset or cleaned.\n\nThe five reports R1–R5 and the separate proposed standard R6 were written against older, often dirty working checkouts. They remain design inputs; findings must be rebound to the fetched commits. Targeted production-source inspection was performed for the highest-risk integration, policy, definition and dependency surfaces. This is an initiative assessment, not a complete fresh audit of every module. C01 below requires exact per-recommendation source disposition before implementation of the affected slice.\n\n## Current findings\n\n| Area | Status | Observed evidence and planning consequence |\n|---|---|---|\n| Isolated initiative workspace | DONE | Eleven worktrees on the requested branch; independent KBD project identity under this directory. Git isolation does not isolate runtime resources. |\n| BossFang provider integration | PARTIAL | At `82809ab6719f`, `crates/librefang-llm-drivers/src/drivers/uar.rs` now uses a supervised HTTP endpoint and the OpenAI-compatible model surface. R1's direct Rust-wrapper description is superseded. Full-run delegation is still a separate requirement; model-call bridging does not transfer loop authority. |\n| The Boss UAR integration | PARTIAL | At `2b57fa0164a5`, `src/main/ai/runtime/registerDrivers.ts` imports and registers `UarRuntimeDriver`; `src/main/ai/runtime/uar/UarSidecarService.ts` and binary-manager entries exist. The report's absent-driver finding is superseded. Installed readiness is not inferred from source. |\n| UAR run/actor/subagent foundation | PARTIAL | Existing run/thread/actor/compiler surfaces remain the starting point at `c29af47be343`. Sidecar launch-security, principal and retention integration test sources exist. No results were collected here. A bounded search did not locate first-class `TeamDefinition`/`TeamInstance`; this is not a universal absence claim. |\n| Governed startup | PARTIAL | Current `src/server.rs` still falls back to `GovernanceEngine::with_default_permit()` on policy-load error, while warning when Cedar is not compiled. The managed host's other governance checks must be assessed separately. Governed profile behavior requires route-complete verification, not a generic claim that all UAR is fail-open. |\n| Direct tool boundary | PARTIAL | Current `src/uar/api/discovery.rs::execute_tool` calls `state.mcp.call_namespaced_tool` directly. Middleware is a separate layer; inventory both before deciding which enforcement is missing. Do not describe this source fact as an unauthenticated exploit. |\n| Definition integrity | PARTIAL | Current `src/uar/compiler/to_artifact.rs` maps skills to `SkillPolicy.prefer` IDs; required/version/config preservation and effective policy installation remain explicit acceptance requirements. |\n| Gate delegation | PARTIAL | At `0edb945f1d73`, token exchange still rejects supplied `actor_token`; arbitrary multi-hop delegation cannot be assumed. The original checkout also contains in-flight security edits. |\n| Fabric and Forge convergence | PARTIAL | Production-readiness branches contain 12 and 4 commits respectively beyond their fetched default branches. Report findings about read lanes, cancellation, sync, RLS and durability need comparison with that work before assigning new fixes. |\n| KnowMe composition | PARTIAL | Both app and system repositories exist and have distinct architectures. The system has embedded-UAR integration work; the app pins a separate Rust storage stack. Do not silently choose one product as the replacement for the other. |\n| Dependency compatibility | PARTIAL | Current UAR, BossFang and surreal-memory source pins include SurrealDB 3.2.4. KnowMe app pins 3.0.5; KnowMe system `versions.toml` declares 3.2.1; Fabric declares 3.1.5. Source declarations require lockfile/feature verification. Process separation can permit different versions; in-process sharing cannot assume compatibility. No dependency upgrades are made here. |\n| Skills | PARTIAL | Agent-team skill work is merged into the fetched mini/full sources and The Boss PR #3 is included in the fetched main history. Reuse the four skills, configuration and adapter contracts. New business-role coverage and runtime enforcement require separate evidence. |\n| Observers, workflows, twins | PARTIAL | Reports establish useful primitives and explicit gaps. Their complete durable, scoped and governed cross-product behavior has not been demonstrated against these baselines. A resident process, transport subscription or persona definition is not sufficient evidence. |\n\n## Active work and conflicts\n\nThe active Codex task **UAR Working Agent** is a protected external dependency. Its P1 plan owns sidecar security/runtime/session adapters, The Boss driver and lifecycle, host tool approvals, UI and native release packaging. It also has an integration-administration child. The convergence phase cannot claim those tasks or alter that task's canonical state.\n\nThe current P1 host contract gives The Boss canonical product conversation history and UAR execution ownership. R1 uses broader language about harness-owned history. Resolve the vocabulary: distinguish product conversation history, executor context/checkpoints, workflow records and projections. Do not introduce a second conflicting canonical transcript or overwrite the P1 contract.\n\nThe mini-pack's local `main` and `origin/main` are divergent (19 local-only and 9 remote-only commits at inventory time). The shared branch must not discard that local shipping work or treat the fetched mini baseline as an accepted future release candidate. Other divergences are in the manifest. A reconciliation gate is required before pin advancement.\n\n## Goal progress\n\n- Workspace isolation: MET for Git checkouts; no runtime isolation claims.\n- Report reconciliation: PARTIAL, with concrete superseded findings and current blockers identified.\n- Cross-project implementation plan: pending analysis/spec/plan stages.\n- All recommendations implemented: NOT MET; implementation was not requested in this turn.\n- External SaaS effects, digital-twin authority and publication: NOT enabled by planning.\n\n## Constraints and unknowns\n\nPreserve BossFang branding, storage and UAR additions; its CLI is outside this initiative's initial implementation scope. Respect per-repository version policy rather than copying stale pins from this task's original instructions. Keep KBD state, model routing, skill packages and runtime authority distinct. Knowledge logs may explain decisions but never issue grants or replace execution receipts.\n\nUnmeasured: installed platform behavior, throughput, actor residency payoff, end-to-end revocation, remote fencing, connector idempotency, peer key recovery and product-level test coverage. No percentages are invented. Negative claims from older reports remain historical until their exact paths are rechecked or a current integration scenario demonstrates them.\n\n## Proposed standard R6: reconciliation\n\nR6 is a design proposal, not a sixth research report or an implemented profile. Its `urn:prometheus:uar:collaboration:draft-1` identifier remains provisional.\n\n| R6 requirement | Source status / gap | Planned disposition |\n|---|---|---|\n| §§1–3 section-based authoring, IR and skill integrity | Existing parser/IR/artifact conversion; current preferred-ID mapping does not establish required/version/config retention | C03 repair and round-trip through effective runtime, preserving legacy headings |\n| §2 five document kinds | Agent artifacts exist; bounded source search did not locate TeamDefinition/TeamInstance. Workflow/binding/representation records require exact mapping | C03 formal schemas; C04/C09/C10/C17 implement records through existing stores |\n| §4 teams, task leases, peer budgets and independent review | Child threads/actors are reusable; team-scoped durable claim/fencing remains unverified | C09 extend host, never force peers into a forged parent root |\n| §5 workflows, waits and uncertain effects | Existing graph path is a reuse candidate; complete restart/effect contract not established here | C10 measured build-versus-adopt decision and production recovery evidence |\n| §6 binding receipts and negotiated profiles | New P1 sidecar/driver exists; ecosystem-wide profile binding not established | C04 adopt P1 contract and extend with explicit unsupported semantics |\n| §7 governance | Current policy-load fallback and direct dispatch require route inventory; authored policy references are not grants | C02 verify each boundary before any expanded authority |\n| §8 representation | Role prompts and personal consent are distinct; issuer/delegation/offboarding contract remains proposed | C17 grants and negative human-approval tests |\n| §9 scoped subscriptions | Existing run events and channel plumbing are not proof of durable authorized delivery | C07 local inbox plus C08 source/recipient bridge |\n| §10 examples | Illustrative companion records, not valid current parser inputs | C03 publish explicit migration fixtures, do not install examples |\n| §11 conformance and loss reporting | No current ecosystem conformance results collected | C03/C15 loss diagnostics; C18 supported-profile evidence |\n| §12 adoption | Governance and conversion precede empowered teams; feedback is first bounded business slice | C02→C03→C09/C10, with direct/BossFang acceptance |\n\n## Connector integration assessment\n\nBossFang has channel adapters and MCP extension configuration; UAR exposes MCP tool discovery/calling and the managed runtime tool path. These are reusable mechanisms, not evidence of uniform business-action policy. The source inventory in `source-evidence.json` records concrete paths at the new baselines. Notion, Slack, Jira and GitHub require an action-by-action mapping: read, draft, publish/update/delete, target account/project/channel, payload classification, credential binding and result reconciliation. C10 owns this boundary; C08 owns channel event provenance; C16 supplies task-specific role procedures. No connector was installed, authenticated, contacted or mutated for this assessment. Provider-native idempotency, search consistency, quotas and connector compliance remain unverified and must be assessed before enabling their corresponding effect.\n\n",
+  "goals": "# Goals\n\n- Reconcile all five research reports and the proposed agent standard against pinned current sources.\n- Preserve the active UAR Working Agent delivery and all other worktrees.\n- Define single execution, supervision, workflow, data, and policy authorities across all operating modes.\n- Plan governed definitions, teams, observers, workflows, human representation, skills and connector integrations.\n- Produce ordered OpenSpec changes with ownership, prerequisites, operational acceptance and compatibility gates.\n- Stop at reviewed planning; product implementation, builds and deployment remain future work.\n",
+  "cited_paths": "EXISTS   repository-manifest.json\nEXISTS   source-evidence.json\nMISSING  crates/librefang-llm-drivers/src/drivers/uar.rs\nMISSING  src/main/ai/runtime/registerDrivers.ts\nMISSING  src/main/ai/runtime/uar/UarSidecarService.ts\nMISSING  src/server.rs\nMISSING  src/uar/compiler/to_artifact.rs\nMISSING  versions.toml\n",
+  "prior_handoffs": null,
+  "crossRepositoryEvidence": {
+    "capturedAt": "2026-09-24T18:11:57.234Z",
+    "method": "read-only source inspection; not runtime validation",
+    "evidence": [
+      {
+        "repository": "librefang",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/crates/librefang-llm-drivers/src/drivers/uar.rs",
+        "relativePath": "crates/librefang-llm-drivers/src/drivers/uar.rs",
+        "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+        "sha256": "6610e35bc1f47411b9139f93af49944b55324dfbbe899ad61793fb9d92f9eba6",
+        "firstLine": 1,
+        "lastLine": 85,
+        "excerpt": "//! UAR (Universal Agent Runtime) LLM driver.\n//!\n//! Connects to a supervised UAR sidecar over its OpenAI-compatible HTTP\n//! surface, giving LibreFang agents access to 142+\n//! providers via unified `provider/model` addressing (e.g.\n//! `\"openai/gpt-4o\"`, `\"anthropic/claude-opus-4\"`,\n//! `\"groq/llama-3.3-70b-versatile\"`).\n//!\n//! # Usage in an agent manifest\n//!\n//! ```toml\n//! [model]\n//! provider = \"uar\"\n//! model    = \"openai/gpt-4o\"   # any liter-llm provider/model string\n//!\n//! [env]\n//! UAR_LLM__API_KEY = \"sk-...\"  # or a provider-specific key\n//! ```\n//!\n//! `UarConfig::base_url` remains an LLM-provider override used by UAR itself.\n//! It is intentionally never treated as the UAR process endpoint.\n\nuse std::sync::{Arc, OnceLock, RwLock};\nuse std::time::Duration;\n\nuse async_trait::async_trait;\nuse futures::StreamExt;\nuse librefang_types::{\n    message::{ContentBlock, MessageContent, Role, StopReason, TokenUsage},\n    tool::{ToolCall, ToolDefinition},\n};\n\nuse crate::llm_driver::{\n    CompletionRequest, CompletionResponse, DriverConfig, LlmDriver, LlmError, StreamEvent,\n};\n\n// ---------------------------------------------------------------------------\n// Driver struct\n// ---------------------------------------------------------------------------\n\n#[derive(Clone, Default)]\nstruct PublishedEndpoint {\n    url: Option<String>,\n    generation: u64,\n}\n\nstatic SUPERVISED_ENDPOINT: OnceLock<RwLock<PublishedEndpoint>> = OnceLock::new();\n\nfn endpoint_cell() -> &'static RwLock<PublishedEndpoint> {\n    SUPERVISED_ENDPOINT.get_or_init(|| RwLock::new(PublishedEndpoint::default()))\n}\n\n/// Publish the endpoint selected by the UAR supervisor.\n///\n/// The port is ephemeral, so it cannot be stored in `DriverConfig` at kernel\n/// boot. Drivers resolve this shared value at call time, which also makes a\n/// dashboard restart immediately visible without rebuilding every agent.\npub fn set_supervised_endpoint(endpoint: Option<String>) {\n    let mut guard = endpoint_cell()\n        .write()\n        .unwrap_or_else(std::sync::PoisonError::into_inner);\n    guard.url = endpoint.map(|value| value.trim_end_matches('/').to_string());\n    guard.generation = guard.generation.wrapping_add(1);\n}\n\nfn supervised_endpoint() -> Result<(String, u64), LlmError> {\n    let published = endpoint_cell()\n        .read()\n        .unwrap_or_else(std::sync::PoisonError::into_inner)\n        .clone();\n    published\n        .url\n        .map(|url| (url, published.generation))\n        .ok_or_else(|| {\n            LlmError::Http(\n                \"UAR sidecar is not available; start it in the dashboard or configure \\\n                 [uar.sidecar] endpoint\"\n                    .to_string(),\n            )\n        })\n}\n\n/// LLM driver backed by the supervised UAR HTTP API.\n///\n/// Created via `provider = \"uar\"` in an agent manifest; the model string"
+      },
+      {
+        "repository": "the-boss",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss/src/main/ai/runtime/registerDrivers.ts",
+        "relativePath": "src/main/ai/runtime/registerDrivers.ts",
+        "commit": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+        "sha256": "ddc5ee58ce45f4471b4d6e2eb7e59f173ca6101f84922d387a3bc3d2664b3bd1",
+        "firstLine": 95,
+        "lastLine": 125,
+        "excerpt": "    this.implementationPromise ??= createClaudeCodeRuntimeDriver()\n    return this.implementationPromise\n  }\n}\n\n/** Register every built-in runtime at the AgentSessionRuntimeService lifecycle boundary. */\nexport function registerRuntimeDrivers(): void {\n  runtimeDriverRegistry.register(new LazyClaudeCodeRuntimeDriver())\n  runtimeDriverRegistry.register(new PiRuntimeDriver())\n  runtimeDriverRegistry.register(new DshRuntimeDriver())\n  runtimeDriverRegistry.register(new UarRuntimeDriver())\n}\n"
+      },
+      {
+        "repository": "universal-agent-runtime",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/server.rs",
+        "relativePath": "src/server.rs",
+        "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sha256": "4ebd8442eae64d193d2f787407bf7b9c50eb6a219b4e15007cb68d7fd1f8fdd9",
+        "firstLine": 1145,
+        "lastLine": 1192,
+        "excerpt": "        effective_enabled = governance_boot_status.effective_enabled,\n        may_disable = governance_boot_status.may_disable,\n        \"Governance boot posture finalized\"\n    );\n\n    // Initialize Governance Policy Engine (before RunManager so it can gate the\n    // orchestrator tool loop in addition to the HTTP governance layer).\n    info!(name: \"startup.step\", step = 5, stage = \"governance_engine\", \"UAR startup progress\");\n    // Say plainly when no policy engine exists, rather than letting it look\n    // like a recoverable policy-load failure.\n    //\n    // Without `cedar-governance`, `GovernanceEngine` is the facade in\n    // `engine_disabled.rs`: `is_allowed` and `is_tool_allowed` return `true`\n    // unconditionally, so the middleware mounted below authorizes every\n    // request carrying `X-Agent-Id`. `load_from_dir` also always fails in that\n    // build, so the \"failed to load policies\" warning below fires on every\n    // boot and reads like a missing directory -- understating it.\n    //\n    // The permissive baseline is deliberate (governance is opt-in via\n    // `server-full`), and this line is here so an operator can tell a build\n    // that authorizes nothing from one that authorizes everything.\n    #[cfg(not(feature = \"cedar-governance\"))]\n    warn!(\n        name: \"governance.engine.absent\",\n        feature = \"cedar-governance\",\n        \"No policy engine is compiled in — every X-Agent-Id request is authorized. Rebuild with `cedar-governance` to enforce policy.\"\n    );\n    let governance_engine = match GovernanceEngine::load_from_dir(\"policies\").await {\n        Ok(engine) => {\n            info!(\n                policy_count = engine.policy_count().await,\n                \"Governance policy engine loaded\"\n            );\n            Arc::new(engine)\n        }\n        Err(e) => {\n            warn!(\n                error = %e,\n                \"Failed to load policies from directory — using permissive default\"\n            );\n            Arc::new(\n                GovernanceEngine::with_default_permit()\n                    .expect(\"default permit policy should parse\"),\n            )\n        }\n    };\n\n    let a2ui_realtime_backbone = uar::a2ui::realtime::InMemoryReplayBackbone::new();"
+      },
+      {
+        "repository": "universal-agent-runtime",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/api/discovery.rs",
+        "relativePath": "src/uar/api/discovery.rs",
+        "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sha256": "8b1f8b69db9ac8b134e6d62428cfddde962369e8330a3eb585cf243fb0682fa7",
+        "firstLine": 460,
+        "lastLine": 510,
+        "excerpt": "    duration_ms: u128,\n    success: bool,\n}\n\n/// POST /api/tools/{name}/execute — execute a registered tool by namespaced name.\npub async fn execute_tool(\n    State(state): State<AppState>,\n    Path(name): Path<String>,\n    Json(body): Json<ExecuteToolRequest>,\n) -> impl IntoResponse {\n    // Verify the tool exists before attempting execution.\n    let tool_exists = state\n        .mcp\n        .tools()\n        .iter()\n        .any(|(ns_name, _)| ns_name == &name);\n\n    if !tool_exists {\n        return (\n            StatusCode::NOT_FOUND,\n            Json(ExecuteToolResponse {\n                result: None,\n                error: Some(format!(\"unknown tool: {name}\")),\n                duration_ms: 0,\n                success: false,\n            }),\n        )\n            .into_response();\n    }\n\n    let start = std::time::Instant::now();\n    match state.mcp.call_namespaced_tool(&name, body.arguments).await {\n        Ok(result) => {\n            let duration_ms = start.elapsed().as_millis();\n            (\n                StatusCode::OK,\n                Json(ExecuteToolResponse {\n                    result: Some(result),\n                    error: None,\n                    duration_ms,\n                    success: true,\n                }),\n            )\n                .into_response()\n        }\n        Err(err) => {\n            let duration_ms = start.elapsed().as_millis();\n            (\n                StatusCode::INTERNAL_SERVER_ERROR,\n                Json(ExecuteToolResponse {\n                    result: None,"
+      },
+      {
+        "repository": "universal-agent-runtime",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/compiler/to_artifact.rs",
+        "relativePath": "src/uar/compiler/to_artifact.rs",
+        "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sha256": "ddabcf143e9a00b0fd1d1bfeb3a627fd1ddf59ffad710e513d1f55b7f2327125",
+        "firstLine": 118,
+        "lastLine": 151,
+        "excerpt": "\n        // ── tool / skill policy ───────────────────────────────────────────\n        let tools_policy = ToolPolicy {\n            allow: if ir.tools.allow.is_empty() {\n                defaults.policy.tools.allow.clone()\n            } else {\n                ir.tools.allow.clone()\n            },\n            deny: ir.tools.deny.clone(),\n            max_concurrent: defaults.policy.tools.max_concurrent,\n            execution_mode: defaults.policy.tools.execution_mode.clone(),\n        };\n\n        let skills_policy = SkillPolicy {\n            prefer: ir.skills.skills.iter().map(|s| s.id.clone()).collect(),\n            max_active: defaults.policy.skills.max_active,\n        };\n\n        let policy = AgentPolicy {\n            provider: ProviderPolicy {\n                default: provider_default,\n                fallbacks: vec![],\n            },\n            tools: tools_policy,\n            skills: skills_policy,\n        };\n\n        // ── prompt ────────────────────────────────────────────────────────\n        let prompt = AgentPrompt {\n            system: system_prompt(ir),\n            instructions: ir.identity.instructions.clone(),\n        };\n\n        // ── memory ────────────────────────────────────────────────────────"
+      },
+      {
+        "repository": "universal-agent-runtime",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/src/uar/runtime/actor/agent_actor.rs",
+        "relativePath": "src/uar/runtime/actor/agent_actor.rs",
+        "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sha256": "0a3b1a222eda3b7429116055d66b506a842fa09db71ee8844d95b370196f2e15",
+        "firstLine": 1,
+        "lastLine": 85,
+        "excerpt": "//! An actor mailbox over the shared thread/run host. Actors do not construct\n//! an LLM driver, orchestrator, tool registry, or private conversation history.\n\nuse std::sync::Arc;\n\nuse ractor::{Actor, ActorProcessingErr, ActorRef};\nuse tokio_util::sync::CancellationToken;\n\nuse crate::uar::runtime::thread::{AgentThreadResult, actor_host::ActorThreadSession};\n\nuse super::messages::{ActorStatus, AgentMessage, AgentReply};\n\n/// Mailbox-owned state. The host owns thread persistence and run execution.\npub struct AgentActorState {\n    pub agent_id: String,\n    pub status: ActorStatus,\n    session: Arc<tokio::sync::Mutex<ActorThreadSession>>,\n    cancellation: CancellationToken,\n}\n\nimpl std::fmt::Debug for AgentActorState {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        f.debug_struct(\"AgentActorState\")\n            .field(\"agent_id\", &self.agent_id)\n            .field(\"status\", &self.status)\n            .finish_non_exhaustive()\n    }\n}\n\n/// Serialized mailbox adapter, not an alternative agent execution kernel.\n#[derive(Debug)]\npub struct AgentActor;\n\n/// Trusted-host arguments. Identity and artifact are resolved before spawning.\npub struct AgentActorArgs {\n    pub agent_id: String,\n    pub cancellation: CancellationToken,\n    pub(crate) session: Arc<tokio::sync::Mutex<ActorThreadSession>>,\n}\n\nimpl std::fmt::Debug for AgentActorArgs {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        f.debug_struct(\"AgentActorArgs\")\n            .field(\"agent_id\", &self.agent_id)\n            .finish_non_exhaustive()\n    }\n}\n\nimpl AgentActorState {\n    async fn execute(&mut self, content: String) -> AgentReply {\n        if self.cancellation.is_cancelled() {\n            return AgentReply {\n                content: \"Actor has been stopped\".into(),\n                success: false,\n                metadata: serde_json::json!({\"code\": \"actor_stopped\"}),\n            };\n        }\n        match self.session.lock().await.execute(content).await {\n            Ok(record) => {\n                let metadata = serde_json::json!({\n                    \"thread_id\": record.thread.thread_id,\n                    \"root_run_id\": record.thread.root_run_id,\n                    \"run_id\": record.thread.run_id,\n                    \"status\": record.thread.status,\n                });\n                let (content, success) = match record.thread.result {\n                    Some(AgentThreadResult::Completed { output }) => (output, true),\n                    Some(AgentThreadResult::Failed { message, .. }) => (message, false),\n                    Some(AgentThreadResult::Cancelled) => (\"Run cancelled\".into(), false),\n                    None => (\"Thread returned without a terminal result\".into(), false),\n                };\n                AgentReply {\n                    content,\n                    success,\n                    metadata,\n                }\n            }\n            Err(error) => {\n                tracing::error!(agent_id = %self.agent_id, error = %error, \"Actor host execution failed\");\n                AgentReply {\n                    content: \"Actor host execution failed\".into(),\n                    success: false,\n                    metadata: serde_json::json!({\"code\": \"actor_host_failed\"}),\n                }\n            }"
+      },
+      {
+        "repository": "universal-agent-runtime",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime/Cargo.toml",
+        "relativePath": "Cargo.toml",
+        "commit": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sha256": "d0787df925bf8208290e7ad9caa62f7d35dbbcf8865d53b88e7878b40d3dd9b3",
+        "firstLine": 460,
+        "lastLine": 477,
+        "excerpt": "# JSON Schema generation for AppConfig, exposed at GET /.well-known/uar-config\n# (openspec/changes/config-rs-schemars-migration).\nschemars = \"1\"\n# Lock-free runtime config hot-reload (openspec/changes/config-hot-reload-vault).\narc-swap = \"1.6\"\n# Optional HashiCorp Vault KV-v2 source, gated behind the `vault` feature.\nvaultrs = { version = \"0.8\", optional = true }\n## Pinned to =3.2.4 (exact) so UAR, librefang, surreal-memory, and the deployed\n## SurrealDB server remain on the same verified release baseline. The curated\n## surreal-memory manifest carries the matching exact SDK and schema-type pins.\nsurrealdb = { version = \"=3.2.4\", optional = true, features = [\"kv-surrealkv\"] }\njsonschema = { version = \"0.49.4\", default-features = false }\ngovernor = { version = \"0.10.4\", features = [\"std\", \"jitter\", \"quanta\"] }\nnonzero_ext = \"0.3.0\"\n\n# Compiler pipeline (UAR-AGENT-MD → descriptor)\npulldown-cmark = \"0.13.3\"\nsha2 = \"0.11.0\""
+      },
+      {
+        "repository": "flint-gate",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate/crates/flint-gate-core/src/auth/token_exchange.rs",
+        "relativePath": "crates/flint-gate-core/src/auth/token_exchange.rs",
+        "commit": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+        "sha256": "ed751d1d0337a1600ae5a75e9696940793209d38719c9c48f46a3c7cd2b16451",
+        "firstLine": 212,
+        "lastLine": 233,
+        "excerpt": "    }\n    if req.subject_token.trim().is_empty() {\n        return Err(ExchangeError::InvalidSubjectToken(\n            \"subject_token is required\".to_string(),\n        ));\n    }\n    // Fail-closed on an actor_token: multi-hop `act` chaining is not supported\n    // this phase. Rejecting (rather than silently ignoring the security-relevant\n    // parameter) prevents a caller from believing a delegation constraint was\n    // applied when it was not.\n    if req\n        .actor_token\n        .as_deref()\n        .map(str::trim)\n        .is_some_and(|s| !s.is_empty())\n    {\n        return Err(ExchangeError::UnsupportedActorToken);\n    }\n    Ok(())\n}\n\n/// Downscope the requested scope to the subject token's granted scopes."
+      },
+      {
+        "repository": "flint-realtime-fabric",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric/Cargo.toml",
+        "relativePath": "Cargo.toml",
+        "commit": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+        "sha256": "d6fbddcf679bc8c4ee8236f708f0627da346f76d677a682bf1b3271d11d40111",
+        "firstLine": 150,
+        "lastLine": 161,
+        "excerpt": "\n# Phase 8: Cedar policy engine\ncedar-policy = { version = \"4\" }\nloro-ffi = { version = \"1.13.1\" }\nredb = { version = \"4.1.0\" }\nsurrealdb = { version = \"3.1.5\" }\nuniffi = { version = \"0.31.2\" }\n\n[profile.release]\nopt-level = 3\nlto = \"thin\"\ncodegen-units = 1"
+      },
+      {
+        "repository": "surreal-memory-server",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server/Cargo.toml",
+        "relativePath": "Cargo.toml",
+        "commit": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+        "sha256": "ef15a9315fc6f69372d3ac7dd6c4495a1824c68088e9da436d23cd1657434e37",
+        "firstLine": 1,
+        "lastLine": 20,
+        "excerpt": "[workspace]\nmembers = [\n    \".\",                     # surreal-memory-server binary (root)\n    \"crates/surreal-memory\", # embeddable library crate\n]\nresolver = \"2\"\n\n[workspace.dependencies]\nmempalace-core = { git = \"https://github.com/GQAdonis/mempalace-rs.git\", branch = \"main\" }\ntokio = { version = \"1.50.0\", features = [\"full\"] }\nserde = { version = \"1.0\", features = [\"derive\"] }\nserde_json = \"1.0\"\n# Keep the SDK and schema types aligned with the deployed SurrealDB server.\nsurrealdb = { version = \"=3.2.4\" }\nsurrealdb_types = { package = \"surrealdb-types\", version = \"=3.2.4\" }\nanyhow = \"1.0.102\"\nthiserror = \"2.0.18\"\nsha2 = \"0.11.0\"\ntracing = \"0.1.44\"\ntracing-subscriber = { version = \"0.3.23\", features = [\"fmt\", \"env-filter\"] }"
+      },
+      {
+        "repository": "know-me-app",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app/src-tauri/Cargo.toml",
+        "relativePath": "src-tauri/Cargo.toml",
+        "commit": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+        "sha256": "45841ec66bf01900565ad4551608a2b10493498ba90a8651080ca2ecc22d2272",
+        "firstLine": 30,
+        "lastLine": 45,
+        "excerpt": "serde_json = \"1\"\n\n# Errors / logging\nthiserror = \"2\"\nanyhow    = \"1\"\ntracing   = \"0.1\"\ntracing-subscriber = { version = \"0.3\", features = [\"env-filter\"] }\n\n# Database — pin exactly to match UAR + librefang\nsurrealdb = { version = \"=3.0.5\", features = [\"kv-rocksdb\"] }\nuuid      = { version = \"1\", features = [\"v4\", \"serde\"] }\nchrono    = { version = \"0.4\", features = [\"serde\"] }\n\n# Universal Agent Runtime — embedded library mode\nuniversal-agent-runtime = { path = \"../vendor/universal-agent-runtime\", features = [\"tauri\"] }\n"
+      },
+      {
+        "repository": "know-me-system",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system/versions.toml",
+        "relativePath": "versions.toml",
+        "commit": "c561d89e783264ef1215764db69e57493c4b815b",
+        "sha256": "28188ac64eec82faff5d2319930c0056f8868774930400b3ed1490541e1a844d",
+        "firstLine": 32,
+        "lastLine": 44,
+        "excerpt": "[android_build]\ngradle = \"9.7.0-rc-1\"\nandroid_gradle_plugin = \"9.4.0-alpha05\"\nkotlin_android_plugin = \"2.4.20-Beta1\"\nlitert_lm_android = \"0.14.0\"\n\n[data]\nsurrealdb = \"3.2.1\"             # embedded graph/vector/FTS, kv-rocksdb native / kv-indxdb wasm\npglite_oxide = \"0.5.1\"          # desktop config-DB only (macOS arm64 / Win x64 / Linux x64+arm64)\n\n# Inference engines are per-lane decisions, not one global choice. Android uses\n# LiteRT-LM as the universal recovery baseline; llama.cpp remains quarantined\n# outside Android production because OpenCL/Adreno proved device-specific."
+      },
+      {
+        "repository": "librefang",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/sdk/python/librefang/sidecar/adapters/slack.py",
+        "relativePath": "sdk/python/librefang/sidecar/adapters/slack.py",
+        "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+        "sha256": "632546029f1f42b959d9b2dbde126d0272c77d043a6471210711a89f9e5f3d0d",
+        "firstLine": 1,
+        "lastLine": 45,
+        "excerpt": "#!/usr/bin/env python3\n\"\"\"Slack Socket Mode sidecar channel adapter for LibreFang.\n\nReplaces the former in-process Rust ``librefang-channels::slack``\nadapter (removed in this sidecar migration; same pattern as ntfy\n#5224, telegram #5241, gotify #5263, mastodon #5264, bluesky #5277,\nreddit #5281, discord #5299).\n\nBehaviour parity with the Rust adapter:\n\n* **Auth probe**: ``POST /api/auth.test`` with the bot token at\n  startup to discover the bot's own ``user_id`` (used for self-skip).\n* **Socket Mode**: ``POST /api/apps.connections.open`` with the\n  app-level token (``xapp-…``) returns a WSS URL. We connect and\n  read JSON envelopes (``hello`` / ``events_api`` / ``interactive`` /\n  ``disconnect``). Each ``events_api`` / ``interactive`` envelope\n  must be ACK'd by echoing back ``{\"envelope_id\": \"...\"}``.\n* **Event handling**: only ``message`` and ``app_mention`` types produce ``message`` events.\n  Subtype filter: bare messages pass, ``message_changed`` extracts ``event.message`` (edit), ``file_share`` passes as an ordinary message carrying ``files`` (#7087), every other subtype is dropped (joins, leaves, topic changes, etc.).\n  Self-skip on ``bot_id`` present OR ``user == bot_user_id``.\n* **Inbound attachments** (#7087): a message's ``files`` array becomes an ``Image`` / ``Video`` / ``Audio`` / ``File`` content variant carrying ``url_private_download``, and the adapter declares ``header_rules`` so the daemon fetches that URL with the bot token — Slack's private file URLs 302 to a login page without it.\n  The URL is forwarded rather than the bytes because the daemon's media pipeline is what produces a vision image block, an audio transcription or a saved document path; inbound ``FileData`` is rendered as a text placeholder and its payload discarded, so inlining bytes would deliver nothing.\n  One attachment per message (the wire carries one ``ChannelContent``), the attachment outranks the message text including a slash command, and the message text rides along as the caption for every variant that has one.\n  Policy knobs: ``SLACK_FILE_DOWNLOADS``, ``SLACK_FILE_MAX_BYTES``, ``SLACK_FILE_ALLOWED_EXTENSIONS``, ``SLACK_FILE_DOWNLOAD_CHANNELS`` and ``SLACK_FILE_DOWNLOAD_EXCLUDE_CHANNELS``.\n  Link-unfurl ``attachments[].image_url`` is deliberately **not** followed: it is preview metadata for a URL somebody pasted, not an upload, and fetching it would point the daemon at an arbitrary host.\n* **Allowed channels**: empty list = allow all. When non-empty,\n  channel must be in the list; DMs (``channel`` starts with ``D``)\n  are exempt (the operator's per-user DM allowlist handles those).\n* **Display name**: the raw ``Uxxxxxxx`` id by default (DM resolution and the kernel user mapping run on the id, not the human name, and the in-process Rust adapter never spent a call to improve on it).\n  Set ``SLACK_RESOLVE_DISPLAY_NAMES=true`` (#7086) to resolve it through ``users.info`` instead, cached per user id for ``SLACK_DISPLAY_NAME_TTL`` seconds so a busy channel costs a handful of calls a day rather than one per message.\n  Requires the ``users:read`` bot scope; without it every lookup fails and the adapter keeps reporting the id.\n  Off by default because turning it on changes what the daemon *stores*, not only what it shows: the roster row the bridge persists for each group sender carries whatever ``user_name`` this adapter reports.\n  Operators who prefer explicit mappings keep using ``[users]``, which stays authoritative.\n* **Slash commands**: ``/cmd args`` → ``Command`` (text otherwise).\n* **Thread context**: ``thread_ts`` is surfaced as ``thread_id`` so\n  replies thread under the originating message.\n* **DM vs group**: ``is_group = not channel.startswith('D')``.\n* **Bulk member enumeration** (#7086): with ``SLACK_ENUMERATE_MEMBERS=true`` every inbound group message carries the channel's full ``conversations.members`` list as ``group_members`` metadata, so an agent can answer \"who is in this channel?\" for people who have never spoken rather than only for those who have.\n  Cached per channel for ``SLACK_MEMBER_LIST_TTL`` seconds and capped at ``SLACK_MEMBER_LIST_MAX`` members; needs ``channels:read`` / ``groups:read``.\n  Names on this path come from the display-name cache only — a sweep never issues ``users.info``, because resolving hundreds of people who have not spoken would spend the whole per-method budget.\n  Off by default, and for a larger reason than the display-name knob: this changes *how many people* the daemon stores, from those who addressed the agent to everyone the workspace lists in the channel.\n  The daemon keeps those rows classified apart from the observational ones, so ``channel_dm`` still refuses anyone who has never addressed the agent — enumeration widens what can be *reported*, never what can be *messaged*.\n* **Block Kit interactive**: ``block_actions`` payloads → first\n  action's ``value`` becomes ``ButtonCallback.action``; ``action_id``,\n  ``trigger_id``, and the ``block_action`` flag ride in metadata."
+      }
+    ]
+  },
+  "repositoryManifest": {
+    "initiative": "agent-fabric-convergence",
+    "capturedAt": "2026-09-24T18:00:25.497Z",
+    "repositories": [
+      {
+        "name": "librefang",
+        "source": "/Users/gqadonis/Projects/references/librefang",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:GQAdonis/librefang.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+        "sourceBranch": "codex/deploy-uar-bossfang-runtime",
+        "sourceHead": "c719a4d683e4d3fb42e436f812e0193f865c9d2c",
+        "sourceDivergence": "1400\t7",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:00.460Z"
+      },
+      {
+        "name": "universal-agent-runtime",
+        "source": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/universal-agent-runtime.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "sourceBranch": "feat/context-history-integrity",
+        "sourceHead": "ba12845138104d3c8c3b8bca8bc7c5be24004e91",
+        "sourceDivergence": "20\t0",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:02.323Z"
+      },
+      {
+        "name": "the-boss",
+        "source": "/Users/gqadonis/Projects/prometheus/the-boss",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/the-boss.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+        "sourceBranch": "fix/window-titles-branding",
+        "sourceHead": "8344b485203427952716cd142da28c181162be61",
+        "sourceDivergence": "52\t0",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:04.754Z"
+      },
+      {
+        "name": "flint-gate",
+        "source": "/Users/gqadonis/Projects/prometheus/flint-gate",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Know-Me-Tools/flint-gate.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+        "sourceBranch": "codex/aso-task-status-projection",
+        "sourceHead": "39c40d6b97be1b346969acead1e943c0bd68d5b7",
+        "sourceDivergence": "1\t1",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:05.334Z"
+      },
+      {
+        "name": "flint-realtime-fabric",
+        "source": "/Users/gqadonis/Projects/prometheus/flint-realtime-fabric",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/flint-realtime-fabric.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+        "sourceBranch": "codex/production-readiness-integration",
+        "sourceHead": "ae26f45d8afa037677004cd118b0571b8b552131",
+        "sourceDivergence": "0\t12",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:05.857Z"
+      },
+      {
+        "name": "flint-forge",
+        "source": "/Users/gqadonis/Projects/prometheus/flint-forge",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-forge",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Know-Me-Tools/flint-forge.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+        "sourceBranch": "codex/production-readiness-integration",
+        "sourceHead": "ed7201851bb4feb068518912316b75cb869add14",
+        "sourceDivergence": "0\t4",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:06.498Z"
+      },
+      {
+        "name": "surreal-memory-server",
+        "source": "/Users/gqadonis/Projects/prometheus/surreal-memory-server",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/surreal-memory-server.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+        "sourceBranch": "chore/update-dependencies",
+        "sourceHead": "dd7fdcd6d8974af4059d1d51401bd33ae29f65db",
+        "sourceDivergence": "33\t1",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:06.640Z"
+      },
+      {
+        "name": "prometheus-skill-pack",
+        "source": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/prometheus-skill-system.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "add9b48949371f647350ee0d318bfc0672a861ff",
+        "sourceBranch": "main",
+        "sourceHead": "10a416589b06c5f22f4ca32b3c0414fdd3026603",
+        "sourceDivergence": "17\t0",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:09.310Z"
+      },
+      {
+        "name": "prometheus-skills-mini",
+        "source": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Prometheus-AGS/prometheus-skills-mini.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+        "sourceBranch": "main",
+        "sourceHead": "14a65e8e337fff9cbd0bbaab6844cd626f3d2633",
+        "sourceDivergence": "9\t19",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:09.646Z"
+      },
+      {
+        "name": "know-me-app",
+        "source": "/Users/gqadonis/Projects/know-me/know-me-app",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Know-Me-Tools/know-me-app.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+        "sourceBranch": "main",
+        "sourceHead": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+        "sourceDivergence": "0\t0",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:09.734Z"
+      },
+      {
+        "name": "know-me-system",
+        "source": "/Users/gqadonis/Projects/know-me/know-me-system",
+        "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system",
+        "branch": "codex/agent-fabric-convergence",
+        "origin": "git@github.com:Know-Me-Tools/know-me-system.git",
+        "baseRef": "refs/remotes/origin/main",
+        "baseline": "c561d89e783264ef1215764db69e57493c4b815b",
+        "sourceBranch": "feat/embedded-memory-crud",
+        "sourceHead": "68f7ab83b72c8bed37d1e7d19a5371a45b4f8f52",
+        "sourceDivergence": "3\t2",
+        "sourceDirty": true,
+        "createdAt": "2026-09-24T18:01:10.140Z"
+      }
+    ]
+  },
+  "reportSources": {
+    "capturedAt": "2026-09-24T18:05:07.504Z",
+    "sources": [
+      {
+        "id": "R1",
+        "path": "/Users/gqadonis/.prometheus/research/bossfang-uar-studio-architecture-20260924-a73e/report.md",
+        "sha256": "a20c4b57cefbdba72b8b20dd27192d64bd072d0f8d3c19fcc7eb91fee4c5c26a",
+        "verification": "historical source inspection; not current operational certification"
+      },
+      {
+        "id": "R2",
+        "path": "/Users/gqadonis/.prometheus/research/knowme-flint-ecosystem-architecture-20260924-b6d2/report.md",
+        "sha256": "159cef9e0b6a28c47d7f831f941c8b741088eea1373c657e573f96f3730cfe47",
+        "verification": "historical source inspection; not current operational certification"
+      },
+      {
+        "id": "R3",
+        "path": "/Users/gqadonis/.prometheus/research/uar-agent-operational-modes-20260924-c8f1/report.md",
+        "sha256": "36731b02d65598655b72ce8e0f38e8c53b4f7cf07dd528abc7d96b61fadd4eb1",
+        "verification": "historical source inspection; not current operational certification"
+      },
+      {
+        "id": "R4",
+        "path": "/Users/gqadonis/.prometheus/research/kbd-agent-roles-skills-20260924-d4e7/report.md",
+        "sha256": "4ccd984392f780afdf5d25cb9e5884b7a0d0ff965dd31b0419f414d930c283ef",
+        "verification": "historical source inspection; not current operational certification"
+      },
+      {
+        "id": "R5",
+        "path": "/Users/gqadonis/.prometheus/research/uar-governed-agent-teams-20260924-e92a/report.md",
+        "sha256": "ba36ce801dcb721938c623dc0d78e2e2be7a088081b245765c9c38ae312c7b87",
+        "verification": "historical source inspection; not current operational certification"
+      },
+      {
+        "id": "R6",
+        "path": "/Users/gqadonis/.prometheus/research/uar-governed-agent-teams-20260924-e92a/proposal/standard.md",
+        "sha256": "3e733616a73172fd20b9616a76cacc47b77d8f4a7fa74ee61837722b805933a5",
+        "verification": "proposed standard; not implemented schema"
+      }
+    ]
+  },
+  "pathResolutionNote": "Bare source paths in assessment are qualified by their named repository, not by the nested planning directory. Resolve them using crossRepositoryEvidence.path; the generic packet collector cannot resolve sibling repository paths."
+}
