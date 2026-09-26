@@ -77,6 +77,32 @@
       "scoped retrieval and retained memory only; no conversation or workflow authority"
     ]
   },
+  "nonOverlappingI1Delivery": {
+    "status": "implemented-and-published-awaiting-merge",
+    "child": "uar-team-definitions-deployment",
+    "closeoutRevision": 195,
+    "scope": [
+      "immutable AgentDefinition, TeamDefinition and WorkflowDefinition collaboration packages",
+      "owner and workspace scoped deployment bindings",
+      "agent-team creator questions, maintenance, canonical export and UAR deployment",
+      "explicit refusal of team activation until durable team execution is implemented"
+    ],
+    "architecture": "UAR remains the sole execution-loop owner; I1 adds catalog and binding administration only.",
+    "surrealDb": {
+      "clientSdk": "3.3.0",
+      "serverImage": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20"
+    },
+    "pullRequests": [
+      { "repository": "universal-agent-runtime", "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/304", "head": "676f995c73dc7dacdce71c929ffac88ac3618bb0", "state": "OPEN" },
+      { "repository": "prometheus-skills-mini", "url": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/7", "head": "8fafd44fb2e02a6120c0d4dbb7ef7e21b88be42e", "state": "OPEN" },
+      { "repository": "prometheus-skill-system", "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/104", "head": "1fa2eaa32084059f90866d8fa08744ef2f1b37e6", "state": "OPEN" },
+      { "repository": "compass", "url": "https://github.com/GQAdonis/compass/pull/9", "head": "40c9bfff9dd01f22fb6cb300497ba7a7d32a2897", "state": "OPEN" },
+      { "repository": "surreal-memory-server", "url": "https://github.com/Prometheus-AGS/surreal-memory-server/pull/28", "head": "137780252700cd59630d18b8e42f11d033538c1e", "state": "OPEN" },
+      { "repository": "the-boss", "url": "https://github.com/Prometheus-AGS/the-boss/pull/10", "head": "7e95983bf5bee223c43a7b11f1bbf7c8fddbd636", "state": "OPEN" }
+    ],
+    "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
+    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work."
+  },
   "acceptance": {
     "checkpointAccepted": false,
     "blockingCondition": "Published Windows x64 2.2.3 installed acceptance is still pending in the owning shipping phase.",
@@ -84,7 +110,8 @@
     "allowedWhilePending": [
       "planning and documentation",
       "read-only source reconciliation",
-      "nonoverlapping work whose contract does not depend on D-UAR-P1"
+      "nonoverlapping work whose contract does not depend on D-UAR-P1",
+      "merging and pinning the completed I1 collaboration package and deployment-binding delivery"
     ],
     "disallowedWhilePending": [
       "marking C01.2 complete",

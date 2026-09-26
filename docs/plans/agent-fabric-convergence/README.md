@@ -73,3 +73,7 @@ The [P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-con
 ## UAR collaboration specification child
 
 The operator approved the documentation-only [uar-team-specification child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-specification/README.md). Its contract extends C01/C03/C06/C09/C10/C14/C15 with a bounded local-team release profile; [dependency mapping](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-specification/dependency-map.json) preserves broader recommendations and owners. The canonical draft lives in UAR docs/agents/collaboration/v0.1.0-draft.1. This is design publication, not runtime conformance or D-UAR-P1 installed acceptance.
+
+## UAR team definitions deployment child
+
+The [I1 implementation child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-definitions-deployment/handoff-out.md) is complete. It delivers immutable collaboration packages, private deployment bindings, agent-team creator maintenance/deployment, and SurrealDB 3.3.0 alignment while explicitly refusing team activation until I2. Its six repository PRs are published and awaiting merge. C01.2 still waits for Windows installed P1 acceptance; I1 does not transfer or duplicate execution ownership.
