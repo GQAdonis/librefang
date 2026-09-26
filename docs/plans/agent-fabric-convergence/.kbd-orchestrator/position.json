@@ -2,13 +2,13 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 195,
-  "derivedRevision": 195,
+  "sourceRevision": 196,
+  "derivedRevision": 196,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 195
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 196
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-26T21:43:51.264395Z",
+  "updatedAt": "2026-09-26T21:50:53.500677Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c01-baseline-reconciliation-and-shared-contracts",
