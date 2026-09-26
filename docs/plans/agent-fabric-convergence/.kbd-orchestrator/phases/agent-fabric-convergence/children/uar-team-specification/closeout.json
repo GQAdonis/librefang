@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-26T16:13:45.076Z",
+  "status": "documentation-phase-complete",
+  "canonicalRevision": 147,
+  "phaseStatus": "complete",
+  "stages": {
+    "analyze": {
+      "id": "analyze",
+      "title": "Architecture and ownership analysis",
+      "sequence": 1,
+      "status": "complete"
+    },
+    "assess": {
+      "id": "assess",
+      "title": "Source-grounded team architecture assessment",
+      "sequence": 0,
+      "status": "complete"
+    },
+    "execute": {
+      "id": "execute",
+      "title": "Publish documentation-only collaboration specification",
+      "sequence": 4,
+      "status": "complete"
+    },
+    "plan": {
+      "id": "plan",
+      "title": "Architecture approval and documentation delivery plan",
+      "sequence": 3,
+      "status": "complete"
+    },
+    "reflect": {
+      "id": "reflect",
+      "title": "Documentation reflection and archival",
+      "sequence": 5,
+      "status": "complete"
+    },
+    "spec": {
+      "id": "spec",
+      "title": "Proposed specification outline",
+      "sequence": 2,
+      "status": "complete"
+    }
+  },
+  "taskCompletion": {
+    "completed": 6,
+    "total": 6
+  },
+  "archivedMirrorComplete": 6,
+  "archive": "openspec/changes/archive/2026-09-26-uar-team-specification",
+  "restoredParent": "agent-fabric-convergence",
+  "nextTask": "C01.2",
+  "runtimePrerequisite": "D-UAR-P1 unresolved",
+  "previousShippingPhase": "35/37 tasks and 0/1 changes; installed acceptance pending",
+  "documentationPublication": "publication.json",
+  "runtimeConformance": false
+}

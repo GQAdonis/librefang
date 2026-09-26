@@ -1,0 +1,932 @@
+{
+  "schemaVersion": 1,
+  "coverageClaim": "Actionable recommendation clusters from R1-R6; source findings are revalidated by C01 before affected implementation. Merged primitives are reuse, not full recommendation completion.",
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "source": "R1 §3; R2 §4",
+      "recommendation": "Separate provider bridging, native execution and full harness delegation",
+      "change": "C05",
+      "disposition": "planned",
+      "owners": [
+        "librefang",
+        "UAR"
+      ],
+      "acceptance": "One traced delegated operation has one executor and one set of tool effects.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-001; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-002",
+      "source": "R1 §3.2; R5 §4",
+      "recommendation": "One executor, workflow owner and lifecycle supervisor per owned object",
+      "change": "C04",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "the-boss",
+        "librefang"
+      ],
+      "acceptance": "Closing a nonowner client cannot stop a service; workflow and child identities remain separate.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-002; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-003",
+      "source": "R1 §3.3; R2 §7",
+      "recommendation": "Instance inventory, endpoints, placement and capability negotiation",
+      "change": "C04",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "the-boss"
+      ],
+      "acceptance": "Two UAR instances are selectable; wrong identity/version/required capability is visibly refused.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-003; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-004",
+      "source": "R1 §3.4",
+      "recommendation": "Separate new placement, reattachment and explicit migration",
+      "change": "C04",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "the-boss"
+      ],
+      "acceptance": "A timed-out remote run is reconciled by identity and never silently started locally.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-004; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-005",
+      "source": "R1 §5.1–5.3",
+      "recommendation": "Admission, steer, cancellation, detach, replay and uncertain outcomes",
+      "change": "C05",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang"
+      ],
+      "acceptance": "Dropped admission/cancel responses recover without double execution; cancellation acknowledgement is not completion.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-005; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-006",
+      "source": "R1 §5.2; R3 §7",
+      "recommendation": "Attached/background/workflow-child lifetime and checkpoint contracts",
+      "change": "C06",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Viewer loss follows declared policy; restart recovery does not claim missing event replay.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-006; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-007",
+      "source": "R1 §5.4; R2 §5",
+      "recommendation": "Separate product history, runtime checkpoints, workflow records and knowledge",
+      "change": "C01",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "all"
+      ],
+      "acceptance": "State authority table agrees with P1 host-owned conversation history and UAR-owned execution.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-007; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-008",
+      "source": "R1 §5.4",
+      "recommendation": "Usage identity and aggregate budget accounting without double counting",
+      "change": "C09",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "the-boss"
+      ],
+      "acceptance": "Mirrored usage counted once; concurrent children cannot exceed reserved aggregate limits.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-008; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-009",
+      "source": "R1 §6; R2 §8",
+      "recommendation": "Native UAR UI with isolated BossFang service-console view",
+      "change": "C14",
+      "disposition": "planned",
+      "owners": [
+        "the-boss",
+        "librefang"
+      ],
+      "acceptance": "Per-instance/account isolation, restricted origin, credential handoff and external-browser fallback are exercised.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-009; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-010",
+      "source": "R1 §7; R2 §6",
+      "recommendation": "Authenticate each boundary and attenuate delegated authority",
+      "change": "C02",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate"
+      ],
+      "acceptance": "Direct, managed, embedded and proxied paths produce equivalent protected-effect decisions for their advertised profile.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-010; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-011",
+      "source": "R1 §1.8; R2 §10",
+      "recommendation": "Inventory real pins, schemas and API versions",
+      "change": "C01",
+      "disposition": "planned",
+      "owners": [
+        "all"
+      ],
+      "acceptance": "Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-011; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-012",
+      "source": "R1 §1.2; R1 §1.4",
+      "recommendation": "Implement initial sidecar/driver wiring",
+      "change": "C01",
+      "disposition": "superseded-in-part",
+      "owners": [
+        "UAR",
+        "the-boss",
+        "librefang"
+      ],
+      "acceptance": "Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1.",
+      "implemented": false,
+      "currentSourceVerdict": "superseded",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-012; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-013",
+      "source": "R1 §1.7",
+      "recommendation": "Resolve A2A task authority and durability differences",
+      "change": "C05",
+      "disposition": "planned",
+      "owners": [
+        "librefang",
+        "UAR"
+      ],
+      "acceptance": "Every exposed task resolves to one authoritative record and accurately advertised persistence.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-013; SRC-001, SRC-025, SRC-042; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-014",
+      "source": "R2 §5",
+      "recommendation": "Personal CRDT replication distinct from authoritative business data",
+      "change": "C12",
+      "disposition": "planned",
+      "owners": [
+        "know-me-system",
+        "know-me-app",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "Authorized peers converge permitted documents; business grants and task ownership cannot be CRDT-written.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-014; SRC-030, SRC-031, SRC-035, SRC-038; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-015",
+      "source": "R2 §5",
+      "recommendation": "Server-authoritative read shapes with authorized tombstones/resnapshot",
+      "change": "C11",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "flint-forge",
+        "flint-realtime-fabric",
+        "KnowMe"
+      ],
+      "acceptance": "Tenant-filtered updates/deletes survive disconnect or explicitly require a resnapshot.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-015; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-016",
+      "source": "R2 §5",
+      "recommendation": "Durable offline command outbox and transactional publication",
+      "change": "C11",
+      "disposition": "planned",
+      "owners": [
+        "KnowMe",
+        "flint-forge",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "Crash/retry retains one command identity; domain commit is distinct from broker acknowledgement.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-016; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-017",
+      "source": "R2 §6",
+      "recommendation": "Peer pairing, key lifecycle, selective consent and offline revocation policy",
+      "change": "C12",
+      "disposition": "planned",
+      "owners": [
+        "KnowMe",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "Revoked or expired grants cannot authorize fresh protected operations; offline limitations are visible.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-017; SRC-030, SRC-031, SRC-035, SRC-038; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-018",
+      "source": "R2 §6",
+      "recommendation": "Verified subject/actor, issuer/audience and tenant mapping",
+      "change": "C02",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "flint-gate",
+        "UAR",
+        "flint-forge"
+      ],
+      "acceptance": "Caller-supplied tenant/actor strings cannot create authority; unsupported multi-hop exchange is rejected.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-018; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-019",
+      "source": "R2 §6 approval; R5 §8",
+      "recommendation": "One correlated operation with independently enforced approval challenges",
+      "change": "C02",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate",
+        "the-boss",
+        "KnowMe"
+      ],
+      "acceptance": "Repeated challenge is deduplicated; distinct issuer challenges stay distinct and a policy denial remains binding.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-019; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-020",
+      "source": "R2 §7",
+      "recommendation": "Personal offline, home, cloud, enterprise and independent deployment profiles",
+      "change": "C13",
+      "disposition": "planned",
+      "owners": [
+        "KnowMe",
+        "UAR",
+        "the-boss"
+      ],
+      "acceptance": "Each required/optional service and loss behavior is explicit and exercised for the chosen profile.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-020; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-021",
+      "source": "R2 §3 KnowMe",
+      "recommendation": "Resolve existing KnowMe local loop versus embedded UAR route",
+      "change": "C13",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "know-me-system",
+        "know-me-app",
+        "UAR"
+      ],
+      "acceptance": "Route inventory and migration preserve behavior; exactly one loop owns each run.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-021; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-022",
+      "source": "R2 §8",
+      "recommendation": "Portable plugin host/WIT, signed manifest coverage and local grants",
+      "change": "C15",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "KnowMe",
+        "flint-forge",
+        "skill-packs"
+      ],
+      "acceptance": "Tampered capability manifest fails admission; imported package receives fresh install identity and scoped grants.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-022; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-023",
+      "source": "R2 §8",
+      "recommendation": "Separate UI authoring, binding, delivery and action execution authority",
+      "change": "C14",
+      "disposition": "planned",
+      "owners": [
+        "the-boss",
+        "KnowMe",
+        "UAR",
+        "flint-forge"
+      ],
+      "acceptance": "Rendered action reaches its bound authority with current identity; the rendering host cannot mint authority.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-023; SRC-002, SRC-042, SRC-043; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-024",
+      "source": "R2 §3 Fabric; R2 §7",
+      "recommendation": "Fabric transport control must not masquerade as execution control",
+      "change": "C08",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "flint-realtime-fabric",
+        "UAR",
+        "librefang"
+      ],
+      "acceptance": "Cancel reaches the owning runtime or reports unsupported; stopping delivery is labeled detach.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-024; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-025",
+      "source": "R2 §3 Forge",
+      "recommendation": "Route-specific RLS/Keto/Cedar coverage and database transactions",
+      "change": "C11",
+      "disposition": "reconcile-active-work",
+      "owners": [
+        "flint-forge",
+        "flint-gate"
+      ],
+      "acceptance": "GraphQL/REST/reflection effects enforce the declared contract and documented differences.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-025; SRC-028, SRC-029, SRC-030, SRC-031, SRC-032, SRC-033; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-026",
+      "source": "R3 §§1–3",
+      "recommendation": "Separate definition, logical instance, activation, run and placement",
+      "change": "C06",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Two tenants instantiate one definition without sharing state; restarts preserve logical identity.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-026; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-027",
+      "source": "R3 §§3–4",
+      "recommendation": "Request execution default; on-demand and pinned-resident profiles",
+      "change": "C06",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Warm workers get fresh contexts; resident activation is opt-in with measured resource justification.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-027; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-028",
+      "source": "R3 §5",
+      "recommendation": "Logical addresses, authenticated transport and fenced ownership",
+      "change": "C06",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "No identity depends on a private port; stale activation cannot commit protected state.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-028; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-029",
+      "source": "R3 §6",
+      "recommendation": "Durable inbox, admission acknowledgement and uncertain-effect ledger",
+      "change": "C07",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Crash between source commit, publication and inbox admission does not silently lose admitted work.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-029; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-030",
+      "source": "R3 §6.1–6.4",
+      "recommendation": "Scoped local monitors of particular agents and conversations",
+      "change": "C07",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Two observers have independent cursors; agent-A/conversation-C scope excludes other conversations.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-030; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-031",
+      "source": "R3 §6.5",
+      "recommendation": "BossFang channel normalization and agent-requested subscriptions",
+      "change": "C08",
+      "disposition": "planned",
+      "owners": [
+        "librefang",
+        "UAR",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "Host authorizes requested filter; channel/account/thread provenance survives the bridge.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-031; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-032",
+      "source": "R3 §6.6",
+      "recommendation": "Handler selection separate from observer fanout and reply rights",
+      "change": "C08",
+      "disposition": "planned",
+      "owners": [
+        "librefang",
+        "UAR"
+      ],
+      "acceptance": "Two handler matches have an explicit winner/conflict; observing does not grant posting.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-032; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-033",
+      "source": "R3 §6.6–6.7",
+      "recommendation": "Replay safety, provider-echo deduplication and causal-loop bounds",
+      "change": "C08",
+      "disposition": "planned",
+      "owners": [
+        "librefang",
+        "UAR",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "Historical replay cannot repost; A-to-B-to-A chains stop within declared budgets.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-033; SRC-013, SRC-023, SRC-024, SRC-030, SRC-031; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-034",
+      "source": "R3 §6.7",
+      "recommendation": "Watermark, retention gaps, pause semantics and subscription diagnostics",
+      "change": "C07",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "the-boss"
+      ],
+      "acceptance": "Attach has no unreported gap; expired retention reports missing coverage and resnapshot choices.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-034; SRC-006, SRC-023, SRC-024; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-035",
+      "source": "R3 §7",
+      "recommendation": "Lifecycle controls, timers/reminders, serialized turns and restart budgets",
+      "change": "C06",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Cancel/drain respond during blocked turns; repeated activation crashes reach an inspectable failed state.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-035; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-036",
+      "source": "R3 §8",
+      "recommendation": "One scheduler per action and mobile suspension semantics",
+      "change": "C13",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "KnowMe"
+      ],
+      "acceptance": "A schedule fires once under one owner; suspended local work never masquerades as remotely running.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-036; SRC-035, SRC-036, SRC-037, SRC-038, SRC-044, SRC-045; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-037",
+      "source": "R4 Parts I–II",
+      "recommendation": "KBD typed authority, bounded loops and independent evaluation",
+      "change": "C15",
+      "disposition": "reuse-existing",
+      "owners": [
+        "skill-packs",
+        "UAR"
+      ],
+      "acceptance": "Handoff carries revision/task/evidence and preserves four completion dimensions; logs cannot mark execution complete.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-037; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-038",
+      "source": "R4 Part III; Addendum A",
+      "recommendation": "Six specialist roles with task-selected skills and distinct write scopes",
+      "change": "C16",
+      "disposition": "planned",
+      "owners": [
+        "skill-packs",
+        "UAR"
+      ],
+      "acceptance": "UI/UX, mobile, security, product, documentation and code-review presets have bounded assignments and role-specific acceptance.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-038; SRC-014, SRC-018; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-039",
+      "source": "R4 Addendum B",
+      "recommendation": "Feedback analyst and issue curator with standing intake authorization",
+      "change": "C10",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "skill-packs"
+      ],
+      "acceptance": "Authorized intake creates one sanitized issue; an issue does not authorize implementation or roadmap commitments.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-039; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-040",
+      "source": "R4 Addendum C",
+      "recommendation": "Reviewed, pinned skill identity, license and dependency lock",
+      "change": "C15",
+      "disposition": "planned",
+      "owners": [
+        "skill-packs",
+        "UAR"
+      ],
+      "acceptance": "Required skill/version/config reaches runtime; unsupported required tools block binding.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-040; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-041",
+      "source": "R4 Part IV–V",
+      "recommendation": "Eight harnesses, truthful capabilities and revision-bound handoff",
+      "change": "C15",
+      "disposition": "reuse-existing",
+      "owners": [
+        "skill-packs",
+        "UAR"
+      ],
+      "acceptance": "UAR/Codex/Claude Code/Copilot/Kimi Code/MiniMax CLI/OpenCode/DeepSeek Harness each retain exact supported options or report loss.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-041; SRC-014, SRC-015, SRC-016, SRC-017, SRC-018, SRC-019, SRC-020, SRC-021, SRC-040; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-042",
+      "source": "R4 §2.4; R5 §10",
+      "recommendation": "Separate worktrees, single writers and compatible commit manifest",
+      "change": "C01",
+      "disposition": "setup-complete",
+      "owners": [
+        "all"
+      ],
+      "acceptance": "All branches match requested name; original checkouts preserved; integration checkpoints remain separate.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-042; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-043",
+      "source": "R5 §§1–4",
+      "recommendation": "Reuse existing UAR thread/actor/compiler instead of new model loop",
+      "change": "C09",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Team tasks execute through the trusted existing host with original lineage and attenuation.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-043; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-044",
+      "source": "R5 §5",
+      "recommendation": "Team membership, atomic task claims, peer mailboxes and budgets",
+      "change": "C09",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Stale assignment cannot commit; removal prevents new access; peer team is not forced into one parent thread.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-044; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-045",
+      "source": "R5 §5",
+      "recommendation": "Explicit selected context, artifact namespaces and memory provenance",
+      "change": "C09",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "surreal-memory-server"
+      ],
+      "acceptance": "No implicit team-wide private memory union; cross-tenant reads and writes are denied.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-045; SRC-006, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-046",
+      "source": "R5 §5; §10",
+      "recommendation": "Durable workflows, branch/join, waits, compensation and effects",
+      "change": "C10",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang"
+      ],
+      "acceptance": "Restart resumes pinned workflow without duplicate external action; uncertain effects require reconciliation.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-046; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-047",
+      "source": "R5 §6",
+      "recommendation": "Coding, product, marketing and full design teams",
+      "change": "C16",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "skill-packs",
+        "the-boss"
+      ],
+      "acceptance": "Representative task produces accepted artifact with independent review and measured cost versus single-agent baseline.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-047; SRC-014, SRC-018; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-048",
+      "source": "R5 §7",
+      "recommendation": "Executive role assistants separate from person-specific twins",
+      "change": "C17",
+      "disposition": "planned",
+      "owners": [
+        "KnowMe",
+        "UAR",
+        "the-boss"
+      ],
+      "acceptance": "CEO/CFO/CIO/intelligence/security/marketing/product role titles confer no privileges.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-048; SRC-003, SRC-008, SRC-035; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-049",
+      "source": "R5 §7; R6 §8",
+      "recommendation": "Consent, representation and organizational action grants",
+      "change": "C17",
+      "disposition": "planned",
+      "owners": [
+        "KnowMe",
+        "UAR",
+        "flint-gate"
+      ],
+      "acceptance": "Offboarding and revocation stop new access/effects; a twin cannot satisfy required human approval.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-049; SRC-003, SRC-008, SRC-035; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-050",
+      "source": "R5 §8",
+      "recommendation": "Fail-closed governed profiles and schema-validated policy context",
+      "change": "C02",
+      "disposition": "planned",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Invalid/missing required policy prevents protected effects and exposes effective posture.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-050; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-051",
+      "source": "R5 §8",
+      "recommendation": "Restrictive composition of Cedar boundaries and policy binding receipt",
+      "change": "C02",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate"
+      ],
+      "acceptance": "A broad permit in one boundary cannot override another denial; compiled policy is proven active.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-051; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-052",
+      "source": "R5 §8",
+      "recommendation": "Recheck authority after waits, payload changes and lease expiry",
+      "change": "C02",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate"
+      ],
+      "acceptance": "Revoked or altered approval cannot authorize an effect; exact target/payload identity is retained.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-052; SRC-003, SRC-004, SRC-008, SRC-026, SRC-027; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-053",
+      "source": "R5 §8",
+      "recommendation": "Host credential broker, egress labels and durable action audit",
+      "change": "C10",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate",
+        "surreal-memory-server"
+      ],
+      "acceptance": "Private input cannot be posted to a disallowed destination; every effect has decision and outcome references.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-053; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-054",
+      "source": "R5 §9; R6 §§1–3",
+      "recommendation": "Five document kinds extend section-based UAR-AGENT-MD",
+      "change": "C03",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "skill-packs"
+      ],
+      "acceptance": "Existing documents remain readable; required collaboration fields survive authoring-to-runtime or are rejected.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-054; SRC-005, SRC-014, SRC-018; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-055",
+      "source": "R5 §9; R6 §11",
+      "recommendation": "Import/export loss reports, immutable dependencies and migrations",
+      "change": "C03",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "skill-packs"
+      ],
+      "acceptance": "Required unsupported semantics prohibit execution; running definitions do not float with aliases.",
+      "implemented": false,
+      "currentSourceVerdict": "externally-owned",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-055; SRC-005, SRC-014, SRC-018; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-056",
+      "source": "R5 §10; R6 §12",
+      "recommendation": "First thin product-feedback team through direct and BossFang routes",
+      "change": "C10",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "librefang",
+        "the-boss"
+      ],
+      "acceptance": "Scoped event yields one governed issue plus product/design review with complete causal evidence.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-056; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-057",
+      "source": "R5 §10",
+      "recommendation": "Measure quality, human correction, cost, recovery and admin burden",
+      "change": "C18",
+      "disposition": "planned",
+      "owners": [
+        "all"
+      ],
+      "acceptance": "Coding/design/marketing/feedback/executive-support results report failures and supported confidence limits.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-057; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-058",
+      "source": "R5 §8; §10; R6 §6",
+      "recommendation": "Federation with independent resource-side checks and lower-trust placement",
+      "change": "C18",
+      "disposition": "planned",
+      "owners": [
+        "UAR",
+        "flint-gate",
+        "flint-realtime-fabric"
+      ],
+      "acceptance": "External harness cannot receive protected authority it cannot enforce; negative capability negotiation is demonstrated.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-058; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-059",
+      "source": "R1 §8; R5 §10",
+      "recommendation": "Evaluate external workflow engine only if measured requirements justify it",
+      "change": "C10",
+      "disposition": "conditional-design-decision",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "Compare embedded-compatible reuse against explicit durability/throughput needs before selecting a new engine.",
+      "implemented": false,
+      "currentSourceVerdict": "retained",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-059; SRC-004, SRC-013, SRC-026, SRC-027, SRC-039; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-060",
+      "source": "R3 §10",
+      "recommendation": "Cross-host takeover and pinned residency require workload evidence",
+      "change": "C18",
+      "disposition": "conditional-design-decision",
+      "owners": [
+        "UAR"
+      ],
+      "acceptance": "No automatic failover until state/effect fencing is demonstrated; residency chosen from measurements.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-060; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
+    },
+    {
+      "id": "REC-061",
+      "source": "R2 §7; R5 §10",
+      "recommendation": "Tested release matrix and explicit upgrade/rollback compatibility",
+      "change": "C18",
+      "disposition": "planned",
+      "owners": [
+        "all"
+      ],
+      "acceptance": "Exact provider/consumer/payload pins pass supported deployment modes; rollback preserves migrated data.",
+      "implemented": false,
+      "currentSourceVerdict": "unresolved",
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-061; SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-037; source-only, runtime unverified"
+    }
+  ]
+}

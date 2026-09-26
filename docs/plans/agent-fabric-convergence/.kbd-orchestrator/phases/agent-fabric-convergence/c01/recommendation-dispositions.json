@@ -1,0 +1,2579 @@
+{
+  "schemaVersion": 1,
+  "task": "C01.1",
+  "capturedAt": "2026-09-24T18:55:58.532Z",
+  "counts": {
+    "retained": 25,
+    "externally-owned": 9,
+    "unresolved": 26,
+    "superseded": 1
+  },
+  "scope": "A disposition ledger, not a proof that all 61 requirements pass; unresolved items are explicit acceptance obligations.",
+  "recommendations": [
+    {
+      "id": "REC-001",
+      "recommendation": "Separate provider bridging, native execution and full harness delegation",
+      "reportSource": "R1 §3; R2 §4",
+      "change": "C05",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "BossFang UAR source is an OpenAI-compatible provider adapter. This confirms provider access but does not certify full-harness delegation, durable A2A lookup or recovery.",
+      "evidence": [
+        "SRC-001",
+        "SRC-025",
+        "SRC-042"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C05",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "One traced delegated operation has one executor and one set of tool effects.",
+      "acceptanceReference": "openspec/changes/afc-c05-bossfang-full-run-delegation/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-002",
+      "recommendation": "One executor, workflow owner and lifecycle supervisor per owned object",
+      "reportSource": "R1 §3.2; R5 §4",
+      "change": "C04",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "The Boss already registers a UAR runtime driver and sidecar service. Replaceable multi-instance placement and lifecycle-owner acceptance remain unproven and overlap P1 administration.",
+      "evidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "the-boss",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C04",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Closing a nonowner client cannot stop a service; workflow and child identities remain separate.",
+      "acceptanceReference": "openspec/changes/afc-c04-replaceable-service-instances-and-placement/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-003",
+      "recommendation": "Instance inventory, endpoints, placement and capability negotiation",
+      "reportSource": "R1 §3.3; R2 §7",
+      "change": "C04",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "The Boss already registers a UAR runtime driver and sidecar service. Replaceable multi-instance placement and lifecycle-owner acceptance remain unproven and overlap P1 administration.",
+      "evidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "the-boss",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C04",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Two UAR instances are selectable; wrong identity/version/required capability is visibly refused.",
+      "acceptanceReference": "openspec/changes/afc-c04-replaceable-service-instances-and-placement/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-004",
+      "recommendation": "Separate new placement, reattachment and explicit migration",
+      "reportSource": "R1 §3.4",
+      "change": "C04",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "The Boss already registers a UAR runtime driver and sidecar service. Replaceable multi-instance placement and lifecycle-owner acceptance remain unproven and overlap P1 administration.",
+      "evidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "the-boss",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C04",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "A timed-out remote run is reconciled by identity and never silently started locally.",
+      "acceptanceReference": "openspec/changes/afc-c04-replaceable-service-instances-and-placement/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-005",
+      "recommendation": "Admission, steer, cancellation, detach, replay and uncertain outcomes",
+      "reportSource": "R1 §5.1–5.3",
+      "change": "C05",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "BossFang UAR source is an OpenAI-compatible provider adapter. This confirms provider access but does not certify full-harness delegation, durable A2A lookup or recovery.",
+      "evidence": [
+        "SRC-001",
+        "SRC-025",
+        "SRC-042"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C05",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Dropped admission/cancel responses recover without double execution; cancellation acknowledgement is not completion.",
+      "acceptanceReference": "openspec/changes/afc-c05-bossfang-full-run-delegation/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-006",
+      "recommendation": "Attached/background/workflow-child lifetime and checkpoint contracts",
+      "reportSource": "R1 §5.2; R3 §7",
+      "change": "C06",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "UAR actors reuse a shared thread/run host and cancellation token. This is a reuse foundation, not evidence of all activation, durable mailbox, fencing or cross-host lifecycle guarantees.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C06",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Viewer loss follows declared policy; restart recovery does not claim missing event replay.",
+      "acceptanceReference": "openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-007",
+      "recommendation": "Separate product history, runtime checkpoints, workflow records and knowledge",
+      "reportSource": "R1 §5.4; R2 §5",
+      "change": "C01",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "evidence": [
+        "SRC-001",
+        "SRC-002",
+        "SRC-006",
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-040",
+        "SRC-041"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "the-boss",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "know-me-app",
+          "know-me-system",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C01",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "State authority table agrees with P1 host-owned conversation history and UAR-owned execution.",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-008",
+      "recommendation": "Usage identity and aggregate budget accounting without double counting",
+      "reportSource": "R1 §5.4",
+      "change": "C09",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing UAR actor/thread host and memory auth scopes support reuse. Atomic team claims, aggregate reservations and scoped peer authority remain unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C09",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Mirrored usage counted once; concurrent children cannot exceed reserved aggregate limits.",
+      "acceptanceReference": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-009",
+      "recommendation": "Native UAR UI with isolated BossFang service-console view",
+      "reportSource": "R1 §6; R2 §8",
+      "change": "C14",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Existing Boss runtime integration and active integration-administration delivery own substantial UI/control surfaces. A new duplicate admin interface must not be started.",
+      "evidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "the-boss",
+          "librefang",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C14",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Per-instance/account isolation, restricted origin, credential handoff and external-browser fallback are exercised.",
+      "acceptanceReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-010",
+      "recommendation": "Authenticate each boundary and attenuate delegated authority",
+      "reportSource": "R1 §7; R2 §6",
+      "change": "C02",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "Direct, managed, embedded and proxied paths produce equivalent protected-effect decisions for their advertised profile.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-011",
+      "recommendation": "Inventory real pins, schemas and API versions",
+      "reportSource": "R1 §1.8; R2 §10",
+      "change": "C01",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "evidence": [
+        "SRC-001",
+        "SRC-002",
+        "SRC-006",
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-040",
+        "SRC-041"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "the-boss",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "know-me-app",
+          "know-me-system",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C01",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated.",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-012",
+      "recommendation": "Implement initial sidecar/driver wiring",
+      "reportSource": "R1 §1.2; R1 §1.4",
+      "change": "C01",
+      "disposition": "superseded",
+      "dispositionMeaning": "The historical missing-initial-wiring gap is superseded by existing source; integrated delivery acceptance is still reserved, not declared complete.",
+      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "evidence": [
+        "SRC-001",
+        "SRC-002",
+        "SRC-006",
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-040",
+        "SRC-041"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "the-boss",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "know-me-app",
+          "know-me-system",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C01",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1.",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-013",
+      "recommendation": "Resolve A2A task authority and durability differences",
+      "reportSource": "R1 §1.7",
+      "change": "C05",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "BossFang UAR source is an OpenAI-compatible provider adapter. This confirms provider access but does not certify full-harness delegation, durable A2A lookup or recovery.",
+      "evidence": [
+        "SRC-001",
+        "SRC-025",
+        "SRC-042"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C05",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Every exposed task resolves to one authoritative record and accurately advertised persistence.",
+      "acceptanceReference": "openspec/changes/afc-c05-bossfang-full-run-delegation/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-014",
+      "recommendation": "Personal CRDT replication distinct from authoritative business data",
+      "reportSource": "R2 §5",
+      "change": "C12",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Fabric CRDT sync and KnowMe runtime facades exist. Pairing, consent, offline revocation and authorized personal peer convergence were not established by source excerpts.",
+      "evidence": [
+        "SRC-030",
+        "SRC-031",
+        "SRC-035",
+        "SRC-038"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "know-me-system",
+          "know-me-app",
+          "flint-realtime-fabric",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-FRF"
+        ],
+        "convergenceAcceptanceOwner": "C12",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-FRF"
+      ],
+      "acceptance": "Authorized peers converge permitted documents; business grants and task ownership cannot be CRDT-written.",
+      "acceptanceReference": "openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-015",
+      "recommendation": "Server-authoritative read shapes with authorized tombstones/resnapshot",
+      "reportSource": "R2 §5",
+      "change": "C11",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Fabric already implements authorized shape policy/leases and CRDT synchronization; Forge already has a bearer-derived RLS layer and Keto synchronization. Complete offline-command publication, all-route enforcement and tombstone recovery remain unverified.",
+      "evidence": [
+        "SRC-028",
+        "SRC-029",
+        "SRC-030",
+        "SRC-031",
+        "SRC-032",
+        "SRC-033"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "flint-forge",
+          "flint-realtime-fabric",
+          "flint-gate",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-FORGE",
+          "D-FRF",
+          "D-GATE",
+          "D-KNOWME"
+        ],
+        "convergenceAcceptanceOwner": "C11",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FORGE",
+        "D-FRF",
+        "D-GATE",
+        "D-KNOWME"
+      ],
+      "acceptance": "Tenant-filtered updates/deletes survive disconnect or explicitly require a resnapshot.",
+      "acceptanceReference": "openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-016",
+      "recommendation": "Durable offline command outbox and transactional publication",
+      "reportSource": "R2 §5",
+      "change": "C11",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Fabric already implements authorized shape policy/leases and CRDT synchronization; Forge already has a bearer-derived RLS layer and Keto synchronization. Complete offline-command publication, all-route enforcement and tombstone recovery remain unverified.",
+      "evidence": [
+        "SRC-028",
+        "SRC-029",
+        "SRC-030",
+        "SRC-031",
+        "SRC-032",
+        "SRC-033"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "flint-forge",
+          "flint-realtime-fabric",
+          "flint-gate",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-FORGE",
+          "D-FRF",
+          "D-GATE",
+          "D-KNOWME"
+        ],
+        "convergenceAcceptanceOwner": "C11",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FORGE",
+        "D-FRF",
+        "D-GATE",
+        "D-KNOWME"
+      ],
+      "acceptance": "Crash/retry retains one command identity; domain commit is distinct from broker acknowledgement.",
+      "acceptanceReference": "openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-017",
+      "recommendation": "Peer pairing, key lifecycle, selective consent and offline revocation policy",
+      "reportSource": "R2 §6",
+      "change": "C12",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Fabric CRDT sync and KnowMe runtime facades exist. Pairing, consent, offline revocation and authorized personal peer convergence were not established by source excerpts.",
+      "evidence": [
+        "SRC-030",
+        "SRC-031",
+        "SRC-035",
+        "SRC-038"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "know-me-system",
+          "know-me-app",
+          "flint-realtime-fabric",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-FRF"
+        ],
+        "convergenceAcceptanceOwner": "C12",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-FRF"
+      ],
+      "acceptance": "Revoked or expired grants cannot authorize fresh protected operations; offline limitations are visible.",
+      "acceptanceReference": "openspec/changes/afc-c12-personal-peer-sovereignty-and-consent/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-018",
+      "recommendation": "Verified subject/actor, issuer/audience and tenant mapping",
+      "reportSource": "R2 §6",
+      "change": "C02",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "Caller-supplied tenant/actor strings cannot create authority; unsupported multi-hop exchange is rejected.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-019",
+      "recommendation": "One correlated operation with independently enforced approval challenges",
+      "reportSource": "R2 §6 approval; R5 §8",
+      "change": "C02",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "Repeated challenge is deduplicated; distinct issuer challenges stay distinct and a policy denial remains binding.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-020",
+      "recommendation": "Personal offline, home, cloud, enterprise and independent deployment profiles",
+      "reportSource": "R2 §7",
+      "change": "C13",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "KnowMe System defines embedded/service runtime lanes; KnowMe App chat calls inference directly and its cancellation/session-list functions are stubs in the inspected source. C13 must reconcile product ownership before implementing convergence; hardware behavior remains untested.",
+      "evidence": [
+        "SRC-035",
+        "SRC-036",
+        "SRC-037",
+        "SRC-038",
+        "SRC-044",
+        "SRC-045"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "know-me-system",
+          "know-me-app",
+          "universal-agent-runtime",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C13",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-UAR-P1"
+      ],
+      "acceptance": "Each required/optional service and loss behavior is explicit and exercised for the chosen profile.",
+      "acceptanceReference": "openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-021",
+      "recommendation": "Resolve existing KnowMe local loop versus embedded UAR route",
+      "reportSource": "R2 §3 KnowMe",
+      "change": "C13",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "KnowMe System defines embedded/service runtime lanes; KnowMe App chat calls inference directly and its cancellation/session-list functions are stubs in the inspected source. C13 must reconcile product ownership before implementing convergence; hardware behavior remains untested.",
+      "evidence": [
+        "SRC-035",
+        "SRC-036",
+        "SRC-037",
+        "SRC-038",
+        "SRC-044",
+        "SRC-045"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "know-me-system",
+          "know-me-app",
+          "universal-agent-runtime",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C13",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-UAR-P1"
+      ],
+      "acceptance": "Route inventory and migration preserve behavior; exactly one loop owns each run.",
+      "acceptanceReference": "openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-022",
+      "recommendation": "Portable plugin host/WIT, signed manifest coverage and local grants",
+      "reportSource": "R2 §8",
+      "change": "C15",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Both packs contain creator/models/manage/handoff skills and the UAR uses its internal liter-llm dependency. This supersedes any blank-slate skill-family assumption; every advertised harness option, plugin boundary and helper toolchain still needs its own acceptance receipt.",
+      "evidence": [
+        "SRC-014",
+        "SRC-015",
+        "SRC-016",
+        "SRC-017",
+        "SRC-018",
+        "SRC-019",
+        "SRC-020",
+        "SRC-021",
+        "SRC-040"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "librefang",
+          "flint-forge",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-MINI",
+          "D-KNOWME",
+          "D-FORGE",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C15",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1"
+      ],
+      "acceptance": "Tampered capability manifest fails admission; imported package receives fresh install identity and scoped grants.",
+      "acceptanceReference": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-023",
+      "recommendation": "Separate UI authoring, binding, delivery and action execution authority",
+      "reportSource": "R2 §8",
+      "change": "C14",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Existing Boss runtime integration and active integration-administration delivery own substantial UI/control surfaces. A new duplicate admin interface must not be started.",
+      "evidence": [
+        "SRC-002",
+        "SRC-042",
+        "SRC-043"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "the-boss",
+          "librefang",
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C14",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Rendered action reaches its bound authority with current identity; the rendering host cannot mint authority.",
+      "acceptanceReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-024",
+      "recommendation": "Fabric transport control must not masquerade as execution control",
+      "reportSource": "R2 §3 Fabric; R2 §7",
+      "change": "C08",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing channel and event/trigger surfaces are source anchors. Multi-handler conflict resolution, per-observer delivery, reply grants and echo/reaction limits need route-specific verification, not inferred completeness.",
+      "evidence": [
+        "SRC-013",
+        "SRC-023",
+        "SRC-024",
+        "SRC-030",
+        "SRC-031"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "flint-realtime-fabric",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-FRF",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C08",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FRF",
+        "D-GATE"
+      ],
+      "acceptance": "Cancel reaches the owning runtime or reports unsupported; stopping delivery is labeled detach.",
+      "acceptanceReference": "openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-025",
+      "recommendation": "Route-specific RLS/Keto/Cedar coverage and database transactions",
+      "reportSource": "R2 §3 Forge",
+      "change": "C11",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Fabric already implements authorized shape policy/leases and CRDT synchronization; Forge already has a bearer-derived RLS layer and Keto synchronization. Complete offline-command publication, all-route enforcement and tombstone recovery remain unverified.",
+      "evidence": [
+        "SRC-028",
+        "SRC-029",
+        "SRC-030",
+        "SRC-031",
+        "SRC-032",
+        "SRC-033"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "flint-forge",
+          "flint-realtime-fabric",
+          "flint-gate",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-FORGE",
+          "D-FRF",
+          "D-GATE",
+          "D-KNOWME"
+        ],
+        "convergenceAcceptanceOwner": "C11",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FORGE",
+        "D-FRF",
+        "D-GATE",
+        "D-KNOWME"
+      ],
+      "acceptance": "GraphQL/REST/reflection effects enforce the declared contract and documented differences.",
+      "acceptanceReference": "openspec/changes/afc-c11-authoritative-business-data-and-offline-commands/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-026",
+      "recommendation": "Separate definition, logical instance, activation, run and placement",
+      "reportSource": "R3 §§1–3",
+      "change": "C06",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "UAR actors reuse a shared thread/run host and cancellation token. This is a reuse foundation, not evidence of all activation, durable mailbox, fencing or cross-host lifecycle guarantees.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C06",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Two tenants instantiate one definition without sharing state; restarts preserve logical identity.",
+      "acceptanceReference": "openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-027",
+      "recommendation": "Request execution default; on-demand and pinned-resident profiles",
+      "reportSource": "R3 §§3–4",
+      "change": "C06",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "UAR actors reuse a shared thread/run host and cancellation token. This is a reuse foundation, not evidence of all activation, durable mailbox, fencing or cross-host lifecycle guarantees.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C06",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Warm workers get fresh contexts; resident activation is opt-in with measured resource justification.",
+      "acceptanceReference": "openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-028",
+      "recommendation": "Logical addresses, authenticated transport and fenced ownership",
+      "reportSource": "R3 §5",
+      "change": "C06",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "UAR actors reuse a shared thread/run host and cancellation token. This is a reuse foundation, not evidence of all activation, durable mailbox, fencing or cross-host lifecycle guarantees.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C06",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "No identity depends on a private port; stale activation cannot commit protected state.",
+      "acceptanceReference": "openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-029",
+      "recommendation": "Durable inbox, admission acknowledgement and uncertain-effect ledger",
+      "reportSource": "R3 §6",
+      "change": "C07",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "BossFang event bus uses broadcast plus a bounded in-memory ring; UAR actor source is reusable. A scoped durable UAR observer path was not established by these excerpts; end-to-end recovery remains unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-023",
+        "SRC-024"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C07",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Crash between source commit, publication and inbox admission does not silently lose admitted work.",
+      "acceptanceReference": "openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-030",
+      "recommendation": "Scoped local monitors of particular agents and conversations",
+      "reportSource": "R3 §6.1–6.4",
+      "change": "C07",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "BossFang event bus uses broadcast plus a bounded in-memory ring; UAR actor source is reusable. A scoped durable UAR observer path was not established by these excerpts; end-to-end recovery remains unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-023",
+        "SRC-024"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C07",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Two observers have independent cursors; agent-A/conversation-C scope excludes other conversations.",
+      "acceptanceReference": "openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-031",
+      "recommendation": "BossFang channel normalization and agent-requested subscriptions",
+      "reportSource": "R3 §6.5",
+      "change": "C08",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Existing channel and event/trigger surfaces are source anchors. Multi-handler conflict resolution, per-observer delivery, reply grants and echo/reaction limits need route-specific verification, not inferred completeness.",
+      "evidence": [
+        "SRC-013",
+        "SRC-023",
+        "SRC-024",
+        "SRC-030",
+        "SRC-031"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "flint-realtime-fabric",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-FRF",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C08",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FRF",
+        "D-GATE"
+      ],
+      "acceptance": "Host authorizes requested filter; channel/account/thread provenance survives the bridge.",
+      "acceptanceReference": "openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-032",
+      "recommendation": "Handler selection separate from observer fanout and reply rights",
+      "reportSource": "R3 §6.6",
+      "change": "C08",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Existing channel and event/trigger surfaces are source anchors. Multi-handler conflict resolution, per-observer delivery, reply grants and echo/reaction limits need route-specific verification, not inferred completeness.",
+      "evidence": [
+        "SRC-013",
+        "SRC-023",
+        "SRC-024",
+        "SRC-030",
+        "SRC-031"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "flint-realtime-fabric",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-FRF",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C08",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FRF",
+        "D-GATE"
+      ],
+      "acceptance": "Two handler matches have an explicit winner/conflict; observing does not grant posting.",
+      "acceptanceReference": "openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-033",
+      "recommendation": "Replay safety, provider-echo deduplication and causal-loop bounds",
+      "reportSource": "R3 §6.6–6.7",
+      "change": "C08",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Existing channel and event/trigger surfaces are source anchors. Multi-handler conflict resolution, per-observer delivery, reply grants and echo/reaction limits need route-specific verification, not inferred completeness.",
+      "evidence": [
+        "SRC-013",
+        "SRC-023",
+        "SRC-024",
+        "SRC-030",
+        "SRC-031"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "flint-realtime-fabric",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-FRF",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C08",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-FRF",
+        "D-GATE"
+      ],
+      "acceptance": "Historical replay cannot repost; A-to-B-to-A chains stop within declared budgets.",
+      "acceptanceReference": "openspec/changes/afc-c08-bossfang-and-fabric-observer-routing/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-034",
+      "recommendation": "Watermark, retention gaps, pause semantics and subscription diagnostics",
+      "reportSource": "R3 §6.7",
+      "change": "C07",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "BossFang event bus uses broadcast plus a bounded in-memory ring; UAR actor source is reusable. A scoped durable UAR observer path was not established by these excerpts; end-to-end recovery remains unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-023",
+        "SRC-024"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C07",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1"
+      ],
+      "acceptance": "Attach has no unreported gap; expired retention reports missing coverage and resnapshot choices.",
+      "acceptanceReference": "openspec/changes/afc-c07-local-scoped-observers-with-durable-delivery/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-035",
+      "recommendation": "Lifecycle controls, timers/reminders, serialized turns and restart budgets",
+      "reportSource": "R3 §7",
+      "change": "C06",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "UAR actors reuse a shared thread/run host and cancellation token. This is a reuse foundation, not evidence of all activation, durable mailbox, fencing or cross-host lifecycle guarantees.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C06",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Cancel/drain respond during blocked turns; repeated activation crashes reach an inspectable failed state.",
+      "acceptanceReference": "openspec/changes/afc-c06-durable-addressable-instances-and-bounded-turns/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-036",
+      "recommendation": "One scheduler per action and mobile suspension semantics",
+      "reportSource": "R3 §8",
+      "change": "C13",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "KnowMe System defines embedded/service runtime lanes; KnowMe App chat calls inference directly and its cancellation/session-list functions are stubs in the inspected source. C13 must reconcile product ownership before implementing convergence; hardware behavior remains untested.",
+      "evidence": [
+        "SRC-035",
+        "SRC-036",
+        "SRC-037",
+        "SRC-038",
+        "SRC-044",
+        "SRC-045"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "know-me-system",
+          "know-me-app",
+          "universal-agent-runtime",
+          "librefang"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C13",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-UAR-P1"
+      ],
+      "acceptance": "A schedule fires once under one owner; suspended local work never masquerades as remotely running.",
+      "acceptanceReference": "openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-037",
+      "recommendation": "KBD typed authority, bounded loops and independent evaluation",
+      "reportSource": "R4 Parts I–II",
+      "change": "C15",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Both packs contain creator/models/manage/handoff skills and the UAR uses its internal liter-llm dependency. This supersedes any blank-slate skill-family assumption; every advertised harness option, plugin boundary and helper toolchain still needs its own acceptance receipt.",
+      "evidence": [
+        "SRC-014",
+        "SRC-015",
+        "SRC-016",
+        "SRC-017",
+        "SRC-018",
+        "SRC-019",
+        "SRC-020",
+        "SRC-021",
+        "SRC-040"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "librefang",
+          "flint-forge",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-MINI",
+          "D-KNOWME",
+          "D-FORGE",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C15",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1"
+      ],
+      "acceptance": "Handoff carries revision/task/evidence and preserves four completion dimensions; logs cannot mark execution complete.",
+      "acceptanceReference": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-038",
+      "recommendation": "Six specialist roles with task-selected skills and distinct write scopes",
+      "reportSource": "R4 Part III; Addendum A",
+      "change": "C16",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing team-creator skills are available for extension. Complete specialist and business-team outputs have not been exercised against the new acceptance clauses.",
+      "evidence": [
+        "SRC-014",
+        "SRC-018"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "the-boss"
+        ],
+        "reservedDependencies": [
+          "D-MINI"
+        ],
+        "convergenceAcceptanceOwner": "C16",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "acceptance": "UI/UX, mobile, security, product, documentation and code-review presets have bounded assignments and role-specific acceptance.",
+      "acceptanceReference": "openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-039",
+      "recommendation": "Feedback analyst and issue curator with standing intake authorization",
+      "reportSource": "R4 Addendum B",
+      "change": "C10",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing connector ingress, direct tool execution and durable approval storage are reusable pieces. No configured feedback-to-issue run or effect-reconciliation proof was executed.",
+      "evidence": [
+        "SRC-004",
+        "SRC-013",
+        "SRC-026",
+        "SRC-027",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "flint-gate",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-GATE",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C10",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "acceptance": "Authorized intake creates one sanitized issue; an issue does not authorize implementation or roadmap commitments.",
+      "acceptanceReference": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-040",
+      "recommendation": "Reviewed, pinned skill identity, license and dependency lock",
+      "reportSource": "R4 Addendum C",
+      "change": "C15",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Both packs contain creator/models/manage/handoff skills and the UAR uses its internal liter-llm dependency. This supersedes any blank-slate skill-family assumption; every advertised harness option, plugin boundary and helper toolchain still needs its own acceptance receipt.",
+      "evidence": [
+        "SRC-014",
+        "SRC-015",
+        "SRC-016",
+        "SRC-017",
+        "SRC-018",
+        "SRC-019",
+        "SRC-020",
+        "SRC-021",
+        "SRC-040"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "librefang",
+          "flint-forge",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-MINI",
+          "D-KNOWME",
+          "D-FORGE",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C15",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1"
+      ],
+      "acceptance": "Required skill/version/config reaches runtime; unsupported required tools block binding.",
+      "acceptanceReference": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-041",
+      "recommendation": "Eight harnesses, truthful capabilities and revision-bound handoff",
+      "reportSource": "R4 Part IV–V",
+      "change": "C15",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Both packs contain creator/models/manage/handoff skills and the UAR uses its internal liter-llm dependency. This supersedes any blank-slate skill-family assumption; every advertised harness option, plugin boundary and helper toolchain still needs its own acceptance receipt.",
+      "evidence": [
+        "SRC-014",
+        "SRC-015",
+        "SRC-016",
+        "SRC-017",
+        "SRC-018",
+        "SRC-019",
+        "SRC-020",
+        "SRC-021",
+        "SRC-040"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "librefang",
+          "flint-forge",
+          "know-me-system",
+          "know-me-app"
+        ],
+        "reservedDependencies": [
+          "D-MINI",
+          "D-KNOWME",
+          "D-FORGE",
+          "D-UAR-P1"
+        ],
+        "convergenceAcceptanceOwner": "C15",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1"
+      ],
+      "acceptance": "UAR/Codex/Claude Code/Copilot/Kimi Code/MiniMax CLI/OpenCode/DeepSeek Harness each retain exact supported options or report loss.",
+      "acceptanceReference": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-042",
+      "recommendation": "Separate worktrees, single writers and compatible commit manifest",
+      "reportSource": "R4 §2.4; R5 §10",
+      "change": "C01",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "evidence": [
+        "SRC-001",
+        "SRC-002",
+        "SRC-006",
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-040",
+        "SRC-041"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "librefang",
+          "universal-agent-runtime",
+          "the-boss",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "know-me-app",
+          "know-me-system",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C01",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "All branches match requested name; original checkouts preserved; integration checkpoints remain separate.",
+      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-043",
+      "recommendation": "Reuse existing UAR thread/actor/compiler instead of new model loop",
+      "reportSource": "R5 §§1–4",
+      "change": "C09",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Existing UAR actor/thread host and memory auth scopes support reuse. Atomic team claims, aggregate reservations and scoped peer authority remain unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C09",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Team tasks execute through the trusted existing host with original lineage and attenuation.",
+      "acceptanceReference": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-044",
+      "recommendation": "Team membership, atomic task claims, peer mailboxes and budgets",
+      "reportSource": "R5 §5",
+      "change": "C09",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing UAR actor/thread host and memory auth scopes support reuse. Atomic team claims, aggregate reservations and scoped peer authority remain unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C09",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "Stale assignment cannot commit; removal prevents new access; peer team is not forced into one parent thread.",
+      "acceptanceReference": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-045",
+      "recommendation": "Explicit selected context, artifact namespaces and memory provenance",
+      "reportSource": "R5 §5",
+      "change": "C09",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing UAR actor/thread host and memory auth scopes support reuse. Atomic team claims, aggregate reservations and scoped peer authority remain unverified.",
+      "evidence": [
+        "SRC-006",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C09",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "acceptance": "No implicit team-wide private memory union; cross-tenant reads and writes are denied.",
+      "acceptanceReference": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-046",
+      "recommendation": "Durable workflows, branch/join, waits, compensation and effects",
+      "reportSource": "R5 §5; §10",
+      "change": "C10",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing connector ingress, direct tool execution and durable approval storage are reusable pieces. No configured feedback-to-issue run or effect-reconciliation proof was executed.",
+      "evidence": [
+        "SRC-004",
+        "SRC-013",
+        "SRC-026",
+        "SRC-027",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "flint-gate",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-GATE",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C10",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "acceptance": "Restart resumes pinned workflow without duplicate external action; uncertain effects require reconciliation.",
+      "acceptanceReference": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-047",
+      "recommendation": "Coding, product, marketing and full design teams",
+      "reportSource": "R5 §6",
+      "change": "C16",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing team-creator skills are available for extension. Complete specialist and business-team outputs have not been exercised against the new acceptance clauses.",
+      "evidence": [
+        "SRC-014",
+        "SRC-018"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "universal-agent-runtime",
+          "the-boss"
+        ],
+        "reservedDependencies": [
+          "D-MINI"
+        ],
+        "convergenceAcceptanceOwner": "C16",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "acceptance": "Representative task produces accepted artifact with independent review and measured cost versus single-agent baseline.",
+      "acceptanceReference": "openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-048",
+      "recommendation": "Executive role assistants separate from person-specific twins",
+      "reportSource": "R5 §7",
+      "change": "C17",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "General governance and personal runtime primitives are not evidence of trusted executive representation grants, consent revocation or human approval separation. Treat these requirements as unverified, not implemented.",
+      "evidence": [
+        "SRC-003",
+        "SRC-008",
+        "SRC-035"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "the-boss"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C17",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-GATE"
+      ],
+      "acceptance": "CEO/CFO/CIO/intelligence/security/marketing/product role titles confer no privileges.",
+      "acceptanceReference": "openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-049",
+      "recommendation": "Consent, representation and organizational action grants",
+      "reportSource": "R5 §7; R6 §8",
+      "change": "C17",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "General governance and personal runtime primitives are not evidence of trusted executive representation grants, consent revocation or human approval separation. Treat these requirements as unverified, not implemented.",
+      "evidence": [
+        "SRC-003",
+        "SRC-008",
+        "SRC-035"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "the-boss"
+        ],
+        "reservedDependencies": [
+          "D-KNOWME",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C17",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-KNOWME",
+        "D-GATE"
+      ],
+      "acceptance": "Offboarding and revocation stop new access/effects; a twin cannot satisfy required human approval.",
+      "acceptanceReference": "openspec/changes/afc-c17-executive-assistants-and-consented-human-representation/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-050",
+      "recommendation": "Fail-closed governed profiles and schema-validated policy context",
+      "reportSource": "R5 §8",
+      "change": "C02",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "Invalid/missing required policy prevents protected effects and exposes effective posture.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-051",
+      "recommendation": "Restrictive composition of Cedar boundaries and policy binding receipt",
+      "reportSource": "R5 §8",
+      "change": "C02",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "A broad permit in one boundary cannot override another denial; compiled policy is proven active.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-052",
+      "recommendation": "Recheck authority after waits, payload changes and lease expiry",
+      "reportSource": "R5 §8",
+      "change": "C02",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Inspected startup contains permissive fallback and the direct tool route calls MCP directly. This is a source-level audit trigger; the complete middleware/route enforcement graph and deployed profile were not executed. Gate already has durable approval stores and explicitly rejects unsupported actor_token chaining.",
+      "evidence": [
+        "SRC-003",
+        "SRC-004",
+        "SRC-008",
+        "SRC-026",
+        "SRC-027"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "flint-gate"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-GATE"
+        ],
+        "convergenceAcceptanceOwner": "C02",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "acceptance": "Revoked or altered approval cannot authorize an effect; exact target/payload identity is retained.",
+      "acceptanceReference": "openspec/changes/afc-c02-governed-action-and-approval-boundary/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-053",
+      "recommendation": "Host credential broker, egress labels and durable action audit",
+      "reportSource": "R5 §8",
+      "change": "C10",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing connector ingress, direct tool execution and durable approval storage are reusable pieces. No configured feedback-to-issue run or effect-reconciliation proof was executed.",
+      "evidence": [
+        "SRC-004",
+        "SRC-013",
+        "SRC-026",
+        "SRC-027",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "flint-gate",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-GATE",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C10",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "acceptance": "Private input cannot be posted to a disallowed destination; every effect has decision and outcome references.",
+      "acceptanceReference": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-054",
+      "recommendation": "Five document kinds extend section-based UAR-AGENT-MD",
+      "reportSource": "R5 §9; R6 §§1–3",
+      "change": "C03",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Compiler conversion shown in SRC-005 carries skill IDs into prefer; that excerpt does not preserve required/version/config fields in SkillPolicy. Active catalog/definition execution work is reserved to D-UAR-P1; whole-pipeline losslessness is not certified.",
+      "evidence": [
+        "SRC-005",
+        "SRC-014",
+        "SRC-018"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-MINI"
+        ],
+        "convergenceAcceptanceOwner": "C03",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "acceptance": "Existing documents remain readable; required collaboration fields survive authoring-to-runtime or are rejected.",
+      "acceptanceReference": "openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-055",
+      "recommendation": "Import/export loss reports, immutable dependencies and migrations",
+      "reportSource": "R5 §9; R6 §11",
+      "change": "C03",
+      "disposition": "externally-owned",
+      "dispositionMeaning": "The prerequisite/shared surface is already reserved to external work; convergence retains residual requirements after checkpoint adoption.",
+      "finding": "Compiler conversion shown in SRC-005 carries skill IDs into prefer; that excerpt does not preserve required/version/config fields in SkillPolicy. Active catalog/definition execution work is reserved to D-UAR-P1; whole-pipeline losslessness is not certified.",
+      "evidence": [
+        "SRC-005",
+        "SRC-014",
+        "SRC-018"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-MINI"
+        ],
+        "convergenceAcceptanceOwner": "C03",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-MINI"
+      ],
+      "acceptance": "Required unsupported semantics prohibit execution; running definitions do not float with aliases.",
+      "acceptanceReference": "openspec/changes/afc-c03-lossless-definitions-and-collaboration-document-profile/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-056",
+      "recommendation": "First thin product-feedback team through direct and BossFang routes",
+      "reportSource": "R5 §10; R6 §12",
+      "change": "C10",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Existing connector ingress, direct tool execution and durable approval storage are reusable pieces. No configured feedback-to-issue run or effect-reconciliation proof was executed.",
+      "evidence": [
+        "SRC-004",
+        "SRC-013",
+        "SRC-026",
+        "SRC-027",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "flint-gate",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-GATE",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C10",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "acceptance": "Scoped event yields one governed issue plus product/design review with complete causal evidence.",
+      "acceptanceReference": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-057",
+      "recommendation": "Measure quality, human correction, cost, recovery and admin burden",
+      "reportSource": "R5 §10",
+      "change": "C18",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Observed pins and lockfiles differ across products/profiles. No mode was installed, benchmarked or failover-tested during this task; no release-readiness inference is permitted.",
+      "evidence": [
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-037"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-MINI",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C18",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "Coding/design/marketing/feedback/executive-support results report failures and supported confidence limits.",
+      "acceptanceReference": "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-058",
+      "recommendation": "Federation with independent resource-side checks and lower-trust placement",
+      "reportSource": "R5 §8; §10; R6 §6",
+      "change": "C18",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Observed pins and lockfiles differ across products/profiles. No mode was installed, benchmarked or failover-tested during this task; no release-readiness inference is permitted.",
+      "evidence": [
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-037"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-MINI",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C18",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "External harness cannot receive protected authority it cannot enforce; negative capability negotiation is demonstrated.",
+      "acceptanceReference": "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-059",
+      "recommendation": "Evaluate external workflow engine only if measured requirements justify it",
+      "reportSource": "R1 §8; R5 §10",
+      "change": "C10",
+      "disposition": "retained",
+      "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
+      "finding": "Existing connector ingress, direct tool execution and durable approval storage are reusable pieces. No configured feedback-to-issue run or effect-reconciliation proof was executed.",
+      "evidence": [
+        "SRC-004",
+        "SRC-013",
+        "SRC-026",
+        "SRC-027",
+        "SRC-039"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini",
+          "flint-gate",
+          "surreal-memory-server"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-MINI",
+          "D-GATE",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C10",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-MINI",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "acceptance": "Compare embedded-compatible reuse against explicit durability/throughput needs before selecting a new engine.",
+      "acceptanceReference": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-060",
+      "recommendation": "Cross-host takeover and pinned residency require workload evidence",
+      "reportSource": "R3 §10",
+      "change": "C18",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Observed pins and lockfiles differ across products/profiles. No mode was installed, benchmarked or failover-tested during this task; no release-readiness inference is permitted.",
+      "evidence": [
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-037"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-MINI",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C18",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "No automatic failover until state/effect fencing is demonstrated; residency chosen from measurements.",
+      "acceptanceReference": "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    },
+    {
+      "id": "REC-061",
+      "recommendation": "Tested release matrix and explicit upgrade/rollback compatibility",
+      "reportSource": "R2 §7; R5 §10",
+      "change": "C18",
+      "disposition": "unresolved",
+      "dispositionMeaning": "Current end-to-end conformance is not established by this bounded source pass; retain as an explicit future acceptance obligation.",
+      "finding": "Observed pins and lockfiles differ across products/profiles. No mode was installed, benchmarked or failover-tested during this task; no release-readiness inference is permitted.",
+      "evidence": [
+        "SRC-007",
+        "SRC-009",
+        "SRC-010",
+        "SRC-011",
+        "SRC-012",
+        "SRC-022",
+        "SRC-037"
+      ],
+      "inspectionScope": "Fetched default-branch immutable source. External unmerged work is recorded separately and has not been adopted.",
+      "owner": {
+        "responsibleRepositories": [
+          "universal-agent-runtime",
+          "librefang",
+          "the-boss",
+          "know-me-system",
+          "know-me-app",
+          "flint-gate",
+          "flint-realtime-fabric",
+          "flint-forge",
+          "surreal-memory-server",
+          "prometheus-skill-pack",
+          "prometheus-skills-mini"
+        ],
+        "reservedDependencies": [
+          "D-UAR-P1",
+          "D-FRF",
+          "D-FORGE",
+          "D-GATE",
+          "D-MINI",
+          "D-KNOWME",
+          "D-MEMORY"
+        ],
+        "convergenceAcceptanceOwner": "C18",
+        "fileClaimAccepted": false
+      },
+      "blockingDependencies": [
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "acceptance": "Exact provider/consumer/payload pins pass supported deployment modes; rollback preserves migrated data.",
+      "acceptanceReference": "openspec/changes/afc-c18-federated-compatibility-and-release-evidence/design.md",
+      "runtimeVerified": false,
+      "implemented": false,
+      "referenceRoot": "initiative directory"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "dispatchedAt": "2026-09-24T18:47:53.658Z",
+  "backend": "openspec",
+  "executor": "current Codex task",
+  "modelClass": "medium",
+  "model": "GPT-6 family; current session retained",
+  "phase": "agent-fabric-convergence",
+  "assignedChanges": [
+    "afc-c01-baseline-reconciliation-and-shared-contracts"
+  ],
+  "activeTask": "C01.1",
+  "scope": "planning-root documentation; other repositories read/fetch only",
+  "pendingWork": [
+    "C01.1",
+    "C01.2",
+    "C01.3"
+  ],
+  "phasePendingChanges": 18,
+  "taskMapping": {
+    "canonical": "C01.1",
+    "openSpecOrdinal": "1",
+    "openSpecLabel": "1.1"
+  }
+}

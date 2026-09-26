@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "status": "approved-design-runtime-pending",
+  "specificationRepository": "Prometheus-AGS/universal-agent-runtime",
+  "specificationPath": "docs/agents/collaboration/v0.1.0-draft.1",
+  "recommendations": [
+    "C01",
+    "C03",
+    "C06",
+    "C09",
+    "C10",
+    "C14",
+    "C15"
+  ],
+  "acceptedContract": "uar.collaboration draft0.1.0-draft.1",
+  "runtimePrerequisite": "D-UAR-P1 remains pending installed acceptance; parent C01.2 unchanged",
+  "parentTaskCompletion": "No parent task/change marked complete by specification publication",
+  "firstImplementation": "I1 definitions/catalog, separately approved",
+  "postponedOwners": "dependency-map.json"
+}

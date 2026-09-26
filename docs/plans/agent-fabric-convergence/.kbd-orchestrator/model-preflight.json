@@ -1,0 +1,43 @@
+{
+  "status": "degraded",
+  "gateway": "http://localhost:4000/v1",
+  "roles": {
+    "judge": {
+      "alias": "gpt-5.5",
+      "identity": null,
+      "source": "models.toml"
+    },
+    "critic": {
+      "alias": "MiniMax-M3",
+      "identity": null,
+      "source": "models.toml"
+    },
+    "backup": {
+      "alias": "",
+      "identity": null,
+      "source": "unconfigured"
+    },
+    "generator": {
+      "alias": "kbd-frontier",
+      "identity": null,
+      "source": "models.toml"
+    }
+  },
+  "providers_detected": [
+    "openai",
+    "gemini",
+    "groq",
+    "fireworks",
+    "openrouter"
+  ],
+  "classes_available": [
+    "small",
+    "medium",
+    "frontier"
+  ],
+  "distinct_models": 0,
+  "config_path": "/Users/gqadonis/.config/liter-llm/liter-llm-proxy.toml",
+  "config_exists": true,
+  "config_defects": [],
+  "checked_at": "2026-09-26T14:49:33Z"
+}

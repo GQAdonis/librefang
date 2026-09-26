@@ -1,0 +1,2 @@
+# Transient hook lock; the journal is owned by the external KBD runtime.
+*.lock

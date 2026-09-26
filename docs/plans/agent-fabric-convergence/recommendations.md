@@ -1,0 +1,67 @@
+# Recommendation coverage register
+
+61 recommendation clusters cover the five reports and companion standard. All product outcomes remain unverified in this initiative. `setup-complete` refers only to worktree creation; `reuse-existing` identifies foundations, not completed conformance. Conditional decisions remain in scope and have explicit evidence gates.
+
+| ID | Source | Recommendation | Change | Disposition | Acceptance |
+|---|---|---|---|---|---|
+| REC-001 | R1 §3; R2 §4 | Separate provider bridging, native execution and full harness delegation | C05 | planned | One traced delegated operation has one executor and one set of tool effects. |
+| REC-002 | R1 §3.2; R5 §4 | One executor, workflow owner and lifecycle supervisor per owned object | C04 | planned | Closing a nonowner client cannot stop a service; workflow and child identities remain separate. |
+| REC-003 | R1 §3.3; R2 §7 | Instance inventory, endpoints, placement and capability negotiation | C04 | planned | Two UAR instances are selectable; wrong identity/version/required capability is visibly refused. |
+| REC-004 | R1 §3.4 | Separate new placement, reattachment and explicit migration | C04 | planned | A timed-out remote run is reconciled by identity and never silently started locally. |
+| REC-005 | R1 §5.1–5.3 | Admission, steer, cancellation, detach, replay and uncertain outcomes | C05 | planned | Dropped admission/cancel responses recover without double execution; cancellation acknowledgement is not completion. |
+| REC-006 | R1 §5.2; R3 §7 | Attached/background/workflow-child lifetime and checkpoint contracts | C06 | planned | Viewer loss follows declared policy; restart recovery does not claim missing event replay. |
+| REC-007 | R1 §5.4; R2 §5 | Separate product history, runtime checkpoints, workflow records and knowledge | C01 | reconcile-active-work | State authority table agrees with P1 host-owned conversation history and UAR-owned execution. |
+| REC-008 | R1 §5.4 | Usage identity and aggregate budget accounting without double counting | C09 | planned | Mirrored usage counted once; concurrent children cannot exceed reserved aggregate limits. |
+| REC-009 | R1 §6; R2 §8 | Native UAR UI with isolated BossFang service-console view | C14 | planned | Per-instance/account isolation, restricted origin, credential handoff and external-browser fallback are exercised. |
+| REC-010 | R1 §7; R2 §6 | Authenticate each boundary and attenuate delegated authority | C02 | planned | Direct, managed, embedded and proxied paths produce equivalent protected-effect decisions for their advertised profile. |
+| REC-011 | R1 §1.8; R2 §10 | Inventory real pins, schemas and API versions | C01 | planned | Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated. |
+| REC-012 | R1 §1.2; R1 §1.4 | Implement initial sidecar/driver wiring | C01 | superseded-in-part | Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1. |
+| REC-013 | R1 §1.7 | Resolve A2A task authority and durability differences | C05 | planned | Every exposed task resolves to one authoritative record and accurately advertised persistence. |
+| REC-014 | R2 §5 | Personal CRDT replication distinct from authoritative business data | C12 | planned | Authorized peers converge permitted documents; business grants and task ownership cannot be CRDT-written. |
+| REC-015 | R2 §5 | Server-authoritative read shapes with authorized tombstones/resnapshot | C11 | reconcile-active-work | Tenant-filtered updates/deletes survive disconnect or explicitly require a resnapshot. |
+| REC-016 | R2 §5 | Durable offline command outbox and transactional publication | C11 | planned | Crash/retry retains one command identity; domain commit is distinct from broker acknowledgement. |
+| REC-017 | R2 §6 | Peer pairing, key lifecycle, selective consent and offline revocation policy | C12 | planned | Revoked or expired grants cannot authorize fresh protected operations; offline limitations are visible. |
+| REC-018 | R2 §6 | Verified subject/actor, issuer/audience and tenant mapping | C02 | reconcile-active-work | Caller-supplied tenant/actor strings cannot create authority; unsupported multi-hop exchange is rejected. |
+| REC-019 | R2 §6 approval; R5 §8 | One correlated operation with independently enforced approval challenges | C02 | planned | Repeated challenge is deduplicated; distinct issuer challenges stay distinct and a policy denial remains binding. |
+| REC-020 | R2 §7 | Personal offline, home, cloud, enterprise and independent deployment profiles | C13 | planned | Each required/optional service and loss behavior is explicit and exercised for the chosen profile. |
+| REC-021 | R2 §3 KnowMe | Resolve existing KnowMe local loop versus embedded UAR route | C13 | reconcile-active-work | Route inventory and migration preserve behavior; exactly one loop owns each run. |
+| REC-022 | R2 §8 | Portable plugin host/WIT, signed manifest coverage and local grants | C15 | planned | Tampered capability manifest fails admission; imported package receives fresh install identity and scoped grants. |
+| REC-023 | R2 §8 | Separate UI authoring, binding, delivery and action execution authority | C14 | planned | Rendered action reaches its bound authority with current identity; the rendering host cannot mint authority. |
+| REC-024 | R2 §3 Fabric; R2 §7 | Fabric transport control must not masquerade as execution control | C08 | reconcile-active-work | Cancel reaches the owning runtime or reports unsupported; stopping delivery is labeled detach. |
+| REC-025 | R2 §3 Forge | Route-specific RLS/Keto/Cedar coverage and database transactions | C11 | reconcile-active-work | GraphQL/REST/reflection effects enforce the declared contract and documented differences. |
+| REC-026 | R3 §§1–3 | Separate definition, logical instance, activation, run and placement | C06 | planned | Two tenants instantiate one definition without sharing state; restarts preserve logical identity. |
+| REC-027 | R3 §§3–4 | Request execution default; on-demand and pinned-resident profiles | C06 | planned | Warm workers get fresh contexts; resident activation is opt-in with measured resource justification. |
+| REC-028 | R3 §5 | Logical addresses, authenticated transport and fenced ownership | C06 | planned | No identity depends on a private port; stale activation cannot commit protected state. |
+| REC-029 | R3 §6 | Durable inbox, admission acknowledgement and uncertain-effect ledger | C07 | planned | Crash between source commit, publication and inbox admission does not silently lose admitted work. |
+| REC-030 | R3 §6.1–6.4 | Scoped local monitors of particular agents and conversations | C07 | planned | Two observers have independent cursors; agent-A/conversation-C scope excludes other conversations. |
+| REC-031 | R3 §6.5 | BossFang channel normalization and agent-requested subscriptions | C08 | planned | Host authorizes requested filter; channel/account/thread provenance survives the bridge. |
+| REC-032 | R3 §6.6 | Handler selection separate from observer fanout and reply rights | C08 | planned | Two handler matches have an explicit winner/conflict; observing does not grant posting. |
+| REC-033 | R3 §6.6–6.7 | Replay safety, provider-echo deduplication and causal-loop bounds | C08 | planned | Historical replay cannot repost; A-to-B-to-A chains stop within declared budgets. |
+| REC-034 | R3 §6.7 | Watermark, retention gaps, pause semantics and subscription diagnostics | C07 | planned | Attach has no unreported gap; expired retention reports missing coverage and resnapshot choices. |
+| REC-035 | R3 §7 | Lifecycle controls, timers/reminders, serialized turns and restart budgets | C06 | planned | Cancel/drain respond during blocked turns; repeated activation crashes reach an inspectable failed state. |
+| REC-036 | R3 §8 | One scheduler per action and mobile suspension semantics | C13 | planned | A schedule fires once under one owner; suspended local work never masquerades as remotely running. |
+| REC-037 | R4 Parts I–II | KBD typed authority, bounded loops and independent evaluation | C15 | reuse-existing | Handoff carries revision/task/evidence and preserves four completion dimensions; logs cannot mark execution complete. |
+| REC-038 | R4 Part III; Addendum A | Six specialist roles with task-selected skills and distinct write scopes | C16 | planned | UI/UX, mobile, security, product, documentation and code-review presets have bounded assignments and role-specific acceptance. |
+| REC-039 | R4 Addendum B | Feedback analyst and issue curator with standing intake authorization | C10 | planned | Authorized intake creates one sanitized issue; an issue does not authorize implementation or roadmap commitments. |
+| REC-040 | R4 Addendum C | Reviewed, pinned skill identity, license and dependency lock | C15 | planned | Required skill/version/config reaches runtime; unsupported required tools block binding. |
+| REC-041 | R4 Part IV–V | Eight harnesses, truthful capabilities and revision-bound handoff | C15 | reuse-existing | UAR/Codex/Claude Code/Copilot/Kimi Code/MiniMax CLI/OpenCode/DeepSeek Harness each retain exact supported options or report loss. |
+| REC-042 | R4 §2.4; R5 §10 | Separate worktrees, single writers and compatible commit manifest | C01 | setup-complete | All branches match requested name; original checkouts preserved; integration checkpoints remain separate. |
+| REC-043 | R5 §§1–4 | Reuse existing UAR thread/actor/compiler instead of new model loop | C09 | planned | Team tasks execute through the trusted existing host with original lineage and attenuation. |
+| REC-044 | R5 §5 | Team membership, atomic task claims, peer mailboxes and budgets | C09 | planned | Stale assignment cannot commit; removal prevents new access; peer team is not forced into one parent thread. |
+| REC-045 | R5 §5 | Explicit selected context, artifact namespaces and memory provenance | C09 | planned | No implicit team-wide private memory union; cross-tenant reads and writes are denied. |
+| REC-046 | R5 §5; §10 | Durable workflows, branch/join, waits, compensation and effects | C10 | planned | Restart resumes pinned workflow without duplicate external action; uncertain effects require reconciliation. |
+| REC-047 | R5 §6 | Coding, product, marketing and full design teams | C16 | planned | Representative task produces accepted artifact with independent review and measured cost versus single-agent baseline. |
+| REC-048 | R5 §7 | Executive role assistants separate from person-specific twins | C17 | planned | CEO/CFO/CIO/intelligence/security/marketing/product role titles confer no privileges. |
+| REC-049 | R5 §7; R6 §8 | Consent, representation and organizational action grants | C17 | planned | Offboarding and revocation stop new access/effects; a twin cannot satisfy required human approval. |
+| REC-050 | R5 §8 | Fail-closed governed profiles and schema-validated policy context | C02 | planned | Invalid/missing required policy prevents protected effects and exposes effective posture. |
+| REC-051 | R5 §8 | Restrictive composition of Cedar boundaries and policy binding receipt | C02 | planned | A broad permit in one boundary cannot override another denial; compiled policy is proven active. |
+| REC-052 | R5 §8 | Recheck authority after waits, payload changes and lease expiry | C02 | planned | Revoked or altered approval cannot authorize an effect; exact target/payload identity is retained. |
+| REC-053 | R5 §8 | Host credential broker, egress labels and durable action audit | C10 | planned | Private input cannot be posted to a disallowed destination; every effect has decision and outcome references. |
+| REC-054 | R5 §9; R6 §§1–3 | Five document kinds extend section-based UAR-AGENT-MD | C03 | planned | Existing documents remain readable; required collaboration fields survive authoring-to-runtime or are rejected. |
+| REC-055 | R5 §9; R6 §11 | Import/export loss reports, immutable dependencies and migrations | C03 | planned | Required unsupported semantics prohibit execution; running definitions do not float with aliases. |
+| REC-056 | R5 §10; R6 §12 | First thin product-feedback team through direct and BossFang routes | C10 | planned | Scoped event yields one governed issue plus product/design review with complete causal evidence. |
+| REC-057 | R5 §10 | Measure quality, human correction, cost, recovery and admin burden | C18 | planned | Coding/design/marketing/feedback/executive-support results report failures and supported confidence limits. |
+| REC-058 | R5 §8; §10; R6 §6 | Federation with independent resource-side checks and lower-trust placement | C18 | planned | External harness cannot receive protected authority it cannot enforce; negative capability negotiation is demonstrated. |
+| REC-059 | R1 §8; R5 §10 | Evaluate external workflow engine only if measured requirements justify it | C10 | conditional-design-decision | Compare embedded-compatible reuse against explicit durability/throughput needs before selecting a new engine. |
+| REC-060 | R3 §10 | Cross-host takeover and pinned residency require workload evidence | C18 | conditional-design-decision | No automatic failover until state/effect fencing is demonstrated; residency chosen from measurements. |
+| REC-061 | R2 §7; R5 §10 | Tested release matrix and explicit upgrade/rollback compatibility | C18 | planned | Exact provider/consumer/payload pins pass supported deployment modes; rollback preserves migrated data. |

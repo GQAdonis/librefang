@@ -1,0 +1,12 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-09-24T18:25:53Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Reuse analysis passed independent review. Three warnings resolved: explicit baseline/profile/representation decisions and requirements-first workflow selection.",
+  "skipped": false,
+  "skipReason": null
+}

@@ -1,0 +1,4 @@
+# Raw retrieved documents and tool snippets stay local; publish URL/hash receipts and original analysis.
+research/sources/*.source.txt
+research/sources/search-*.json
+research/sources/context7-*.json

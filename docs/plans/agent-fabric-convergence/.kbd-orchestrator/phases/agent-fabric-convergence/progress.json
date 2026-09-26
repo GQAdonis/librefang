@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "2",
+  "generatedBy": "kbd-runtime",
+  "projectionContractVersion": 2,
+  "sourceRevision": 146,
+  "derivedRevision": 146,
+  "frontier": {
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 146
+  },
+  "conflictCount": 0,
+  "phase": "agent-fabric-convergence",
+  "phaseId": "agent-fabric-convergence",
+  "parentPhase": null,
+  "last_updated": "2026-09-26T16:12:54.604976Z",
+  "last_updated_by": "kbd-runtime",
+  "changes_total": 18,
+  "changes_completed": 0,
+  "implementation_total": 18,
+  "implementation_completed": 0,
+  "completion": {
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 0,
+      "total": 18,
+      "status": "PENDING"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 1,
+      "total": 19,
+      "status": "IN_PROGRESS"
+    },
+    "evidence": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "changes": [
+    {
+      "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "title": "C01 — Baseline reconciliation and shared contracts",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 1,
+      "last_task_completed": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+      "next_task_pending": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c02-governed-action-and-approval-boundary",
+      "title": "C02 — Governed action and approval boundary",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "title": "C03 — Lossless definitions and collaboration document profile",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c04-replaceable-service-instances-and-placement",
+      "title": "C04 — Replaceable service instances and placement",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c05-bossfang-full-run-delegation",
+      "title": "C05 — BossFang full-run delegation",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "title": "C06 — Durable addressable instances and bounded turns",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "title": "C07 — Local scoped observers with durable delivery",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c08-bossfang-and-fabric-observer-routing",
+      "title": "C08 — BossFang and Fabric observer routing",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c09-bounded-teams-and-shared-task-board",
+      "title": "C09 — Bounded teams and shared task board",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "title": "C10 — Feedback workflow and governed connector effects",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c11-authoritative-business-data-and-offline-commands",
+      "title": "C11 — Authoritative business data and offline commands",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Adopt accepted production-readiness changes; document route-specific auth/RLS and cursor/tombstone semantics.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c12-personal-peer-sovereignty-and-consent",
+      "title": "C12 — Personal peer sovereignty and consent",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Define eligible personal data classes, peer identity/membership, key rotation/recovery and explicit offline grant validity; keep organization/runtime authority outside CRDT writes.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "title": "C13 — Embedded mobile and home/cloud execution profiles",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Reconcile local model/tool loop with embedded UAR route; pin SDK/features and preserve each product layer contract.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "title": "C14 — Studio administration and isolated service consoles",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c16-specialist-marketing-product-and-design-teams",
+      "title": "C16 — Specialist, marketing, product and design teams",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c17-executive-assistants-and-consented-human-representation",
+      "title": "C17 — Executive assistants and consented human representation",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Define CEO/CFO/CIO/Chief Intelligence/Security/Marketing/Product and configurable office roles separately from human profiles; identify trusted grant issuers.",
+      "blockers": []
+    },
+    {
+      "id": "afc-c18-federated-compatibility-and-release-evidence",
+      "title": "C18 — Federated compatibility and release evidence",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 3,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Implement only required remaining federation/trust adapters with independent resource-side enforcement and capability refusal; prove state/effect fencing before optional takeover.",
+      "blockers": []
+    }
+  ],
+  "children": {
+    "uar-team-specification": {
+      "status": "DONE",
+      "changes_completed": 1,
+      "changes_total": 1,
+      "implementation_completed": 1,
+      "implementation_total": 1,
+      "certification_status": "NOT_TRACKED",
+      "handoff": null,
+      "completed_at": null
+    }
+  },
+  "migrationStatus": null
+}

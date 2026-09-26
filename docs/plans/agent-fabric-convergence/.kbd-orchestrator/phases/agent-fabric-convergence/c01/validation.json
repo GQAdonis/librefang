@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-09-24T18:57:35.374Z",
+  "repositories": 11,
+  "recommendations": 61,
+  "sourceReceipts": 45,
+  "inventoryRepositories": 11,
+  "errors": [],
+  "status": "PASS",
+  "limits": "Validates provenance, coverage, ownership gates and convergence checkout isolation; does not run or certify products."
+}

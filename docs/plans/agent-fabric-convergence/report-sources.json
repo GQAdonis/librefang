@@ -1,0 +1,41 @@
+{
+  "capturedAt": "2026-09-24T18:05:07.504Z",
+  "sources": [
+    {
+      "id": "R1",
+      "path": "/Users/gqadonis/.prometheus/research/bossfang-uar-studio-architecture-20260924-a73e/report.md",
+      "sha256": "a20c4b57cefbdba72b8b20dd27192d64bd072d0f8d3c19fcc7eb91fee4c5c26a",
+      "verification": "historical source inspection; not current operational certification"
+    },
+    {
+      "id": "R2",
+      "path": "/Users/gqadonis/.prometheus/research/knowme-flint-ecosystem-architecture-20260924-b6d2/report.md",
+      "sha256": "159cef9e0b6a28c47d7f831f941c8b741088eea1373c657e573f96f3730cfe47",
+      "verification": "historical source inspection; not current operational certification"
+    },
+    {
+      "id": "R3",
+      "path": "/Users/gqadonis/.prometheus/research/uar-agent-operational-modes-20260924-c8f1/report.md",
+      "sha256": "36731b02d65598655b72ce8e0f38e8c53b4f7cf07dd528abc7d96b61fadd4eb1",
+      "verification": "historical source inspection; not current operational certification"
+    },
+    {
+      "id": "R4",
+      "path": "/Users/gqadonis/.prometheus/research/kbd-agent-roles-skills-20260924-d4e7/report.md",
+      "sha256": "4ccd984392f780afdf5d25cb9e5884b7a0d0ff965dd31b0419f414d930c283ef",
+      "verification": "historical source inspection; not current operational certification"
+    },
+    {
+      "id": "R5",
+      "path": "/Users/gqadonis/.prometheus/research/uar-governed-agent-teams-20260924-e92a/report.md",
+      "sha256": "ba36ce801dcb721938c623dc0d78e2e2be7a088081b245765c9c38ae312c7b87",
+      "verification": "historical source inspection; not current operational certification"
+    },
+    {
+      "id": "R6",
+      "path": "/Users/gqadonis/.prometheus/research/uar-governed-agent-teams-20260924-e92a/proposal/standard.md",
+      "sha256": "3e733616a73172fd20b9616a76cacc47b77d8f4a7fa74ee61837722b805933a5",
+      "verification": "proposed standard; not implemented schema"
+    }
+  ]
+}

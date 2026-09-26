@@ -1,0 +1,45 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "openspec/changes/afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff/proposal.md",
+      "claim": "C15 hard-codes an unevaluated toolchain requirement that is not supported by the analysis or any cited dependency gate.",
+      "evidence": "C15 proposal says: \"use Node.js/TypeScript 7 for authored shared hooks/scripts.\" The corresponding analysis only says to reuse merged skills/adapters and that \"External library versions and mutable protocol documentation must be refreshed through Context7/primary sources when a concrete implementation adopts them\"; no candidate or dependency checkpoint evaluates or pins Node.js/TypeScript 7.",
+      "suggested_fix": "Replace the hard-coded Node.js/TypeScript 7 requirement with a C15 task to refresh and pin supported Node.js and TypeScript versions through the D-MINI/adapter evidence gate before implementation."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/afc-c10-feedback-workflow-and-governed-connector-effects/proposal.md",
+      "claim": "C10 omits repositories and external checkpoints for owners that its assigned recommendation requires for governed connector effects.",
+      "evidence": "REC-053 is assigned to C10 with owners [\"UAR\", \"flint-gate\", \"surreal-memory-server\"] and acceptance: \"Private input cannot be posted to a disallowed destination; every effect has decision and outcome references.\" But C10 Impact lists only repositories \"universal-agent-runtime, librefang, the-boss, prometheus-skill-pack, prometheus-skills-mini\" and external checkpoints \"D-UAR-P1, D-MINI\", omitting flint-gate, surreal-memory-server, D-GATE and D-MEMORY.",
+      "suggested_fix": "Either add the missing Gate/memory repositories and checkpoints to C10, or explicitly move REC-053's Gate/memory-owned enforcement and evidence to prerequisite changes with acceptance references that C10 consumes."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/afc-c16-specialist-marketing-product-and-design-teams/proposal.md",
+      "claim": "C16 acceptance includes a subjective user-understanding criterion that is not operationally testable as written.",
+      "evidence": "C16 Acceptance says: \"Representative coding/design/marketing/documentation tasks produce accepted artifacts and independent findings; users can explain selected roles, allowed writes and cost tradeoffs.\" The spec scenarios require the guide to propose roles and limits, but no measurable method, participant class, rubric, or pass threshold is defined for \"users can explain\".",
+      "suggested_fix": "Replace the subjective clause with an observable criterion, such as generated role-selection rationale, displayed write scopes, estimated cost class, and an operator-review checklist with required fields."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/proposal.md",
+      "claim": "C01 acceptance claims resolution of all 11 baselines but the task set does not identify those baselines or require a named baseline ledger artifact.",
+      "evidence": "C01 Acceptance says: \"Every REC has a source disposition, owner and acceptance reference; all 11 baselines resolve; no unresolved ownership is labeled execution-ready.\" The C01 tasks only say to \"Refresh source and lockfile/feature evidence,\" \"Record accepted P1 conversation/execution/approval contract,\" and \"Publish versioned identity/state/action vocabulary\"; no task names the 11 baselines or requires a baseline-resolution table.",
+      "suggested_fix": "Add an explicit C01 task and acceptance artifact for a baseline ledger listing all 11 baselines, their current source revision, owner, disposition, blocking dependency, and acceptance reference."
+    },
+    {
+      "severity": "WARNING",
+      "file": "openspec/changes/afc-c13-embedded-mobile-and-home-cloud-execution-profiles/proposal.md",
+      "claim": "C13's acceptance tests privacy grants but its declared prerequisites omit the consent and business-data changes needed for some advertised profiles.",
+      "evidence": "C13 Acceptance requires \"no private-memory upload without grant\" and tasks include \"consume C11/C12 when enabling their data profiles.\" However C13 Dependencies list only \"C04, C06\" and the work package says \"C11/C12 are additional prerequisites for enterprise-sync/peer modes; basic standalone embedding does not depend on them.\" The spec also covers \"home/cloud\" profiles, which can involve remote context placement, but the dependency gate does not force C11/C12 before those profile variants are accepted.",
+      "suggested_fix": "Split C13 acceptance by profile: standalone embedded may depend on C04/C06 only, while enterprise-sync and peer/home-cloud profiles must explicitly depend on C11 and/or C12 before privacy-grant acceptance can pass."
+    }
+  ]
+}

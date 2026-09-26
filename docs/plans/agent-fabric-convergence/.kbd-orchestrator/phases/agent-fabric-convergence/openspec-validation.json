@@ -1,0 +1,155 @@
+{
+  "items": [
+    {
+      "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "type": "change",
+      "valid": true,
+      "issues": [
+        {
+          "level": "INFO",
+          "path": "file",
+          "message": "skip_specs is set in .openspec.yaml: change declares no spec-level behavior changes, zero deltas accepted"
+        }
+      ],
+      "durationMs": 15
+    },
+    {
+      "id": "afc-c02-governed-action-and-approval-boundary",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 33
+    },
+    {
+      "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 33
+    },
+    {
+      "id": "afc-c04-replaceable-service-instances-and-placement",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 33
+    },
+    {
+      "id": "afc-c05-bossfang-full-run-delegation",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 34
+    },
+    {
+      "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 34
+    },
+    {
+      "id": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 24
+    },
+    {
+      "id": "afc-c08-bossfang-and-fabric-observer-routing",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 21
+    },
+    {
+      "id": "afc-c09-bounded-teams-and-shared-task-board",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 20
+    },
+    {
+      "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 21
+    },
+    {
+      "id": "afc-c11-authoritative-business-data-and-offline-commands",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 21
+    },
+    {
+      "id": "afc-c12-personal-peer-sovereignty-and-consent",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 21
+    },
+    {
+      "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 22
+    },
+    {
+      "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 18
+    },
+    {
+      "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 17
+    },
+    {
+      "id": "afc-c16-specialist-marketing-product-and-design-teams",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 17
+    },
+    {
+      "id": "afc-c17-executive-assistants-and-consented-human-representation",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 17
+    },
+    {
+      "id": "afc-c18-federated-compatibility-and-release-evidence",
+      "type": "change",
+      "valid": true,
+      "issues": [],
+      "durationMs": 17
+    }
+  ],
+  "summary": {
+    "totals": {
+      "items": 18,
+      "passed": 18,
+      "failed": 0
+    },
+    "byType": {
+      "change": {
+        "items": 18,
+        "passed": 18,
+        "failed": 0
+      }
+    }
+  },
+  "version": "1.0",
+  "root": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang/docs/plans/agent-fabric-convergence",
+    "source": "nearest"
+  }
+}

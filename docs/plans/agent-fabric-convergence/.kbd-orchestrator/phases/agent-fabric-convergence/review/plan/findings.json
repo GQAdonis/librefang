@@ -1,0 +1,26 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "C13's profile prerequisite gates omit C18 even though the operational matrix requires C18 before the home/personal-cloud mode can be advertised.",
+      "evidence": "C13 states: \"personal peer or home/cloud context requires C12\" and work_packages.profileDependencies lists \"personal-peer-home-cloud\": [\"C04\", \"C06\", \"C12\"]. But operational_modes says \"KnowMe phone + home or personal cloud ... Slices | C12\u2013C13, C18\". This contradiction lets downstream accept or advertise a remote home/cloud profile without the federated compatibility/release evidence gate.",
+      "suggested_fix": "Keep C13 as an implementation prerequisite for C18, but add an explicit release/advertising gate that home/personal-cloud profiles are not supported until C18 passes for that mode; update C13 profileDependencies or add a separate releaseDependencies field including C18."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "C15 mandates routing through an unevaluated dependency named `liter-llm` that is absent from the candidate list and external dependency gates.",
+      "evidence": "C15.1 says: \"extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.\" The library_candidates for C15 only list cand-005 \"Merged agent-team skills and Agent Skills format\" as adopt; no candidate evaluates `liter-llm` or a similarly named model router, and C15 external checkpoints are only D-MINI, D-KNOWME, D-FORGE.",
+      "suggested_fix": "Either remove the specific `liter-llm` mandate and describe an existing reviewed model-routing interface, or add a candidate/evaluation and checkpoint for the exact library/tool, including maintenance/version verification and whether the name is intended to be LiteLLM."
+    }
+  ]
+}

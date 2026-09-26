@@ -1,0 +1,42 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "judge_model": "gpt-5.5",
+  "producer_model": "gpt-6",
+  "isolation_mode": "rest-gateway:http://localhost:4000/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment bases multiple current-source conclusions on paths that are not present in the packet's file tree and are explicitly marked missing.",
+      "evidence": "The artifact asserts facts about `crates/librefang-llm-drivers/src/drivers/uar.rs`, `src/main/ai/runtime/registerDrivers.ts`, `src/server.rs`, and `src/uar/compiler/to_artifact.rs`, but `cited_paths` marks those paths as `MISSING`, and the provided `file_tree` only lists top-level files such as `README.md`, `repository-manifest.json`, and `report-sources.json`.",
+      "suggested_fix": "Either include the fetched repository trees/manifest evidence needed to support these path-specific claims, or rewrite the assessment to mark these findings as unverified against the packet."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment is inconsistent about how many research reports must be reconciled, which can cause downstream analysis to include or omit the wrong inputs.",
+      "evidence": "The goals require: `Reconcile all five research reports and the proposed agent standard against pinned current sources.` The assessment instead states: `The reports R1\u2013R6 were written against older, often dirty working checkouts.`",
+      "suggested_fix": "Name the exact five reports required by the goal, explain whether R6 is an extra input or a numbering error, and state how the proposed agent standard is handled separately."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "The assessment does not provide a concrete gap analysis for the required proposed agent standard.",
+      "evidence": "The goals explicitly require reconciliation of `the proposed agent standard against pinned current sources`, but the assessment contains no finding or section that identifies the proposed standard, its requirements, conflicts, superseded claims, or source disposition.",
+      "suggested_fix": "Add a dedicated assessment subsection for the proposed agent standard, listing each standard requirement and its current-source status, conflicts, unknowns, and planning consequences."
+    },
+    {
+      "severity": "WARNING",
+      "file": "assessment.md",
+      "line": 0,
+      "claim": "Connector integrations are a required planning area but receive no usable assessment beyond being listed as unmeasured.",
+      "evidence": "The goals require planning `connector integrations`, while the assessment only mentions connectors in `Unmeasured: ... connector idempotency ...` and provides no current-state inventory, gap, affected repositories, or planning consequence.",
+      "suggested_fix": "Add a connector integration assessment that identifies existing connector surfaces, known gaps, ownership boundaries, governance requirements, and what evidence is missing."
+    }
+  ]
+}

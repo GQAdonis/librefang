@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "status": "operator-approved",
+  "phase": "agent-fabric-convergence::uar-team-specification",
+  "canonicalRevision": 111,
+  "independentReview": "PASS with two warnings; dispositions applied without second review",
+  "documentValidation": "Deferred until the complete approved specification/schema/example set exists in task1.4",
+  "runtimeConformance": "not evaluated",
+  "artifacts": [
+    {
+      "file": "assessment.md",
+      "sha256": "02a7730ae89e3e08ffab87f268a884941f4a0969c7e37cfd1822f6eed9d5f7b8"
+    },
+    {
+      "file": "analysis.md",
+      "sha256": "091392762b1f9e9590f506685bec98d1a857ff1156396920122371164518a152"
+    },
+    {
+      "file": "architecture-proposal.md",
+      "sha256": "57921b06600c710630dbe9dd9eafa394316ff30ea69d2e271e57bb52c0f21202"
+    },
+    {
+      "file": "specification-outline.md",
+      "sha256": "0ca44e0d8f60c48362b8c45c69ffa1635e435a0540efc03de1f0babf1d688e13"
+    },
+    {
+      "file": "implementation-roadmap.md",
+      "sha256": "84c65dc5ef6e6cb344a76defc9bc9bf2d162c64162f448537e41b1effaf58e76"
+    },
+    {
+      "file": "plan.md",
+      "sha256": "7dc17b32105dab81a9ab90a950657b6e69e69c47d66fe8690deb34de2708d29c"
+    },
+    {
+      "file": "library-candidates.json",
+      "sha256": "c276ce99643a1c04040eb83f3bc3f82e51dc5d03643bcc8f539f54477afc32c4"
+    },
+    {
+      "file": "dependency-map.json",
+      "sha256": "46fee73d3306ab10b337ed713a51c4851f4799c8276474c2de1d8ea9bea8840d"
+    },
+    {
+      "file": "review/gateway.findings.json",
+      "sha256": "d46b6b8eaa33d39c397008b88f20b3ae4ab58d2812e1563277909ada59190995"
+    },
+    {
+      "file": "review/dispositions.md",
+      "sha256": "5d8a1023e4b1f92e74fbeecaec3328d8fb0f02c5c75a694f72b9ae4a4744a236"
+    }
+  ],
+  "approvedAt": "2026-09-26T15:49:42.209Z",
+  "approvalSource": "Explicit /kbd-execute user message in this thread"
+}

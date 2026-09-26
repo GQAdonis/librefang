@@ -1,0 +1,755 @@
+{
+  "schemaVersion": "2",
+  "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+  "runId": "project-20260924T180329Z",
+  "revision": 85,
+  "frontier": {
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 85
+  },
+  "replicaHeads": {
+    "a23247c7-e278-4036-90b2-9536fe03e75f": {
+      "eventId": "b0258545-7d6c-4348-84fa-986f88f9be72",
+      "integrityHash": "eb5bc6aa8d21043319afd1acc991e584e902839a76d1d3a3024816ad454eb50e",
+      "lamport": 85
+    }
+  },
+  "lastEventId": "b0258545-7d6c-4348-84fa-986f88f9be72",
+  "lastEventHash": "eb5bc6aa8d21043319afd1acc991e584e902839a76d1d3a3024816ad454eb50e",
+  "lastEventAt": "2026-09-24T18:42:25.184156Z",
+  "phaseDefinitionOrder": [
+    "agent-fabric-convergence"
+  ],
+  "lifecycle": "ready",
+  "planRevision": 1,
+  "checkpoint": null,
+  "exactNextWork": "/kbd-apply afc-c01-baseline-reconciliation-and-shared-contracts — planning-root documentation only; read the plan handoff and reconcile source/owner checkpoints before any product dispatch.",
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence"
+    ],
+    "phaseId": "agent-fabric-convergence",
+    "stageId": null,
+    "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+    "taskId": "C01.1",
+    "commit": "82809ab6719f930bddacae9a3f6cee33f5657de8"
+  },
+  "phases": {
+    "agent-fabric-convergence": {
+      "id": "agent-fabric-convergence",
+      "slug": "agent-fabric-convergence",
+      "title": "Agent Fabric Convergence",
+      "parentPhaseId": null,
+      "status": "in_progress",
+      "stages": {
+        "analyze": {
+          "id": "analyze",
+          "title": "Reuse and cross-project design analysis",
+          "sequence": 1,
+          "status": "complete"
+        },
+        "assess": {
+          "id": "assess",
+          "title": "Reconcile reports and current baselines",
+          "sequence": 0,
+          "status": "complete"
+        },
+        "plan": {
+          "id": "plan",
+          "title": "Plan",
+          "sequence": 4,
+          "status": "complete"
+        },
+        "spec": {
+          "id": "spec",
+          "title": "Specification",
+          "sequence": 3,
+          "status": "complete"
+        }
+      },
+      "changes": {
+        "afc-c01-baseline-reconciliation-and-shared-contracts": {
+          "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
+          "title": "C01 — Baseline reconciliation and shared contracts",
+          "sequence": 1,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C01.1": {
+              "id": "C01.1",
+              "title": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C01.2": {
+              "id": "C01.2",
+              "title": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C01.3": {
+              "id": "C01.3",
+              "title": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c02-governed-action-and-approval-boundary": {
+          "id": "afc-c02-governed-action-and-approval-boundary",
+          "title": "C02 — Governed action and approval boundary",
+          "sequence": 2,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C02.1": {
+              "id": "C02.1",
+              "title": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C02.2": {
+              "id": "C02.2",
+              "title": "Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C02.3": {
+              "id": "C02.3",
+              "title": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c03-lossless-definitions-and-collaboration-document-profile": {
+          "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+          "title": "C03 — Lossless definitions and collaboration document profile",
+          "sequence": 3,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C03.1": {
+              "id": "C03.1",
+              "title": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C03.2": {
+              "id": "C03.2",
+              "title": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C03.3": {
+              "id": "C03.3",
+              "title": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c04-replaceable-service-instances-and-placement": {
+          "id": "afc-c04-replaceable-service-instances-and-placement",
+          "title": "C04 — Replaceable service instances and placement",
+          "sequence": 4,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C04.1": {
+              "id": "C04.1",
+              "title": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C04.2": {
+              "id": "C04.2",
+              "title": "Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C04.3": {
+              "id": "C04.3",
+              "title": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c05-bossfang-full-run-delegation": {
+          "id": "afc-c05-bossfang-full-run-delegation",
+          "title": "C05 — BossFang full-run delegation",
+          "sequence": 5,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C05.1": {
+              "id": "C05.1",
+              "title": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C05.2": {
+              "id": "C05.2",
+              "title": "Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C05.3": {
+              "id": "C05.3",
+              "title": "Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c06-durable-addressable-instances-and-bounded-turns": {
+          "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+          "title": "C06 — Durable addressable instances and bounded turns",
+          "sequence": 6,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C06.1": {
+              "id": "C06.1",
+              "title": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C06.2": {
+              "id": "C06.2",
+              "title": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C06.3": {
+              "id": "C06.3",
+              "title": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c07-local-scoped-observers-with-durable-delivery": {
+          "id": "afc-c07-local-scoped-observers-with-durable-delivery",
+          "title": "C07 — Local scoped observers with durable delivery",
+          "sequence": 7,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C07.1": {
+              "id": "C07.1",
+              "title": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C07.2": {
+              "id": "C07.2",
+              "title": "Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C07.3": {
+              "id": "C07.3",
+              "title": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c08-bossfang-and-fabric-observer-routing": {
+          "id": "afc-c08-bossfang-and-fabric-observer-routing",
+          "title": "C08 — BossFang and Fabric observer routing",
+          "sequence": 8,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C08.1": {
+              "id": "C08.1",
+              "title": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C08.2": {
+              "id": "C08.2",
+              "title": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C08.3": {
+              "id": "C08.3",
+              "title": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c09-bounded-teams-and-shared-task-board": {
+          "id": "afc-c09-bounded-teams-and-shared-task-board",
+          "title": "C09 — Bounded teams and shared task board",
+          "sequence": 9,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C09.1": {
+              "id": "C09.1",
+              "title": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C09.2": {
+              "id": "C09.2",
+              "title": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C09.3": {
+              "id": "C09.3",
+              "title": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c10-feedback-workflow-and-governed-connector-effects": {
+          "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+          "title": "C10 — Feedback workflow and governed connector effects",
+          "sequence": 10,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C10.1": {
+              "id": "C10.1",
+              "title": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C10.2": {
+              "id": "C10.2",
+              "title": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C10.3": {
+              "id": "C10.3",
+              "title": "Wire observe/classify/deduplicate/draft/standing-policy intake and product/design/reviewer outputs with durable approvals and explicit implementation admission.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c11-authoritative-business-data-and-offline-commands": {
+          "id": "afc-c11-authoritative-business-data-and-offline-commands",
+          "title": "C11 — Authoritative business data and offline commands",
+          "sequence": 11,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C11.1": {
+              "id": "C11.1",
+              "title": "Adopt accepted production-readiness changes; document route-specific auth/RLS and cursor/tombstone semantics.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C11.2": {
+              "id": "C11.2",
+              "title": "Persist pending command atomically with local state; preserve idempotency through Forge transaction and authoritative result lookup.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C11.3": {
+              "id": "C11.3",
+              "title": "Publish committed outbox/CDC facts and rebuild scoped read models with deletion/revocation and explicit retention-gap resnapshot.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c12-personal-peer-sovereignty-and-consent": {
+          "id": "afc-c12-personal-peer-sovereignty-and-consent",
+          "title": "C12 — Personal peer sovereignty and consent",
+          "sequence": 12,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C12.1": {
+              "id": "C12.1",
+              "title": "Define eligible personal data classes, peer identity/membership, key rotation/recovery and explicit offline grant validity; keep organization/runtime authority outside CRDT writes.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C12.2": {
+              "id": "C12.2",
+              "title": "Compose durable authenticated peer transport and CRDT storage from existing modules; project personal context through consented scopes.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C12.3": {
+              "id": "C12.3",
+              "title": "Implement removal/revocation/tombstone behavior, reconnection and inspectable consent history without claiming deletion of previously disclosed plaintext.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c13-embedded-mobile-and-home-cloud-execution-profiles": {
+          "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+          "title": "C13 — Embedded mobile and home/cloud execution profiles",
+          "sequence": 13,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C13.1": {
+              "id": "C13.1",
+              "title": "Reconcile local model/tool loop with embedded UAR route; pin SDK/features and preserve each product layer contract.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C13.2": {
+              "id": "C13.2",
+              "title": "Specify offline/local, home, personal-cloud and enterprise profiles with required/optional services, inference availability and approved context placement.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C13.3": {
+              "id": "C13.3",
+              "title": "Wire suspend/resume, pending/offline authority and persistent remote job observation; consume C11/C12 when enabling their data profiles.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c14-studio-administration-and-isolated-service-consoles": {
+          "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+          "title": "C14 — Studio administration and isolated service consoles",
+          "sequence": 14,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C14.1": {
+              "id": "C14.1",
+              "title": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C14.2": {
+              "id": "C14.2",
+              "title": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C14.3": {
+              "id": "C14.3",
+              "title": "Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff": {
+          "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+          "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
+          "sequence": 15,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C15.1": {
+              "id": "C15.1",
+              "title": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C15.2": {
+              "id": "C15.2",
+              "title": "Validate all eight harness adapters against pinned CLI schemas; preserve native options/extensions and report unsupported agent/plugin/marketplace features; use Node.js/TypeScript 7 for authored shared hooks/scripts. Before authoring helpers, pin the exact Node.js and TypeScript 7 distribution and prove full/mini and harness adapter compatibility at D-MINI; if unavailable, record a blocker rather than substituting another language/version.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C15.3": {
+              "id": "C15.3",
+              "title": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c16-specialist-marketing-product-and-design-teams": {
+          "id": "afc-c16-specialist-marketing-product-and-design-teams",
+          "title": "C16 — Specialist, marketing, product and design teams",
+          "sequence": 16,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C16.1": {
+              "id": "C16.1",
+              "title": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C16.2": {
+              "id": "C16.2",
+              "title": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C16.3": {
+              "id": "C16.3",
+              "title": "Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c17-executive-assistants-and-consented-human-representation": {
+          "id": "afc-c17-executive-assistants-and-consented-human-representation",
+          "title": "C17 — Executive assistants and consented human representation",
+          "sequence": 17,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C17.1": {
+              "id": "C17.1",
+              "title": "Define CEO/CFO/CIO/Chief Intelligence/Security/Marketing/Product and configurable office roles separately from human profiles; identify trusted grant issuers.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C17.2": {
+              "id": "C17.2",
+              "title": "Implement consent, organizational assignment, data-use/communication/action scopes, expiry/revocation, offboarding and disclosure with pinned evidence.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C17.3": {
+              "id": "C17.3",
+              "title": "Evaluate person-specific behavior on approved held-out scenarios; enforce separation of duties and real-human approval requirements.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        },
+        "afc-c18-federated-compatibility-and-release-evidence": {
+          "id": "afc-c18-federated-compatibility-and-release-evidence",
+          "title": "C18 — Federated compatibility and release evidence",
+          "sequence": 18,
+          "status": "pending",
+          "implementationStatus": "pending",
+          "tasks": {
+            "C18.1": {
+              "id": "C18.1",
+              "title": "Implement only required remaining federation/trust adapters with independent resource-side enforcement and capability refusal; prove state/effect fencing before optional takeover.",
+              "sequence": 1,
+              "status": "pending",
+              "summary": null
+            },
+            "C18.2": {
+              "id": "C18.2",
+              "title": "Run operational-mode matrix on exact source/payload/policy combinations; test upgrade, rollback, outage, retention gaps, restart and revoked authority.",
+              "sequence": 2,
+              "status": "pending",
+              "summary": null
+            },
+            "C18.3": {
+              "id": "C18.3",
+              "title": "Benchmark task quality, human correction, cost/latency, duplicate/unknown effects and administration effort against controlled baselines; publish supported/unsupported matrix and release evidence after authorization.",
+              "sequence": 3,
+              "status": "pending",
+              "summary": null
+            }
+          }
+        }
+      },
+      "legacyReadOnly": false
+    }
+  },
+  "completion": {
+    "implementation": {
+      "completed": 0,
+      "total": 18,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "evidence": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "decisions": {},
+  "blockers": {},
+  "claims": {},
+  "submodulePins": {},
+  "replicaView": {
+    "replicaId": "a23247c7-e278-4036-90b2-9536fe03e75f",
+    "localHead": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+    "activePathStatus": "current",
+    "submodules": {}
+  },
+  "conflicts": {},
+  "devices": {
+    "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349": {
+      "deviceId": "unknown-device",
+      "keyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+      "publicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+      "status": "active",
+      "enrolledAtRevision": 1,
+      "revokedAtRevision": null
+    }
+  },
+  "operatorKeyIds": [
+    "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349"
+  ],
+  "commandRevisions": {
+    "afc-analyze-complete": 8,
+    "afc-plan-complete": 84,
+    "afc-plan-enter": 11,
+    "afc-planned-next-c01": 85,
+    "afc-register-C01": 12,
+    "afc-register-C01.1": 13,
+    "afc-register-C01.2": 14,
+    "afc-register-C01.3": 15,
+    "afc-register-C02": 16,
+    "afc-register-C02.1": 17,
+    "afc-register-C02.2": 18,
+    "afc-register-C02.3": 19,
+    "afc-register-C03": 20,
+    "afc-register-C03.1": 21,
+    "afc-register-C03.2": 22,
+    "afc-register-C03.3": 23,
+    "afc-register-C04": 24,
+    "afc-register-C04.1": 25,
+    "afc-register-C04.2": 26,
+    "afc-register-C04.3": 27,
+    "afc-register-C05": 28,
+    "afc-register-C05.1": 29,
+    "afc-register-C05.2": 30,
+    "afc-register-C05.3": 31,
+    "afc-register-C06": 32,
+    "afc-register-C06.1": 33,
+    "afc-register-C06.2": 34,
+    "afc-register-C06.3": 35,
+    "afc-register-C07": 36,
+    "afc-register-C07.1": 37,
+    "afc-register-C07.2": 38,
+    "afc-register-C07.3": 39,
+    "afc-register-C08": 40,
+    "afc-register-C08.1": 41,
+    "afc-register-C08.2": 42,
+    "afc-register-C08.3": 43,
+    "afc-register-C09": 44,
+    "afc-register-C09.1": 45,
+    "afc-register-C09.2": 46,
+    "afc-register-C09.3": 47,
+    "afc-register-C10": 48,
+    "afc-register-C10.1": 49,
+    "afc-register-C10.2": 50,
+    "afc-register-C10.3": 51,
+    "afc-register-C11": 52,
+    "afc-register-C11.1": 53,
+    "afc-register-C11.2": 54,
+    "afc-register-C11.3": 55,
+    "afc-register-C12": 56,
+    "afc-register-C12.1": 57,
+    "afc-register-C12.2": 58,
+    "afc-register-C12.3": 59,
+    "afc-register-C13": 60,
+    "afc-register-C13.1": 61,
+    "afc-register-C13.2": 62,
+    "afc-register-C13.3": 63,
+    "afc-register-C14": 64,
+    "afc-register-C14.1": 65,
+    "afc-register-C14.2": 66,
+    "afc-register-C14.3": 67,
+    "afc-register-C15": 68,
+    "afc-register-C15.1": 69,
+    "afc-register-C15.2": 70,
+    "afc-register-C15.3": 71,
+    "afc-register-C16": 72,
+    "afc-register-C16.1": 73,
+    "afc-register-C16.2": 74,
+    "afc-register-C16.3": 75,
+    "afc-register-C17": 76,
+    "afc-register-C17.1": 77,
+    "afc-register-C17.2": 78,
+    "afc-register-C17.3": 79,
+    "afc-register-C18": 80,
+    "afc-register-C18.1": 81,
+    "afc-register-C18.2": 82,
+    "afc-register-C18.3": 83,
+    "afc-spec-complete": 10,
+    "afc-spec-enter": 9,
+    "b4e5eb53-0099-45f5-b00e-3a2dbb480c11": 1,
+    "convergence-analyze-enter": 7,
+    "convergence-assess-complete": 6,
+    "convergence-assess-enter": 5,
+    "convergence-phase-activate": 3,
+    "convergence-phase-create": 2,
+    "convergence-phase-start": 4
+  }
+}

@@ -1,0 +1,240 @@
+{
+  "C02": [
+    [
+      "Verified effect admission",
+      "A governed profile MUST deny protected actions when policy or required identity/context is unavailable, and expose the denial posture.",
+      "A direct, managed, embedded or proxied tool request supplies forged tenant or actor facts, or policy loading fails",
+      "the protected effect does not occur and the caller receives a reason without hidden fallback."
+    ],
+    [
+      "Approval revalidation",
+      "Approval MUST bind issuer, action, resource, payload digest and authority revision; delayed execution MUST recheck current grants and limits.",
+      "A granted request waits while its grant is revoked or its payload changes",
+      "the old approval cannot authorize the changed or revoked effect."
+    ]
+  ],
+  "C03": [
+    [
+      "Lossless required semantics",
+      "The definition pipeline MUST preserve required skill identity, version and configuration and reject unknown mandatory semantics.",
+      "A legacy or collaboration-profile definition is compiled, persisted, loaded and bound",
+      "its required semantics remain effective, or binding fails with field-level diagnostics."
+    ],
+    [
+      "Private authority separation",
+      "Portable AgentDefinition, TeamDefinition, WorkflowDefinition and DeploymentBinding documents MUST NOT confer installed authority; private RepresentationGrant records MUST stay outside exported packages.",
+      "A definition claiming administrator or executive authority is imported or exported",
+      "installation requires independent trusted grants and exports contain neither those grants nor secrets."
+    ]
+  ],
+  "C04": [
+    [
+      "Explicit replaceable binding",
+      "Clients MUST bind a run to a verified service instance and compatible capability profile, with credential references rather than embedded credentials.",
+      "A user selects between two UAR instances or selects an instance missing a mandatory feature",
+      "new work uses the selected compatible instance or refuses admission with a specific diagnostic."
+    ],
+    [
+      "Lifecycle ownership",
+      "Only the registered lifecycle owner MAY stop or replace a managed service; clients MUST distinguish reattachment from new-session placement and migration.",
+      "A nonowner client closes while a remote service has active runs",
+      "the service keeps running; reconnect preserves the native run identity without silently creating a replacement."
+    ]
+  ],
+  "C05": [
+    [
+      "One delegated executor",
+      "Full-run delegation MUST be distinct from model-provider bridging; a delegated run MUST have exactly one tool/token-loop executor.",
+      "BossFang chooses native execution, UAR provider access or full UAR delegation",
+      "the observable execution trace identifies which runtime owns the loop and BossFang does not replay delegated tools."
+    ],
+    [
+      "Recoverable control identity",
+      "Delegated run control MUST preserve native IDs and reconcile uncertain admission before retries; cancellation and detachment MUST have distinct semantics.",
+      "An admission response is lost and the caller reconnects, then cancels the recovered task",
+      "lookup returns the existing task or a truthful unresolved state; cancellation reaches its executor and no duplicate effect is launched."
+    ]
+  ],
+  "C06": [
+    [
+      "Durable logical instance",
+      "Request execution, on-demand instances and resident instances MUST expose distinct lifetimes; durable state MUST NOT depend on a permanently active model loop.",
+      "Two users instantiate the same definition and one activation passivates or crashes",
+      "their state remains isolated and admitted work resumes from the correct instance state on activation."
+    ],
+    [
+      "Fenced bounded turns",
+      "Instances MUST serialize mutating turns, bound queue/restart/retention policies, and reject stale ownership while keeping administrative cancellation responsive.",
+      "An old activation returns after replacement while a current tool call is blocked",
+      "the stale activation cannot commit and authorized cancellation/status control remains available."
+    ]
+  ],
+  "C07": [
+    [
+      "Scoped independent subscriptions",
+      "Each observer MUST have its own authorized source-agent/conversation intersection, projection, delivery cursor and acknowledgement.",
+      "Two observers subscribe to overlapping conversations but have different access grants",
+      "each receives its own permitted projection and neither receives unauthorized conversation content."
+    ],
+    [
+      "Durable delivery and revocation",
+      "Committed event publication and observer admission MUST recover from interruptions with stable occurrence identity; queued content MUST be checked against current authority.",
+      "The source or observer crashes at publication, admission or acknowledgement, and a subscription is revoked before recovery",
+      "recoverable authorized work resumes without silent gaps; revoked queued content is withheld and any retention gap is visible."
+    ]
+  ],
+  "C08": [
+    [
+      "Deterministic channel routing",
+      "Channel routes MUST bind provider/account/workspace/room/thread/sender and chosen recipient, with explicit handler precedence and observer-copy rights.",
+      "A channel message matches two handlers and two observer subscriptions, then the bridge restarts",
+      "the declared conflict rule determines the handler and only authorized observers receive independent copies; affinity remains stable."
+    ],
+    [
+      "Cross-boundary reaction controls",
+      "Forwarded events MUST preserve source occurrence and separate disclosure, delivery, execution and reply permissions; reaction depth, fanout and duplicate effects MUST be bounded.",
+      "An agent reply echoes through the channel into an A-B-A observer chain or a queued grant is revoked",
+      "duplicate effects and unauthorized replies are blocked, causal budgets terminate the loop, and queued revoked content is withheld."
+    ]
+  ],
+  "C09": [
+    [
+      "Fenced task ownership",
+      "Teams MUST record versioned membership, task inputs/outputs/dependencies and atomic claims; child authority MUST be no broader than its delegated grant.",
+      "Two workers claim one task revision and an old worker returns after reassignment",
+      "only one current claim can complete or authorize effects and the stale result remains nonauthoritative evidence."
+    ],
+    [
+      "Team resource and context isolation",
+      "Teams MUST enforce aggregate budgets, scoped memory/artifacts and independent reviewer authority with explicit parent and peer lifetime rules.",
+      "A member is removed or a parent is cancelled while workers spend from the shared budget",
+      "new effects from revoked workers are denied, aggregate reservations cannot overspend, and unrelated authorized peers retain their declared lifetime."
+    ]
+  ],
+  "C10": [
+    [
+      "Authorized feedback intake",
+      "A feedback workflow MUST support draft-only operation and scoped standing authorization for sanitized issue creation, with durable effect identity and uncertainty reconciliation.",
+      "The same authorized feedback arrives by direct API and BossFang channel, and an issue-creation response is lost",
+      "reconciliation produces one issue or a visible unresolved outcome without blind retry; no customer message or roadmap promise is implied."
+    ],
+    [
+      "Connector action separation",
+      "Connector capabilities MUST separately authorize reading, drafting, writing, sending and publishing; external content MUST be treated as data.",
+      "A Slack, Notion, Jira or GitHub item instructs the agent to expand its rights or disclose unrelated content",
+      "the instruction cannot expand authority, and only explicitly permitted targets and actions execute."
+    ]
+  ],
+  "C11": [
+    [
+      "Business authority and read replicas",
+      "Forge business writes MUST remain server-authoritative; read projections MUST disclose freshness and permission scope separately from personal peer documents.",
+      "An offline client views stale data and submits a business write against a changed version",
+      "the view reports freshness and the server accepts, rejects or conflicts the command through the authoritative API."
+    ],
+    [
+      "Durable offline command outcomes",
+      "Offline business commands MUST retain stable identity and expose queued, accepted, rejected, conflicted or uncertain outcomes without treating transport acknowledgement as acceptance.",
+      "A command is resent after reconnect or its response is lost",
+      "the client reconciles one authoritative outcome or a visible uncertain state, without duplicate business effects."
+    ]
+  ],
+  "C12": [
+    [
+      "Personal peer sovereignty",
+      "KnowMe personal documents MUST preserve authorized peer synchronization and explicit home/cloud participation, with schema compatibility and recovery policy.",
+      "A permitted device reconnects after offline edits while a different peer lacks permission",
+      "authorized compatible data converges according to document policy and the unauthorized peer receives no new disclosure."
+    ],
+    [
+      "Revocation-aware sharing",
+      "Consent and data-use boundaries MUST be enforced for new synchronization and agent access; offline validity limits and residual downloaded copies MUST be disclosed.",
+      "Sharing is revoked or device credentials are rotated while another peer remains offline",
+      "new online access is denied and offline behavior follows the declared bounded policy; the system does not claim remote erasure of already downloaded copies."
+    ]
+  ],
+  "C13": [
+    [
+      "Truthful deployment profiles",
+      "UAR deployment profiles MUST declare supported embedding, storage, tools and governance capabilities independently of BossFang, Gate, Fabric or The Boss availability.",
+      "A mobile or embedded host lacks a required sandbox, tool or governance facility",
+      "the affected capability refuses admission or uses an explicitly selected constrained profile without silently expanding authority."
+    ],
+    [
+      "Mobile suspension and remote placement",
+      "Mobile suspension and home/cloud disconnection MUST have explicit queue, retention and resumption semantics; a device MUST NOT promise perpetual background residency.",
+      "The mobile process is suspended while an observer or remote workflow has admitted work",
+      "durable work is resumed or a documented gap is surfaced; selecting a new host does not silently migrate the existing session."
+    ]
+  ],
+  "C14": [
+    [
+      "Common studio administration",
+      "The Boss MUST expose effective runtime binding, ownership, policy posture, lifecycle, budget, approvals and subscription state across local and remote instances.",
+      "An operator connects two runtimes and an externally managed BossFang service",
+      "the UI identifies each instance and permits only authorized controls without conflating product history with runtime checkpoints."
+    ],
+    [
+      "Isolated service console",
+      "BossFang channel administration MUST remain in its isolated authenticated console surface; embedding MUST preserve origin, credential and navigation boundaries.",
+      "A console redirects, attempts privileged host operations or targets an untrusted origin",
+      "the host does not disclose credentials or grant ambient mini-app privileges and offers a controlled failure path."
+    ]
+  ],
+  "C15": [
+    [
+      "Truthful harness portability",
+      "The skill family MUST preserve supported native configuration and explicitly diagnose required unsupported options across UAR, Codex, Claude Code, Copilot, Kimi Code, MiniMax CLI, OpenCode and DeepSeek Harness.",
+      "A team with a required native feature is exported to a harness without that feature",
+      "export fails with a capability diagnostic instead of silently dropping semantics or claiming equivalent plugin/team support."
+    ],
+    [
+      "Auditable model and memory handoff",
+      "Guided team creation MUST discover model capabilities/cost classes and bind reviewed skills; handoffs MUST record source revision, artifacts, authority and selected memory references.",
+      "A coding task transfers between supported harnesses",
+      "the receiver verifies the checkpoint and available capabilities before work; private memory is not copied wholesale, and full/mini helpers use the declared Node.js/TypeScript 7 toolchain."
+    ]
+  ],
+  "C16": [
+    [
+      "Task-led specialist selection",
+      "Team creation MUST explain the smallest useful role set, a single-agent alternative, skill choices, output contracts and model/cost tradeoffs.",
+      "An inexperienced user requests a coding, marketing, product or full-design task",
+      "the guide proposes accountable roles and reviewed skills with separate evaluator assignments and explicit write limits."
+    ],
+    [
+      "Role scope is not authority",
+      "UI/UX, mobile, security, product, documentation and code-review roles MUST have explicit evidence and action scopes; titles MUST NOT grant publication, communication or compliance certification authority.",
+      "A security or product specialist recommends an external action",
+      "the resulting artifact distinguishes advice from verified evidence and the action follows the separate governing grant."
+    ]
+  ],
+  "C17": [
+    [
+      "Consented representation and office grants",
+      "Executive assistance MUST distinguish role assistance, simulation, disclosed human representation and delegated organizational action through separate trusted grants.",
+      "A human authorizes a personal twin but the organization has not granted spending authority",
+      "the twin may perform permitted personal representation and cannot spend organizational funds."
+    ],
+    [
+      "Revocation and human separation",
+      "Offboarding, expiry and revocation MUST block new protected access/effects; a simulated human approval MUST NOT satisfy a required real-human decision.",
+      "An offboarded executive twin attempts an action or generates a simulated approval",
+      "the effect is denied and the audit records the governing grant state and unmet real-human requirement."
+    ]
+  ],
+  "C18": [
+    [
+      "Evidence-bound compatibility",
+      "A release MUST advertise only deployment/protocol/schema/policy combinations that passed the operational-mode scenarios on identified builds and hosts.",
+      "A new combination is requested without interoperability or recovery evidence",
+      "it remains unsupported or explicitly experimental with required features disabled; success on a unit suite cannot certify the combination."
+    ],
+    [
+      "Safe takeover and outcome claims",
+      "Automatic cross-host takeover MUST remain disabled until state and effect fencing are demonstrated; release evidence MUST distinguish quality, cost, recovery and unknown outcomes.",
+      "Two hosts can believe they own a recovering run or an external effect has uncertain completion",
+      "stale authority cannot commit and recovery reconciles uncertainty without promising exactly-once effects."
+    ]
+  ]
+}

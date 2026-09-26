@@ -1,0 +1,380 @@
+{
+  "capturedAt": "2026-09-24T18:48:40.803Z",
+  "mode": "fetch only; no checkout, merge, pull or reset",
+  "repositories": [
+    {
+      "name": "librefang",
+      "source": "/Users/gqadonis/Projects/references/librefang",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:GQAdonis/librefang.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "sourceBranch": "codex/deploy-uar-bossfang-runtime",
+      "sourceHead": "c719a4d683e4d3fb42e436f812e0193f865c9d2c",
+      "sourceDivergence": "1400\t7",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:00.460Z",
+      "refreshedAt": "2026-09-24T18:48:26.048Z",
+      "fetchStartedAt": "2026-09-24T18:48:25.060Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "7599daaed6ae18a5efc07b29d98c011b3aa3c77a",
+        "branch": "codex/agent-fabric-convergence",
+        "status": "M docs/plans/agent-fabric-convergence/.kbd-orchestrator/current-waypoint.json\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/hooks-status.json\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/hooks.log.jsonl\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/progress.json\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/tasks.md\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/position-reminder.txt\n M docs/plans/agent-fabric-convergence/.kbd-orchestrator/position.json\n?? docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/execute-dispatch.json\n?? docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/execution.md"
+      },
+      "fetchedDefaultHead": "82809ab6719f930bddacae9a3f6cee33f5657de8",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "codex/deploy-uar-bossfang-runtime",
+        "head": "c719a4d683e4d3fb42e436f812e0193f865c9d2c",
+        "status": "?? .agents/\n?? .investigation/\n?? .kimi-code/\n?? .prometheus/",
+        "worktrees": "worktree /Users/gqadonis/Projects/references/librefang\nHEAD c719a4d683e4d3fb42e436f812e0193f865c9d2c\nbranch refs/heads/codex/deploy-uar-bossfang-runtime\n\nworktree /private/tmp/librefang-c001-deadlock\nHEAD 1d40f249396e72adc8b79ac6bfa53f9480456ec2\nbranch refs/heads/fix/memory-config-patch-deadlock\nprunable gitdir file points to non-existent location\n\nworktree /private/tmp/librefang-dockerfile-arm64\nHEAD ad0ff13f7f23228d4a7e3767c025995470b9c721\nbranch refs/heads/fix/dockerfile-rust-dev-arm64\nprunable gitdir file points to non-existent location\n\nworktree /private/tmp/librefang-kbd-hook-exception\nHEAD 6f927199b8965cdae2e3114c8e52857eb979085d\nbranch refs/heads/fix/kbd-orchestrator-hook-exception\nprunable gitdir file points to non-existent location\n\nworktree /private/tmp/librefang-upstream-2026-09b\nHEAD a66317f66491c14cd36d33f1a366033d810b42cf\nbranch refs/heads/chore/upstream-merge-2026-09b\nprunable gitdir file points to non-existent location\n\nworktree /private/tmp/librefang-upstream-merge\nHEAD e02c606861f604b167586bb129ff5cd7caa0024e\nbranch refs/heads/chore/upstream-merge-2026-09\nprunable gitdir file points to non-existent location\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/librefang\nHEAD 7599daaed6ae18a5efc07b29d98c011b3aa3c77a\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "universal-agent-runtime",
+      "source": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/universal-agent-runtime.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "sourceBranch": "feat/context-history-integrity",
+      "sourceHead": "ba12845138104d3c8c3b8bca8bc7c5be24004e91",
+      "sourceDivergence": "20\t0",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:02.323Z",
+      "refreshedAt": "2026-09-24T18:48:27.312Z",
+      "fetchStartedAt": "2026-09-24T18:48:26.231Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "c29af47be3439c69e1a3c124fdcf09ce4cbb5cba",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "feat/context-history-integrity",
+        "head": "ba12845138104d3c8c3b8bca8bc7c5be24004e91",
+        "status": "M .claude/settings.local.json\n M crates/prometheus-skill-system\n M frontend/packages/prometheus-entity-management\n?? \"Claude outputs/\"",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/universal-agent-runtime\nHEAD ba12845138104d3c8c3b8bca8bc7c5be24004e91\nbranch refs/heads/feat/context-history-integrity\n\nworktree /Users/gqadonis/.claude/worktrees/runtime-harness-baseline\nHEAD 226d4a0af89811975662cf3f203c699f70e8cebc\ndetached\n\nworktree /Users/gqadonis/.claude/worktrees/runtime-harness-checkpoint-d586c75d\nHEAD d586c75d9d69cf94a54d62e95ade78ae94147745\ndetached\n\nworktree /Users/gqadonis/.claude/worktrees/uar-presentation-wip\nHEAD aa553c6e5f85cc54634c70e3e9954bfc2dc2fabe\nbranch refs/heads/codex/uar-presentation-wip\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/universal-agent-runtime\nHEAD c29af47be3439c69e1a3c124fdcf09ce4cbb5cba\nbranch refs/heads/codex/agent-fabric-convergence\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/uar-the-boss-sidecar\nHEAD 8f82c90c623d82d1a56525f892c6fb00d6fbd755\nbranch refs/heads/feat/the-boss-sidecar"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "the-boss",
+      "source": "/Users/gqadonis/Projects/prometheus/the-boss",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/the-boss.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+      "sourceBranch": "fix/window-titles-branding",
+      "sourceHead": "8344b485203427952716cd142da28c181162be61",
+      "sourceDivergence": "52\t0",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:04.754Z",
+      "refreshedAt": "2026-09-24T18:48:29.873Z",
+      "fetchStartedAt": "2026-09-24T18:48:28.432Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "2b57fa0164a558fecaefa72ce5309445602fbfb7",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "f1314b46ad464aedb5d446c586a824b326bae7a4",
+      "baselineVsFetched": "0\t1",
+      "sourceNow": {
+        "branch": "fix/window-titles-branding",
+        "head": "8344b485203427952716cd142da28c181162be61",
+        "status": "M .prometheus/knowledge/wiki/index.md\n M .prometheus/knowledge/wiki/log.md\n?? .prometheus/knowledge/wiki/karpathy-session-158ec35fc1a8c2cd.md\n?? .prometheus/knowledge/wiki/karpathy-session-2f1db6d4059103d6.md\n?? .prometheus/knowledge/wiki/karpathy-session-391c765cc2befbdf.md\n?? .prometheus/knowledge/wiki/karpathy-session-7a32c79f84988524.md\n?? .prometheus/knowledge/wiki/karpathy-session-8200c3aa308f27c1.md\n?? .prometheus/knowledge/wiki/karpathy-session-a6f1db801985bc0d.md\n?? .prometheus/knowledge/wiki/karpathy-session-bb5947a1efa61c5a.md\n?? .prometheus/knowledge/wiki/karpathy-session-c22e507c058b63db.md\n?? .prometheus/knowledge/wiki/karpathy-session-c64d46179866e9b0.md\n?? .prometheus/knowledge/wiki/karpathy-session-d74f6e1fe7ceec5c.md\n?? .worktrees/\n?? compass-out/\n?? manifests/",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/the-boss\nHEAD 8344b485203427952716cd142da28c181162be61\nbranch refs/heads/fix/window-titles-branding\n\nworktree /private/tmp/the-boss-apple-release\nHEAD ce115a8d27ef3e8439a7bd9739848ba5df78fea2\ndetached\n\nworktree /Users/gqadonis/Projects/prometheus/the-boss/.worktrees/update-agent-team-skills-mini\nHEAD 719716e62f12b6c640897647b453a356ee580c82\nbranch refs/heads/codex/update-agent-team-skills-mini\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/the-boss\nHEAD 2b57fa0164a558fecaefa72ce5309445602fbfb7\nbranch refs/heads/codex/agent-fabric-convergence\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/the-boss-uar\nHEAD b6fdd47e05b230c34abe43c121cf22202161128d\nbranch refs/heads/feat/uar-agent-runtime"
+      },
+      "changedDefaultPaths": "M\tRELEASES.md\nM\trelease-manifest.json"
+    },
+    {
+      "name": "flint-gate",
+      "source": "/Users/gqadonis/Projects/prometheus/flint-gate",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Know-Me-Tools/flint-gate.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "sourceBranch": "codex/aso-task-status-projection",
+      "sourceHead": "39c40d6b97be1b346969acead1e943c0bd68d5b7",
+      "sourceDivergence": "1\t1",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:05.334Z",
+      "refreshedAt": "2026-09-24T18:48:31.141Z",
+      "fetchStartedAt": "2026-09-24T18:48:30.205Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "codex/aso-task-status-projection",
+        "head": "39c40d6b97be1b346969acead1e943c0bd68d5b7",
+        "status": "M crates/flint-gate-core/src/approval/mod.rs\n M crates/flint-gate-core/src/auth/client_credentials.rs\n M crates/flint-gate-core/src/auth/introspect.rs\n M crates/flint-gate-core/src/auth/jwt_mint.rs\n M crates/flint-gate-core/src/auth/jwt_verify.rs\n M crates/flint-gate-core/src/auth/mod.rs\n M crates/flint-gate-core/src/auth/oauth.rs\n M crates/flint-gate-core/src/auth/token_exchange.rs\n M crates/flint-gate-core/src/authz/error.rs\n M crates/flint-gate-core/src/authz/mod.rs\n M crates/flint-gate-core/src/authz/sugar.rs\n M crates/flint-gate-core/src/authz/tool_authz.rs\n M crates/flint-gate-core/src/config/types.rs\n M crates/flint-gate-core/src/metrics.rs\n M crates/flint-gate-core/src/ratelimit/oauth_limit.rs\n M crates/flint-gate-core/src/stream/ag_ui.rs\n M crates/flint-gate-core/src/stream/ndjson.rs\n M crates/flint-gate-core/src/stream/processor.rs\n M crates/flint-gate-core/src/stream/websocket.rs",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/flint-gate\nHEAD 39c40d6b97be1b346969acead1e943c0bd68d5b7\nbranch refs/heads/codex/aso-task-status-projection\n\nworktree /Users/gqadonis/Projects/prometheus/flint-gate-ember-jwks\nHEAD 6dd72e553ba630cac62f8616007b2f1b4b684fb5\nbranch refs/heads/codex/know-me-ec-jwks\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-gate\nHEAD 0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "flint-realtime-fabric",
+      "source": "/Users/gqadonis/Projects/prometheus/flint-realtime-fabric",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/flint-realtime-fabric.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "sourceBranch": "codex/production-readiness-integration",
+      "sourceHead": "ae26f45d8afa037677004cd118b0571b8b552131",
+      "sourceDivergence": "0\t12",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:05.857Z",
+      "refreshedAt": "2026-09-24T18:48:32.298Z",
+      "fetchStartedAt": "2026-09-24T18:48:31.329Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "codex/production-readiness-integration",
+        "head": "ae26f45d8afa037677004cd118b0571b8b552131",
+        "status": "M .kbd-orchestrator/current-waypoint.json\n M .kbd-orchestrator/model-preflight.json\n M .kbd-orchestrator/phases/production-readiness-integration/hooks-status.json\n M .kbd-orchestrator/phases/production-readiness-integration/hooks.log.jsonl\n M .kbd-orchestrator/phases/production-readiness-integration/progress.json\n M .kbd-orchestrator/phases/production-readiness-integration/tasks.md\n M .kbd-orchestrator/position-reminder.txt\n M .kbd-orchestrator/position.json\n M crates/frf-app/src/shape/tests.rs\n M crates/frf-app/tests/shape_lease_timing.rs\n M crates/frf-app/tests/shape_revocation.rs\n M crates/frf-gateway/tests/shape_projection_grant.rs\n M crates/frf-identity-ory/src/claims.rs\n M crates/frf-ports/src/identity.rs\n D openspec/changes/pri-c014-aso-memory/design.md\n D openspec/changes/pri-c014-aso-memory/proposal.md\n D openspec/changes/pri-c014-aso-memory/specs/production-readiness-integration/spec.md\n D openspec/changes/pri-c014-aso-memory/tasks.md\n M openspec/changes/pri-c015-aso-protected-proof/tasks.md\n M openspec/specs/production-readiness-integration/spec.md\n?? .kbd-orchestrator/phases/production-readiness-integration/evidence/pri-c014-aso-memory/\n?? .kbd-orchestrator/phases/production-readiness-integration/evidence/pri-c015-aso-protected-proof/\n?? .kbd-orchestrator/phases/production-readiness-integration/review/pri-c014-aso-memory/\n?? .kbd-orchestrator/phases/production-readiness-integration/review/pri-c015-aso-protected-proof/\n?? .playwright-mcp/\n?? openspec/changes/archive/2026-09-17-pri-c014-aso-memory/",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/flint-realtime-fabric\nHEAD ae26f45d8afa037677004cd118b0571b8b552131\nbranch refs/heads/codex/production-readiness-integration\n\nworktree /Users/gqadonis/Projects/prometheus/flint-realtime-fabric/.claude/worktrees/peaceful-swanson-01380a\nHEAD 31cfbc2792640b4eff7e04cfba4df4e385b272cb\ndetached\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-realtime-fabric\nHEAD 3043ca53239cc74a7f94a9e12484e2fd17726adb\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "flint-forge",
+      "source": "/Users/gqadonis/Projects/prometheus/flint-forge",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-forge",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Know-Me-Tools/flint-forge.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "sourceBranch": "codex/production-readiness-integration",
+      "sourceHead": "ed7201851bb4feb068518912316b75cb869add14",
+      "sourceDivergence": "0\t4",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:06.498Z",
+      "refreshedAt": "2026-09-24T18:48:33.663Z",
+      "fetchStartedAt": "2026-09-24T18:48:32.507Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "codex/production-readiness-integration",
+        "head": "ed7201851bb4feb068518912316b75cb869add14",
+        "status": "?? .worktrees/",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/flint-forge\nHEAD ed7201851bb4feb068518912316b75cb869add14\nbranch refs/heads/codex/production-readiness-integration\n\nworktree /Users/gqadonis/Projects/prometheus/flint-forge/.worktrees/gofast-database-roles-contract\nHEAD 7d40a53cfc2c9ad2f4945491908737f4e00eb238\nbranch refs/heads/gofast/database-roles-contract\n\nworktree /Users/gqadonis/Projects/prometheus/flint-forge/.worktrees/gofast-pg-graphql-1-6-2\nHEAD 3ca94e5e0693a66ca1513fe6b79a009d252f0a1a\nbranch refs/heads/gofast/pg-graphql-1-6-2\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/flint-forge\nHEAD dc313be3a044c65b05d845a9c34350bf5ca3ca3e\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "surreal-memory-server",
+      "source": "/Users/gqadonis/Projects/prometheus/surreal-memory-server",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/surreal-memory-server.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "sourceBranch": "chore/update-dependencies",
+      "sourceHead": "dd7fdcd6d8974af4059d1d51401bd33ae29f65db",
+      "sourceDivergence": "33\t1",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:06.640Z",
+      "refreshedAt": "2026-09-24T18:48:34.766Z",
+      "fetchStartedAt": "2026-09-24T18:48:33.863Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "4ed6b2c79b9a28b56e53f208fcb85306ec443ae2",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "chore/update-dependencies",
+        "head": "dd7fdcd6d8974af4059d1d51401bd33ae29f65db",
+        "status": "M .claude/settings.local.json\n M .prometheus/knowledge/wiki/index.md\n M .prometheus/knowledge/wiki/log.md\n M AGENTS.md\n M CLAUDE.md\n?? .prometheus/knowledge/wiki/karpathy-session-01292e86f284184b.md\n?? .prometheus/knowledge/wiki/karpathy-session-014e7215387c6674.md\n?? .prometheus/knowledge/wiki/karpathy-session-10a9252284019f78.md\n?? .prometheus/knowledge/wiki/karpathy-session-1387d1c085152039.md\n?? .prometheus/knowledge/wiki/karpathy-session-19c97f33a08e7598.md\n?? .prometheus/knowledge/wiki/karpathy-session-34031cd6d43ba9c7.md\n?? .prometheus/knowledge/wiki/karpathy-session-3e4f8508e1c1e306.md\n?? .prometheus/knowledge/wiki/karpathy-session-3fc3c7eeb7d09395.md\n?? .prometheus/knowledge/wiki/karpathy-session-42f4d76829700c8f.md\n?? .prometheus/knowledge/wiki/karpathy-session-43bd4b6930d45ea9.md\n?? .prometheus/knowledge/wiki/karpathy-session-451238e4b7ffb324.md\n?? .prometheus/knowledge/wiki/karpathy-session-45aa5754db648111.md\n?? .prometheus/knowledge/wiki/karpathy-session-4c63a2f145fe4b7f.md\n?? .prometheus/knowledge/wiki/karpathy-session-51f9c4e235dd261b.md\n?? .prometheus/knowledge/wiki/karpathy-session-5671779b000d7dc8.md\n?? .prometheus/knowledge/wiki/karpathy-session-585eaae338b196a4.md\n?? .prometheus/knowledge/wiki/karpathy-session-5b8eb4bf4c1231b6.md\n?? .prometheus/knowledge/wiki/karpathy-session-5bcc4e58915dc148.md\n?? .prometheus/knowledge/wiki/karpathy-session-6172c3e46d70a250.md\n?? .prometheus/knowledge/wiki/karpathy-session-691b9d16a3059696.md\n?? .prometheus/knowledge/wiki/karpathy-session-701d211d06b0ad54.md\n?? .prometheus/knowledge/wiki/karpathy-session-7507d85c683cd5c4.md\n?? .prometheus/knowledge/wiki/karpathy-session-7dc17141a10522d3.md\n?? .prometheus/knowledge/wiki/karpathy-session-7e95b31b80743f66.md\n?? .prometheus/knowledge/wiki/karpathy-session-854042c3931f6cb3.md\n?? .prometheus/knowledge/wiki/karpathy-session-8562a17c2277e920.md\n?? .prometheus/knowledge/wiki/karpathy-session-87bbdb2a738da798.md\n?? .prometheus/knowledge/wiki/karpathy-session-937ee31f03d082b3.md\n?? .prometheus/knowledge/wiki/karpathy-session-965133ca99862c8a.md\n?? .prometheus/knowledge/wiki/karpathy-session-98efc3c677050101.md\n?? .prometheus/knowledge/wiki/karpathy-session-9b169c4eb64e70d7.md\n?? .prometheus/knowledge/wiki/karpathy-session-a2361af0a62fd9ef.md\n?? .prometheus/knowledge/wiki/karpathy-session-a4581bc55ccc4c93.md\n?? .prometheus/knowledge/wiki/karpathy-session-a7b38d4d6fc8c973.md\n?? .prometheus/knowledge/wiki/karpathy-session-a9af8f907daf546a.md\n?? .prometheus/knowledge/wiki/karpathy-session-aabf70e2c2ebc6af.md\n?? .prometheus/knowledge/wiki/karpathy-session-afc4a00414078ae5.md\n?? .prometheus/knowledge/wiki/karpathy-session-b0c38d2157869110.md\n?? .prometheus/knowledge/wiki/karpathy-session-baddab8370bcfd09.md\n?? .prometheus/knowledge/wiki/karpathy-session-bf111008ef4f2261.md\n?? .prometheus/knowledge/wiki/karpathy-session-cbc5d16e02f2bb51.md\n?? .prometheus/knowledge/wiki/karpathy-session-d0124063b8da3db5.md\n?? .prometheus/knowledge/wiki/karpathy-session-da22d025f1abab6b.md\n?? .prometheus/knowledge/wiki/karpathy-session-db7d80f2078fe176.md\n?? .prometheus/knowledge/wiki/karpathy-session-dc195d11ee752631.md\n?? .prometheus/knowledge/wiki/karpathy-session-e31032c14183b143.md\n?? .prometheus/knowledge/wiki/karpathy-session-e5c95881d4726b8f.md\n?? .prometheus/knowledge/wiki/karpathy-session-f23bdf88418aa7ad.md\n?? .prometheus/project.json\n?? history.txt",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/surreal-memory-server\nHEAD dd7fdcd6d8974af4059d1d51401bd33ae29f65db\nbranch refs/heads/chore/update-dependencies\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/surreal-memory-server\nHEAD 4ed6b2c79b9a28b56e53f208fcb85306ec443ae2\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "prometheus-skill-pack",
+      "source": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/prometheus-skill-system.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "sourceBranch": "main",
+      "sourceHead": "10a416589b06c5f22f4ca32b3c0414fdd3026603",
+      "sourceDivergence": "17\t0",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:09.310Z",
+      "refreshedAt": "2026-09-24T18:48:36.137Z",
+      "fetchStartedAt": "2026-09-24T18:48:34.928Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "add9b48949371f647350ee0d318bfc0672a861ff",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "add9b48949371f647350ee0d318bfc0672a861ff",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "main",
+        "head": "10a416589b06c5f22f4ca32b3c0414fdd3026603",
+        "status": "M AGENTS.md\n M CLAUDE.md\n M dist/plugins/claude/prometheus-skill-pack/shared/scripts/detect-project-context.sh\n M scripts/generate-skill-system-distribution.js\n M scripts/tests/skill-system-distribution.test.mjs\n M shared/scripts/detect-project-context.sh\n M tools/surreal-memory-server\n?? skills/process/karpathy-progress-memory/scripts/__pycache__/",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/prometheus-skill-pack\nHEAD 10a416589b06c5f22f4ca32b3c0414fdd3026603\nbranch refs/heads/main\n\nworktree /private/tmp/boss-prometheus-cli\nHEAD e57421a86fae08ac4d1e3a625a213cf3f3eb98bc\nbranch refs/heads/codex/boss-cli-windows\n\nworktree /private/tmp/claude-501/pr-kbd-path-fix\nHEAD 74b936f00c4f2cb07e141341a84d9c0ecd5a83c3\nbranch refs/heads/fix/kbd-waypoint-path-reset\nprunable gitdir file points to non-existent location\n\nworktree /Users/gqadonis/.claude/worktrees/kbd-qualified-task-subjects\nHEAD 1dc5a670fa0659a41fc9cedea2020db19e4a59a3\ndetached\n\nworktree /Users/gqadonis/.claude/worktrees/skill-pack-1-10-0-recovery\nHEAD 29050ebe314e74229a90446b3baab5c1093e3fda\nbranch refs/heads/codex/skill-pack-1-10-0-recovery\n\nworktree /Users/gqadonis/Projects/prometheus/prometheus-skill-pack/.worktrees/agent-team-creator\nHEAD 5f48b933ac6dbd430b92699598cf5e11cadbe327\nbranch refs/heads/codex/agent-team-creator\n\nworktree /Users/gqadonis/Projects/prometheus/prometheus-skill-pack/.worktrees/gofast-liter-llm-mcp-secrets\nHEAD 2b1ce32c04317aecfbe235e559a0fccee120c964\nbranch refs/heads/gofast/liter-llm-mcp-secrets\n\nworktree /Users/gqadonis/Projects/prometheus/prometheus-skill-pack/.worktrees/gomark-kbd-orchestrator-writable\nHEAD 37aa5bc518f75c9fddb3b5581440c94295eb70cb\nbranch refs/heads/gomark/kbd-orchestrator-writable\n\nworktree /Users/gqadonis/Projects/prometheus/prometheus-skill-pack/.worktrees/gomark-rules-architecture-v4\nHEAD 7421aa8d79e82e099b542edea318395ab0260499\nbranch refs/heads/gomark/rules-architecture-v4\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skill-pack\nHEAD add9b48949371f647350ee0d318bfc0672a861ff\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "prometheus-skills-mini",
+      "source": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Prometheus-AGS/prometheus-skills-mini.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "sourceBranch": "main",
+      "sourceHead": "14a65e8e337fff9cbd0bbaab6844cd626f3d2633",
+      "sourceDivergence": "9\t19",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:09.646Z",
+      "refreshedAt": "2026-09-24T18:48:37.698Z",
+      "fetchStartedAt": "2026-09-24T18:48:36.837Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "main",
+        "head": "35b05ca5ec2e6085090b59bf017e3815a0f46f27",
+        "status": "M openspec/changes/compass-mcp-protocol-negotiation/verification.md\n M tools/prometheus-knowledge\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/cargo-check-final.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/cargo-check.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/cargo-clippy-final.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/cargo-clippy.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/installed-baseline.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/mcp-integration-final.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/mcp-library-recheck.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/evidence/a1/tests-before-priming-fix.log\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/handoffs/a1-in-progress.diff\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/handoffs/codex-prompt.txt\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/a1/\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r10.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r11.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r2.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r3.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r4.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r5.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r6.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r7.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r8.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci-r9.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/findings-ci.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r10.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r11.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r2.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r3.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r4.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r5.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r6.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r7.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r8.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci-r9.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-ci.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-r1.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-r2.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet-r3.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-compass-integration/review/compass-mcp-protocol-negotiation/packet.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/review/impl/sidecar-launch-security.packet.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/review/impl/sidecar-launch-security.r2.packet.json\n?? .kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/review/impl/sidecar-launch-security.r3.packet.json\n?? .worktrees/",
+        "worktrees": "worktree /Users/gqadonis/Projects/prometheus/prometheus-skills-mini\nHEAD 35b05ca5ec2e6085090b59bf017e3815a0f46f27\nbranch refs/heads/main\n\nworktree /Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.worktrees/agent-team-creator\nHEAD 3a5f3c45596272d5fbba74ebd28d27db03bf7b13\nbranch refs/heads/codex/agent-team-creator\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/prometheus-skills-mini\nHEAD 2782c3a2d3d0b2bf3b969a5f55352be48b87d7f6\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "know-me-app",
+      "source": "/Users/gqadonis/Projects/know-me/know-me-app",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Know-Me-Tools/know-me-app.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "sourceBranch": "main",
+      "sourceHead": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "sourceDivergence": "0\t0",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:09.734Z",
+      "refreshedAt": "2026-09-24T18:48:38.864Z",
+      "fetchStartedAt": "2026-09-24T18:48:38.022Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "main",
+        "head": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+        "status": "?? docs/knowme-mvp-lesson-plan-w4w5.html\n?? docs/knowme-mvp-w4w5-slides.pptx",
+        "worktrees": "worktree /Users/gqadonis/Projects/know-me/know-me-app\nHEAD d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f\nbranch refs/heads/main\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-app\nHEAD d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    },
+    {
+      "name": "know-me-system",
+      "source": "/Users/gqadonis/Projects/know-me/know-me-system",
+      "worktree": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system",
+      "branch": "codex/agent-fabric-convergence",
+      "origin": "git@github.com:Know-Me-Tools/know-me-system.git",
+      "baseRef": "refs/remotes/origin/main",
+      "baseline": "c561d89e783264ef1215764db69e57493c4b815b",
+      "sourceBranch": "feat/embedded-memory-crud",
+      "sourceHead": "68f7ab83b72c8bed37d1e7d19a5371a45b4f8f52",
+      "sourceDivergence": "3\t2",
+      "sourceDirty": true,
+      "createdAt": "2026-09-24T18:01:10.140Z",
+      "refreshedAt": "2026-09-24T18:48:40.014Z",
+      "fetchStartedAt": "2026-09-24T18:48:39.030Z",
+      "fetch": {
+        "ok": true,
+        "output": ""
+      },
+      "convergence": {
+        "head": "c561d89e783264ef1215764db69e57493c4b815b",
+        "branch": "codex/agent-fabric-convergence",
+        "status": ""
+      },
+      "fetchedDefaultHead": "c561d89e783264ef1215764db69e57493c4b815b",
+      "baselineVsFetched": "0\t0",
+      "sourceNow": {
+        "branch": "feat/embedded-memory-crud",
+        "head": "68f7ab83b72c8bed37d1e7d19a5371a45b4f8f52",
+        "status": "M .claude/commands/opsx/apply.md\n M .claude/commands/opsx/archive.md\n M .claude/commands/opsx/bulk-archive.md\n M .claude/commands/opsx/continue.md\n M .claude/commands/opsx/explore.md\n M .claude/commands/opsx/ff.md\n M .claude/commands/opsx/new.md\n M .claude/commands/opsx/onboard.md\n M .claude/commands/opsx/sync.md\n M .claude/commands/opsx/verify.md\n M .claude/skills/openspec-apply-change/SKILL.md\n M .claude/skills/openspec-archive-change/SKILL.md\n M .claude/skills/openspec-bulk-archive-change/SKILL.md\n M .claude/skills/openspec-continue-change/SKILL.md\n M .claude/skills/openspec-explore/SKILL.md\n M .claude/skills/openspec-ff-change/SKILL.md\n M .claude/skills/openspec-new-change/SKILL.md\n M .claude/skills/openspec-onboard/SKILL.md\n M .claude/skills/openspec-sync-specs/SKILL.md\n M .claude/skills/openspec-verify-change/SKILL.md\n D .kimi/skills/openspec-apply-change/SKILL.md\n D .kimi/skills/openspec-archive-change/SKILL.md\n D .kimi/skills/openspec-bulk-archive-change/SKILL.md\n D .kimi/skills/openspec-continue-change/SKILL.md\n D .kimi/skills/openspec-explore/SKILL.md\n D .kimi/skills/openspec-ff-change/SKILL.md\n D .kimi/skills/openspec-new-change/SKILL.md\n D .kimi/skills/openspec-onboard/SKILL.md\n D .kimi/skills/openspec-sync-specs/SKILL.md\n D .kimi/skills/openspec-verify-change/SKILL.md\n M .opencode/commands/opsx-apply.md\n M .opencode/commands/opsx-archive.md\n M .opencode/commands/opsx-bulk-archive.md\n M .opencode/commands/opsx-continue.md\n M .opencode/commands/opsx-explore.md\n M .opencode/commands/opsx-ff.md\n M .opencode/commands/opsx-new.md\n M .opencode/commands/opsx-onboard.md\n M .opencode/commands/opsx-sync.md\n M .opencode/commands/opsx-verify.md\n M .opencode/skills/openspec-apply-change/SKILL.md\n M .opencode/skills/openspec-archive-change/SKILL.md\n M .opencode/skills/openspec-bulk-archive-change/SKILL.md\n M .opencode/skills/openspec-continue-change/SKILL.md\n M .opencode/skills/openspec-explore/SKILL.md\n M .opencode/skills/openspec-ff-change/SKILL.md\n M .opencode/skills/openspec-new-change/SKILL.md\n M .opencode/skills/openspec-onboard/SKILL.md\n M .opencode/skills/openspec-sync-specs/SKILL.md\n M .opencode/skills/openspec-verify-change/SKILL.md\n M .prometheus/events.jsonl\n M .prometheus/knowledge/wiki/embedded-uar-offline-agents-executor-completion-marker.md\n M .prometheus/knowledge/wiki/index.md\n M .prometheus/knowledge/wiki/log.md\n M AGENT_BASE_RULES.md\n M docs/knowme-builder-extensibility-spec.md\n M docs/strategies/plugins/README.md\n M docs/strategies/plugins/universal-plugin-system-plan.md\n M mobile/ios/Runner.xcodeproj/project.pbxproj\n M mobile/ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme\n M rust/vendor/universal-agent-runtime\n?? .agents/skills/.openspec-target\n?? .agents/skills/openspec-apply-change/\n?? .agents/skills/openspec-archive-change/\n?? .agents/skills/openspec-bulk-archive-change/\n?? .agents/skills/openspec-continue-change/\n?? .agents/skills/openspec-explore/\n?? .agents/skills/openspec-ff-change/\n?? .agents/skills/openspec-new-change/\n?? .agents/skills/openspec-onboard/\n?? .agents/skills/openspec-sync-specs/\n?? .agents/skills/openspec-verify-change/\n?? .compass/\n?? .kimi-code/skills/openspec-apply-change/\n?? .kimi-code/skills/openspec-archive-change/\n?? .kimi-code/skills/openspec-bulk-archive-change/\n?? .kimi-code/skills/openspec-continue-change/\n?? .kimi-code/skills/openspec-explore/\n?? .kimi-code/skills/openspec-ff-change/\n?? .kimi-code/skills/openspec-new-change/\n?? .kimi-code/skills/openspec-onboard/\n?? .kimi-code/skills/openspec-sync-specs/\n?? .kimi-code/skills/openspec-verify-change/\n?? .prometheus/knowledge/wiki/embedded-uar-offline-agents-session-ended-at-2026-07-29t14-33z.md\n?? .prometheus/knowledge/wiki/embedded-uar-offline-agents-session-ended-at-2026-07-29t14-39z.md\n?? compass-out/\n?? docs/adr-001-wasm-target.md\n?? docs/adr-002-container-substrate.md\n?? docs/design/\n?? docs/knowme-company-of-one.html\n?? docs/og/\n?? docs/pags-spec-km-crm-001.md\n?? docs/pags-spec-km-goal-001.md\n?? docs/strategies/plugins/uar-plugin-system-research-2026-08-04.md",
+        "worktrees": "worktree /Users/gqadonis/Projects/know-me/know-me-system\nHEAD 68f7ab83b72c8bed37d1e7d19a5371a45b4f8f52\nbranch refs/heads/feat/embedded-memory-crud\n\nworktree /Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-convergence/know-me-system\nHEAD c561d89e783264ef1215764db69e57493c4b815b\nbranch refs/heads/codex/agent-fabric-convergence"
+      },
+      "changedDefaultPaths": ""
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "completedAt": "2026-09-24T19:00:32.445Z",
+  "canonicalRevision": 91,
+  "task": "C01.1",
+  "status": "complete",
+  "remainingTasks": [
+    "C01.2",
+    "C01.3"
+  ],
+  "phaseStage": "in_progress",
+  "review": "../review/c01-task1/findings.json",
+  "validation": "validation.json",
+  "changeCertification": "pending until the full C01 change is complete and its required gates run",
+  "archived": false,
+  "memoryMirror": "Queued by existing hook after pk timeout; local receipt/session log saved, remote delivery not confirmed."
+}
