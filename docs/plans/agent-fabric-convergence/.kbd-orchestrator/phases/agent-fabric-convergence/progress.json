@@ -2,16 +2,16 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 146,
-  "derivedRevision": 146,
+  "sourceRevision": 149,
+  "derivedRevision": 149,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 146
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 149
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-26T16:12:54.604976Z",
+  "last_updated": "2026-09-26T16:32:58.955906Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 0,
@@ -73,8 +73,8 @@
     {
       "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
       "title": "C01 — Baseline reconciliation and shared contracts",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
       "tasks_done": 1,
       "last_task_completed": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
