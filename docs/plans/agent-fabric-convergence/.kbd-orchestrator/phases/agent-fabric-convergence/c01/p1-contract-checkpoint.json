@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "checkpointId": "D-UAR-P1",
+  "recordedAt": "2026-09-26T16:37:22Z",
+  "status": "contract-frozen-acceptance-pending",
+  "task": "C01.2",
+  "contract": {
+    "id": "the-boss.uar.sidecar/1",
+    "status": "frozen-for-p1",
+    "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/contract-v1.md",
+    "sha256": "4517ae27474b417d23ffb237a5809b2675e40a92cad278006a1a9785a59b0a14"
+  },
+  "mergedDocumentation": {
+    "uar": {
+      "pullRequest": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/299",
+      "head": "cbf5d560f578069e908faa0ba08b133121241cc5",
+      "mergeCommit": "cbb511ac61eb6b2928d7a80c67324baeb913ca11"
+    },
+    "convergence": {
+      "pullRequest": "https://github.com/GQAdonis/librefang/pull/128",
+      "head": "be26e154afa5e3b52e55e163ce31ef4c76b23573",
+      "mergeCommit": "425b30e04388ac7fd42f5223bebc546942c39bf2"
+    },
+    "meaning": "Published design and planning baseline only; neither merge is installed-runtime acceptance."
+  },
+  "releaseEvidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration/evidence/release-2.2.3-uar-receipt.json",
+    "sha256": "bde0411907e5f92c400ccace8ddf6d53c764374c81811baaf7f3201e38ab813a",
+    "release": "2.2.3",
+    "profile": "uar-enabled",
+    "releaseCommit": "1cda4e55535b42dfab8f064d7bbc16d82e0807fa",
+    "uarSidecarSource": "92620d40419d5b55af94e2aef0a0db886aa9aadc",
+    "miniPayloadSource": "2650b3d470373d822f9cfd2349229942c05c1566",
+    "publishedRepositoryCommit": "19fc2a7ad658b30b18911e0d240c59c71e876e1e",
+    "currentRepositoryMain": "f20b9d9a4fe93043f489f7586331276a672408df",
+    "currentUarMain": "cbb511ac61eb6b2928d7a80c67324baeb913ca11",
+    "currentMiniMain": "0077629faca910524abcc60f7dd4a6863463fa55",
+    "currentConvergenceMain": "425b30e04388ac7fd42f5223bebc546942c39bf2",
+    "platforms": {
+      "darwin-arm64": {
+        "status": "accepted-local",
+        "publishedSha256": "6bab9898d19b716996238be17abb31959d9fd4d72003f20f5124e55a95a91fb9",
+        "acceptedLocalSha256": "349b88f737f7be99304bc0855017dcce8c819799f95dea57b025d6d4c22e7d04",
+        "note": "The shipping owner records the local installed gate as accepted. The accepted local bytes and notarized published bytes are distinct and remain explicitly recorded."
+      },
+      "win32-x64": {
+        "status": "pending-operator",
+        "publishedSha256": "6688b21b33e51a1250c50b2ceb43b898f3375d8aed66b7fe8b12b8dc5056d5f1",
+        "requiredObservation": "Install the published 2.2.3 setup and confirm UAR launch plus effective-port reporting."
+      }
+    }
+  },
+  "ownership": {
+    "theBossMainProcess": [
+      "application profile, workspace and conversation identity",
+      "canonical product conversation history",
+      "provider credential lookup and request-scoped secret delivery",
+      "MCP connection ownership and immutable run catalog capture",
+      "host approval presentation, policy ceilings and exact tool admission",
+      "sidecar supervision, readiness, restart generation and shutdown"
+    ],
+    "uar": [
+      "governed execution loop and admitted run resources",
+      "run, step, invocation, child and cancellation lineage",
+      "executor context and checkpoints",
+      "ordered AG-UI emission, replay and explicit gap outcomes",
+      "runtime policy composition that the host may restrict but not enlarge"
+    ],
+    "bossFang": [
+      "BossFang workflow and kernel execution when it delegates a bounded UAR call",
+      "UAR provider adapter is not authority over the UAR execution loop"
+    ],
+    "fabric": [
+      "event transport and delivery only; no task or execution ownership"
+    ],
+    "memory": [
+      "scoped retrieval and retained memory only; no conversation or workflow authority"
+    ]
+  },
+  "nonOverlappingI1Delivery": {
+    "status": "implemented-and-published-awaiting-merge",
+    "child": "uar-team-definitions-deployment",
+    "closeoutRevision": 195,
+    "scope": [
+      "immutable AgentDefinition, TeamDefinition and WorkflowDefinition collaboration packages",
+      "owner and workspace scoped deployment bindings",
+      "agent-team creator questions, maintenance, canonical export and UAR deployment",
+      "explicit refusal of team activation until durable team execution is implemented"
+    ],
+    "architecture": "UAR remains the sole execution-loop owner; I1 adds catalog and binding administration only.",
+    "surrealDb": {
+      "clientSdk": "3.3.0",
+      "serverImage": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20"
+    },
+    "pullRequests": [
+      { "repository": "universal-agent-runtime", "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/304", "head": "676f995c73dc7dacdce71c929ffac88ac3618bb0", "state": "OPEN" },
+      { "repository": "prometheus-skills-mini", "url": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/7", "head": "8fafd44fb2e02a6120c0d4dbb7ef7e21b88be42e", "state": "OPEN" },
+      { "repository": "prometheus-skill-system", "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/104", "head": "1fa2eaa32084059f90866d8fa08744ef2f1b37e6", "state": "OPEN" },
+      { "repository": "compass", "url": "https://github.com/GQAdonis/compass/pull/9", "head": "40c9bfff9dd01f22fb6cb300497ba7a7d32a2897", "state": "OPEN" },
+      { "repository": "surreal-memory-server", "url": "https://github.com/Prometheus-AGS/surreal-memory-server/pull/28", "head": "137780252700cd59630d18b8e42f11d033538c1e", "state": "OPEN" },
+      { "repository": "the-boss", "url": "https://github.com/Prometheus-AGS/the-boss/pull/10", "head": "7e95983bf5bee223c43a7b11f1bbf7c8fddbd636", "state": "OPEN" }
+    ],
+    "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
+    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work."
+  },
+  "acceptance": {
+    "checkpointAccepted": false,
+    "blockingCondition": "Published Windows x64 2.2.3 installed acceptance is still pending in the owning shipping phase.",
+    "implementationAdmission": "blocked",
+    "allowedWhilePending": [
+      "planning and documentation",
+      "read-only source reconciliation",
+      "nonoverlapping work whose contract does not depend on D-UAR-P1",
+      "merging and pinning the completed I1 collaboration package and deployment-binding delivery"
+    ],
+    "disallowedWhilePending": [
+      "marking C01.2 complete",
+      "starting overlapping UAR/Boss runtime implementation",
+      "claiming release or runtime conformance from merged documentation"
+    ],
+    "ownerPhase": "the-boss-shipping-and-settings::uar-working-agent::integration-administration",
+    "ownerPhaseState": "35/37 tasks, 0/1 changes"
+  }
+}
