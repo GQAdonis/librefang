@@ -11,5 +11,6 @@
   "runtimeConformance": "not demonstrated",
   "priorReleaseAcceptance": "pending; D-UAR-P1 unresolved",
   "coordinationRepository": "GQAdonis/librefang",
-  "coordinationBranch": "codex/agent-fabric-convergence"
+  "coordinationBranch": "codex/agent-fabric-convergence",
+  "coordinationPublicationCommit": "a334c0462"
 }

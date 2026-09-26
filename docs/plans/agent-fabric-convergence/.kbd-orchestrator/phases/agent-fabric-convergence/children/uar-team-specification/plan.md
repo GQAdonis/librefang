@@ -1,6 +1,6 @@
 # KBD plan — uar-team-specification
 
-Status: operator-approved; documentation execution active. One documentation-only OpenSpec change: uar-team-specification. No runtime changes, builds, migrations or dependency upgrades. Astra owns the proposal. This child does not replace the convergence plan or close the shipping phase.
+Status: operator-approved; documentation executed, validated, published and archived. One documentation-only OpenSpec change: uar-team-specification. No runtime changes, builds, migrations or dependency upgrades. Astra owns the proposal. This child does not replace the convergence plan or close the shipping phase.
 
 ## Completed planning inputs
 

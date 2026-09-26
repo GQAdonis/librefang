@@ -2,26 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 134,
-  "derivedRevision": 134,
+  "sourceRevision": 147,
+  "derivedRevision": 147,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 134
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 147
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-26T16:06:54.833929Z",
+  "updatedAt": "2026-09-26T16:12:55.358673Z",
   "cursor": [
     "agent-fabric-convergence",
-    "uar-team-specification",
-    "execute",
-    "uar-team-specification",
-    "1.5"
+    "afc-c01-baseline-reconciliation-and-shared-contracts",
+    "C01.2"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 0,
+      "done": 1,
       "total": 19
     },
     "children": [
@@ -39,18 +37,18 @@
             "type": "phase",
             "id": "uar-team-specification",
             "canonicalId": "agent-fabric-convergence::uar-team-specification",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 1
             },
             "children": [
               {
                 "type": "change",
                 "id": "uar-team-specification",
-                "status": "IN_PROGRESS",
+                "status": "COMPLETE",
                 "progress": {
-                  "done": 4,
+                  "done": 6,
                   "total": 6
                 }
               }
