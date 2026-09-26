@@ -78,7 +78,7 @@
     ]
   },
   "nonOverlappingI1Delivery": {
-    "status": "implemented-and-published-awaiting-merge",
+    "status": "implemented-published-and-merged",
     "child": "uar-team-definitions-deployment",
     "closeoutRevision": 195,
     "scope": [
@@ -93,12 +93,12 @@
       "serverImage": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20"
     },
     "pullRequests": [
-      { "repository": "universal-agent-runtime", "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/304", "head": "676f995c73dc7dacdce71c929ffac88ac3618bb0", "state": "OPEN" },
-      { "repository": "prometheus-skills-mini", "url": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/7", "head": "8fafd44fb2e02a6120c0d4dbb7ef7e21b88be42e", "state": "OPEN" },
-      { "repository": "prometheus-skill-system", "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/104", "head": "1fa2eaa32084059f90866d8fa08744ef2f1b37e6", "state": "OPEN" },
-      { "repository": "compass", "url": "https://github.com/GQAdonis/compass/pull/9", "head": "40c9bfff9dd01f22fb6cb300497ba7a7d32a2897", "state": "OPEN" },
-      { "repository": "surreal-memory-server", "url": "https://github.com/Prometheus-AGS/surreal-memory-server/pull/28", "head": "137780252700cd59630d18b8e42f11d033538c1e", "state": "OPEN" },
-      { "repository": "the-boss", "url": "https://github.com/Prometheus-AGS/the-boss/pull/10", "head": "7e95983bf5bee223c43a7b11f1bbf7c8fddbd636", "state": "OPEN" }
+      { "repository": "universal-agent-runtime", "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/304", "head": "676f995c73dc7dacdce71c929ffac88ac3618bb0", "state": "MERGED", "mergedAt": "2026-09-26T21:57:33Z", "mergeCommit": "79414bb7e134dad45330008999ee1dca999d44af" },
+      { "repository": "prometheus-skills-mini", "url": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/7", "head": "8fafd44fb2e02a6120c0d4dbb7ef7e21b88be42e", "state": "MERGED", "mergedAt": "2026-09-26T21:58:44Z", "mergeCommit": "677a4e2c71d6a608e778a7106c41e0b00d55df7a" },
+      { "repository": "prometheus-skill-system", "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/104", "head": "1fa2eaa32084059f90866d8fa08744ef2f1b37e6", "state": "MERGED", "mergedAt": "2026-09-26T21:59:04Z", "mergeCommit": "e9520f5832c598270bcfee79a6e9af39853d2760" },
+      { "repository": "compass", "url": "https://github.com/GQAdonis/compass/pull/9", "head": "40c9bfff9dd01f22fb6cb300497ba7a7d32a2897", "state": "MERGED", "mergedAt": "2026-09-26T21:57:51Z", "mergeCommit": "1ddd1d07979d67aa8ca715aec27fe8f3936bbb43" },
+      { "repository": "surreal-memory-server", "url": "https://github.com/Prometheus-AGS/surreal-memory-server/pull/28", "head": "137780252700cd59630d18b8e42f11d033538c1e", "state": "MERGED", "mergedAt": "2026-09-26T21:58:10Z", "mergeCommit": "2d8e3ceea13b8c448a7611353cb86f233046f448" },
+      { "repository": "the-boss", "url": "https://github.com/Prometheus-AGS/the-boss/pull/10", "head": "7e95983bf5bee223c43a7b11f1bbf7c8fddbd636", "state": "MERGED", "mergedAt": "2026-09-26T21:58:26Z", "mergeCommit": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad" }
     ],
     "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
     "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work."
@@ -118,7 +118,13 @@
       "starting overlapping UAR/Boss runtime implementation",
       "claiming release or runtime conformance from merged documentation"
     ],
-    "ownerPhase": "the-boss-shipping-and-settings::uar-working-agent::integration-administration",
-    "ownerPhaseState": "35/37 tasks, 0/1 changes"
+    "ownerPhase": "the-boss-shipping-and-settings::uar-working-agent::integration-administration-closeout",
+    "ownerPhaseState": "in progress at canonical revision 943; successor tasks 5.3 in progress and 5.5 pending",
+    "recovery": {
+      "reason": "kbd-next-phase.mjs treated --help as a phase name and falsely completed the prior integration-administration phase at revisions 932-933 without changing its 35/37 tasks or acceptance evidence",
+      "planRevision": 4,
+      "canonicalRevision": 943,
+      "decisionId": "integration-administration-false-complete-recovery"
+    }
   }
 }
