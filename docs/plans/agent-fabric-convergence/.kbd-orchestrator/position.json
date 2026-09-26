@@ -2,13 +2,13 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 150,
-  "derivedRevision": 150,
+  "sourceRevision": 195,
+  "derivedRevision": 195,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 150
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 195
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-26T16:37:22.744983Z",
+  "updatedAt": "2026-09-26T21:43:51.264395Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c01-baseline-reconciliation-and-shared-contracts",
@@ -19,8 +19,8 @@
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 1,
-      "total": 19
+      "done": 2,
+      "total": 20
     },
     "children": [
       {
@@ -46,6 +46,28 @@
               {
                 "type": "change",
                 "id": "uar-team-specification",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 6,
+                  "total": 6
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "uar-team-definitions-deployment",
+            "canonicalId": "uar-team-definitions-deployment",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "uar-team-definitions-deployment",
                 "status": "COMPLETE",
                 "progress": {
                   "done": 6,

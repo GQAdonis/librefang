@@ -2,16 +2,16 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 189,
-  "derivedRevision": 189,
+  "sourceRevision": 192,
+  "derivedRevision": 192,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 189
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 192
   },
   "conflictCount": 0,
-  "phase": "uar-team-specification",
-  "phaseId": "agent-fabric-convergence::uar-team-specification",
+  "phase": "uar-team-definitions-deployment",
+  "phaseId": "uar-team-definitions-deployment",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-09-26T21:43:06.284610Z",
+  "last_updated": "2026-09-26T21:43:50.023252Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 1,
   "changes_completed": 1,
@@ -71,13 +71,13 @@
   },
   "changes": [
     {
-      "id": "uar-team-specification",
-      "title": "Official draft collaboration specification and implementation handoff",
+      "id": "uar-team-definitions-deployment",
+      "title": "UAR collaboration packages and team deployment",
       "status": "DONE",
       "implementation_status": "COMPLETE",
       "tasks_total": 6,
       "tasks_done": 6,
-      "last_task_completed": "Reflect, verify/archive the documentation change, hand off and restore parent waypoint.",
+      "last_task_completed": "Run the complete creator-to-UAR integration gate, publish changes, and reflect",
       "next_task_pending": null,
       "blockers": []
     }

@@ -2,10 +2,10 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 150,
-  "derivedRevision": 150,
+  "sourceRevision": 195,
+  "derivedRevision": 195,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 150
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 195
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -28,12 +28,12 @@
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 1,
-  "implementationTotal": 19,
-  "planRevision": 1,
-  "revision": 150,
+  "implementationCompleted": 2,
+  "implementationTotal": 20,
+  "planRevision": 3,
+  "revision": 195,
   "exactNextCommand": "/kbd-status",
   "nextChange": "afc-c01-baseline-reconciliation-and-shared-contracts",
   "nextTask": "C01.2",
-  "updatedAt": "2026-09-26T16:37:22.744983Z"
+  "updatedAt": "2026-09-26T21:43:51.264395Z"
 }

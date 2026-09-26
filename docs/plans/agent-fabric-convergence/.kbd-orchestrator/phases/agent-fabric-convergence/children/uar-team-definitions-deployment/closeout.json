@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-26T21:49:00Z",
+  "status": "implementation-phase-complete",
+  "canonicalRevision": 195,
+  "phaseStatus": "complete",
+  "taskCompletion": {
+    "completed": 6,
+    "total": 6
+  },
+  "surrealDb": {
+    "clientSdk": "3.3.0",
+    "serverImage": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20"
+  },
+  "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
+  "restoredParent": "agent-fabric-convergence",
+  "restoredTask": "C01.2",
+  "restoredTaskStatus": "in_progress",
+  "runtimeConformance": {
+    "collaborationPackages": true,
+    "deploymentBindings": true,
+    "durableTeamExecution": false
+  },
+  "nextIncrement": "I2 durable local team instances, task state, bounded scheduling, messaging, routing, recovery, and governance"
+}
