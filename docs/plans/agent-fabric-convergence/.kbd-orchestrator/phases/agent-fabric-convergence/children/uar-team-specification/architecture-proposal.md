@@ -1,6 +1,6 @@
 # Architecture proposal — UAR collaboration profile 0.1.0-draft.1
 
-Status: PROPOSED; operator architecture approval required before official draft publication. None of the endpoints or new record types below is advertised as implemented.
+Status: DESIGN APPROVED on 2026-09-26; official draft publication authorized. None of the endpoints or new record types below is advertised as implemented.
 
 ## 1. Ownership and execution
 

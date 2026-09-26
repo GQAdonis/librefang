@@ -65,3 +65,7 @@ The optional shared-memory recall/mirror hook could not reach its endpoint durin
 ## C01.1 baseline reconciliation
 
 The [baseline ledger](baseline-ledger.md) is the latest source-disposition record, superseding earlier assessment-era current-source labels. It records 11 fetched repository revisions and all 61 recommendation dispositions, preserves active integration ownership, and distinguishes unresolved conformance from missing source. C01.2/C01.3 still own agreement and adoption decisions.
+
+## UAR collaboration specification child
+
+The operator approved the documentation-only [uar-team-specification child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-specification/README.md). Its contract extends C01/C03/C06/C09/C10/C14/C15 with a bounded local-team release profile; [dependency mapping](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-specification/dependency-map.json) preserves broader recommendations and owners. The canonical draft lives in UAR docs/agents/collaboration/v0.1.0-draft.1. This is design publication, not runtime conformance or D-UAR-P1 installed acceptance.

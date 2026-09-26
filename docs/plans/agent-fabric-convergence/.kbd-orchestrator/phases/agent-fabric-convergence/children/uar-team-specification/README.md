@@ -1,6 +1,6 @@
 # UAR team specification — proposal for architecture approval
 
-Status: assess/analyze/spec proposals prepared; plan reviewed and awaiting operator architecture approval. Documentation-only. Official draft publication and runtime conformance remain separate.
+Status: assess/analyze/spec proposals prepared; plan approved; documentation execution active. Documentation-only. Official draft publication and runtime conformance remain separate.
 
 Start with [architecture](architecture-proposal.md), [document outline](specification-outline.md) and [implementation roadmap](implementation-roadmap.md). The [KBD plan](plan.md) defines documentation execution and the operator approval checkpoint.
 

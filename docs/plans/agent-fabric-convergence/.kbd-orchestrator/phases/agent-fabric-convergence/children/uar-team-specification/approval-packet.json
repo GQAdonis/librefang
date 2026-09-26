@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "awaiting-operator-architecture-approval",
+  "status": "operator-approved",
   "phase": "agent-fabric-convergence::uar-team-specification",
   "canonicalRevision": 111,
   "independentReview": "PASS with two warnings; dispositions applied without second review",
@@ -47,5 +47,7 @@
       "file": "review/dispositions.md",
       "sha256": "5d8a1023e4b1f92e74fbeecaec3328d8fb0f02c5c75a694f72b9ae4a4744a236"
     }
-  ]
+  ],
+  "approvedAt": "2026-09-26T15:49:42.209Z",
+  "approvalSource": "Explicit /kbd-execute user message in this thread"
 }

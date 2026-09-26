@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "status": "published-on-documentation-branch",
+  "specificationVersion": "0.1.0-draft.1",
+  "repository": "Prometheus-AGS/universal-agent-runtime",
+  "commit": "cbf5d560f578069e908faa0ba08b133121241cc5",
+  "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/blob/cbf5d560f578069e908faa0ba08b133121241cc5/docs/agents/collaboration/v0.1.0-draft.1/README.md",
+  "pullRequest": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/299",
+  "mergeStatus": "PR open; publication is commit-addressed, not a claim of main-branch merge",
+  "validation": "document-validation.json",
+  "runtimeConformance": "not demonstrated",
+  "priorReleaseAcceptance": "pending; D-UAR-P1 unresolved",
+  "coordinationRepository": "GQAdonis/librefang",
+  "coordinationBranch": "codex/agent-fabric-convergence"
+}

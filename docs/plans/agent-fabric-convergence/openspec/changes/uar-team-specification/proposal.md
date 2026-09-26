@@ -12,4 +12,4 @@ UAR has a governed child-thread kernel but lacks one accepted, lossless contract
 No deployed capability changes. This documentation-only change uses skip_specs; proposed runtime contracts stay in documentation until separately approved implementation changes.
 
 ## Impact
-Coordination artifacts in this initiative; later canonical documents under UAR docs/agents/team-orchestration. No production code, dependency upgrades, migrations or application builds.
+Coordination artifacts in this initiative; later canonical documents under UAR docs/agents/collaboration/v0.1.0-draft.1. No production code, dependency upgrades, migrations or application builds.

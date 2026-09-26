@@ -22,4 +22,4 @@ Document additive versioned definitions, preserved original descriptors, field-l
 
 ## Open Questions
 
-Operator approval of architecture, version split, limits/targets and local-profile dependencies is pending. The official draft is not frozen. Previous D-UAR-P1 remains unresolved.
+Operator approved architecture, version split, limits/targets and local-profile dependencies on2026-09-26. Official draft publication is authorized. Previous D-UAR-P1 remains unresolved.

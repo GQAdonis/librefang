@@ -1,6 +1,6 @@
 # Official draft publication outline
 
-Proposed version: 0.1.0-draft.1. Status now: review proposal, not an official published specification. Normative owner: universal-agent-runtime. Extend docs/agents/AGENTS_SPEC_RFC.md with an additive link and compatibility statement; do not replace legacy agent documents. Publish the approved package under docs/agents/collaboration/v0.1.0-draft.1/. Schemas remain under docs and outside all runtime generation paths.
+Proposed version: 0.1.0-draft.1. Status: operator-approved publication outline; documentation execution authorized. Normative owner: universal-agent-runtime. Extend docs/agents/AGENTS_SPEC_RFC.md with an additive link and compatibility statement; do not replace legacy agent documents. Publish the approved package under docs/agents/collaboration/v0.1.0-draft.1/. Schemas remain under docs and outside all runtime generation paths.
 
 ## Document contents
 
