@@ -2,16 +2,16 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 91,
-  "derivedRevision": 91,
+  "sourceRevision": 111,
+  "derivedRevision": 111,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 91
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 111
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-24T19:00:24.595862Z",
+  "last_updated": "2026-09-26T15:12:31.811358Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 0,
@@ -50,7 +50,7 @@
     "primaryCounter": "implementation",
     "implementation": {
       "completed": 0,
-      "total": 18,
+      "total": 19,
       "status": "PENDING"
     },
     "evidence": {
@@ -269,6 +269,17 @@
       "blockers": []
     }
   ],
-  "children": {},
+  "children": {
+    "uar-team-specification": {
+      "status": "IN_PROGRESS",
+      "changes_completed": 0,
+      "changes_total": 1,
+      "implementation_completed": 0,
+      "implementation_total": 1,
+      "certification_status": "NOT_TRACKED",
+      "handoff": null,
+      "completed_at": null
+    }
+  },
   "migrationStatus": null
 }

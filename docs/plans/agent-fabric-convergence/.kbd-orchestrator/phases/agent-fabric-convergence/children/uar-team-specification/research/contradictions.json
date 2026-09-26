@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "id": "X01",
+      "claims": [
+        "UAR has no multi-agent support",
+        "Existing thread host and subagent events exist"
+      ],
+      "resolution": "Existing bounded thread execution is implemented in source; durable team task semantics remain a gap."
+    },
+    {
+      "id": "X02",
+      "claims": [
+        "Compiler is lossless",
+        "Runtime projection keeps preferred skill IDs only"
+      ],
+      "resolution": "Full descriptor retains IR; runtime registration projection loses semantics. Repair that seam and binding, not parser syntax alone."
+    },
+    {
+      "id": "X03",
+      "claims": [
+        "Use current A2UI examples",
+        "UAR pins v0.9.1"
+      ],
+      "resolution": "Retain UAR profile; upstream v1.0 is not silently adopted."
+    },
+    {
+      "id": "X04",
+      "claims": [
+        "A2A comment says RC v1",
+        "Current released contract v1.0.1 differs"
+      ],
+      "resolution": "Separate legacy interface and new pinned adapter; no conformance claim until integration."
+    },
+    {
+      "id": "X05",
+      "claims": [
+        "Merged PRs close phase",
+        "Installed acceptance pending"
+      ],
+      "resolution": "35/37 tasks and 0/1 changes retain distinct meaning; D-UAR-P1 remains pending."
+    }
+  ]
+}

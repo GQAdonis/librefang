@@ -1,0 +1,13 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-09-26T15:06:41.394Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json",
+    "dependency-map.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Adapt existing UAR kernel and Codex control patterns; durable collaboration is distinct from active runs. Preserve original recommendation ownership.",
+  "skipped": false,
+  "skipReason": null
+}

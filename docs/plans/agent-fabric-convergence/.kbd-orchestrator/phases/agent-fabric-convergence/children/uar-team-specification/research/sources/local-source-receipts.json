@@ -1,0 +1,154 @@
+[
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/compiler/to_artifact.rs",
+    "sha256": "ddabcf143e9a00b0fd1d1bfeb3a627fd1ddf59ffad710e513d1f55b7f2327125",
+    "lines": 410
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/compiler/ir.rs",
+    "sha256": "54d82bf24fcd36b6e0067a71c509e20f21b5f55afbee92c4978d6d38632cdb07",
+    "lines": 869
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/compiler/pipeline.rs",
+    "sha256": "7e604f4412e660f0c5c9c753a5b80947f8b758432c563df99ab18c3241bfd6a1",
+    "lines": 290
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/runtime/thread/service.rs",
+    "sha256": "f4bc863129dff212def6be377868723ca02d01a26e1a64de8212ddaa357f24d3",
+    "lines": 1692
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/runtime/thread/limits.rs",
+    "sha256": "e9fdd213c4e9ee758479a2272dbd807baf590daa2acdc5493902d5776b05ad96",
+    "lines": 336
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/runtime/thread/messages.rs",
+    "sha256": "8f1b8291d0ae8caed6f19dd31640cddfcba79cad239f4da2496fe1258cd31acc",
+    "lines": 95
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/runtime/thread/policy_intersection.rs",
+    "sha256": "a290214331d14e1958846336704ac85e181b8e0300e5bcced65faa3c1e96d9c5",
+    "lines": 878
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/runtime/thread/approvals.rs",
+    "sha256": "5c1e49633bbd432a891ffe209a27fd883df841508e533ad96891798978cc8ddc",
+    "lines": 339
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "docs/protocols/a2ui-profile.md",
+    "sha256": "c61dd5d4d8b73676efb73db6a5e3ea488bdef1b722c23c00795f130e45d12438",
+    "lines": 52
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/agent/control.rs",
+    "sha256": "06fa53e7b587945b23bb178252566101ca3a8b30ea5d4809d56decbed10f81bb",
+    "lines": 921
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/agent/control/spawn.rs",
+    "sha256": "b41c919444d5fe752fa1b2ee8db45df229a42c61fc9aa5c07c3a197aa99f90a9",
+    "lines": 1274
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/agent/control/residency.rs",
+    "sha256": "019818bed8a57225d084e850fb2b471c2e4d4c21d263869c9ed49a2815fa8691",
+    "lines": 244
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/agent/control/execution.rs",
+    "sha256": "67c4819b28e4866a46af11c0c338f2ba35efa2b8c01957976d699b48d41bfb17",
+    "lines": 102
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/tools/handlers/multi_agents_v2/send_message.rs",
+    "sha256": "0c3f9ca77ac63b7f3bb38a2e85aa932d6891937970ebf39957d1463f6aaa3f46",
+    "lines": 58
+  },
+  {
+    "repo": "codex",
+    "root": "/Users/gqadonis/Projects/references/codex",
+    "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+    "path": "codex-rs/core/src/tools/handlers/multi_agents_v2/followup_task.rs",
+    "sha256": "754c3641826955308f8df5069ab5927669318fe4b40df620557c3a95aa7ee8cb",
+    "lines": 58
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/api/compiler.rs",
+    "sha256": "4a6c16d9dc62638cab6e3ce43f0ae062b36f2a68c7fbb4309025829e1c6a0e2d",
+    "lines": 504
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/api/adapters.rs",
+    "sha256": "8d43b8fab9ca1cbf112976fb3863ff1c9506531dc872903d37f38f74209fe569",
+    "lines": 492
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/api/a2a/types.rs",
+    "sha256": "d124090d2763825078613575b22a22d387c4d2f911a3712eb680e8ee5c98f927",
+    "lines": 321
+  },
+  {
+    "repo": "uar",
+    "root": "/Users/gqadonis/Projects/prometheus/universal-agent-runtime",
+    "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+    "path": "src/uar/api/a2a/agent_card.rs",
+    "sha256": "c6de671396cb63b89af835aa112be1b9248356f17e24458c640638aa0c3e6cdb",
+    "lines": 83
+  }
+]

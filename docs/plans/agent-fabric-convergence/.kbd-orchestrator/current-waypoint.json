@@ -2,38 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 91,
-  "derivedRevision": 91,
+  "sourceRevision": 111,
+  "derivedRevision": 111,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 91
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 111
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "uar-team-specification"
   ],
   "phaseIds": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "agent-fabric-convergence::uar-team-specification"
   ],
-  "activePhaseId": "agent-fabric-convergence",
-  "activePhase": "agent-fabric-convergence",
+  "activePhaseId": "agent-fabric-convergence::uar-team-specification",
+  "activePhase": "uar-team-specification",
   "phase": "agent-fabric-convergence",
-  "parentPhase": null,
-  "childPointer": null,
-  "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "currentTask": "C01.2",
+  "parentPhase": "agent-fabric-convergence",
+  "childPointer": "uar-team-specification",
+  "change": "uar-team-specification",
+  "currentTask": "1.1",
   "status": "ready",
   "lifecycle": "ready",
-  "stageId": "execute",
-  "stageStatus": "IN_PROGRESS",
+  "stageId": "plan",
+  "stageStatus": "BLOCKED",
   "completionMetric": "implementation",
   "implementationCompleted": 0,
-  "implementationTotal": 18,
+  "implementationTotal": 19,
   "planRevision": 1,
-  "revision": 91,
-  "exactNextCommand": "/kbd-apply afc-c01-baseline-reconciliation-and-shared-contracts — planning-root documentation only; read the plan handoff and reconcile source/owner checkpoints before any product dispatch.",
-  "nextChange": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "nextTask": "C01.2",
-  "updatedAt": "2026-09-24T19:00:24.595862Z"
+  "revision": 111,
+  "exactNextCommand": "/kbd-assess agent-fabric-convergence > uar-team-specification",
+  "nextChange": "uar-team-specification",
+  "nextTask": "1.1",
+  "updatedAt": "2026-09-26T15:12:31.811358Z"
 }

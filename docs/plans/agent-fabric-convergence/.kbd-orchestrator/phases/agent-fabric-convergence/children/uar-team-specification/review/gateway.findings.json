@@ -1,0 +1,36 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.5",
+  "judge_identity": {
+    "providerId": "openai",
+    "providerConnectionId": "http://localhost:8181/v1",
+    "modelId": "gpt-5.5"
+  },
+  "producer_model": "gpt-6-astra",
+  "producer_identity": {
+    "providerConnectionId": "codex-desktop",
+    "providerId": "openai",
+    "modelId": "gpt-6-astra"
+  },
+  "isolation_mode": "rest-gateway:http://localhost:8181/v1",
+  "cross_model_check": "verified-distinct",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "The plan depends on library candidate decisions that are not present in the supplied artifact, leaving downstream implementers without definitions for referenced candidate IDs.",
+      "evidence": "plan.md says \"analysis/candidates and architecture-proposal.md define one owner and explicit protocol versions,\" prior_handoffs says analyze output included \"library-candidates.json,\" and implementation-roadmap.md references \"libraries cand-001/cand-005,\" \"cand-001/cand-002/cand-003,\" and \"cand-004,\" but file_tree contains no library-candidates.json.",
+      "suggested_fix": "Include library-candidates.json in the published planning packet or replace cand-* references with explicit library names, decisions, and adoption constraints in the roadmap."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 0,
+      "claim": "Task 1.1 over-orders unresolved storage backend capability decisions into the documentation freeze despite prior evidence assigning those guarantees to implementation gates.",
+      "evidence": "plan.md task 1.1 requires \"settle versions, limits, storage capabilities, migration approach and local-release dependencies,\" but research/source-verification.md says confidence is \"unresolved for installed behavior, database transaction guarantees under the selected backend and unmeasured performance targets. These remain implementation gates,\" and implementation-roadmap.md places the storage decision under I2: \"Storage decision before implementation: identify selected existing backend's actual transactions/CAS/uniqueness behavior.\"",
+      "suggested_fix": "Change task 1.1 to freeze the required storage capability contract and explicitly defer selected-backend proof and capability certification to I2."
+    }
+  ]
+}

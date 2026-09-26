@@ -1,0 +1,72 @@
+[
+  {
+    "id": "claude-teams",
+    "url": "https://code.claude.com/docs/en/agent-teams.md",
+    "resolvedUrl": "https://code.claude.com/docs/en/agent-teams.md",
+    "status": 200,
+    "bytes": 41614,
+    "sha256": "1aa4bf6be58c47fc4f06cb95505c1f13dd6600a2e633b7f5bec1302686b66ff8",
+    "retrievedAt": "2026-09-26T14:54:02.247Z",
+    "file": "claude-teams.source.txt"
+  },
+  {
+    "id": "opencode-agents",
+    "url": "https://opencode.ai/docs/agents/",
+    "resolvedUrl": "https://opencode.ai/docs/agents/",
+    "status": 200,
+    "bytes": 179863,
+    "sha256": "a900eda514d3f79043f7a1f4d192782d01022c0f79dede7b3d3917ed8ee5eb7f",
+    "retrievedAt": "2026-09-26T14:54:02.207Z",
+    "file": "opencode-agents.source.txt"
+  },
+  {
+    "id": "kimi-agents",
+    "url": "https://moonshotai.github.io/kimi-cli/en/customization/agents.html",
+    "resolvedUrl": "https://moonshotai.github.io/kimi-cli/en/customization/agents.html",
+    "status": 200,
+    "bytes": 65968,
+    "sha256": "09f14be75bc3205510862fd712078096cc672595986104b5b3df53655e36e443",
+    "retrievedAt": "2026-09-26T14:54:02.153Z",
+    "file": "kimi-agents.source.txt"
+  },
+  {
+    "id": "agui-events",
+    "url": "https://docs.ag-ui.com/concepts/events",
+    "resolvedUrl": "https://docs.ag-ui.com/concepts/events",
+    "status": 200,
+    "bytes": 598676,
+    "sha256": "030b5d13178ceffe40afba2666f53f0dbedba95e9f6e2abb77b44143bc35daae",
+    "retrievedAt": "2026-09-26T14:54:02.352Z",
+    "file": "agui-events.source.txt"
+  },
+  {
+    "id": "agui-subagents",
+    "url": "https://docs.ag-ui.com/concepts/subagents",
+    "resolvedUrl": "https://docs.ag-ui.com/concepts/subagents",
+    "status": 200,
+    "bytes": 404051,
+    "sha256": "10e8a9fa434f173d7deb1cd2b742fb317a6e2e816eaa022f35d7e452a7f62404",
+    "retrievedAt": "2026-09-26T14:54:02.314Z",
+    "file": "agui-subagents.source.txt"
+  },
+  {
+    "id": "a2a-spec",
+    "url": "https://a2a-protocol.org/latest/specification/",
+    "resolvedUrl": "https://a2a-protocol.org/latest/specification/",
+    "status": 200,
+    "bytes": 617214,
+    "sha256": "4805254c10d8cbde59a82f6767598c37b051d7c3cdf9d5ce636dba287cd6ab2b",
+    "retrievedAt": "2026-09-26T14:54:02.394Z",
+    "file": "a2a-spec.source.txt"
+  },
+  {
+    "id": "a2ui-profile",
+    "url": "https://a2ui.org/specification/v0.9-a2ui/",
+    "resolvedUrl": "https://a2ui.org/specification/v0.9-a2ui/",
+    "status": 200,
+    "bytes": 183148,
+    "sha256": "1b45cbd2e5be41cde79ef8243e84d8ba12734045659f5114e25530ff18a8898e",
+    "retrievedAt": "2026-09-26T14:54:02.390Z",
+    "file": "a2ui-profile.source.txt"
+  }
+]

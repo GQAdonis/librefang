@@ -1,0 +1,82 @@
+{
+  "sources": [
+    {
+      "id": "W-CLAUDE",
+      "url": "https://code.claude.com/docs/en/agent-teams",
+      "supports": "Documented experimental team coordination and recovery limits",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-OPENCODE",
+      "url": "https://opencode.ai/docs/agents/",
+      "supports": "Agent configuration and delegation permission boundaries",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-KIMI",
+      "url": "https://moonshotai.github.io/kimi-cli/en/customization/agents.html",
+      "supports": "Declarative agents and isolated child sessions",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-AGUI",
+      "url": "https://docs.ag-ui.com/concepts/events",
+      "supports": "Base lifecycle and extension compatibility",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-AGUI-SUB",
+      "url": "https://docs.ag-ui.com/concepts/subagents",
+      "supports": "Current documented subagent events",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-A2UI",
+      "url": "https://a2ui.org/specification/v0.9-a2ui/",
+      "supports": "Upstream surface protocol; UAR patch profile is separately pinned",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-A2A",
+      "url": "https://github.com/a2aproject/A2A/releases/tag/v1.0.1",
+      "supports": "Released specification 1.0.1; wire version 1.0",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "W-A2A-SPEC",
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "supports": "Task/card/streaming mappings; latest is mutable",
+      "evidenceClass": "primary-documentation",
+      "retrievedAt": "2026-09-26",
+      "limitations": "Describes documented contracts, not UAR conformance; mutable URLs require release fixtures before implementation."
+    },
+    {
+      "id": "L-UAR",
+      "revision": "a54dd9591dfeaff8694252b69d2d40f0f28e2250",
+      "evidenceClass": "immutable-source",
+      "receipts": "sources/local-source-receipts.json",
+      "limitations": "Static inspection only."
+    },
+    {
+      "id": "L-CODEX",
+      "revision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+      "evidenceClass": "immutable-source",
+      "receipts": "sources/local-source-receipts.json",
+      "limitations": "Patterns inspected; no claims of UAR execution or enterprise durability."
+    }
+  ]
+}

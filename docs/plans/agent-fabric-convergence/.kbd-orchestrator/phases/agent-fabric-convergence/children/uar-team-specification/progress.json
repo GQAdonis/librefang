@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "2",
+  "generatedBy": "kbd-runtime",
+  "projectionContractVersion": 2,
+  "sourceRevision": 111,
+  "derivedRevision": 111,
+  "frontier": {
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 111
+  },
+  "conflictCount": 0,
+  "phase": "uar-team-specification",
+  "phaseId": "agent-fabric-convergence::uar-team-specification",
+  "parentPhase": "agent-fabric-convergence",
+  "last_updated": "2026-09-26T15:12:31.811358Z",
+  "last_updated_by": "kbd-runtime",
+  "changes_total": 1,
+  "changes_completed": 0,
+  "implementation_total": 1,
+  "implementation_completed": 0,
+  "completion": {
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 0,
+      "total": 1,
+      "status": "PENDING"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 0,
+      "total": 19,
+      "status": "PENDING"
+    },
+    "evidence": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "changes": [
+    {
+      "id": "uar-team-specification",
+      "title": "Official draft collaboration specification and implementation handoff",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 6,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Record operator architecture decision and freeze required contracts, not unmeasured backend conformance.",
+      "blockers": []
+    }
+  ],
+  "children": {},
+  "migrationStatus": null
+}

@@ -1,0 +1,30 @@
+{
+  "initialGateway": {
+    "status": "pending",
+    "exitCode": 4,
+    "reason": "Configured roles lacked canonical identities; no global settings changed"
+  },
+  "nativeAttempts": [
+    {
+      "model": "kimi-k3:cloud",
+      "result": "provider usage policy rejected before findings"
+    },
+    {
+      "model": "glm-5.3:cloud",
+      "result": "provider usage policy rejected before findings"
+    }
+  ],
+  "selectedGateway": "http://localhost:8181/v1",
+  "selectedModel": "gpt-5.5",
+  "evidence": "GET /v1/models advertised gpt-5.5; configured proxy provider_model openai/gpt-5.5; process-scoped identity values supplied from this route. Producer identity is declared by the current harness, not inferred from a gateway alias.",
+  "result": {
+    "status": "completed",
+    "model": "gpt-5.5",
+    "findings": "gateway.findings.json",
+    "criticals": 0,
+    "warnings": 2,
+    "suggestions": 0,
+    "dispositions": "dispositions.md",
+    "globalConfigChanged": false
+  }
+}

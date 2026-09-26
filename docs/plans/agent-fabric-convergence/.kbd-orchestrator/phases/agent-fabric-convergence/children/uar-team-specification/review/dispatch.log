@@ -1,0 +1,2 @@
+[MODEL_ROUTING] phase=adv-review-judge class=frontier model=gpt-5.5 producer=gpt-6-astra
+[judge] wrote .kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-specification/review/gateway.findings.json
