@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+  "chunk_id": "chunk-075",
+  "source_id": "U20",
+  "text": "struct AnthropicMessagesRequest { model, messages, system, tools, stream, session_id, prompt_caching_enabled, #[serde(flatten)] _extra } (3346-3369)"
+}

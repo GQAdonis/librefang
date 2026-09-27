@@ -1,0 +1,6 @@
+{
+  "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+  "chunk_id": "chunk-038",
+  "source_id": "B03",
+  "text": "/^READY:(\\d{1,5})$/ (406); UAR_PERSISTENCE__DATABASE_URL surrealkv://.../runtime.db (308); approval_lifecycle_v1 (49)"
+}

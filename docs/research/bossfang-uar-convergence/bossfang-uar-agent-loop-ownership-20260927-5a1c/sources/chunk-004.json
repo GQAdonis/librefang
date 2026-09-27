@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs",
+  "chunk_id": "chunk-004",
+  "source_id": "R04",
+  "text": "UAR_PERSISTENCE__DATABASE_URL default surrealkv://{home}/uar-surreal (lines 103-118); READY:{port} parse 781-828"
+}

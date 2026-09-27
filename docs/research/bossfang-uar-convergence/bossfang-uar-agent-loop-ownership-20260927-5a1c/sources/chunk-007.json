@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+  "chunk_id": "chunk-007",
+  "source_id": "R07",
+  "text": "That driver makes UAR an LLM provider inside the native librefang loop. It is not complete-run delegation"
+}

@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs",
+  "chunk_id": "chunk-002",
+  "source_id": "R02",
+  "text": "lines 1288-1298: wasm: -> execute_wasm_agent, python: -> execute_python_agent, else execute_llm_agent"
+}

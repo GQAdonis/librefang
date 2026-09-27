@@ -1,0 +1,6 @@
+{
+  "url": "repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts",
+  "chunk_id": "chunk-041",
+  "source_id": "B06",
+  "text": "port default 1906 (79); endpoint http://127.0.0.1:28000 (80)"
+}

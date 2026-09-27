@@ -1,0 +1,6 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern",
+  "chunk_id": "chunk-048",
+  "source_id": "S3",
+  "text": "A separate team or external partner owns a component."
+}

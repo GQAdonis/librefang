@@ -1,0 +1,6 @@
+{
+  "url": "https://agentclientprotocol.com/overview/introduction",
+  "chunk_id": "chunk-053",
+  "source_id": "S8",
+  "text": "Local agents run as sub-processes of the code editor, communicating via JSON-RPC over stdio."
+}

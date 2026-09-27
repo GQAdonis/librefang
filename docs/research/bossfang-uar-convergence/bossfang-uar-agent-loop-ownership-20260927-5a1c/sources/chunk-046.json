@@ -1,0 +1,6 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+  "chunk_id": "chunk-046",
+  "source_id": "S1",
+  "text": "Tightly integrated components run in the same process and efficiently use shared resources, but they lack isolation."
+}

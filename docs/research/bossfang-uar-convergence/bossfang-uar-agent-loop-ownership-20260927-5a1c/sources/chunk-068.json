@@ -1,0 +1,6 @@
+{
+  "url": "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+  "chunk_id": "chunk-068",
+  "source_id": "S23",
+  "text": "one namespace per tenant so credentials and data never cross tenant boundaries"
+}

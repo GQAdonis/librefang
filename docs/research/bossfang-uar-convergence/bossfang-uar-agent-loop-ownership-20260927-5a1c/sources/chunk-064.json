@@ -1,0 +1,6 @@
+{
+  "url": "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html",
+  "chunk_id": "chunk-064",
+  "source_id": "S19",
+  "text": "other packages in the dependency tree may require a newer version, leading to an unresolvable error"
+}

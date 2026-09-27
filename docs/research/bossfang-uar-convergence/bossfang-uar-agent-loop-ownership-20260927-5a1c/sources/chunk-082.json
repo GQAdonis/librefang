@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+  "chunk_id": "chunk-082",
+  "source_id": "R23",
+  "text": "pub fn new(api_key: String, base_url: String) -> Self (45)"
+}

@@ -115,14 +115,14 @@
   },
   "completion": {
     "certification": {
-      "blockers": [],
-      "status": "PENDING",
-      "summary": null
+      "status": "SKIPPED",
+      "summary": "Waived 2026-09-27 (phase-11 G3): no signed `prometheus kbd gate` certification receipts were produced for phase-10, and the canonical runtime replica never advanced past revision 2, so there is nothing to certify against. The unsigned gate results and the final adversarial review PASS in verification.md are recorded under evidence, not certification.",
+      "blockers": []
     },
     "evidence": {
-      "blockers": [],
-      "status": "PENDING",
-      "summary": null
+      "status": "COMPLETE",
+      "summary": "verification.md (2026-07-31, Result: PASS): supervisor 4/4, auth allowlist 10/10, UAR driver 21/21, 902 dashboard tests, workspace check + clippy -D warnings, fmt, branding --check, live authenticated /api/uar/test returning \"BossFang UAR is ready.\"; merged PRs #108, #109, #112, #118, #120.",
+      "blockers": []
     },
     "implementation": {
       "completed": 8,
@@ -131,20 +131,23 @@
     },
     "primaryCounter": "implementation",
     "publication": {
-      "blockers": [],
-      "status": "PENDING",
-      "summary": null
+      "status": "COMPLETE",
+      "summary": "PR #120 (374d8611) merged to main 2026-08-01; runtime image ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9c28f27532a03e68d5035b248a0cef5b8 published (linux/amd64 sha256:8ce03eff…, workflow 30679093670) and pinned in Dockerfile.",
+      "blockers": []
     }
   },
-  "generatedBy": "kbd-runtime",
   "implementation_completed": 8,
   "implementation_total": 8,
-  "last_updated": "2026-08-01T03:16:51.357501Z",
-  "last_updated_by": "kbd-runtime",
+  "last_updated": "2026-09-27T21:09:14Z",
+  "last_updated_by": "product-manager (phase-11 G3 hand reconciliation)",
   "migrationStatus": null,
   "parentPhase": null,
   "phase": "phase-10-uar-sidecar-availability",
   "phaseId": "phase-10-uar-sidecar-availability",
   "schemaVersion": "2",
-  "sourceRevision": 72
+  "sourceRevision": 72,
+  "assessment_complete": true,
+  "plan_complete": true,
+  "execution_dispatched": true,
+  "reflection_complete": true
 }
