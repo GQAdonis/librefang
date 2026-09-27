@@ -10,6 +10,8 @@ The summary lives in [`CLAUDE.md`](../../CLAUDE.md); this page is the full enume
 ### `forbid-main-worktree.sh` (PreToolUse)
 
 Blocks edits and mutating git commands aimed at the main worktree.
+`git pull --ff-only` is the one allowed git mutation there: a fast-forward only moves `main` to the remote tip and can never create a merge commit, so it keeps the main checkout current; plain `git pull` and `git pull --rebase` stay blocked.
+A shell operator glued to a subcommand (`git commit; …`) no longer hides it from the rule.
 It decides main-vs-linked with `test -d "$(git rev-parse --show-toplevel)/.git"`: git stores the main worktree's `.git` as a directory and a linked worktree's `.git` as a small text file pointing at `<main>/.git/worktrees/<name>`, so the directory test is true exactly in the main worktree.
 
 Do not substitute `git rev-parse --git-dir` — its output is path-shaped and varies with cwd.

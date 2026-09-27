@@ -233,6 +233,21 @@ GIT_WORKTREE_MUTATIONS = {"remove", "prune", "move"}
 GIT_TAG_DELETE_FLAGS = {"-d", "--delete"}
 
 
+def invocation_args(toks: list[str], start: int) -> list[str]:
+    """Arguments of the command starting at `start`, stopping at the next shell
+    operator (which shlex may leave glued to the last argument, e.g. `x;`)."""
+    args = []
+    for t in toks[start:]:
+        if t in SHELL_OPS:
+            break
+        core = t.rstrip(";&|)")
+        if core:
+            args.append(core)
+        if core != t:
+            break
+    return args
+
+
 def rule_git_mutation_main(toks, ctx):
     """When kind=main, refuse any modifying git invocation that would touch
     the main worktree's tree, HEAD, or stash. Worktree-cleanup commands
@@ -247,8 +262,16 @@ def rule_git_mutation_main(toks, ctx):
     for i_git, j, c_path in walk_git_invocations(toks):
         if j >= len(toks):
             continue
-        sub = strip_parens(toks[j])
+        # shlex leaves a trailing operator glued on (`commit;`), which would otherwise hide the subcommand.
+        raw_sub = strip_parens(toks[j])
+        sub = raw_sub.rstrip(";&|")
         sub_arg = strip_parens(toks[j + 1]) if j + 1 < len(toks) else None
+        # A fast-forward pull only moves main to the remote tip; it cannot
+        # create a merge commit or rewrite local work.
+        if sub == "pull" and raw_sub == sub and "--ff-only" in invocation_args(toks, j + 1):
+            continue
+        if sub == "pull":
+            return "`git pull` in main worktree (only `git pull --ff-only` is allowed)."
         if sub in GIT_DIRECT_MUTATIONS:
             return f"`git {sub}` in main worktree."
         if sub == "stash" and sub_arg in GIT_STASH_MUTATIONS:
