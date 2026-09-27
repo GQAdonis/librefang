@@ -1,0 +1,6 @@
+{
+  "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html",
+  "chunk_id": "chunk-060",
+  "source_id": "S15",
+  "text": "Works seamlessly with popular frameworks like LangGraph, Strands, and CrewAI."
+}

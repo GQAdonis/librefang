@@ -1,0 +1,6 @@
+{
+  "url": "https://docs.dapr.io/concepts/dapr-services/sidecar/",
+  "chunk_id": "chunk-050",
+  "source_id": "S5",
+  "text": "The sidecar APIs are called from your application over local http or gRPC endpoints."
+}

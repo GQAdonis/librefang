@@ -1,0 +1,617 @@
+{
+  "style": "APA",
+  "citations": [
+    {
+      "id": "cite-001",
+      "source_id": "R01",
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/agent_loop/mod.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang agent loop (run_agent_loop). repo://librefang@259f44819/crates/librefang-runtime/src/agent_loop/mod.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-002",
+      "source_id": "R02",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs",
+      "formatted": "GQAdonis/librefang. (2026). Kernel dispatch by module prefix. repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-003",
+      "source_id": "R03",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "formatted": "GQAdonis/librefang. (2026). UarDriver HTTP/SSE driver. repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-004",
+      "source_id": "R04",
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs",
+      "formatted": "GQAdonis/librefang. (2026). UAR sidecar supervisor. repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-005",
+      "source_id": "R05",
+      "url": "repo://librefang@259f44819/Cargo.toml",
+      "formatted": "GQAdonis/librefang. (2026). Workspace SurrealDB and surreal-memory pins. repo://librefang@259f44819/Cargo.toml",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-006",
+      "source_id": "R06",
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/config.rs",
+      "formatted": "GQAdonis/librefang. (2026). Storage namespaces and embedded/remote config. repo://librefang@259f44819/crates/librefang-storage/src/config.rs",
+      "credibility_score": 95,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-007",
+      "source_id": "R07",
+      "url": "repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+      "formatted": "GQAdonis/librefang. (2026). Agent Fabric Convergence planning note (BossFang). repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+      "credibility_score": 75,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-008",
+      "source_id": "R08",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs",
+      "formatted": "GQAdonis/librefang. (2026). LlmDriver trait. repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-009",
+      "source_id": "R09",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs",
+      "formatted": "GQAdonis/librefang. (2026). claude-code driver MCP bridge. repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-010",
+      "source_id": "R10",
+      "url": "repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml",
+      "formatted": "GQAdonis/librefang. (2026). k8s SurrealDB StatefulSet. repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml",
+      "credibility_score": 90,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-011",
+      "source_id": "R11",
+      "url": "repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md",
+      "formatted": "GQAdonis/librefang. (2026). Phase-10 decision log. repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md",
+      "credibility_score": 80,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-012",
+      "source_id": "R12",
+      "url": "repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs",
+      "formatted": "GQAdonis/librefang. (2026). Semantic remember defect note at b7e2093. repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs",
+      "credibility_score": 85,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-013",
+      "source_id": "R13",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs",
+      "formatted": "GQAdonis/librefang. (2026). execute_llm_agent and metering hooks. repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-014",
+      "source_id": "R14",
+      "url": "repo://librefang@259f44819/Dockerfile",
+      "formatted": "GQAdonis/librefang. (2026). BossFang image UAR sidecar copy. repo://librefang@259f44819/Dockerfile",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-015",
+      "source_id": "R15",
+      "url": "repo://librefang@259f44819/Cargo.lock",
+      "formatted": "GQAdonis/librefang. (2026). BossFang lockfile. repo://librefang@259f44819/Cargo.lock",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-016",
+      "source_id": "R16",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/approval.rs",
+      "formatted": "GQAdonis/librefang. (2026). ApprovalManager. repo://librefang@259f44819/crates/librefang-kernel/src/approval.rs",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-017",
+      "source_id": "U01",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR HTTP server routes. repo://universal-agent-runtime@3d6bf056/src/server.rs",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-018",
+      "source_id": "U02",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR run API. repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-019",
+      "source_id": "U03",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR tool-calling loop. repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-020",
+      "source_id": "U04",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). uar-sidecar binary. repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-021",
+      "source_id": "U05",
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR manifest pins. repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-022",
+      "source_id": "U06",
+      "url": "repo://universal-agent-runtime@3d6bf056/versions.toml",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR authoritative pins. repo://universal-agent-runtime@3d6bf056/versions.toml",
+      "credibility_score": 85,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-023",
+      "source_id": "U07",
+      "url": "repo://universal-agent-runtime@3d6bf056/vendor/git/README.md",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR vendored sources provenance. repo://universal-agent-runtime@3d6bf056/vendor/git/README.md",
+      "credibility_score": 85,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-024",
+      "source_id": "U08",
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR librefang integration note. repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md",
+      "credibility_score": 75,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-025",
+      "source_id": "U09",
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). Agent Fabric Convergence (UAR). repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md",
+      "credibility_score": 75,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-026",
+      "source_id": "U10",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR RunManager. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-027",
+      "source_id": "U11",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/embedded.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR EmbeddedRuntime builder. repo://universal-agent-runtime@3d6bf056/src/embedded.rs",
+      "credibility_score": 85,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-028",
+      "source_id": "U12",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR host tool admission port. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "credibility_score": 85,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-029",
+      "source_id": "U13",
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.lock",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR lockfile. repo://universal-agent-runtime@3d6bf056/Cargo.lock",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-030",
+      "source_id": "M01",
+      "url": "repo://surreal-memory-server@b7e2093/Cargo.toml",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). surreal-memory workspace pins. repo://surreal-memory-server@b7e2093/Cargo.toml",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-031",
+      "source_id": "M02",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). MemoryStorage trait. repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs",
+      "credibility_score": 95,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-032",
+      "source_id": "M03",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). SurrealStorage connect and migrations. repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-033",
+      "source_id": "M04",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). surreal-memory migrations. repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-034",
+      "source_id": "M05",
+      "url": "repo://surreal-memory-server@b7e2093/CLAUDE.md",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). surreal-memory agent instructions. repo://surreal-memory-server@b7e2093/CLAUDE.md",
+      "credibility_score": 70,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-035",
+      "source_id": "M06",
+      "url": "repo://surreal-memory-server@6acb605/Cargo.toml",
+      "formatted": "Prometheus-AGS/surreal-memory-server. (2026). surreal-memory at the-boss pin. repo://surreal-memory-server@6acb605/Cargo.toml",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-036",
+      "source_id": "B01",
+      "url": "repo://the-boss@1fe9acff43/build/integration-sources.json",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss source pins. repo://the-boss@1fe9acff43/build/integration-sources.json",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-037",
+      "source_id": "B02",
+      "url": "repo://the-boss@1fe9acff43/build/integration-artifacts.json",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss artifact pins. repo://the-boss@1fe9acff43/build/integration-artifacts.json",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-038",
+      "source_id": "B03",
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss UAR sidecar service. repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+      "credibility_score": 95,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-039",
+      "source_id": "B04",
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss UAR run connection. repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-040",
+      "source_id": "B05",
+      "url": "repo://the-boss@1fe9acff43/src/main/services/prometheus/managedServices.ts",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss managed Docker services. repo://the-boss@1fe9acff43/src/main/services/prometheus/managedServices.ts",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-041",
+      "source_id": "B06",
+      "url": "repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss integration defaults. repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-042",
+      "source_id": "B07",
+      "url": "repo://the-boss@1fe9acff43/PRODUCT.md",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss product statement. repo://the-boss@1fe9acff43/PRODUCT.md",
+      "credibility_score": 70,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-043",
+      "source_id": "B08",
+      "url": "repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss UAR runtime goals. repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md",
+      "credibility_score": 75,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-044",
+      "source_id": "B09",
+      "url": "repo://the-boss@1fe9acff43/resources/prometheus-skills-mini/.prometheus/postmortems/2026-09-20-surreal-memory-mirror-write-failed.md",
+      "formatted": "Prometheus-AGS/prometheus-skills-mini. (2026). surreal-memory mirror write postmortem. repo://the-boss@1fe9acff43/resources/prometheus-skills-mini/.prometheus/postmortems/2026-09-20-surreal-memory-mirror-write-failed.md",
+      "credibility_score": 70,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-045",
+      "source_id": "B10",
+      "url": "repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)",
+      "formatted": "Prometheus-AGS/the-boss. (2026). the-boss search for librefang/bossfang. repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)",
+      "credibility_score": 90,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-046",
+      "source_id": "S1",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+      "formatted": "Microsoft Azure Architecture Center. (2026). Sidecar pattern. https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-047",
+      "source_id": "S2",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations",
+      "formatted": "Microsoft Azure Architecture Center. (2026). Sidecar pattern: issues and considerations. https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-048",
+      "source_id": "S3",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern",
+      "formatted": "Microsoft Azure Architecture Center. (2026). Sidecar pattern: when to use. https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-049",
+      "source_id": "S4",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+      "formatted": "Kubernetes. (2026). Sidecar Containers. https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+      "credibility_score": 90,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-050",
+      "source_id": "S5",
+      "url": "https://docs.dapr.io/concepts/dapr-services/sidecar/",
+      "formatted": "Dapr. (2026). Dapr sidecar (daprd) overview. https://docs.dapr.io/concepts/dapr-services/sidecar/",
+      "credibility_score": 80,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-051",
+      "source_id": "S6",
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "formatted": "A2A Project. (2026). Agent2Agent Protocol Specification. https://a2a-protocol.org/latest/specification/",
+      "credibility_score": 90,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-052",
+      "source_id": "S7",
+      "url": "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "formatted": "Linux Foundation. (2026). Linux Foundation Launches the Agent2Agent Protocol Project. https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "credibility_score": 80,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-053",
+      "source_id": "S8",
+      "url": "https://agentclientprotocol.com/overview/introduction",
+      "formatted": "Agent Client Protocol. (2026). Agent Client Protocol: Introduction. https://agentclientprotocol.com/overview/introduction",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-054",
+      "source_id": "S9",
+      "url": "https://zed.dev/blog/bring-your-own-agent-to-zed",
+      "formatted": "Zed Industries (Nathan Sobo). (2026). Bring Your Own Agent to Zed. https://zed.dev/blog/bring-your-own-agent-to-zed",
+      "credibility_score": 75,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-055",
+      "source_id": "S10",
+      "url": "https://docs.ag-ui.com/concepts/events",
+      "formatted": "AG-UI / CopilotKit. (2026). AG-UI Events. https://docs.ag-ui.com/concepts/events",
+      "credibility_score": 80,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-056",
+      "source_id": "S11",
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+      "formatted": "Model Context Protocol. (2026). MCP Specification 2025-06-18: Tools. https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+      "credibility_score": 90,
+      "confidence": 0.8,
+      "label": "verified"
+    },
+    {
+      "id": "cite-057",
+      "source_id": "S12",
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "formatted": "OpenAI. (2026). Function calling. https://developers.openai.com/api/docs/guides/function-calling",
+      "credibility_score": 85,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-058",
+      "source_id": "S13",
+      "url": "https://code.claude.com/docs/en/agent-sdk/overview",
+      "formatted": "Anthropic. (2026). Agent SDK overview. https://code.claude.com/docs/en/agent-sdk/overview",
+      "credibility_score": 85,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-059",
+      "source_id": "S14",
+      "url": "https://code.claude.com/docs/en/agent-sdk/permissions",
+      "formatted": "Anthropic. (2026). Configure permissions. https://code.claude.com/docs/en/agent-sdk/permissions",
+      "credibility_score": 85,
+      "confidence": 0.8,
+      "label": "verified"
+    },
+    {
+      "id": "cite-060",
+      "source_id": "S15",
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html",
+      "formatted": "Amazon Web Services. (2026). Host agent or tools with Amazon Bedrock AgentCore Runtime. https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-061",
+      "source_id": "S16",
+      "url": "https://github.com/langchain-ai/agent-protocol",
+      "formatted": "LangChain. (2026). Agent Protocol. https://github.com/langchain-ai/agent-protocol",
+      "credibility_score": 70,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-062",
+      "source_id": "S17",
+      "url": "https://learn.microsoft.com/en-us/agent-framework/overview/",
+      "formatted": "Microsoft Learn. (2026). Microsoft Agent Framework Overview. https://learn.microsoft.com/en-us/agent-framework/overview/",
+      "credibility_score": 80,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-063",
+      "source_id": "S18",
+      "url": "https://doc.rust-lang.org/cargo/reference/resolver.html",
+      "formatted": "The Cargo Book. (2026). Dependency Resolution. https://doc.rust-lang.org/cargo/reference/resolver.html",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-064",
+      "source_id": "S19",
+      "url": "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html",
+      "formatted": "The Cargo Book. (2026). Specifying Dependencies. https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-065",
+      "source_id": "S20",
+      "url": "https://doc.rust-lang.org/cargo/reference/features.html",
+      "formatted": "The Cargo Book. (2026). Features. https://doc.rust-lang.org/cargo/reference/features.html",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-066",
+      "source_id": "S21",
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
+      "formatted": "SurrealDB. (2026). Migrating 2.x to 3.x. https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-067",
+      "source_id": "S22",
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
+      "formatted": "SurrealDB. (2026). Migrating 3.2 to 3.3. https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
+      "credibility_score": 90,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-068",
+      "source_id": "S23",
+      "url": "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+      "formatted": "SurrealDB. (2026). Namespace & database architecture. https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+      "credibility_score": 85,
+      "confidence": 0.85,
+      "label": "verified"
+    }
+  ]
+}

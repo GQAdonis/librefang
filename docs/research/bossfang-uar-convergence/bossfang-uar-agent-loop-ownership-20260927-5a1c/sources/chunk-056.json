@@ -1,0 +1,6 @@
+{
+  "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+  "chunk_id": "chunk-056",
+  "source_id": "S11",
+  "text": "there SHOULD always be a human in the loop with the ability to deny tool invocations"
+}

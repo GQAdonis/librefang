@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs",
+  "chunk_id": "chunk-020",
+  "source_id": "U04",
+  "text": "launch token on stdin; READY:{port}; std::env::set_var(\"UAR_MEMORY__ENABLED\", \"false\") (189)"
+}

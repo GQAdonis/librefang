@@ -1,0 +1,6 @@
+{
+  "url": "https://doc.rust-lang.org/cargo/reference/features.html",
+  "chunk_id": "chunk-065",
+  "source_id": "S20",
+  "text": "Cargo will use the union of all features enabled on that dependency when building it."
+}

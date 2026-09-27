@@ -1,0 +1,119 @@
+{
+  "contradictions": [
+    {
+      "id": "contra-001",
+      "topic": "BossFang to UAR seams",
+      "claim_a": {
+        "id": "claim-eef87106293dde35",
+        "text": "UarDriver makes UAR an LLM provider inside the native librefang loop (BossFang docs/agent-fabric-convergence.md).",
+        "source": "repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+        "credibility": 75
+      },
+      "claim_b": {
+        "id": "claim-415b3506d008ddd0",
+        "text": "UAR's /api/chat/completion only debug-logs the caller's tools, uses the last user message, and runs a full UAR agent run with UAR's own tools.",
+        "source": "repo://universal-agent-runtime@3d6bf056/src/server.rs",
+        "credibility": 95
+      },
+      "strategy_tried": "source_authority",
+      "resolved": true,
+      "resolution": "claim_b",
+      "confidence": 0.93,
+      "label": "verified",
+      "audit_trail": "Code read at UAR src/server.rs:4617, 5171, 5533 outranks a planning note; the seam is a nested loop."
+    },
+    {
+      "id": "contra-002",
+      "topic": "the-boss integration",
+      "claim_a": {
+        "id": "claim-76f9456cdea16d58",
+        "text": "BossFang, UAR and surreal-memory all come together in the-boss (operator framing).",
+        "source": "operator brief",
+        "credibility": null
+      },
+      "claim_b": {
+        "id": "claim-779d2a853c1d5766",
+        "text": "The-boss does not bundle, launch or connect to BossFang.",
+        "source": "repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)",
+        "credibility": 90
+      },
+      "strategy_tried": "source_authority",
+      "resolved": true,
+      "resolution": "claim_b",
+      "confidence": 0.9,
+      "label": "verified",
+      "audit_trail": "Repository search of the-boss source, build and packaging finds no librefang or BossFang reference; BossFang appears only as an export target of a packaged skill."
+    },
+    {
+      "id": "contra-003",
+      "topic": "LLM provider coverage",
+      "claim_a": {
+        "id": "claim-31cd0fdb3169ff75",
+        "text": "UAR supports 142+ LLM providers (UAR Cargo.toml comment, BossFang CLAUDE.md).",
+        "source": "repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+        "credibility": 70
+      },
+      "claim_b": {
+        "id": "claim-927abe4272836522",
+        "text": "UAR's catalog lists 322 providers and certifies two at tier 1.",
+        "source": "repo://universal-agent-runtime@3d6bf056/catalog/SNAPSHOT.md",
+        "credibility": 85
+      },
+      "strategy_tried": "semantic",
+      "resolved": true,
+      "resolution": "both",
+      "confidence": 0.75,
+      "label": "inferred",
+      "audit_trail": "Different measures: reachable catalog entries versus certified support; certified count is operative for support claims."
+    },
+    {
+      "id": "contra-004",
+      "topic": "the-boss integration",
+      "claim_a": {
+        "id": "claim-247efa5572933fda",
+        "text": "UAR falls back to its embedded store when Docker is down (the-boss goals.md).",
+        "source": "repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md",
+        "credibility": 75
+      },
+      "claim_b": {
+        "id": "claim-c0c3195ed1cbdac9",
+        "text": "the-boss has no automatic UAR storage fallback, only rollback of a failed profile apply.",
+        "source": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+        "credibility": 90
+      },
+      "strategy_tried": "source_authority",
+      "resolved": true,
+      "resolution": "claim_b",
+      "confidence": 0.8,
+      "label": "inferred",
+      "audit_trail": "Worker read UarSidecarService.ts:170-191; code outranks a goal statement."
+    },
+    {
+      "id": "contra-005",
+      "topic": "Version and storage alignment",
+      "claim_a": {
+        "id": "claim-18a20131617dbe60",
+        "text": "UAR pins liter-llm 1.18.2 at commit c5c6caac (versions.toml).",
+        "source": "repo://universal-agent-runtime@3d6bf056/versions.toml",
+        "credibility": 85
+      },
+      "claim_b": {
+        "id": "claim-6fc7bc990501520d",
+        "text": "UAR's lockfile resolves liter-llm 2.0.3 from submodule 046c998e.",
+        "source": "repo://universal-agent-runtime@3d6bf056/Cargo.lock",
+        "credibility": 90
+      },
+      "strategy_tried": "numeric",
+      "resolved": false,
+      "resolution": null,
+      "confidence": 0.6,
+      "label": "unverified",
+      "audit_trail": "Internal UAR drift; not resolvable from BossFang; raised to UAR maintainers."
+    }
+  ],
+  "detection": {
+    "semantic": {
+      "status": "manual"
+    }
+  }
+}

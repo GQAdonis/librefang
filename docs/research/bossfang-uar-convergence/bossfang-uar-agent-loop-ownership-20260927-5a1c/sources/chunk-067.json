@@ -1,0 +1,6 @@
+{
+  "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
+  "chunk_id": "chunk-067",
+  "source_id": "S22",
+  "text": "A datastore cannot return to 3.2 once a 3.3.0 node has started against it."
+}

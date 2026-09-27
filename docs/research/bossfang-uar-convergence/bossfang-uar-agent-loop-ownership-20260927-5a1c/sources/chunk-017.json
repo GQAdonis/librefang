@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs",
+  "chunk_id": "chunk-017",
+  "source_id": "U01",
+  "text": "tools: accepted for compatibility (4617); tracing::debug!(tool_count, \"tools payload received\") (5171); run_manager.execute_request (5533); .route(\"/v1/messages\", post(api_messages)) (1809); tools: convert_anthropic_tools_to_openai(&req.tools) (4055)"
+}

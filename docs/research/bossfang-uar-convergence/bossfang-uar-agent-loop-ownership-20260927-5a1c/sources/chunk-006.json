@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-storage/src/config.rs",
+  "chunk_id": "chunk-006",
+  "source_id": "R06",
+  "text": "DEFAULT_NAMESPACE_NAME librefang, database main, memory database memory; provision_uar_namespace defines ns uar db main"
+}
