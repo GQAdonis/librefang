@@ -5,7 +5,12 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Deserialize;
+use librefang_channels::uar_sidecar::UarSidecarStatus;
+use librefang_types::config::{
+    UarCompatibilityDiagnostic, UarEffectiveBinding, UarPlacementSupport, UarServiceCredentialRefs,
+    UarServiceEndpoints, UarServiceOwnership, UarWorkspaceLocality,
+};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[cfg(feature = "uar-driver")]
 use std::time::Instant;
@@ -27,7 +32,102 @@ pub fn router() -> axum::Router<Arc<AppState>> {
     responses((status = 200, description = "Current supervised UAR lifecycle state"))
 )]
 pub(crate) async fn uar_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    Json(state.uar_supervisor.status().await)
+    Json(operator_status(&state).await)
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct UarInstanceView {
+    id: String,
+    ownership: UarServiceOwnership,
+    endpoints: UarServiceEndpoints,
+    workspace_locality: UarWorkspaceLocality,
+    workspace: Option<std::path::PathBuf>,
+    credential_ref: Option<String>,
+    credential_refs: UarServiceCredentialRefs,
+    profile: String,
+    capabilities: Vec<String>,
+    required_profile: Option<String>,
+    required_capabilities: Vec<String>,
+    selected: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct UarOperatorStatus {
+    #[serde(flatten)]
+    lifecycle: UarSidecarStatus,
+    instances: Vec<UarInstanceView>,
+    selected_instance_id: Option<String>,
+    effective_binding: Option<UarEffectiveBinding>,
+    compatibility: Option<UarCompatibilityDiagnostic>,
+    placement: UarPlacementSupport,
+}
+
+async fn operator_status(state: &AppState) -> UarOperatorStatus {
+    let lifecycle = state.uar_supervisor.status().await;
+    let configured = state.kernel.config_ref().uar.as_ref();
+    let selected_instance = configured.and_then(|config| config.selected_instance().ok());
+    let selected_instance_id = selected_instance
+        .as_ref()
+        .map(|instance| instance.id.clone());
+    let instances = configured
+        .map(librefang_types::config::UarConfig::effective_instances)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|instance| {
+            let instance = selected_instance
+                .as_ref()
+                .filter(|selected| selected.id == instance.id)
+                .cloned()
+                .unwrap_or(instance);
+            UarInstanceView {
+                selected: selected_instance_id.as_deref() == Some(instance.id.as_str()),
+                id: instance.id,
+                ownership: instance.ownership,
+                endpoints: instance.endpoints,
+                workspace_locality: instance.workspace_locality,
+                workspace: instance.workspace,
+                credential_ref: instance.credential_ref,
+                credential_refs: instance.credential_refs,
+                profile: instance.profile,
+                capabilities: instance.capabilities,
+                required_profile: instance.required_profile,
+                required_capabilities: instance.required_capabilities,
+            }
+        })
+        .collect();
+    #[cfg(feature = "uar-driver")]
+    let (effective_binding, compatibility) = {
+        if lifecycle.state == librefang_channels::uar_sidecar::UarSupervisorState::Healthy {
+            let _ = librefang_llm_drivers::drivers::uar::admit_supervised_binding().await;
+        }
+        librefang_llm_drivers::drivers::uar::binding_snapshot()
+    };
+    #[cfg(not(feature = "uar-driver"))]
+    let (effective_binding, compatibility) = (
+        None,
+        Some(UarCompatibilityDiagnostic {
+            code: "uar_driver_disabled".to_string(),
+            message: "BossFang was built without the uar-driver feature".to_string(),
+            expected: None,
+            observed: None,
+            missing_capabilities: Vec::new(),
+        }),
+    );
+    UarOperatorStatus {
+        lifecycle,
+        instances,
+        selected_instance_id,
+        effective_binding,
+        compatibility,
+        placement: UarPlacementSupport::default(),
+    }
+}
+
+#[cfg(feature = "uar-driver")]
+async fn admit_binding() -> Result<UarEffectiveBinding, String> {
+    librefang_llm_drivers::drivers::uar::admit_supervised_binding()
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[utoipa::path(
@@ -43,7 +143,11 @@ pub(crate) async fn uar_start(State(state): State<Arc<AppState>>) -> Response {
     match state.uar_supervisor.start().await {
         Ok(status) => {
             publish_driver_endpoint(status.endpoint.clone());
-            Json(status).into_response()
+            #[cfg(feature = "uar-driver")]
+            if let Err(error) = admit_binding().await {
+                return operator_error(StatusCode::BAD_GATEWAY, error);
+            }
+            Json(operator_status(&state).await).into_response()
         }
         Err(error) => operator_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
     }
@@ -59,7 +163,8 @@ pub(crate) async fn uar_stop(State(state): State<Arc<AppState>>) -> Response {
     match state.uar_supervisor.stop().await {
         Ok(status) => {
             publish_driver_endpoint(None);
-            Json(status).into_response()
+            drop(status);
+            Json(operator_status(&state).await).into_response()
         }
         Err(error) => operator_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
     }
@@ -79,7 +184,11 @@ pub(crate) async fn uar_restart(State(state): State<Arc<AppState>>) -> Response 
     match state.uar_supervisor.restart().await {
         Ok(status) => {
             publish_driver_endpoint(status.endpoint.clone());
-            Json(status).into_response()
+            #[cfg(feature = "uar-driver")]
+            if let Err(error) = admit_binding().await {
+                return operator_error(StatusCode::BAD_GATEWAY, error);
+            }
+            Json(operator_status(&state).await).into_response()
         }
         Err(error) => operator_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
     }
@@ -211,8 +320,18 @@ pub(crate) async fn uar_models(State(state): State<Arc<AppState>>) -> Response {
             "UAR is not running".to_string(),
         );
     };
+    #[cfg(feature = "uar-driver")]
+    let model_catalog_url = match admit_binding().await {
+        Ok(binding) => binding
+            .endpoints
+            .models
+            .unwrap_or_else(|| format!("{endpoint}/api/models")),
+        Err(error) => return operator_error(StatusCode::BAD_GATEWAY, error),
+    };
+    #[cfg(not(feature = "uar-driver"))]
+    let model_catalog_url = format!("{endpoint}/api/models");
     match librefang_http::new_client()
-        .get(format!("{endpoint}/api/models"))
+        .get(model_catalog_url)
         .send()
         .await
     {

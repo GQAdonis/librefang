@@ -111,6 +111,71 @@ export interface UarStatus {
   port?: number | null;
   restart_count: number;
   last_error?: string | null;
+  instances: UarInstance[];
+  selected_instance_id?: string | null;
+  effective_binding?: UarEffectiveBinding | null;
+  compatibility?: UarCompatibilityDiagnostic | null;
+  placement: UarPlacementSupport;
+}
+
+export type UarOwnership = "managed" | "external";
+export type UarWorkspaceLocality = "local" | "remote";
+
+export interface UarEndpoints {
+  model_provider?: string | null;
+  runtime?: string | null;
+  administration?: string | null;
+  models?: string | null;
+  console?: string | null;
+}
+
+export interface UarCredentialRefs {
+  runtime?: string | null;
+  administration?: string | null;
+  models?: string | null;
+  console?: string | null;
+}
+
+export interface UarInstance {
+  id: string;
+  ownership: UarOwnership;
+  endpoints: UarEndpoints;
+  workspace_locality: UarWorkspaceLocality;
+  workspace?: string | null;
+  credential_ref?: string | null;
+  credential_refs: UarCredentialRefs;
+  profile: string;
+  capabilities: string[];
+  required_profile?: string | null;
+  required_capabilities: string[];
+  selected: boolean;
+}
+
+export interface UarEffectiveBinding {
+  instance_id: string;
+  ownership: UarOwnership;
+  endpoints: UarEndpoints;
+  workspace_locality: UarWorkspaceLocality;
+  workspace?: string | null;
+  credential_ref?: string | null;
+  profile: string;
+  capabilities: string[];
+  placement: UarPlacementSupport;
+}
+
+export interface UarCompatibilityDiagnostic {
+  code: string;
+  message: string;
+  expected?: string | null;
+  observed?: string | null;
+  missing_capabilities?: string[];
+}
+
+export interface UarPlacementSupport {
+  current_operation: "new_session";
+  new_session: boolean;
+  native_run_reattachment: boolean;
+  live_migration: boolean;
 }
 
 export interface UarTestResult {

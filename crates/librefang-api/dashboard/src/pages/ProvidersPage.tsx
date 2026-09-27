@@ -1656,6 +1656,8 @@ function UarControlPanel() {
   const statusQuery = useUarStatus();
   const status = statusQuery.data;
   const healthy = status?.state === "healthy";
+  const selectedInstance = status?.instances?.find(instance => instance.selected);
+  const externallyOwned = selectedInstance?.ownership === "external";
   const modelsQuery = useUarModels(healthy);
   const startMutation = useStartUar();
   const stopMutation = useStopUar();
@@ -1731,7 +1733,9 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("start")}
             leftIcon={startMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
           >
-            {t("providers.uar_start", "Start")}
+            {externallyOwned
+              ? t("providers.uar_connect", "Connect")
+              : t("providers.uar_start", "Start")}
           </Button>
           <Button
             size="sm"
@@ -1740,7 +1744,9 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("stop")}
             leftIcon={<Square className="h-3.5 w-3.5" />}
           >
-            {t("providers.uar_stop", "Stop")}
+            {externallyOwned
+              ? t("providers.uar_detach", "Detach")
+              : t("providers.uar_stop", "Stop")}
           </Button>
           <Button
             size="sm"
@@ -1749,16 +1755,74 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("restart")}
             leftIcon={restartMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
           >
-            {t("providers.uar_restart", "Restart")}
+            {externallyOwned
+              ? t("providers.uar_reconnect", "Reconnect")
+              : t("providers.uar_restart", "Restart")}
           </Button>
         </div>
       </div>
 
-      {(actionError || statusError || status?.last_error) && (
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div className="rounded-lg border border-border-subtle bg-bg-subtle p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase text-text-dim">
+            {t("providers.uar_instances", "Configured instances")}
+          </div>
+          <div className="space-y-2">
+            {(status?.instances ?? []).map(instance => (
+              <div key={instance.id} className="rounded-md border border-border-subtle bg-main p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-bold text-text-main">{instance.id}</span>
+                  {instance.selected && <Badge variant="success">{t("providers.uar_selected", "selected")}</Badge>}
+                  <Badge variant="default">{instance.ownership}</Badge>
+                  <Badge variant="default">{instance.workspace_locality}</Badge>
+                </div>
+                <div className="mt-1 text-[10px] text-text-dim">{instance.profile}</div>
+              </div>
+            ))}
+            {(status?.instances?.length ?? 0) === 0 && (
+              <span className="text-xs text-text-dim">{t("providers.uar_no_instances", "No UAR instance configured.")}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border-subtle bg-bg-subtle p-3">
+          <div className="mb-2 text-[10px] font-bold uppercase text-text-dim">
+            {t("providers.uar_effective_binding", "Effective binding")}
+          </div>
+          {status?.effective_binding ? (
+            <div className="space-y-1 text-xs">
+              <div className="font-mono font-bold text-text-main">{status.effective_binding.instance_id}</div>
+              <div className="text-text-dim">{status.effective_binding.profile} · {status.effective_binding.ownership}</div>
+              {Object.entries(status.effective_binding.endpoints).map(([role, value]) => value ? (
+                <div key={role} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2 font-mono text-[10px]">
+                  <span className="text-text-dim">{role}</span>
+                  <span className="break-all text-text-main">{value}</span>
+                </div>
+              ) : null)}
+            </div>
+          ) : (
+            <span className="text-xs text-text-dim">{t("providers.uar_no_binding", "No compatible binding admitted.")}</span>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border-subtle bg-bg-subtle p-3 text-xs">
+        <span className="font-bold text-text-main">{t("providers.uar_placement", "Placement support")}: </span>
+        <span className="text-text-dim">
+          {t("providers.uar_current_operation", "current operation")} {status?.placement?.current_operation ?? "new_session"}; {" "}
+          {t("providers.uar_new_session", "new session")} {status?.placement?.new_session ? t("common.yes", "yes") : t("common.no", "no")}; {" "}
+          {t("providers.uar_reattachment", "native run reattachment")} {status?.placement?.native_run_reattachment ? t("common.yes", "yes") : t("common.no", "no")}; {" "}
+          {t("providers.uar_migration", "live migration")} {status?.placement?.live_migration ? t("common.yes", "yes") : t("common.no", "no")}
+        </span>
+      </div>
+
+      {(actionError || statusError || status?.last_error || status?.compatibility?.message) && (
         <div className="rounded-lg border border-error/30 bg-error/5 p-3 text-xs text-error" role="alert">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span className="break-all">{actionError || statusError || status?.last_error}</span>
+            <span className="break-all">
+              {actionError || statusError || status?.last_error || `${status?.compatibility?.code}: ${status?.compatibility?.message}`}
+            </span>
           </div>
         </div>
       )}

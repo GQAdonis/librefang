@@ -28,6 +28,15 @@ use crate::llm_driver::{DriverConfig, LlmDriver, LlmError};
 use dashmap::DashMap;
 use std::sync::Arc;
 
+fn uar_binding_cache_identity(provider: &str) -> String {
+    #[cfg(feature = "uar-driver")]
+    if provider == "uar" {
+        return uar::binding_cache_identity();
+    }
+    let _ = provider;
+    String::new()
+}
+
 // ── Driver Cache ────────────────────────────────────────────────
 
 /// Thread-safe, lazy-initializing cache for LLM drivers.
@@ -109,13 +118,14 @@ impl DriverCache {
         let key_hash = hex::encode(&digest[..16]);
 
         format!(
-            "{}|{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}|{}|{}|{}",
             config.provider,
             key_hash,
             config.base_url.as_deref().unwrap_or(""),
             config.proxy_url.as_deref().unwrap_or(""),
             config.request_timeout_secs.unwrap_or(0),
             config.message_timeout_secs,
+            uar_binding_cache_identity(&config.provider),
         )
     }
 }
@@ -1208,9 +1218,9 @@ mod tests {
             ..DriverConfig::default()
         };
         let key = DriverCache::cache_key(&cfg);
-        // Shape: "openai|<hex>|||0|300"
+        // Shape: "openai|<hex>|||0|300|" (final segment is UAR binding identity).
         let parts: Vec<&str> = key.split('|').collect();
-        assert_eq!(parts.len(), 6, "cache key shape: {key}");
+        assert_eq!(parts.len(), 7, "cache key shape: {key}");
         let hash_segment = parts[1];
         assert_eq!(
             hash_segment.len(),

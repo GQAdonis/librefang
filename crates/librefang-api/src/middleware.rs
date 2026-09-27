@@ -294,6 +294,9 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
         "/api/config"
             | "/api/config/set"
             | "/api/config/reload"
+            | "/api/uar/start"
+            | "/api/uar/stop"
+            | "/api/uar/restart"
             | "/api/auth/change-password"
             | "/api/shutdown"
             // #3621: TOTP enrollment is an Owner-equivalent action — a

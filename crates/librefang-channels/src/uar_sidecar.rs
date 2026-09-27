@@ -1,30 +1,33 @@
 //! Lifecycle supervision for the Universal Agent Runtime sidecar.
 //!
-//! The UAR process contract is deliberately tiny: bind loopback on an
-//! ephemeral port, print exactly one `READY:{port}` line, and exit when stdin
-//! reaches EOF. This module layers that contract onto the same bundled-binary
-//! resolution and bounded restart policy used by channel sidecars.
+//! The UAR process contract is deliberately tiny: the host writes one fresh
+//! 64-lowercase-hex launch token plus a newline to stdin, retains that pipe,
+//! then the child binds loopback on an ephemeral port and prints exactly one
+//! `READY:{port}` line. The child exits when the retained stdin reaches EOF.
+//! This module layers that contract onto the same bundled-binary resolution
+//! and bounded restart policy used by channel sidecars.
 
 use crate::sidecar::{
     bundled_binary_hint, resolve_sidecar_command, supervise_contract, RestartPolicy,
     SupervisionContract, SupervisionOutcome,
 };
 use async_trait::async_trait;
-use librefang_types::config::{UarConfig, UarSidecarConfig};
+use librefang_types::config::{UarConfig, UarServiceInstanceConfig, UarSidecarConfig};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tracing::{debug, info, warn};
+use uuid::Uuid;
 
 const UAR_SIDECAR_STEM: &str = "uar-sidecar";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_secs(5);
 const STDERR_LIMIT: usize = 64 * 1024;
-type EndpointCallback = Arc<dyn Fn(Option<String>) + Send + Sync>;
+type EndpointCallback = Arc<dyn Fn(Option<String>, Option<String>) + Send + Sync>;
 
 /// Operator-visible lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -74,6 +77,7 @@ enum StartWait {
 struct RunningChild {
     child: Child,
     stdin: Option<ChildStdin>,
+    bearer_token: String,
     stderr: Arc<Mutex<String>>,
 }
 
@@ -88,6 +92,7 @@ pub struct UarSidecarSupervisor {
     status: Arc<RwLock<UarSidecarStatus>>,
     environment: Vec<(String, String)>,
     endpoint_callback: Option<EndpointCallback>,
+    probe_bearer: Option<String>,
     lifecycle: Mutex<()>,
     control_tx: Mutex<Option<mpsc::Sender<Control>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -114,6 +119,7 @@ impl UarSidecarSupervisor {
                 ),
             ],
             endpoint_callback: None,
+            probe_bearer: None,
             lifecycle: Mutex::new(()),
             control_tx: Mutex::new(None),
             task: Mutex::new(None),
@@ -160,14 +166,71 @@ impl UarSidecarSupervisor {
         self
     }
 
+    /// Apply selected-instance provider and workspace overrides to a managed
+    /// child. Opaque credential references remain in the host store.
+    #[must_use]
+    pub fn with_instance_config(mut self, instance: Option<&UarServiceInstanceConfig>) -> Self {
+        let Some(instance) = instance else {
+            return self;
+        };
+        self.environment.extend([
+            (
+                "UAR_SERVICE_INSTANCE__INSTANCE_ID".to_string(),
+                instance.id.clone(),
+            ),
+            (
+                "UAR_SERVICE_INSTANCE__WORKSPACE_LOCATION".to_string(),
+                match instance.workspace_locality {
+                    librefang_types::config::UarWorkspaceLocality::Local => "local",
+                    librefang_types::config::UarWorkspaceLocality::Remote => "remote",
+                }
+                .to_string(),
+            ),
+            (
+                "UAR_SERVICE_INSTANCE__OWNERSHIP".to_string(),
+                match instance.ownership {
+                    librefang_types::config::UarServiceOwnership::Managed => "managed",
+                    librefang_types::config::UarServiceOwnership::External => "external",
+                }
+                .to_string(),
+            ),
+        ]);
+        if let Some(base_url) = instance.endpoints.model_provider.as_ref() {
+            self.environment.extend([
+                ("UAR_LLM__BASE_URL".to_string(), base_url.clone()),
+                ("LLM_BASE_URL".to_string(), base_url.clone()),
+            ]);
+        }
+        if let Some(path) = instance.workspace.as_ref() {
+            self.environment.push((
+                "UAR_PERSISTENCE__PROVIDER".to_string(),
+                "surreal".to_string(),
+            ));
+            self.environment.push((
+                "UAR_PERSISTENCE__DATABASE_URL".to_string(),
+                format!("surrealkv://{}", path.display()),
+            ));
+        }
+        self
+    }
+
     /// Publish endpoint changes to the driver layer after every successful
     /// spawn, including background restarts that select a new ephemeral port.
     #[must_use]
     pub fn with_endpoint_callback(
         mut self,
-        callback: impl Fn(Option<String>) + Send + Sync + 'static,
+        callback: impl Fn(Option<String>, Option<String>) + Send + Sync + 'static,
     ) -> Self {
         self.endpoint_callback = Some(Arc::new(callback));
+        self
+    }
+
+    /// Authenticate lifecycle probes for an externally managed endpoint.
+    /// The credential remains private process state and is never included in
+    /// status payloads or logs.
+    #[must_use]
+    pub fn with_probe_bearer(mut self, credential: Option<String>) -> Self {
+        self.probe_bearer = credential;
         self
     }
 
@@ -210,6 +273,7 @@ impl UarSidecarSupervisor {
                 &self.client,
                 &endpoint,
                 Duration::from_millis(self.config.effective_ready_timeout_ms()),
+                self.probe_bearer.as_deref(),
             )
             .await
             {
@@ -219,7 +283,7 @@ impl UarSidecarSupervisor {
                     status.endpoint = Some(endpoint);
                     status.last_error = None;
                     if let Some(callback) = self.endpoint_callback.as_ref() {
-                        callback(status.endpoint.clone());
+                        callback(status.endpoint.clone(), None);
                     }
                     return Ok(StartWait::Ready(status.clone()));
                 }
@@ -336,7 +400,7 @@ impl UarSidecarSupervisor {
             status.endpoint = None;
             status.port = None;
             if let Some(callback) = self.endpoint_callback.as_ref() {
-                callback(None);
+                callback(None, None);
             }
             return Ok(status.clone());
         }
@@ -422,9 +486,9 @@ struct UarSupervisionContract {
 }
 
 impl UarSupervisionContract {
-    fn publish_endpoint(&self, endpoint: Option<String>) {
+    fn publish_endpoint(&self, endpoint: Option<String>, bearer: Option<String>) {
         if let Some(callback) = self.endpoint_callback.as_ref() {
-            callback(endpoint);
+            callback(endpoint, bearer);
         }
     }
 
@@ -437,7 +501,7 @@ impl UarSupervisionContract {
             snapshot.last_error = error;
         }
         drop(snapshot);
-        self.publish_endpoint(None);
+        self.publish_endpoint(None, None);
     }
 }
 
@@ -499,6 +563,7 @@ impl SupervisionContract for UarSupervisionContract {
             &self.client,
             &endpoint,
             Duration::from_millis(self.config.effective_ready_timeout_ms()),
+            Some(&running.0.bearer_token),
         )
         .await
         {
@@ -524,7 +589,7 @@ impl SupervisionContract for UarSupervisionContract {
             snapshot.last_error = None;
             snapshot.restart_count = attempt;
         }
-        self.publish_endpoint(Some(endpoint.clone()));
+        self.publish_endpoint(Some(endpoint.clone()), Some(running.0.bearer_token.clone()));
         if let Some(tx) = self.started_tx.take() {
             let _ = tx.send(Ok(()));
         }
@@ -558,7 +623,13 @@ impl SupervisionContract for UarSupervisionContract {
                 wait = running.0.child.wait() => break wait,
                 _ = health_tick.tick() => {
                     let mut snapshot = self.status.write().await;
-                    if let Err(error) = probe(&self.client, &endpoint).await {
+                    if let Err(error) = probe(
+                        &self.client,
+                        &endpoint,
+                        Some(&running.0.bearer_token),
+                    )
+                    .await
+                    {
                         snapshot.state = UarSupervisorState::Degraded;
                         snapshot.last_error = Some(error);
                     } else {
@@ -592,7 +663,7 @@ impl SupervisionContract for UarSupervisionContract {
             snapshot.endpoint = None;
             snapshot.port = None;
         }
-        self.publish_endpoint(None);
+        self.publish_endpoint(None, None);
         warn!(
             error = %error,
             attempt,
@@ -640,7 +711,7 @@ impl SupervisionContract for UarSupervisionContract {
         snapshot.endpoint = None;
         snapshot.port = None;
         drop(snapshot);
-        self.publish_endpoint(None);
+        self.publish_endpoint(None, None);
     }
 }
 
@@ -665,7 +736,7 @@ async fn spawn_and_wait_ready(
             .unwrap_or(base)
     })?;
 
-    let stdin = child
+    let mut stdin = child
         .stdin
         .take()
         .ok_or_else(|| "UAR sidecar stdin was not piped".to_string())?;
@@ -677,6 +748,14 @@ async fn spawn_and_wait_ready(
         .stderr
         .take()
         .ok_or_else(|| "UAR sidecar stderr was not piped".to_string())?;
+
+    let bearer_token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    stdin
+        .write_all(format!("{bearer_token}\n").as_bytes())
+        .await
+        .map_err(|error| {
+            format!("failed to send UAR sidecar launch token through stdin: {error}")
+        })?;
 
     let stderr_text = Arc::new(Mutex::new(String::new()));
     let stderr_capture = Arc::clone(&stderr_text);
@@ -736,6 +815,7 @@ async fn spawn_and_wait_ready(
         RunningChild {
             child,
             stdin: Some(stdin),
+            bearer_token,
             stderr: stderr_text,
         },
         port,
@@ -780,11 +860,19 @@ fn is_terminal_uar_failure(stderr: &str) -> bool {
     .any(|needle| value.contains(needle))
 }
 
-async fn probe(client: &reqwest::Client, endpoint: &str) -> Result<(), String> {
+async fn probe(
+    client: &reqwest::Client,
+    endpoint: &str,
+    bearer: Option<&str>,
+) -> Result<(), String> {
     for path in ["/healthz", "/readyz"] {
-        let response = client
+        let mut request = client
             .get(format!("{endpoint}{path}"))
-            .timeout(Duration::from_secs(1))
+            .timeout(Duration::from_secs(1));
+        if let Some(bearer) = bearer {
+            request = request.bearer_auth(bearer);
+        }
+        let response = request
             .send()
             .await
             .map_err(|error| format!("UAR {path} probe failed at {endpoint}: {error}"))?;
@@ -802,10 +890,11 @@ async fn wait_until_ready(
     client: &reqwest::Client,
     endpoint: &str,
     timeout: Duration,
+    bearer: Option<&str>,
 ) -> Result<(), String> {
     let readiness = async {
         loop {
-            if probe(client, endpoint).await.is_ok() {
+            if probe(client, endpoint, bearer).await.is_ok() {
                 return;
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
@@ -1290,7 +1379,7 @@ sys.stdin.read()
         let published = Arc::new(std::sync::Mutex::new(Vec::new()));
         let published_for_callback = Arc::clone(&published);
         let supervisor = UarSidecarSupervisor::new(config, dir.path().to_path_buf())
-            .with_endpoint_callback(move |endpoint| {
+            .with_endpoint_callback(move |endpoint, _bearer| {
                 published_for_callback
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)

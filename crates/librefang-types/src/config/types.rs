@@ -3513,6 +3513,15 @@ pub struct UarConfig {
     /// [`Self::base_url`].
     #[serde(default)]
     pub sidecar: UarSidecarConfig,
+
+    /// Named replaceable UAR service instances. Empty preserves the legacy
+    /// singleton configuration above as `legacy-default`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instances: Vec<UarServiceInstanceConfig>,
+
+    /// Stable identifier of the instance selected for new UAR work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_instance_id: Option<String>,
 }
 
 impl UarConfig {
@@ -3551,6 +3560,245 @@ impl UarConfig {
         }
         sidecar
     }
+
+    /// Resolve the configured inventory, adapting the historical singleton
+    /// fields into one stable instance when no explicit inventory exists.
+    #[must_use]
+    pub fn effective_instances(&self) -> Vec<UarServiceInstanceConfig> {
+        if !self.instances.is_empty() {
+            return self.instances.clone();
+        }
+        let sidecar = self.effective_sidecar();
+        vec![UarServiceInstanceConfig {
+            id: "legacy-default".to_string(),
+            ownership: if sidecar.endpoint.is_some() {
+                UarServiceOwnership::External
+            } else {
+                UarServiceOwnership::Managed
+            },
+            endpoints: UarServiceEndpoints {
+                model_provider: self.base_url.clone(),
+                runtime: sidecar.endpoint.clone(),
+                ..UarServiceEndpoints::default()
+            },
+            workspace_locality: UarWorkspaceLocality::Local,
+            workspace: self.surreal_data_dir.clone(),
+            credential_ref: None,
+            credential_refs: UarServiceCredentialRefs::default(),
+            profile: "uar.service-instance/1".to_string(),
+            capabilities: vec![
+                "chat.completion".to_string(),
+                "chat.streaming".to_string(),
+                "models.list".to_string(),
+            ],
+            required_profile: None,
+            required_capabilities: Vec::new(),
+            sidecar,
+        }]
+    }
+
+    /// Select the one instance controlled by the process-wide supervisor.
+    pub fn selected_instance(&self) -> Result<UarServiceInstanceConfig, String> {
+        let instances = self.effective_instances();
+        let mut identities = std::collections::BTreeSet::new();
+        for instance in &instances {
+            if instance.id.trim().is_empty() {
+                return Err("UAR instance id must not be empty".to_string());
+            }
+            if !identities.insert(instance.id.as_str()) {
+                return Err(format!("duplicate UAR instance id '{}'", instance.id));
+            }
+        }
+        let selected_id = self.selected_instance_id.clone().unwrap_or_else(|| {
+            instances
+                .first()
+                .map_or_else(|| "legacy-default".to_string(), |item| item.id.clone())
+        });
+        if selected_id.trim().is_empty() {
+            return Err("selected UAR instance id must not be empty".to_string());
+        }
+        let mut selected = instances
+            .into_iter()
+            .find(|item| item.id == selected_id)
+            .ok_or_else(|| format!("selected UAR instance '{selected_id}' is not configured"))?;
+        if selected.endpoints.model_provider.is_none() {
+            selected.endpoints.model_provider.clone_from(&self.base_url);
+        }
+        if selected.workspace.is_none() {
+            selected.workspace.clone_from(&self.surreal_data_dir);
+        }
+        if selected.endpoints.runtime.is_some() || selected.sidecar.endpoint.is_some() {
+            selected.ownership = UarServiceOwnership::External;
+        }
+        Ok(selected)
+    }
+}
+
+/// Whether BossFang owns the UAR service process or only attaches to it.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum UarServiceOwnership {
+    Managed,
+    #[default]
+    External,
+}
+
+/// Declared locality of the workspace used by one UAR instance.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum UarWorkspaceLocality {
+    #[default]
+    Local,
+    Remote,
+}
+
+/// Named endpoint roles. The upstream model-provider endpoint remains
+/// separate from UAR's own runtime and administrative surfaces.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct UarServiceEndpoints {
+    pub model_provider: Option<String>,
+    pub runtime: Option<String>,
+    pub administration: Option<String>,
+    pub models: Option<String>,
+    pub console: Option<String>,
+}
+
+/// Opaque host-store references for credentials used by each UAR endpoint
+/// role. Values are resolved inside the host and are never sent to status or
+/// compatibility APIs as credential material.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct UarServiceCredentialRefs {
+    pub runtime: Option<String>,
+    pub administration: Option<String>,
+    pub models: Option<String>,
+    pub console: Option<String>,
+}
+
+/// One configured, replaceable UAR service instance.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(default)]
+pub struct UarServiceInstanceConfig {
+    pub id: String,
+    pub ownership: UarServiceOwnership,
+    pub endpoints: UarServiceEndpoints,
+    pub workspace_locality: UarWorkspaceLocality,
+    pub workspace: Option<PathBuf>,
+    /// Legacy all-role reference. New configurations should use
+    /// [`Self::credential_refs`] so each endpoint role has explicit authority.
+    pub credential_ref: Option<String>,
+    /// Opaque host-store references such as `vault://uar_runtime`. Never raw
+    /// credential values.
+    pub credential_refs: UarServiceCredentialRefs,
+    pub profile: String,
+    pub capabilities: Vec<String>,
+    pub required_profile: Option<String>,
+    pub required_capabilities: Vec<String>,
+    pub sidecar: UarSidecarConfig,
+}
+
+impl Default for UarServiceInstanceConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            ownership: UarServiceOwnership::External,
+            endpoints: UarServiceEndpoints::default(),
+            workspace_locality: UarWorkspaceLocality::Local,
+            workspace: None,
+            credential_ref: None,
+            credential_refs: UarServiceCredentialRefs::default(),
+            profile: "uar.service-instance/1".to_string(),
+            capabilities: Vec::new(),
+            required_profile: None,
+            required_capabilities: Vec::new(),
+            sidecar: UarSidecarConfig::default(),
+        }
+    }
+}
+
+impl UarServiceInstanceConfig {
+    /// Resolve role-specific references while retaining the legacy single
+    /// reference as a fallback for roles without an explicit reference.
+    #[must_use]
+    pub fn effective_credential_refs(&self) -> UarServiceCredentialRefs {
+        let mut references = self.credential_refs.clone();
+        if let Some(legacy) = self.credential_ref.as_ref() {
+            references.runtime.get_or_insert_with(|| legacy.clone());
+            references
+                .administration
+                .get_or_insert_with(|| legacy.clone());
+            references.models.get_or_insert_with(|| legacy.clone());
+            references.console.get_or_insert_with(|| legacy.clone());
+        }
+        references
+    }
+
+    /// Process configuration consumed by the one supervisor. Runtime endpoint
+    /// presence always wins over managed-process enablement.
+    #[must_use]
+    pub fn effective_sidecar(&self) -> UarSidecarConfig {
+        let mut sidecar = self.sidecar.clone();
+        if self.endpoints.runtime.is_some() {
+            sidecar.endpoint.clone_from(&self.endpoints.runtime);
+        }
+        if self.ownership == UarServiceOwnership::External {
+            sidecar.enabled = false;
+        } else if self.id != "legacy-default" {
+            sidecar.enabled = true;
+        }
+        sidecar
+    }
+}
+
+/// Operations the current BossFang UAR model-provider integration supports.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct UarPlacementSupport {
+    /// Placement semantics of the current model-provider integration.
+    pub current_operation: String,
+    pub new_session: bool,
+    pub native_run_reattachment: bool,
+    pub live_migration: bool,
+}
+
+impl Default for UarPlacementSupport {
+    fn default() -> Self {
+        Self {
+            current_operation: "new_session".to_string(),
+            new_session: true,
+            native_run_reattachment: false,
+            live_migration: false,
+        }
+    }
+}
+
+/// Machine-readable compatibility refusal emitted without credential values.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct UarCompatibilityDiagnostic {
+    pub code: String,
+    pub message: String,
+    pub expected: Option<String>,
+    pub observed: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_capabilities: Vec<String>,
+}
+
+/// Identity-bearing admitted binding published to the UAR driver and API.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct UarEffectiveBinding {
+    pub instance_id: String,
+    pub ownership: UarServiceOwnership,
+    pub endpoints: UarServiceEndpoints,
+    pub workspace_locality: UarWorkspaceLocality,
+    pub workspace: Option<PathBuf>,
+    pub credential_ref: Option<String>,
+    pub profile: String,
+    pub capabilities: Vec<String>,
+    pub placement: UarPlacementSupport,
 }
 
 /// Supervision settings for UAR running as an out-of-process sidecar.
@@ -4542,6 +4790,11 @@ pub struct KernelConfig {
     /// ```
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uar: Option<UarConfig>,
+
+    /// Public base URL advertised by BossFang's A2A surface. This is distinct
+    /// from every UAR service and model-provider endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub a2a_public_url: Option<String>,
 
     /// Storage backend configuration (Phase 4 of `surrealdb-storage-swap`).
     ///
@@ -7293,6 +7546,7 @@ impl Default for KernelConfig {
             max_request_body_bytes: default_max_request_body_bytes(),
             terminal: TerminalConfig::default(),
             uar: None,
+            a2a_public_url: None,
             storage: StorageConfig::default(),
             tool_invoke: ToolInvokeConfig::default(),
             parallel_tools: ParallelToolsConfig::default(),
