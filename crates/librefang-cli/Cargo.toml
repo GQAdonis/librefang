@@ -1,5 +1,6 @@
 [package]
 name = "librefang-cli"
+default-run = "librefang"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -54,6 +55,13 @@ sqlite-backend = ["dep:librefang-storage", "librefang-storage/sqlite-backend"]
 # `--features …,uar-driver` would have failed outright with "none of the selected
 # packages contains these features". Removing this line re-breaks the image build.
 uar-driver = ["librefang-api/uar-driver"]
+
+# BossFang fork: `bossfang` is the primary (surface-layer) binary that the
+# release workflows build and ship; `librefang` stays as the legacy alias so
+# existing installs, scripts and tests keep working. Both share one entrypoint.
+[[bin]]
+name = "bossfang"
+path = "src/main.rs"
 
 [[bin]]
 name = "librefang"
