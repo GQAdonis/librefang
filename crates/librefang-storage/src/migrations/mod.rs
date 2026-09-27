@@ -243,4 +243,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "sessions_parent_session_id_v1",
         sql: include_str!("sql/043_sessions_parent_session_id.surql"),
     },
+    Migration {
+        version: 44,
+        name: "sessions_messages_array_v1",
+        sql: include_str!("sql/044_sessions_messages_array.surql"),
+    },
 ];
