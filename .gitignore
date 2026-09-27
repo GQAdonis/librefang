@@ -107,7 +107,16 @@ result
 !.claude/skills/librefang-upstream-merge/references/*.md
 !.claude/skills/librefang-upstream-merge/scripts/
 !.claude/skills/librefang-upstream-merge/scripts/*.sh
-.codex
+# bossfang-stewards agent team: native role definitions are shared (see .agent-team/).
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/product-manager.md
+!.claude/agents/upstream-merge-manager.md
+!.claude/agents/surrealdb-schema-engineer.md
+!.claude/agents/bossfang-feature-steward.md
+!.claude/agents/merge-reviewer.md
+.codex/*
+!.codex/agents/
 .omc/
 .qwen/
 # OpenSpec generates per-tool instruction shims (slash commands + skills) into
@@ -115,8 +124,13 @@ result
 # `openspec update`, so they stay local like every other agent-tool config here
 # (`.claude/*` and `.codex` above). The shared artefact is `openspec/` itself,
 # which IS tracked. See AGENTS.md → OpenSpec.
-.opencode/
+.opencode/*
+!.opencode/agents/
 .kimi/
+# MiniMax: launch mcode with MINIMAX_DATA_DIR=<repo>/.minimax to load team agents;
+# everything else mcode writes there (sessions, credentials) stays local.
+.minimax/*
+!.minimax/agents/
 *.swp
 *.swo
 *~
@@ -136,3 +150,4 @@ __pycache__/
 # than in /tmp — but it is CI scratch, not a committed overlay.
 deploy/kubernetes/ci-overlay/
 deploy/kubernetes/ci-overlay-managed/
+.agent-team/recovery/
