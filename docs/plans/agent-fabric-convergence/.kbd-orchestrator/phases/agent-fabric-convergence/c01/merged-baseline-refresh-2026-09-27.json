@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "1",
+  "capturedAt": "2026-09-27T00:12:28.349Z",
+  "scope": "merged defaults and convergence checkout state; planning baselines preserved",
+  "repositories": [
+    {
+      "repository": "librefang",
+      "defaultRevision": "cfd5285df61830d77e4d7a8d646bc1ad5d49146c",
+      "worktreePresent": true,
+      "worktreeHead": "1c5d5a6261dd26f4df89fd3f95e590636994c60f",
+      "worktreeBranch": "codex/agent-fabric-convergence-c01",
+      "worktreeDivergence": "1\t0",
+      "state": "active-c01-checkpoint"
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "defaultRevision": "79414bb7e134dad45330008999ee1dca999d44af",
+      "worktreePresent": true,
+      "worktreeHead": "676f995c73dc7dacdce71c929ffac88ac3618bb0",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "0\t1",
+      "state": "stale-after-i1-merge"
+    },
+    {
+      "repository": "the-boss",
+      "defaultRevision": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad",
+      "worktreePresent": true,
+      "worktreeHead": "480703469a18f06b4ba434c568526390cf80bbe7",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t150",
+      "state": "stale-do-not-use-for-release-evidence"
+    },
+    {
+      "repository": "flint-gate",
+      "defaultRevision": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "worktreePresent": true,
+      "worktreeHead": "4cf940a5b7c1405364d9ac1cc44c6fb95156b8c7",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t0",
+      "state": "initiative-doc-ahead"
+    },
+    {
+      "repository": "flint-realtime-fabric",
+      "defaultRevision": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "worktreePresent": true,
+      "worktreeHead": "941e2508797cc9e990e849bd798c4447d0125f11",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t0",
+      "state": "initiative-doc-ahead"
+    },
+    {
+      "repository": "flint-forge",
+      "defaultRevision": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "worktreePresent": true,
+      "worktreeHead": "8068c94ce74f99a6932d5dc2bfa8bd941d4cf001",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t0",
+      "state": "initiative-doc-ahead"
+    },
+    {
+      "repository": "surreal-memory-server",
+      "defaultRevision": "2d8e3ceea13b8c448a7611353cb86f233046f448",
+      "worktreePresent": true,
+      "worktreeHead": "a335fdfe6b7f6f8789055756b7b068f6b3a015ee",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t8",
+      "state": "stale-after-i1-merge"
+    },
+    {
+      "repository": "prometheus-skill-pack",
+      "defaultRevision": "e9520f5832c598270bcfee79a6e9af39853d2760",
+      "worktreePresent": false,
+      "worktreeHead": null,
+      "worktreeBranch": null,
+      "worktreeDivergence": null,
+      "state": "manifest-worktree-retired"
+    },
+    {
+      "repository": "prometheus-skills-mini",
+      "defaultRevision": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
+      "worktreePresent": false,
+      "worktreeHead": null,
+      "worktreeBranch": null,
+      "worktreeDivergence": null,
+      "state": "manifest-worktree-retired-source-owned-by-shipping-closeout"
+    },
+    {
+      "repository": "know-me-app",
+      "defaultRevision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "worktreePresent": true,
+      "worktreeHead": "b07b2d1fd31390bd44df39faa203e2e49c412f87",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t0",
+      "state": "initiative-doc-ahead"
+    },
+    {
+      "repository": "know-me-system",
+      "defaultRevision": "c561d89e783264ef1215764db69e57493c4b815b",
+      "worktreePresent": true,
+      "worktreeHead": "390c1520421c6151ed3c1a397daf86d4550c45df",
+      "worktreeBranch": "codex/agent-fabric-convergence",
+      "worktreeDivergence": "1\t0",
+      "state": "initiative-doc-ahead"
+    }
+  ],
+  "mergedI1": {
+    "universal-agent-runtime": "79414bb7e134dad45330008999ee1dca999d44af",
+    "the-boss": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad",
+    "prometheus-skills-mini": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
+    "prometheus-skill-pack": "e9520f5832c598270bcfee79a6e9af39853d2760",
+    "surreal-memory-server": "2d8e3ceea13b8c448a7611353cb86f233046f448",
+    "compass": "1ddd1d07979d67aa8ca715aec27fe8f3936bbb43"
+  },
+  "compatibility": {
+    "surrealDb330Image": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20",
+    "sameProcessBoundary": "BossFang remains on SurrealDB 3.2.4; C01.3 must reconcile or isolate same-process linkage",
+    "payloadPropagation": "mini/full gitlinks and The Boss surreal-memory metadata remain older than the merged 3.3.0 service source"
+  },
+  "activeDependency": {
+    "checkpoint": "D-UAR-P1",
+    "status": "pending-operator",
+    "requiredObservation": "Installed Windows x64 application launches UAR, displays effective port, and advances from 1906 when occupied"
+  }
+}
