@@ -999,6 +999,7 @@ mod tests {
         Session {
             id: SessionId::new(),
             agent_id,
+            parent_session_id: None,
             messages: Vec::new(),
             context_window_tokens: 0,
             label: None,
@@ -1114,8 +1115,14 @@ system_prompt = "s"
         }
 
         // The live shape: the kernel always builds an engine, so the engine branch is the one production takes.
-        let engine =
-            DefaultContextEngine::new(ContextEngineConfig::default(), Arc::clone(&substrate), None);
+        // BossFang's engine takes the semantic backend separately; the in-memory substrate is both, as in the context_engine tests.
+        let semantic: Arc<dyn librefang_memory::SemanticBackend> = substrate.clone();
+        let engine = DefaultContextEngine::new(
+            ContextEngineConfig::default(),
+            Arc::clone(&substrate),
+            semantic,
+            None,
+        );
         let session = empty_session(agent_id);
         let opts = LoopOptions::default();
 
@@ -1773,9 +1780,11 @@ system_prompt = "s"
             max_recall_results: 5,
             ..Default::default()
         };
+        let semantic: Arc<dyn librefang_memory::SemanticBackend> = substrate.clone();
         let engine = DefaultContextEngine::new(
             engine_cfg,
             Arc::clone(&substrate),
+            semantic,
             Some(Arc::new(AxisEmbedding)),
         );
 

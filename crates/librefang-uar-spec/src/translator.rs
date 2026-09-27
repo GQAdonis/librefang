@@ -35,7 +35,7 @@ use crate::types::{
     MemorySection, MetadataSection, SkillRef, SkillsSection, ToolsSection,
 };
 use librefang_types::agent::{
-    AgentManifest, ManifestCapabilities, ModelConfig, ModelMode, ResourceQuota, ScheduleMode,
+    AgentManifest, ManifestCapabilities, ModelConfig, ResourceQuota, ScheduleMode,
 };
 use std::collections::HashMap;
 
@@ -68,15 +68,14 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         .unwrap_or_else(|| artifact.identity.persona.clone());
 
     let model = ModelConfig {
+        // UAR-AGENT-MD always names a concrete `provider/model`, so the agent
+        // pins it (`fixed`). The spec's `execution.mode` is orchestration
+        // (sequential/parallel/reactive), not model selection, so it does not
+        // map to `ModelMode::Flexible` / `router_override`.
+        mode: librefang_types::agent::ModelMode::default(),
+        router_override: None,
         provider,
         model: model_name,
-        // UAR-AGENT-MD names one provider/model pair outright; it has no notion
-        // of a model *mode* or a per-agent router override. `ModelMode::Fixed`
-        // (the derived default) honours the pair the artifact declared, and
-        // `None` leaves complexity-based routing to the kernel rather than
-        // pinning the agent to a profile the artifact never asked for.
-        mode: ModelMode::default(),
-        router_override: None,
         // Upstream widened these to `Option`, where `None` means "inherit".
         // A UAR artifact that declares no per-turn budget should inherit
         // rather than pin the old hardcoded 4096 ceiling.
@@ -86,6 +85,11 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         top_p: None,
         frequency_penalty: None,
         presence_penalty: None,
+        // Typed local-runtime samplers (#8290). UAR-AGENT-MD has no sampling
+        // section, so these inherit (`None` omits them from the request).
+        top_k: None,
+        min_p: None,
+        repeat_penalty: None,
         system_prompt,
         api_key_env: None,
         base_url: None,
@@ -129,13 +133,6 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         // default), NOT `Some(vec![])` ("declared, grants nothing").
         memory_read: None,
         memory_write: None,
-        // Per-agent media capability routing. A UAR artifact never declares
-        // these keys, and an empty `CapabilityRouting` is exactly what
-        // "inherit the kernel-global `[capabilities]` block" looks like — see
-        // the field docs on `ManifestCapabilities::routing`. Every field is an
-        // `Option<CapabilityTarget>`, so this grants nothing and denies
-        // nothing: it defers.
-        routing: librefang_types::media::CapabilityRouting::default(),
         agent_spawn: false,
         agent_message: Vec::new(),
         shell: if artifact.capabilities.code_execution {
@@ -145,6 +142,10 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         },
         ofp_discover: false,
         ofp_connect: Vec::new(),
+        // Per-agent media capability routing. UAR's `image_generation` is a
+        // boolean feature flag, not a `provider/model` route target, so the
+        // translated agent inherits the kernel-global `[capabilities]` block.
+        routing: librefang_types::media::CapabilityRouting::default(),
     };
 
     let tags = artifact.metadata.tags.clone();
@@ -389,6 +390,24 @@ model: anthropic/claude-sonnet-4-20250514
         assert_eq!(manifest.model.provider, "anthropic");
         assert_eq!(manifest.model.model, "claude-sonnet-4-20250514");
         assert_eq!(manifest.model.provider, "anthropic"); // streaming flag not on ModelConfig
+    }
+
+    /// UAR-AGENT-MD has no sampling, router or media-routing section, so the
+    /// fields upstream added in the 2026-09-27 sync (#8290 samplers, model
+    /// router `mode`/`router_override`, per-agent `capabilities.routing`) must
+    /// inherit rather than pin a value. If the spec grows an equivalent, this
+    /// test is the place to assert the new mapping.
+    #[test]
+    fn artifact_to_manifest_inherits_fields_without_uar_equivalent() {
+        let artifact = parser::parse(MINIMAL_DOC).unwrap();
+        let manifest = artifact_to_manifest(&artifact).unwrap();
+        let m = &manifest.model;
+        assert_eq!(m.mode, librefang_types::agent::ModelMode::Fixed);
+        assert!(m.router_override.is_none());
+        assert_eq!(m.top_k, None);
+        assert_eq!(m.min_p, None);
+        assert_eq!(m.repeat_penalty, None);
+        assert!(manifest.capabilities.routing.is_empty());
     }
 
     #[test]

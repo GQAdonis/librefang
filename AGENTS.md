@@ -5,12 +5,12 @@
 LibreFang is an open-source **Agent Operating System** written in Rust.
 It manages AI agents (LLM-backed), their tools, memory, messaging channels, and inter-agent networking.
 
-- **Language**: Rust (edition 2021, MSRV 1.94.1)
-- **Async runtime**: tokio
-- **Web framework**: axum 0.8 (HTTP + WebSocket)
-- **Database**: SQLite via rusqlite (bundled)
-- **Config**: TOML (`~/.librefang/config.toml`)
-- **Default API address**: `http://127.0.0.1:4545`
+- Language: Rust, edition 2021, MSRV 1.95.0
+- Async: tokio
+- Web: axum 0.8 (HTTP + WebSocket)
+- DB: SurrealDB via `librefang-storage` (embedded RocksDB or remote ws/http); SQLite via bundled rusqlite remains the upstream-compatible fallback
+- Config: TOML at `~/.librefang/config.toml`
+- API: `http://127.0.0.1:4545` (default)
 
 ## Workspace Structure
 
@@ -246,19 +246,16 @@ migration files in `crates/librefang-storage/src/migrations/sql/`. Feature: `sur
 (default). After upstream merge, map any new upstream SQLite schema changes to new `.surql`
 migration files and register them in `src/migrations/mod.rs`.
 
-**Version pin**: `surrealdb = "=3.2.4"` **and** `surrealdb-core = "=3.2.4"` in workspace
-`Cargo.toml` — both move together, since `=` on the client does not constrain core. Do NOT
-upgrade without coordinating surreal-memory and UAR git refs — version drift breaks the build.
+**Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=3.3.0`, in workspace `Cargo.toml` — the three move together, since `=` on the client does not constrain the other two.
+Do NOT upgrade without moving the `surreal-memory` rev in step (currently `b7e2093`, which pins `=3.3.0` itself) — version drift breaks the build.
+UAR runs as a sidecar and no longer links surrealdb in-process.
 
 ### surreal-memory Integration (`librefang-memory` surreal backends)
 
 BossFang memory uses `surreal-memory` from `https://github.com/Prometheus-AGS/surreal-memory-server`.
 Implementation in `crates/librefang-memory/src/backends/surreal*.rs` (9 backend files).
-Dependency is pinned to `branch = "main"`; run `cargo update -p surreal-memory` after
-every upstream merge to pull the latest connection-architecture fixes (most recently
-the 2026-05-24 ArcSwap rewrite + typed `RetryAction` + `SURREAL_QUERY_TIMEOUT_MS` env
-var + embedded in-flight semaphore — the `MemoryStorage` trait surface is held stable,
-so picking it up is typically zero-risk on our side).
+The dependency is pinned by `rev` (currently `b7e2093`), not a branch, so a bump is a deliberate edit of the workspace `Cargo.toml` followed by `cargo update -p surreal-memory`.
+Its `surrealdb = "=3.3.0"` pin is exact, so the rev and our SurrealDB pins move together.
 
 Never remove; never switch to upstream's SQLite memory backend. The `embedded` feature must
 remain active (no external SurrealDB service required).

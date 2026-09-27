@@ -24,7 +24,8 @@ fn read_agent_skills_registry(
     params(("id" = String, Path, description = "Agent ID")),
     request_body(content = crate::types::JsonObject, description = "Model name and optional provider"),
     responses(
-        (status = 200, description = "Change an agent's LLM model", body = crate::types::JsonObject)
+        (status = 200, description = "Change an agent's LLM model", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn set_model(
@@ -243,7 +244,8 @@ pub struct SetAgentToolsRequest {
         description = "Tool configuration fields. `capabilities_tools` is the grant surface; `tool_allowlist` and `tool_blocklist` only ever narrow what it already admits, because the kernel applies them afterwards as a retain. An allowlist entry naming a builtin or skill tool that `capabilities_tools` excludes therefore grants nothing — add it to `capabilities_tools` instead. MCP tools are the exception: they are not filtered by `capabilities_tools`, so an `mcp_*` allowlist entry does select among them (#6609). `disabled` is the `tools_disabled` master switch, evaluated before all three filters. Every field is a tri-state: omit it to leave the stored value alone, send it to write exactly what it says (#7742)."
     ),
     responses(
-        (status = 200, description = "Updated tool configuration, echoing the stored `capabilities_tools`, `tool_allowlist`, `tool_blocklist` and `disabled` values. Carries an additional `warnings` array of strings naming each stored `tool_allowlist` entry that provably cannot admit any tool; the key is absent when there is nothing to report. The check runs whenever the request submits `tool_allowlist` or `capabilities_tools` — narrowing the grant surface is itself a way to render a stored entry inert — and is skipped for a request that submits only `tool_blocklist` or only `disabled`, and for an agent left with `tools_disabled = true`, where no allowlist entry can admit anything anyway.", body = crate::types::JsonObject)
+        (status = 200, description = "Updated tool configuration, echoing the stored `capabilities_tools`, `tool_allowlist`, `tool_blocklist` and `disabled` values. Carries an additional `warnings` array of strings naming each stored `tool_allowlist` entry that provably cannot admit any tool; the key is absent when there is nothing to report. The check runs whenever the request submits `tool_allowlist` or `capabilities_tools` — narrowing the grant surface is itself a way to render a stored entry inert — and is skipped for a request that submits only `tool_blocklist` or only `disabled`, and for an agent left with `tools_disabled = true`, where no allowlist entry can admit anything anyway.", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn set_agent_tools(
@@ -421,7 +423,8 @@ pub async fn get_agent_skills(
     params(("id" = String, Path, description = "Agent ID")),
     request_body(content = crate::types::JsonArray, description = "Array of skill names"),
     responses(
-        (status = 200, description = "Update an agent's skill allowlist", body = crate::types::JsonObject)
+        (status = 200, description = "Update an agent's skill allowlist", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn set_agent_skills(
@@ -565,7 +568,8 @@ pub struct SetAgentMcpServersRequest {
     request_body(content = SetAgentMcpServersRequest, description = "Object containing the MCP server allowlist"),
     responses(
         (status = 200, description = "Update an agent's MCP server allowlist", body = crate::types::JsonObject),
-        (status = 400, description = "Malformed request body", body = crate::types::JsonObject)
+        (status = 400, description = "Malformed request body", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn set_agent_mcp_servers(
@@ -682,6 +686,13 @@ pub async fn get_agent_channels(
     // bot's messages arrive at it. Surfacing both from one place is what lets an
     // agent's own editor answer "which of the three Telegram bots is mine?",
     // which previously could only be read from the channel's side.
+    //
+    // `resolves` is the difference between "this bot belongs to another agent" and "this bot is wired to nothing and its messages are dropped", which the binding alone cannot express.
+    // `ChannelRouter::resolve_bindings` looks `binding.agent` up by exact key and `continue`s on a miss (`router.rs`), so a binding naming an agent that was never spawned — or has since been deleted, or is a typo — delivers nowhere.
+    // Reported as `false` rather than by omitting the instance: the row is real, it is only its target that is not, and an operator needs to see the one to fix the other.
+    //
+    // The registry's `name_index` and the router's `agent_name_cache` are separate maps, but both are exact-keyed and both written when an agent registers, so this answer and the router's cannot disagree.
+    let registry = state.kernel.agent_registry();
     let instances: Vec<serde_json::Value> = config
         .sidecar_channels
         .iter()
@@ -691,6 +702,10 @@ pub async fn get_agent_channels(
                 "channel_type": sc.channel_type.clone().unwrap_or_else(|| sc.name.clone()),
                 "agent": sc.agent,
                 "bound_to_this_agent": sc.agent.as_deref() == Some(agent_name.as_str()),
+                "resolves": sc
+                    .agent
+                    .as_deref()
+                    .is_some_and(|name| registry.find_by_name(name).is_some()),
             })
         })
         .collect();
@@ -737,7 +752,8 @@ pub struct SetAgentChannelsRequest {
     request_body(content = SetAgentChannelsRequest, description = "Object containing the channel allowlist"),
     responses(
         (status = 200, description = "Update an agent's channel allowlist", body = crate::types::JsonObject),
-        (status = 400, description = "Malformed request body", body = crate::types::JsonObject)
+        (status = 400, description = "Malformed request body", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn set_agent_channels(
@@ -796,7 +812,7 @@ pub async fn set_agent_channels(
     tag = "agents",
     params(("id" = String, Path, description = "Agent ID")),
     responses(
-        (status = 200, description = "An agent's model routing mode and router override", body = crate::types::JsonObject),
+        (status = 200, description = "An agent's model routing mode and router override, plus `routing_inert_reason` (`\"stable_mode\"` when the kernel mode makes routing inert, else null) and `pinned_model`", body = crate::types::JsonObject),
         (status = 400, description = "Malformed agent id", body = crate::types::JsonObject),
         (status = 404, description = "Agent not found, or not visible to the caller", body = crate::types::JsonObject)
     )
@@ -852,6 +868,10 @@ pub async fn get_agent_model_routing(
             // per-agent opt-out was write-only before: no surface could
             // know it was set.
             "fixed": router_override.map(|o| o.fixed).unwrap_or(false),
+            // `"stable_mode"` when the kernel will run no router for this agent whatever is stored above; `null` when routing is live (#8446).
+            "routing_inert_reason": super::model_routing_inert_reason(&state),
+            // The model Stable mode applies instead of any routed choice, so a surface reporting the inert reason can name what actually runs; `null` means the manifest model.
+            "pinned_model": entry.manifest.pinned_model,
         })),
     )
 }
@@ -874,7 +894,7 @@ pub async fn get_agent_model_routing(
     params(("id" = String, Path, description = "Agent ID")),
     request_body(content = crate::types::JsonObject, description = "Mode, allowed profiles, cost budget and default profile"),
     responses(
-        (status = 200, description = "Updated model routing settings", body = crate::types::JsonObject),
+        (status = 200, description = "Updated model routing settings, with the same fields as the GET; `routing_inert_reason` is `\"stable_mode\"` when the saved settings have no effect under the current kernel mode, else null", body = crate::types::JsonObject),
         (status = 400, description = "Invalid agent id, mode or cost budget", body = crate::types::JsonObject),
         (status = 404, description = "Agent not found, or not visible to the caller", body = crate::types::JsonObject),
         (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
@@ -1038,6 +1058,11 @@ pub async fn set_agent_model_routing(
                 "default_profile": router_override
                     .as_ref()
                     .and_then(|o| o.default_profile.clone()),
+                // Echoed so the response carries the same fields as the GET: the dashboard seeds its cache from it, and a missing key would briefly hide the opt-out and inert banners after every save.
+                "fixed": router_override.as_ref().map(|o| o.fixed).unwrap_or(false),
+                // The save is valid and persisted, but in Stable mode it has no effect until the mode changes; say so in the response rather than reporting plain success (#8446).
+                "routing_inert_reason": super::model_routing_inert_reason(&state),
+                "pinned_model": entry.manifest.pinned_model,
             })),
         ),
         Err(e) => (
@@ -1136,11 +1161,17 @@ pub struct PatchAgentConfigRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub system_prompt: Option<String>,
+    /// Appearance, stored in the agent registry.
     pub emoji: Option<String>,
+    /// Appearance, stored in the agent registry.
     pub avatar_url: Option<String>,
+    /// Appearance, stored in the agent registry.
     pub color: Option<String>,
+    /// Personality, written into the front matter of the agent's `.identity/IDENTITY.md`, which is what reaches the prompt (#8447).
     pub archetype: Option<String>,
+    /// Personality, written into the front matter of the agent's `.identity/IDENTITY.md`, which is what reaches the prompt (#8447).
     pub vibe: Option<String>,
+    /// Personality, written into the front matter of the agent's `.identity/IDENTITY.md`, which is what reaches the prompt (#8447).
     pub greeting_style: Option<String>,
     pub model: Option<String>,
     pub provider: Option<String>,
@@ -1171,6 +1202,18 @@ pub struct PatchAgentConfigRequest {
     #[serde(default, deserialize_with = "deserialize_present")]
     #[schema(value_type = Option<f32>)]
     pub presence_penalty: Option<Option<f32>>,
+    /// Top-k sampling (≥ 1). Same tri-state as [`Self::max_tokens`].
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<u32>)]
+    pub top_k: Option<Option<u32>>,
+    /// Minimum-probability (min-p) sampling (0.0–1.0). Same tri-state as [`Self::max_tokens`].
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<f32>)]
+    pub min_p: Option<Option<f32>>,
+    /// Repetition penalty (0.01–2.0, `1.0` = off). Same tri-state as [`Self::max_tokens`].
+    #[serde(default, deserialize_with = "deserialize_present")]
+    #[schema(value_type = Option<f32>)]
+    pub repeat_penalty: Option<Option<f32>>,
     /// Context-window override in tokens — a limit, not a preference.
     /// Same tri-state as [`Self::max_tokens`]; `null` returns resolution to
     /// the registry / probe chain.
@@ -1197,7 +1240,11 @@ pub struct PatchAgentConfigRequest {
     params(("id" = String, Path, description = "Agent ID")),
     request_body(content = PatchAgentConfigRequest, description = "Agent config fields to update"),
     responses(
-        (status = 200, description = "Hot-update agent name, description, system prompt, identity, and model", body = crate::types::JsonObject)
+        (status = 200, description = "Hot-update agent name, description, system prompt, identity, and model", body = crate::types::JsonObject),
+        (status = 400, description = "A field is malformed: an invalid agent ID, colour or avatar URL, a personality value containing a line break, or personality values that would grow IDENTITY.md past the 32 KiB identity-file cap. A rejected personality value changes nothing", body = crate::types::JsonObject),
+        (status = 404, description = "Agent not found", body = crate::types::JsonObject),
+        (status = 409, description = "The new name is taken, or a personality field was sent and the agent's IDENTITY.md cannot be edited in place (missing, not a regular file, or its front matter is never closed). When a personality field was sent, nothing was changed", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 #[allow(private_interfaces)]
@@ -1283,14 +1330,53 @@ pub async fn patch_agent_config(
         }
     }
 
+    let personality = AgentPersonality {
+        archetype: req.archetype,
+        vibe: req.vibe,
+        greeting_style: req.greeting_style,
+    };
+    if let Some(refusal) = super::reject_multiline_personality(&personality, &t) {
+        return refusal;
+    }
+
+    // Personality goes to IDENTITY.md, the file the prompt reads, not the registry (#8447).
+    // It is the first thing written, because every later step only edits the in-memory registry, which reaches disk through the `save_agent` at the end: an IDENTITY.md that refuses the edit (400 / 409) or fails to write would otherwise return early with a rename or description already applied in memory, answered as an error and silently reverted on restart.
+    if !personality.front_matter_fields().is_empty() {
+        // The one later step that can refuse the request is the rename, so check it before the file changes: a rename that is going to answer 409 must not leave a personality edit behind.
+        if let Some(new_name) = req.name.as_deref().filter(|name| !name.is_empty()) {
+            let refused = librefang_types::agent::validate_agent_name(new_name)
+                .err()
+                .or_else(|| {
+                    state
+                        .kernel
+                        .agent_registry()
+                        .find_by_name(new_name)
+                        .map(|_| {
+                            librefang_types::error::LibreFangError::AgentAlreadyExists(
+                                new_name.to_string(),
+                            )
+                        })
+                });
+            if let Some(e) = refused {
+                let e = crate::error::KernelError::from(e);
+                return (
+                    StatusCode::CONFLICT,
+                    Json(
+                        serde_json::json!({"error": t.t_args("api-error-generic", &[("error", &e.to_string())])}),
+                    ),
+                );
+            }
+        }
+        if let Err(e) = state.kernel.set_agent_personality(agent_id, &personality) {
+            return super::personality_write_error(&e, &t);
+        }
+    }
+
     // Update name
     if let Some(ref new_name) = req.name {
         if !new_name.is_empty() {
-            if let Err(e) = state
-                .kernel
-                .agent_registry()
-                .update_name(agent_id, new_name.clone())
-            {
+            // `rename_agent`, not the bare registry rename, so IDENTITY.md's front matter follows the new name (#8469).
+            if let Err(e) = state.kernel.rename_agent(agent_id, new_name.clone()) {
                 return (
                     StatusCode::CONFLICT,
                     Json(
@@ -1331,16 +1417,12 @@ pub async fn patch_agent_config(
         }
     }
 
-    // Update identity fields (merge — only overwrite provided fields)
-    let has_identity_field = req.emoji.is_some()
-        || req.avatar_url.is_some()
-        || req.color.is_some()
-        || req.archetype.is_some()
-        || req.vibe.is_some()
-        || req.greeting_style.is_some();
+    // Update appearance fields (merge — only overwrite provided fields)
+    let has_appearance_field =
+        req.emoji.is_some() || req.avatar_url.is_some() || req.color.is_some();
 
-    if has_identity_field {
-        // Read current identity, merge with provided fields.
+    if has_appearance_field {
+        // Read current appearance, merge with provided fields.
         // The merge itself lives in `merge_agent_identity` so this handler and `PATCH /api/agents/{id}/identity` cannot drift apart again (#6608).
         let current = state
             .kernel
@@ -1354,9 +1436,6 @@ pub async fn patch_agent_config(
                 emoji: req.emoji,
                 avatar_url: req.avatar_url,
                 color: req.color,
-                archetype: req.archetype,
-                vibe: req.vibe,
-                greeting_style: req.greeting_style,
             },
         );
         if state
@@ -1487,6 +1566,17 @@ pub async fn patch_agent_config(
             -2.0..=2.0,
             "presence_penalty must be between -2.0 and 2.0",
         ),
+        (
+            req.min_p.flatten(),
+            0.0..=1.0,
+            "min_p must be between 0.0 and 1.0",
+        ),
+        // `0` would divide every logit by zero in llama.cpp and vLLM rejects it; `1.0` is "off".
+        (
+            req.repeat_penalty.flatten(),
+            0.01..=2.0,
+            "repeat_penalty must be between 0.01 and 2.0",
+        ),
     ] {
         if value.is_some_and(|v| !range.contains(&v)) {
             return (
@@ -1494,6 +1584,12 @@ pub async fn patch_agent_config(
                 Json(serde_json::json!({ "error": message })),
             );
         }
+    }
+    if let Some(Some(0)) = req.top_k {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "top_k must be greater than 0"})),
+        );
     }
     if let Some(Some(0)) = req.max_tokens {
         return (
@@ -1525,6 +1621,10 @@ pub async fn patch_agent_config(
             .map(|v| registry.update_frequency_penalty(agent_id, v)),
         req.presence_penalty
             .map(|v| registry.update_presence_penalty(agent_id, v)),
+        req.top_k.map(|v| registry.update_top_k(agent_id, v)),
+        req.min_p.map(|v| registry.update_min_p(agent_id, v)),
+        req.repeat_penalty
+            .map(|v| registry.update_repeat_penalty(agent_id, v)),
         req.context_window
             .map(|v| registry.update_context_window(agent_id, v)),
         req.max_output_tokens

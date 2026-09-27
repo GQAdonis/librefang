@@ -243,7 +243,7 @@ pub fn upsert_sidecar_in_vec(
 }
 
 #[cfg(all(test, feature = "surreal-backend"))]
-mod tests {
+mod config_store_tests {
     use super::*;
 
     #[test]

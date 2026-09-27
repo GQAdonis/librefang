@@ -4,7 +4,11 @@ use super::*;
 // Shared manifest resolution helper
 // ---------------------------------------------------------------------------
 /// Maximum manifest size (1MB) to prevent parser memory exhaustion.
-const MAX_MANIFEST_SIZE: usize = 1024 * 1024;
+///
+/// `pub(crate)` because every surface that accepts a whole agent manifest — the
+/// agent spawn path here and `PUT /api/templates/{name}/toml` in
+/// `agent_templates` — must enforce the same cap, not just this one.
+pub(crate) const MAX_MANIFEST_SIZE: usize = 1024 * 1024;
 
 /// Resolved manifest ready for spawning.
 struct ResolvedManifest {
@@ -725,9 +729,23 @@ pub async fn list_agents(
 
     // `e` is &Arc<AgentEntry>; `as_ref()` on Arc yields the &AgentEntry the
     // helper expects without forcing a manifest deep-clone (#3569).
+    // Resolved per row rather than once for the page: the provisioning state is an `ArcSwap`
+    // load behind a map lookup, and it is empty on every installation that has not opted in, so
+    // the alternative — a second pre-pass building a name index — would cost more than it saves.
     let items: Vec<serde_json::Value> = agents
         .iter()
-        .map(|e| enrich_agent_json(e.as_ref(), &dm, catalog, bulk_stats.as_ref()))
+        .map(|e| {
+            let provisioned = state
+                .kernel
+                .provisioned_resource(librefang_kernel::provisioning::ResourceKind::Agent, &e.name);
+            enrich_agent_json(
+                e.as_ref(),
+                &dm,
+                catalog,
+                bulk_stats.as_ref(),
+                provisioned.as_ref(),
+            )
+        })
         .collect();
 
     Json(PaginatedResponse {
@@ -790,7 +808,8 @@ const DELETE_AGENT_WARNING: &str = "Deleting this agent will permanently remove 
     responses(
         (status = 200, description = "Agent killed and canonical UUID purged"),
         (status = 400, description = "Malformed agent ID"),
-        (status = 409, description = "Confirmation required, or agent is hand-owned")
+        (status = 409, description = "Confirmation required, or agent is hand-owned"),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn kill_agent(
@@ -1105,6 +1124,9 @@ pub async fn get_agent(
                 "top_p": entry.manifest.model.top_p,
                 "frequency_penalty": entry.manifest.model.frequency_penalty,
                 "presence_penalty": entry.manifest.model.presence_penalty,
+                "top_k": entry.manifest.model.top_k,
+                "min_p": entry.manifest.model.min_p,
+                "repeat_penalty": entry.manifest.model.repeat_penalty,
                 "context_window": entry.manifest.model.context_window,
                 "max_output_tokens": entry.manifest.model.max_output_tokens,
             },
@@ -1116,6 +1138,16 @@ pub async fn get_agent(
             "description": entry.manifest.description,
             "source_template": entry.manifest.source_template,
             "tags": entry.manifest.tags,
+            // Whether the deployment declares this agent, and where. `null` when it is the operator's own.
+            //
+            // This payload is hand-built rather than going through `enrich_agent_json`, so the field has to be spelled here as well — and the detail drawer is where it matters most, since that is the surface offering the identity and avatar controls the guard refuses (#8354).
+            "provisioned": state
+                .kernel
+                .provisioned_resource(
+                    librefang_kernel::provisioning::ResourceKind::Agent,
+                    &entry.name,
+                )
+                .map(|p| serde_json::json!({ "source": p.source })),
             "identity": {
                 "emoji": entry.identity.emoji,
                 "avatar_url": entry.identity.avatar_url,
@@ -1136,6 +1168,8 @@ pub async fn get_agent(
             // Without this the dashboard showed `mcp_servers = ["*"]` on an `mcp_disabled` agent as a live grant (#6565).
             "mcp_disabled": entry.manifest.mcp_disabled,
             "fallback_models": entry.manifest.fallback_models,
+            // `"stable_mode"` when the kernel mode stops both routers (profile and tier) from choosing this agent's model, so the manifest's `pinned_model` (else `model` above) is what runs; `null` when routing is live (#8446).
+            "routing_inert_reason": super::model_routing_inert_reason(&state),
             "auto_evolve": entry.manifest.auto_evolve,
             "web_search_augmentation": entry.manifest.web_search_augmentation,
             "injected_footprint_tokens": injected_footprint_tokens,
@@ -1238,7 +1272,8 @@ pub async fn list_agent_runtime(
     params(("id" = String, Path, description = "Agent ID")),
     request_body(content = crate::types::JsonObject, description = "Partial agent fields to update"),
     responses(
-        (status = 200, description = "Partially update an agent (name, description, model, system prompt)", body = crate::types::JsonObject)
+        (status = 200, description = "Partially update an agent (name, description, model, system prompt)", body = crate::types::JsonObject),
+        (status = 423, description = "This agent is provisioned by the deployment; its manifest cannot be changed through the API", body = crate::types::JsonObject)
     )
 )]
 pub async fn patch_agent(
@@ -1328,11 +1363,8 @@ pub async fn patch_agent(
 
     // Apply partial updates using dedicated registry methods
     if let Some(name) = body.get("name").and_then(|v| v.as_str()) {
-        if let Err(e) = state
-            .kernel
-            .agent_registry()
-            .update_name(agent_id, name.to_string())
-        {
+        // `rename_agent`, not the bare registry rename, so IDENTITY.md's front matter follows the new name (#8469).
+        if let Err(e) = state.kernel.rename_agent(agent_id, name.to_string()) {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(
@@ -1522,6 +1554,82 @@ pub async fn reload_agent_manifest(
                 status,
                 Json(serde_json::json!({"error": kernel_err_body(status, &e, &t)})),
             )
+        }
+    }
+}
+
+/// GET /api/agents/{id}/manifest — Get the agent's full manifest as raw TOML.
+///
+/// Powers the dashboard's full manifest editor (#7742): the Configure
+/// drawer's quick-edit widgets only cover a handful of fields, so this
+/// endpoint hands back every field `AgentManifest` carries for
+/// `AgentManifestForm` to parse and pre-fill, with `PATCH /api/agents/{id}`
+/// (`manifest_toml`) as the matching write path. Renders the live
+/// in-memory manifest the same way `persist_manifest_to_disk` writes
+/// `agent.toml`, rather than re-reading the on-disk file, so the response
+/// always reflects the latest state even if a prior partial PATCH hasn't
+/// flushed to disk yet.
+#[utoipa::path(
+    get,
+    path = "/api/agents/{id}/manifest",
+    tag = "agents",
+    params(("id" = String, Path, description = "Agent ID")),
+    responses(
+        (status = 200, description = "Agent manifest as raw TOML", content_type = "application/toml"),
+        (status = 400, description = "Invalid agent ID"),
+        (status = 404, description = "Agent not found")
+    )
+)]
+pub async fn get_agent_manifest_toml(
+    State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+    Path(id): Path<String>,
+    lang: Option<axum::Extension<RequestLanguage>>,
+) -> impl IntoResponse {
+    use axum::body::Body;
+
+    let t = ErrorTranslator::new(super::resolve_lang(lang.as_ref()));
+    let agent_id: AgentId = match id.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            return ApiErrorResponse::bad_request(t.t("api-error-agent-invalid-id"))
+                .with_code("invalid_agent_id")
+                .into_response();
+        }
+    };
+    let entry = match state.kernel.agent_registry().get(agent_id) {
+        Some(e) => e,
+        None => {
+            return ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
+                .with_code("agent_not_found")
+                .into_response();
+        }
+    };
+    if !super::super::can_access_agent(&state, agent_id, api_user.as_ref()) {
+        return ApiErrorResponse::not_found(t.t("api-error-agent-not-found"))
+            .with_code("agent_not_found")
+            .into_response();
+    }
+    // Localize before dropping the translator (`ErrorTranslator` is
+    // `!Send`) — the toml::to_string_pretty call below doesn't await, but
+    // matching the established pattern (see `patch_agent`) keeps this file
+    // consistent and future-proof against a refactor that adds one.
+    let internal_error_msg = t.t("api-error-internal");
+    drop(t);
+    match toml::to_string_pretty(&entry.manifest) {
+        Ok(text) => (
+            StatusCode::OK,
+            [(axum::http::header::CONTENT_TYPE, "application/toml")],
+            Body::from(text),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "failed to serialize agent manifest to TOML");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": internal_error_msg})),
+            )
+                .into_response()
         }
     }
 }

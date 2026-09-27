@@ -936,6 +936,11 @@ pub(crate) fn is_scrubbed_config_key(key: &str) -> bool {
         "api_base_url",
         "fork_owner",
         "base_branch",
+        // Release-path destination (#8180): `librefang skill publish` creates
+        // releases and uploads assets under this organisation with the same
+        // token, so writing it retargets those uploads the way `fork_owner`
+        // retargets promotion pushes.
+        "release_org",
     ];
     // Round-4 review of #4678: env-var-name redirects. Codebase
     // pervasively uses `*_token_env`, `*_password_env`,
@@ -1319,7 +1324,19 @@ async fn dashboard_snapshot_compute(state: &Arc<AppState>) -> serde_json::Value 
             .iter()
             // `e` here is &&Arc<AgentEntry>; deref through the ref + Arc to
             // hand `enrich_agent_json` the `&AgentEntry` it expects.
-            .map(|e| super::agents::enrich_agent_json(e.as_ref(), &dm, catalog, None))
+            .map(|e| {
+                let provisioned = state.kernel.provisioned_resource(
+                    librefang_kernel::provisioning::ResourceKind::Agent,
+                    &e.name,
+                );
+                super::agents::enrich_agent_json(
+                    e.as_ref(),
+                    &dm,
+                    catalog,
+                    None,
+                    provisioned.as_ref(),
+                )
+            })
             .collect()
     };
 

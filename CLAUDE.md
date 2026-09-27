@@ -369,10 +369,9 @@ as the default persistent storage, with SQLite retained only as a legacy opt-in 
 **Crate**: `librefang-storage` (`crates/librefang-storage/`)
 **Migration files**: `crates/librefang-storage/src/migrations/sql/*.surql` (24+ migrations)
 **Feature flags**: `surreal-backend` (default), `sqlite-backend` (opt-in legacy)
-**Version pin**: `surrealdb = { version = "=3.2.4" }` **and** `surrealdb-core = { version = "=3.2.4" }`
-  in workspace `Cargo.toml` — both lines move together. `=` on `surrealdb` does NOT transitively
-  constrain `surrealdb-core`, so pinning only the former lets `cargo update` drift core onto a
-  newer minor that breaks the client. Coordinate with surreal-memory and UAR before changing.
+**Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=3.3.0`, in workspace `Cargo.toml` — the three lines move together.
+  `=` on `surrealdb` does NOT transitively constrain `surrealdb-core` or `surrealdb-types`, so `librefang-storage` lists both as direct optional deps to make the pins load-bearing.
+  Coordinate with surreal-memory before changing.
 
 **After every upstream merge:**
 1. Check if upstream added new SQLite `CREATE TABLE` or `ALTER TABLE` statements
@@ -390,22 +389,17 @@ SurrealDB-native memory substrate with semantic search, knowledge graphs, and ta
 
 **Crate**: `librefang-memory` (`crates/librefang-memory/`)
 **Backends**: `crates/librefang-memory/src/backends/surreal*.rs` (9 backend files)
-**Dependency**: `surreal-memory = { git = "https://github.com/Prometheus-AGS/surreal-memory-server", branch = "main", features = ["embedded"] }`
+**Dependency**: `surreal-memory = { git = "https://github.com/Prometheus-AGS/surreal-memory-server.git", rev = "b7e2093a267ca8655fbe85693c0ddfc52711ab6b", default-features = false, features = ["embedded"] }` — pinned by `rev`; keep the URL/rev form byte-identical (see the comment in `Cargo.toml`).
 
 **After every upstream merge:**
 1. If upstream changes the `librefang-memory` API surface (e.g., `Arc<Mutex<Connection>>`
    → r2d2 `Pool`), update BossFang's surreal backend implementations to match
 2. Never remove the `surreal-backend` feature from `librefang-memory/Cargo.toml`
 3. The `embedded` feature on surreal-memory must remain — no external SurrealDB service needed
-4. Run `cargo update -p surreal-memory` to pull any new commits from `branch = "main"`
-   into `Cargo.lock`. surreal-memory's internal connection architecture changes
-   under us (most recently: 2026-05-24 ArcSwap rewrite + typed `RetryAction` +
-   `SURREAL_QUERY_TIMEOUT_MS` env var + embedded in-flight semaphore) but the
-   `MemoryStorage` trait surface is held stable — so picking up the latest is
-   typically zero-risk on our side. Two operational env vars surface from those
-   internals if you need them: `SURREAL_QUERY_TIMEOUT_MS` (per-query deadline,
-   default 10000 ms) and `SURREAL_EMBEDDED_MAX_INFLIGHT` (concurrent embedded
-   ops, default 16 = RocksDB default stripe count).
+4. surreal-memory is pinned by `rev`, not a branch, so a bump is a deliberate edit of the workspace `Cargo.toml` followed by `cargo update -p surreal-memory`.
+   Its `surrealdb` pin is exact, so a new rev usually moves our `surrealdb` / `surrealdb-core` / `surrealdb-types` pins with it (see Shared SurrealDB Version Pin).
+   Since rev `b7e2093` it retries SurrealDB 3.3 `TransactionConflict` errors on every write and shares one `Surreal<Any>` session rather than cloning per call (in SDK 3.x a clone is a new server-side session).
+   Two operational env vars surface from its internals: `SURREAL_QUERY_TIMEOUT_MS` (per-query deadline, default 10000 ms) and `SURREAL_EMBEDDED_MAX_INFLIGHT` (concurrent embedded ops, default 16 = RocksDB default stripe count).
 
 ### 3. Universal Agent Runtime (UAR) as a Runtime Provider
 
@@ -461,23 +455,23 @@ paper over a missing feature declaration — declare the feature and forward it.
 
 ### Shared SurrealDB Version Pin
 
-All three systems (librefang-storage, surreal-memory, UAR) must link the same surrealdb
-client. The workspace `Cargo.toml` pins:
+librefang-storage and surreal-memory link the same in-process surrealdb client.
+The workspace `Cargo.toml` pins:
 ```toml
-surrealdb = { version = "=3.2.4", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
-surrealdb-core = { version = "=3.2.4", default-features = false }
+surrealdb = { version = "=3.3.0", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb-core = { version = "=3.3.0", default-features = false }
+surrealdb-types = { version = "=3.3.0", default-features = false }
 ```
-Upgrade both lines together, and check the other two systems first.
+Upgrade the three lines together, and check surreal-memory first.
 Version drift causes duplicate dep link errors that break the entire build.
+Verify with `cargo tree -i surrealdb`, `-i surrealdb-core`, `-i surrealdb-types` and `-i surreal-memory`: each must show exactly one version.
 
-What each system demands, as of the 3.2.4 bump:
+What each system demands, as of the 3.3.0 bump:
 
-- `surreal-memory` pins a **caret** `^3.2.0`, which any 3.2.x satisfies — flexible.
-- `universal-agent-runtime` pins an **exact** `=3.2.4` (`Cargo.toml` in that repo) — rigid, and
-  historically the sole source of the lockstep constraint. Since phase-8 C-001 un-forced
-  `uar-driver` out of the default build, a default `cargo check` no longer links UAR at all, so
-  the exact pin only binds builds that opt into `--features uar-driver` (the `Dockerfile` image
-  does). Keep the two in step anyway: cargo cannot unify two different exact `=` pins.
+- `surreal-memory` (rev `b7e2093`) pins an **exact** `surrealdb = "=3.3.0"` and `surrealdb-types = "=3.3.0"` — rigid, so its rev and our pin must move in step.
+- `universal-agent-runtime` also pins `=3.3.0`, but it is no longer linked in-process: `uar-driver` in `librefang-llm-drivers` is an empty feature and UAR runs as a sidecar, so its pin does not bind this workspace.
+- The remote SurrealDB server (`k8s/base/surrealdb-statefulset.yaml`) runs `surrealdb/surrealdb:v3.3.0`, the same minor as the client.
+- Embedded (RocksDB) datastores are migrated in place, one way, the first time a 3.3.0 client opens them; take a copy of the embedded `librefang.surreal` / `librefang-memory.surreal` directories under the configured storage data dir before the first 3.3.0 boot if a rollback to 3.2.x must stay possible.
 
 ### 4. Env-var aliases (BOSSFANG_* preferred, LIBREFANG_* fallback)
 

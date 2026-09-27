@@ -1797,6 +1797,9 @@ pub enum RegistryPromotionMode {
 /// owns the token, the fork's own default branch as the PR base, a
 /// path-derived head-branch prefix, and no explicit commit author.
 ///
+/// `api_base_url` and `release_org` are also read by the release path — `librefang skill publish` and the GitHub-releases fallback of `librefang skill install` (`librefang-skills::marketplace`) — so one setting points both flows at the same GitHub, GitHub Enterprise Server included (#8180).
+/// That path creates a release on a repository and uploads an asset to it rather than opening a pull request, and ignores every other field here.
+///
 /// The GitHub token is deliberately *not* configured here.
 /// It continues to resolve from the `GITHUB_TOKEN` environment variable and
 /// then the vault, so no credential is readable back out of `GET /api/config`.
@@ -1821,6 +1824,13 @@ pub struct RegistryPromotionConfig {
     /// Ignored in `direct_push` mode, where there is no fork.
     #[serde(default)]
     pub fork_owner: Option<String>,
+    /// GitHub organisation or account that holds one repository per skill, which `librefang skill publish` creates its releases on and the marketplace install fallback downloads them from.
+    /// Defaults to `librefang-skills`.
+    /// Only the default repository is derived from it: `skill publish --repo owner/name` still names the repository outright.
+    /// Unused by the promotion flow, which targets `skills.registry_repo`.
+    /// Like `api_base_url` it is not writable through `POST /api/config/set`, because it picks the repository the operator's GitHub token uploads release assets to (#8180).
+    #[serde(default)]
+    pub release_org: Option<String>,
     /// Branch the pull request targets on the upstream registry, and the
     /// branch the head branch is cut from.
     /// Defaults to the default branch of the repository being pushed to.
@@ -2464,6 +2474,10 @@ impl std::fmt::Debug for AuthProfile {
 // ---------------------------------------------------------------------------
 
 /// Docker sandbox activation mode.
+///
+/// **Not wired into tool dispatch.** Nothing in the daemon matches on this value: `shell_exec` and `process_start` run as subprocesses on the daemon host whatever it is set to, and the only way into a container remains the separate `docker_exec` tool the model chooses for itself (#8220).
+/// The rest of `[docker]` — `enabled`, `scope`, `reuse_cool_secs`, `idle_timeout_secs`, `max_age_secs`, and the image / limits — is live and governs `docker_exec`'s containers.
+/// [`Self::is_wired_into_dispatch`] is the single source of truth for that, and the kernel warns at boot when a mode that does nothing is configured.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
 )]
@@ -2476,6 +2490,31 @@ pub enum DockerSandboxMode {
     NonMain,
     /// Use Docker for all agents.
     All,
+}
+
+impl DockerSandboxMode {
+    /// The mode's wire name, as it is written in `config.toml`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DockerSandboxMode::Off => "off",
+            DockerSandboxMode::NonMain => "non_main",
+            DockerSandboxMode::All => "all",
+        }
+    }
+
+    /// Whether selecting this mode actually changes where a tool call runs.
+    ///
+    /// Only `Off` does today, in the degenerate sense that it asks for nothing: no execution path matches on `[docker] mode`, so `non_main` and `all` are configuration an operator can set, read back from `GET /api/config`, and get nothing from (#8220).
+    /// Callers use this to warn an operator whose configuration is being silently ignored — the boot warning in `librefang-kernel`'s `boot.rs`.
+    ///
+    /// Written as an exhaustive match rather than a comparison against `Off` so that adding a variant, or wiring an existing one into dispatch, forces this answer to be revisited instead of inheriting a default.
+    /// This mirrors [`crate::tool_exec::BackendKind::is_wired_into_dispatch`], which carries the same shape for the same reason (#8221) — the two gaps are adjacent and an operator reaching for OS-level isolation can land on either.
+    pub fn is_wired_into_dispatch(self) -> bool {
+        match self {
+            DockerSandboxMode::Off => true,
+            DockerSandboxMode::NonMain | DockerSandboxMode::All => false,
+        }
+    }
 }
 
 /// Docker container lifecycle scope.
@@ -10220,5 +10259,38 @@ rule_sets = ["browser_handles", "pii_baseline"]
         assert!(!rule.matches("matrix", Some("acct"), "!other:server", None, &[]));
         // account_id mismatch alone fails.
         assert!(!rule.matches("matrix", Some("other"), "!room:server", None, &[]));
+    }
+
+    /// Pins the set of `[docker] mode` values that actually change where a tool call runs (#8220).
+    ///
+    /// The boot warning in `librefang-kernel`'s `boot.rs` fires on exactly the complement of this set, so an entry silently flipping to `true` would take the warning away from a mode that still does nothing.
+    /// Whoever wires the mode into dispatch updates this test in the same change — and the row in `docs/src/app/configuration/features/page.mdx`, which currently says the field is not implemented.
+    #[test]
+    fn no_docker_sandbox_mode_is_wired_into_dispatch_8220() {
+        assert!(
+            DockerSandboxMode::Off.is_wired_into_dispatch(),
+            "`off` asks for nothing, so it is trivially honoured"
+        );
+        for mode in [DockerSandboxMode::NonMain, DockerSandboxMode::All] {
+            assert!(
+                !mode.is_wired_into_dispatch(),
+                "`{}` is selectable but reaches no execution path; if that changed, drop it from this list and from the warning in boot.rs",
+                mode.as_str()
+            );
+        }
+    }
+
+    /// `as_str` must render the wire name serde accepts, because the boot warning quotes it back at the operator who typed it.
+    #[test]
+    fn docker_sandbox_mode_as_str_round_trips_through_serde() {
+        for mode in [
+            DockerSandboxMode::Off,
+            DockerSandboxMode::NonMain,
+            DockerSandboxMode::All,
+        ] {
+            let parsed: DockerSandboxMode =
+                serde_json::from_str(&format!("\"{}\"", mode.as_str())).expect("wire name");
+            assert_eq!(parsed, mode);
+        }
     }
 }

@@ -14,8 +14,8 @@
 //! ## Feature flags
 //!
 //! - `surreal-backend` (default) — pulls in the `surrealdb` crate at version
-//!   `=3.0.5` so librefang, `surreal-memory`, and the Universal Agent Runtime
-//!   all link the same client.
+//!   `=3.3.0` so librefang and `surreal-memory` link the same client.
+//!   The Universal Agent Runtime runs as a sidecar and no longer links it in-process.
 //! - `sqlite-backend` — opt-in; pulls in `rusqlite` for the legacy backend.
 //!
 //! Both can be enabled simultaneously; the live backend is selected at startup

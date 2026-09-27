@@ -35,10 +35,8 @@ use std::sync::Arc;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
-use wasmtime_wasi_http::{
-    p2::{WasiHttpCtxView, WasiHttpView},
-    WasiHttpCtx,
-};
+// wasmtime-wasi-http 48 moved the view trait and its context view from `p2` to the crate root.
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpCtxView, WasiHttpView};
 
 // ---------------------------------------------------------------------------
 // bindgen — generates `Plugin` world + per-interface `Host` traits from

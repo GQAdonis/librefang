@@ -40,7 +40,7 @@ WORKDIR /build/dashboard
 # optional dependencies, so the dashboard build needs no postinstall code.
 RUN npm install --global corepack@0.34.6 \
     && corepack enable \
-    && corepack prepare pnpm@10.33.0 --activate \
+    && corepack prepare pnpm@12.6.0 --activate \
     && pnpm install --frozen-lockfile --ignore-scripts \
     && pnpm run build \
     # JS → WASM tools available in the dashboard / plugin build context
@@ -59,8 +59,8 @@ FROM python:3.13-bookworm AS python-provider
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 3 — Rust builder + full WASM toolchain
-# Pinned to a specific minor matching the workspace MSRV (1.94.1).
-FROM rust:1.94-slim-bookworm AS builder
+# Pinned to a specific minor matching the workspace MSRV (1.95.0, raised by upstream).
+FROM rust:1.95-slim-bookworm AS builder
 # ─────────────────────────────────────────────────────────────────────────────
 WORKDIR /build
 

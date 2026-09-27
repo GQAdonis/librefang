@@ -76,6 +76,11 @@ impl SurrealSessionBackend {
         let context_window_tokens = row["context_window_tokens"].as_u64().unwrap_or(0);
         let label = row["label"].as_str().map(str::to_string);
         let model_override = row["model_override"].as_str().map(str::to_string);
+        // Migration v43 (`043_sessions_parent_session_id.surql`), mirroring upstream SQLite v61.
+        // A malformed value is dropped rather than failing the load, as the SQLite path does.
+        let parent_session_id = row["parent_session_id"]
+            .as_str()
+            .and_then(|s| s.parse::<SessionId>().ok());
 
         Ok(Session {
             id: session_id,
@@ -84,6 +89,7 @@ impl SurrealSessionBackend {
             context_window_tokens,
             label,
             model_override,
+            parent_session_id,
             // Generation counter starts at 0 on cold-load; the repair pass
             // will set last_repaired_generation once it runs.
             messages_generation: 0,
@@ -112,6 +118,7 @@ impl SessionBackend for SurrealSessionBackend {
             .map_err(|e| LibreFangError::memory_msg(format!("serialise messages: {e}")))?;
         let label = session.label.clone();
         let model_override = session.model_override.clone();
+        let parent_session_id = session.parent_session_id.map(|p| p.to_string());
         let context_window_tokens = session.context_window_tokens;
         let message_count = session.messages.len() as i64;
         let now = chrono::Utc::now().to_rfc3339();
@@ -128,16 +135,25 @@ impl SessionBackend for SurrealSessionBackend {
                 .unwrap_or(&now)
                 .to_string();
 
-            let payload = serde_json::json!({
+            let mut payload = serde_json::json!({
                 "agent_id": agent_id,
                 "messages": messages,
                 "context_window_tokens": context_window_tokens,
                 "message_count": message_count,
-                "label": label,
-                "model_override": model_override,
                 "created_at": created_at,
                 "updated_at": now,
             });
+            // The optional columns are `option<string>`, which accepts NONE but rejects NULL, and a JSON `null` arrives as NULL.
+            // Leave an unset field out of the document instead: `.content()` replaces the whole record, so an absent key is stored as NONE.
+            for (key, value) in [
+                ("label", label),
+                ("model_override", model_override),
+                ("parent_session_id", parent_session_id),
+            ] {
+                if let Some(value) = value {
+                    payload[key] = JsonValue::String(value);
+                }
+            }
             let _: Option<JsonValue> = db
                 .upsert(("sessions", id.as_str()))
                 .content(payload)
@@ -256,5 +272,40 @@ impl SessionBackend for SurrealSessionBackend {
                 .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(parent: Option<&str>) -> JsonValue {
+        let mut row = serde_json::json!({
+            "id": format!("sessions:{}", uuid::Uuid::new_v4()),
+            "agent_id": uuid::Uuid::new_v4().to_string(),
+            "messages": [],
+            "context_window_tokens": 0,
+        });
+        if let Some(parent) = parent {
+            row["parent_session_id"] = JsonValue::String(parent.to_string());
+        }
+        row
+    }
+
+    /// Migration v43 mirrors upstream SQLite v61 (`sessions.parent_session_id`).
+    /// The load path must carry the parent through, read an absent field as a root session, and drop a malformed value rather than fail the load, as the SQLite path does.
+    #[test]
+    fn row_to_session_reads_parent_session_id() {
+        let parent = SessionId(uuid::Uuid::new_v4());
+        let child = SurrealSessionBackend::row_to_session(&row(Some(&parent.to_string())))
+            .expect("child row");
+        assert_eq!(child.parent_session_id, Some(parent));
+
+        let root = SurrealSessionBackend::row_to_session(&row(None)).expect("root row");
+        assert_eq!(root.parent_session_id, None);
+
+        let malformed =
+            SurrealSessionBackend::row_to_session(&row(Some("not-a-uuid"))).expect("malformed row");
+        assert_eq!(malformed.parent_session_id, None);
     }
 }

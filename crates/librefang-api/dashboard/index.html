@@ -20,9 +20,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Service-worker registration lives in main.tsx (a bundled 'self'
-         script), not an inline page script, so the strict CSP
-         script-src 'self' (no 'unsafe-inline', #3732) stays intact. -->
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ("serviceWorker" in navigator) {

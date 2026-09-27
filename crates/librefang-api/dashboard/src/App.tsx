@@ -27,6 +27,7 @@ import {
   Hand,
   BarChart3,
   Database,
+  Library,
   Activity,
   FileText,
   Settings,
@@ -88,6 +89,7 @@ type DashboardRoute =
   | "/providers"
   | "/models"
   | "/memory"
+  | "/knowledge"
   | "/network"
   | "/a2a"
   | "/hands"
@@ -565,13 +567,20 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// Meta line under the user's name in both user panels (#8092).
+// The role is the RBAC level `/api/authz/whoami` resolved for this credential, not the dashboard auth mode: `hybrid` / `password` describe how the daemon accepts credentials and say nothing about who is signed in.
+// Both panels build the line here so they can never disagree.
+function userMetaLine(role: string, hostname: string): string {
+  return [role, hostname].filter(Boolean).join(" · ");
+}
+
 // Shared user menu panel — body of the user dropdown wherever it appears
 // (sidebar foot or topbar avatar). Mirrors the design canvas's
 // `shell.jsx::UserMenuPanel`:
 //
 //   ┌────────────────────────────────┐
 //   │  [avatar] name                 │
-//   │           role · mode (mono)   │
+//   │           role · host (mono)   │
 //   ├────────────────────────────────┤
 //   │  THEME                         │
 //   │  [ Light | Dark ]              │
@@ -586,6 +595,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
 //   └────────────────────────────────┘
 type UserMenuPanelProps = {
   username: string;
+  role: string;
   authMode: AuthMode;
   hostname: string;
   theme: "dark" | "light";
@@ -601,6 +611,7 @@ type UserMenuPanelProps = {
 
 function UserMenuPanel({
   username,
+  role,
   authMode,
   hostname,
   theme,
@@ -614,9 +625,7 @@ function UserMenuPanel({
   t,
 }: UserMenuPanelProps) {
   const initials = (username || "U").slice(0, 2).toUpperCase();
-  const roleLine = [authMode !== "none" ? authMode : null, hostname]
-    .filter(Boolean)
-    .join(" · ");
+  const roleLine = userMetaLine(role, hostname);
 
   return (
     <div className="rounded-xl border border-border-subtle bg-surface shadow-2xl backdrop-blur-md p-1.5 w-[260px]">
@@ -764,6 +773,7 @@ type SidebarUserBlockProps = {
   authMode: AuthMode;
   hostname: string;
   username: string;
+  role: string;
   onOpenChangePassword: () => void;
   onOpenShortcuts: () => void;
   onLogout: () => void | Promise<void>;
@@ -779,6 +789,7 @@ function SidebarUserBlock({
   authMode,
   hostname,
   username,
+  role,
   onOpenChangePassword,
   onOpenShortcuts,
   onLogout,
@@ -790,9 +801,7 @@ function SidebarUserBlock({
 }: SidebarUserBlockProps) {
   const [open, setOpen] = useState(false);
   const initials = (username || "U").slice(0, 2).toUpperCase();
-  const subline = [authMode !== "none" ? authMode : null, hostname]
-    .filter(Boolean)
-    .join(" · ");
+  const subline = userMetaLine(role, hostname);
 
   return (
     <div className="relative border-t border-border-subtle">
@@ -828,6 +837,7 @@ function SidebarUserBlock({
           <div className={`absolute z-[100] ${collapsed ? "left-full bottom-1 ml-2" : "left-2 right-2 bottom-full mb-1.5"}`}>
             <UserMenuPanel
               username={username}
+              role={role}
               authMode={authMode}
               hostname={hostname}
               theme={theme}
@@ -931,6 +941,7 @@ function DashboardApp() {
   const [appVersion, setAppVersion] = useState("");
   const [hostname, setHostname] = useState("");
   const [username, setUsername] = useState("");
+  const [userRole, setUserRole] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -981,6 +992,7 @@ function DashboardApp() {
       .then((w) => {
         if (!mountedRef.current) return;
         setUsername(w.name);
+        setUserRole(w.role);
       })
       .catch(() => {
         /* unauth or no-auth mode — fine, avatar shows the icon. */
@@ -1127,6 +1139,7 @@ function DashboardApp() {
           { to: "/providers", label: t("nav.providers"), icon: Server },
           { to: "/models", label: t("nav.models"), icon: Cpu },
           { to: "/memory", label: t("nav.memory"), icon: Database },
+          { to: "/knowledge", label: t("nav.knowledge", { defaultValue: "Knowledge" }), icon: Library },
           { to: "/network", label: t("nav.network"), icon: Share2 },
           { to: "/a2a", label: t("nav.a2a"), icon: Globe },
           { to: "/hands", label: t("nav.hands"), icon: Hand },
@@ -1333,6 +1346,7 @@ function DashboardApp() {
           authMode={authMode}
           hostname={hostname}
           username={username}
+          role={userRole}
           onOpenChangePassword={() => setShowChangePassword(true)}
           onOpenShortcuts={() => setShowShortcuts(true)}
           onLogout={handleLogout}
@@ -1441,6 +1455,7 @@ function DashboardApp() {
                   <div className="fixed top-[54px] right-3 sm:right-4 z-[100]">
                     <UserMenuPanel
                       username={username}
+                      role={userRole}
                       authMode={authMode}
                       hostname={hostname}
                       theme={theme}

@@ -73,10 +73,10 @@ If upstream introduces a direct DB dependency in the desktop crate
 (e.g. they decide to cache local-only state in a SQLite file at
 `~/.librefang/desktop.db`):
 
-1. Don't take the SQLite dep — replace with SurrealDB embedded 3.0.5.
+1. Don't take the SQLite dep — replace with embedded SurrealDB at the workspace pin (currently 3.3.0).
 2. Add a new SurrealDB migration if applicable (`refs surrealdb-migrations.md`).
 3. Adjust the connection logic to use SurrealDB's record IDs / queries.
-4. Pin the same `surrealdb = "=3.0.5"` workspace dep — never let
+4. Use the workspace `surrealdb` dep (`{ workspace = true }`, currently `=3.3.0`) — never let
    desktop's version diverge from `librefang-storage`'s pin.
 
 ## Building (NOT in this skill's scope)
