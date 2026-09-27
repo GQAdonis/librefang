@@ -32,7 +32,7 @@ SurrealDB layer — so storage conversion is a non-issue here.
 
 ## Post-merge audit (per `scripts/audit-tauri-desktop.sh`)
 
-The audit script checks four things after merge:
+The audit script checks six things after merge:
 
 1. **productName** in `tauri.conf.json` is `"BossFang"`. Failure: upstream merged their `"LibreFang"` value back in. Fix: edit the file, restore `"BossFang"`.
 
@@ -48,6 +48,19 @@ The audit script checks four things after merge:
    - Key ID must be `E329A6B2863F1707` (NOT upstream's `BC91908BD3F1520D`)
    - The key ID lives in the decoded comment line of the base64 pubkey blob. Decode with: `echo '<pubkey>' | base64 -d | head -1`
    - Expect: `untrusted comment: minisign public key E329A6B2863F1707`
+
+5. **Icons** in `icons/` are present and non-trivial in size (not upstream placeholders).
+
+6. **Release identity** (added after the 2026-09-27 sync):
+   - Every `sign <binary> <identifier>` line in the `cli_mac` / `cli_mac_mini` jobs of `.github/workflows/release.yml` and `release-cli.yml` uses `ai.bossfang.*`.
+     Fix: restore the BossFang identifier in the workflow; never change it to match a test.
+   - `scripts/tests/test_release_tag_workflow_safety.py` does not expect any `ai.librefang.*` value.
+     Fix: flip its `MACOS_CLI_SIGNING_JOBS` table to the identifiers the workflows sign.
+   - The Play upload's `packageName` in `release.yml` is either derived from `tauri.android.conf.json` in the `play_gate` step (`${{ steps.play_gate.outputs.package_name }}`) or equals its `identifier`.
+     Fix: restore the derivation; upstream's value is the hardcoded `ai.librefang.app`.
+   - The check then runs the whole release-safety test, so any failure in it, including a non-identity one, shows up here as a Tauri-audit failure.
+     The test needs PyYAML (`pip install pyyaml`); without it the check fails too.
+     Run `python3 scripts/tests/test_release_tag_workflow_safety.py` directly to see the actual message.
 
 ## When upstream upgrades Tauri version
 

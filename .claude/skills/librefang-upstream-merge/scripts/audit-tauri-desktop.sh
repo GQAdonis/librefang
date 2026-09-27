@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # audit-tauri-desktop.sh — Phase 3c of the librefang-upstream-merge skill.
 #
-# Verifies the four Tauri configs, the minisign pubkey and the macOS CLI
-# code-signing identifiers survived the merge unchanged. See references/tauri-desktop-checklist.md for fixes
-# when a check fails.
+# Verifies that the four Tauri configs, the minisign pubkey, the macOS CLI code-signing identifiers and the Play package name survived the merge unchanged.
+# See references/tauri-desktop-checklist.md for fixes when a check fails.
 #
 # Exit codes:
 #   0 — all checks pass
@@ -135,6 +134,21 @@ elif echo "$sign_hits" | grep -qv '^ai\.bossfang\.'; then
 else
   ok "release workflows sign only ai.bossfang.* ($(echo "$sign_hits" | tr '\n' ' '))"
 fi
+# The Play upload's packageName must be the Android bundle identifier, or every upload is rejected (and silently, since the step is continue-on-error).
+# Accept either the derived form (read from tauri.android.conf.json in the play_gate step) or a literal equal to that identifier.
+android_id="$(json_field "$desktop/tauri.android.conf.json" identifier)"
+play_pkg="$(grep -E '^[[:space:]]*packageName:' "$workflows/release.yml" 2>/dev/null | head -1 | sed -E 's/^[[:space:]]*packageName:[[:space:]]*//; s/[[:space:]]+$//' || true)"
+case "$play_pkg" in
+  '') fail "release.yml Play upload has no packageName" ;;
+  *steps.play_gate.outputs.package_name*)
+    if grep -qF 'jq -r .identifier crates/librefang-desktop/tauri.android.conf.json' "$workflows/release.yml"; then
+      ok "release.yml Play packageName derived from tauri.android.conf.json ($android_id)"
+    else
+      fail "release.yml Play packageName uses play_gate output but play_gate no longer reads tauri.android.conf.json"
+    fi ;;
+  "$android_id") ok "release.yml Play packageName = $android_id" ;;
+  *) fail "release.yml Play packageName = '$play_pkg' (expected '$android_id' from tauri.android.conf.json, preferably derived)" ;;
+esac
 safety_test="$toplevel/scripts/tests/test_release_tag_workflow_safety.py"
 if [ -f "$safety_test" ]; then
   if grep -qE '"ai\.librefang\.' "$safety_test"; then
