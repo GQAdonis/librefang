@@ -2,24 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 224,
-  "derivedRevision": 224,
+  "sourceRevision": 227,
+  "derivedRevision": 227,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 224
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 227
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-27T06:35:59.072982Z",
+  "updatedAt": "2026-09-27T10:37:49.340080Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c03-lossless-definitions-and-collaboration-document-profile",
-    "C03.2"
+    "afc-c04-replaceable-service-instances-and-placement",
+    "C04.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 4,
+      "done": 5,
       "total": 20
     },
     "children": [
@@ -29,7 +29,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 2,
+          "done": 3,
           "total": 18
         },
         "children": [
@@ -98,9 +98,9 @@
           {
             "type": "change",
             "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 1,
+              "done": 3,
               "total": 3
             }
           },
