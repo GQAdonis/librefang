@@ -6,6 +6,7 @@
 # Published to GHCR (pullable with no credentials, unlike the operator's private GCP Artifact Registry image) by the former GQAdonis/universal-agent-runtime fork's publish-ghcr.yml; that fork no longer exists, and Prometheus-AGS/universal-agent-runtime main publishes no GHCR image.
 # f45941bb is the newest published tag (`sidecar-latest`): a docs-only commit on top of 2aaeadd9 whose linux/amd64 manifest (sha256:910c3dab…) is byte-identical to 2aaeadd9's.
 # Pinned by tag and index digest so a re-pushed tag cannot silently change the sidecar.
+# KNOWN GAP: since 0208eaa34 the `uar-driver` admits a runtime only through UAR's service-placement contract (`GET /api/uar/capabilities`, `POST /api/uar/compatibility`, capability `service_instance_placement_v1`), which first shipped in Prometheus-AGS/universal-agent-runtime 3d6bf056; this image predates it, so the driver refuses it until a linux/amd64 image of 3d6bf056 or later is published and pinned here.
 ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:f45941bb330ba5e42eaf3dae5806c9a90300a069@sha256:6de7185679bb9d273b5bf77b5f940f6d0ac7fc00e937e46bb041d9c578e2aa94
 FROM ${UAR_IMAGE} AS uar-sidecar-src
 # ─────────────────────────────────────────────────────────────────────────────
