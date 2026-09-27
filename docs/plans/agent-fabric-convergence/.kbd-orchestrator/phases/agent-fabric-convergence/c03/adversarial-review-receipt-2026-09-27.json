@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "review": "c03-bounded-adversarial-review",
+  "initiativeChange": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "reviewedOn": "2026-09-27",
+  "result": "blocked",
+  "testsOrBuildsRun": false,
+  "skillRouting": {
+    "expected": "adversarial-review",
+    "available": false,
+    "fallback": "project constitution and accepted C03 contracts"
+  },
+  "reviewedCommits": {
+    "universalAgentRuntime": "f0dac3eeca0c5310f866173e8bac60b0b1219b7d",
+    "universalAgentRuntimeFinalExecutableCheckpoint": "7a02a249396fd77f297cdb3f9672c4ca35341a63",
+    "prometheusSkillsMini": "ba3bbc862305b9e5abd9946af69d371db5dcb6c4",
+    "prometheusSkillPack": "f73e53216a87630e9c4aef5e8a0ea6238708a309",
+    "initiative": "45abd7161bd08f07fad764245c083a49f6e4b7b4"
+  },
+  "evidence": {
+    "finalGateResult": "passed",
+    "finalGateReceiptSha256": "319ea6264860ab34fcf68c8dbd8d43ae943293b4313ffdc00dd1d2d2a409809c",
+    "finalGateCopiesByteIdentical": true,
+    "finalGatePlatform": "darwin-arm64",
+    "windowsOperatorReceiptAcceptedAs": [
+      "installed presence",
+      "UAR launch",
+      "preferred-port binding at port 1906"
+    ],
+    "windowsC03ConformanceClaimed": false
+  },
+  "findings": [
+    {
+      "id": "C03-AR-01",
+      "priority": "P1",
+      "status": "blocking",
+      "category": "runtime-binding-correctness",
+      "summary": "Required modelRequirements, promptDialect, and contextStrategy are reported exact/runtime-enforced without corresponding runtime enforcement."
+    },
+    {
+      "id": "C03-AR-02",
+      "priority": "P1",
+      "status": "blocking",
+      "category": "immutable-maintenance",
+      "summary": "Next-version maintenance accepts lower versions and rewrites all definitions instead of preserving unchanged exact references."
+    },
+    {
+      "id": "C03-AR-03",
+      "priority": "P1",
+      "status": "blocking",
+      "category": "workspace-concurrency",
+      "summary": "The file-backed workspace has no persisted mutation revision or expected-revision comparison."
+    },
+    {
+      "id": "C03-AR-04",
+      "priority": "P1",
+      "status": "blocking",
+      "category": "release-provenance",
+      "summary": "The generated payloads and final receipts that passed remain uncommitted and are not anchored to exact mini/full commit identities."
+    },
+    {
+      "id": "C03-AR-05",
+      "priority": "P2",
+      "status": "required-correction",
+      "category": "checkpoint-drift",
+      "summary": "Committed manifest/task metadata still names fba2b34 as frozen while the exercised checkpoint is 7a02a249."
+    }
+  ],
+  "acceptedBoundaries": {
+    "portableAuthorityLeakObserved": false,
+    "falseTeamExecutionClaimObserved": false,
+    "creatorTeamPackageExecuted": false,
+    "durableTeamInstanceSupported": false,
+    "windowsReceiptOverclaimed": false
+  },
+  "completionDisposition": "C03 remains incomplete until C03-AR-01 through C03-AR-04 are resolved and C03-AR-05 is corrected."
+}
