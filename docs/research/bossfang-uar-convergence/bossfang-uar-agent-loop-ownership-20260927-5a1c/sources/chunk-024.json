@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md",
+  "chunk_id": "chunk-024",
+  "source_id": "U08",
+  "text": "supervised out-of-process boundary, not link the full crate; Bossfang owns workflows/channels/approvals; UAR owns model routing and execution policy"
+}

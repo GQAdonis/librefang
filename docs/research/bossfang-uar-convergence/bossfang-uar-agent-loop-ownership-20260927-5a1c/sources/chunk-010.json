@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml",
+  "chunk_id": "chunk-010",
+  "source_id": "R10",
+  "text": "image surrealdb/surrealdb:v3.3.0@sha256:681c6c22 (line 45)"
+}

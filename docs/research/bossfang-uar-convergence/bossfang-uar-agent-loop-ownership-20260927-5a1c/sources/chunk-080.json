@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+  "chunk_id": "chunk-080",
+  "source_id": "R21",
+  "text": "pub const DEFAULT_MAX_ITERATIONS: u32 = 50; (147)"
+}

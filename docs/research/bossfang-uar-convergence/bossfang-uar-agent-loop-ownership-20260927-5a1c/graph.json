@@ -1,0 +1,1157 @@
+{
+  "topics": [
+    {
+      "id": "topic-001",
+      "name": "Agent-loop ownership",
+      "claims": [
+        "claim-cb90b8323713856a",
+        "claim-a3821f3ca5d04b8d",
+        "claim-9363dff3d7dead5c",
+        "claim-972884d4177ac0a1",
+        "claim-fb0f47e7fa0d45b4",
+        "claim-96daf10083c04638",
+        "claim-684d4c703e73f0f7",
+        "claim-a716b4256d1af8ac",
+        "claim-d302a4f5dd1907bc"
+      ]
+    },
+    {
+      "id": "topic-002",
+      "name": "BossFang to UAR seams",
+      "claims": [
+        "claim-bdfe65f3bc3ca8de",
+        "claim-415b3506d008ddd0",
+        "claim-befc17305727da5a",
+        "claim-d214a118ed229a3b",
+        "claim-a3e436efcf11fe93",
+        "claim-a51659b510049c7a",
+        "claim-198a16feccd8af38",
+        "claim-8ca8059558e6e813",
+        "claim-fe693f727608ea93"
+      ]
+    },
+    {
+      "id": "topic-003",
+      "name": "the-boss integration",
+      "claims": [
+        "claim-9d87f2a2dba0f752",
+        "claim-779d2a853c1d5766"
+      ]
+    },
+    {
+      "id": "topic-004",
+      "name": "Embedded vs remote UAR",
+      "claims": [
+        "claim-0b0a6608529e4a0c",
+        "claim-354373a1a8aba8bb",
+        "claim-130d167878b6e506",
+        "claim-bec181ae11584d89",
+        "claim-7012d65360018999",
+        "claim-aa0c914109354dd1",
+        "claim-53eb8e711896e878",
+        "claim-f74b4018c3ce624a"
+      ]
+    },
+    {
+      "id": "topic-005",
+      "name": "Version and storage alignment",
+      "claims": [
+        "claim-255fe7dc910c96b8",
+        "claim-2977e9f83f6c02f4",
+        "claim-79d75f100827b469",
+        "claim-07aac95fd95f4bbb",
+        "claim-9d6ff43b621d07de",
+        "claim-1b0041b65f29d448",
+        "claim-711bbd8a67b2206f",
+        "claim-9405e7c86616e163",
+        "claim-b6a572395abf4ad4",
+        "claim-c9ebbf58ac25f51d"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-cb90b8323713856a",
+      "text": "BossFang's native agent loop is run_agent_loop, entered from execute_llm_agent, and BossFang has no pluggable runtime or executor trait.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "R01",
+        "R02",
+        "R13",
+        "R08"
+      ],
+      "contradicts": [],
+      "evidence": "R01: \"pub async fn run_agent_loop( at line 483; compaction 1091-1144; prompt caching 1256-1260\"; R02: \"lines 1288-1298: wasm: -> execute_wasm_agent, python: -> execute_python_agent, else execute_llm_agent\"; R13: \"execute_llm_agent at 623; check_quota 645-648; check_all_and_record 1845\"; R08: \"pub trait LlmDriver: Send + Sync at 570; fn is_coding_agent at 635\""
+    },
+    {
+      "id": "claim-a3821f3ca5d04b8d",
+      "text": "UAR runs its own production agent loop in RunManager with a tool loop capped at ten iterations and LLM summarisation disabled in production.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.9,
+      "sources": [
+        "U03",
+        "U10"
+      ],
+      "contradicts": [],
+      "evidence": "U03: \"const MAX_TOOL_ITERATIONS: usize = 10; (189)\"; U10: \"Production summarization stays disabled until the ... (4833)\""
+    },
+    {
+      "id": "claim-bdfe65f3bc3ca8de",
+      "text": "BossFang's UarDriver sends BossFang's tool list to UAR's /api/chat/completion and expects tool calls back for BossFang to execute.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "R03"
+      ],
+      "contradicts": [],
+      "evidence": "R03: \".post(format!(\"{endpoint}/api/chat/completion\")) at 895; \"tools\": tools_to_openai_json(&request.tools) at 1484; \"memory_enabled\": false at 1489; wiremock tests \""
+    },
+    {
+      "id": "claim-415b3506d008ddd0",
+      "text": "UAR's /api/chat/completion only debug-logs the caller's tools, uses the last user message, and runs a full UAR agent run with UAR's own tools.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.93,
+      "sources": [
+        "U01"
+      ],
+      "contradicts": [],
+      "evidence": "U01: \"tools: accepted for compatibility (4617); tracing::debug!(tool_count, \"tools payload received\") (5171); run_manager.execute_request (5533); .route(\"/v1/messages\""
+    },
+    {
+      "id": "claim-befc17305727da5a",
+      "text": "UAR's /v1/messages endpoint forwards the caller's tools to the model and returns tool_use without running a UAR agent loop.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [
+        "U01"
+      ],
+      "contradicts": [],
+      "evidence": "U01: \"tools: accepted for compatibility (4617); tracing::debug!(tool_count, \"tools payload received\") (5171); run_manager.execute_request (5533); .route(\"/v1/messages\""
+    },
+    {
+      "id": "claim-d214a118ed229a3b",
+      "text": "UAR exposes POST /api/uar/runs for full-run delegation with host-supplied MCP servers, host tool admission and host-seeded history.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.92,
+      "sources": [
+        "U02",
+        "U12",
+        "B04"
+      ],
+      "contradicts": [],
+      "evidence": "U02: \".route(\"/runs\", get(list_runs).post(create_run)) line 40; CreateRunRequest with mcp_servers, tool_admission, history\"; U12: \"scoped to one run-owned Boss bridge\"; B04: \"mcp_servers (198); tool_admission (199); '/api/uar/runs' (208); stream_mode=agui_spec (252)\""
+    },
+    {
+      "id": "claim-9d87f2a2dba0f752",
+      "text": "The-boss delegates UAR agent runs through POST /api/uar/runs with run-scoped MCP servers and tool admission, and UAR runs the loop.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.93,
+      "sources": [
+        "B04",
+        "B08"
+      ],
+      "contradicts": [],
+      "evidence": "B04: \"mcp_servers (198); tool_admission (199); '/api/uar/runs' (208); stream_mode=agui_spec (252)\"; B08: \"tools through a loopback, token-protected MCP endpoint. UAR runs the loop. (18)\""
+    },
+    {
+      "id": "claim-779d2a853c1d5766",
+      "text": "The-boss does not bundle, launch or connect to BossFang.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [
+        "B10",
+        "B01"
+      ],
+      "contradicts": [],
+      "evidence": "B10: \"grep -rIl -i 'librefang|bossfang' returned no files\"; B01: \"uar revision 92620d40; surreal-memory revision 6acb6056\""
+    },
+    {
+      "id": "claim-9363dff3d7dead5c",
+      "text": "BossFang's convergence note and UAR's design notes both place the loop for a delegated run in UAR and keep channels, workflows, approvals and identity in the host.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [
+        "R07",
+        "U09",
+        "U08"
+      ],
+      "contradicts": [],
+      "evidence": "R07: \"That driver makes UAR an LLM provider inside the native librefang loop. It is not complete-run delegation\"; U09: \"UAR owns the execution loop\"; U08: \"supervised out-of-process boundary, not link the full crate; Bossfang owns workflows/channels/approvals; UAR owns model routing and execution policy\""
+    },
+    {
+      "id": "claim-0b0a6608529e4a0c",
+      "text": "The in-process UAR link is retired in BossFang and Cargo.lock contains no universal-agent-runtime package.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.95,
+      "sources": [
+        "R15",
+        "R14"
+      ],
+      "contradicts": [],
+      "evidence": "R15: \"surrealdb 3.3.0; surreal-memory rev b7e2093; no universal-agent-runtime package\"; R14: \"ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9 (10); COPY --from=uar-sidecar-src /usr/local/bin/uar-sidecar (359)\""
+    },
+    {
+      "id": "claim-354373a1a8aba8bb",
+      "text": "Cargo errors rather than building two conflicting exact pins of one crate in a semver-compatible range, and unions features across the graph.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "S18",
+        "S19",
+        "S20"
+      ],
+      "contradicts": [],
+      "evidence": "S18: \"If two compatible versions cannot be unified because of conflicting version requirements, Cargo will error.\"; S19: \"other packages in the dependency tree may require a newer version, leading to an unresolvable error\"; S20: \"Cargo will use the union of all features enabled on that dependency when building it.\""
+    },
+    {
+      "id": "claim-130d167878b6e506",
+      "text": "UAR's library build carries liter-llm, rmcp, surreal-memory and mimalloc as non-optional dependencies and an exact surrealdb pin.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [
+        "U05"
+      ],
+      "contradicts": [],
+      "evidence": "U05: \"surrealdb = { version = \"=3.3.0\", optional = true, features = [\"kv-surrealkv\"] } (478); surreal-memory path vendor/git/... (392)\""
+    },
+    {
+      "id": "claim-255fe7dc910c96b8",
+      "text": "BossFang, UAR main and surreal-memory HEAD all pin surrealdb 3.3.0 exactly.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "R05",
+        "U05",
+        "M01"
+      ],
+      "contradicts": [],
+      "evidence": "R05: \"surrealdb =3.3.0 (118), surrealdb-core =3.3.0 (119), surrealdb-types =3.3.0 (122), surreal-memory rev b7e2093 (131)\"; U05: \"surrealdb = { version = \"=3.3.0\", optional = true, features = [\"kv-surrealkv\"] } (478); surreal-memory path vendor/git/... (392)\"; M01: \"surrealdb = { version = \"=3.3.0\" }\""
+    },
+    {
+      "id": "claim-2977e9f83f6c02f4",
+      "text": "The-boss ships a SurrealDB 3.2.4 server with UAR and surreal-memory revisions that pin surrealdb 3.2.4.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.93,
+      "sources": [
+        "B02",
+        "B01",
+        "M06"
+      ],
+      "contradicts": [],
+      "evidence": "B02: \"\"surrealdb\": \"surrealdb/surrealdb:v3.2.4@sha256:51baed87...\" (256)\"; B01: \"uar revision 92620d40; surreal-memory revision 6acb6056\"; M06: \"surrealdb = { version = \"=3.2.4\" }\""
+    },
+    {
+      "id": "claim-79d75f100827b469",
+      "text": "A SurrealDB 3.2 datastore opens on 3.3 in place but cannot return to 3.2 once a 3.3.0 node has started against it.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [
+        "S22"
+      ],
+      "contradicts": [],
+      "evidence": "S22: \"A datastore cannot return to 3.2 once a 3.3.0 node has started against it.\""
+    },
+    {
+      "id": "claim-07aac95fd95f4bbb",
+      "text": "SurrealDB namespaces are the documented isolation boundary for credentials and data.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [
+        "S23"
+      ],
+      "contradicts": [],
+      "evidence": "S23: \"one namespace per tenant so credentials and data never cross tenant boundaries\""
+    },
+    {
+      "id": "claim-9d6ff43b621d07de",
+      "text": "surreal-memory owns its schema and applies migrations v1 to v21 on every connect.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.92,
+      "sources": [
+        "M03",
+        "M04"
+      ],
+      "contradicts": [],
+      "evidence": "M03: \"SurrealStorage::new calls run_migrations then ensure_embedding_indexes (719-745)\"; M04: \"v20_defines_idempotent_operation_ledger; v21_persists_executor_lifecycle\""
+    },
+    {
+      "id": "claim-1b0041b65f29d448",
+      "text": "UAR vendors a surreal-memory snapshot of upstream 432eaa1 with a manifest patched to pin surrealdb 3.3.0, and forces memory off in the sidecar.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.9,
+      "sources": [
+        "U07",
+        "U04",
+        "U05"
+      ],
+      "contradicts": [],
+      "evidence": "U07: \"surreal-memory ... 432eaa1; manifest exact-pins surrealdb, surrealdb-types\"; U04: \"launch token on stdin; READY:{port}; std::env::set_var(\"UAR_MEMORY__ENABLED\", \"false\") (189)\"; U05: \"surrealdb = { version = \"=3.3.0\", optional = true, features = [\"kv-surrealkv\"] } (478); surreal-memory path vendor/git/... (392)\""
+    },
+    {
+      "id": "claim-711bbd8a67b2206f",
+      "text": "BossFang has no script or CI job that checks SurrealDB or surreal-memory pins for drift.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.85,
+      "sources": [
+        "R05",
+        "R10"
+      ],
+      "contradicts": [],
+      "evidence": "R05: \"surrealdb =3.3.0 (118), surrealdb-core =3.3.0 (119), surrealdb-types =3.3.0 (122), surreal-memory rev b7e2093 (131)\"; R10: \"image surrealdb/surrealdb:v3.3.0@sha256:681c6c22 (line 45)\""
+    },
+    {
+      "id": "claim-9405e7c86616e163",
+      "text": "BossFang's UAR sidecar uses its own SurrealKV store rather than BossFang's namespaces.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.92,
+      "sources": [
+        "R04"
+      ],
+      "contradicts": [],
+      "evidence": "R04: \"UAR_PERSISTENCE__DATABASE_URL default surrealkv://{home}/uar-surreal (lines 103-118); READY:{port} parse 781-828\""
+    },
+    {
+      "id": "claim-bec181ae11584d89",
+      "text": "Sidecars isolate failures and allow independent updates but add latency for chatty components.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "contradicts": [],
+      "evidence": "S1: \"Tightly integrated components run in the same process and efficiently use shared resources, but they lack isolation.\"; S2: \"Sidecars add overhead, especially latency, which makes them unsuitable for applications with frequent communication between components.\"; S3: \"A separate team or external partner owns a component.\"; S4: \"Sidecar containers have their own independent lifecycles.\""
+    },
+    {
+      "id": "claim-972884d4177ac0a1",
+      "text": "Delegation protocols such as A2A and ACP treat the remote agent as owning its loop while the host keeps UI, policy and orchestration.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [
+        "S6",
+        "S8",
+        "S9",
+        "S15"
+      ],
+      "contradicts": [],
+      "evidence": "S6: \"without needing access to each other's internal state, memory, or tools\"; S8: \"Local agents run as sub-processes of the code editor, communicating via JSON-RPC over stdio.\"; S9: \"our goal with the Agent Client Protocol is to enable you to switch between multiple agents without switching your editor.\"; S15: \"Works seamlessly with popular frameworks like LangGraph, Strands, and CrewAI.\""
+    },
+    {
+      "id": "claim-fb0f47e7fa0d45b4",
+      "text": "Hosts keep control of a delegated loop through interception points such as tool-approval callbacks rather than by owning the loop.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.8,
+      "sources": [
+        "S11",
+        "S14",
+        "S6"
+      ],
+      "contradicts": [],
+      "evidence": "S11: \"there SHOULD always be a human in the loop with the ability to deny tool invocations\"; S14: \"Auto-approved tools never reach canUseTool.\"; S6: \"without needing access to each other's internal state, memory, or tools\""
+    },
+    {
+      "id": "claim-96daf10083c04638",
+      "text": "BossFang should remain the control plane and default native executor, with UAR as a per-agent execution runtime behind one BossFang-owned executor seam and exactly one executor per run.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.82,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in Agent-loop ownership, BossFang to UAR seams, the-boss integration"
+    },
+    {
+      "id": "claim-7012d65360018999",
+      "text": "Embedded UAR should mean a supervised child process bundled in the same artifact, never an in-process crate link.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.85,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in Embedded vs remote UAR"
+    },
+    {
+      "id": "claim-b6a572395abf4ad4",
+      "text": "Clients that share a SurrealDB datastore must upgrade together, the server last and never downgraded, and different schema owners must not share a database.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.85,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in Version and storage alignment"
+    },
+    {
+      "id": "claim-a3e436efcf11fe93",
+      "text": "The UarDriver model-provider seam is a nested loop that BossFang's wiremock tests could not detect.",
+      "label": "inferred",
+      "critical": false,
+      "confidence": 0.85,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in BossFang to UAR seams"
+    },
+    {
+      "id": "claim-aa0c914109354dd1",
+      "text": "UAR accepts host tool admission only over a loopback /uar/admission/v1 URL and only from a launch-token-authenticated sidecar host.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "U14",
+        "U15",
+        "U02"
+      ],
+      "contradicts": [],
+      "evidence": "U14: \"base.scheme() == \"http\" && is_loopback(&base) && path == \"/uar/admission/v1\" (77-87); prepare/resolve/cancel/claim/finish paths (102-110)\"; U15: \"request.extensions_mut().insert(HostAuthenticated); (168)\"; U02: \".route(\"/runs\", get(list_runs).post(create_run)) line 40; CreateRunRequest with mcp_servers, tool_admission, history\""
+    },
+    {
+      "id": "claim-53eb8e711896e878",
+      "text": "UAR run-scoped MCP servers must be loopback HTTP or an administrator-registered destination granted to a trusted host role.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.92,
+      "sources": [
+        "U16"
+      ],
+      "contradicts": [],
+      "evidence": "U16: \"MCP server must select one loopback URL or one trusted destination grant (110-117); MCP server URL must be loopback HTTP without userinfo (209-223); host-sessio\""
+    },
+    {
+      "id": "claim-a51659b510049c7a",
+      "text": "The UAR image BossFang ships at 2aaeadd9 has no tool admission, run-scoped MCP servers or seeded history in its run API.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "U19",
+        "R14"
+      ],
+      "contradicts": [],
+      "evidence": "U19: \"struct CreateRunRequest { artifact: AgentArtifact, input: String, session_id: Option<String> } (34-38); tool_admission/http.rs, turn/host/mcp.rs, turn/host/hist\"; R14: \"ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9 (10); COPY --from=uar-sidecar-src /usr/local/bin/uar-sidecar (359)\""
+    },
+    {
+      "id": "claim-198a16feccd8af38",
+      "text": "UAR's /v1/messages request type has no max_tokens, temperature or tool_choice fields, so those values are silently dropped.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.92,
+      "sources": [
+        "U20"
+      ],
+      "contradicts": [],
+      "evidence": "U20: \"struct AnthropicMessagesRequest { model, messages, system, tools, stream, session_id, prompt_caching_enabled, #[serde(flatten)] _extra } (3346-3369)\""
+    },
+    {
+      "id": "claim-684d4c703e73f0f7",
+      "text": "UAR caps seeded host history at 1000 messages and 4 MiB and keeps LLM summarisation off in production.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.93,
+      "sources": [
+        "U17",
+        "U10"
+      ],
+      "contradicts": [],
+      "evidence": "U17: \"const MAX_HOST_HISTORY_MESSAGES: usize = 1_000; const MAX_HOST_HISTORY_BYTES: usize = 4 * 1024 * 1024; (8-9)\"; U10: \"Production summarization stays disabled until the ... (4833)\""
+    },
+    {
+      "id": "claim-a716b4256d1af8ac",
+      "text": "UAR's default effect-authority TTL is 300 seconds, overridable per artifact.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.9,
+      "sources": [
+        "U18"
+      ],
+      "contradicts": [],
+      "evidence": "U18: \"pub const DEFAULT_EFFECT_AUTHORITY_TTL_SECONDS: u64 = 300; (32); extensions.budgets.timeout_seconds override (101-106)\""
+    },
+    {
+      "id": "claim-d302a4f5dd1907bc",
+      "text": "BossFang's default iteration cap is 50 while UAR hard-codes 10 tool iterations per run.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.93,
+      "sources": [
+        "R21",
+        "U03"
+      ],
+      "contradicts": [],
+      "evidence": "R21: \"pub const DEFAULT_MAX_ITERATIONS: u32 = 50; (147)\"; U03: \"const MAX_TOOL_ITERATIONS: usize = 10; (189)\""
+    },
+    {
+      "id": "claim-8ca8059558e6e813",
+      "text": "BossFang's /mcp tools/call runs the execute_tool approval, capability and taint gate and returns results as content plus isError.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [
+        "R19",
+        "R20"
+      ],
+      "contradicts": [],
+      "evidence": "R19: \"execute_tool_with_sender_account (1552); \"isError\": result.is_error (1609)\"; R20: \"execute_tool is the public entry point - it runs the approval / capability / taint gate (3-4)\""
+    },
+    {
+      "id": "claim-c9ebbf58ac25f51d",
+      "text": "BossFang's link-uar provisions a uar namespace on BossFang's SurrealDB server but the sidecar supervisor never consumes the written remote config.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.85,
+      "sources": [
+        "R17",
+        "R18",
+        "R22"
+      ],
+      "contradicts": [],
+      "evidence": "R17: \"pub async fn provision_uar_namespace( (53)\"; R18: \"librefang_storage::provision_uar_namespace( (504); Build [uar.remote] subtable (556)\"; R22: \"if let Some(path) = config.surreal_data_dir.as_ref() (156); no reader of uar.remote or share_librefang_storage outside config type, CLI and storage route\""
+    },
+    {
+      "id": "claim-f74b4018c3ce624a",
+      "text": "The BossFang-governed UAR executor should be scoped to a managed loopback sidecar until UAR supports authenticated remote host admission.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.8,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in Embedded vs remote UAR, BossFang to UAR seams"
+    },
+    {
+      "id": "claim-fe693f727608ea93",
+      "text": "The UAR executor depends on moving UAR_IMAGE to a revision at or after 3d6bf056.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in BossFang to UAR seams"
+    }
+  ],
+  "relations": [
+    {
+      "from": "claim-cb90b8323713856a",
+      "to": "R01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-cb90b8323713856a",
+      "to": "R02",
+      "type": "cites"
+    },
+    {
+      "from": "claim-cb90b8323713856a",
+      "to": "R13",
+      "type": "cites"
+    },
+    {
+      "from": "claim-cb90b8323713856a",
+      "to": "R08",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a3821f3ca5d04b8d",
+      "to": "U03",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a3821f3ca5d04b8d",
+      "to": "U10",
+      "type": "cites"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "R03",
+      "type": "cites"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "U01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "U01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "U02",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "U12",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "B04",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9d87f2a2dba0f752",
+      "to": "B04",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9d87f2a2dba0f752",
+      "to": "B08",
+      "type": "cites"
+    },
+    {
+      "from": "claim-779d2a853c1d5766",
+      "to": "B10",
+      "type": "cites"
+    },
+    {
+      "from": "claim-779d2a853c1d5766",
+      "to": "B01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9363dff3d7dead5c",
+      "to": "R07",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9363dff3d7dead5c",
+      "to": "U09",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9363dff3d7dead5c",
+      "to": "U08",
+      "type": "cites"
+    },
+    {
+      "from": "claim-0b0a6608529e4a0c",
+      "to": "R15",
+      "type": "cites"
+    },
+    {
+      "from": "claim-0b0a6608529e4a0c",
+      "to": "R14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "S18",
+      "type": "cites"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "S19",
+      "type": "cites"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "S20",
+      "type": "cites"
+    },
+    {
+      "from": "claim-130d167878b6e506",
+      "to": "U05",
+      "type": "cites"
+    },
+    {
+      "from": "claim-255fe7dc910c96b8",
+      "to": "R05",
+      "type": "cites"
+    },
+    {
+      "from": "claim-255fe7dc910c96b8",
+      "to": "U05",
+      "type": "cites"
+    },
+    {
+      "from": "claim-255fe7dc910c96b8",
+      "to": "M01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-2977e9f83f6c02f4",
+      "to": "B02",
+      "type": "cites"
+    },
+    {
+      "from": "claim-2977e9f83f6c02f4",
+      "to": "B01",
+      "type": "cites"
+    },
+    {
+      "from": "claim-2977e9f83f6c02f4",
+      "to": "M06",
+      "type": "cites"
+    },
+    {
+      "from": "claim-79d75f100827b469",
+      "to": "S22",
+      "type": "cites"
+    },
+    {
+      "from": "claim-07aac95fd95f4bbb",
+      "to": "S23",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9d6ff43b621d07de",
+      "to": "M03",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9d6ff43b621d07de",
+      "to": "M04",
+      "type": "cites"
+    },
+    {
+      "from": "claim-1b0041b65f29d448",
+      "to": "U07",
+      "type": "cites"
+    },
+    {
+      "from": "claim-1b0041b65f29d448",
+      "to": "U04",
+      "type": "cites"
+    },
+    {
+      "from": "claim-1b0041b65f29d448",
+      "to": "U05",
+      "type": "cites"
+    },
+    {
+      "from": "claim-711bbd8a67b2206f",
+      "to": "R05",
+      "type": "cites"
+    },
+    {
+      "from": "claim-711bbd8a67b2206f",
+      "to": "R10",
+      "type": "cites"
+    },
+    {
+      "from": "claim-9405e7c86616e163",
+      "to": "R04",
+      "type": "cites"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "S1",
+      "type": "cites"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "S2",
+      "type": "cites"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "S3",
+      "type": "cites"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "S4",
+      "type": "cites"
+    },
+    {
+      "from": "claim-972884d4177ac0a1",
+      "to": "S6",
+      "type": "cites"
+    },
+    {
+      "from": "claim-972884d4177ac0a1",
+      "to": "S8",
+      "type": "cites"
+    },
+    {
+      "from": "claim-972884d4177ac0a1",
+      "to": "S9",
+      "type": "cites"
+    },
+    {
+      "from": "claim-972884d4177ac0a1",
+      "to": "S15",
+      "type": "cites"
+    },
+    {
+      "from": "claim-fb0f47e7fa0d45b4",
+      "to": "S11",
+      "type": "cites"
+    },
+    {
+      "from": "claim-fb0f47e7fa0d45b4",
+      "to": "S14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-fb0f47e7fa0d45b4",
+      "to": "S6",
+      "type": "cites"
+    },
+    {
+      "from": "claim-cb90b8323713856a",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3821f3ca5d04b8d",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-9363dff3d7dead5c",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-972884d4177ac0a1",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-fb0f47e7fa0d45b4",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3e436efcf11fe93",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-9d87f2a2dba0f752",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-779d2a853c1d5766",
+      "to": "claim-96daf10083c04638",
+      "type": "supports"
+    },
+    {
+      "from": "claim-0b0a6608529e4a0c",
+      "to": "claim-7012d65360018999",
+      "type": "supports"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "claim-7012d65360018999",
+      "type": "supports"
+    },
+    {
+      "from": "claim-130d167878b6e506",
+      "to": "claim-7012d65360018999",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "claim-7012d65360018999",
+      "type": "supports"
+    },
+    {
+      "from": "claim-255fe7dc910c96b8",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-2977e9f83f6c02f4",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-79d75f100827b469",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-07aac95fd95f4bbb",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-9d6ff43b621d07de",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-1b0041b65f29d448",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-711bbd8a67b2206f",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-9405e7c86616e163",
+      "to": "claim-b6a572395abf4ad4",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-a3e436efcf11fe93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-a3e436efcf11fe93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-a3e436efcf11fe93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-a3e436efcf11fe93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U15",
+      "type": "cites"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U02",
+      "type": "cites"
+    },
+    {
+      "from": "claim-53eb8e711896e878",
+      "to": "U16",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "U19",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "R14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "U20",
+      "type": "cites"
+    },
+    {
+      "from": "claim-684d4c703e73f0f7",
+      "to": "U17",
+      "type": "cites"
+    },
+    {
+      "from": "claim-684d4c703e73f0f7",
+      "to": "U10",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a716b4256d1af8ac",
+      "to": "U18",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d302a4f5dd1907bc",
+      "to": "R21",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d302a4f5dd1907bc",
+      "to": "U03",
+      "type": "cites"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "R19",
+      "type": "cites"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "R20",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R17",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R18",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R22",
+      "type": "cites"
+    },
+    {
+      "from": "claim-0b0a6608529e4a0c",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-130d167878b6e506",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-7012d65360018999",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-53eb8e711896e878",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3e436efcf11fe93",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3e436efcf11fe93",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    }
+  ]
+}

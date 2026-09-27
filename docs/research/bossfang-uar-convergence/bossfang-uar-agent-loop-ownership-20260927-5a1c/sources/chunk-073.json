@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+  "chunk_id": "chunk-073",
+  "source_id": "U18",
+  "text": "pub const DEFAULT_EFFECT_AUTHORITY_TTL_SECONDS: u64 = 300; (32); extensions.budgets.timeout_seconds override (101-106)"
+}

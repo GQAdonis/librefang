@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+  "chunk_id": "chunk-081",
+  "source_id": "R22",
+  "text": "if let Some(path) = config.surreal_data_dir.as_ref() (156); no reader of uar.remote or share_librefang_storage outside config type, CLI and storage route"
+}

@@ -1,0 +1,6 @@
+{
+  "url": "https://github.com/langchain-ai/agent-protocol",
+  "chunk_id": "chunk-061",
+  "source_id": "S16",
+  "text": "codifying the framework-agnostic APIs that are needed to serve LLM agents in production"
+}
