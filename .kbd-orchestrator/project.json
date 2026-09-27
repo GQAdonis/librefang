@@ -253,5 +253,5 @@
   "specBackend": "native-kbd",
   "specBackendNote": "OpenSpec is initialized (openspec/config.yaml, schema: spec-driven) but the spec backend is deliberately pinned to native-kbd for phase-10, whose 8 change specs (C-001..C-008) were already written and reviewed as native change files. Migrating them mid-phase would rewrite eight specs purely to change file format without improving their content. Adopt OpenSpec from phase-11: drop this key (or set it to \"openspec\") and /kbd-spec + /kbd-plan will emit openspec/changes/<id>/{proposal.md,tasks.md} via /opsx:new.",
   "activePhase": "phase-11-surreal-recovery-and-uar-convergence",
-  "updatedAt": "2026-09-27T21:00:59Z"
+  "updatedAt": "2026-09-27T21:09:14Z"
 }

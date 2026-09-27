@@ -46,3 +46,16 @@ Output a recommended architecture with a decision record, and a migration path f
 - G3 `/kbd-status` renders without contradictions.
 - G4 `Dockerfile` pins the latest runtime image, and the sidecar integration tests pass.
 - G5 research package and decision record exist and are reviewed by `merge-reviewer`.
+
+## Goal status
+
+Goals are tracked here, not in `progress.json`: the progress schema (`progress.schema.json`) tracks changes only, and changes are created at `/kbd-plan`.
+`/kbd-assess` updates this table.
+
+| Goal | Status | Updated |
+|---|---|---|
+| G1 — Root-cause the SurrealDB regression | NOT MET | 2026-09-27 |
+| G2 — Restore a working state | NOT MET | 2026-09-27 |
+| G3 — Repair KBD state | NOT MET | 2026-09-27 |
+| G4 — Move the UAR pin to the latest runtime | NOT MET | 2026-09-27 |
+| G5 — Resolve the BossFang / UAR / surreal-memory relationship | NOT MET | 2026-09-27 |

@@ -1,11 +1,10 @@
 {
-  "activePhaseId": "phase-10-uar-sidecar-availability",
+  "activePhaseId": "phase-11-surreal-recovery-and-uar-convergence",
   "change": null,
   "childPointer": null,
   "completionMetric": "implementation",
   "currentTask": "run kbd-assess for phase-11-surreal-recovery-and-uar-convergence",
   "exactNextCommand": "/kbd-assess phase-11-surreal-recovery-and-uar-convergence",
-  "generatedBy": "kbd-runtime",
   "implementationCompleted": 0,
   "implementationTotal": 0,
   "path": [
@@ -13,19 +12,24 @@
   ],
   "phase": "phase-11-surreal-recovery-and-uar-convergence",
   "phaseIds": [
-    "phase-10-uar-sidecar-availability"
+    "phase-11-surreal-recovery-and-uar-convergence"
   ],
   "planRevision": 1,
   "projectId": "eca657d1-b62b-4085-b712-d398b35c1903",
-  "revision": 73,
+  "revision": 74,
   "runId": "phase-10-uar-sidecar-availability-20260731T190715Z",
   "schemaVersion": "5",
   "sourceRevision": 72,
   "status": "assessment_ready",
-  "updatedAt": "2026-09-27T21:00:59Z",
+  "updatedAt": "2026-09-27T21:09:14Z",
   "previousPhase": "phase-10-uar-sidecar-availability",
-  "sourceTool": "kbd-next-phase",
+  "sourceTool": "product-manager (phase-11 G3 hand reconciliation)",
   "nextPendingChange": null,
   "certificationStatus": "NOT_TRACKED",
-  "publicationStatus": "NOT_TRACKED"
+  "publicationStatus": "NOT_TRACKED",
+  "activePhase": "phase-11-surreal-recovery-and-uar-convergence",
+  "parentPhase": null,
+  "childPhases": [],
+  "stageId": "assess",
+  "stageStatus": "pending"
 }
