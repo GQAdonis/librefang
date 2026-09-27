@@ -35,7 +35,7 @@ use crate::types::{
     MemorySection, MetadataSection, SkillRef, SkillsSection, ToolsSection,
 };
 use librefang_types::agent::{
-    AgentManifest, ManifestCapabilities, ModelConfig, ResourceQuota, ScheduleMode,
+    AgentManifest, ManifestCapabilities, ModelConfig, ModelMode, ResourceQuota, ScheduleMode,
 };
 use std::collections::HashMap;
 
@@ -70,6 +70,13 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
     let model = ModelConfig {
         provider,
         model: model_name,
+        // UAR-AGENT-MD names one provider/model pair outright; it has no notion
+        // of a model *mode* or a per-agent router override. `ModelMode::Fixed`
+        // (the derived default) honours the pair the artifact declared, and
+        // `None` leaves complexity-based routing to the kernel rather than
+        // pinning the agent to a profile the artifact never asked for.
+        mode: ModelMode::default(),
+        router_override: None,
         // Upstream widened these to `Option`, where `None` means "inherit".
         // A UAR artifact that declares no per-turn budget should inherit
         // rather than pin the old hardcoded 4096 ceiling.
@@ -122,6 +129,13 @@ pub fn artifact_to_manifest(artifact: &AgentArtifact) -> Result<AgentManifest> {
         // default), NOT `Some(vec![])` ("declared, grants nothing").
         memory_read: None,
         memory_write: None,
+        // Per-agent media capability routing. A UAR artifact never declares
+        // these keys, and an empty `CapabilityRouting` is exactly what
+        // "inherit the kernel-global `[capabilities]` block" looks like — see
+        // the field docs on `ManifestCapabilities::routing`. Every field is an
+        // `Option<CapabilityTarget>`, so this grants nothing and denies
+        // nothing: it defers.
+        routing: librefang_types::media::CapabilityRouting::default(),
         agent_spawn: false,
         agent_message: Vec::new(),
         shell: if artifact.capabilities.code_execution {

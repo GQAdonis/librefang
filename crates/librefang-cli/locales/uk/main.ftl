@@ -236,6 +236,7 @@ audit-failed = Перевірка цілісності аудиторськог�
 
 # --- Health ---
 health-ok = Демон здоровий
+health-degraded = Демон доступний, але повідомляє про несправну підсистему
 health-not-running = Демон не запущений.
 
 # --- Channel setup ---
@@ -1278,7 +1279,7 @@ skill-bundle-size =   Розмір: { $size } байт
 skill-dry-run = Тільки сухий запуск (dry run).
 skill-dry-run-repo =   Репозиторій: { $repo }
 skill-dry-run-tag =   Тег: { $tag }
-skill-github-token-required = Встановіть GITHUB_TOKEN або GH_TOKEN для публікації, або перезапустіть з параметром --dry-run.
+skill-github-token-required = Токен GitHub не знайдено. Встановіть GITHUB_TOKEN або GH_TOKEN, або збережіть його у сховищі командою `librefang vault set GITHUB_TOKEN`, або перезапустіть з параметром --dry-run.
 skill-publishing-progress = Публікація { $name }@{ $tag }
 skill-publish-success = Опубліковано { $name } в { $repo }@{ $tag }
 skill-publish-release-url = Реліз: { $url }
@@ -2111,6 +2112,9 @@ tui-agents-title-templates = Шаблони
 tui-agents-title-custom-name = Власний — Ім'я
 tui-agents-title-custom-desc = Власний — Опис
 tui-agents-title-custom-prompt = Власний — Системний промпт
+tui-agents-detail-tokens = Обсяг токенів  ($ оновити)
+tui-agents-detail-tokens-injected = введено
+tui-agents-token-usage-failed = Не вдалося завантажити обсяг токенів
 tui-agents-title-custom-tools = Власний — Інструменти
 tui-agents-title-custom-skills = Власний — Скіли
 tui-agents-title-custom-mcp = Власний — MCP-сервери
@@ -2145,7 +2149,7 @@ tui-agents-opt-create-new = Створити нового агента
 
 tui-agents-hints-filter =   [Введення] Фільтр  [Enter] Застосувати  [Esc] Скасувати пошук
 tui-agents-hints-list =   [↑↓] Навігація  [Enter] Деталі  [/] Пошук  [Esc] Назад
-tui-agents-hints-detail =   [s] Змінити скіли  [m] Змінити MCP  [n] Змінити канали  [p] Параметри моделі  [c] Чат  [k] Зупинити  [Esc] Назад
+tui-agents-hints-detail =   [s] Змінити скіли  [m] Змінити MCP  [n] Змінити канали  [p] Параметри моделі  [$] Токени  [c] Чат  [k] Зупинити  [Esc] Назад
 tui-agents-title-model-params = Параметри моделі
 tui-agents-prompt-model-params = Налаштування цього агента мають перевагу над налаштуваннями моделі. `inherit` означає налаштування моделі.
 tui-agents-hints-model-params =   [←→] Змінити  [i] Успадкувати  [e] Своє значення  [Enter] Зберегти  [Esc] Скасувати
@@ -2555,6 +2559,7 @@ cmd-goal-finished = Ціль успішно завершено.
 cmd-goal-max-iterations = Ціль зупинено: досягнуто ліміт ітерацій.
 cmd-goal-rate-limited = Ціль зупинено: ліміт запитів провайдера.
 cmd-goal-stopped = Запуск цілі зупинено.
+cmd-goal-paused = Запуск цілі призупинено.
 cmd-goal-error = помилка: { $error }
 cmd-goal-unknown-error = невідома помилка
 cmd-goal-watch-poll-error = Не вдалося прочитати стан запуску ({ $count }/{ $max }); повторна спроба…
@@ -2618,3 +2623,66 @@ tui-memory-config-requires-daemon = Налаштування пам'яті на�
 tui-memory-config-fetch-failed = Не вдалося прочитати налаштування пам'яті: { $error }
 tui-goals-run-requires-daemon = Стан запуску надходить з API демона — недоступний, коли TUI підключено в межах процесу.
 tui-goals-run-fetch-failed = Не вдалося прочитати стан запуску для { $id }: { $error }
+
+# config_editor.rs — загальний редактор секцій конфігурації (#8165)
+tui-settings-tab-config = 6 Конфігурація
+tui-settings-hints-config =   [↑↓] Навігація  [Enter] Відкрити секцію  [r] Оновити
+tui-settings-hints-config-fields =   [↑↓] Навігація  [Enter] Редагувати / Перемкнути  [Esc] Назад  [r] Оновити
+tui-settings-config-loading = Завантаження конфігурації…
+tui-settings-config-empty = Секції конфігурації недоступні. Демон має бути запущений.
+tui-settings-config-select-section = Оберіть секцію ліворуч і натисніть [Enter], щоб побачити її налаштування.
+tui-settings-config-header-section = Секція
+tui-settings-config-header-setting = Налаштування
+tui-settings-config-header-value = Значення
+tui-settings-config-unset = не задано
+tui-settings-config-on = увімк
+tui-settings-config-off = вимк
+tui-settings-config-readonly = лише читання
+tui-settings-config-readonly-msg = { $path } доступне лише для читання — змініть ~/.librefang/config.toml напряму.
+tui-settings-config-complex = { $path } містить список або таблицю — змініть ~/.librefang/config.toml напряму.
+tui-settings-config-invalid = Це не є коректним значенням для { $path }.
+tui-settings-config-redacted = { $path } показано приховано — введіть нове значення повністю; порожній рядок тут не приймається.
+tui-settings-config-prompt = Задати { $path } (порожнє значення очищає):
+tui-mod-config-value-saved = Збережено { $path }
+tui-mod-config-value-saved-restart = Збережено { $path } — перезапустіть демон, щоб зміни набули чинності
+tui-mod-config-value-saved-reload-failed = { $path } збережено у config.toml, але перезавантаження не вдалося: { $error }
+tui-event-config-schema-failed = Не вдалося завантажити схему конфігурації
+tui-event-config-schema-unreadable = Демон відповів, але не вдалося прочитати схему конфігурації: { $error }
+tui-event-config-failed = Не вдалося завантажити поточну конфігурацію
+tui-event-config-unreadable = Демон відповів, але не вдалося прочитати поточну конфігурацію: { $error }
+tui-event-config-set-failed = Не вдалося зберегти { $path }
+tui-event-config-need-daemon = Редагування конфігурації потребує запущеного демона
+
+# Model routing editor (profile-based routing)
+tui-agents-title-model-routing = Маршрутизація моделей
+tui-agents-label-routing-fixed = фіксований — завжди використовувати власну модель агента
+tui-agents-label-routing-flexible = гнучкий — маршрутизатор обирає модель для кожного завдання
+tui-agents-hint-routing-mode = [Tab] змінити режим
+tui-agents-label-routing-fixed-explainer = Цей агент завжди використовує модель зі свого маніфесту. Натисніть Tab, щоб маршрутизатор обирав модель для кожного завдання.
+tui-agents-label-no-router-profiles = Немає доступних профілів моделей. Додайте їх до ~/.librefang/model_profiles.toml.
+tui-agents-label-routing-any-profile = будь-який
+tui-agents-hints-model-routing = [Tab] Режим  [↑↓] Навігація  [Space] Перемкнути профіль  [+/-] Бюджет витрат  [Enter] Зберегти  [Esc] Скасувати
+tui-agents-model-routing-not-loaded = Налаштування маршрутизації цього агента не завантажено — зачекайте мить або, якщо запит не вдався, натисніть Esc і відкрийте редактор знову клавішею r.
+tui-event-model-routing-fetch-failed = Не вдалося отримати маршрутизацію моделі
+tui-event-model-routing-update-failed = Не вдалося оновити маршрутизацію моделі
+tui-mod-agent-model-routing-updated = Маршрутизацію моделі оновлено для агента { $id }.
+
+# Model routing CLI commands
+agent-routing-label-mode = Режим
+agent-routing-label-allowed = Дозволені профілі
+agent-routing-label-budget = Бюджет витрат
+agent-routing-label-default = Профіль за замовчуванням
+agent-routing-any-profile = будь-який
+agent-routing-no-cap = без обмежень
+agent-routing-fixed-explainer = Цей агент завжди використовує модель зі свого маніфесту.
+agent-routing-label-fixed = Виключення з маршрутизації
+agent-routing-fixed-opt-out = зафіксовано — маршрутизатор ніколи не торкається цього агента
+agent-routing-updated = Маршрутизацію моделі для агента { $id } встановлено на { $mode }.
+agent-routing-failed = Не вдалося оновити маршрутизацію моделі: { $error }
+agent-routing-profiles-header = Профілі маршрутизатора моделей (маршрутизатор: { $enabled }):
+tui-agents-line-routing-mode =   Режим: { $mode }
+tui-agents-line-routing-summary =   Бюджет витрат: { $budget }    Дозволені профілі: { $allowed }
+tui-agents-label-routing-no-cap = без обмежень
+tui-agents-label-routing-cheap = дешевий
+tui-agents-label-routing-medium = середній
+tui-agents-label-routing-expensive = дорогий

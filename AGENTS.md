@@ -61,6 +61,29 @@ cargo test --workspace               # Run all tests
 cargo clippy --workspace --all-targets -- -D warnings  # Lint (zero warnings policy)
 ```
 
+### Verify locally. Never wait on CI.
+
+**CI is not a verification step in this repo.** It is slow, and waiting on it stalls work a local `cargo check` answers in a minute or two.
+
+- **Never** push a branch and then poll GitHub Actions for the result.
+- **Never** describe a change as "verified by CI", and never defer a failing or skipped check to CI.
+- **Never** treat a red or skipped CI lane as a reason to pause — verify the same property locally instead.
+- **Never** build `Dockerfile.rust-dev` to run a check. That image is for hosts with no native toolchain; this host has one, and building it costs ~20 minutes.
+
+There is a native `cargo` toolchain on the development host. Use it:
+
+```bash
+export CARGO_TARGET_DIR=/tmp/librefang-target-<worktree>   # keep off the shared target/
+export SKIP_DASHBOARD_BUILD=1                              # build.rs soft-skips without pnpm
+
+cargo check --workspace --lib
+cargo test -p <crate>
+```
+
+`SKIP_DASHBOARD_BUILD=1` stops `librefang-api/build.rs` shelling out to `pnpm`, which dominates a cold check and is irrelevant to Rust correctness.
+
+Read cargo's **own** exit status, not a wrapper's: `VAR=$?` followed by a pipe makes the shell report the pipe's status, so a failed build reads as success. Write it as the final action (`cmd > log 2>&1; echo $? > log.status`) and read that file.
+
 ## OpenSpec
 
 The repo is initialized for [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec-driven development.

@@ -490,6 +490,262 @@ async fn test_streaming_repeated_tool_failures_cap_exits() {
     }
 }
 
+/// A stream that fails with a provider error whose `Display` carries an
+/// endpoint URL and an upstream response body — the shape the note must not
+/// reproduce.
+struct ProviderErrorStreamDriver;
+
+/// Stands in for the endpoint/model/upstream-body detail a real driver error
+/// drags along. A 400 with no "unsupported parameter" wording classifies as
+/// `Format`, which is the branch of `build_user_facing_llm_error` that appends
+/// the raw error verbatim — and also where an unrecognised provider error
+/// lands by default.
+const PROVIDER_ERROR_LEAK_MARKER: &str =
+    "https://internal-gw.example/v1/messages model=acme-secret-v3 body={\"detail\":\"leaked\"}";
+
+#[async_trait]
+impl LlmDriver for ProviderErrorStreamDriver {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        unreachable!("streaming test must use stream")
+    }
+
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+        _tx: mpsc::Sender<StreamEvent>,
+    ) -> Result<CompletionResponse, LlmError> {
+        Err(LlmError::Api {
+            status: 400,
+            message: PROVIDER_ERROR_LEAK_MARKER.to_string(),
+            code: None,
+        })
+    }
+}
+
+/// Records what the substrate already held at the moment the provider was
+/// called, then fails the turn so nothing further can write.
+struct SessionSnapshotDriver {
+    memory: Arc<librefang_memory::MemorySubstrate>,
+    session_id: librefang_types::agent::SessionId,
+    persisted_at_call: Arc<std::sync::Mutex<Option<Vec<String>>>>,
+}
+
+#[async_trait]
+impl LlmDriver for SessionSnapshotDriver {
+    async fn complete(&self, _request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        unreachable!("streaming test must use stream")
+    }
+
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+        _tx: mpsc::Sender<StreamEvent>,
+    ) -> Result<CompletionResponse, LlmError> {
+        let persisted = self
+            .memory
+            .get_session_async(self.session_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|s| {
+                s.messages
+                    .iter()
+                    .map(|m| m.content.text_content())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        *self.persisted_at_call.lock().unwrap() = Some(persisted);
+        Err(LlmError::Api {
+            status: 500,
+            message: "stop the turn here".to_string(),
+            code: None,
+        })
+    }
+}
+
+/// The inbound message has to be on disk *before* the provider is called.
+///
+/// This is the path the dashboard takes, and the failure it guards is the one
+/// nothing else covers: a daemon restart, or a hang that outlives the
+/// surrounding timeout, between pushing the user's message and the first
+/// interim save. The provider-failure note added elsewhere in this loop only
+/// covers `stream_with_retry` returning `Err` — not a crash, not a restart,
+/// not a cancellation — so asserting on the session *after* the loop would
+/// pass with the save deleted.
+#[tokio::test]
+async fn the_streaming_loop_persists_the_inbound_message_before_calling_the_provider() {
+    let memory = Arc::new(librefang_memory::MemorySubstrate::open_in_memory(0.01).unwrap());
+    let mut session = fresh_session();
+    let session_id = session.id;
+    let mut manifest = test_manifest();
+    manifest.model.provider = "test-inbound-save".to_string();
+
+    let persisted_at_call = Arc::new(std::sync::Mutex::new(None));
+    let driver: Arc<dyn LlmDriver> = Arc::new(SessionSnapshotDriver {
+        memory: Arc::clone(&memory),
+        session_id,
+        persisted_at_call: Arc::clone(&persisted_at_call),
+    });
+    let (tx, _rx) = mpsc::channel(64);
+
+    let _ = run_agent_loop_streaming(
+        &manifest,
+        "the message that must not be lost",
+        &mut session,
+        &memory,
+        driver,
+        &[],
+        None,
+        tx,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None, // on_phase
+        None, // media_engine
+        None, // media_drivers
+        None, // tts_engine
+        None, // docker_config
+        None, // hooks
+        None, // context_window_tokens
+        None, // process_manager
+        None, // checkpoint_manager
+        None, // process_registry
+        None, // user_content_blocks
+        None, // proactive_memory
+        None, // context_engine
+        None, // pending_messages
+        &LoopOptions::default(),
+    )
+    .await;
+
+    let snapshot = persisted_at_call
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("the driver must have been reached");
+    assert!(
+        snapshot
+            .iter()
+            .any(|t| t.contains("the message that must not be lost")),
+        "the inbound message must already be persisted when the provider is called, \
+         got: {snapshot:?}"
+    );
+}
+
+/// A provider failure must leave a visible note so the turn does not die
+/// silently. The note carries none of the driver error's `Display`, and it has
+/// to be stored in a role that survives both `session_repair` and the driver's
+/// message conversion — a `Role::System` note reads correctly in the dashboard
+/// and reaches no hosted model at all.
+#[tokio::test]
+async fn streaming_provider_failure_note_is_opaque_and_reaches_the_model() {
+    let memory = librefang_memory::MemorySubstrate::open_in_memory(0.01).unwrap();
+    let mut session = fresh_session();
+    let mut manifest = test_manifest();
+    // Own cooldown key: the circuit breaker is a process-wide static, so a
+    // shared provider name would let this failure leak into sibling tests.
+    manifest.model.provider = "test-provider-failure-note".to_string();
+    let driver: Arc<dyn LlmDriver> = Arc::new(ProviderErrorStreamDriver);
+    let (tx, _rx) = mpsc::channel(64);
+
+    let err = run_agent_loop_streaming(
+        &manifest,
+        "Do something",
+        &mut session,
+        &memory,
+        driver,
+        &[],
+        None,
+        tx,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None, // on_phase
+        None, // media_engine
+        None, // media_drivers
+        None, // tts_engine
+        None, // docker_config
+        None, // hooks
+        None, // context_window_tokens
+        None, // process_manager
+        None, // checkpoint_manager
+        None, // process_registry
+        None, // user_content_blocks
+        None, // proactive_memory
+        None, // context_engine
+        None, // pending_messages
+        &LoopOptions::default(),
+    )
+    .await
+    .expect_err("Streaming loop must surface the provider error");
+
+    let note = session
+        .messages
+        .last()
+        .expect("Provider failure must leave a note in the session");
+
+    let text = match &note.content {
+        MessageContent::Text(t) => t.clone(),
+        MessageContent::Blocks(blocks) => blocks
+            .iter()
+            .filter_map(|b| match b {
+                ContentBlock::Text { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    };
+
+    assert_ne!(
+        note.role,
+        Role::System,
+        "A system-role note in the middle of history reaches no hosted model: anthropic \
+         filters it out of the request, gemini and bedrock skip it, and openai / ollama \
+         emit one only when the request carries no system prompt — which the agent loop \
+         always sets. The `[System: …]` text prefix is what marks this as a daemon fact. \
+         Got: {text:?}"
+    );
+    assert!(
+        !text.contains(PROVIDER_ERROR_LEAK_MARKER),
+        "The visible note must not reproduce the provider error's endpoint / model / \
+         upstream body. Got: {text:?}"
+    );
+    assert!(
+        !text.contains(&err.to_string()),
+        "The visible note must not contain the provider error's Display. Got: {text:?}"
+    );
+    assert!(
+        !text.trim().is_empty(),
+        "The note must still be there — a turn that dies leaving the chat blank is the \
+         failure this branch exists to prevent"
+    );
+
+    // …and it must survive the round trip to the provider. `session_repair`
+    // merges only *adjacent* same-role messages, so a note interposed between
+    // two user turns is not merged; the driver then strips it and hands the
+    // provider the `user, user` pair that merge exists to prevent.
+    let mut next_turn = session.messages.clone();
+    next_turn.push(Message::user("and now?"));
+    let repaired = crate::session_repair::validate_and_repair(&next_turn);
+    let sent: Vec<&Message> = repaired.iter().filter(|m| m.role != Role::System).collect();
+    assert!(
+        sent.iter()
+            .any(|m| matches!(&m.content, MessageContent::Text(t) if t == &text)),
+        "the note must still be present in what the provider receives"
+    );
+    assert!(
+        sent.windows(2).all(|w| w[0].role != w[1].role),
+        "the history handed to the provider must alternate: {:?}",
+        sent.iter().map(|m| m.role).collect::<Vec<_>>()
+    );
+}
+
 // -------------------------------------------------------------------
 // StagedToolUseTurn invariants (closes #2381 by construction)
 //
@@ -2304,5 +2560,181 @@ fn redact_images_for_text_only_is_noop_without_images() {
         format!("{:?}", out[0].content),
         format!("{:?}", original[0].content),
         "messages without image blocks must pass through unchanged"
+    );
+}
+
+// --- Loop-guard outcome recording --------------------------------------
+//
+// `record_loop_guard_outcome` is the post-execution half of the guard: it feeds the result back in, which is what arms `blocked_outcomes` for the next `check()`.
+// Before it was wired the outcome counters stayed empty for the whole loop and only the per-call counter could ever block anything.
+
+/// One executed tool call carrying `content` as both the raw result and the content the model would see.
+/// `execution_ms` is what distinguishes a call that ran the tool body from a short-circuit (fork-allowlist rejection, incognito drop, hook block), so it is a parameter.
+fn executed_tool_call(content: &str, execution_ms: Option<u64>) -> ExecutedToolCall {
+    ExecutedToolCall {
+        result: librefang_types::tool::ToolResult {
+            tool_use_id: "tid_1".to_string(),
+            content: content.to_string(),
+            is_error: false,
+            status: librefang_types::tool::ToolExecutionStatus::Completed,
+            ..Default::default()
+        },
+        final_content: content.to_string(),
+        execution_ms,
+    }
+}
+
+#[test]
+fn record_loop_guard_outcome_blocks_the_call_after_three_identical_results() {
+    use super::super::tool_call::record_loop_guard_outcome;
+
+    let mut guard = LoopGuard::new(LoopGuardConfig::default());
+    let tool_call = ToolCall {
+        id: "tid_1".to_string(),
+        name: "task_claim".to_string(),
+        input: serde_json::json!({}),
+    };
+
+    // Three calls that run and return the same thing.
+    // The first is silent; the second and third carry the guard's advisory into the tool result.
+    for i in 1..=3 {
+        let verdict = guard.check(&tool_call.name, &tool_call.input);
+        assert!(
+            !matches!(verdict, LoopGuardVerdict::Block(_)),
+            "call {i} must still run: {verdict:?}"
+        );
+        let mut executed = executed_tool_call("The queue is empty.", Some(4));
+        record_loop_guard_outcome(&mut guard, &tool_call, &mut executed);
+        if i == 1 {
+            assert_eq!(
+                executed.final_content, "The queue is empty.",
+                "a first result has nothing to repeat and must not be annotated"
+            );
+        } else {
+            assert!(
+                executed.final_content.contains("[LOOP GUARD]")
+                    && executed.final_content.contains("identical results"),
+                "repeat {i} must carry the outcome advisory, got: {:?}",
+                executed.final_content
+            );
+        }
+    }
+
+    // Fourth call: blocked on the outcome rule, one call before `block_threshold` (5) would have stopped it.
+    let verdict = guard.check(&tool_call.name, &tool_call.input);
+    assert!(
+        matches!(&verdict, LoopGuardVerdict::Block(msg) if msg.contains("identical results")),
+        "expected an outcome block on the fourth identical call, got: {verdict:?}"
+    );
+}
+
+#[test]
+fn record_loop_guard_outcome_ignores_calls_that_never_ran() {
+    use super::super::tool_call::record_loop_guard_outcome;
+
+    let mut guard = LoopGuard::new(LoopGuardConfig::default());
+    let tool_call = ToolCall {
+        id: "tid_1".to_string(),
+        name: "task_claim".to_string(),
+        input: serde_json::json!({}),
+    };
+
+    // A hook block, a fork-allowlist rejection and an incognito drop all produce constant content without running the tool.
+    // Recording them would let the runtime's own refusals look like a tool repeating itself.
+    for _ in 0..3 {
+        guard.check(&tool_call.name, &tool_call.input);
+        let mut executed = executed_tool_call("Hook blocked tool 'task_claim': policy", None);
+        record_loop_guard_outcome(&mut guard, &tool_call, &mut executed);
+        assert_eq!(
+            executed.final_content, "Hook blocked tool 'task_claim': policy",
+            "a call that never ran must not be annotated"
+        );
+    }
+
+    // Nothing was recorded, so the fourth call is judged by the per-call counter alone — a warning, not the outcome block.
+    let verdict = guard.check(&tool_call.name, &tool_call.input);
+    assert!(
+        matches!(verdict, LoopGuardVerdict::Warn(_)),
+        "expected the plain repeat warning, got: {verdict:?}"
+    );
+}
+
+#[test]
+fn record_loop_guard_outcome_appends_the_poll_backoff_suggestion() {
+    use super::super::tool_call::record_loop_guard_outcome;
+
+    let mut guard = LoopGuard::new(LoopGuardConfig::default());
+    let tool_call = ToolCall {
+        id: "tid_1".to_string(),
+        name: "shell_exec".to_string(),
+        input: serde_json::json!({"command": "docker ps"}),
+    };
+
+    // The backoff schedule starts on the second call of the same poll.
+    let mut first = executed_tool_call("CONTAINER ID   IMAGE   STATUS", Some(7));
+    record_loop_guard_outcome(&mut guard, &tool_call, &mut first);
+    assert_eq!(
+        first.final_content, "CONTAINER ID   IMAGE   STATUS",
+        "the first poll has nothing to pace"
+    );
+
+    let mut second = executed_tool_call("CONTAINER ID   IMAGE   STATUS", Some(7));
+    record_loop_guard_outcome(&mut guard, &tool_call, &mut second);
+    assert!(
+        second.final_content.contains("Wait roughly 5s"),
+        "expected the first backoff step on the second poll, got: {:?}",
+        second.final_content
+    );
+
+    // An unchanged answer is what a wait loop looks like, so a poll call is paced rather than accused of returning identical results.
+    let mut third = executed_tool_call("CONTAINER ID   IMAGE   STATUS", Some(7));
+    record_loop_guard_outcome(&mut guard, &tool_call, &mut third);
+    assert!(
+        !third.final_content.contains("identical results"),
+        "a poll call must keep its relaxed outcome thresholds, got: {:?}",
+        third.final_content
+    );
+    assert!(
+        !matches!(
+            guard.check(&tool_call.name, &tool_call.input),
+            LoopGuardVerdict::Block(_)
+        ),
+        "three identical poll answers must not block the next poll"
+    );
+}
+
+/// The advisory text and the relaxed outcome budget are both gated on a call that *declares* itself a poll, not on the broad classifier `check` uses.
+/// `LoopGuard::is_poll_call` also treats any parameter object mentioning `status` / `poll` / `wait` as polling, for any tool name, which sweeps up ordinary listings — `task_list {"status": "pending"}` and `goal_update {"goal_id": …, "status": "in_progress"}` both match.
+/// Telling those to wait five seconds is false advice, and tripling their outcome budget would weaken the guard 3x for exactly the calls it was written to stop.
+#[test]
+fn record_loop_guard_outcome_does_not_pace_ordinary_calls_that_mention_status() {
+    use super::super::tool_call::record_loop_guard_outcome;
+
+    let mut guard = LoopGuard::new(LoopGuardConfig::default());
+    let tool_call = ToolCall {
+        id: "tid_1".to_string(),
+        name: "task_list".to_string(),
+        input: serde_json::json!({"status": "pending"}),
+    };
+
+    for i in 1..=3 {
+        let verdict = guard.check(&tool_call.name, &tool_call.input);
+        assert!(
+            !matches!(verdict, LoopGuardVerdict::Block(_)),
+            "call {i} must still run: {verdict:?}"
+        );
+        let mut executed = executed_tool_call("No pending tasks.", Some(3));
+        record_loop_guard_outcome(&mut guard, &tool_call, &mut executed);
+        assert!(
+            !executed.final_content.contains("This looks like polling"),
+            "repeat {i} of an ordinary listing must not be told to wait, got: {:?}",
+            executed.final_content
+        );
+    }
+
+    let verdict = guard.check(&tool_call.name, &tool_call.input);
+    assert!(
+        matches!(&verdict, LoopGuardVerdict::Block(msg) if msg.contains("identical results")),
+        "the fourth identical listing must hit the strict outcome threshold, got: {verdict:?}"
     );
 }

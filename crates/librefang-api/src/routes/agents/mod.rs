@@ -195,6 +195,10 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
             axum::routing::get(get_agent_mcp_servers).put(set_agent_mcp_servers),
         )
         .route(
+            "/agents/{id}/model_routing",
+            axum::routing::get(get_agent_model_routing).put(set_agent_model_routing),
+        )
+        .route(
             "/agents/{id}/channels",
             axum::routing::get(get_agent_channels).put(set_agent_channels),
         )
@@ -422,7 +426,11 @@ pub(crate) fn merge_agent_identity(
 
 /// Resolve the session id the attachment blocks should be written to,
 /// mirroring the resolver used by `send_message_*` in
-/// `kernel::messaging`. Pure function (no I/O, no kernel reads) so it can
+/// `kernel::messaging`. The channel branch delegates to
+/// `LibreFangKernel::channel_session_id` — the single resolver every
+/// dispatch path names (#7701 review: this used to be the fourth inline
+/// `for_sender_scope` mirror, and without the reserved-name guard it could
+/// drift from the other three). Pure function (no I/O, no kernel reads) so it can
 /// be unit-tested directly and so call sites can assert which session id
 /// the attachment landed in.
 ///
@@ -453,10 +461,15 @@ pub(crate) fn resolve_attachment_session_id(
     }
     if let Some(ctx) = sender_context {
         if !ctx.channel.is_empty() && !ctx.use_canonical_session {
-            return librefang_types::agent::SessionId::for_sender_scope(
+            // The channel branch now goes through the kernel's centralized
+            // resolver, not an inline `for_sender_scope`: the reserved-name
+            // guard (`resolve_scope_channel`) lives in one place, so this
+            // fourth site cannot drift from the other three (#7701 review).
+            return librefang_kernel::LibreFangKernel::channel_session_id(
                 agent_id,
                 &ctx.channel,
                 ctx.chat_id.as_deref(),
+                ctx.is_internal_system,
             );
         }
     }
@@ -692,6 +705,13 @@ fn kernel_err_to_status(e: &crate::error::KernelError) -> StatusCode {
     use librefang_types::error::LibreFangError;
     match e {
         KernelError::LibreFang(LibreFangError::AgentNotFound(_)) => StatusCode::NOT_FOUND,
+        // The other two "not found" shapes the kernel can produce. Leaving
+        // them in the `_` arm reported a missing session, or a tool-level
+        // resource a `ToolError::NotFound` had already typed, as a server
+        // fault — and `kernel_err_body` then scrubbed the reason away, so the
+        // caller could not tell a bad id from an outage.
+        KernelError::LibreFang(LibreFangError::SessionNotFound(_)) => StatusCode::NOT_FOUND,
+        KernelError::LibreFang(LibreFangError::ResourceNotFound { .. }) => StatusCode::NOT_FOUND,
         KernelError::LibreFang(LibreFangError::AgentAlreadyExists(_)) => StatusCode::CONFLICT,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -1988,6 +2008,38 @@ mod tests {
         );
     }
 
+    /// The reserved-name guard applies at the attachment site too. An
+    /// external sender whose channel happens to carry a reserved system
+    /// name ("cron") must not land on the internal system session id —
+    /// before the migration to `LibreFangKernel::channel_session_id` this
+    /// was the fourth inline `for_sender_scope` mirror, and the only one
+    /// of the four without the guard (#7701 review).
+    #[test]
+    fn resolve_attachment_session_id_guards_reserved_channel_names() {
+        use librefang_channels::types::SenderContext;
+        use librefang_types::agent::SessionId;
+        let agent_id = AgentId::new();
+        let registry_default = SessionId::new();
+        let sender = SenderContext {
+            channel: "cron".to_string(),
+            user_id: "user-1".to_string(),
+            chat_id: Some("chat-XYZ".to_string()),
+            display_name: "Alice".to_string(),
+            use_canonical_session: false,
+            is_internal_system: false,
+            ..Default::default()
+        };
+        let resolved =
+            resolve_attachment_session_id(agent_id, Some(&sender), None, registry_default);
+        let unguarded =
+            SessionId::for_sender_scope(agent_id, &sender.channel, sender.chat_id.as_deref());
+        assert_ne!(
+            resolved, unguarded,
+            "an external 'cron' channel must be remapped by the reserved-name \
+             guard instead of colliding with the internal system session id"
+        );
+    }
+
     /// Explicit `session_id_override` (multi-tab WebUI, REST callers that
     /// already pinned a session) must win over channel-derived resolution
     /// AND over the registry-default fallback. Mirrors priority #1 in the
@@ -2107,6 +2159,7 @@ mod monitoring_tests {
             webhook_router: Arc::new(tokio::sync::RwLock::new(Arc::new(axum::Router::new()))),
             api_key_lock: Arc::new(tokio::sync::RwLock::new(String::new())),
             master_key: Default::default(),
+            dashboard_auth_enabled: Default::default(),
             user_api_keys: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             config_write_lock: tokio::sync::Mutex::new(()),
             pending_a2a_agents: dashmap::DashMap::new(),

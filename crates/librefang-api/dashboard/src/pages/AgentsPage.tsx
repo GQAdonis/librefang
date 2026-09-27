@@ -36,7 +36,7 @@ import { useUIStore } from "../lib/store";
 import { copyToClipboard } from "../lib/clipboard";
 import { toastErr } from "../lib/errors";
 import { filterVisible } from "../lib/hiddenModels";
-import { Search, Users, MessageCircle, X, Cpu, Wrench, Shield, Plus, Loader2, Pause, Play, Clock, Brain, Zap, FlaskConical, Trash2, Copy, RotateCcw, Pencil, Bot, Database, FileText, MoreHorizontal, Sparkles, ChevronDown, Check, Save, Library, GitBranch } from "lucide-react";
+import { Search, Users, MessageCircle, X, Cpu, Wrench, Shield, Plus, Loader2, Pause, Play, Clock, Brain, Zap, FlaskConical, Trash2, Copy, RotateCcw, Pencil, Bot, Database, FileText, MoreHorizontal, Sparkles, ChevronDown, Check, Save, Library, GitBranch, Route } from "lucide-react";
 import { buildModelConfigPatch } from "../lib/agentModelPatch";
 import { truncateId } from "../lib/string";
 import { pickLatestSessionId } from "../lib/sessionSelector";
@@ -53,6 +53,7 @@ import { useSkills } from "../lib/queries/skills";
 import { useMcpServers } from "../lib/queries/mcp";
 import { AgentManifestForm } from "../components/AgentManifestForm";
 import { AgentSchedulePanel } from "../components/AgentSchedulePanel";
+import { AgentModelRoutingPanel } from "../components/AgentModelRoutingPanel";
 import { AgentSkillItem } from "../components/AgentSkillItem";
 import {
   emptyManifestExtras,
@@ -91,6 +92,7 @@ import {
   useSetAgentSkills,
 } from "../lib/mutations/agents";
 import { useBindPromptVersionToAgent } from "../lib/mutations/prompts";
+import { formatNumber } from "../lib/format";
 
 /**
  * Local view type that pairs the strict `AgentDetail` shape from `api.ts`
@@ -153,6 +155,17 @@ export function cloneResultNotice(result: CloneAgentResult): {
     partial: result.partial || warnings.length > 0,
     warnings: warnings.join(", ") || "unknown",
   };
+}
+
+/**
+ * Whether the token-footprint panel has data to show. A genuine zero (a
+ * tools-disabled agent with no system_prompt) is real data, not "missing" —
+ * only the absence of the field means the daemon has nothing to report.
+ */
+export function hasTokenFootprintData(
+  injectedFootprintTokens: number | null | undefined,
+): injectedFootprintTokens is number {
+  return injectedFootprintTokens != null;
 }
 
 /** Two-column row used inside the detail modal's value cards. */
@@ -379,7 +392,7 @@ export function AgentsPage() {
   // the PUT — leaving the tab discards the draft (the "change your mind" path).
   const [skillsDraft, setSkillsDraft] = useState<string[] | null>(null);
   const [agentTab, setAgentTab] = useState<
-    "conversation" | "memory" | "skills" | "tools" | "schedule" | "logs"
+    "conversation" | "memory" | "skills" | "tools" | "routing" | "schedule" | "logs"
   >("conversation");
   // Whether the deep-edit drawer is open. Decoupled from `detailAgent` so
   // selecting an agent in the list shows the inline detail panel without
@@ -784,7 +797,11 @@ export function AgentsPage() {
   }, [skillsQuery.data]);
 
   const configuredProviders = useMemo(
-    () => (providersQuery.data ?? []).filter(p => isProviderAvailable(p.auth_status)),
+    // Suppression excluded as well as availability: a provider the operator
+    // removed is absent from the Providers page, and offering it here would
+    // let an agent be bound to something with no card, no badge and no way to
+    // manage it.
+    () => (providersQuery.data ?? []).filter(p => p.suppressed !== true && isProviderAvailable(p.auth_status)),
     [providersQuery.data],
   );
 
@@ -1114,6 +1131,7 @@ export function AgentsPage() {
       { id: "memory",       label: t("agents.tab.memory",       { defaultValue: "Memory" }),       Icon: Database },
       { id: "skills",       label: t("agents.tab.skills",       { defaultValue: "Skills" }),       Icon: Sparkles },
       { id: "tools",        label: t("agents.tab.tools",        { defaultValue: "Tools" }),        Icon: Wrench },
+      { id: "routing",      label: t("agents.tab.routing",      { defaultValue: "Routing" }),      Icon: Route },
       { id: "schedule",     label: t("agents.tab.schedule",     { defaultValue: "Schedule" }),     Icon: Clock },
       { id: "logs",         label: t("agents.tab.logs",         { defaultValue: "Logs" }),         Icon: FileText },
     ];
@@ -1362,6 +1380,7 @@ export function AgentsPage() {
       case "memory":            return renderMemoryTab(agent);
       case "skills":            return renderSkillsTab(agent);
       case "tools":             return renderToolsTab(agent);
+      case "routing":           return renderRoutingTab(agent);
       case "schedule":          return renderScheduleTab(agent);
       case "logs":              return renderLogsTab(agent);
     }
@@ -2294,6 +2313,14 @@ export function AgentsPage() {
   // (no real per-fire telemetry endpoint yet) and was dropped in favour of
   // real editing affordances — restore it once a per-agent run-history feed
   // exists.
+  // ---------- Routing tab — per-agent model routing (fixed vs router-chosen,
+  // profile allowlist, cost budget). Owned by AgentModelRoutingPanel, which
+  // talks to GET/PUT /api/agents/{id}/model_routing and
+  // GET /api/model-router/profiles.
+  const renderRoutingTab = (agent: AgentDetail) => (
+    <AgentModelRoutingPanel agent={agent} />
+  );
+
   const renderScheduleTab = (agent: AgentDetail) => (
     <AgentSchedulePanel agent={agent} />
   );
@@ -2787,7 +2814,7 @@ export function AgentsPage() {
                           <span className="font-mono">
                             {detailAgent.model.max_tokens == null
                               ? t("agents.form.inherit_default")
-                              : detailAgent.model.max_tokens.toLocaleString()}
+                              : formatNumber(detailAgent.model.max_tokens)}
                           </span>
                         </DetailRow>
                         <DetailRow label={t("agents.temperature")}>
@@ -3013,7 +3040,7 @@ export function AgentsPage() {
                       </Badge>
                     </DetailRow>
                     <DetailRow label={t("agents.budget_tokens")}>
-                      <span className="font-mono">{detailAgent.thinking.budget_tokens?.toLocaleString() ?? 0}</span>
+                      <span className="font-mono">{formatNumber(detailAgent.thinking.budget_tokens)}</span>
                     </DetailRow>
                     <DetailRow label={t("agents.stream_thinking")}>
                       <Badge variant={detailAgent.thinking.stream_thinking ? "brand" : "default"}>
@@ -3130,6 +3157,37 @@ export function AgentsPage() {
                   </Button>
                 )}
               </div>
+
+              {hasTokenFootprintData(detailAgent.injected_footprint_tokens) && (
+                <div className="rounded-lg bg-main/30 p-3 space-y-1.5">
+                  <p className="text-[11px] font-bold text-text-dim">
+                    {t("agents.token_usage_title", { defaultValue: "Token footprint" })}
+                  </p>
+                  <div className="flex justify-between text-[11px] border-t border-border/40 pt-1.5">
+                    <span className="font-bold">
+                      {t("agents.token_injected_total", { defaultValue: "Injected per request" })}
+                    </span>
+                    <span className="font-mono font-bold">
+                      {formatNumber(detailAgent.injected_footprint_tokens)}
+                    </span>
+                  </div>
+                  {(agentEventsQuery.data ?? []).length > 0 && (
+                    <div className="border-t border-border/40 pt-1.5 space-y-1">
+                      <p className="text-[10px] text-text-dim">
+                        {t("agents.token_recent", { defaultValue: "Recent calls" })}
+                      </p>
+                      {(agentEventsQuery.data ?? []).slice(0, 5).map((call, i) => (
+                        <div key={`${call.timestamp}-${i}`} className="flex justify-between text-[10px]">
+                          <span className="text-text-dim truncate">{call.model}</span>
+                          <span className="font-mono">
+                            {call.input_tokens}/{call.output_tokens} · ${call.cost_usd.toFixed(4)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <Button
                 variant="secondary"

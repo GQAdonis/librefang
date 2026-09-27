@@ -234,6 +234,7 @@ audit-failed = 감사 추적 무결성 검사에 실패했습니다.
 
 # --- Health ---
 health-ok = 데몬이 정상입니다
+health-degraded = 데몬에 연결되었지만 일부 하위 시스템이 비정상입니다
 health-not-running = 데몬이 실행 중이 아닙니다.
 
 # --- Channel setup ---
@@ -1264,7 +1265,7 @@ skill-bundle-size =   크기: { $size } bytes
 skill-dry-run = 테스트 실행만 수행합니다.
 skill-dry-run-repo =   저장소: { $repo }
 skill-dry-run-tag =   태그: { $tag }
-skill-github-token-required = 게시하려면 GITHUB_TOKEN 또는 GH_TOKEN을 설정하거나 --dry-run으로 다시 실행하십시오.
+skill-github-token-required = GitHub 토큰을 찾을 수 없습니다. GITHUB_TOKEN 또는 GH_TOKEN을 설정하거나 `librefang vault set GITHUB_TOKEN`으로 볼트에 저장하거나 --dry-run으로 다시 실행하십시오.
 skill-publishing-progress = { $name }@{ $tag } 게시 중
 skill-publish-success = { $name }을(를) { $repo }@{ $tag }에 게시했습니다
 skill-publish-release-url = 릴리스: { $url }
@@ -2090,6 +2091,9 @@ tui-agents-title-templates = 템플릿
 tui-agents-title-custom-name = 사용자 지정 — 이름
 tui-agents-title-custom-desc = 사용자 지정 — 설명
 tui-agents-title-custom-prompt = 사용자 지정 — 시스템 프롬프트
+tui-agents-detail-tokens = 토큰 사용량  ($ 새로고침)
+tui-agents-detail-tokens-injected = 주입됨
+tui-agents-token-usage-failed = 토큰 사용량을 불러올 수 없습니다
 tui-agents-title-custom-tools = 사용자 지정 — 도구
 tui-agents-title-custom-skills = 사용자 지정 — 스킬
 tui-agents-title-custom-mcp = 사용자 지정 — MCP 서버
@@ -2124,7 +2128,7 @@ tui-agents-opt-create-new = 새 에이전트 생성
 
 tui-agents-hints-filter =   [입력] 필터  [Enter] 적용  [Esc] 검색 취소
 tui-agents-hints-list =   [↑↓] 탐색  [Enter] 상세  [/] 검색  [Esc] 뒤로
-tui-agents-hints-detail =   [s] 스킬 편집  [m] MCP 편집  [n] 채널 편집  [p] 모델 파라미터  [c] 채팅  [k] 종료  [Esc] 뒤로
+tui-agents-hints-detail =   [s] 스킬 편집  [m] MCP 편집  [n] 채널 편집  [p] 모델 파라미터  [$] 토큰  [c] 채팅  [k] 종료  [Esc] 뒤로
 tui-agents-title-model-params = 모델 파라미터
 tui-agents-prompt-model-params = 이 에이전트의 설정이 모델 설정보다 우선합니다. `inherit`는 모델 설정을 따릅니다.
 tui-agents-hints-model-params =   [←→] 변경  [i] 상속  [e] 직접 입력  [Enter] 저장  [Esc] 취소
@@ -2403,6 +2407,20 @@ agent-set-invalid-integer = { $field }은(는) 양의 정수여야 합니다. �
 agent-set-invalid-decimal = { $field }은(는) 실수여야 합니다. 입력값: '{ $value }'
 agent-set-limit-warning = 경고: { $message }
 
+# Model routing editor (profile-based routing)
+tui-agents-title-model-routing = 모델 라우팅
+tui-agents-label-routing-fixed = 고정 — 항상 이 에이전트의 자체 모델 사용
+tui-agents-label-routing-flexible = 유연 — 작업별로 라우터가 선택
+tui-agents-hint-routing-mode = [Tab] 모드 전환
+tui-agents-label-routing-fixed-explainer = 이 에이전트는 항상 자체 매니페스트의 모델을 사용합니다. Tab을 눌러 작업별로 라우터가 선택하도록 하세요.
+tui-agents-label-no-router-profiles = 사용 가능한 모델 프로필이 없습니다. ~/.librefang/model_profiles.toml에 추가하세요.
+tui-agents-label-routing-any-profile = 전체
+tui-agents-hints-model-routing = [Tab] 모드  [↑↓] 탐색  [Space] 프로필 전환  [+/-] 비용 예산  [Enter] 저장  [Esc] 취소
+tui-agents-model-routing-not-loaded = 이 에이전트의 라우팅 설정을 아직 불러오지 못했습니다 — 잠시 기다리거나, 가져오기에 실패했다면 Esc를 누른 뒤 r 키로 다시 여세요.
+tui-event-model-routing-fetch-failed = 모델 라우팅을 가져오지 못했습니다
+tui-event-model-routing-update-failed = 모델 라우팅을 업데이트하지 못했습니다
+tui-mod-agent-model-routing-updated = 에이전트 { $id }의 모델 라우팅이 업데이트되었습니다.
+
 # --- Goals screen (TUI) ---
 tui-goals-title = ⌖ 목표
 tui-goals-count = 목표 { $count }개
@@ -2470,11 +2488,11 @@ cmd-goal-finished = 목표가 성공적으로 완료되었습니다.
 cmd-goal-max-iterations = 목표 중지: 반복 한도에 도달했습니다.
 cmd-goal-rate-limited = 목표 중지: 제공자 속도 제한.
 cmd-goal-stopped = 목표 실행이 중지되었습니다.
+cmd-goal-paused = 목표 실행이 일시 중지되었습니다.
 cmd-goal-error = 오류: { $error }
 cmd-goal-unknown-error = 알 수 없는 오류
 cmd-goal-watch-poll-error = 실행 상태를 읽을 수 없습니다({ $count }/{ $max }); 다시 시도하는 중…
 cmd-goal-watch-poll-gave-up = { $count }회 연속 폴링 실패 후 관찰을 중단했습니다 — 결과를 알 수 없으며 실행은 계속 진행 중일 수 있습니다.
-
 
 
 
@@ -2595,3 +2613,52 @@ tui-memory-config-requires-daemon = 메모리 설정은 데몬 API에서 가져�
 tui-memory-config-fetch-failed = 메모리 설정을 읽을 수 없습니다: { $error }
 tui-goals-run-requires-daemon = 실행 상태는 데몬 API에서 가져옵니다 — TUI가 인프로세스로 연결된 경우 사용할 수 없습니다.
 tui-goals-run-fetch-failed = { $id }의 실행 상태를 읽을 수 없습니다: { $error }
+
+# config_editor.rs — 범용 설정 섹션 편집기 (#8165)
+tui-settings-tab-config = 6 구성
+tui-settings-hints-config =   [↑↓] 탐색  [Enter] 섹션 열기  [r] 새로고침
+tui-settings-hints-config-fields =   [↑↓] 탐색  [Enter] 편집 / 전환  [Esc] 뒤로  [r] 새로고침
+tui-settings-config-loading = 구성을 불러오는 중…
+tui-settings-config-empty = 사용할 수 있는 구성 섹션이 없습니다. 데몬이 실행 중이어야 합니다.
+tui-settings-config-select-section = 왼쪽에서 섹션을 고른 뒤 [Enter]를 눌러 설정을 확인하세요.
+tui-settings-config-header-section = 섹션
+tui-settings-config-header-setting = 설정
+tui-settings-config-header-value = 값
+tui-settings-config-unset = 설정되지 않음
+tui-settings-config-on = 켬
+tui-settings-config-off = 끔
+tui-settings-config-readonly = 읽기 전용
+tui-settings-config-readonly-msg = { $path }은(는) 여기서 읽기 전용입니다 — ~/.librefang/config.toml을 직접 편집하세요.
+tui-settings-config-complex = { $path }은(는) 목록 또는 테이블입니다 — ~/.librefang/config.toml을 직접 편집하세요.
+tui-settings-config-invalid = { $path }에 유효한 값이 아닙니다.
+tui-settings-config-redacted = { $path }은(는) 가려진 상태로 표시됩니다 — 새 값을 전체로 입력하세요. 빈 값은 여기서 거부됩니다.
+tui-settings-config-prompt = { $path } 설정 (비우면 삭제):
+tui-mod-config-value-saved = { $path } 저장됨
+tui-mod-config-value-saved-restart = { $path }을(를) 저장했습니다 — 적용하려면 데몬을 다시 시작하세요
+tui-mod-config-value-saved-reload-failed = { $path }을(를) config.toml에 저장했지만 다시 불러오기에 실패했습니다: { $error }
+tui-event-config-schema-failed = 구성 스키마를 불러오지 못했습니다
+tui-event-config-schema-unreadable = 데몬이 응답했지만 설정 스키마를 읽을 수 없습니다: { $error }
+tui-event-config-failed = 현재 구성을 불러오지 못했습니다
+tui-event-config-unreadable = 데몬이 응답했지만 현재 설정을 읽을 수 없습니다: { $error }
+tui-event-config-set-failed = { $path }을(를) 저장하지 못했습니다
+tui-event-config-need-daemon = 구성 편집에는 실행 중인 데몬이 필요합니다
+
+# Model routing CLI commands
+agent-routing-label-mode = 모드
+agent-routing-label-allowed = 허용된 프로필
+agent-routing-label-budget = 비용 예산
+agent-routing-label-default = 기본 프로필
+agent-routing-any-profile = 전체
+agent-routing-no-cap = 제한 없음
+agent-routing-fixed-explainer = 이 에이전트는 항상 자체 매니페스트의 모델을 사용합니다.
+agent-routing-label-fixed = 라우터 제외
+agent-routing-fixed-opt-out = 고정됨 — 라우터가 이 에이전트를 건드리지 않습니다
+agent-routing-updated = 에이전트 { $id }의 모델 라우팅이 { $mode }(으)로 설정되었습니다.
+agent-routing-failed = 모델 라우팅 업데이트 실패: { $error }
+agent-routing-profiles-header = 모델 라우터 프로필 (라우터: { $enabled }):
+tui-agents-line-routing-mode =   모드: { $mode }
+tui-agents-line-routing-summary =   비용 예산: { $budget }    허용된 프로필: { $allowed }
+tui-agents-label-routing-no-cap = 제한 없음
+tui-agents-label-routing-cheap = 저비용
+tui-agents-label-routing-medium = 중간
+tui-agents-label-routing-expensive = 고비용

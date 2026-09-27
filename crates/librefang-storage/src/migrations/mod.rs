@@ -193,4 +193,49 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "knowledge_graph_peer_scope_v1",
         sql: include_str!("sql/033_knowledge_graph_peer_scope.surql"),
     },
+    Migration {
+        version: 34,
+        name: "workflow_runs_total_steps_v1",
+        sql: include_str!("sql/034_workflow_runs_total_steps.surql"),
+    },
+    Migration {
+        version: 35,
+        name: "manifest_versions_v1",
+        sql: include_str!("sql/035_manifest_versions.surql"),
+    },
+    Migration {
+        version: 36,
+        name: "template_versions_v1",
+        sql: include_str!("sql/036_template_versions.surql"),
+    },
+    Migration {
+        version: 37,
+        name: "goal_runs_v1",
+        sql: include_str!("sql/037_goal_runs.surql"),
+    },
+    Migration {
+        version: 38,
+        name: "webauthn_credentials_v1",
+        sql: include_str!("sql/038_webauthn_credentials.surql"),
+    },
+    Migration {
+        version: 39,
+        name: "channel_bindings_v1",
+        sql: include_str!("sql/039_channel_bindings.surql"),
+    },
+    Migration {
+        version: 40,
+        name: "mcp_server_configs_v1",
+        sql: include_str!("sql/040_mcp_server_configs.surql"),
+    },
+    Migration {
+        version: 41,
+        name: "a2a_tasks_v1",
+        sql: include_str!("sql/041_a2a_tasks.surql"),
+    },
+    Migration {
+        version: 42,
+        name: "ephemeral_runs_v1",
+        sql: include_str!("sql/042_ephemeral_runs.surql"),
+    },
 ];

@@ -33,6 +33,7 @@ pub mod kernel_api;
 pub mod log_reload;
 pub mod mcp_health_reporter;
 pub mod mcp_oauth_provider;
+pub mod model_router;
 pub mod oauth_cache_invalidator;
 pub mod storage_backends; // BossFang: SurrealDB / SQLite backend selection
 pub use librefang_kernel_metering as metering;
@@ -61,6 +62,7 @@ pub mod workflow;
 
 pub use kernel::DeliveryTracker;
 pub use kernel::LibreFangKernel;
+pub use kernel::McpReconnectError;
 pub use kernel::{PendingSkillMcpDeclarations, SemanticMemoryAccess, SkillReloadOutcome};
 pub use kernel::{SYSTEM_CHANNEL_AUTONOMOUS, SYSTEM_CHANNEL_CRON, SYSTEM_CHANNEL_WEBUI};
 pub use kernel_api::KernelApi;

@@ -8,9 +8,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="BossFang" />
     <meta name="theme-color" content="#0B0F14" />
-    <link rel="manifest" href="%BASE_URL%manifest.json" crossorigin="use-credentials" />
-    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
-    <link rel="apple-touch-icon" href="%BASE_URL%icon-192.png" />
+    <!-- These live in `public/`, which Vite copies verbatim without rewriting references into it, so they have to be written against the `/dashboard/` base by hand — unlike the script and CSS below, which Vite does rewrite. -->
+    <!-- The relative forms resolved against whichever URL served the shell, and the same file is served at both `/` and `/dashboard/<route>`, so which of them 404d depended on how the operator happened to enter. -->
+    <link rel="manifest" href="/dashboard/manifest.json" crossorigin="use-credentials" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/dashboard/icon-192.png" />
+    <link rel="apple-touch-icon" href="/dashboard/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -22,5 +24,10 @@
          script), not an inline page script, so the strict CSP
          script-src 'self' (no 'unsafe-inline', #3732) stays intact. -->
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/dashboard/sw.js").catch(() => {});
+      }
+    </script>
   </body>
 </html>

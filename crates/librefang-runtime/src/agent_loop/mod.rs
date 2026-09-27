@@ -36,6 +36,13 @@ use tracing::{debug, info, instrument, warn};
 
 mod end_turn;
 mod history;
+// The orchestration half of this module is deliberately feature-agnostic so its
+// unit tests run in every configuration, but with `media` off nothing in the
+// crate calls it — the entry point compiles to a pass-through. Silence the
+// resulting dead-code wall there rather than splitting the file along a feature
+// seam that has no behavioural meaning.
+#[cfg_attr(not(feature = "media"), allow(dead_code))]
+mod media_routing;
 mod message;
 pub mod model;
 mod prompt;
@@ -73,7 +80,7 @@ use self::prompt::{
     RecallSetupContext,
 };
 use self::retry::call_with_retry;
-use self::text_recovery::recover_text_tool_calls;
+use self::text_recovery::{recover_text_tool_calls, replace_unrecoverable_tool_call_reply};
 use self::tool_call::{
     append_skipped_tool_results, execute_single_tool_call, execute_tool_group,
     handle_mid_turn_signal, stage_tool_use_turn, tool_use_blocks_from_calls,
@@ -384,13 +391,7 @@ fn build_sender_prefix(manifest: &AgentManifest, sender_user_id: Option<&str>) -
         .get("sender_channel")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    // Keep these literals in sync with the kernel-side synthetic channel
-    // sentinels: `librefang_kernel::SYSTEM_CHANNEL_{CRON,AUTONOMOUS,WEBUI}`.
-    // Runtime can't import the constants directly (circular dep — runtime
-    // is below kernel), so a grep-pointer is the best we can do; api / cli
-    // / kernel sites reference the kernel constants by name and stay in
-    // lock-step.
-    if matches!(channel, "webui" | "cron" | "autonomous") {
+    if crate::channel_registry::is_system_channel(channel) {
         return None;
     }
     let raw = manifest
@@ -742,6 +743,8 @@ async fn run_agent_loop_inner(
     } = setup_recalled_memories(RecallSetupContext {
         session,
         user_message,
+        agent_name: &manifest.name,
+        memory_read_allowed: manifest.capabilities.allows_own_memory_read(),
         memory,
         embedding_driver,
         proactive_memory: gated_proactive_memory_for_retrieve(manifest, proactive_memory.as_ref()),
@@ -859,6 +862,20 @@ async fn run_agent_loop_inner(
             (user_message, user_content_blocks)
         };
 
+    // Capability routing: an image bound for a model with no vision support is
+    // described by the provider the resolved `[capabilities]` block nominates,
+    // and the description is inserted next to the image. Done here — once, on
+    // the inbound turn, before it enters history — rather than at the redaction
+    // gate inside the loop, which would re-describe on every iteration.
+    // No-op for vision-capable models and for turns without images.
+    let guarded_user_content_blocks = media_routing::describe_images_for_text_only_model(
+        guarded_user_content_blocks,
+        manifest,
+        kernel.as_ref(),
+        media_engine,
+    )
+    .await;
+
     // Add the user message to session history.
     // When content blocks are provided (e.g. text + image from a channel),
     // use multimodal message format so the LLM receives the image for vision.
@@ -870,6 +887,18 @@ async fn run_agent_loop_inner(
         &privacy_config,
         combined_prefix.as_deref(),
     );
+
+    // Persist the inbound message before the first LLM call. The turn can
+    // die long before the first interim save (daemon restart, a provider
+    // that hangs, a circuit breaker that opens) and a session that loses the
+    // operator's message is the worst failure mode of all: the conversation
+    // forgets what was asked, silently. Same guards as the interim save —
+    // fork and incognito turns stay ephemeral even on mid-turn crashes.
+    if !opts.is_fork && !opts.incognito {
+        if let Err(e) = memory.save_session_async(session).await {
+            warn!("Failed to save inbound message: {e}");
+        }
+    }
 
     let max_history = resolve_max_history(manifest, opts);
     let PreparedMessages {
@@ -1350,6 +1379,11 @@ async fn run_agent_loop_inner(
         };
         // The stripped-tools request has been built; restore tools for any
         // subsequent iteration (the degrade is a single forced prose turn).
+        // Capture this turn's value before resetting — recovery below must
+        // not re-arm the #5979 block-stall loop by promoting text-based
+        // markup back into a tool call on the very turn that was forced
+        // tools-stripped so the model would answer in prose (#8236).
+        let forced_tools_stripped_this_turn = force_tools_stripped;
         force_tools_stripped = false;
 
         // Notify phase: Thinking
@@ -1414,11 +1448,11 @@ async fn run_agent_loop_inner(
         // Recover tool calls output as text by models that don't use the tool_calls API field
         // (e.g. Groq/Llama, DeepSeek emit `<function=name>{json}</function>` in text)
         let mut tools_recovered_from_text = false;
-        if matches!(
+        if text_recovery::should_attempt_text_recovery(
+            forced_tools_stripped_this_turn,
             response.stop_reason,
-            StopReason::EndTurn | StopReason::StopSequence
-        ) && response.tool_calls.is_empty()
-        {
+            response.tool_calls.is_empty(),
+        ) {
             let recovered = recover_text_tool_calls(&response.text(), available_tools);
             if !recovered.is_empty() {
                 info!(
@@ -1482,10 +1516,7 @@ async fn run_agent_loop_inner(
                 // gateway envelopes) into the reply text. This is almost
                 // always recall-regurgitation rather than user-facing content
                 // (see is_cascade_leak doc-comment). Drop as silent.
-                if response.tool_calls.is_empty()
-                    && !tools_recovered_from_text
-                    && is_cascade_leak(&text)
-                {
+                if response.tool_calls.is_empty() && is_cascade_leak(&text) {
                     warn!(
                         agent = %manifest.name,
                         text_excerpt = %text.chars().take(120).collect::<String>(),
@@ -1517,10 +1548,7 @@ async fn run_agent_loop_inner(
                 // tool call that preamble was introducing. Surfacing this
                 // to the channel reads as nonsense; drop as silent and let
                 // the operator retrigger.
-                if response.tool_calls.is_empty()
-                    && !tools_recovered_from_text
-                    && is_progress_text_leak(&text)
-                {
+                if response.tool_calls.is_empty() && is_progress_text_leak(&text) {
                     warn!(
                         agent = %manifest.name,
                         text_excerpt = %text.chars().take(80).collect::<String>(),
@@ -1605,6 +1633,23 @@ async fn run_agent_loop_inner(
                     }
                     None => {}
                 }
+
+                // #8235: a reply that is nothing but tool-call markup the
+                // recovery could not parse must not reach the channel as raw
+                // syntax — say something honest instead. Applied here,
+                // immediately before delivery, and not earlier: the retry
+                // classification above must see the model's real text (a
+                // `HallucinatedAction`/`ActionIntent` retry pushes `text`
+                // into history to nudge the *next* turn — pushing the
+                // apology sentence instead would fabricate a turn the model
+                // never produced). `tools_recovered_from_text` is always
+                // false on this arm — promoting a call switches
+                // `response.stop_reason` to `ToolUse`, which this match arm
+                // never sees — so the guard always runs.
+                let text = match replace_unrecoverable_tool_call_reply(&text) {
+                    std::borrow::Cow::Borrowed(_) => text,
+                    std::borrow::Cow::Owned(replacement) => replacement,
+                };
 
                 let text = finalize_end_turn_text(
                     text,
@@ -2073,6 +2118,16 @@ async fn run_agent_loop_inner(
                     let (cleaned_text, parsed_directives) =
                         crate::reply_directives::parse_directives(&text);
                     let text = cleaned_text;
+                    // #8236: the token cap can cut a tool-call markup span
+                    // off mid-call, leaving it permanently unterminated —
+                    // exactly the case this guard exists for. Without this,
+                    // the raw `<function=...>` syntax reaches the channel
+                    // verbatim on every pure-text overflow that happened to
+                    // start with one.
+                    let text = match replace_unrecoverable_tool_call_reply(&text) {
+                        std::borrow::Cow::Borrowed(_) => text,
+                        std::borrow::Cow::Owned(replacement) => replacement,
+                    };
                     session.push_message(Message::assistant(&text));
                     if !opts.is_fork && !opts.incognito {
                         if let Err(e) = memory.save_session_async(session).await {
