@@ -170,11 +170,18 @@ async fn load_applied(db: &Surreal<Any>) -> Result<Vec<AppliedRow>, MigrationErr
 }
 
 async fn run_migration(db: &Surreal<Any>, m: &Migration) -> Result<(), MigrationError> {
-    db.query(m.sql).await.map_err(|e| MigrationError::Apply {
+    let apply_error = |e: surrealdb::Error| MigrationError::Apply {
         version: m.version,
         name: m.name,
         message: e.to_string(),
-    })?;
+    };
+    // `query` only fails on transport errors; a statement SurrealDB rejects is reported per statement, so `check` it.
+    // Without this a rejected DEFINE would be recorded as applied and never retried.
+    db.query(m.sql)
+        .await
+        .map_err(apply_error)?
+        .check()
+        .map_err(apply_error)?;
     record_applied(db, m).await
 }
 
@@ -205,4 +212,117 @@ fn checksum(sql: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(sql.as_bytes());
     hex::encode(hasher.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{RemoteSurrealConfig, StorageBackendKind, StorageConfig};
+    use crate::migrations::OPERATIONAL_MIGRATIONS;
+    use crate::pool::{SurrealConnectionPool, SurrealSession};
+
+    /// Every operational migration applies cleanly, a second run is a no-op, and editing an applied migration is refused.
+    async fn exercise_runner(session: &SurrealSession) {
+        let db = session.client();
+        let first = apply_pending(db, OPERATIONAL_MIGRATIONS)
+            .await
+            .expect("every operational migration applies");
+        assert_eq!(first.len(), OPERATIONAL_MIGRATIONS.len());
+        let second = apply_pending(db, OPERATIONAL_MIGRATIONS)
+            .await
+            .expect("second run");
+        assert!(second.is_empty(), "re-run applied {second:?}");
+
+        let mut edited = OPERATIONAL_MIGRATIONS.to_vec();
+        edited[0].sql = "DEFINE TABLE IF NOT EXISTS audit_entries SCHEMAFULL; -- edited in place";
+        match apply_pending(db, &edited).await {
+            Err(MigrationError::ChecksumDrift { version, .. }) => assert_eq!(version, 1),
+            other => panic!("expected ChecksumDrift, got {other:?}"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn operational_migrations_apply_idempotently_and_detect_drift_embedded() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cfg = StorageConfig {
+            backend: StorageBackendKind::embedded(dir.path().join("ops.surreal")),
+            namespace: "librefang".into(),
+            database: "main".into(),
+            legacy_sqlite_path: None,
+        };
+        let session = SurrealConnectionPool::new()
+            .open(&cfg)
+            .await
+            .expect("open embedded");
+        exercise_runner(&session).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn operational_migrations_apply_idempotently_and_detect_drift_remote() {
+        let Ok(url) = std::env::var("BOSSFANG_TEST_SURREAL_URL") else {
+            eprintln!("SKIP remote surreal: BOSSFANG_TEST_SURREAL_URL unset");
+            return;
+        };
+        let username =
+            std::env::var("BOSSFANG_TEST_SURREAL_USER").unwrap_or_else(|_| "root".into());
+        let password_env = std::env::var("BOSSFANG_TEST_SURREAL_PASS_ENV")
+            .unwrap_or_else(|_| "BOSSFANG_TEST_SURREAL_PASS".into());
+        for url in crate::migrations::test_support::remote_urls(&url) {
+            let database = format!("runner_{}", uuid::Uuid::new_v4().simple());
+            eprintln!("remote surreal: migration runner against {url} db={database}");
+            let session = SurrealConnectionPool::new()
+                .open_remote(&RemoteSurrealConfig {
+                    url: url.clone(),
+                    namespace: "bossfang_test".into(),
+                    database: database.clone(),
+                    username: username.clone(),
+                    password_env: password_env.clone(),
+                    tls_skip_verify: false,
+                })
+                .await
+                .unwrap_or_else(|e| panic!("open remote {url}: {e}"));
+            exercise_runner(&session).await;
+            session
+                .client()
+                .query(format!("REMOVE DATABASE IF EXISTS {database}"))
+                .await
+                .expect("drop test database");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_rejected_statement_fails_the_migration_instead_of_being_recorded() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cfg = StorageConfig {
+            backend: StorageBackendKind::embedded(dir.path().join("bad.surreal")),
+            namespace: "librefang".into(),
+            database: "main".into(),
+            legacy_sqlite_path: None,
+        };
+        let session = SurrealConnectionPool::new()
+            .open(&cfg)
+            .await
+            .expect("open embedded");
+        let bad = [Migration {
+            version: 1,
+            name: "rejected",
+            // Parses, but the second DEFINE fails at execution ("already exists"), which `query` alone does not surface.
+            sql: "DEFINE TABLE IF NOT EXISTS t SCHEMAFULL; DEFINE FIELD n ON t TYPE int; DEFINE FIELD n ON t TYPE int;",
+        }];
+        match apply_pending(session.client(), &bad).await {
+            Err(MigrationError::Apply { version: 1, .. }) => {}
+            other => panic!("expected Apply error, got {other:?}"),
+        }
+        let recorded: Vec<serde_json::Value> = session
+            .client()
+            .query(format!("SELECT version FROM {APPLIED_TABLE}"))
+            .await
+            .expect("query ledger")
+            .take(0)
+            .expect("ledger rows");
+        assert!(
+            recorded.is_empty(),
+            "a failed migration was recorded: {recorded:?}"
+        );
+    }
 }

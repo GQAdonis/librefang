@@ -370,19 +370,59 @@ mod tests {
         };
         let pool = SurrealConnectionPool::new();
         let session = pool.open(&cfg).await.expect("open session");
+        store_on(&session).await
+    }
+
+    async fn store_on(session: &crate::pool::SurrealSession) -> SurrealConfigStore {
         apply_pending(session.client(), OPERATIONAL_MIGRATIONS)
             .await
             .expect("migrations");
-        SurrealConfigStore::open(&session)
-            .await
-            .expect("open store")
+        SurrealConfigStore::open(session).await.expect("open store")
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn round_trips_upsert_get_list_delete() {
         let dir = tempdir().unwrap();
         let store = open_store(dir.path()).await;
+        exercise_round_trip(&store).await;
+    }
 
+    /// The same round trip over `ws://` and `http://` against a live server, as the k8s deployment runs it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn round_trips_upsert_get_list_delete_remote() {
+        let Ok(url) = std::env::var("BOSSFANG_TEST_SURREAL_URL") else {
+            eprintln!("SKIP remote surreal: BOSSFANG_TEST_SURREAL_URL unset");
+            return;
+        };
+        let username =
+            std::env::var("BOSSFANG_TEST_SURREAL_USER").unwrap_or_else(|_| "root".into());
+        let password_env = std::env::var("BOSSFANG_TEST_SURREAL_PASS_ENV")
+            .unwrap_or_else(|_| "BOSSFANG_TEST_SURREAL_PASS".into());
+        for url in crate::migrations::test_support::remote_urls(&url) {
+            let database = format!("cfg_{}", uuid::Uuid::new_v4().simple());
+            eprintln!("remote surreal: config store against {url} db={database}");
+            let session = SurrealConnectionPool::new()
+                .open_remote(&crate::config::RemoteSurrealConfig {
+                    url: url.clone(),
+                    namespace: "bossfang_test".into(),
+                    database: database.clone(),
+                    username: username.clone(),
+                    password_env: password_env.clone(),
+                    tls_skip_verify: false,
+                })
+                .await
+                .unwrap_or_else(|e| panic!("open remote {url}: {e}"));
+            let store = store_on(&session).await;
+            exercise_round_trip(&store).await;
+            session
+                .client()
+                .query(format!("REMOVE DATABASE IF EXISTS {database}"))
+                .await
+                .expect("drop test database");
+        }
+    }
+
+    async fn exercise_round_trip(store: &SurrealConfigStore) {
         // get on empty
         assert!(store.get("missing").await.unwrap().is_none());
 
