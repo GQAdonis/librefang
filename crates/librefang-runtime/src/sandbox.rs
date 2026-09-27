@@ -368,6 +368,16 @@ pub(crate) fn new_guest_state(
         kernel,
         agent_id: agent_id.to_string(),
         tokio_handle,
+        // Taken here rather than threaded in as a parameter: the sole caller is
+        // `sandbox_component::execute_component`, an `async fn`, so this runs on
+        // the task that `tool_runner::dispatch` installed the counter on and
+        // `current()` can still see it. The classic path does the same at its
+        // own call site before `spawn_blocking` hands the guest to a thread the
+        // task-local cannot reach.
+        //
+        // `None` would compile and silently exempt every Component Model guest
+        // from the rolling-hour byte quota while the classic path stays metered.
+        network_meter: crate::network_meter::current(),
         limiter: MemoryLimiter {
             max_bytes: config.max_memory_bytes,
         },

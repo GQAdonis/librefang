@@ -181,21 +181,30 @@ LibreFang is an open-source Agent Operating System written in Rust (31 crate dir
 
 **Do NOT run `cargo build` or `cargo run` locally.**
 **`cargo test` is allowed only when scoped with `-p <crate>` / `--package <crate>`** — the unscoped workspace-wide form contends with the user's other sessions on the shared `target/` directory.
-Full workspace build / test runs in CI.
 
-After every change:
+### Verify locally. Never wait on CI.
+
+**CI is not a verification step in this repo.** It is slow, and waiting on it stalls work that a local `cargo check` answers in a minute or two.
+
+- **Never** push a branch and then poll GitHub Actions for the result.
+- **Never** describe a change as "verified by CI", and never defer a failing or skipped check to CI.
+- **Never** treat a red or skipped CI lane as a reason to pause — verify the same property locally instead.
+- **Never** build `Dockerfile.rust-dev` to run a check. That image exists for hosts with no native toolchain; this host has one, and building it costs ~20 minutes.
+
+There is a native `cargo` toolchain on the development host. Use it:
 
 ```bash
+export CARGO_TARGET_DIR=/tmp/librefang-target-<worktree>   # keep off the shared target/
+export SKIP_DASHBOARD_BUILD=1                              # build.rs soft-skips without pnpm
+
 cargo check --workspace --lib                          # Compile-check only
 cargo clippy --workspace --all-targets -- -D warnings  # Zero warnings
-cargo test -p <crate>                                  # Only when verifying behavior in one crate
-
-# Quick unit-only lane, mirrors CI's Test / Unit (lib+bin):
-cargo nextest run --workspace -E 'kind(lib) | kind(bin)' --no-fail-fast
+cargo test -p <crate>                                  # Behaviour, one crate at a time
 ```
 
-`docs/development/build-and-verify.md` covers the rest: the two CI test lanes and why the nextest filter expression is used instead of `--lib --bins`, the `librefang-desktop` Windows exclusion (#6729), and how to verify **without a native toolchain** via `Dockerfile.rust-dev` and a per-worktree target volume.
-Read it before declaring a change unverified on a host that has no `cargo`.
+Both env vars matter. `CARGO_TARGET_DIR` keeps a linked worktree off the shared `target/` so a check here cannot contend with another session. `SKIP_DASHBOARD_BUILD=1` stops `librefang-api/build.rs` shelling out to `pnpm`, which dominates a cold check and is irrelevant to Rust correctness.
+
+Read cargo's **own** exit status, not a wrapper's. Writing `VAR=$?` and then piping to `tail` makes the shell report `tail`'s status — a failed build then looks like success. Write the status as the final action (`cmd > log 2>&1; echo $? > log.status`) and read that file.
 
 ## MANDATORY: Integration Testing (refs #3721)
 
