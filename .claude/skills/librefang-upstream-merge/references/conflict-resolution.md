@@ -65,10 +65,24 @@ Everything else. Specifically:
 
 - Runtime / kernel / API logic that isn't a brand surface
 - New tools, channels, providers, drivers
-- Test files (unless they assert on a BossFang-specific string)
+- Test files (unless they assert on a BossFang-specific string — see "Upstream tests that assert upstream identity" below)
 - Workflow files that don't touch BossFang-renamed artifact names
 - Anything in `crates/librefang-uar-spec/` (BossFang-exclusive but stable surface)
 - Anything in `crates/librefang-storage/` migrations (BossFang-exclusive; upstream doesn't ship migrations here)
+
+## Upstream tests that assert upstream identity
+
+Take-upstream-as-is is wrong for a test whose expectations are upstream identity values that BossFang overrides.
+These merge cleanly (no conflict marker), so they only surface as a CI failure after the sync lands.
+Take upstream's test logic, then flip the identity expectations to the BossFang value the fork actually ships — never flip the fork's surface back to match the test.
+
+| Test | Upstream expectation | BossFang value | Source of truth |
+|---|---|---|---|
+| `scripts/tests/test_release_tag_workflow_safety.py` `MACOS_CLI_SIGNING_JOBS` (#8234) | `ai.librefang.cli`, `ai.librefang.sidecar-telegram` | `ai.bossfang.cli`, `ai.bossfang.sidecar-telegram` | the `sign <binary> <identifier>` lines in the `cli_mac` / `cli_mac_mini` jobs of `.github/workflows/release.yml` and `release-cli.yml` |
+
+Found in the 2026-09-27 sync: the Quality job's "Check release workflow input safety" step failed on `main` until the table was flipped.
+`scripts/audit-tauri-desktop.sh` check 6 now fails when that test still expects `ai.librefang.*` or when a release workflow signs a non-BossFang identifier.
+After every sync, also run each `scripts/tests/*.py` / `*.sh` the Quality job in `.github/workflows/ci.yml` runs, and grep the merge diff for new `ai.librefang.` / `LibreFang` literals under `scripts/tests/` to catch the next test of this kind.
 
 ## After conflict resolution
 
