@@ -25,6 +25,9 @@ ALLOWED = [
     "git pull --ff-only --prune",
     f"git -C {MAIN} pull --ff-only",
     "git pull --ff-only && git log -1",
+    "git pull --ff-only 2>&1 | tail -3",
+    "git pull --ff-only >/tmp/pull.log 2>&1",
+    "git pull --ff-only < /dev/null",
     "git fetch origin",
     "git status; git log",
     "git log --oneline;git status",
@@ -53,6 +56,7 @@ BLOCKED = [
     "git pull --ff-only . origin/feat",
     "git pull --ff-only upstream main",
     "git pull --ff-only $REMOTE",
+    "git pull --ff-only > /tmp/x feat",
     "git pull --ff-only $(echo --no-ff)",
     "git -c pull.ff=false pull --ff-only",
     # --ff-only belonging to a different command.

@@ -21,7 +21,7 @@ Full enumeration: `docs/development/ai-safety-hooks.md`.
 The short list of things that get blocked:
 
 - Editing files or running mutating git commands in the **main worktree**.
-  The one exception is `git pull --ff-only [origin [main]]` (optionally with `-q`, `-v` or `--prune`), which fast-forwards the main checkout to `origin/main` and cannot create a commit.
+  The one exception is `git pull --ff-only [origin [main]]` (optionally with `-q`, `-v` or `--prune`), which fast-forwards the checked-out `main` to `origin/main` and cannot create a commit unless repo config overrides the pull strategy (for example `pull.twohead`).
   Any other form of `git pull` stays blocked, because a later `--ff` / `--no-ff`, a strategy, `--squash` or another ref would defeat that guarantee.
 - Force-push to `main` / `master`; `--no-verify` / `--no-gpg-sign` on any git command.
 - Staging sensitive files (`.env*`, `*.pem`, `id_rsa`, `credentials*`, …) and broad `git add -A` / `git add .` — stage specific paths.

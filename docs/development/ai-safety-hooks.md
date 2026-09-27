@@ -11,7 +11,8 @@ The summary lives in [`CLAUDE.md`](../../CLAUDE.md); this page is the full enume
 
 Blocks edits and mutating git commands aimed at the main worktree.
 The one allowed git mutation there is `git [-C <path>] pull --ff-only [origin [main]]`, optionally with `-q` / `--quiet`, `-v` / `--verbose` or `--prune`.
-That exact form fast-forwards the main checkout to `origin/main` and cannot create a commit.
+That exact form fast-forwards the checked-out `main` to its upstream `origin/main` and cannot create a commit, as long as repo config does not override the pull strategy (a `pull.twohead` setting can still force a merge, and `git config` writes in the main worktree are not blocked).
+Output redirections on that command (`2>&1`, `>file`, `< /dev/null`) are allowed.
 Every other `git pull` stays blocked: git lets a later `--ff` or `--no-ff` override `--ff-only`, a strategy such as `-s ours` or `--squash` changes what lands, a `-c` global option can change pull behaviour, and a different remote or ref would fast-forward main onto unreviewed commits.
 The tokenizer emits shell operators as separate tokens and treats an unquoted newline as a command separator, so `git commit;ls`, `$(git commit …)`, `` `git commit` `` and a mutation on a following line are all seen.
 Global options before the subcommand (`git -c k=v commit`, `git --no-pager commit`) no longer hide it either.

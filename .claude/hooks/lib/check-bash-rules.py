@@ -263,7 +263,18 @@ def is_safe_ff_pull(toks: list[str], i_git: int, j: int) -> bool:
     global_opts = toks[i_git + 1:j]
     if global_opts and global_opts[0] != "-C" or len(global_opts) not in (0, 2):
         return False
-    args = invocation_args(toks, j + 1)
+    args = []
+    skip_target = False
+    for a in invocation_args(toks, j + 1):
+        if skip_target:
+            skip_target = False
+            continue
+        # Redirections (`2>`, `>/tmp/log`, `< /dev/null`) change where output goes, not what the pull does.
+        m = re.match(r"^\d*(>>|>\||>|<)", a)
+        if m:
+            skip_target = m.end() == len(a)
+            continue
+        args.append(a)
     flags = [a for a in args if a.startswith("-")]
     positionals = [a for a in args if not a.startswith("-")]
     return "--ff-only" in flags and set(flags) <= PULL_FF_SAFE_FLAGS and positionals in PULL_FF_SAFE_POSITIONALS
