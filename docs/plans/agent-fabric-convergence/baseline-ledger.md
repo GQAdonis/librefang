@@ -2,7 +2,7 @@
 
 All 11 origin refs were fetched without merging, rebasing or switching a source checkout. All 61 recommendation clusters have a disposition, evidence scope, responsible repository, reserved dependency and acceptance reference. Source inspection is distinct from runtime validation.
 
-The planning baselines below remain immutable. A [27 September merged-baseline refresh](.kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.md) records the six merged I1 delivery commits, current default refs, retired/stale initiative worktrees, the SurrealDB 3.3.0 propagation gaps, and the still-pending Windows `D-UAR-P1` observation. That refresh updates current facts without rewriting what C01.1 originally inspected.
+The planning baselines below remain immutable. A [27 September merged-baseline refresh](.kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.md) records the six merged I1 delivery commits, current default refs, retired/stale initiative worktrees, the SurrealDB 3.3.0 propagation gaps, and the still-pending Windows `D-UAR-P1` observation. The subsequent [checkpoint merge receipt](.kbd-orchestrator/phases/agent-fabric-convergence/c01/checkpoint-merge-receipt-2026-09-27.md) records the merged recovery and reconciliation PRs. These receipts update current facts without rewriting what C01.1 originally inspected.
 
 ## Findings that affect the next step
 
