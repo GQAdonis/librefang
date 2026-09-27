@@ -1,15 +1,23 @@
 # Current Waypoint
 
-**Active path:** phase-10-uar-sidecar-availability
-**Change:** none
-**Updated:** 2026-07-31 at canonical revision 37
+**Phase**: `phase-11-surreal-recovery-and-uar-convergence`
+**Stage**: `assess_pending`
+**Created**: 2026-09-27T21:00:59Z
+**Previous phase**: `phase-10-uar-sidecar-availability`
 
-## Where we are
+## Summary
 
-The `uar-readiness-and-tooling-repair` child is complete (3/3) and rolled up as `DONE`. The parent phase is active with 5/8 implementation changes complete; C006-C008 remain pending. The child removed the UAR publication, canonical KBD identity, and kernel-handle certification blockers.
+New phase seeded from `phase-10-uar-sidecar-availability/reflection.md`.
+Goals are pre-loaded in `.kbd-orchestrator/phases/phase-11-surreal-recovery-and-uar-convergence/goals.md`.
+Review the goals, then run `/kbd-assess` to begin.
 
-## Next step
+## Next action
 
-```text
-/kbd-status
 ```
+/kbd-assess phase-11-surreal-recovery-and-uar-convergence
+```
+
+## References
+
+- [goals.md](phases/phase-11-surreal-recovery-and-uar-convergence/goals.md)
+- [Previous reflection](phases/phase-10-uar-sidecar-availability/reflection.md)

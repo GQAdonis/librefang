@@ -1,11 +1,10 @@
 {
   "name": "BossFang",
   "description": "Open-source Agent Operating System built in Rust.",
-  "active_phase": "phase-10-uar-sidecar-availability",
   "worktreeRoot": "/tmp",
   "maxChildDepth": 4,
   "ux_profile": "advanced",
-  "__ux_profile_note": "advanced \u2192 kbd-status is dense by default; beginner \u2192 kbd-status --explain is on by default (expands decision-log entries + next-and-why narrative). Verbosity only \u2014 never gates information.",
+  "__ux_profile_note": "advanced → kbd-status is dense by default; beginner → kbd-status --explain is on by default (expands decision-log entries + next-and-why narrative). Verbosity only — never gates information.",
   "spec_paths": [
     "openspec/specs/*.md",
     "docs/**/*.md"
@@ -111,7 +110,7 @@
       {
         "path": "/Users/gqadonis/Projects/references/librefang",
         "role": "focus",
-        "purpose": "Active BossFang project \u2014 all KBD implementation operations target linked worktrees of this repository.",
+        "purpose": "Active BossFang project — all KBD implementation operations target linked worktrees of this repository.",
         "write_access": true
       },
       {
@@ -219,9 +218,9 @@
   },
   "constraints": {
     "three_layer_rebrand": {
-      "internal": "never rename \u2014 Cargo crate names, Rust modules, function names, Python SDK module names, workspace member paths, test fixture filenames",
-      "boundary": "additive aliases only \u2014 BOSSFANG_* primary + LIBREFANG_* fallback, default values stay LibreFang-flavoured",
-      "surface": "full BossFang identity \u2014 CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
+      "internal": "never rename — Cargo crate names, Rust modules, function names, Python SDK module names, workspace member paths, test fixture filenames",
+      "boundary": "additive aliases only — BOSSFANG_* primary + LIBREFANG_* fallback, default values stay LibreFang-flavoured",
+      "surface": "full BossFang identity — CLI banners, product name, install scripts, README/docs body, content-type vendor prefix, release artifact names, dashboard chrome"
     },
     "edits_blocked_in_main_worktree": true,
     "cargo_build_blocked_in_main_worktree": true,
@@ -252,5 +251,7 @@
   "reinitialized": "2026-07-30",
   "initialized_via": "kbd-init schema migration preserving the 2026-05-14 bootstrap state",
   "specBackend": "native-kbd",
-  "specBackendNote": "OpenSpec is initialized (openspec/config.yaml, schema: spec-driven) but the spec backend is deliberately pinned to native-kbd for phase-10, whose 8 change specs (C-001..C-008) were already written and reviewed as native change files. Migrating them mid-phase would rewrite eight specs purely to change file format without improving their content. Adopt OpenSpec from phase-11: drop this key (or set it to \"openspec\") and /kbd-spec + /kbd-plan will emit openspec/changes/<id>/{proposal.md,tasks.md} via /opsx:new."
+  "specBackendNote": "OpenSpec is initialized (openspec/config.yaml, schema: spec-driven) but the spec backend is deliberately pinned to native-kbd for phase-10, whose 8 change specs (C-001..C-008) were already written and reviewed as native change files. Migrating them mid-phase would rewrite eight specs purely to change file format without improving their content. Adopt OpenSpec from phase-11: drop this key (or set it to \"openspec\") and /kbd-spec + /kbd-plan will emit openspec/changes/<id>/{proposal.md,tasks.md} via /opsx:new.",
+  "activePhase": "phase-11-surreal-recovery-and-uar-convergence",
+  "updatedAt": "2026-09-27T21:00:59Z"
 }

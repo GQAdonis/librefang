@@ -3,24 +3,29 @@
   "change": null,
   "childPointer": null,
   "completionMetric": "implementation",
-  "currentTask": null,
-  "exactNextCommand": "/kbd-status",
+  "currentTask": "run kbd-assess for phase-11-surreal-recovery-and-uar-convergence",
+  "exactNextCommand": "/kbd-assess phase-11-surreal-recovery-and-uar-convergence",
   "generatedBy": "kbd-runtime",
-  "implementationCompleted": 56,
-  "implementationTotal": 66,
+  "implementationCompleted": 0,
+  "implementationTotal": 0,
   "path": [
-    "phase-10-uar-sidecar-availability"
+    "phase-11-surreal-recovery-and-uar-convergence"
   ],
-  "phase": "phase-10-uar-sidecar-availability",
+  "phase": "phase-11-surreal-recovery-and-uar-convergence",
   "phaseIds": [
     "phase-10-uar-sidecar-availability"
   ],
   "planRevision": 1,
   "projectId": "eca657d1-b62b-4085-b712-d398b35c1903",
-  "revision": 72,
+  "revision": 73,
   "runId": "phase-10-uar-sidecar-availability-20260731T190715Z",
   "schemaVersion": "5",
   "sourceRevision": 72,
-  "status": "ready",
-  "updatedAt": "2026-08-01T03:16:51.357501Z"
+  "status": "assessment_ready",
+  "updatedAt": "2026-09-27T21:00:59Z",
+  "previousPhase": "phase-10-uar-sidecar-availability",
+  "sourceTool": "kbd-next-phase",
+  "nextPendingChange": null,
+  "certificationStatus": "NOT_TRACKED",
+  "publicationStatus": "NOT_TRACKED"
 }
