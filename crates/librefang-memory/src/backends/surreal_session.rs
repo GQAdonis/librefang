@@ -2,6 +2,7 @@
 //!
 //! Persists session history and canonical sessions into SurrealDB tables
 //! defined by migration v5 (`005_sessions.surql`).
+//! Migration v44 (`044_sessions_messages_array.surql`) retypes `messages` as the array of message objects this backend writes.
 //!
 //! ## Design notes
 //!
@@ -28,6 +29,18 @@ use crate::session::Session;
 /// SurrealDB-backed implementation of [`SessionBackend`].
 pub struct SurrealSessionBackend {
     db: Arc<Surreal<Any>>,
+}
+
+/// The session UUID inside a stringified `sessions` record id.
+///
+/// SurrealDB 3.x renders a record id as `sessions:<key>` and escapes a key that is not a plain identifier, which every UUID is (it contains `-`), so the key arrives as `` `uuid` `` or `⟨uuid⟩`.
+/// Strip the table prefix and either escape pair so the key parses as a [`SessionId`].
+fn session_record_key(raw: &str) -> &str {
+    let key = raw.strip_prefix("sessions:").unwrap_or(raw);
+    key.strip_prefix('`')
+        .and_then(|k| k.strip_suffix('`'))
+        .or_else(|| key.strip_prefix('⟨').and_then(|k| k.strip_suffix('⟩')))
+        .unwrap_or(key)
 }
 
 impl SurrealSessionBackend {
@@ -57,8 +70,7 @@ impl SurrealSessionBackend {
         let id_raw = row["id"]
             .as_str()
             .ok_or_else(|| LibreFangError::memory_msg("session row missing id"))?;
-        // SurrealDB returns record IDs as "sessions:UUID" — strip the table prefix.
-        let id_str = id_raw.strip_prefix("sessions:").unwrap_or(id_raw);
+        let id_str = session_record_key(id_raw);
         let session_id: SessionId = id_str
             .parse()
             .map_err(|_| LibreFangError::memory_msg(format!("invalid session id: {id_str}")))?;
@@ -178,8 +190,7 @@ impl SessionBackend for SurrealSessionBackend {
             let mut ids = Vec::new();
             for row in rows {
                 if let Some(id_str) = row["id"].as_str() {
-                    let raw = id_str.strip_prefix("sessions:").unwrap_or(id_str);
-                    if let Ok(sid) = raw.parse::<SessionId>() {
+                    if let Ok(sid) = session_record_key(id_str).parse::<SessionId>() {
                         ids.push(sid);
                     }
                 }
@@ -244,14 +255,21 @@ impl SessionBackend for SurrealSessionBackend {
             let msgs_value = serde_json::to_value(&all_msgs)
                 .map_err(|e| LibreFangError::memory_msg(format!("serialise: {e}")))?;
 
-            let payload = serde_json::json!({
+            let mut payload = serde_json::json!({
                 "agent_id": agent,
                 "messages": msgs_value,
                 "compaction_cursor": compaction_cursor,
-                "compacted_summary": compacted_summary,
-                "compacted_summary_session_id": compacted_summary_session_id,
                 "updated_at": chrono::Utc::now().to_rfc3339(),
             });
+            // Same NONE-vs-NULL rule as `save_session`: an unset `option<string>` column is left out of the document, never sent as JSON `null`.
+            for (key, value) in [
+                ("compacted_summary", compacted_summary),
+                ("compacted_summary_session_id", compacted_summary_session_id),
+            ] {
+                if let Some(value) = value {
+                    payload[key] = JsonValue::String(value);
+                }
+            }
 
             let _: Option<JsonValue> = db
                 .upsert(("canonical_sessions", agent.as_str()))
@@ -290,6 +308,20 @@ mod tests {
             row["parent_session_id"] = JsonValue::String(parent.to_string());
         }
         row
+    }
+
+    /// SurrealDB 3.x escapes a UUID record key, so the stringified id must be unwrapped before it parses.
+    #[test]
+    fn session_record_key_unwraps_escaped_uuid_keys() {
+        let id = uuid::Uuid::new_v4().to_string();
+        for raw in [
+            format!("sessions:`{id}`"),
+            format!("sessions:⟨{id}⟩"),
+            format!("sessions:{id}"),
+            id.clone(),
+        ] {
+            assert_eq!(session_record_key(&raw), id, "raw id {raw}");
+        }
     }
 
     /// Migration v43 mirrors upstream SQLite v61 (`sessions.parent_session_id`).

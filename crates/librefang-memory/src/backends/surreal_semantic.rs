@@ -94,27 +94,21 @@ impl SurrealSemanticBackend {
     /// Open a `SurrealSemanticBackend` from a kernel storage config, building a
     /// dedicated `SurrealStorage` connection internally.
     ///
-    /// This is the factory used by `librefang-kernel` so that `surreal-memory`
-    /// is not a direct dependency of the kernel crate (it reaches it via
-    /// `librefang-memory`).
+    /// Meant for `librefang-kernel`, so that `surreal-memory` is not a direct dependency of the kernel crate (it reaches it via `librefang-memory`); the kernel does not call it today.
     ///
-    /// The internal `SurrealStorage` is initialised with a [`NoopEmbedding`]
-    /// service.  Real embeddings are supplied at query time by the
-    /// `ContextEngine`'s `EmbeddingDriver` via the `query_embedding` parameter
-    /// on [`SemanticBackend::recall`].
+    /// `embedding` and `dimensions` are passed to [`super::shared::open_shared_memory_storage`]: `SurrealStorage` embeds every memory it stores, and every recall made without `query_embedding`, with that driver, so it must be the driver the `ContextEngine` uses for `query_embedding`.
     pub async fn open_with_storage(
         session: &SurrealSession,
         storage_cfg: &librefang_storage::config::StorageConfig,
+        embedding: Arc<dyn EmbeddingFn>,
+        dimensions: usize,
     ) -> Result<Self, String> {
-        // Delegate to the single-source factory so this path is functionally
-        // identical to (and shares the same RocksDB lock with) the kernel's
-        // shared-storage boot path.  Standalone callers (e.g. the
-        // `#[ignore]`d `knn_hnsw_relevance` integration test) get a fresh
-        // `SurrealStorage` here because no other opener exists in their process.
-        let storage = super::shared::open_shared_memory_storage(storage_cfg)
-            .await
-            .map_err(|e| format!("SurrealStorage (semantic backend): {e}"))?;
-        Ok(Self::new(storage, session, None))
+        // Delegate to the single-source factory, which owns the memory store's RocksDB lock; standalone callers get a fresh `SurrealStorage` here because no other opener exists in their process.
+        let storage =
+            super::shared::open_shared_memory_storage(storage_cfg, embedding.clone(), dimensions)
+                .await
+                .map_err(|e| format!("SurrealStorage (semantic backend): {e}"))?;
+        Ok(Self::new(storage, session, Some(embedding)))
     }
 }
 
@@ -803,14 +797,28 @@ mod tests {
         use librefang_types::memory::MemorySource;
 
         // Synthetic 3-dim embeddings.  Fragment 0 is the "target" query vector.
+        // `SurrealStorage::add_memory` re-embeds content with the storage's driver and merges near-duplicates (cosine >= 0.92), so every pair stays below that threshold.
         let query_vec = vec![1.0_f32, 0.0, 0.0];
         let vecs: Vec<Vec<f32>> = vec![
-            vec![1.0, 0.0, 0.0], // 0: identical to query → highest similarity
-            vec![0.8, 0.2, 0.0], // 1: close
-            vec![0.5, 0.5, 0.0], // 2: moderate
-            vec![0.1, 0.9, 0.0], // 3: distant
-            vec![0.0, 0.0, 1.0], // 4: orthogonal → lowest similarity
+            vec![1.0, 0.0, 0.0],   // 0: identical to query → highest similarity
+            vec![0.85, 0.53, 0.0], // 1: close
+            vec![0.5, 0.0, 0.866], // 2: moderate
+            vec![0.1, 0.995, 0.0], // 3: distant
+            vec![0.0, 0.0, 1.0],   // 4: orthogonal → lowest similarity
         ];
+
+        // The storage embeds each fragment's content itself, so hand it a driver that returns the synthetic vector for that content.
+        struct LookupEmbedding(Vec<Vec<f32>>);
+        #[async_trait]
+        impl EmbeddingFn for LookupEmbedding {
+            async fn embed_one(&self, text: &str) -> LibreFangResult<Vec<f32>> {
+                let idx = text
+                    .strip_prefix("Memory fragment ")
+                    .and_then(|i| i.parse::<usize>().ok())
+                    .unwrap_or(0);
+                Ok(self.0[idx].clone())
+            }
+        }
 
         // Build the backend using a SurrealSession pointing at the local instance.
         // SurrealSession is obtained via SurrealConnectionPool::open(cfg).
@@ -823,9 +831,14 @@ mod tests {
             .open(&storage_cfg)
             .await
             .expect("Failed to connect to SurrealDB");
-        let backend = SurrealSemanticBackend::open_with_storage(&session, &storage_cfg)
-            .await
-            .expect("Failed to create SurrealSemanticBackend");
+        let backend = SurrealSemanticBackend::open_with_storage(
+            &session,
+            &storage_cfg,
+            Arc::new(LookupEmbedding(vecs.clone())),
+            3,
+        )
+        .await
+        .expect("Failed to create SurrealSemanticBackend");
 
         // Insert all 5 fragments.
         let agent_id = AgentId(uuid::Uuid::new_v4());
