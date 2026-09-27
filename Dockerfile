@@ -1,13 +1,12 @@
 # syntax=docker/dockerfile:1
 
-# UAR sidecar source image (phase-10 UAR-as-sidecar migration). Pinned to the
-# release that provides the HTTP/SSE contract consumed by the opt-in
-# `uar-driver`. BossFang no longer links UAR in-process; bump this image only
-# after the driver's compatibility checks and contract tests pass against the
-# new release. Published by GQAdonis/universal-agent-runtime's
-# publish-ghcr.yml — GHCR because it is pullable with no credentials, unlike
-# the operator's private GCP Artifact Registry image.
-ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9c28f27532a03e68d5035b248a0cef5b8
+# UAR sidecar source image (phase-10 UAR-as-sidecar migration).
+# Pinned to the release that provides the HTTP/SSE contract consumed by the opt-in `uar-driver`.
+# BossFang no longer links UAR in-process; bump this image only after the driver's compatibility checks and contract tests pass against the new release.
+# Published to GHCR (pullable with no credentials, unlike the operator's private GCP Artifact Registry image) by the former GQAdonis/universal-agent-runtime fork's publish-ghcr.yml; that fork no longer exists, and Prometheus-AGS/universal-agent-runtime main publishes no GHCR image.
+# f45941bb is the newest published tag (`sidecar-latest`): a docs-only commit on top of 2aaeadd9 whose linux/amd64 manifest (sha256:910c3dab…) is byte-identical to 2aaeadd9's.
+# Pinned by tag and index digest so a re-pushed tag cannot silently change the sidecar.
+ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:f45941bb330ba5e42eaf3dae5806c9a90300a069@sha256:6de7185679bb9d273b5bf77b5f940f6d0ac7fc00e937e46bb041d9c578e2aa94
 FROM ${UAR_IMAGE} AS uar-sidecar-src
 # ─────────────────────────────────────────────────────────────────────────────
 
