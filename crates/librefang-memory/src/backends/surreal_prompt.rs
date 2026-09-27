@@ -38,11 +38,11 @@ fn block_on<F: std::future::Future>(f: F) -> F::Output {
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 fn parse_prompt_version(row: &serde_json::Value) -> Option<PromptVersion> {
+    // SurrealDB returns the id as "prompt_versions:`<uuid>`".
     let id = row.get("id").and_then(|v| {
-        // SurrealDB returns id as "prompt_versions:uuid"
-        let s = v.as_str()?;
-        let id_part = s.split(':').next_back().unwrap_or(s);
-        id_part.parse::<Uuid>().ok()
+        super::record_key(v.as_str()?, "prompt_versions")
+            .parse::<Uuid>()
+            .ok()
     })?;
     let agent_id: AgentId = row
         .get("agent_id")
@@ -62,8 +62,8 @@ fn parse_prompt_version(row: &serde_json::Value) -> Option<PromptVersion> {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string(),
-        tools: vec![],
-        variables: vec![],
+        tools: string_list(row, "tools"),
+        variables: string_list(row, "variables"),
         created_at: {
             let s = row
                 .get("created_at")
@@ -88,11 +88,24 @@ fn parse_prompt_version(row: &serde_json::Value) -> Option<PromptVersion> {
     })
 }
 
+/// A `option<array<string>>` column (migration 045) read back as a list; NONE reads as empty.
+fn string_list(row: &serde_json::Value, field: &str) -> Vec<String> {
+    row.get(field)
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn parse_experiment(row: &serde_json::Value) -> Option<PromptExperiment> {
     let id = row.get("id").and_then(|v| {
-        let s = v.as_str()?;
-        let id_part = s.split(':').next_back().unwrap_or(s);
-        id_part.parse::<Uuid>().ok()
+        super::record_key(v.as_str()?, "prompt_experiments")
+            .parse::<Uuid>()
+            .ok()
     })?;
     let agent_id: AgentId = row
         .get("agent_id")
@@ -166,13 +179,15 @@ impl PromptBackend for SurrealPromptStore {
             "version": version.version as i64,
             "content_hash": version.content_hash,
             "system_prompt": version.system_prompt,
-            "tools": serde_json::Value::Array(vec![]),
-            "variables": serde_json::Value::Array(vec![]),
+            "tools": version.tools,
+            "variables": version.variables,
             "created_at": version.created_at.to_rfc3339(),
             "created_by": version.created_by,
             "is_active": version.is_active,
             "description": version.description,
         });
+        // `description` is `option<string>`, which rejects JSON `null`; leave it out when unset.
+        let row = super::omit_nulls(row);
         let id = version.id.to_string();
         block_on(async {
             self.db
@@ -398,6 +413,8 @@ impl PromptBackend for SurrealPromptStore {
             "ended_at": experiment.ended_at.map(|t| t.to_rfc3339()),
             "created_at": experiment.created_at.to_rfc3339(),
         });
+        // `started_at` / `ended_at` are `option<string>`; leave them out while unset.
+        let row = super::omit_nulls(row);
         let id = experiment.id.to_string();
         block_on(async {
             self.db
@@ -508,10 +525,10 @@ impl PromptBackend for SurrealPromptStore {
                 })?;
 
             if check.is_some() {
-                // Use type::thing() to construct the record reference without string interpolation
+                // `type::record` builds the record reference without string interpolation (`type::thing` no longer exists in SurrealDB 3.x).
                 self.db
                     .query(
-                        "UPDATE type::thing('experiment_metrics', $id) SET \
+                        "UPDATE type::record('experiment_metrics', $id) SET \
                          total_requests += 1, \
                          successful_requests += $succ, \
                          failed_requests += $fail, \
@@ -526,6 +543,7 @@ impl PromptBackend for SurrealPromptStore {
                     .bind(("cost", cost_usd))
                     .bind(("now", now.clone()))
                     .await
+                    .and_then(|res| res.check())
                     .map_err(|e| {
                         LibreFangError::memory_msg(format!("SurrealDB record_request update: {e}"))
                     })?;

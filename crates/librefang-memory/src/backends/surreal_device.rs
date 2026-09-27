@@ -126,6 +126,8 @@ impl DeviceBackend for SurrealDeviceStore {
             "push_token": push_token,
             "api_key_hash": api_key_hash,
         });
+        // `push_token` is `option<string>`, which rejects JSON `null`; an unset token is left out and stored as NONE.
+        let row = super::omit_nulls(row);
         // Use device_id as record ID for idempotent upserts
         let safe_id = device_id.replace([':', '/'], "_");
         block_on(async {
