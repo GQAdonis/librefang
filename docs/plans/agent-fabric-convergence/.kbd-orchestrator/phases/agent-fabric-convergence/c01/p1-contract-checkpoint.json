@@ -130,7 +130,13 @@
       "reason": "kbd-next-phase.mjs treated --help as a phase name and falsely completed the prior integration-administration phase at revisions 932-933 without changing its 35/37 tasks or acceptance evidence",
       "planRevision": 4,
       "canonicalRevision": 943,
-      "decisionId": "integration-administration-false-complete-recovery"
+      "decisionId": "integration-administration-false-complete-recovery",
+      "toolFix": {
+        "repository": "prometheus-skills-mini",
+        "commit": "d7da4a5b11b60fc9b2891979ca70ae378f9f743e",
+        "pullRequest": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/8",
+        "state": "OPEN"
+      }
     }
   }
 }

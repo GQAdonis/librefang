@@ -26,7 +26,7 @@ The shipping receipt for 2.2.3 is SHA-256 `bde0411907e5f92c400ccace8ddf6d53c7643
 
 Consequently D-UAR-P1 is not accepted. C01.2 remains open, and overlapping UAR/The Boss implementation stays blocked. C01.3 and later changes cannot use merged PRs as a substitute for this checkpoint.
 
-The shipping ledger's original `integration-administration` phase was accidentally marked complete at canonical revisions 932–933 when `kbd-next-phase.mjs` treated `--help` as a phase name. Its task count and acceptance evidence remained 35/37 and pending. Because phase completion is immutable, plan revision 4 records the correction and the remaining tasks 5.3 and 5.5 now belong to the in-progress successor child `integration-administration-closeout` at revision 943. This recovery changes no acceptance outcome.
+The shipping ledger's original `integration-administration` phase was accidentally marked complete at canonical revisions 932–933 when `kbd-next-phase.mjs` treated `--help` as a phase name. Its task count and acceptance evidence remained 35/37 and pending. Because phase completion is immutable, plan revision 4 records the correction and the remaining tasks 5.3 and 5.5 now belong to the in-progress successor child `integration-administration-closeout` at revision 943. A read-only help fix is committed as mini `d7da4a5b11b60fc9b2891979ca70ae378f9f743e` and proposed in mini PR #8. This recovery changes no acceptance outcome.
 
 ## Nonoverlapping I1 delivery
 
