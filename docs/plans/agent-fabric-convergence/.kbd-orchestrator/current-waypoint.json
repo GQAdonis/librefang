@@ -2,10 +2,10 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 227,
-  "derivedRevision": 227,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 227
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -19,18 +19,21 @@
   "activePhaseId": "agent-fabric-convergence",
   "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
+  "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c04-replaceable-service-instances-and-placement",
-  "currentTask": "C04.1",
+  "change": "afc-c05-bossfang-full-run-delegation",
+  "currentTask": "C05.1",
   "status": "ready",
+  "lifecycle": "ready",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 5,
+  "implementationCompleted": 6,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 227,
+  "revision": 233,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c04-replaceable-service-instances-and-placement",
-  "nextTask": "C04.1",
-  "updatedAt": "2026-09-27T10:37:49.340080Z"
+  "nextChange": "afc-c05-bossfang-full-run-delegation",
+  "nextTask": "C05.1",
+  "updatedAt": "2026-09-27T12:47:49.368144Z"
 }

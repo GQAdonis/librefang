@@ -2,26 +2,55 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 227,
-  "derivedRevision": 227,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 227
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-27T10:37:49.340080Z",
+  "last_updated": "2026-09-27T12:47:49.368144Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
-  "changes_completed": 3,
+  "changes_completed": 4,
   "implementation_total": 18,
-  "implementation_completed": 3,
+  "implementation_completed": 4,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 3,
+      "completed": 4,
       "total": 18,
+      "status": "IN_PROGRESS"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 6,
+      "total": 20,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -77,12 +106,12 @@
     {
       "id": "afc-c04-replaceable-service-instances-and-placement",
       "title": "C04 — Replaceable service instances and placement",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+      "tasks_done": 3,
+      "last_task_completed": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+      "next_task_pending": null,
       "blockers": []
     },
     {

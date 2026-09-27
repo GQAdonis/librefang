@@ -2,24 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 227,
-  "derivedRevision": 227,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 227
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-27T10:37:49.340080Z",
+  "updatedAt": "2026-09-27T12:47:49.368144Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c04-replaceable-service-instances-and-placement",
-    "C04.1"
+    "afc-c05-bossfang-full-run-delegation",
+    "C05.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 5,
+      "done": 6,
       "total": 20
     },
     "children": [
@@ -29,7 +29,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 3,
+          "done": 4,
           "total": 18
         },
         "children": [
@@ -107,9 +107,9 @@
           {
             "type": "change",
             "id": "afc-c04-replaceable-service-instances-and-placement",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
