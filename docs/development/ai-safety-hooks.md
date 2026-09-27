@@ -10,6 +10,13 @@ The summary lives in [`CLAUDE.md`](../../CLAUDE.md); this page is the full enume
 ### `forbid-main-worktree.sh` (PreToolUse)
 
 Blocks edits and mutating git commands aimed at the main worktree.
+The one allowed git mutation there is `git [-C <path>] pull --ff-only [origin [main]]`, optionally with `-q` / `--quiet`, `-v` / `--verbose` or `--prune`.
+That exact form fast-forwards the checked-out `main` to its upstream `origin/main` and cannot create a commit, as long as repo config does not override the pull strategy (a `pull.twohead` setting can still force a merge, and `git config` writes in the main worktree are not blocked).
+Output redirections on that command (`2>&1`, `>file`, `< /dev/null`) are allowed.
+Every other `git pull` stays blocked: git lets a later `--ff` or `--no-ff` override `--ff-only`, a strategy such as `-s ours` or `--squash` changes what lands, a `-c` global option can change pull behaviour, and a different remote or ref would fast-forward main onto unreviewed commits.
+The tokenizer emits shell operators as separate tokens and treats an unquoted newline as a command separator, so `git commit;ls`, `$(git commit …)`, `` `git commit` `` and a mutation on a following line are all seen.
+Global options before the subcommand (`git -c k=v commit`, `git --no-pager commit`) no longer hide it either.
+`scripts/tests/test_check_bash_rules_main_worktree.py` pins all of this and runs in CI's Hook Guards job.
 It decides main-vs-linked with `test -d "$(git rev-parse --show-toplevel)/.git"`: git stores the main worktree's `.git` as a directory and a linked worktree's `.git` as a small text file pointing at `<main>/.git/worktrees/<name>`, so the directory test is true exactly in the main worktree.
 
 Do not substitute `git rev-parse --git-dir` — its output is path-shaped and varies with cwd.

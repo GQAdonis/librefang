@@ -53,15 +53,20 @@ import sys
 
 SKIP_AFTER_FLAGS = {"-m", "--message", "-F", "--file", "-c", "-C"}
 
-# Operators shlex returns as their own tokens (sometimes glued to surrounding
-# text). We split tokens on these to recover command-position info.
+# Shell operators, each emitted as its own token by `tokenize`.
 SHELL_OPS = ("&&", "||", ";;", ";", "|", "&", "(", ")")
 
 
 def tokenize(cmd: str) -> list[str]:
-    """shlex.split with a fallback so a malformed quote can't crash the hook."""
+    """Quote-aware split that emits shell operators as their own tokens, with a fallback so a malformed quote can't crash the hook.
+    Operators glued to words (`commit;ls`, `$(git`) are split off, and an unquoted newline becomes `;` because it separates commands just like one.
+    `#` stays an ordinary word: bash only starts a comment at a word boundary, and treating `a#` as a comment would hide whatever follows it."""
     try:
-        return shlex.split(cmd, posix=True)
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()\n")
+        lex.whitespace = " \t\r"
+        lex.whitespace_split = True
+        lex.commenters = ""
+        return [";" if t == "\n" else t for t in lex]
     except ValueError:
         return cmd.split()
 
@@ -73,9 +78,8 @@ def is_quoted_content(t: str) -> bool:
 
 
 def strip_parens(t: str) -> str:
-    """Bash subshells like `(cargo build)` keep the parens glued in shlex
-    tokens. Strip them so equality checks work."""
-    return t.lstrip("(").rstrip(")")
+    """Strip subshell parens and command-substitution backticks glued to a word (`` `git ``), so equality checks work."""
+    return t.lstrip("(`").rstrip(")`")
 
 
 def at_command_position(toks: list[str], i: int) -> bool:
@@ -128,11 +132,14 @@ def find_cargo_subcommand(toks: list[str], wanted_subs: set[str]):
     return None
 
 
+# git's global options that take a separate value (`git -c k=v commit`).
+GIT_GLOBAL_OPTS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--super-prefix"}
+
+
 def walk_git_invocations(toks: list[str]):
-    """Yield (i_git, j_after_C, c_path) for each `git [-C path] ...` we find
-    where i_git is the index of the `git` token, j_after_C is the index of the
-    first non-`-C` argument, and c_path is the value passed via `-C` (or None
-    if no `-C` was used). Skips occurrences inside quoted content."""
+    """Yield (i_git, j_sub, c_path) for each `git [global options] <sub> ...` we find.
+    i_git is the index of the `git` token, j_sub the index of the subcommand after every global option (`-C`, `-c k=v`, `--no-pager`, `--git-dir=…`), and c_path the value of `-C` (or None).
+    Skips occurrences inside quoted content."""
     i = 0
     while i < len(toks):
         if is_quoted_content(toks[i]):
@@ -141,13 +148,15 @@ def walk_git_invocations(toks: list[str]):
         if strip_parens(toks[i]) != "git":
             i += 1
             continue
-        # Optional -C <path>
         j = i + 1
         c_path = None
-        if j < len(toks) and toks[j] == "-C":
-            if j + 1 < len(toks):
-                c_path = toks[j + 1]
-            j += 2
+        while j < len(toks) and toks[j].startswith("-") and toks[j] not in SHELL_OPS:
+            if toks[j] in GIT_GLOBAL_OPTS_WITH_VALUE:
+                if toks[j] == "-C" and j + 1 < len(toks):
+                    c_path = toks[j + 1]
+                j += 2
+            else:
+                j += 1
         yield i, j, c_path
         i = j + 1
 
@@ -233,6 +242,44 @@ GIT_WORKTREE_MUTATIONS = {"remove", "prune", "move"}
 GIT_TAG_DELETE_FLAGS = {"-d", "--delete"}
 
 
+# The only `git pull` accepted in the main worktree: `--ff-only`, output-only flags, and at most `origin main`.
+# Anything else can defeat the fast-forward guarantee (a later `--ff` / `--no-ff`, `-s ours`, `--squash`) or fast-forward main onto an arbitrary ref.
+PULL_FF_SAFE_FLAGS = {"--ff-only", "-q", "--quiet", "-v", "--verbose", "--prune"}
+PULL_FF_SAFE_POSITIONALS = ([], ["origin"], ["origin", "main"])
+
+
+def invocation_args(toks: list[str], start: int) -> list[str]:
+    """Arguments of the command starting at `start`, up to the next shell operator."""
+    args = []
+    for t in toks[start:]:
+        if t in SHELL_OPS:
+            break
+        args.append(t)
+    return args
+
+
+def is_safe_ff_pull(toks: list[str], i_git: int, j: int) -> bool:
+    """True only for `git [-C <path>] pull --ff-only [safe flags] [origin [main]]`."""
+    global_opts = toks[i_git + 1:j]
+    if global_opts and global_opts[0] != "-C" or len(global_opts) not in (0, 2):
+        return False
+    args = []
+    skip_target = False
+    for a in invocation_args(toks, j + 1):
+        if skip_target:
+            skip_target = False
+            continue
+        # Redirections (`2>`, `>/tmp/log`, `< /dev/null`) change where output goes, not what the pull does.
+        m = re.match(r"^\d*(>>|>\||>|<)", a)
+        if m:
+            skip_target = m.end() == len(a)
+            continue
+        args.append(a)
+    flags = [a for a in args if a.startswith("-")]
+    positionals = [a for a in args if not a.startswith("-")]
+    return "--ff-only" in flags and set(flags) <= PULL_FF_SAFE_FLAGS and positionals in PULL_FF_SAFE_POSITIONALS
+
+
 def rule_git_mutation_main(toks, ctx):
     """When kind=main, refuse any modifying git invocation that would touch
     the main worktree's tree, HEAD, or stash. Worktree-cleanup commands
@@ -249,6 +296,11 @@ def rule_git_mutation_main(toks, ctx):
             continue
         sub = strip_parens(toks[j])
         sub_arg = strip_parens(toks[j + 1]) if j + 1 < len(toks) else None
+        # A fast-forward of main to origin/main cannot create a commit or rewrite local work.
+        if sub == "pull" and is_safe_ff_pull(toks, i_git, j):
+            continue
+        if sub == "pull":
+            return "`git pull` in main worktree (only `git pull --ff-only [origin [main]]` is allowed)."
         if sub in GIT_DIRECT_MUTATIONS:
             return f"`git {sub}` in main worktree."
         if sub == "stash" and sub_arg in GIT_STASH_MUTATIONS:

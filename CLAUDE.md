@@ -21,6 +21,8 @@ Full enumeration: `docs/development/ai-safety-hooks.md`.
 The short list of things that get blocked:
 
 - Editing files or running mutating git commands in the **main worktree**.
+  The one exception is `git pull --ff-only [origin [main]]` (optionally with `-q`, `-v` or `--prune`), which fast-forwards the checked-out `main` to `origin/main` and cannot create a commit unless repo config overrides the pull strategy (for example `pull.twohead`).
+  Any other form of `git pull` stays blocked, because a later `--ff` / `--no-ff`, a strategy, `--squash` or another ref would defeat that guarantee.
 - Force-push to `main` / `master`; `--no-verify` / `--no-gpg-sign` on any git command.
 - Staging sensitive files (`.env*`, `*.pem`, `id_rsa`, `credentials*`, …) and broad `git add -A` / `git add .` — stage specific paths.
 - Claude / Anthropic attribution in a commit message, **or** a commit author identity that resolves to Claude / Anthropic.
@@ -38,6 +40,38 @@ git config merge.ours.driver true
 `.gitattributes` declares `merge=ours` for all `.kbd-orchestrator/**/*.json`
 and `.kbd-orchestrator/**/*.md` files. Without the driver registered, git
 falls back to manual conflict resolution on those files.
+
+## Default operating mode: delegate to the agent team
+
+Every non-trivial task in this repo runs through the **`bossfang-stewards`** agent team (`.agent-team/project-routing.json` → `.agent-team/bossfang-stewards/team.json`).
+The main session is the orchestrator: it plans, dispatches roles, combines their results, and reports.
+It does not do role work itself when a role owns that work.
+Only trivial single-file changes (a typo, a one-line obvious fix) skip delegation.
+
+| Work | Role |
+|---|---|
+| Roadmap, feature ledger, acceptance criteria, KBD phases and OpenSpec changes (`docs/bossfang/`, `.kbd-orchestrator/`, `openspec/changes/`) | `product-manager` |
+| Any upstream `librefang/librefang` sync (`docs/upstream-merges/`, the upstream-merge skill, `scripts/enforce-branding.py`) | `upstream-merge-manager` |
+| SurrealDB schema and migrations, `librefang-storage`, the Surreal backends in `librefang-memory` (the surreal-memory substrate), SurrealDB / surreal-memory version pins | `surrealdb-schema-engineer` |
+| UAR (`librefang-uar-spec`, the `UarDriver`, the runtime pin), the config store overlay, desktop identity, branding assets | `bossfang-feature-steward` |
+| Independent review of every upstream sync before it merges to `main` | `merge-reviewer` |
+
+How to use the team:
+
+- **Use it to the maximum.**
+  Split work so that every role with an independent piece runs, and run those roles **in parallel**.
+- **Isolate parallel roles.**
+  Each role gets its own linked worktree (branched from the shared base) and its own `CARGO_TARGET_DIR`, so their commits and builds never collide.
+  The orchestrator combines the commits afterwards and re-verifies the combined tree.
+- **Invoke by role.**
+  Spawn the native agent (`.claude/agents/<role>.md`) when the harness exposes it; otherwise spawn a general-purpose agent and hand it the role file to follow.
+- **Work no role owns** (general kernel, API, dashboard, CLI or hook code) still goes to a delegated agent in its own worktree, which follows this file.
+- **Review is independent.**
+  Nothing merges to `main` without a review in a fresh context, never the builder's.
+  `merge-reviewer` reviews upstream syncs; every other change gets a fresh-context reviewer agent (for example `code-reviewer`, `rust-reviewer`, or `security-reviewer` for hooks and auth).
+- **Hand off explicitly.**
+  A role that finds work owned by another role reports it as a handoff.
+  The orchestrator dispatches it rather than letting the finder absorb it.
 
 ## Process Discipline
 
