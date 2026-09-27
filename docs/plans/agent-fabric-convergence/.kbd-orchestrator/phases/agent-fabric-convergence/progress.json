@@ -2,16 +2,16 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 214,
-  "derivedRevision": 214,
+  "sourceRevision": 224,
+  "derivedRevision": 224,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 214
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 224
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-27T05:58:11.232770Z",
+  "last_updated": "2026-09-27T06:35:59.072982Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 2,
@@ -22,6 +22,35 @@
     "implementation": {
       "completed": 2,
       "total": 18,
+      "status": "IN_PROGRESS"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 4,
+      "total": 20,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -69,9 +98,9 @@
       "status": "IN_PROGRESS",
       "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+      "tasks_done": 1,
+      "last_task_completed": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+      "next_task_pending": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
       "blockers": []
     },
     {
