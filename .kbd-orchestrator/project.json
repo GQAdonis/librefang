@@ -214,7 +214,7 @@
     "http_framework": "axum-0.8",
     "frontend": "react-19+vite-8+typescript",
     "desktop": "tauri-2",
-    "storage": "surrealdb-3.2.1",
+    "storage": "surrealdb-3.3.0",
     "memory_substrate": "surreal-memory"
   },
   "constraints": {

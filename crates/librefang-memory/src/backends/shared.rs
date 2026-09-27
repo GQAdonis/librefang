@@ -63,10 +63,13 @@ pub async fn open_shared_memory_storage(
     storage_cfg: &librefang_storage::config::StorageConfig,
 ) -> Result<Arc<surreal_memory::SurrealStorage>, String> {
     use surreal_memory::storage::surreal::{SurrealConfig, SurrealMode};
+    use surreal_memory::SurrealAuthLevel;
 
     let mem_cfg = storage_cfg.memory_storage_config();
     let sm_config = match &mem_cfg.backend {
         librefang_storage::config::StorageBackendKind::Embedded { path } => SurrealConfig {
+            // No credentials in embedded mode; Root is surreal-memory's own default.
+            auth_level: SurrealAuthLevel::Root,
             mode: SurrealMode::Embedded,
             endpoint: None,
             embedded_path: Some(path.to_string_lossy().to_string()),
@@ -79,6 +82,15 @@ pub async fn open_shared_memory_storage(
         librefang_storage::config::StorageBackendKind::Remote(remote) => {
             let password = std::env::var(&remote.password_env).unwrap_or_default();
             SurrealConfig {
+                // Same level selection as the operational pool (`librefang_storage::pool`): the `root`
+                // system user is defined ON ROOT and must sign in at root level, while any other user is
+                // treated as namespace-scoped. Both stores read the same `[storage.backend]` credentials,
+                // so they must agree or one of them fails to authenticate.
+                auth_level: if remote.username == "root" {
+                    SurrealAuthLevel::Root
+                } else {
+                    SurrealAuthLevel::Namespace
+                },
                 mode: SurrealMode::Server,
                 endpoint: Some(remote.url.clone()),
                 embedded_path: None,
