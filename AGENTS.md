@@ -21,19 +21,29 @@ Only trivial single-file changes (a typo, a one-line obvious fix) skip delegatio
 
 | Work | Role |
 |---|---|
-| Scope, acceptance criteria, feature ledger, KBD phases, research and analysis | `product-manager` |
-| Any upstream `librefang/librefang` sync | `upstream-merge-manager` |
-| SurrealDB schema, migrations, `librefang-storage`, SurrealDB / surreal-memory version pins | `surrealdb-schema-engineer` |
-| UAR, config store, desktop identity, branding, the surreal-memory substrate, any BossFang-exclusive surface | `bossfang-feature-steward` |
-| Independent review of every change before it merges to `main` | `merge-reviewer` |
+| Roadmap, feature ledger, acceptance criteria, KBD phases and OpenSpec changes (`docs/bossfang/`, `.kbd-orchestrator/`, `openspec/changes/`) | `product-manager` |
+| Any upstream `librefang/librefang` sync (`docs/upstream-merges/`, the upstream-merge skill, `scripts/enforce-branding.py`) | `upstream-merge-manager` |
+| SurrealDB schema and migrations, `librefang-storage`, the Surreal backends in `librefang-memory` (the surreal-memory substrate), SurrealDB / surreal-memory version pins | `surrealdb-schema-engineer` |
+| UAR (`librefang-uar-spec`, the `UarDriver`, the runtime pin), the config store overlay, desktop identity, branding assets | `bossfang-feature-steward` |
+| Independent review of every upstream sync before it merges to `main` | `merge-reviewer` |
 
 How to use the team:
 
-- **Use it to the maximum.** Split work so that every role with an independent piece runs, and run those roles **in parallel**.
-- **Isolate parallel roles.** Each role gets its own linked worktree (branched from the shared base) and its own `CARGO_TARGET_DIR`, so their commits and builds never collide; the orchestrator combines the commits afterwards and re-verifies the combined tree.
-- **Invoke by role.** Use the harness's native definition for the role (`.claude/agents/`, `.codex/agents/`, `.kimi-code/agents/`, `.opencode/agents/`, `.minimax/agents/`); where the harness has no native delegation, follow the role instructions sequentially and say so.
-- **Review is independent.** `merge-reviewer` reviews in a fresh context, never the builder's; a change is not ready for `main` until it has reviewed it.
-- **Hand off explicitly.** A role that finds work owned by another role reports it as a handoff; the orchestrator dispatches it rather than letting the finder absorb it.
+- **Use it to the maximum.**
+  Split work so that every role with an independent piece runs, and run those roles **in parallel**.
+- **Isolate parallel roles.**
+  Each role gets its own linked worktree (branched from the shared base) and its own `CARGO_TARGET_DIR`, so their commits and builds never collide.
+  The orchestrator combines the commits afterwards and re-verifies the combined tree.
+- **Invoke by role.**
+  Use the harness's native definition for the role (`.claude/agents/`, `.codex/agents/`, `.kimi-code/agents/`, `.opencode/agents/`, `.minimax/agents/`).
+  Where the harness has no native delegation, follow the role instructions sequentially and say so.
+- **Work no role owns** (general kernel, API, dashboard, CLI or hook code) still goes to a delegated agent in its own worktree, which follows this file.
+- **Review is independent.**
+  Nothing merges to `main` without a review in a fresh context, never the builder's.
+  `merge-reviewer` reviews upstream syncs; every other change gets a fresh-context reviewer agent (for example `code-reviewer`, `rust-reviewer`, or `security-reviewer` for hooks and auth).
+- **Hand off explicitly.**
+  A role that finds work owned by another role reports it as a handoff.
+  The orchestrator dispatches it rather than letting the finder absorb it.
 
 ## Workspace Structure
 

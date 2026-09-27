@@ -156,7 +156,7 @@ jobs:
           # agent sessions editing / mutating the main worktree. They are plain
           # shell + python with no compile step, so no other CI lane would
           # notice a regression — gate them on their own job.
-          HOOKS=false;   has '^(\.claude/hooks/|scripts/tests/forbid-main-worktree-kbd\.sh$)' && HOOKS=true
+          HOOKS=false;   has '^(\.claude/hooks/|scripts/tests/forbid-main-worktree-kbd\.sh$|scripts/tests/test_check_bash_rules_[a-z_]+\.py$)' && HOOKS=true
           # The WASM-skill guest SDK and its example are independent
           # workspaces (own `[workspace]` roots), so the main RUST lane —
           # which only builds the kernel workspace — never compiles them.
@@ -988,6 +988,10 @@ jobs:
           python3 -m py_compile .claude/hooks/lib/check-bash-rules.py
       - name: Run forbid-main-worktree regression tests
         run: bash scripts/tests/forbid-main-worktree-kbd.sh
+      - name: Run check-bash-rules corpus tests
+        run: |
+          python3 scripts/tests/test_check_bash_rules_main_worktree.py
+          python3 scripts/tests/test_check_bash_rules_attribution.py
 
   # ── Live-integration smoke (#3405) ────────────────────────────────────────────
   # Spawn a real `target/debug/librefang start` daemon on port 4545, hit
