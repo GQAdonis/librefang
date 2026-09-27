@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "activeTeam": "bossfang-stewards",
+  "manifest": ".agent-team/bossfang-stewards/team.json",
+  "target": "claude",
+  "nativeDefinitions": [
+    ".claude/agents/product-manager.md",
+    ".claude/agents/upstream-merge-manager.md",
+    ".claude/agents/surrealdb-schema-engineer.md",
+    ".claude/agents/bossfang-feature-steward.md",
+    ".claude/agents/merge-reviewer.md"
+  ],
+  "instructionFiles": [
+    "AGENTS.md",
+    "CLAUDE.md"
+  ],
+  "delegation": "native-definitions",
+  "limitations": [
+    "Native definition presence is not live invocation evidence. The active harness owns permissions, models, concurrency and delegation.",
+    "When delegation is unavailable, use selected role instructions sequentially and report it; builder-context review is not independent.",
+    "Zed external ACP agents use their native configuration; Zed parallel threads are not an automatic delegation API."
+  ]
+}

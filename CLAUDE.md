@@ -601,3 +601,9 @@ The rules you must not break without asking:
   It exists for containers that drop to a numeric uid without a passwd entry and inherit a placeholder home (`/nonexistent`, `/var/empty`, `/dev/null`), leaving the CLI unable to find `~/.claude/.credentials.json`.
   The override is ignored when the inherited home is already a real directory, and when it points at a non-directory the driver logs a `WARN` and falls back rather than honouring it.
 - When parallel agents modify the same crate, `Option::None` defaults for new fields compile silently but disable the feature. Always write the integration test at the injection site, not just the implementation site.
+
+<!-- prometheus-team-routing:start v1 -->
+For every code task, read `.agent-team/project-routing.json`, then its active team manifest and the relevant role instructions. Default to that team, selecting only roles whose responsibilities and ownership match the work. Preserve native permissions, models, concurrency limits and existing project instructions.
+For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.
+Use native delegation when available. If unavailable, follow the selected role instructions sequentially and report that limitation. Review in the builder context is not independent review. Keep reviewers dormant until the complete implementation phase; allow one batched correction/confirmation cycle. Respect user-only skill invocation restrictions. Zed external ACP agents use their own native configuration; parallel UI threads are not an automatic delegation API.
+<!-- prometheus-team-routing:end -->
