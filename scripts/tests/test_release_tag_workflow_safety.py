@@ -1053,11 +1053,12 @@ def check_repository_automation() -> None:
 # #8234: every macOS CLI build is signed with the Developer ID certificate, not ad hoc.
 # macOS keys Full Disk Access and Automation grants on a binary's code identity, and an ad-hoc signature derives that identity from the binary's own hash, so each release silently revoked them.
 # The jobs are duplicated between release.yml and release-cli.yml, so each copy is checked on its own.
+# BossFang signs under its own `ai.bossfang.*` identifiers (the fork's code identity); upstream's `ai.librefang.*` expectations must never be restored by a sync.
 MACOS_CLI_SIGNING_JOBS = (
-    (RELEASE_WORKFLOW, "cli_mac", ("ai.librefang.cli", "ai.librefang.sidecar-telegram")),
-    (RELEASE_WORKFLOW, "cli_mac_mini", ("ai.librefang.cli",)),
-    (ROOT / ".github" / "workflows" / "release-cli.yml", "cli_mac", ("ai.librefang.cli", "ai.librefang.sidecar-telegram")),
-    (ROOT / ".github" / "workflows" / "release-cli.yml", "cli_mac_mini", ("ai.librefang.cli",)),
+    (RELEASE_WORKFLOW, "cli_mac", ("ai.bossfang.cli", "ai.bossfang.sidecar-telegram")),
+    (RELEASE_WORKFLOW, "cli_mac_mini", ("ai.bossfang.cli",)),
+    (ROOT / ".github" / "workflows" / "release-cli.yml", "cli_mac", ("ai.bossfang.cli", "ai.bossfang.sidecar-telegram")),
+    (ROOT / ".github" / "workflows" / "release-cli.yml", "cli_mac_mini", ("ai.bossfang.cli",)),
 )
 
 

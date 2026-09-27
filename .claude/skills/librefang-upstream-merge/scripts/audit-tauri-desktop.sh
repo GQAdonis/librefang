@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # audit-tauri-desktop.sh — Phase 3c of the librefang-upstream-merge skill.
 #
-# Verifies the four Tauri configs and the minisign pubkey survived the
-# merge unchanged. See references/tauri-desktop-checklist.md for fixes
+# Verifies the four Tauri configs, the minisign pubkey and the macOS CLI
+# code-signing identifiers survived the merge unchanged. See references/tauri-desktop-checklist.md for fixes
 # when a check fails.
 #
 # Exit codes:
-#   0 — all four checks pass
+#   0 — all checks pass
 #   1 — one or more checks failed; specifics on stderr
 
 set -euo pipefail
@@ -122,6 +122,29 @@ for icon in icon.png icon.ico 32x32.png 128x128.png "128x128@2x.png"; do
     ok "icons/$icon present (${size} bytes)"
   fi
 done
+
+# 6. macOS CLI code-signing identity. The release workflows sign the CLI and the Telegram sidecar under `ai.bossfang.*`, and upstream's release-safety test (#8234) asserts its own `ai.librefang.*` identifiers.
+# A sync takes that test as-is, so it fails CI on the fork until its expectation table is flipped (2026-09-27 sync).
+# Check both sides: the workflows must sign BossFang identifiers, and the test must expect them.
+workflows="$toplevel/.github/workflows"
+sign_hits="$(grep -hoE '^[[:space:]]*sign .* ai\.[a-z]+\.[a-z-]+[[:space:]]*$' "$workflows/release.yml" "$workflows/release-cli.yml" 2>/dev/null | awk '{print $NF}' | sort -u || true)"
+if [ -z "$sign_hits" ]; then
+  fail "no macOS codesign identifiers found in release.yml / release-cli.yml"
+elif echo "$sign_hits" | grep -qv '^ai\.bossfang\.'; then
+  fail "release workflows sign non-BossFang identifiers: $(echo "$sign_hits" | grep -v '^ai\.bossfang\.' | tr '\n' ' ')"
+else
+  ok "release workflows sign only ai.bossfang.* ($(echo "$sign_hits" | tr '\n' ' '))"
+fi
+safety_test="$toplevel/scripts/tests/test_release_tag_workflow_safety.py"
+if [ -f "$safety_test" ]; then
+  if grep -qE '"ai\.librefang\.' "$safety_test"; then
+    fail "$(basename "$safety_test") still expects ai.librefang.* identifiers — flip its expectation table to ai.bossfang.*"
+  elif python3 "$safety_test" >/dev/null 2>&1; then
+    ok "$(basename "$safety_test") passes"
+  else
+    fail "$(basename "$safety_test") fails — run it directly for the message"
+  fi
+fi
 
 echo
 if [ "$fail_count" -eq 0 ]; then
