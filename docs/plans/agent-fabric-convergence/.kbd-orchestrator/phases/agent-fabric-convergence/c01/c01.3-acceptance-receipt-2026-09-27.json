@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "task": "C01.3",
+  "recordedAt": "2026-09-27T04:40:00Z",
+  "result": "PASS",
+  "contractVersion": "1.0.0",
+  "gate": {
+    "contractValidator": {
+      "result": "PASS",
+      "repositories": 11,
+      "identities": 24,
+      "actions": 17,
+      "adoptionCheckpoints": 12,
+      "rollbackSteps": 11
+    },
+    "openSpec": {
+      "result": "PASS",
+      "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "strict": true,
+      "skipSpecs": true
+    },
+    "diffIntegrity": {
+      "result": "PASS"
+    }
+  },
+  "independentReview": {
+    "result": "PASS",
+    "receipt": "c01.3-independent-review-2026-09-27.json"
+  },
+  "artifactHashes": {
+    "convergence-contract-v1.md": "b9d966153d1a57b924f123a6001f6814c018665444be9c558fd40250553d0a6b",
+    "convergence-contract-v1.json": "44a5c1f33a861a6eec00db864602e673d13d4fbc70252515ebb72f781a901dc4",
+    "identity-state-action-vocabulary-v1.md": "00409a23ecc3eae0ee4891b35d862414567823b8671ffcee900d826ad945ad72",
+    "identity-state-action-vocabulary-v1.json": "513e554ef983b3c77f9aa99b65d0f627ee91479c47a1a3161a61a345260f20ae",
+    "dependency-compatibility-matrix-v1.md": "f7c883e38e7f0cb3d869d93252c08574e8fce0ba63b94ef9f70be8d7a6b1f778",
+    "dependency-compatibility-matrix-v1.json": "86206dba93887216f001c1353d15a309a16762a4f5391cad718a959dcbb238bf",
+    "adoption-rollback-checkpoints-v1.md": "3c7f1b42a8a6bd216ae90ad8d5506b27428c3ef6c55b13a698b7503d75d11664",
+    "adoption-rollback-checkpoints-v1.json": "5902701c5b49bb7ec18194485cb6f4ee72ba17062ec0c633f70e18e994921043",
+    "c01.3-independent-review-2026-09-27.json": "d46c6a70043fb3434d34dad117773b21a7afad73e4c78c35aad50c4e30bb6ee6"
+  },
+  "claims": {
+    "planningContractAccepted": true,
+    "productConformance": false,
+    "productCodeChanged": false,
+    "productBuildsRun": false
+  },
+  "limitations": [
+    "Windows occupied-port fallback remains unobserved.",
+    "Later C02-C18 product implementation and external checkpoints remain separately gated."
+  ]
+}

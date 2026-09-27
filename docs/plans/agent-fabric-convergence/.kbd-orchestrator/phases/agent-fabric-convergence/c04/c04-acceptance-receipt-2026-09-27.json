@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c04-replaceable-service-instances-and-placement",
+  "initiativeChange": "afc-c04-replaceable-service-instances-and-placement",
+  "recordedOn": "2026-09-27",
+  "result": "pass",
+  "repositories": {
+    "universalAgentRuntime": {
+      "commit": "33d817a95d21e81fff5b0ee504975edfadd84b91",
+      "signed": false,
+      "signingStatus": "configured GPG identity had no secret key on this host"
+    },
+    "theBoss": {
+      "commit": "1e9c0a43f1312f4ec024cd9d4e224afca2318cf6",
+      "signed": true
+    },
+    "librefang": {
+      "commit": "0208eaa348aecfb4ad2b63b5f6b88e089fac02bd",
+      "signed": false
+    }
+  },
+  "integrationGate": {
+    "universalAgentRuntime": {
+      "rustfmtChangedFiles": "pass",
+      "cargoCheckServerFullLocked": "pass",
+      "cargoBuildSidecarLocked": "pass",
+      "binary": {
+        "path": "target/debug/uar-sidecar",
+        "size": 510074144,
+        "sha256": "985653dafbc8d944f7ee3c14dc5990a659d8dafa3c4882f0490dce0a73516bcb"
+      },
+      "liveCreateAndReattach": {
+        "result": "pass",
+        "port": 19300,
+        "instanceId": "c04-reattach-gate",
+        "createRunId": "93718347-1bd8-4da8-8d9e-027a524b8482",
+        "resumedRunId": "d58f0c15-dd68-4a6b-b90d-7fa92ab32a1c",
+        "reattachBindingReturned": true
+      }
+    },
+    "theBoss": {
+      "targetedOxfmt": "pass",
+      "typecheck": "pass",
+      "productionBuild": "pass",
+      "commitHooks": "pass"
+    },
+    "librefang": {
+      "rustfmtChangedFile": "pass",
+      "targetedCrateCheck": "pass",
+      "dashboardTypecheckAndBuild": "pass",
+      "broaderApiCompilation": "blocked by pre-existing untouched model_catalog.rs ProviderInfo errors"
+    },
+    "openspec": {
+      "validation": "pass",
+      "archives": "pass in all three repositories"
+    }
+  },
+  "adversarialReview": {
+    "result": "pass",
+    "criticalFindingsRemaining": 0,
+    "acceptedWarnings": [
+      "Librefang retains an explicit administration endpoint compatibility fallback.",
+      "UAR placement errors flatten structured diagnostic fields into one message."
+    ]
+  },
+  "operatorEvidence": {
+    "source": "operator report",
+    "observed": [
+      "Windows installation opened successfully",
+      "UAR sidecar was active on port 1906"
+    ],
+    "c04BuildClaimed": false,
+    "disposition": "installed baseline evidence; C04 source acceptance is established by the final integration gate above"
+  },
+  "kbd": {
+    "sourceRevision": 233,
+    "conflictCount": 0,
+    "implementationCompleted": 4,
+    "implementationTotal": 18
+  }
+}

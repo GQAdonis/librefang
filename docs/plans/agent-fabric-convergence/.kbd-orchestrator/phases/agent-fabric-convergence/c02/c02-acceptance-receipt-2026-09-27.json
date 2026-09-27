@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "change": "afc-c02-governed-action-and-approval-boundary",
+  "tasks": [
+    "C02.1",
+    "C02.2",
+    "C02.3"
+  ],
+  "recordedAt": "2026-09-27T05:51:24.644Z",
+  "result": "PASS",
+  "contract": {
+    "protocol": "afc.governed-effect/1",
+    "version": "1.1.0",
+    "path": "governed-effect-contract-v1.json"
+  },
+  "productCommits": {
+    "universalAgentRuntime": "59df10a102c5d46da9db5983a73fbcf20ca09590",
+    "flintGate": "7c80cae57fc2ffecdf668041757bf106fe5fee23",
+    "theBoss": "371e023cd22110db9b16afc52a5881a65f39dcff"
+  },
+  "integrationGate": {
+    "universalAgentRuntime": [
+      {
+        "target": "tool_admission_integration",
+        "result": "PASS",
+        "tests": 5
+      },
+      {
+        "target": "integration::live::capability_cases::l3_c02_direct_tool_route_binds_principal_to_authenticated_owner",
+        "result": "PASS",
+        "tests": 1
+      },
+      {
+        "target": "a2a_thread_service::actor_collaboration_rejection_prevents_child_dispatch",
+        "result": "PASS",
+        "tests": 1
+      },
+      {
+        "target": "skill_scoped_governance",
+        "result": "PASS",
+        "tests": 3
+      },
+      {
+        "target": "embedded_sdk",
+        "result": "PASS",
+        "tests": 1
+      },
+      {
+        "target": "builtin_db_registration",
+        "result": "PASS",
+        "tests": 3
+      }
+    ],
+    "flintGate": [
+      {
+        "target": "flint-gate-core::governed_effect_authority",
+        "result": "PASS",
+        "tests": 1
+      }
+    ],
+    "theBoss": [
+      {
+        "target": "governedEffectHostAdapter.integration.test.ts",
+        "result": "PASS",
+        "tests": 1
+      },
+      {
+        "target": "typecheck:node",
+        "result": "PASS"
+      }
+    ],
+    "openSpec": {
+      "result": "PASS",
+      "strictChanges": [
+        "afc-c02-governed-action-boundary",
+        "afc-c02-governed-effect-authority-v1",
+        "afc-c02-governed-effect-host-adapter",
+        "afc-c02-governed-action-and-approval-boundary"
+      ]
+    }
+  },
+  "adversarialReview": {
+    "result": "PASS",
+    "resolvedFindings": [
+      "Bind direct REST authority to the authenticated subject instead of X-Agent-Id.",
+      "Reject auto-to-ask claim transitions without a recorded human approval.",
+      "Route actor spawn through the root approval gate and prevent rejected child dispatch.",
+      "Include the required budget expiry in The Boss to Flint Gate requests.",
+      "Reject duplicate audience values before Cedar evaluation.",
+      "Align the source receipt with governed-effect contract version 1.1.0."
+    ],
+    "remainingActionableFindings": 0
+  },
+  "installedBaseline": {
+    "checkpoint": "D-UAR-P1",
+    "windowsX64": "operator-accepted",
+    "observation": "The Boss installation worked and UAR was active on preferred/effective port 1906.",
+    "provesC02": false
+  },
+  "claims": {
+    "productionImplementationCommitted": true,
+    "c02IntegrationGatePassed": true,
+    "openSpecVerifiedAndArchivedInProductRepositories": true,
+    "productPullRequestsMerged": false,
+    "c02ReleasedAndInstalled": false
+  },
+  "limitations": [
+    "Windows occupied-port fallback remains unobserved.",
+    "The accepted Windows installation predates these C02 product commits and is baseline evidence only.",
+    "The bounded C02 gate intentionally did not run unrelated repository suites."
+  ]
+}

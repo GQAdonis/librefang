@@ -4,13 +4,15 @@
 
 | Dependency | Existing scope / location | Required convergence checkpoint |
 |---|---|---|
-| D-UAR-P1 | Codex task `UAR Working Agent`; UAR `worktrees/uar-the-boss-sidecar`, The Boss `worktrees/the-boss-uar`; canonical shipping state in the original mini checkout | Read latest committed plan, execution manifest, child integration-administration artifacts and source commits. Record current owner and the agreed API/approval/history contract. Do not infer completion from an old waypoint. Overlapping implementation waits for owner agreement or merged release checkpoint. |
+| D-UAR-P1 | Accepted The Boss 2.2.3 Windows x64 and Apple Silicon closeout; frozen `the-boss.uar.sidecar/1` contract; mini closeout `5f43a25dd027311a8bcbc690eed022031d45aafd` | Accepted. Consume the recorded conversation/execution/approval ownership and immutable release evidence. Windows occupied-port fallback remains unobserved. Later work still requires its own change dependencies, repository-scoped tasks and explicit owner; P2-P5 are not complete. |
 | D-MINI | Original mini local shipping commits diverge from origin/main; original full pack has uncommitted distribution/context changes | Reconcile exact shipped/accepted commit through the owning work. Never replace it with an older pin because the branch name matches. Reuse merged agent-team skills. |
 | D-FRF | Fabric `codex/production-readiness-integration`, with pending work and local commits | Map agent-control semantics, identity, shape/replay/sync and observer features to accepted work before new implementation. |
 | D-FORGE | Forge production-readiness branch plus database-role and GraphQL worktrees | Agree domain-write/outbox/RLS/shape contract; preserve role and GraphQL changes. |
 | D-GATE | Gate `codex/aso-task-status-projection` and existing authorization/stream edits | Establish owner and disposition for token exchange, approval storage, transport PEP and task projection before editing those modules. |
 | D-KNOWME | App `main`; system `feat/embedded-memory-crud` with vendor/config/spec WIP | Preserve app/system identities, Rust-core ownership, consent and embedding contracts; explicitly reconcile any duplicate local loop. |
 | D-MEMORY | surreal-memory original dependency branch and newer fetched main | Record exact auth/namespace/storage API and pins. Sharing uses a service or designated in-process handle, never two processes opening one embedded directory. |
+
+The C01 [compatibility matrix](.kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-compatibility-matrix-v1.md) records the exact source anchor, boundary type, accepted capability, unresolved incompatibility, owner and rollback anchor for every repository. The [adoption contract](.kbd-orchestrator/phases/agent-fabric-convergence/c01/adoption-rollback-checkpoints-v1.md) keeps unresolved external checkpoints blocked and orders provider adoption before consumer enforcement.
 
 No messages or dispatches were sent to the other task. Ownership described here is a planning reservation based on its recorded plan, not an agreement to transfer work.
 

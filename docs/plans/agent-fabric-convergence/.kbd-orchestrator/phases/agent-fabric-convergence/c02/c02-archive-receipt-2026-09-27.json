@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "change": "afc-c02-governed-action-and-approval-boundary",
+  "recordedAt": "2026-09-27T05:55:23.567Z",
+  "canonicalRevision": 212,
+  "canonicalStatus": "complete",
+  "openSpecStatus": "archived",
+  "archivePath": "openspec/changes/archive/2026-09-27-afc-c02-governed-action-and-approval-boundary",
+  "acceptanceReceipt": "c02-acceptance-receipt-2026-09-27.json",
+  "nextChange": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "nextTask": "C03.1",
+  "conflictCount": 0
+}

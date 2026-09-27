@@ -1,0 +1,296 @@
+{
+  "schemaVersion": "afc.adoption-rollback-checkpoints.v1",
+  "contractVersion": "1.0.0",
+  "status": "accepted-planning-contract",
+  "capturedAt": "2026-09-27T04:00:00Z",
+  "adoptionPolicy": [
+    "Provider capability and immutable source evidence precede consumer enforcement.",
+    "Every product change uses its repository OpenSpec/KBD authority, exact file claims and a single writer.",
+    "A checkpoint admits only the capabilities named in its evidence; unresolved dependencies remain blocked.",
+    "UAR is the sole execution-loop owner for UAR tasks; hosts and transports project or delegate state.",
+    "Product conformance is proven only at the owning change's complete integration boundary."
+  ],
+  "adoption": [
+    {
+      "order": 1,
+      "id": "AFC-A01",
+      "name": "coordination-contract",
+      "changes": [
+        "C01"
+      ],
+      "requires": [
+        "C01.1 immutable source ledger",
+        "accepted D-UAR-P1",
+        "merged I1 receipts"
+      ],
+      "delivers": [
+        "identity/state/action vocabulary v1",
+        "dependency compatibility matrix v1",
+        "ordered adoption/rollback checkpoints v1"
+      ],
+      "exit": "All eleven repositories have an exact anchor, owner, unresolved incompatibility and rollback anchor; no unresolved row is execution-ready."
+    },
+    {
+      "order": 2,
+      "id": "AFC-A02",
+      "name": "governed-action-and-approval-boundary",
+      "changes": [
+        "C02"
+      ],
+      "requires": [
+        "AFC-A01",
+        "D-UAR-P1",
+        "D-GATE"
+      ],
+      "delivers": [
+        "typed action/resource/effect identity",
+        "current-policy admission",
+        "approval issuer/subject/audience binding",
+        "uncertain-effect reconciliation contract"
+      ],
+      "exit": "Protected actions deny on missing policy facts and approval/effect identity is agreed before definitions can demand it."
+    },
+    {
+      "order": 3,
+      "id": "AFC-A03",
+      "name": "canonical-definitions-and-provider-inputs",
+      "changes": [
+        "C03"
+      ],
+      "requires": [
+        "AFC-A02",
+        "I1 UAR and skill-pack merge commits",
+        "D-MINI",
+        "pre-upgrade SurrealDB export where downgrade is required"
+      ],
+      "delivers": [
+        "one canonical definition/package representation",
+        "lossless compiler diagnostics",
+        "private deployment bindings",
+        "pinned provider/package inputs"
+      ],
+      "exit": "C03 reconciles against I1 assets, introduces no competing catalog, and freezes exact provider inputs before consumers enforce them."
+    },
+    {
+      "order": 4,
+      "id": "AFC-A04",
+      "name": "runtime-placement-and-lifecycle-ownership",
+      "changes": [
+        "C04"
+      ],
+      "requires": [
+        "AFC-A03",
+        "D-UAR-P1"
+      ],
+      "delivers": [
+        "runtime instance and placement contract",
+        "managed versus external lifecycle ownership",
+        "capability negotiation"
+      ],
+      "exit": "The selected runtime identity, capabilities and lifecycle owner are known before execution features adopt it."
+    },
+    {
+      "order": 5,
+      "id": "AFC-A05",
+      "name": "core-runtime-and-product-foundations",
+      "changes": [
+        "C05",
+        "C06",
+        "C11",
+        "C12"
+      ],
+      "requires": [
+        "AFC-A04",
+        "D-UAR-P1",
+        "D-MEMORY for C06",
+        "D-FORGE/D-FRF/D-GATE/D-KNOWME for C11",
+        "D-KNOWME/D-FRF for C12"
+      ],
+      "delivers": [
+        "full-run delegation",
+        "durable instances and bounded turns",
+        "authoritative business-data boundary",
+        "peer sovereignty and consent boundary"
+      ],
+      "exit": "Each change passes its own repository gate; C05/C06 preserve one UAR executor and C11/C12 preserve their product data owners."
+    },
+    {
+      "order": 6,
+      "id": "AFC-A06",
+      "name": "local-teams-observation-and-embedded-profiles",
+      "changes": [
+        "C07",
+        "C09",
+        "C13"
+      ],
+      "requires": [
+        "AFC-A05",
+        "C07 requires C06",
+        "C09 requires C06",
+        "C13 requires C06 and D-KNOWME"
+      ],
+      "delivers": [
+        "authorized observation/replay",
+        "durable task board, routing, messaging and nested local teams",
+        "embedded/mobile execution profiles"
+      ],
+      "exit": "I2 proves durable local teams through the existing UAR kernel; observers and embedded profiles do not add another scheduler."
+    },
+    {
+      "order": 7,
+      "id": "AFC-A07",
+      "name": "fabric-routing",
+      "changes": [
+        "C08"
+      ],
+      "requires": [
+        "AFC-A06",
+        "C05",
+        "C07",
+        "D-FRF",
+        "D-GATE"
+      ],
+      "delivers": [
+        "BossFang/Fabric observer routing",
+        "causal and recipient identity preservation"
+      ],
+      "exit": "Transport remains a transport; replay and forwarding do not duplicate semantic actions."
+    },
+    {
+      "order": 8,
+      "id": "AFC-A08",
+      "name": "governed-workflows-and-portable-adapters",
+      "changes": [
+        "C10",
+        "C15"
+      ],
+      "requires": [
+        "AFC-A07",
+        "C09",
+        "C03",
+        "D-MINI",
+        "D-KNOWME",
+        "D-FORGE",
+        "D-UAR-P1",
+        "D-GATE",
+        "D-MEMORY"
+      ],
+      "delivers": [
+        "development and feedback-to-approved-issue workflows",
+        "portable harness capability declarations",
+        "provider-first full/mini payload propagation"
+      ],
+      "exit": "Every effect has one workflow owner and unsupported harness semantics are reported rather than dropped."
+    },
+    {
+      "order": 9,
+      "id": "AFC-A09",
+      "name": "team-protocol-and-administration-i3",
+      "changes": [
+        "C14"
+      ],
+      "requires": [
+        "AFC-A08",
+        "C04",
+        "C05",
+        "C07",
+        "C09",
+        "C10"
+      ],
+      "delivers": [
+        "AG-UI/A2UI/A2A team projections",
+        "The Boss administration over authoritative UAR state"
+      ],
+      "exit": "Protocol clients and The Boss observe the same task identities and revisions without creating another runtime store."
+    },
+    {
+      "order": 10,
+      "id": "AFC-A10",
+      "name": "specialist-teams",
+      "changes": [
+        "C16"
+      ],
+      "requires": [
+        "AFC-A08",
+        "AFC-A09",
+        "C10",
+        "C14",
+        "C15",
+        "D-MINI"
+      ],
+      "delivers": [
+        "development, product, marketing and design team profiles"
+      ],
+      "exit": "Representative team workflows pass their bounded integration scenarios using the canonical runtime and adapters."
+    },
+    {
+      "order": 11,
+      "id": "AFC-A11",
+      "name": "executive-and-human-representation",
+      "changes": [
+        "C17"
+      ],
+      "requires": [
+        "AFC-A10",
+        "C02",
+        "C09",
+        "C10",
+        "C12",
+        "C16",
+        "D-KNOWME",
+        "D-GATE"
+      ],
+      "delivers": [
+        "executive-role assistants",
+        "consented and revocable representation boundaries"
+      ],
+      "exit": "Role titles grant no authority and human representation requires explicit private grants."
+    },
+    {
+      "order": 12,
+      "id": "AFC-A12",
+      "name": "federated-compatibility-and-release",
+      "changes": [
+        "C18"
+      ],
+      "requires": [
+        "C05 through C17 according to work-packages.json",
+        "D-UAR-P1",
+        "D-FRF",
+        "D-FORGE",
+        "D-GATE",
+        "D-MINI",
+        "D-KNOWME",
+        "D-MEMORY"
+      ],
+      "delivers": [
+        "exact provider/consumer/payload manifest",
+        "mode matrix evidence",
+        "upgrade and rollback receipts",
+        "supported customer artifacts"
+      ],
+      "exit": "C18 publishes only combinations whose exact revisions and deployment modes passed the release boundary."
+    }
+  ],
+  "rollback": {
+    "order": "reverse-dependency-order",
+    "steps": [
+      "Stop new admission for the affected profile while preserving status, cancellation and reconciliation controls.",
+      "Drain or cancel active work under its recorded policy; do not infer cancellation from client detach.",
+      "Fence current attempts and preserve task, inbox, approval, audit and effect-reconciliation records.",
+      "Quiesce database writers and capture a current post-upgrade export before any datastore rollback decision.",
+      "Roll back consumers and host projections before provider services or canonical schemas.",
+      "Pin bindings to a prior immutable definition, package and catalog revision; never float an alias during rollback.",
+      "Restore protected configuration and payload manifests from their recorded revision and backup.",
+      "For SurrealDB downgrade after 3.3 access, reconcile post-upgrade writes and use an explicit migration or operator-accepted recovery point; never point 3.2 software at potentially upgraded data or silently discard 3.3 writes.",
+      "Reconcile unknown external effects by stable EffectId; local rollback never represents a remote effect as undone.",
+      "Refuse downgrade when the target cannot preserve required semantics, retained data, post-upgrade writes or current authority records.",
+      "Run the owning repository rollback integration scenario before restoring admission."
+    ]
+  },
+  "singleWriter": {
+    "manifestAuthority": "repository-manifest.json plus the owning repository change receipt",
+    "rule": "Matching branch names coordinate the initiative but do not prove compatible commits or isolate runtime resources.",
+    "releaseRule": "A cross-repository release records each exact commit, package digest, database/image version, protocol profile and acceptance receipt."
+  }
+}

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "task": "C01.1",
-  "capturedAt": "2026-09-24T18:55:58.532Z",
+  "task": "C01.3",
+  "capturedAt": "2026-09-27T04:00:00Z",
   "counts": {
     "retained": 25,
     "externally-owned": 9,
@@ -225,7 +225,7 @@
       "change": "C01",
       "disposition": "retained",
       "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
-      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "finding": "The accepted D-UAR-P1 authority table is now bound to afc.identity-state-action.v1. The Boss owns product history and host admission; UAR owns execution/checkpoints; BossFang owns its workflow; Fabric transports; memory retains scoped context.",
       "evidence": [
         "SRC-001",
         "SRC-002",
@@ -276,9 +276,9 @@
         "D-MEMORY"
       ],
       "acceptance": "State authority table agrees with P1 host-owned conversation history and UAR-owned execution.",
-      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "acceptanceReference": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/convergence-contract-v1.md",
       "runtimeVerified": false,
-      "implemented": false,
+      "implemented": true,
       "referenceRoot": "initiative directory"
     },
     {
@@ -396,7 +396,7 @@
       "change": "C01",
       "disposition": "retained",
       "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
-      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "finding": "The v1 compatibility matrix records exact anchors, boundary types, external checkpoints, accepted capabilities, unresolved incompatibilities, adoption owners and rollback anchors for all eleven repositories.",
       "evidence": [
         "SRC-001",
         "SRC-002",
@@ -447,9 +447,9 @@
         "D-MEMORY"
       ],
       "acceptance": "Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated.",
-      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "acceptanceReference": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-compatibility-matrix-v1.json",
       "runtimeVerified": false,
-      "implemented": false,
+      "implemented": true,
       "referenceRoot": "initiative directory"
     },
     {
@@ -459,7 +459,7 @@
       "change": "C01",
       "disposition": "superseded",
       "dispositionMeaning": "The historical missing-initial-wiring gap is superseded by existing source; integrated delivery acceptance is still reserved, not declared complete.",
-      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "finding": "The initial The Boss/UAR sidecar and driver wiring is accepted on Windows x64 and Apple Silicon through D-UAR-P1. Later UAR phases and broader BossFang delegation remain separately scoped.",
       "evidence": [
         "SRC-001",
         "SRC-002",
@@ -511,8 +511,8 @@
       ],
       "acceptance": "Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1.",
       "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
-      "runtimeVerified": false,
-      "implemented": false,
+      "runtimeVerified": true,
+      "implemented": true,
       "referenceRoot": "initiative directory"
     },
     {
@@ -1691,7 +1691,7 @@
       "change": "C01",
       "disposition": "retained",
       "dispositionMeaning": "Retain the requirement/audit work; this does not assert every target feature is absent.",
-      "finding": "Exact baselines/pins and existing wiring are inventoried; shared ownership and adoption contracts remain C01.2/C01.3 work.",
+      "finding": "The v1 adoption contract preserves separate worktrees and single writers, and requires exact cross-repository commit/package/protocol manifests instead of treating shared branch names as compatibility.",
       "evidence": [
         "SRC-001",
         "SRC-002",
@@ -1742,9 +1742,9 @@
         "D-MEMORY"
       ],
       "acceptance": "All branches match requested name; original checkouts preserved; integration checkpoints remain separate.",
-      "acceptanceReference": "openspec/changes/afc-c01-baseline-reconciliation-and-shared-contracts/design.md",
+      "acceptanceReference": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/adoption-rollback-checkpoints-v1.json",
       "runtimeVerified": false,
-      "implemented": false,
+      "implemented": true,
       "referenceRoot": "initiative directory"
     },
     {

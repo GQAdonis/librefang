@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 192,
-  "derivedRevision": 192,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 192
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-26T21:43:50.023252Z",
+  "last_updated": "2026-09-27T12:47:49.368144Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
-  "changes_completed": 0,
+  "changes_completed": 4,
   "implementation_total": 18,
-  "implementation_completed": 0,
+  "implementation_completed": 4,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 0,
+      "completed": 4,
       "total": 18,
-      "status": "PENDING"
+      "status": "IN_PROGRESS"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -49,7 +49,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 2,
+      "completed": 6,
       "total": 20,
       "status": "IN_PROGRESS"
     },
@@ -73,45 +73,45 @@
     {
       "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
       "title": "C01 — Baseline reconciliation and shared contracts",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
-      "next_task_pending": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+      "tasks_done": 3,
+      "last_task_completed": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-c02-governed-action-and-approval-boundary",
       "title": "C02 — Governed action and approval boundary",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+      "tasks_done": 3,
+      "last_task_completed": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
       "title": "C03 — Lossless definitions and collaboration document profile",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+      "tasks_done": 3,
+      "last_task_completed": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-c04-replaceable-service-instances-and-placement",
       "title": "C04 — Replaceable service instances and placement",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+      "tasks_done": 3,
+      "last_task_completed": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+      "next_task_pending": null,
       "blockers": []
     },
     {

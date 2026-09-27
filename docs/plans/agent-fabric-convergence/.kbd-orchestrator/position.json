@@ -2,24 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 196,
-  "derivedRevision": 196,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 196
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-26T21:50:53.500677Z",
+  "updatedAt": "2026-09-27T12:47:49.368144Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c01-baseline-reconciliation-and-shared-contracts",
-    "C01.2"
+    "afc-c05-bossfang-full-run-delegation",
+    "C05.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 2,
+      "done": 6,
       "total": 20
     },
     "children": [
@@ -29,7 +29,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 0,
+          "done": 4,
           "total": 18
         },
         "children": [
@@ -80,36 +80,36 @@
           {
             "type": "change",
             "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 1,
+              "done": 3,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c02-governed-action-and-approval-boundary",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c04-replaceable-service-instances-and-placement",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },

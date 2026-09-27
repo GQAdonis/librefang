@@ -1,0 +1,611 @@
+{
+  "schemaVersion": "afc.governed-effect/1",
+  "contractVersion": "1.1.0",
+  "status": "normative-c02-implementation-contract-conformance-pending",
+  "capturedAt": "2026-09-27T04:12:30Z",
+  "consumes": {
+    "convergenceContract": "../c01/convergence-contract-v1.json",
+    "identityStateActionVocabulary": "../c01/identity-state-action-vocabulary-v1.json",
+    "hostRuntime": "the-boss.uar.sidecar/1",
+    "hostCheckpoint": "../c01/p1-acceptance-receipt-2026-09-27.json"
+  },
+  "scope": {
+    "routes": [
+      "direct",
+      "managed",
+      "embedded",
+      "proxied"
+    ],
+    "profiles": [
+      "governed",
+      "constrained-local"
+    ],
+    "repositories": [
+      "universal-agent-runtime",
+      "flint-gate",
+      "the-boss"
+    ]
+  },
+  "invariants": [
+    "UAR owns admission, dispatch lineage, result recording and uncertain-outcome reconciliation for UAR work.",
+    "Flint Gate or the P1 trusted host owns policy decisions, issuer-scoped approval identities and grant revisions, but does not perform effects.",
+    "Governed execution fails closed and visibly when policy, required facts, identity, current grant, approval, lease or budget is missing or invalid.",
+    "Authority is re-evaluated after every durable wait and immediately before admission.",
+    "Admission is recorded before connector dispatch.",
+    "Unknown dispatched outcomes remain uncertain and are reconciled without automatic replay.",
+    "constrained-local is explicitly selected and never an automatic fallback."
+  ],
+  "intent": {
+    "requiredFields": {
+      "envelope": [
+        "contract",
+        "effectId",
+        "commandId",
+        "createdAt",
+        "route",
+        "governanceProfile"
+      ],
+      "executionLineage": [
+        "workspaceId",
+        "runtimeInstanceId",
+        "deploymentBindingId",
+        "taskId",
+        "attemptId",
+        "runId",
+        "stepId",
+        "invocationId"
+      ],
+      "principal": [
+        "subjectPrincipalId",
+        "actorPrincipalId",
+        "audience",
+        "authnContextId"
+      ],
+      "action": [
+        "namespace",
+        "name",
+        "version"
+      ],
+      "resource": [
+        "type",
+        "id",
+        "ownerScope",
+        "workspaceId",
+        "revision",
+        "locationClass"
+      ],
+      "payload": [
+        "mediaType",
+        "canonicalization",
+        "sha256Digest",
+        "disclosureLabels",
+        "bodyRef"
+      ],
+      "policy": [
+        "policySetId",
+        "activeRevision",
+        "sha256Digest",
+        "requiredFactSchema",
+        "evaluatedAt"
+      ],
+      "grant": [
+        "grantId",
+        "issuerPrincipalId",
+        "subjectPrincipalId",
+        "revision",
+        "status",
+        "notBefore",
+        "expiresAt",
+        "constraintDigest"
+      ],
+      "lease": [
+        "leaseId",
+        "taskId",
+        "attemptId",
+        "epoch",
+        "holderAgentInstanceId",
+        "expiresAt"
+      ],
+      "budget": [
+        "reservationId",
+        "budgetId",
+        "revision",
+        "amount",
+        "unit",
+        "expiresAt"
+      ],
+      "correlation": [
+        "parentEffectId",
+        "workflowId",
+        "conversationId",
+        "traceId"
+      ]
+    },
+    "nullableRules": {
+      "executionLineage": "A non-applicable identifier is encoded as null and is never omitted or replaced by another identity class.",
+      "policy": "Policy is authority-resolved. UAR may supply only an expected revision; the Gate wire request rejects a client-authored policy object, and Gate returns its active policy binding.",
+      "grant": "The grant object is null only when the active policy decision explicitly sets noGrantRequired to true.",
+      "correlation": "Correlation values may be null and never confer authority."
+    },
+    "requestDigest": {
+      "algorithm": "sha256",
+      "canonicalization": "RFC 8785 compatible canonical JSON",
+      "includes": "All required intent fields except createdAt, payload.bodyRef and correlation; includes payload.sha256Digest.",
+      "normalization": [
+        "Sort audience",
+        "Sort disclosureLabels",
+        "Reject duplicate audience",
+        "Reject duplicate disclosureLabels"
+      ]
+    },
+    "authorityDigest": {
+      "algorithm": "sha256",
+      "includes": [
+        "requestDigest",
+        "policyDecision",
+        "grantRevisionOrNoGrantDisposition",
+        "approvalDecisionOrNoApprovalDisposition",
+        "leaseEpoch",
+        "budgetReservationRevision"
+      ]
+    }
+  },
+  "policyDecision": {
+    "requiredFields": [
+      "policyDecisionId",
+      "effectId",
+      "requestDigest",
+      "policySetId",
+      "policyRevision",
+      "policyDigest",
+      "subjectPrincipalId",
+      "actorPrincipalId",
+      "audience",
+      "action",
+      "resourceDigest",
+      "payloadDigest",
+      "grantId",
+      "grantRevision",
+      "grantConstraintDigest",
+      "noGrantRequired",
+      "result",
+      "reasonCodes",
+      "requiredChallengeKind",
+      "evaluatedAt",
+      "validUntil"
+    ],
+    "results": [
+      "allow",
+      "deny",
+      "challenge"
+    ],
+    "rules": [
+      "Missing or invalid policy, required facts, identity or grant produces deny.",
+      "challenge requires a qualifying approval and is not an allow decision."
+    ]
+  },
+  "approvalChallenge": {
+    "requiredFields": [
+      "approvalChallengeId",
+      "issuerPrincipalId",
+      "effectId",
+      "requestDigest",
+      "policyDecisionId",
+      "policyRevision",
+      "subjectPrincipalId",
+      "actorPrincipalId",
+      "audience",
+      "actionDigest",
+      "resourceDigest",
+      "payloadDigest",
+      "requiredApproverConstraints",
+      "createdAt",
+      "expiresAt",
+      "status",
+      "challengeRevision"
+    ],
+    "statuses": [
+      "pending",
+      "decided",
+      "expired",
+      "cancelled",
+      "superseded"
+    ],
+    "rules": [
+      "Presentation retry preserves challenge identity and revision.",
+      "A changed authority-bearing field supersedes the challenge and requires a new identity."
+    ]
+  },
+  "approvalDecision": {
+    "requiredFields": [
+      "approvalDecisionId",
+      "approvalChallengeId",
+      "issuerPrincipalId",
+      "approverPrincipalId",
+      "effectId",
+      "requestDigest",
+      "subjectPrincipalId",
+      "actorPrincipalId",
+      "audience",
+      "actionDigest",
+      "resourceDigest",
+      "payloadDigest",
+      "policyRevision",
+      "grantRevision",
+      "decision",
+      "decisionRevision",
+      "decidedAt",
+      "validUntil",
+      "revocationRevision",
+      "revocationStatus",
+      "reasonCodes"
+    ],
+    "decisions": [
+      "approve",
+      "deny"
+    ],
+    "revocationStatuses": [
+      "active",
+      "revoked",
+      "expired",
+      "superseded"
+    ],
+    "admissionChecks": [
+      "issuer matches the challenge authority",
+      "challenge and decision are current, unexpired and not revoked or superseded",
+      "subject, actor and audience match exactly",
+      "effectId, requestDigest, action, resource and payload digests match exactly",
+      "policy and grant revisions still match",
+      "fresh post-wait policy evaluation with that exact approval decision as a typed fact allows the same request"
+    ]
+  },
+  "stateMachine": {
+    "initial": "proposed",
+    "terminal": [
+      "succeeded",
+      "failed",
+      "denied",
+      "cancelled-before-dispatch"
+    ],
+    "transitions": {
+      "proposed": [
+        "evaluating",
+        "cancelled-before-dispatch"
+      ],
+      "evaluating": [
+        "denied",
+        "awaiting-approval",
+        "admitted",
+        "cancelled-before-dispatch"
+      ],
+      "awaiting-approval": [
+        "evaluating",
+        "denied",
+        "cancelled-before-dispatch"
+      ],
+      "admitted": [
+        "dispatching",
+        "cancelled-before-dispatch"
+      ],
+      "dispatching": [
+        "succeeded",
+        "failed",
+        "uncertain"
+      ],
+      "uncertain": [
+        "reconciling"
+      ],
+      "reconciling": [
+        "succeeded",
+        "failed"
+      ],
+      "succeeded": [],
+      "failed": [],
+      "denied": [],
+      "cancelled-before-dispatch": []
+    },
+    "dispatchBoundary": "Entering dispatching means the connector call may have begun; cancellation can no longer prove that the effect did not occur.",
+    "retryRule": "A new attempt preserves task and effect reconciliation lineage. Connector idempotency identity may be reused only when that connector contract proves replay safe."
+  },
+  "governanceReceipt": {
+    "requiredFields": [
+      "effectId",
+      "governanceProfile",
+      "state",
+      "eventId",
+      "eventSequence",
+      "occurredAt",
+      "requestDigest",
+      "authorityDigest",
+      "policyDecisionId",
+      "policyRevision",
+      "grantId",
+      "grantRevision",
+      "approvalChallengeId",
+      "approvalDecisionId",
+      "leaseId",
+      "leaseEpoch",
+      "budgetReservationId",
+      "budgetRevision",
+      "reasonCodes",
+      "visiblePosture",
+      "effectReceiptId"
+    ],
+    "prohibitedFields": [
+      "rawPayload",
+      "credential",
+      "secret",
+      "policySecret"
+    ]
+  },
+  "profiles": {
+    "governed": {
+      "failClosed": true,
+      "providerFailureResult": "denied / authority.unavailable",
+      "automaticDowngrade": false
+    },
+    "constrained-local": {
+      "explicitSelectionRequired": true,
+      "subjectMustEqualActor": true,
+      "audience": "local UAR runtime only",
+      "allowedLocationClass": "workspace-local",
+      "authority": "P1 trusted host with pinned local policy revision",
+      "forbidden": [
+        "network",
+        "remote-service",
+        "external-publication",
+        "credential-bearing",
+        "organization-wide",
+        "financial",
+        "multi-hop-delegated"
+      ],
+      "satisfiesDGate": false,
+      "automaticFallback": false
+    }
+  },
+  "ownership": [
+    {
+      "owner": "universal-agent-runtime",
+      "owns": [
+        "effect-intent",
+        "canonical-request",
+        "task-and-attempt",
+        "lease",
+        "budget-reservation",
+        "authority-adapter-call",
+        "post-wait-recheck",
+        "admission",
+        "dispatch",
+        "result",
+        "uncertain-outcome-reconciliation"
+      ],
+      "doesNotOwn": [
+        "gate-policy",
+        "issuer-grant",
+        "issuer-approval"
+      ]
+    },
+    {
+      "owner": "flint-gate",
+      "owns": [
+        "authenticated-principal-validation",
+        "cedar-policy-evaluation",
+        "typed-fact-validation",
+        "policy-decision",
+        "approval-challenge",
+        "issuer-scoped-approval-decision",
+        "grant-and-approval-revision",
+        "revocation-state"
+      ],
+      "doesNotOwn": [
+        "uar-task-scheduling",
+        "uar-budget",
+        "uar-lease",
+        "connector-dispatch",
+        "effect-completion"
+      ]
+    },
+    {
+      "owner": "the-boss-trusted-host",
+      "owns": [
+        "p1-principal",
+        "workspace",
+        "credential",
+        "exact-tool-admission",
+        "challenge-presentation",
+        "explicit-constrained-local-authority"
+      ],
+      "doesNotOwn": [
+        "uar-execution-loop",
+        "uar-effect-ledger",
+        "authority-enlargement"
+      ]
+    },
+    {
+      "owner": "effect-connector",
+      "owns": [
+        "idempotent-effect-attempt",
+        "authoritative-outcome-receipt",
+        "result-lookup-when-supported"
+      ],
+      "doesNotOwn": [
+        "authorization",
+        "identity-interpretation",
+        "autonomous-uncertain-retry"
+      ]
+    },
+    {
+      "owner": "fabric-and-memory",
+      "owns": [
+        "authorized-envelope-transport",
+        "scoped-context-retention"
+      ],
+      "doesNotOwn": [
+        "policy",
+        "approval",
+        "scheduling",
+        "effect-completion"
+      ]
+    }
+  ],
+  "negativeAcceptance": [
+    {
+      "scenario": "forged-subject",
+      "expected": "denied",
+      "reasonCode": "identity.subject-invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "actor-authentication-or-grant-mismatch",
+      "expected": "denied",
+      "reasonCode": "identity.actor-invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "invalid-audience",
+      "expected": "denied",
+      "reasonCode": "identity.audience-invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "missing-policy-governed",
+      "expected": "denied",
+      "reasonCode": "policy.missing",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "invalid-policy",
+      "expected": "denied",
+      "reasonCode": "policy.invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "missing-or-invalid-required-fact",
+      "expected": "denied",
+      "reasonCode": "policy.fact-invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "policy-deny",
+      "expected": "denied",
+      "reasonCode": "policy.denied",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "invalid-grant",
+      "expected": "denied",
+      "reasonCode": "grant.invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "stale-policy-or-grant-after-wait",
+      "expected": "reevaluate-or-deny",
+      "reasonCode": "authority.stale",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "changed-payload-action-or-resource",
+      "expected": "challenge-superseded",
+      "reasonCode": "request.digest-mismatch",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "approval-scope-mismatch",
+      "expected": "denied",
+      "reasonCode": "approval.scope-mismatch",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "expired-revoked-replayed-or-wrong-challenge-approval",
+      "expected": "denied",
+      "reasonCode": "approval.invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "stale-lease",
+      "expected": "denied",
+      "reasonCode": "lease.stale",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "invalid-budget-reservation",
+      "expected": "denied",
+      "reasonCode": "budget.invalid",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "cancel-before-dispatch",
+      "expected": "cancelled-before-dispatch",
+      "reasonCode": "effect.cancelled-before-dispatch",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "cancel-after-dispatch-begins",
+      "expected": "authoritative-result-or-uncertain",
+      "reasonCode": "effect.dispatch-in-flight",
+      "connectorCalls": "0-or-1-as-observed"
+    },
+    {
+      "scenario": "connector-timeout-after-accept",
+      "expected": "uncertain-then-reconciling",
+      "reasonCode": "effect.outcome-unknown",
+      "automaticReplay": false
+    },
+    {
+      "scenario": "proxy-mutates-authority-field",
+      "expected": "denied",
+      "reasonCode": "request.digest-mismatch",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "gate-unavailable-governed",
+      "expected": "denied",
+      "reasonCode": "authority.unavailable",
+      "connectorCalls": 0
+    },
+    {
+      "scenario": "gate-unavailable-constrained-local",
+      "expected": "local-policy-only",
+      "forbiddenDispatch": [
+        "remote",
+        "credential-bearing",
+        "delegated"
+      ]
+    }
+  ],
+  "dependencyGates": {
+    "dUarP1": "accepted",
+    "dGate": "implementation-dependency-pending",
+    "dGateRule": "The shared Gate-backed governed profile is not conformant until UAR and Gate agree and demonstrate this interface."
+  },
+  "authorityProviderWire": {
+    "protocol": "afc.governed-effect/1",
+    "evaluatePath": "/authority/effects/evaluate",
+    "revalidatePath": "/authority/effects/revalidate",
+    "decisionPath": "/authority/effects/{issuer}/{challenge_id}/decision",
+    "requestFields": [
+      "protocol",
+      "effect_id",
+      "invocation_id",
+      "action",
+      "resource",
+      "payload",
+      "identity",
+      "grants",
+      "lease",
+      "budget",
+      "epochs"
+    ],
+    "rejectsUnknownTopLevelFields": true,
+    "clientPolicyFieldAllowed": false,
+    "policyResolution": "Flint Gate resolves and returns the active Cedar set, revision and digest from the evaluated snapshot.",
+    "identitySource": "The Boss derives trusted principal facts from the authenticated P1 host session.",
+    "executionFactsSource": "UAR supplies lease and budget reservation facts through an exact paired-host receipt; The Boss forwards only finite active facts.",
+    "emptyGrants": "Allowed as input; active Gate policy decides whether a grant is required.",
+    "decisionResults": [
+      "deny",
+      "challenge",
+      "permit"
+    ]
+  }
+}

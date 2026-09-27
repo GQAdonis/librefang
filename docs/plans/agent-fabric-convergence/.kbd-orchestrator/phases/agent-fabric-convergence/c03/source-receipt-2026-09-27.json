@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "initiativeChange": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "recordedAt": "2026-09-27T06:13:57.442Z",
+  "predecessors": {
+    "c01": "0417937410d38e77fcba3ddb770c20458ad52758",
+    "c02": "76ad349fc42e176bb9f4560e0c489889eb5100a2",
+    "governedEffectContract": "afc.governed-effect/1@1.1.0"
+  },
+  "productBaselines": {
+    "universalAgentRuntime": "852b0657adf2792aa6ed755e5c4540573b685795",
+    "prometheusSkillPack": "e9520f5",
+    "prometheusSkillsMini": "f38a98a",
+    "fullPackTeamDeployment": "79cd048",
+    "miniTeamDeployment": "28c008d"
+  },
+  "profile": {
+    "current": "urn:prometheus:uar:collaboration:0.1.0-draft.1",
+    "target": "urn:prometheus:uar:collaboration:0.1.0-draft.2",
+    "legacyAdapter": "UAR-AGENT-MD",
+    "newMarkdownDialects": false
+  },
+  "checkpoints": {
+    "dMini": "pending-c03-integration-gate",
+    "teamExecution": "deferred-c06-c09",
+    "representationBehavior": "deferred-c17"
+  },
+  "observedGaps": [
+    "Executable projections reduce full skill requirements to preferred IDs.",
+    "Preserved v2 fields have no complete runtime enforcement path.",
+    "Deployment bindings do not resolve effective runtime resources.",
+    "Canonical export, migration receipts, sanitized binding templates, and private RepresentationGrant schemas are absent.",
+    "Full and mini authoring requires an unbounded inline JSON graph and lacks complete topology validation."
+  ],
+  "claimsNotMade": [
+    "C03 implementation complete",
+    "team activation supported",
+    "human representation behavior implemented",
+    "D-MINI accepted",
+    "C03 released or installed"
+  ]
+}

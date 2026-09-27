@@ -158,6 +158,60 @@ fn resolve_credential(config_value: &str, env_var: &str, home_dir: &std::path::P
     config_value.to_string()
 }
 
+#[cfg(feature = "uar-driver")]
+fn resolve_uar_role_credential(
+    kernel: &dyn KernelApi,
+    role: &str,
+    reference: Option<&str>,
+) -> Result<Option<zeroize::Zeroizing<String>>, String> {
+    let Some(reference) = reference else {
+        return Ok(None);
+    };
+    let (authority, key) = reference
+        .split_once("://")
+        .or_else(|| reference.split_once(':'))
+        .ok_or_else(|| {
+            format!("UAR {role} credential reference must use vault:// or env:// authority")
+        })?;
+    if key.is_empty() || key.chars().any(char::is_whitespace) {
+        return Err(format!(
+            "UAR {role} credential reference has an invalid key"
+        ));
+    }
+    let value = match authority {
+        "vault" => kernel.vault_get(key),
+        "env" => std::env::var(key).ok(),
+        _ => {
+            return Err(format!(
+                "UAR {role} credential reference uses unsupported authority '{authority}'"
+            ));
+        }
+    }
+    .filter(|value| !value.trim().is_empty())
+    .ok_or_else(|| format!("UAR {role} credential reference could not be resolved"))?;
+    Ok(Some(zeroize::Zeroizing::new(value)))
+}
+
+#[cfg(feature = "uar-driver")]
+fn resolve_uar_credentials(
+    kernel: &dyn KernelApi,
+    instance: &librefang_types::config::UarServiceInstanceConfig,
+) -> Result<librefang_llm_drivers::drivers::uar::UarResolvedCredentials, String> {
+    let references = instance.effective_credential_refs();
+    Ok(
+        librefang_llm_drivers::drivers::uar::UarResolvedCredentials {
+            runtime: resolve_uar_role_credential(kernel, "runtime", references.runtime.as_deref())?,
+            administration: resolve_uar_role_credential(
+                kernel,
+                "administration",
+                references.administration.as_deref(),
+            )?,
+            models: resolve_uar_role_credential(kernel, "models", references.models.as_deref())?,
+            console: resolve_uar_role_credential(kernel, "console", references.console.as_deref())?,
+        },
+    )
+}
+
 /// Env var that overrides `KernelConfig.api_key`. Also read at boot by
 /// `librefang_kernel::kernel::boot` so the #3572 bind-safety guard and the
 /// outbound MCP bridge see the same value; resolving it here as well is what
@@ -1691,30 +1745,51 @@ pub async fn build_router(
     };
 
     let uar_config = kernel.config_ref().uar.clone();
-    let uar_sidecar_config = uar_config
+    let selected_uar_instance = uar_config
         .as_ref()
-        .map(librefang_types::config::UarConfig::effective_sidecar)
+        .map(librefang_types::config::UarConfig::selected_instance)
+        .unwrap_or_else(|| Err("UAR service instance is not configured".to_string()));
+    let uar_sidecar_config = selected_uar_instance
+        .as_ref()
+        .map(librefang_types::config::UarServiceInstanceConfig::effective_sidecar)
         .unwrap_or_default();
+    #[cfg(feature = "uar-driver")]
+    let resolved_uar_credentials = selected_uar_instance
+        .as_ref()
+        .map(|instance| resolve_uar_credentials(kernel.as_ref(), instance))
+        .unwrap_or_else(|| Ok(Default::default()));
+    #[cfg(feature = "uar-driver")]
+    let uar_probe_bearer = resolved_uar_credentials
+        .as_ref()
+        .ok()
+        .and_then(|credentials| credentials.runtime.as_ref())
+        .map(|credential| credential.to_string());
+    #[cfg(not(feature = "uar-driver"))]
+    let uar_probe_bearer = None;
     let should_start_uar = uar_sidecar_config.enabled || uar_sidecar_config.endpoint.is_some();
     let uar_supervisor = librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
         uar_sidecar_config,
         kernel.home_dir().to_path_buf(),
     )
-    .with_runtime_config(uar_config.as_ref());
+    .with_runtime_config(uar_config.as_ref())
+    .with_instance_config(selected_uar_instance.as_ref().ok())
+    .with_probe_bearer(uar_probe_bearer);
     #[cfg(feature = "uar-driver")]
-    let uar_supervisor = uar_supervisor
-        .with_endpoint_callback(librefang_llm_drivers::drivers::uar::set_supervised_endpoint);
+    let uar_supervisor = {
+        librefang_llm_drivers::drivers::uar::configure_supervised_instance(
+            selected_uar_instance.clone(),
+        );
+        librefang_llm_drivers::drivers::uar::configure_supervised_credentials(
+            resolved_uar_credentials,
+        );
+        uar_supervisor.with_endpoint_callback(
+            librefang_llm_drivers::drivers::uar::set_supervised_endpoint_with_bearer,
+        )
+    };
     let uar_supervisor = Arc::new(uar_supervisor);
     if should_start_uar {
         match uar_supervisor.start().await {
-            Ok(status) => {
-                #[cfg(feature = "uar-driver")]
-                librefang_llm_drivers::drivers::uar::set_supervised_endpoint(
-                    status.endpoint.clone(),
-                );
-                #[cfg(not(feature = "uar-driver"))]
-                drop(status);
-            }
+            Ok(status) => drop(status),
             Err(error) => {
                 tracing::error!(error = %error, "UAR sidecar failed to start");
             }

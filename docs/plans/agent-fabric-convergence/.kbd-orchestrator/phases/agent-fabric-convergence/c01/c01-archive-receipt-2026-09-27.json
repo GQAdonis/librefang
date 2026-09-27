@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
+  "archivedAt": "2026-09-27T03:56:00Z",
+  "result": "PASS",
+  "canonicalRevision": 203,
+  "archive": "openspec/changes/archive/2026-09-26-afc-c01-baseline-reconciliation-and-shared-contracts",
+  "verification": "kbd-apply verify: PASS",
+  "acceptanceReceipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/c01.3-acceptance-receipt-2026-09-27.json",
+  "nextChange": "afc-c02-governed-action-and-approval-boundary"
+}

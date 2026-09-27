@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "afc.convergence-contract.v1",
+  "contractVersion": "1.0.0",
+  "status": "accepted-planning-contract",
+  "capturedAt": "2026-09-27T04:00:00Z",
+  "parts": {
+    "vocabulary": "identity-state-action-vocabulary-v1.json",
+    "compatibilityMatrix": "dependency-compatibility-matrix-v1.json",
+    "adoptionRollback": "adoption-rollback-checkpoints-v1.json"
+  },
+  "consumes": {
+    "hostRuntime": "the-boss.uar.sidecar/1",
+    "collaborationProfile": "urn:prometheus:uar:collaboration:0.1.0-draft.1",
+    "p1Checkpoint": "p1-contract-checkpoint.json",
+    "i1Handoff": "../children/uar-team-definitions-deployment/handoff-out.md"
+  },
+  "scope": "Cross-repository planning coordination only. Product conformance requires the owning repository change and integration boundary.",
+  "invariants": [
+    "UAR is the sole execution-loop owner for UAR tasks.",
+    "The Boss owns product conversation history and host admission.",
+    "BossFang retains workflow ownership when delegating a bounded UAR task.",
+    "Fabric transports events and memory stores scoped context; neither schedules UAR tasks.",
+    "Unresolved compatibility or ownership is never labeled execution-ready."
+  ],
+  "precedence": [
+    {
+      "higher": "p1-contract-checkpoint.json",
+      "lower": "../children/uar-team-definitions-deployment/handoff-out.md",
+      "scope": "merge and checkpoint status",
+      "reason": "The P1 checkpoint records later merged PRs, accepted Windows/Mac evidence and completed C01.2; the I1 handoff status sentences are historical."
+    },
+    {
+      "higher": "dependency-compatibility-matrix-v1.json",
+      "lower": "dependency-inventory.json and merged-baseline-refresh-2026-09-27.json",
+      "scope": "current adoption disposition",
+      "reason": "C01.1 evidence remains immutable, while C01.3 records later accepted inputs and unresolved compatibility."
+    }
+  ]
+}

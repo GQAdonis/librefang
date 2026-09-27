@@ -97,14 +97,14 @@
       "source": "R1 §5.4; R2 §5",
       "recommendation": "Separate product history, runtime checkpoints, workflow records and knowledge",
       "change": "C01",
-      "disposition": "reconcile-active-work",
+      "disposition": "coordination-contract-complete",
       "owners": [
         "all"
       ],
       "acceptance": "State authority table agrees with P1 host-owned conversation history and UAR-owned execution.",
-      "implemented": false,
+      "implemented": true,
       "currentSourceVerdict": "retained",
-      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-007; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/convergence-contract-v1.md; accepted D-UAR-P1 authority table and versioned cross-ecosystem identity/state/action vocabulary"
     },
     {
       "id": "REC-008",
@@ -157,14 +157,14 @@
       "source": "R1 §1.8; R2 §10",
       "recommendation": "Inventory real pins, schemas and API versions",
       "change": "C01",
-      "disposition": "planned",
+      "disposition": "inventory-and-compatibility-matrix-complete",
       "owners": [
         "all"
       ],
       "acceptance": "Exact lockfile/feature/API matrix replaces stale docs; incompatible embeddings are gated.",
-      "implemented": false,
+      "implemented": true,
       "currentSourceVerdict": "retained",
-      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-011; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-compatibility-matrix-v1.json; exact eleven-repository anchors, boundary types, incompatibilities and rollback anchors"
     },
     {
       "id": "REC-012",
@@ -178,9 +178,9 @@
         "librefang"
       ],
       "acceptance": "Reuse fetched driver and HTTP sidecar; verify remaining requirements against D-UAR-P1.",
-      "implemented": false,
+      "implemented": true,
       "currentSourceVerdict": "superseded",
-      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-012; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-acceptance-receipt-2026-09-27.json; installed The Boss/UAR sidecar operation accepted on both customer platforms"
     },
     {
       "id": "REC-013",
@@ -633,14 +633,14 @@
       "source": "R4 §2.4; R5 §10",
       "recommendation": "Separate worktrees, single writers and compatible commit manifest",
       "change": "C01",
-      "disposition": "setup-complete",
+      "disposition": "setup-and-adoption-contract-complete",
       "owners": [
         "all"
       ],
       "acceptance": "All branches match requested name; original checkouts preserved; integration checkpoints remain separate.",
-      "implemented": false,
+      "implemented": true,
       "currentSourceVerdict": "retained",
-      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json#REC-042; SRC-001, SRC-002, SRC-006, SRC-007, SRC-009, SRC-010, SRC-011, SRC-012, SRC-022, SRC-040, SRC-041; source-only, runtime unverified"
+      "currentEvidence": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/adoption-rollback-checkpoints-v1.json; separate worktrees, single-writer rule and exact release-manifest requirements"
     },
     {
       "id": "REC-043",

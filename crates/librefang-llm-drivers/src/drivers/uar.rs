@@ -26,9 +26,15 @@ use std::time::Duration;
 use async_trait::async_trait;
 use futures::StreamExt;
 use librefang_types::{
+    config::{
+        UarCompatibilityDiagnostic, UarEffectiveBinding, UarPlacementSupport, UarServiceEndpoints,
+        UarServiceInstanceConfig, UarServiceOwnership, UarWorkspaceLocality,
+    },
     message::{ContentBlock, MessageContent, Role, StopReason, TokenUsage},
     tool::{ToolCall, ToolDefinition},
 };
+use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
 
 use crate::llm_driver::{
     CompletionRequest, CompletionResponse, DriverConfig, LlmDriver, LlmError, StreamEvent,
@@ -39,15 +45,182 @@ use crate::llm_driver::{
 // ---------------------------------------------------------------------------
 
 #[derive(Clone, Default)]
-struct PublishedEndpoint {
-    url: Option<String>,
+struct PublishedBinding {
+    candidate: Option<UarServiceInstanceConfig>,
+    endpoint: Option<String>,
+    credentials: UarResolvedCredentials,
+    credential_error: Option<String>,
+    admitted: Option<UarEffectiveBinding>,
+    diagnostic: Option<UarCompatibilityDiagnostic>,
     generation: u64,
 }
 
-static SUPERVISED_ENDPOINT: OnceLock<RwLock<PublishedEndpoint>> = OnceLock::new();
+/// Resolved bearer credentials kept only in process memory. Configuration and
+/// operator status carry opaque references instead of these values.
+#[derive(Clone, Default)]
+pub struct UarResolvedCredentials {
+    pub runtime: Option<Zeroizing<String>>,
+    pub administration: Option<Zeroizing<String>>,
+    pub models: Option<Zeroizing<String>>,
+    pub console: Option<Zeroizing<String>>,
+}
 
-fn endpoint_cell() -> &'static RwLock<PublishedEndpoint> {
-    SUPERVISED_ENDPOINT.get_or_init(|| RwLock::new(PublishedEndpoint::default()))
+impl UarResolvedCredentials {
+    #[must_use]
+    pub fn uniform(value: String) -> Self {
+        let value = Zeroizing::new(value);
+        Self {
+            runtime: Some(value.clone()),
+            administration: Some(value.clone()),
+            models: Some(value.clone()),
+            console: Some(value),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum EndpointRole {
+    Runtime,
+    Administration,
+    Models,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct CompatibilityEndpoints {
+    runtime: String,
+    administration: String,
+    models: String,
+    console: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CapabilitiesInstance {
+    id: String,
+    profile: String,
+    workspace_location: UarWorkspaceLocality,
+}
+
+#[derive(Deserialize)]
+struct PlacementCapabilities {
+    new: bool,
+    #[serde(rename = "reattach")]
+    _reattach: bool,
+    #[serde(rename = "migrate")]
+    _migrate: bool,
+}
+
+#[derive(Deserialize)]
+struct CapabilitiesDocument {
+    instance: CapabilitiesInstance,
+    endpoints: CompatibilityEndpoints,
+    ownership: UarServiceOwnership,
+    placement: PlacementCapabilities,
+    capabilities: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompatibilityExpectation {
+    intent: &'static str,
+    expected_instance_id: String,
+    expected_profile: String,
+    expected_workspace_location: UarWorkspaceLocality,
+    required_capabilities: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_endpoints: Option<CompatibilityEndpoints>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    credential_ref: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CompatibilityResponse {
+    compatible: bool,
+    diagnostics: Vec<RemoteCompatibilityDiagnostic>,
+    effective_binding: Option<RemoteEffectiveBinding>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteCompatibilityDiagnostic {
+    field: String,
+    code: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteEffectiveBinding {
+    instance_id: String,
+    profile: String,
+    workspace_location: UarWorkspaceLocality,
+    endpoints: CompatibilityEndpoints,
+    capabilities: Vec<String>,
+    credential_ref: Option<String>,
+}
+
+static SUPERVISED_BINDING: OnceLock<RwLock<PublishedBinding>> = OnceLock::new();
+
+fn binding_cell() -> &'static RwLock<PublishedBinding> {
+    SUPERVISED_BINDING.get_or_init(|| RwLock::new(PublishedBinding::default()))
+}
+
+/// Configure the identity and requirements associated with the one supervised
+/// endpoint. Endpoint publication alone never changes this logical identity.
+pub fn configure_supervised_instance(instance: Result<UarServiceInstanceConfig, String>) {
+    let mut guard = binding_cell()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.credentials = UarResolvedCredentials::default();
+    guard.credential_error = None;
+    match instance {
+        Ok(instance) => {
+            guard.candidate = Some(instance);
+            guard.diagnostic = None;
+        }
+        Err(message) => {
+            guard.candidate = None;
+            guard.diagnostic = Some(UarCompatibilityDiagnostic {
+                code: "invalid_instance_selection".to_string(),
+                message,
+                expected: None,
+                observed: None,
+                missing_capabilities: Vec::new(),
+            });
+        }
+    }
+    guard.admitted = None;
+    guard.generation = guard.generation.wrapping_add(1);
+}
+
+/// Install host-resolved endpoint credentials without exposing their values in
+/// the configured instance or admitted binding.
+pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentials, String>) {
+    let mut guard = binding_cell()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match credentials {
+        Ok(credentials) => {
+            guard.credentials = credentials;
+            guard.credential_error = None;
+            if guard.candidate.is_some() {
+                guard.diagnostic = None;
+            }
+        }
+        Err(message) => {
+            guard.credentials = UarResolvedCredentials::default();
+            guard.credential_error = Some(message.clone());
+            guard.diagnostic = Some(UarCompatibilityDiagnostic {
+                code: "credential_resolution_failed".to_string(),
+                message,
+                expected: None,
+                observed: None,
+                missing_capabilities: Vec::new(),
+            });
+        }
+    }
+    guard.admitted = None;
+    guard.generation = guard.generation.wrapping_add(1);
 }
 
 /// Publish the endpoint selected by the UAR supervisor.
@@ -56,28 +229,111 @@ fn endpoint_cell() -> &'static RwLock<PublishedEndpoint> {
 /// boot. Drivers resolve this shared value at call time, which also makes a
 /// dashboard restart immediately visible without rebuilding every agent.
 pub fn set_supervised_endpoint(endpoint: Option<String>) {
-    let mut guard = endpoint_cell()
+    set_supervised_endpoint_with_bearer(endpoint, None);
+}
+
+/// Publish a supervised endpoint together with its ephemeral launch bearer.
+/// The bearer stays in private driver state and is never included in snapshots.
+pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Option<String>) {
+    let mut guard = binding_cell()
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    guard.url = endpoint.map(|value| value.trim_end_matches('/').to_string());
+    guard.endpoint = endpoint.map(|value| value.trim_end_matches('/').to_string());
+    if let Some(bearer) = bearer {
+        guard.credentials = UarResolvedCredentials::uniform(bearer);
+        guard.credential_error = None;
+    } else if guard.endpoint.is_none()
+        && guard
+            .candidate
+            .as_ref()
+            .is_some_and(|candidate| candidate.ownership == UarServiceOwnership::Managed)
+    {
+        guard.credentials = UarResolvedCredentials::default();
+    }
+    let credential_error = guard.credential_error.clone();
+    guard.diagnostic = credential_error.map(|message| UarCompatibilityDiagnostic {
+        code: "credential_resolution_failed".to_string(),
+        message,
+        expected: None,
+        observed: None,
+        missing_capabilities: Vec::new(),
+    });
+    if guard.endpoint.is_some() && guard.candidate.is_none() {
+        guard.candidate = Some(UarServiceInstanceConfig {
+            id: "legacy-default".to_string(),
+            endpoints: librefang_types::config::UarServiceEndpoints {
+                runtime: guard.endpoint.clone(),
+                ..librefang_types::config::UarServiceEndpoints::default()
+            },
+            capabilities: vec![
+                "chat.completion".to_string(),
+                "chat.streaming".to_string(),
+                "models.list".to_string(),
+            ],
+            ..UarServiceInstanceConfig::default()
+        });
+    }
+    guard.admitted = None;
     guard.generation = guard.generation.wrapping_add(1);
 }
 
-fn supervised_endpoint() -> Result<(String, u64), LlmError> {
-    let published = endpoint_cell()
+fn role_credential(role: EndpointRole) -> Option<Zeroizing<String>> {
+    let guard = binding_cell()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    match role {
+        EndpointRole::Runtime => guard.credentials.runtime.clone(),
+        EndpointRole::Administration => guard.credentials.administration.clone(),
+        EndpointRole::Models => guard.credentials.models.clone(),
+    }
+}
+
+fn supervised_candidate() -> Result<(UarServiceInstanceConfig, String, u64), LlmError> {
+    let published = binding_cell()
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone();
-    published
-        .url
-        .map(|url| (url, published.generation))
-        .ok_or_else(|| {
-            LlmError::Http(
-                "UAR sidecar is not available; start it in the dashboard or configure \
-                 [uar.sidecar] endpoint"
-                    .to_string(),
-            )
-        })
+    let candidate = published.candidate.ok_or_else(|| {
+        LlmError::Http(published.diagnostic.map_or_else(
+            || "UAR service instance is not configured".to_string(),
+            |diagnostic| diagnostic.message,
+        ))
+    })?;
+    if let Some(message) = published.credential_error {
+        return Err(LlmError::Http(message));
+    }
+    let endpoint = published.endpoint.ok_or_else(|| {
+        LlmError::Http(
+            "UAR sidecar is not available; start it in the dashboard or configure \
+             a selected UAR instance runtime endpoint"
+                .to_string(),
+        )
+    })?;
+    Ok((candidate, endpoint, published.generation))
+}
+
+/// Stable identity segment included in UAR driver cache keys.
+#[must_use]
+pub fn binding_cache_identity() -> String {
+    binding_cell()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .candidate
+        .as_ref()
+        .map(|instance| instance.id.clone())
+        .unwrap_or_default()
+}
+
+/// Current admitted binding and most recent structured refusal.
+#[must_use]
+pub fn binding_snapshot() -> (
+    Option<UarEffectiveBinding>,
+    Option<UarCompatibilityDiagnostic>,
+) {
+    let guard = binding_cell()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    (guard.admitted.clone(), guard.diagnostic.clone())
 }
 
 /// LLM driver backed by the supervised UAR HTTP API.
@@ -86,7 +342,7 @@ fn supervised_endpoint() -> Result<(String, u64), LlmError> {
 /// must use liter-llm's `provider/model` convention.
 pub struct UarDriver {
     client: reqwest::Client,
-    verified_endpoint: tokio::sync::Mutex<Option<(String, u64)>>,
+    verified_binding: tokio::sync::Mutex<Option<(String, u64)>>,
     request_timeout: Duration,
 }
 
@@ -111,6 +367,20 @@ impl std::fmt::Debug for UarDriver {
 }
 
 impl UarDriver {
+    fn new(config: &DriverConfig) -> Result<Self, LlmError> {
+        validate_provider_overrides(config)?;
+        Ok(Self {
+            client: reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .build()
+                .map_err(|error| {
+                    LlmError::Http(format!("failed to build UAR HTTP client: {error}"))
+                })?,
+            verified_binding: tokio::sync::Mutex::new(None),
+            request_timeout: Duration::from_secs(config.request_timeout_secs.unwrap_or(120).max(1)),
+        })
+    }
+
     /// Construct a `UarDriver` and return it as `Arc<dyn LlmDriver>`.
     ///
     /// # Errors
@@ -118,24 +388,18 @@ impl UarDriver {
     /// Currently infallible — returns `Err` only to satisfy the
     /// `create_driver` call-site convention.
     pub fn create(config: &DriverConfig) -> Result<Arc<dyn LlmDriver>, LlmError> {
-        validate_provider_overrides(config)?;
-        Ok(Arc::new(Self {
-            client: reqwest::Client::builder()
-                .connect_timeout(Duration::from_secs(5))
-                .build()
-                .map_err(|error| {
-                    LlmError::Http(format!("failed to build UAR HTTP client: {error}"))
-                })?,
-            verified_endpoint: tokio::sync::Mutex::new(None),
-            request_timeout: Duration::from_secs(config.request_timeout_secs.unwrap_or(120).max(1)),
-        }))
+        Ok(Arc::new(Self::new(config)?))
     }
 
     async fn send(
         &self,
-        request: reqwest::RequestBuilder,
+        mut request: reqwest::RequestBuilder,
+        role: EndpointRole,
         operation: &str,
     ) -> Result<reqwest::Response, LlmError> {
+        if let Some(credential) = role_credential(role) {
+            request = request.bearer_auth(credential.as_str());
+        }
         tokio::time::timeout(self.request_timeout, request.send())
             .await
             .map_err(|_| {
@@ -164,131 +428,307 @@ impl UarDriver {
     }
 
     async fn endpoint(&self) -> Result<String, LlmError> {
-        let (endpoint, generation) = supervised_endpoint()?;
-        let mut verified = self.verified_endpoint.lock().await;
+        let (candidate, endpoint, generation) = supervised_candidate()?;
+        let mut verified = self.verified_binding.lock().await;
         let is_verified = verified
             .as_ref()
-            .is_some_and(|(url, value)| url == &endpoint && *value == generation);
+            .is_some_and(|(identity, value)| identity == &candidate.id && *value == generation);
         if !is_verified {
-            self.verify_capabilities(&endpoint).await?;
-            *verified = Some((endpoint.clone(), generation));
+            match self.verify_capabilities(&candidate, &endpoint).await {
+                Ok(binding) => {
+                    let mut published = binding_cell()
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if published.generation == generation {
+                        published.admitted = Some(binding);
+                        published.diagnostic = None;
+                    }
+                }
+                Err(error) => {
+                    let mut published = binding_cell()
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if published.generation == generation && published.diagnostic.is_none() {
+                        published.diagnostic = Some(UarCompatibilityDiagnostic {
+                            code: "incompatible_api".to_string(),
+                            message: error.to_string(),
+                            expected: Some(candidate.profile.clone()),
+                            observed: None,
+                            missing_capabilities: Vec::new(),
+                        });
+                    }
+                    return Err(error);
+                }
+            }
+            *verified = Some((candidate.id, generation));
         }
         Ok(endpoint)
     }
 
-    async fn verify_capabilities(&self, endpoint: &str) -> Result<(), LlmError> {
+    async fn verify_capabilities(
+        &self,
+        candidate: &UarServiceInstanceConfig,
+        endpoint: &str,
+    ) -> Result<UarEffectiveBinding, LlmError> {
         self.send(
             self.client.get(format!("{endpoint}/readyz")),
+            EndpointRole::Runtime,
             &format!("readiness check at {endpoint}"),
         )
         .await?
         .error_for_status()
         .map_err(|error| LlmError::Http(format!("UAR is not ready at {endpoint}: {error}")))?;
 
-        let spec_response = self
+        let administration_endpoint = candidate
+            .endpoints
+            .administration
+            .clone()
+            .unwrap_or_else(|| format!("{endpoint}/api/uar"));
+        let capability_response = self
             .send(
-                self.client.get(format!("{endpoint}/api/openapi.json")),
-                &format!("compatibility check at {endpoint}"),
+                self.client
+                    .get(append_role_path(&administration_endpoint, "capabilities")),
+                EndpointRole::Administration,
+                "service capability check",
             )
             .await?
             .error_for_status()
             .map_err(|error| {
                 LlmError::Http(format!(
-                    "UAR compatibility check failed at {endpoint}: {error}"
+                    "UAR capability discovery failed through the administration endpoint: {error}"
                 ))
             })?;
-        let spec_payload = self
-            .response_text(spec_response, "compatibility check")
+        let capability_payload = self
+            .response_text(capability_response, "service capability check")
             .await?;
-        let spec: serde_json::Value = serde_json::from_str(&spec_payload).map_err(|error| {
-            LlmError::Http(format!("UAR returned an invalid OpenAPI document: {error}"))
-        })?;
-        let title = spec
-            .pointer("/info/title")
-            .and_then(serde_json::Value::as_str);
-        let version = spec
-            .pointer("/info/version")
-            .and_then(serde_json::Value::as_str);
-        if title != Some("Universal Agent Runtime")
-            || !version.is_some_and(|value| value.starts_with("0."))
-        {
-            return Err(LlmError::Http(format!(
-                "incompatible UAR API at {endpoint}: title={title:?}, version={version:?}; \
-                 expected Universal Agent Runtime API 0.x"
-            )));
-        }
-        let has_completion = spec
-            .pointer("/paths/~1api~1chat~1completion/post")
-            .is_some();
-        let request_properties =
-            spec.pointer("/components/schemas/ChatCompletionRequest/properties");
-        let has_streaming = request_properties
-            .and_then(|properties| properties.get("stream"))
-            .is_some()
-            && request_properties
-                .and_then(|properties| properties.get("stream_mode"))
-                .is_some();
-        if has_completion && !has_streaming {
-            return Err(LlmError::Http(format!(
-                "incompatible UAR API at {endpoint}: POST /api/chat/completion is missing its \
-                 stream/stream_mode request capabilities"
-            )));
-        }
-        if !has_completion {
-            let has_openai_facade = spec
-                .pointer("/paths/~1v1~1chat~1completions/post")
-                .is_some();
-            if !has_openai_facade {
-                return Err(LlmError::Http(format!(
-                    "incompatible UAR API at {endpoint}: missing POST /api/chat/completion or its \
-                     stream/stream_mode request capabilities"
-                )));
-            }
+        let observed: CapabilitiesDocument =
+            serde_json::from_str(&capability_payload).map_err(|error| {
+                LlmError::Http(format!("UAR capability document is invalid: {error}"))
+            })?;
 
-            // The pinned 0.1 UAR image publishes a deliberately sparse OpenAPI
-            // document: it advertises the OpenAI facade but omits the internal
-            // completion route used by the sidecar client. Confirm that hidden
-            // route's validation contract without issuing a billable LLM call.
-            let probe_response = self
-                .send(
-                    self.client
-                        .post(format!("{endpoint}/api/chat/completion"))
-                        .json(&serde_json::json!({})),
-                    "completion capability probe",
-                )
-                .await?;
-            let probe_status = probe_response.status();
-            let probe_payload = self
-                .response_text(probe_response, "completion capability probe")
-                .await?;
-            let probe: serde_json::Value =
-                serde_json::from_str(&probe_payload).unwrap_or(serde_json::Value::Null);
-            let has_request_contract = probe_status == reqwest::StatusCode::BAD_REQUEST
-                && probe
-                    .pointer("/error/param")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("messages")
-                && probe
-                    .pointer("/error/code")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("invalid_request");
-            if !has_request_contract {
-                return Err(LlmError::Http(format!(
-                    "incompatible UAR API at {endpoint}: sparse OpenAPI document and the \
-                     /api/chat/completion contract probe returned HTTP {probe_status}"
-                )));
+        if observed.instance.id != candidate.id {
+            return Err(compatibility_refusal(
+                "wrong_instance_identity",
+                format!(
+                    "UAR instance identity mismatch: expected '{}', observed '{}'",
+                    candidate.id, observed.instance.id
+                ),
+                Some(candidate.id.clone()),
+                Some(observed.instance.id),
+                Vec::new(),
+            ));
+        }
+        let expected_profile = candidate
+            .required_profile
+            .as_deref()
+            .unwrap_or(&candidate.profile);
+        if observed.instance.profile != expected_profile {
+            return Err(compatibility_refusal(
+                "unsupported_profile",
+                format!(
+                    "UAR profile mismatch: expected '{expected_profile}', observed '{}'",
+                    observed.instance.profile
+                ),
+                Some(expected_profile.to_string()),
+                Some(observed.instance.profile),
+                Vec::new(),
+            ));
+        }
+        if observed.instance.workspace_location != candidate.workspace_locality {
+            return Err(compatibility_refusal(
+                "workspace_locality_mismatch",
+                "UAR workspace locality does not match the selected service instance".to_string(),
+                Some(workspace_locality_name(candidate.workspace_locality).to_string()),
+                Some(workspace_locality_name(observed.instance.workspace_location).to_string()),
+                Vec::new(),
+            ));
+        }
+        if observed.ownership != candidate.ownership {
+            return Err(compatibility_refusal(
+                "ownership_mismatch",
+                "UAR ownership mode does not match the selected service instance".to_string(),
+                Some(ownership_name(candidate.ownership).to_string()),
+                Some(ownership_name(observed.ownership).to_string()),
+                Vec::new(),
+            ));
+        }
+        ensure_endpoint_matches("runtime", Some(endpoint), &observed.endpoints.runtime)?;
+        ensure_endpoint_matches(
+            "administration",
+            candidate.endpoints.administration.as_deref(),
+            &observed.endpoints.administration,
+        )?;
+        ensure_endpoint_matches(
+            "models",
+            candidate.endpoints.models.as_deref(),
+            &observed.endpoints.models,
+        )?;
+        ensure_optional_endpoint_matches(
+            "console",
+            candidate.endpoints.console.as_deref(),
+            observed.endpoints.console.as_deref(),
+        )?;
+
+        let mut required_capabilities = candidate.required_capabilities.clone();
+        if !required_capabilities
+            .iter()
+            .any(|item| item == "service_instance_placement_v1")
+        {
+            required_capabilities.push("service_instance_placement_v1".to_string());
+        }
+        required_capabilities.sort();
+        required_capabilities.dedup();
+        let missing_capabilities = required_capabilities
+            .iter()
+            .filter(|required| !observed.capabilities.contains(required))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing_capabilities.is_empty() {
+            return Err(compatibility_refusal(
+                "missing_required_capabilities",
+                format!(
+                    "UAR instance '{}' lacks required capabilities: {}",
+                    candidate.id,
+                    missing_capabilities.join(", ")
+                ),
+                None,
+                None,
+                missing_capabilities,
+            ));
+        }
+
+        let configured_endpoints = match (
+            candidate.endpoints.runtime.as_ref(),
+            candidate.endpoints.administration.as_ref(),
+            candidate.endpoints.models.as_ref(),
+            candidate.endpoints.console.as_ref(),
+        ) {
+            (Some(runtime), Some(administration), Some(models), Some(console)) => {
+                Some(CompatibilityEndpoints {
+                    runtime: runtime.clone(),
+                    administration: administration.clone(),
+                    models: models.clone(),
+                    console: Some(console.clone()),
+                })
             }
+            _ => None,
+        };
+        let credential_refs = candidate.effective_credential_refs();
+        let credential_ref = credential_refs
+            .runtime
+            .as_deref()
+            .or(credential_refs.administration.as_deref())
+            .map(wire_credential_reference)
+            .transpose()?;
+        let expectation = CompatibilityExpectation {
+            intent: "new",
+            expected_instance_id: candidate.id.clone(),
+            expected_profile: expected_profile.to_string(),
+            expected_workspace_location: candidate.workspace_locality,
+            required_capabilities: required_capabilities.clone(),
+            expected_endpoints: configured_endpoints,
+            credential_ref,
+        };
+        let compatibility_response = self
+            .send(
+                self.client
+                    .post(append_role_path(&administration_endpoint, "compatibility"))
+                    .json(&expectation),
+                EndpointRole::Administration,
+                "service compatibility admission",
+            )
+            .await?
+            .error_for_status()
+            .map_err(|error| {
+                LlmError::Http(format!(
+                    "UAR compatibility admission failed through the administration endpoint: {error}"
+                ))
+            })?;
+        let compatibility_payload = self
+            .response_text(compatibility_response, "service compatibility admission")
+            .await?;
+        let compatibility: CompatibilityResponse = serde_json::from_str(&compatibility_payload)
+            .map_err(|error| {
+                LlmError::Http(format!("UAR compatibility response is invalid: {error}"))
+            })?;
+        if !compatibility.compatible {
+            let summary = compatibility
+                .diagnostics
+                .iter()
+                .map(|item| format!("{}:{} ({})", item.field, item.code, item.message))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(compatibility_refusal(
+                "compatibility_refused",
+                if summary.is_empty() {
+                    "UAR refused the configured service instance expectation".to_string()
+                } else {
+                    format!("UAR refused the configured service instance expectation: {summary}")
+                },
+                Some(candidate.id.clone()),
+                None,
+                Vec::new(),
+            ));
+        }
+        let binding = compatibility.effective_binding.ok_or_else(|| {
+            compatibility_refusal(
+                "missing_effective_binding",
+                "UAR accepted compatibility without returning an effective binding".to_string(),
+                Some(candidate.id.clone()),
+                None,
+                Vec::new(),
+            )
+        })?;
+
+        if binding.instance_id != candidate.id
+            || binding.profile != expected_profile
+            || binding.workspace_location != candidate.workspace_locality
+        {
+            return Err(compatibility_refusal(
+                "effective_binding_mismatch",
+                "UAR returned an effective binding that differs from the configured identity, profile, or workspace locality".to_string(),
+                Some(candidate.id.clone()),
+                Some(binding.instance_id),
+                Vec::new(),
+            ));
+        }
+        if binding.endpoints != observed.endpoints {
+            return Err(compatibility_refusal(
+                "effective_endpoint_mismatch",
+                "UAR effective binding endpoint roles differ from capability discovery".to_string(),
+                None,
+                None,
+                Vec::new(),
+            ));
+        }
+        let binding_missing_capabilities = required_capabilities
+            .iter()
+            .filter(|required| !binding.capabilities.contains(required))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !binding_missing_capabilities.is_empty() {
+            return Err(compatibility_refusal(
+                "effective_capability_mismatch",
+                "UAR effective binding omitted required capabilities".to_string(),
+                None,
+                None,
+                binding_missing_capabilities,
+            ));
         }
 
         let models_response = self
             .send(
-                self.client.get(format!("{endpoint}/api/models")),
+                self.client
+                    .get(append_role_path(&binding.endpoints.models, "models")),
+                EndpointRole::Models,
                 "model capability check",
             )
             .await?
             .error_for_status()
             .map_err(|error| {
-                LlmError::Http(format!("UAR model capability check failed: {error}"))
+                LlmError::Http(format!(
+                    "UAR model discovery failed through the models endpoint: {error}"
+                ))
             })?;
         let models_payload = self
             .response_text(models_response, "model capability check")
@@ -297,11 +737,147 @@ impl UarDriver {
             .map_err(|error| LlmError::Http(format!("UAR model catalog is invalid: {error}")))?;
         if !models.is_object() {
             return Err(LlmError::Http(
-                "incompatible UAR API: /api/models did not return an object".to_string(),
+                "incompatible UAR API: the models endpoint did not return an object".to_string(),
             ));
         }
-        Ok(())
+
+        Ok(UarEffectiveBinding {
+            instance_id: binding.instance_id,
+            ownership: observed.ownership,
+            endpoints: UarServiceEndpoints {
+                model_provider: None,
+                runtime: Some(binding.endpoints.runtime),
+                administration: Some(binding.endpoints.administration),
+                models: Some(binding.endpoints.models),
+                console: binding.endpoints.console,
+            },
+            workspace_locality: binding.workspace_location,
+            workspace: None,
+            credential_ref: binding.credential_ref,
+            profile: binding.profile,
+            capabilities: binding.capabilities,
+            placement: UarPlacementSupport {
+                current_operation: "new_session".to_string(),
+                new_session: observed.placement.new,
+                native_run_reattachment: false,
+                live_migration: false,
+            },
+        })
     }
+}
+
+/// Admit the configured endpoint without issuing a model completion. Reuses an
+/// already admitted binding until the supervisor publishes a new generation.
+pub async fn admit_supervised_binding() -> Result<UarEffectiveBinding, LlmError> {
+    if let Some(binding) = binding_snapshot().0 {
+        return Ok(binding);
+    }
+    let driver = UarDriver::new(&DriverConfig::default())?;
+    driver.endpoint().await?;
+    binding_snapshot().0.ok_or_else(|| {
+        LlmError::Http("UAR compatibility admission completed without a binding".to_string())
+    })
+}
+
+fn compatibility_refusal(
+    code: &str,
+    message: String,
+    expected: Option<String>,
+    observed: Option<String>,
+    missing_capabilities: Vec<String>,
+) -> LlmError {
+    binding_cell()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .diagnostic = Some(UarCompatibilityDiagnostic {
+        code: code.to_string(),
+        message: message.clone(),
+        expected,
+        observed,
+        missing_capabilities,
+    });
+    LlmError::Http(message)
+}
+
+fn append_role_path(endpoint: &str, suffix: &str) -> String {
+    format!(
+        "{}/{}",
+        endpoint.trim_end_matches('/'),
+        suffix.trim_start_matches('/')
+    )
+}
+
+fn endpoint_eq(left: &str, right: &str) -> bool {
+    left.trim_end_matches('/') == right.trim_end_matches('/')
+}
+
+fn ensure_endpoint_matches(
+    role: &str,
+    expected: Option<&str>,
+    observed: &str,
+) -> Result<(), LlmError> {
+    if expected.is_some_and(|expected| !endpoint_eq(expected, observed)) {
+        return Err(compatibility_refusal(
+            "endpoint_role_mismatch",
+            format!("UAR {role} endpoint does not match the configured endpoint role"),
+            Some(role.to_string()),
+            Some(role.to_string()),
+            Vec::new(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_optional_endpoint_matches(
+    role: &str,
+    expected: Option<&str>,
+    observed: Option<&str>,
+) -> Result<(), LlmError> {
+    if let Some(expected) = expected {
+        if !observed.is_some_and(|observed| endpoint_eq(expected, observed)) {
+            return Err(compatibility_refusal(
+                "endpoint_role_mismatch",
+                format!("UAR {role} endpoint does not match the configured endpoint role"),
+                Some(role.to_string()),
+                Some(role.to_string()),
+                Vec::new(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn workspace_locality_name(locality: UarWorkspaceLocality) -> &'static str {
+    match locality {
+        UarWorkspaceLocality::Local => "local",
+        UarWorkspaceLocality::Remote => "remote",
+    }
+}
+
+fn ownership_name(ownership: UarServiceOwnership) -> &'static str {
+    match ownership {
+        UarServiceOwnership::Managed => "managed",
+        UarServiceOwnership::External => "external",
+    }
+}
+
+fn wire_credential_reference(reference: &str) -> Result<String, LlmError> {
+    if reference.starts_with("vault://") || reference.starts_with("env://") {
+        return Ok(reference.to_string());
+    }
+    if let Some(key) = reference.strip_prefix("vault:") {
+        return Ok(format!("vault://{key}"));
+    }
+    if let Some(key) = reference.strip_prefix("env:") {
+        return Ok(format!("env://{key}"));
+    }
+    Err(compatibility_refusal(
+        "credential_reference_invalid",
+        "UAR credential references must use vault:// or env:// authority".to_string(),
+        None,
+        None,
+        Vec::new(),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +894,7 @@ impl LlmDriver for UarDriver {
                 self.client
                     .post(format!("{endpoint}/api/chat/completion"))
                     .json(&body),
+                EndpointRole::Runtime,
                 &format!("completion request at {endpoint}"),
             )
             .await?;
@@ -363,6 +940,7 @@ impl LlmDriver for UarDriver {
                 self.client
                     .post(format!("{endpoint}/api/chat/completion"))
                     .json(&body),
+                EndpointRole::Runtime,
                 &format!("streaming request at {endpoint}"),
             )
             .await?;

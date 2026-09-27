@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "afc.source-receipt.v1",
+  "receipt": "C02-governed-effect-source-2026-09-27",
+  "capturedAt": "2026-09-27T04:12:30Z",
+  "status": "source-lineage-recorded-conformance-pending",
+  "initiative": {
+    "repository": "librefang",
+    "commitAtCapture": "0417937410d38e77fcba3ddb770c20458ad52758",
+    "predecessorContract": {
+      "schemaVersion": "afc.convergence-contract.v1",
+      "contractVersion": "1.0.0",
+      "path": "../c01/convergence-contract-v1.json"
+    },
+    "vocabulary": {
+      "schemaVersion": "afc.identity-state-action.v1",
+      "contractVersion": "1.0.0",
+      "path": "../c01/identity-state-action-vocabulary-v1.json"
+    }
+  },
+  "productSources": [
+    {
+      "repository": "universal-agent-runtime",
+      "commit": "852b0657adf2792aa6ed755e5c4540573b685795",
+      "role": "execution-owner-and-effect-admission-consumer"
+    },
+    {
+      "repository": "flint-gate",
+      "commit": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "role": "policy-grant-challenge-and-approval-provider-candidate"
+    }
+  ],
+  "checkpoints": {
+    "dUarP1": {
+      "status": "accepted",
+      "contract": "the-boss.uar.sidecar/1",
+      "receipt": "../c01/p1-acceptance-receipt-2026-09-27.json",
+      "windowsX64": {
+        "installation": "worked",
+        "packagedUar": "active",
+        "preferredPort": 1906,
+        "effectivePort": 1906,
+        "occupiedPortFallbackObserved": false
+      },
+      "darwinArm64": {
+        "occupiedPortFallbackObserved": true,
+        "preferredPort": 1906,
+        "effectivePort": 1907
+      }
+    },
+    "dGate": {
+      "status": "implementation-dependency-pending",
+      "effect": "The shared Gate-backed governed profile cannot claim conformance until UAR and Gate implement and demonstrate afc.governed-effect/1."
+    }
+  },
+  "outputContract": {
+    "schemaVersion": "afc.governed-effect/1",
+    "contractVersion": "1.1.0",
+    "path": "governed-effect-contract-v1.json"
+  },
+  "limitations": [
+    "Windows occupied-port fallback is unobserved.",
+    "D-UAR-P1 does not prove C02 governance behavior.",
+    "Flint Gate D-GATE is pending.",
+    "constrained-local does not satisfy D-GATE.",
+    "No tests, builds or product verification were run for this receipt."
+  ],
+  "claimsNotMade": [
+    "C02 task completion",
+    "UAR product conformance",
+    "Flint Gate product conformance",
+    "Gate enforcement by constrained-local",
+    "publication authorization"
+  ]
+}

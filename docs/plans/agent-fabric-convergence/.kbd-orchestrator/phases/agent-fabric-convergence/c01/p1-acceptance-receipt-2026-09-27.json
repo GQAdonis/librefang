@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "checkpoint": "D-UAR-P1",
+  "task": "C01.2",
+  "recordedAt": "2026-09-27T03:30:00Z",
+  "status": "accepted",
+  "contract": {
+    "id": "the-boss.uar.sidecar/1",
+    "sha256": "4517ae27474b417d23ffb237a5809b2675e40a92cad278006a1a9785a59b0a14"
+  },
+  "closeout": {
+    "repository": "prometheus-skills-mini",
+    "commit": "5f43a25dd027311a8bcbc690eed022031d45aafd",
+    "pullRequest": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/9",
+    "canonicalChildCompletionRevision": 961,
+    "canonicalParentRestorationRevision": 962
+  },
+  "release": {
+    "version": "2.2.3",
+    "receiptSha256": "8b738f3a9d917c126415a9c693ab306cc9bd0b2a39ac10278f8e8edfc8fe183d",
+    "windowsX64": {
+      "status": "accepted-operator",
+      "artifactSha256": "6688b21b33e51a1250c50b2ceb43b898f3375d8aed66b7fe8b12b8dc5056d5f1",
+      "observation": "Installation worked and packaged UAR was active on preferred and effective port 1906.",
+      "fallbackObserved": false
+    },
+    "darwinArm64": {
+      "status": "accepted-local",
+      "publishedArtifactSha256": "6bab9898d19b716996238be17abb31959d9fd4d72003f20f5124e55a95a91fb9",
+      "acceptedLocalArtifactSha256": "349b88f737f7be99304bc0855017dcce8c819799f95dea57b025d6d4c22e7d04",
+      "fallbackObserved": true,
+      "preferredPort": 1906,
+      "effectivePort": 1907
+    }
+  },
+  "lifecycle": {
+    "implementationTasks": "37/37",
+    "certification": "pass-with-limitations",
+    "criticalFindings": 0,
+    "openspec": "verified-and-archived",
+    "reflection": "complete",
+    "parentHandoff": "complete",
+    "independentGoalCheck": "PASS"
+  },
+  "ownership": {
+    "conversation": "The Boss main process",
+    "credentialsAndMcp": "The Boss main process",
+    "execution": "UAR",
+    "presentation": "UAR produces ordered execution events; The Boss adapts and persists product-visible history",
+    "bossFang": "Owns its kernel/workflow when delegating a bounded UAR call",
+    "fabric": "Transport only",
+    "memory": "Scoped retrieval and retention only"
+  },
+  "limitations": [
+    "Windows occupied-port fallback was not exercised.",
+    "Gate V lacks the complete reporter transcript.",
+    "Artifact refinement skipped because no manifest or constraints existed."
+  ],
+  "excluded": [
+    "UAR P2-P5 completion",
+    "I2 durable team execution",
+    "automatic admission of C02-C18 without their declared dependencies"
+  ]
+}

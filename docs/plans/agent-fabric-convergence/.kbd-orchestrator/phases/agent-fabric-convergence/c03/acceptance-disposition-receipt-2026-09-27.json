@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c03-initiative-acceptance-disposition",
+  "initiativeChange": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "recordedOn": "2026-09-27",
+  "result": "pass",
+  "c03Disposition": "complete-accepted",
+  "runtimeProductCheckpoint": "6f59672f31e9ad971d198a2d7fb5fe6875b8dfb6",
+  "repositories": {
+    "universalAgentRuntime": {
+      "evidenceHead": "b36d4c0857c86f069bac83bb24f18c92d34102e6",
+      "archiveHead": "fd6a538bb379f33f6ed1caf10123dbadeda1bebf",
+      "archiveParentIsEvidenceHead": true,
+      "archivedChange": "afc-c03-lossless-definition-bindings"
+    },
+    "prometheusSkillsMini": {
+      "evidenceHead": "dcc7a99f4aa0d0888a16aecb4bf8422e4f4385ae",
+      "archiveHead": "5d8e85d8d0ec3d2ad75e38922943f772e8603ce9",
+      "archiveParentIsEvidenceHead": true,
+      "archivedChange": "afc-c03-team-authoring-workspace"
+    },
+    "prometheusSkillPack": {
+      "evidenceHead": "53254a309c34e772a210f61d2fb8cecda91f1f83",
+      "archiveHead": "e43df764b54adb8fc7fe70468aefe0da8274d149",
+      "archiveParentIsEvidenceHead": true,
+      "archivedChange": "afc-c03-team-authoring-workspace"
+    }
+  },
+  "acceptanceEvidence": {
+    "finalCrossPackGate": {
+      "result": "pass",
+      "receiptSha256": "7fe86e8a1ead830416b0d85c13876d31fe5fbaa97fc8d27d75ccd470bf16a415",
+      "committedCopiesByteIdentical": true
+    },
+    "kbdApplyVerify": {
+      "universalAgentRuntime": "pass",
+      "prometheusSkillsMini": "pass",
+      "prometheusSkillPack": "pass",
+      "source": "operator report",
+      "rerunForThisReceipt": false
+    },
+    "adversarialResolution": {
+      "result": "pass",
+      "addendum": "adversarial-review-resolution-addendum-2026-09-27.md",
+      "receipt": "adversarial-review-resolution-receipt-2026-09-27.json"
+    },
+    "windowsInstalledOperatorReceipt": {
+      "path": "windows-installed-operator-receipt-2026-09-27.json",
+      "acceptedObservations": [
+        "installation presence",
+        "UAR launch",
+        "effective port 1906"
+      ],
+      "c03ConformanceClaimed": false,
+      "scopeExpansion": false
+    }
+  },
+  "taskDispositions": [
+    {
+      "id": "C03.1",
+      "openSpecTaskId": "1.1",
+      "disposition": "complete-accepted",
+      "scope": "Exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding, and private RepresentationGrant."
+    },
+    {
+      "id": "C03.2",
+      "openSpecTaskId": "1.2",
+      "disposition": "complete-accepted",
+      "scope": "Skill version, required state, configuration, and v2 fields are preserved with field-level conversion diagnostics and effective runtime binding checks."
+    },
+    {
+      "id": "C03.3",
+      "openSpecTaskId": "1.3",
+      "disposition": "complete-accepted",
+      "scope": "Legacy migration, import/export fixtures, and immutable dependency resolution are delivered while installed grants and secrets remain outside packages."
+    }
+  ],
+  "downstreamDisposition": {
+    "range": "C04+",
+    "status": "pending",
+    "acceptedByThisReceipt": false
+  },
+  "reviewActions": {
+    "testsRun": false,
+    "buildsRun": false,
+    "gatesRun": false,
+    "inspectionOnly": true
+  }
+}

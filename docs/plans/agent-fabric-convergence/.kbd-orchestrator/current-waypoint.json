@@ -2,10 +2,10 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 196,
-  "derivedRevision": 196,
+  "sourceRevision": 233,
+  "derivedRevision": 233,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 196
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -21,19 +21,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "currentTask": "C01.2",
+  "change": "afc-c05-bossfang-full-run-delegation",
+  "currentTask": "C05.1",
   "status": "ready",
   "lifecycle": "ready",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 2,
+  "implementationCompleted": 6,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 196,
+  "revision": 233,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c01-baseline-reconciliation-and-shared-contracts",
-  "nextTask": "C01.2",
-  "updatedAt": "2026-09-26T21:50:53.500677Z"
+  "nextChange": "afc-c05-bossfang-full-run-delegation",
+  "nextTask": "C05.1",
+  "updatedAt": "2026-09-27T12:47:49.368144Z"
 }

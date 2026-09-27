@@ -1,8 +1,8 @@
 # Execution: agent-fabric-convergence
 
-Selected backend: OpenSpec, driven one task at a time by kbd-apply in this independent planning root. Executor: current Codex task (self); the resumed C01.2 turn runs on GPT-5 after the prior documentation child completed on GPT-6 Astra. No external agent dispatch is needed for this planning-only ownership checkpoint. Planned class: medium for C01; retain the current session model for cross-repository continuity.
+Selected backend: OpenSpec, driven one task at a time by kbd-apply in this independent planning root. Executor: current Codex task with the existing agent team used for bounded read-only architecture review. Planned class: medium for C01; retain the current session model for cross-repository continuity.
 
-Current assignment: C01.2 P1 ownership and dependency checkpoint. C01.1 baseline/source reconciliation is complete. The P1 contract and exact merged documentation commits are recorded in `c01/p1-contract-checkpoint.{md,json}`. Windows x64 installed acceptance remains pending in the owning shipping phase, so C01.2 and overlapping product implementation remain open. C01.3 follows only after D-UAR-P1 is accepted.
+Current assignment: C02 governed action and approval boundary. C01 is complete and archived after its independent review and final documentation gate passed at canonical revision 203. Product implementation remains under repository-scoped changes and the exact dependency checkpoints in the C01 contract.
 
 Write scope: this planning directory. Read/fetch scope: 11 repositories in repository-manifest.json and recorded external integration plans. No product edits, merges, service operations, release actions or shared-tool repairs. The user's Continue authorizes the next reviewed task.
 
@@ -12,8 +12,16 @@ Verification: source receipts bound to immutable revisions; all 11 baseline rows
 
 ## C01.1 checkpoint
 
-Completed baseline/source reconciliation with 11 repository rows, 61 dispositions and 45 source receipts. Independent artifact review passed without findings. C01.2 ownership/API/history/approval agreement is next; C01.3 compatibility/adoption remains pending. Execute stays active, and C01 is not certified or archived.
+Completed baseline/source reconciliation with 11 repository rows, 61 dispositions and 45 source receipts. C01.2 accepted `the-boss.uar.sidecar/1` and installed Windows x64/Mac ARM64 evidence. C01.3 publishes the shared coordination contract and remains active until its one documentation consistency gate and independent review pass. C01 is not yet archived.
 
-## C01.2 checkpoint in progress
+## C01.2 checkpoint complete
 
-The `the-boss.uar.sidecar/1` architecture and per-module ownership are frozen. UAR PR #299 and librefang PR #128 are merged at immutable commits recorded in `c01/p1-contract-checkpoint.json`. The 2.2.3 shipping receipt records Apple Silicon local acceptance and Windows x64 `pending-operator`. The documentation merges do not close that operational dependency. No product repository was edited, no implementation was dispatched and no verification/build gate was run in this planning task.
+The `the-boss.uar.sidecar/1` architecture and per-module ownership are frozen. UAR PR #299 and librefang PR #128 are merged at immutable commits recorded in `c01/p1-contract-checkpoint.json`. The 2.2.3 shipping receipt records Apple Silicon local acceptance and operator-confirmed Windows x64 installation with packaged UAR active on port 1906. Windows occupied-port fallback remains unobserved. No product repository was edited by this planning task.
+
+## C01.3 contract complete
+
+`c01/convergence-contract-v1.md` binds the vocabulary, exact dependency matrix and adoption/rollback checkpoints. It incorporates the merged I1 definitions/bindings and SurrealDB 3.3.0 input without claiming I2 durable-team execution or any later product conformance.
+
+## C01 closeout
+
+C01 completed 3/3 tasks and was verified and archived at `openspec/changes/archive/2026-09-26-afc-c01-baseline-reconciliation-and-shared-contracts`. The acceptance and archive receipts live under `c01/`. C02 is next.

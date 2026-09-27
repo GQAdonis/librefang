@@ -227,7 +227,7 @@ static TASK_STORE: LazyLock<DashMap<String, A2ATask>> = LazyLock::new(DashMap::n
 ///
 /// Resolution order:
 /// 1. `LIBREFANG_A2A_BASE_URL` environment variable
-/// 2. `[uar].base_url` from kernel config
+/// 2. `a2a_public_url` from kernel config
 /// 3. `http://localhost:4545` (default API port)
 fn a2a_base_url(state: &AppState) -> String {
     if let Ok(url) = std::env::var("LIBREFANG_A2A_BASE_URL") {
@@ -238,9 +238,8 @@ fn a2a_base_url(state: &AppState) -> String {
     state
         .kernel
         .config_ref()
-        .uar
-        .as_ref()
-        .and_then(|u| u.base_url.clone())
+        .a2a_public_url
+        .clone()
         .unwrap_or_else(|| "http://localhost:4545".into())
 }
 
