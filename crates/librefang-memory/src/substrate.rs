@@ -361,8 +361,22 @@ impl MemorySubstrate {
     /// When set, [`SemanticStore::recall_with_embedding`] will delegate vector
     /// similarity search to this backend instead of doing in-process cosine
     /// similarity over SQLite BLOBs.
-    pub fn set_vector_store(&mut self, store: Arc<dyn librefang_types::memory::VectorStore>) {
+    ///
+    /// Takes `&self` so the kernel can attach a backend that needs the resolved embedding driver after the substrate is shared.
+    pub fn set_vector_store(&self, store: Arc<dyn librefang_types::memory::VectorStore>) {
         self.semantic.set_vector_store(store);
+    }
+
+    /// Name of the attached external vector backend (`VectorStore::backend_name`), or `None` when recall uses the built-in SQLite vectors.
+    pub fn vector_backend_name(&self) -> Option<String> {
+        self.semantic
+            .vector_store()
+            .map(|vs| vs.backend_name().to_string())
+    }
+
+    /// Copy live SQLite vectors of `dimensions` length into the attached vector backend; see [`crate::semantic::SemanticStore::sync_vector_store`].
+    pub async fn sync_vector_store(&self, dimensions: usize) -> LibreFangResult<usize> {
+        self.semantic.sync_vector_store(dimensions).await
     }
 
     /// Clone the inner [`SemanticStore`] for use in blocking tasks.

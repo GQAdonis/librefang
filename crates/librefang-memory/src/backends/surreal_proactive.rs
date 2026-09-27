@@ -1,77 +1,109 @@
 //! SurrealDB-backed [`crate::ProactiveMemoryBackend`] implementation.
 //!
-//! Provides decay (TTL-based eviction), consolidation, and vacuum operations
-//! against the SurrealDB `memories` table managed by the `surreal-memory`
-//! library migrations.
+//! Provides decay (TTL-based eviction), consolidation, and vacuum operations against the `memory` table of the surreal-memory store, the same store [`crate::SurrealSemanticBackend`] writes.
 //!
 //! ## Design notes
 //!
-//! - `run_decay` deletes memory rows whose `expires_at` field is in the past,
-//!   mapping the SQLite TTL semantics onto a SurrealQL DELETE WHERE query.
-//! - `consolidate` is a best-effort no-op when no embedding service is
-//!   attached; it returns an empty `ConsolidationReport` instead of failing.
-//!   Full LLM-assisted consolidation requires a `SurrealStorage` with an
-//!   embedding service, which the kernel wires separately via
-//!   `SurrealMemoryBackend::with_extended`.
+//! - `run_decay` applies the SQLite decay policy (`crate::decay::run_decay`) to that table: rows whose scope is `session_memory`, `agent_memory` or `episodic` and whose last access (or creation, if never accessed) is older than the scope's TTL are removed.
+//!   The store has no soft-delete column, so removal goes through `MemoryStorage::delete_memory`, which records a `deleted` history row for each.
+//! - `consolidate` runs surreal-memory's `expire_stale_memories` (rows whose `valid_until` has passed).
 //! - `vacuum_if_shrank` is always a no-op — SurrealDB manages its own
 //!   compaction without the caller needing to trigger it.
 
+use super::shared::memory_error;
 use crate::backend::ProactiveMemoryBackend;
 use async_trait::async_trait;
-use librefang_storage::pool::SurrealSession;
 use librefang_types::config::MemoryDecayConfig;
-use librefang_types::error::{LibreFangError, LibreFangResult};
+use librefang_types::error::LibreFangResult;
 use librefang_types::memory::ConsolidationReport;
 use serde_json::Value as JsonValue;
 use std::sync::Arc;
+use surreal_memory::{MemoryStorage, SurrealStorage};
 use surrealdb::{engine::any::Any, Surreal};
+
+/// Scopes the decay sweep expires, with the config field that sets each TTL (same scopes as `crate::decay::run_decay`).
+/// Reads one scope's TTL (days) from the decay config.
+type TtlOf = fn(&MemoryDecayConfig) -> u32;
+
+const DECAYING_SCOPES: [(&str, TtlOf); 3] = [
+    ("session_memory", |c| c.session_ttl_days),
+    ("agent_memory", |c| c.agent_ttl_days),
+    ("episodic", |c| c.episodic_ttl_days),
+];
 
 /// SurrealDB-backed implementation of [`ProactiveMemoryBackend`].
 pub struct SurrealProactiveMemoryBackend {
-    db: Arc<Surreal<Any>>,
-    /// Optional full SurrealStorage for LLM-assisted consolidation.
-    /// When `None`, consolidate() returns an empty report.
-    #[cfg(feature = "surreal-backend")]
-    extended: Option<Arc<surreal_memory::SurrealStorage>>,
+    storage: Arc<SurrealStorage>,
+    /// Connection to the memory store, for the decay selection query.
+    db: Surreal<Any>,
 }
 
 impl SurrealProactiveMemoryBackend {
-    /// Open the proactive memory backend against an existing [`SurrealSession`].
-    #[must_use]
-    pub fn open(session: &SurrealSession) -> Self {
-        Self {
-            db: Arc::new(session.client().clone()),
-            #[cfg(feature = "surreal-backend")]
-            extended: None,
-        }
-    }
-
-    /// Attach a full `SurrealStorage` for LLM-assisted consolidation.
-    #[cfg(feature = "surreal-backend")]
-    #[must_use]
-    pub fn with_extended(mut self, storage: Arc<surreal_memory::SurrealStorage>) -> Self {
-        self.extended = Some(storage);
-        self
-    }
-
-    /// Open the proactive memory backend and wire a [`surreal_memory::SurrealStorage`]
-    /// built from `storage_cfg` so that `consolidate()` → `expire_stale_memories()` is
-    /// fully active.
-    /// Consolidation only needs TTL eviction, but `SurrealStorage` cannot open without an embedding driver and its dimension, so the caller passes the same pair it gives [`super::shared::open_shared_memory_storage`] for the semantic backend.
+    /// Wrap an open `SurrealStorage` — normally the one the semantic backend uses ([`crate::SurrealSemanticBackend::storage`]).
     ///
-    /// Meant for `librefang-kernel`, so it need not call `SurrealStorage::new()` itself (which would make `surreal-memory` a direct dependency of the kernel crate); the kernel does not call it today.
-    #[cfg(feature = "surreal-backend")]
+    /// # Errors
+    ///
+    /// Returns an error when the storage's connection is not live.
+    pub fn new(storage: Arc<SurrealStorage>) -> LibreFangResult<Self> {
+        let db = storage.db().map_err(|e| {
+            memory_error("SurrealProactiveMemoryBackend: memory store connection", e)
+        })?;
+        Ok(Self { storage, db })
+    }
+
+    /// Open the proactive memory backend on a fresh `SurrealStorage` built from `storage_cfg`.
+    /// `SurrealStorage` cannot open without an embedding driver and its dimension, so the caller passes the same pair it gives [`super::shared::open_shared_memory_storage`] for the semantic backend.
+    /// In embedded mode only one opener per process can hold the store, so a process that also runs the semantic backend builds this one with [`Self::new`] on that backend's storage instead.
     pub async fn open_with_storage(
-        session: &SurrealSession,
         storage_cfg: &librefang_storage::config::StorageConfig,
         embedding: Arc<dyn crate::proactive::EmbeddingFn>,
         dimensions: usize,
     ) -> Result<Self, String> {
-        // Delegate to the single-source factory, which owns the memory store's RocksDB lock; standalone callers get a fresh `SurrealStorage` here because no other opener exists in their process.
         let storage = super::shared::open_shared_memory_storage(storage_cfg, embedding, dimensions)
             .await
-            .map_err(|e| format!("SurrealStorage (proactive memory consolidation): {e}"))?;
-        Ok(Self::open(session).with_extended(storage))
+            .map_err(|e| format!("SurrealStorage (proactive memory): {e}"))?;
+        Self::new(storage).map_err(|e| e.to_string())
+    }
+
+    /// Remove every row the decay policy expires; returns how many were removed.
+    async fn decay(&self, config: &MemoryDecayConfig) -> LibreFangResult<usize> {
+        let now = chrono::Utc::now();
+        let mut removed = 0usize;
+        for (scope, ttl_of) in DECAYING_SCOPES {
+            let ttl_days = ttl_of(config);
+            if ttl_days == 0 {
+                continue;
+            }
+            let cutoff = now - chrono::Duration::days(i64::from(ttl_days));
+            let rows: Vec<JsonValue> = self
+                .db
+                .query(
+                    "SELECT record::id(id) AS key FROM memory \
+                     WHERE categories[0] = $scope \
+                       AND (last_accessed_at ?? created_at) < $cutoff",
+                )
+                .bind(("scope", scope.to_string()))
+                .bind(("cutoff", surrealdb::types::Datetime::from(cutoff)))
+                .await
+                .map_err(|e| memory_error("SurrealProactiveMemoryBackend::run_decay", e))?
+                .take(0)
+                .map_err(|e| {
+                    memory_error("SurrealProactiveMemoryBackend::run_decay (decode)", e)
+                })?;
+            for key in rows
+                .iter()
+                .filter_map(|r| r.get("key").and_then(JsonValue::as_str))
+            {
+                self.storage.delete_memory(key).await.map_err(|e| {
+                    memory_error("SurrealProactiveMemoryBackend::run_decay (delete)", e)
+                })?;
+                removed += 1;
+            }
+        }
+        if removed > 0 {
+            tracing::info!(removed, "SurrealDB memory decay sweep completed");
+        }
+        Ok(removed)
     }
 }
 
@@ -81,43 +113,28 @@ impl ProactiveMemoryBackend for SurrealProactiveMemoryBackend {
         if !config.enabled {
             return Ok(0);
         }
-
-        let db = self.db.clone();
-        let now = chrono::Utc::now().to_rfc3339();
-
-        // Use a block_on bridge: run_decay is a sync trait method.
-        let result = tokio::runtime::Handle::try_current()
-            .map(|h| tokio::task::block_in_place(|| h.block_on(do_decay(db.clone(), now.clone()))))
-            .unwrap_or_else(|_| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .expect("temporary runtime")
-                    .block_on(do_decay(db, now))
-            });
-        result
+        // `run_decay` is a sync trait method; the connection's tasks live on the caller's runtime, so block on it in place.
+        match tokio::runtime::Handle::try_current() {
+            Ok(handle) => tokio::task::block_in_place(|| handle.block_on(self.decay(config))),
+            Err(_) => tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| memory_error("SurrealProactiveMemoryBackend::run_decay (runtime)", e))?
+                .block_on(self.decay(config)),
+        }
     }
 
     async fn consolidate(&self) -> LibreFangResult<ConsolidationReport> {
-        #[cfg(feature = "surreal-backend")]
-        if let Some(ref storage) = self.extended {
-            use surreal_memory::MemoryStorage;
-            let expired = storage
-                .expire_stale_memories()
-                .await
-                .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
-            return Ok(ConsolidationReport {
-                memories_merged: 0,
-                memories_decayed: expired,
-                duration_ms: 0,
-            });
-        }
-
-        // No extended storage — return a no-op report.
+        let started = std::time::Instant::now();
+        let expired = self
+            .storage
+            .expire_stale_memories()
+            .await
+            .map_err(|e| memory_error("SurrealProactiveMemoryBackend::consolidate", e))?;
         Ok(ConsolidationReport {
             memories_merged: 0,
-            memories_decayed: 0,
-            duration_ms: 0,
+            memories_decayed: expired,
+            duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
         })
     }
 
@@ -125,16 +142,4 @@ impl ProactiveMemoryBackend for SurrealProactiveMemoryBackend {
         // SurrealDB manages its own compaction; no manual vacuum needed.
         Ok(())
     }
-}
-
-/// Async helper: delete rows from `memories` whose `expires_at` is past.
-async fn do_decay(db: Arc<Surreal<Any>>, now: String) -> LibreFangResult<usize> {
-    let rows: Vec<JsonValue> = db
-        .query("DELETE memories WHERE expires_at != NONE AND expires_at < $now RETURN id")
-        .bind(("now", now))
-        .await
-        .map_err(|e| LibreFangError::memory_msg(e.to_string()))?
-        .take(0)
-        .map_err(|e| LibreFangError::memory_msg(e.to_string()))?;
-    Ok(rows.len())
 }
