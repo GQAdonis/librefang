@@ -21,7 +21,7 @@ Read first: `CLAUDE.md` / `AGENTS.md` "Default operating mode" (agent-team-first
 | Phase branch `kbd/phase-11-surreal-recovery-uar-convergence` (worktree `/tmp/librefang-phase-11`) | Pushed. Contains phase seed, KBD state repair, merged G5 research, D-003. No PR yet. |
 | PR #139 team-default + ff-only pull hook | Merged (`d216411d7`). |
 | PR #140 release-safety test identity fix | Merged (`d9930772f`). |
-| PR #141 Play packageName from android config + audit check 6 + checklist | Open. merge-reviewer confirmation pass was in flight at handoff; re-run a fresh review if no verdict is recorded on the PR. |
+| PR #141 Play packageName from android config + audit check 6 + checklist | Open. APPROVED by merge-reviewer's confirmation pass on `53ca9fdd9` (three non-blocking LOW nits: check 6 rejects a quoted literal packageName; its `jq` check scans all of release.yml rather than the `play_gate` step; one table cell holds two sentences). Ready to merge. |
 | `p11/kbd-state` | Fully merged into the phase branch. |
 | `p11/uar-convergence-research` | Merged into the phase branch (`d8584d160`). |
 
