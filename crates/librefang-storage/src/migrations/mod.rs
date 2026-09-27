@@ -248,4 +248,24 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "sessions_messages_array_v1",
         sql: include_str!("sql/044_sessions_messages_array.surql"),
     },
+    Migration {
+        version: 45,
+        name: "json_value_columns_v1",
+        sql: include_str!("sql/045_json_value_columns.surql"),
+    },
 ];
+
+/// Helpers shared by the tests that run against a remote SurrealDB.
+#[cfg(all(test, feature = "surreal-backend"))]
+pub(crate) mod test_support {
+    /// The `ws://` and `http://` URLs for one server, derived from whichever scheme the operator gave.
+    pub(crate) fn remote_urls(url: &str) -> Vec<String> {
+        let pairs = [("ws://", "http://"), ("wss://", "https://")];
+        for (ws, http) in pairs {
+            if let Some(rest) = url.strip_prefix(ws).or_else(|| url.strip_prefix(http)) {
+                return vec![format!("{ws}{rest}"), format!("{http}{rest}")];
+            }
+        }
+        vec![url.to_string()]
+    }
+}

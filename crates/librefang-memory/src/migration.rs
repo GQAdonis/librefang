@@ -4896,3 +4896,45 @@ mod tests {
         );
     }
 }
+
+/// Typed decoder for the SQLite → SurrealDB importer (`librefang_storage::migrate::migrate_sqlite_to_surreal_with_decoder`).
+///
+/// It reads the BLOBs with the same Rust types the SQLite store wrote them with, so it also handles the positional encoding of `canonical_sessions.messages` that the importer's schema-free `GenericBlobDecoder` cannot.
+/// The JSON it returns is `serde_json::to_value` of those types, which is exactly what the SurrealDB backends store and read.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TypedLegacyBlobDecoder;
+
+impl librefang_storage::migrate::LegacyBlobDecoder for TypedLegacyBlobDecoder {
+    fn session_messages(&self, blob: &[u8]) -> Result<serde_json::Value, String> {
+        let messages = decode_messages(blob)?;
+        serde_json::to_value(messages).map_err(|e| e.to_string())
+    }
+
+    fn canonical_messages(&self, blob: &[u8]) -> Result<serde_json::Value, String> {
+        // `SessionStore::save_canonical` writes `Vec<CanonicalEntry>` positionally; older databases hold a bare `Vec<Message>`.
+        // The SurrealDB backend stores the message list, without the per-entry session tag.
+        let messages = match rmp_serde::from_slice::<Vec<crate::session::CanonicalEntry>>(blob) {
+            Ok(entries) => entries.into_iter().map(|entry| entry.message).collect(),
+            Err(_) => decode_messages(blob)?,
+        };
+        serde_json::to_value(messages).map_err(|e| e.to_string())
+    }
+
+    fn agent_manifest(&self, blob: &[u8]) -> Result<serde_json::Value, String> {
+        let manifest = rmp_serde::from_slice::<librefang_types::agent::AgentManifest>(blob)
+            .or_else(|msgpack| {
+                serde_json::from_slice::<librefang_types::agent::AgentManifest>(blob).map_err(
+                    |json| format!("manifest is neither MessagePack ({msgpack}) nor JSON ({json})"),
+                )
+            })?;
+        serde_json::to_value(manifest).map_err(|e| e.to_string())
+    }
+}
+
+/// A message history as `SessionStore` writes it: MessagePack (named or positional), or JSON on the oldest databases.
+fn decode_messages(blob: &[u8]) -> Result<Vec<librefang_types::message::Message>, String> {
+    rmp_serde::from_slice::<Vec<librefang_types::message::Message>>(blob).or_else(|msgpack| {
+        serde_json::from_slice(blob)
+            .map_err(|json| format!("history is neither MessagePack ({msgpack}) nor JSON ({json})"))
+    })
+}

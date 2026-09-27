@@ -68,7 +68,10 @@ impl SurrealUsageStore {
             "latency_ms": record.latency_ms as i64,
             "user_id": record.user_id.as_ref().map(|u| u.to_string()),
             "channel": record.channel.clone(),
+            "session_id": record.session_id.map(|s| s.to_string()),
         });
+        // `user_id` / `channel` / `session_id` are `option<string>`, which rejects JSON `null`; leave unset ones out so they are stored as NONE.
+        let row = super::omit_nulls(row);
         self.db
             .create::<Option<serde_json::Value>>(("usage_events", Uuid::new_v4().to_string()))
             .content(row)
@@ -160,7 +163,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_hourly(&self, agent_id: AgentId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE agent_id = $agent_id AND timestamp > $since",
+             WHERE agent_id = $agent_id AND timestamp > $since GROUP ALL",
             vec![
                 ("agent_id", agent_id.0.to_string()),
                 ("since", one_hour_ago()),
@@ -171,7 +174,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_daily(&self, agent_id: AgentId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE agent_id = $agent_id AND timestamp > $since",
+             WHERE agent_id = $agent_id AND timestamp > $since GROUP ALL",
             vec![
                 ("agent_id", agent_id.0.to_string()),
                 ("since", today_start()),
@@ -182,7 +185,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_monthly(&self, agent_id: AgentId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE agent_id = $agent_id AND timestamp > $since",
+             WHERE agent_id = $agent_id AND timestamp > $since GROUP ALL",
             vec![
                 ("agent_id", agent_id.0.to_string()),
                 ("since", month_start()),
@@ -192,21 +195,21 @@ impl UsageBackend for SurrealUsageStore {
 
     fn query_global_hourly(&self) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
-            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since",
+            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since GROUP ALL",
             vec![("since", one_hour_ago())],
         ))
     }
 
     fn query_today_cost(&self) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
-            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since",
+            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since GROUP ALL",
             vec![("since", today_start())],
         ))
     }
 
     fn query_global_monthly(&self) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
-            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since",
+            "SELECT math::sum(cost_usd) AS total FROM usage_events WHERE timestamp > $since GROUP ALL",
             vec![("since", month_start())],
         ))
     }
@@ -221,7 +224,7 @@ impl UsageBackend for SurrealUsageStore {
                                 math::sum(cost_usd) AS total_cost_usd, \
                                 count() AS call_count, \
                                 math::sum(tool_calls) AS total_tool_calls \
-                         FROM usage_events WHERE agent_id = $agent_id",
+                         FROM usage_events WHERE agent_id = $agent_id GROUP ALL",
                     )
                     .bind(("agent_id", aid.0.to_string()))
                     .await
@@ -236,7 +239,7 @@ impl UsageBackend for SurrealUsageStore {
                                 math::sum(cost_usd) AS total_cost_usd, \
                                 count() AS call_count, \
                                 math::sum(tool_calls) AS total_tool_calls \
-                         FROM usage_events",
+                         FROM usage_events GROUP ALL",
                     )
                     .await
                     .map_err(|e| {
@@ -483,7 +486,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_provider_hourly(&self, provider: &str) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE provider = $provider AND timestamp > $since",
+             WHERE provider = $provider AND timestamp > $since GROUP ALL",
             vec![
                 ("provider", provider.to_string()),
                 ("since", one_hour_ago()),
@@ -494,7 +497,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_provider_daily(&self, provider: &str) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE provider = $provider AND timestamp > $since",
+             WHERE provider = $provider AND timestamp > $since GROUP ALL",
             vec![("provider", provider.to_string()), ("since", today_start())],
         ))
     }
@@ -502,7 +505,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_provider_monthly(&self, provider: &str) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE provider = $provider AND timestamp > $since",
+             WHERE provider = $provider AND timestamp > $since GROUP ALL",
             vec![("provider", provider.to_string()), ("since", month_start())],
         ))
     }
@@ -510,7 +513,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_provider_tokens_hourly(&self, provider: &str) -> LibreFangResult<u64> {
         block_on(self.query_u64_total(
             "SELECT math::sum(input_tokens) AS total FROM usage_events \
-             WHERE provider = $provider AND timestamp > $since",
+             WHERE provider = $provider AND timestamp > $since GROUP ALL",
             vec![
                 ("provider", provider.to_string()),
                 ("since", one_hour_ago()),
@@ -537,7 +540,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_user_hourly(&self, user_id: UserId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE user_id = $user_id AND timestamp > $since",
+             WHERE user_id = $user_id AND timestamp > $since GROUP ALL",
             vec![("user_id", user_id.to_string()), ("since", one_hour_ago())],
         ))
     }
@@ -545,7 +548,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_user_daily(&self, user_id: UserId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE user_id = $user_id AND timestamp > $since",
+             WHERE user_id = $user_id AND timestamp > $since GROUP ALL",
             vec![("user_id", user_id.to_string()), ("since", today_start())],
         ))
     }
@@ -553,7 +556,7 @@ impl UsageBackend for SurrealUsageStore {
     fn query_user_monthly(&self, user_id: UserId) -> LibreFangResult<f64> {
         block_on(self.query_f64_total(
             "SELECT math::sum(cost_usd) AS total FROM usage_events \
-             WHERE user_id = $user_id AND timestamp > $since",
+             WHERE user_id = $user_id AND timestamp > $since GROUP ALL",
             vec![("user_id", user_id.to_string()), ("since", month_start())],
         ))
     }

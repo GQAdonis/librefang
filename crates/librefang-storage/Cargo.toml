@@ -13,7 +13,7 @@ default = ["surreal-backend"]
 surreal-backend = ["dep:surrealdb", "dep:surrealdb-core", "dep:surrealdb-types"]
 
 # Legacy SQLite backend (opt-in, mirrors the pre-3.0 storage layout).
-sqlite-backend = ["dep:rusqlite"]
+sqlite-backend = ["dep:rusqlite", "dep:rmp-serde"]
 
 [dependencies]
 serde = { workspace = true }
@@ -37,6 +37,8 @@ surrealdb-core = { workspace = true, optional = true }
 # Same reason for surrealdb-types, which surreal-memory also depends on directly.
 surrealdb-types = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
+# The legacy SQLite store writes session histories and agent manifests as MessagePack BLOBs; the importer decodes them.
+rmp-serde = { workspace = true, optional = true }
 sha2 = { workspace = true }
 hex = { workspace = true }
 

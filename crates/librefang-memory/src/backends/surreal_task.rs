@@ -56,7 +56,7 @@ impl TaskBackend for SurrealTaskBackend {
             .filter_map(|v| {
                 v["id"]
                     .as_str()
-                    .map(|s| s.strip_prefix("task_queue:").unwrap_or(s).to_string())
+                    .map(|s| super::record_key(s, "task_queue").to_string())
             })
             .collect();
 
