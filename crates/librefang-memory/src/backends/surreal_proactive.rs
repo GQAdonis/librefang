@@ -56,23 +56,19 @@ impl SurrealProactiveMemoryBackend {
 
     /// Open the proactive memory backend and wire a [`surreal_memory::SurrealStorage`]
     /// built from `storage_cfg` so that `consolidate()` → `expire_stale_memories()` is
-    /// fully active.  The `SurrealStorage` uses a noop embedding service because
-    /// consolidation only needs TTL eviction, not vector search.
+    /// fully active.
+    /// Consolidation only needs TTL eviction, but `SurrealStorage` cannot open without an embedding driver and its dimension, so the caller passes the same pair it gives [`super::shared::open_shared_memory_storage`] for the semantic backend.
     ///
-    /// Call sites in `librefang-kernel` use this instead of calling
-    /// `SurrealStorage::new()` directly (which requires `surreal-memory` to be a
-    /// direct dependency of the kernel crate).
+    /// Meant for `librefang-kernel`, so it need not call `SurrealStorage::new()` itself (which would make `surreal-memory` a direct dependency of the kernel crate); the kernel does not call it today.
     #[cfg(feature = "surreal-backend")]
     pub async fn open_with_storage(
         session: &SurrealSession,
         storage_cfg: &librefang_storage::config::StorageConfig,
+        embedding: Arc<dyn crate::proactive::EmbeddingFn>,
+        dimensions: usize,
     ) -> Result<Self, String> {
-        // Delegate to the single-source factory so this path is functionally
-        // identical to (and shares the same RocksDB lock with) the kernel's
-        // shared-storage boot path.  Standalone callers (e.g. the
-        // `#[ignore]`d integration tests) get a fresh `SurrealStorage` here
-        // because no other opener exists in their process.
-        let storage = super::shared::open_shared_memory_storage(storage_cfg)
+        // Delegate to the single-source factory, which owns the memory store's RocksDB lock; standalone callers get a fresh `SurrealStorage` here because no other opener exists in their process.
+        let storage = super::shared::open_shared_memory_storage(storage_cfg, embedding, dimensions)
             .await
             .map_err(|e| format!("SurrealStorage (proactive memory consolidation): {e}"))?;
         Ok(Self::open(session).with_extended(storage))
