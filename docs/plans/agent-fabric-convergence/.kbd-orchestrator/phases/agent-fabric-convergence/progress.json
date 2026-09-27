@@ -2,55 +2,26 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 192,
-  "derivedRevision": 192,
+  "sourceRevision": 203,
+  "derivedRevision": 203,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 192
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 203
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-26T21:43:50.023252Z",
+  "last_updated": "2026-09-27T03:54:41.521687Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
-  "changes_completed": 0,
+  "changes_completed": 1,
   "implementation_total": 18,
-  "implementation_completed": 0,
+  "implementation_completed": 1,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 0,
+      "completed": 1,
       "total": 18,
-      "status": "PENDING"
-    },
-    "evidence": {
-      "status": "NOT_TRACKED",
-      "summary": null,
-      "blockers": []
-    },
-    "certification": {
-      "status": "NOT_TRACKED",
-      "summary": null,
-      "blockers": []
-    },
-    "publication": {
-      "status": "NOT_TRACKED",
-      "summary": null,
-      "blockers": []
-    }
-  },
-  "completionScopes": {
-    "completion": "phase",
-    "runCompletion": "run"
-  },
-  "runCompletion": {
-    "scope": "run",
-    "runId": "project-20260924T180329Z",
-    "primaryCounter": "implementation",
-    "implementation": {
-      "completed": 2,
-      "total": 20,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -73,12 +44,12 @@
     {
       "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
       "title": "C01 — Baseline reconciliation and shared contracts",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
-      "next_task_pending": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+      "tasks_done": 3,
+      "last_task_completed": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+      "next_task_pending": null,
       "blockers": []
     },
     {

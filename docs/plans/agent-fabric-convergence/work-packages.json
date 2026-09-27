@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "executionPolicy": "Planning only. These are cross-repository change specifications; before dispatch, split any task that cannot fit one bounded assignment and claim explicit files. C01 is the first future change. All implementation statuses are pending.",
+  "executionPolicy": "Cross-repository execution requires repository-scoped OpenSpec/KBD changes, exact file claims and accepted dependency checkpoints. C01 is documentation-only; C01.1 and C01.2 are complete, and C01.3 remains in progress until its final documentation gate and review pass. Later product statuses remain planned.",
   "changes": [
     {
       "id": "C01",
@@ -42,14 +42,14 @@
         {
           "id": "C01.2",
           "text": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C01.3",
           "text": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -67,7 +67,7 @@
         "REC-012",
         "REC-042"
       ],
-      "status": "pending",
+      "status": "complete",
       "executionReady": false,
       "kbdChangeId": "afc-c01-baseline-reconciliation-and-shared-contracts"
     },
@@ -1151,8 +1151,9 @@
     }
   ],
   "progressSource": {
-    "canonicalRevision": 91,
-    "path": ".kbd-orchestrator/phases/agent-fabric-convergence/progress.json",
-    "note": "Canonical KBD state governs progress; this index reflects the C01.1 checkpoint."
+    "canonicalRevision": 203,
+    "activeChange": "afc-c02-governed-action-and-approval-boundary",
+    "activeTask": "C02.1",
+    "note": "Canonical KBD is authoritative. C01 completed and archived; C02 is the next pending change. Product work still requires repository-scoped changes and accepted dependencies."
   }
 }

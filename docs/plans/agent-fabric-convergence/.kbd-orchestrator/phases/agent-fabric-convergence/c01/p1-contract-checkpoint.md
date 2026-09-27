@@ -1,6 +1,6 @@
 # D-UAR-P1 contract checkpoint
 
-Status: **contract frozen; installed acceptance pending**. This is the C01.2 working receipt. It records the accepted architecture and module ownership without claiming that the external shipping checkpoint has passed.
+Status: **accepted**. This is the completed C01.2 receipt. It records the frozen architecture and module ownership together with the separate installed customer-platform evidence that satisfies D-UAR-P1.
 
 The authoritative P1 contract is `the-boss.uar.sidecar/1`, SHA-256 `4517ae27474b417d23ffb237a5809b2675e40a92cad278006a1a9785a59b0a14`. The merged collaboration specification is UAR merge `cbb511ac61eb6b2928d7a80c67324baeb913ca11`; the merged convergence closeout is librefang merge `425b30e04388ac7fd42f5223bebc546942c39bf2`. These documentation merges freeze design intent. They are not installed-runtime evidence.
 
@@ -19,16 +19,16 @@ The host can restrict UAR policy but cannot enlarge it. A child may narrow its v
 
 ## Release checkpoint
 
-The shipping receipt for 2.2.3 is SHA-256 `bde0411907e5f92c400ccace8ddf6d53c764374c81811baaf7f3201e38ab813a`.
+The final shipping receipt for 2.2.3 is SHA-256 `8b738f3a9d917c126415a9c693ab306cc9bd0b2a39ac10278f8e8edfc8fe183d`. The closeout is committed as mini `5f43a25dd027311a8bcbc690eed022031d45aafd` and published for review in [prometheus-skills-mini PR #9](https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/9).
 
 - Apple Silicon: the shipping owner records the local installed gate as accepted. Its accepted local DMG checksum differs from the notarized published DMG checksum, so both identities remain explicit.
-- Windows x64: the published installer exists and its bytes are recorded, but installed acceptance remains `pending-operator`. Required observation: UAR starts from the installed application and settings report the effective port, including port-1906 conflict handling.
+- Windows x64: the operator confirmed that installation worked and packaged UAR was active on preferred and effective port 1906. The installed walkthrough did not occupy port 1906, so Windows fallback is not claimed.
 
-Consequently D-UAR-P1 is not accepted. C01.2 remains open, and overlapping UAR/The Boss implementation stays blocked. C01.3 and later changes cannot use merged PRs as a substitute for this checkpoint.
+Consequently D-UAR-P1 is accepted. C01.2 may complete and C01.3 may publish the shared vocabulary and compatibility/adoption matrix. Later changes remain governed by their full dependency sets, repository-scoped tasks and explicit owners; this checkpoint does not complete P2-P5 or admit every convergence change.
 
-The shipping ledger's original `integration-administration` phase was accidentally marked complete at canonical revisions 932–933 when `kbd-next-phase.mjs` treated `--help` as a phase name. Its task count and acceptance evidence remained 35/37 and pending. Because phase completion is immutable, plan revision 4 records the correction and the remaining tasks 5.3 and 5.5 now belong to the in-progress successor child `integration-administration-closeout` at revision 943. The read-only help fix and its Windows checkout correction merged through mini PR #8 as `f38a98a6ed064f9e5b8b9837e8b91781af570d22`. This recovery changes no acceptance outcome.
+The shipping ledger's original `integration-administration` phase was accidentally marked complete at canonical revisions 932–933 when `kbd-next-phase.mjs` treated `--help` as a phase name. Plan revision 4 created the corrective `integration-administration-closeout` child. That child completed at canonical revision 961, returned to `uar-working-agent` at revision 962, archived the 37/37 OpenSpec change and passed independent C5 goal evaluation. The read-only help fix and its Windows checkout correction merged through mini PR #8 as `f38a98a6ed064f9e5b8b9837e8b91781af570d22`; the final accepted closeout is mini `5f43a25dd027311a8bcbc690eed022031d45aafd`.
 
-The [post-merge receipt](checkpoint-merge-receipt-2026-09-27.md) records that the convergence reconciliation also merged through BossFang PR #130 as `04a8a278d62e3c833da3906c5d32e2b734e14d15`. These default-branch merges make the planning evidence authoritative; they do not replace the pending installed observation.
+The [post-merge receipt](checkpoint-merge-receipt-2026-09-27.md) records that the earlier convergence reconciliation merged through BossFang PR #130 as `04a8a278d62e3c833da3906c5d32e2b734e14d15`. Those documentation merges froze the contract; the later installed Windows and Apple Silicon receipts provide the distinct runtime acceptance.
 
 ## Nonoverlapping I1 delivery
 
@@ -36,6 +36,16 @@ The completed `uar-team-definitions-deployment` child adds collaboration-package
 
 The child closed at canonical revision 195 after one authenticated creator-to-UAR integration gate against SurrealDB 3.3.0. UAR PR #304, mini PR #7, full skill-system PR #104, Compass PR #9, surreal-memory-server PR #28, and The Boss PR #10 merged on 26 September 2026. Their exact heads and merge commits, the SurrealDB 3.3.0 SDK/image pins, and the final evidence path are recorded in the machine-readable checkpoint.
 
-This delivery advances the definitions/catalog inputs to C03. It does not satisfy Windows installed acceptance and does not admit I2 execution changes that overlap the P1 runtime boundary.
+This delivery advances the definitions/catalog inputs to C03. It did not itself satisfy Windows installed acceptance; the separate 2.2.3 closeout now does. I1 still does not admit I2 execution changes outside the ordered convergence dependencies.
+
+## Acceptance evidence boundary
+
+- Windows acceptance receipt SHA-256: `6685957d7bf2f60132795e48e41c3bff36cddaee3563be2383a4958cd00b34ae`.
+- C1 certification SHA-256: `e49df1d81dad301e02e3b378831ddc51727f961da76630d6841b92d037cdd689`; result `PASS WITH LIMITATIONS`, zero critical findings.
+- C2 OpenSpec archive receipt SHA-256: `321d096e444b3f166e6d5e52a3cbb16a92f7fe810bec3c0596a684aab0ffc6b5`.
+- C5 independent goal-check SHA-256: `8829945e613d5b80f710034e17f2c8c26b3202aac00994cd95acc2ceb03528ba`; result `PASS`.
+- Reflection and parent handoff SHA-256: `554c8da125e65b8ee071677e2155ec419535179d20140058b4f4d7d3ab45feb1` and `f9af414ef17064a26eed8ebbd63d22fb57f574e6acbf16b2cf265c853ae171b1`.
+
+Windows occupied-port fallback remains unobserved. Apple Silicon separately observed fallback from 1906 to 1907. Gate V lacks its complete reporter transcript, and artifact refinement skipped because no manifest or constraints existed. These are retained evidence limits, not claims of broader P2-P5 or team-runtime conformance.
 
 Machine-readable details, exact commits, hashes and permitted work while pending are in [p1-contract-checkpoint.json](p1-contract-checkpoint.json).

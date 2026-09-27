@@ -1,0 +1,322 @@
+{
+  "schemaVersion": "afc.dependency-compatibility-matrix.v1",
+  "contractVersion": "1.0.0",
+  "status": "accepted-planning-contract",
+  "capturedAt": "2026-09-27T04:00:00Z",
+  "interpretation": "Each row is a source and adoption decision, not an end-to-end compatibility claim. A remote protocol boundary does not prove same-process crate compatibility.",
+  "platformContracts": {
+    "hostRuntime": "the-boss.uar.sidecar/1",
+    "collaborationProfile": "urn:prometheus:uar:collaboration:0.1.0-draft.1",
+    "teamAguiProfile": "uar.team.agui/1",
+    "a2aWire": "1.0",
+    "surrealDbProvider": "3.3.0",
+    "surrealDbImage": "surrealdb/surrealdb:v3.3.0@sha256:681c6c22c287421b5c7d99e0fde79b6e0d32c36c1ddeaab2762a1661cb04cd20"
+  },
+  "repositories": [
+    {
+      "name": "librefang",
+      "observedAt": "2026-09-27",
+      "revision": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
+      "boundaryTypes": [
+        "same-process",
+        "remote-service"
+      ],
+      "externalCheckpoint": null,
+      "unresolvedIncompatibility": "Its historical same-process SurrealDB 3.2.4 pin is not compatible-by-assumption with UAR 3.3.0; the current convergence checkout also requires refresh before product edits.",
+      "adoptionOwner": "C05",
+      "rollbackAnchor": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "04a8a278d62e3c833da3906c5d32e2b734e14d15"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "not-applicable",
+      "capabilityDisposition": "accepted-ownership-boundary",
+      "capability": "BossFang retains workflow and kernel ownership when delegating a bounded UAR run."
+    },
+    {
+      "name": "universal-agent-runtime",
+      "observedAt": "2026-09-27",
+      "revision": "79414bb7e134dad45330008999ee1dca999d44af",
+      "boundaryTypes": [
+        "same-process",
+        "remote-service",
+        "protocol",
+        "package"
+      ],
+      "externalCheckpoint": "D-UAR-P1",
+      "unresolvedIncompatibility": "Durable team activation is intentionally refused until I2; stale convergence checkout must be refreshed and root/desktop lock inputs reconciled before same-process claims.",
+      "adoptionOwner": "C03/C06/C09",
+      "rollbackAnchor": "79414bb7e134dad45330008999ee1dca999d44af",
+      "anchorKind": "merged-i1",
+      "evidenceAnchors": [
+        {
+          "kind": "merged-i1",
+          "revision": "79414bb7e134dad45330008999ee1dca999d44af"
+        },
+        {
+          "kind": "accepted-p1-sidecar-source",
+          "revision": "92620d40419d5b55af94e2aef0a0db886aa9aadc"
+        }
+      ],
+      "compatibilityStatus": "compatible-with-adapter",
+      "checkpointStatus": "accepted",
+      "capabilityDisposition": "accepted-input",
+      "capability": "Canonical immutable collaboration definitions, private deployment bindings, UAR execution ownership and SurrealDB 3.3.0 client input."
+    },
+    {
+      "name": "the-boss",
+      "observedAt": "2026-09-27",
+      "revision": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad",
+      "boundaryTypes": [
+        "remote-service",
+        "protocol",
+        "package"
+      ],
+      "externalCheckpoint": "D-UAR-P1",
+      "unresolvedIncompatibility": "The retained convergence checkout is stale and must not be used as release evidence; release source, current main and I1 metadata are separate lineages.",
+      "adoptionOwner": "C04/C14",
+      "rollbackAnchor": "release 2.2.3 source 1cda4e55535b42dfab8f064d7bbc16d82e0807fa",
+      "anchorKind": "merged-i1-plus-accepted-release",
+      "evidenceAnchors": [
+        {
+          "kind": "merged-i1",
+          "revision": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad"
+        },
+        {
+          "kind": "accepted-release-source",
+          "revision": "1cda4e55535b42dfab8f064d7bbc16d82e0807fa"
+        },
+        {
+          "kind": "accepted-release-publication",
+          "revision": "19fc2a7ad658b30b18911e0d240c59c71e876e1e"
+        }
+      ],
+      "compatibilityStatus": "compatible-with-adapter",
+      "checkpointStatus": "accepted",
+      "capabilityDisposition": "accepted-installed-boundary",
+      "capability": "Host-owned product history, principal/admission boundary, sidecar supervision and installed Windows x64/Mac ARM64 UAR operation under release 2.2.3."
+    },
+    {
+      "name": "flint-gate",
+      "observedAt": "2026-09-27",
+      "revision": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "boundaryTypes": [
+        "remote-service",
+        "protocol"
+      ],
+      "externalCheckpoint": "D-GATE",
+      "unresolvedIncompatibility": "D-GATE is unresolved; action facts, issuer/actor/audience and policy-version mappings must be agreed before adoption. No Cedar crate normalization is inferred.",
+      "adoptionOwner": "C02",
+      "rollbackAnchor": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "0edb945f1d73bd8567b90ab6640fbbd0cf1a00c0"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "observed-candidate",
+      "capability": "Existing Cedar policy and approval boundary remains the governance provider candidate."
+    },
+    {
+      "name": "flint-realtime-fabric",
+      "observedAt": "2026-09-27",
+      "revision": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "boundaryTypes": [
+        "remote-service",
+        "protocol"
+      ],
+      "externalCheckpoint": "D-FRF",
+      "unresolvedIncompatibility": "D-FRF is unresolved. Its SurrealDB 3.1.5 and Cedar 4.11.1 inputs may interoperate only across a declared service contract until separately proven.",
+      "adoptionOwner": "C08",
+      "rollbackAnchor": "3043ca53239cc74a7f94a9e12484e2fd17726adb",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "3043ca53239cc74a7f94a9e12484e2fd17726adb"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-ownership-boundary",
+      "capability": "Transport and delivery remain separate from UAR scheduling and task ownership."
+    },
+    {
+      "name": "flint-forge",
+      "observedAt": "2026-09-27",
+      "revision": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "boundaryTypes": [
+        "remote-service",
+        "protocol"
+      ],
+      "externalCheckpoint": "D-FORGE",
+      "unresolvedIncompatibility": "D-FORGE is unresolved and its Cedar 4.11.2 boundary needs explicit protocol mapping.",
+      "adoptionOwner": "C10/C11",
+      "rollbackAnchor": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "dc313be3a044c65b05d845a9c34350bf5ca3ca3e"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-ownership-boundary",
+      "capability": "Domain transaction, outbox and row-level-security ownership remain with Forge."
+    },
+    {
+      "name": "surreal-memory-server",
+      "observedAt": "2026-09-27",
+      "revision": "2d8e3ceea13b8c448a7611353cb86f233046f448",
+      "boundaryTypes": [
+        "remote-service",
+        "protocol"
+      ],
+      "externalCheckpoint": "D-MEMORY",
+      "unresolvedIncompatibility": "D-MEMORY still owns authentication, namespace and API compatibility; memory state never becomes runtime task authority.",
+      "adoptionOwner": "C06/C09",
+      "rollbackAnchor": "2d8e3ceea13b8c448a7611353cb86f233046f448",
+      "anchorKind": "merged-i1",
+      "evidenceAnchors": [
+        {
+          "kind": "merged-i1",
+          "revision": "2d8e3ceea13b8c448a7611353cb86f233046f448"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-provider-input",
+      "capability": "Merged I1 source uses the SurrealDB 3.3.0 client and remains a scoped memory provider."
+    },
+    {
+      "name": "prometheus-skill-pack",
+      "observedAt": "2026-09-27",
+      "revision": "e9520f5832c598270bcfee79a6e9af39853d2760",
+      "boundaryTypes": [
+        "package"
+      ],
+      "externalCheckpoint": "D-MINI",
+      "unresolvedIncompatibility": "Older surreal-memory and liter-llm gitlinks are provider-propagation work; exact packaged dependencies must be frozen before release.",
+      "adoptionOwner": "C03/C15",
+      "rollbackAnchor": "e9520f5832c598270bcfee79a6e9af39853d2760",
+      "anchorKind": "merged-i1",
+      "evidenceAnchors": [
+        {
+          "kind": "merged-i1",
+          "revision": "e9520f5832c598270bcfee79a6e9af39853d2760"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-authoring-input",
+      "capability": "Merged I1 agent-team authoring, maintenance, canonical export and UAR deployment adapters."
+    },
+    {
+      "name": "prometheus-skills-mini",
+      "observedAt": "2026-09-27",
+      "revision": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
+      "boundaryTypes": [
+        "package"
+      ],
+      "externalCheckpoint": "D-MINI",
+      "unresolvedIncompatibility": "Vendored provider sources and some retained worktrees lag the 3.3.0 metadata; D-MINI must reconcile exact gitlinks rather than infer compatibility from labels.",
+      "adoptionOwner": "C03/C15",
+      "rollbackAnchor": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
+      "anchorKind": "merged-i1-plus-shipping-closeout",
+      "evidenceAnchors": [
+        {
+          "kind": "merged-i1",
+          "revision": "677a4e2c71d6a608e778a7106c41e0b00d55df7a"
+        },
+        {
+          "kind": "shipping-closeout",
+          "revision": "5f43a25dd027311a8bcbc690eed022031d45aafd"
+        },
+        {
+          "kind": "accepted-release-payload",
+          "revision": "2650b3d470373d822f9cfd2349229942c05c1566"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-authoring-and-closeout-inputs",
+      "capability": "I1 creator/deployment support and SurrealDB 3.3.0 metadata; accepted shipping closeout is separately anchored at 5f43a25dd027311a8bcbc690eed022031d45aafd."
+    },
+    {
+      "name": "know-me-app",
+      "observedAt": "2026-09-27",
+      "revision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "boundaryTypes": [
+        "same-process",
+        "remote-service",
+        "protocol"
+      ],
+      "externalCheckpoint": "D-KNOWME",
+      "unresolvedIncompatibility": "D-KNOWME is unresolved; SurrealDB 3.0.5 and the direct inference path cannot be merged into a second execution loop by assumption.",
+      "adoptionOwner": "C12/C13",
+      "rollbackAnchor": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "d8fa3a7c14dbc51a1b3bbcb31a646b4700cb788f"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "accepted-ownership-boundary",
+      "capability": "Product data and direct inference remain product-owned inputs to later embedded/mobile profiles."
+    },
+    {
+      "name": "know-me-system",
+      "observedAt": "2026-09-27",
+      "revision": "c561d89e783264ef1215764db69e57493c4b815b",
+      "boundaryTypes": [
+        "same-process",
+        "remote-service",
+        "protocol",
+        "package"
+      ],
+      "externalCheckpoint": "D-KNOWME",
+      "unresolvedIncompatibility": "D-KNOWME is unresolved; SurrealDB 3.2.1, liter-llm 1.9.3 and an older vendored UAR require explicit profile compatibility and source refresh.",
+      "adoptionOwner": "C12/C13",
+      "rollbackAnchor": "c561d89e783264ef1215764db69e57493c4b815b",
+      "anchorKind": "current-default",
+      "evidenceAnchors": [
+        {
+          "kind": "current-default",
+          "revision": "c561d89e783264ef1215764db69e57493c4b815b"
+        }
+      ],
+      "compatibilityStatus": "unverified",
+      "checkpointStatus": "pending",
+      "capabilityDisposition": "observed-candidate",
+      "capability": "Existing embedded and service lanes remain candidate consumers with their own product ownership."
+    }
+  ],
+  "supportingInputs": [
+    {
+      "name": "compass",
+      "revision": "1ddd1d07979d67aa8ca715aec27fe8f3936bbb43",
+      "acceptedCapability": "SurrealDB 3.3.0 and rmcp 3.4.0 support used by the packaged integration.",
+      "unresolvedIncompatibility": "Two exact quick-xml advisory exceptions remain temporary and must be removed when SurrealDB permits the patched object-store line.",
+      "adoptionOwner": "C15/C18"
+    }
+  ],
+  "globalBlocks": [
+    "Refresh stale or retired convergence worktrees from their recorded default revision before product edits.",
+    "Do not mix SurrealDB client crates in one process without a repository-specific proof; use explicit service boundaries otherwise.",
+    "Export any SurrealDB 3.2 datastore before first 3.3 access when downgrade recovery is required.",
+    "Resolve the actual nine harness/target adapters in C15; historical text saying eight is superseded.",
+    "TypeScript 7 remains a pin-or-block requirement for C15 because current pins are lower.",
+    "liter-llm adoption must use an exact source revision and capability receipt because historical prose and gitlinks disagree."
+  ]
+}

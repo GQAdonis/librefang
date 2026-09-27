@@ -68,7 +68,13 @@ The [baseline ledger](baseline-ledger.md) is the latest source-disposition recor
 
 ## C01.2 P1 contract checkpoint
 
-The [P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-contract-checkpoint.md) records the frozen `the-boss.uar.sidecar/1` ownership contract and the exact merged UAR/convergence documentation commits. D-UAR-P1 remains unaccepted because the owning 2.2.3 shipping receipt still records Windows x64 installed acceptance as `pending-operator`. Overlapping product implementation remains blocked; merged documentation is not runtime acceptance.
+The [P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-contract-checkpoint.md) records the frozen `the-boss.uar.sidecar/1` ownership contract, exact merged UAR/convergence documentation commits and accepted 2.2.3 customer-platform evidence. D-UAR-P1 is accepted: Windows x64 installation worked with packaged UAR active on port 1906, and Apple Silicon installed acceptance is recorded separately. Windows occupied-port fallback was not exercised. C01.3 and dependent changes may consume the contract only through their own dependency and ownership gates.
+
+## C01.3 shared convergence contract
+
+The [Agent Fabric Convergence contract v1](.kbd-orchestrator/phases/agent-fabric-convergence/c01/convergence-contract-v1.md) binds the accepted P1 boundary and I1 collaboration package to a versioned identity/state/action vocabulary, an eleven-repository compatibility matrix and ordered adoption/rollback checkpoints. It preserves UAR as the sole execution-loop owner and records the SurrealDB 3.3.0 provider-first migration and rollback rule. These are planning contracts; each product change still requires its own repository-scoped implementation and complete integration gate.
+
+C01 is complete and archived under `openspec/changes/archive/2026-09-26-afc-c01-baseline-reconciliation-and-shared-contracts`. Its final documentation gate and independent review passed at canonical KBD revision 203. C02 is the next change; no later product behavior is implied by C01 completion.
 
 ## UAR collaboration specification child
 
@@ -76,4 +82,4 @@ The operator approved the documentation-only [uar-team-specification child](.kbd
 
 ## UAR team definitions deployment child
 
-The [I1 implementation child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-definitions-deployment/handoff-out.md) is complete. It delivers immutable collaboration packages, private deployment bindings, agent-team creator maintenance/deployment, and SurrealDB 3.3.0 alignment while explicitly refusing team activation until I2. Its six repository PRs merged on 26 September 2026; their immutable heads and merge commits are recorded in the P1 checkpoint. C01.2 still waits for Windows installed P1 acceptance; I1 does not transfer or duplicate execution ownership.
+The [I1 implementation child](.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-definitions-deployment/handoff-out.md) is complete. It delivers immutable collaboration packages, private deployment bindings, agent-team creator maintenance/deployment, and SurrealDB 3.3.0 alignment while explicitly refusing team activation until I2. Its six repository PRs merged on 26 September 2026; their immutable heads and merge commits are recorded in the P1 checkpoint. D-UAR-P1 is now accepted through the separate installed 2.2.3 closeout; I1 does not transfer or duplicate execution ownership.

@@ -1,0 +1,620 @@
+{
+  "schemaVersion": "afc.identity-state-action.v1",
+  "contractVersion": "1.0.0",
+  "status": "accepted-planning-contract",
+  "capturedAt": "2026-09-27T04:00:00Z",
+  "normativeInputs": [
+    "UAR collaboration profile urn:prometheus:uar:collaboration:0.1.0-draft.1",
+    "D-UAR-P1 contract the-boss.uar.sidecar/1",
+    "uar-team-definitions-deployment I1 handoff"
+  ],
+  "independentVersionDimensions": [
+    "the-boss.uar.sidecar/1",
+    "urn:prometheus:uar:collaboration:0.1.0-draft.1",
+    "uar.team.agui/1",
+    "custom-event schemaVersion 1",
+    "definition semantic version and content digest",
+    "mutable resource revision",
+    "event sequence and projection cursor"
+  ],
+  "rules": [
+    "Identifiers are opaque and stable across display-name changes.",
+    "Definition, binding, instance, task and attempt identities are never interchangeable.",
+    "A receipt for admission, delivery or processing is not task or effect completion.",
+    "Every mutating command carries an idempotency identity and authenticated owner scope; mutable targets also carry an expected revision.",
+    "Current authority is re-evaluated at effect admission and after waits; portable definitions grant no authority.",
+    "Unknown external-effect outcomes remain reconciling and are not retried without evidence that retry is safe."
+  ],
+  "authority": [
+    {
+      "system": "the-boss",
+      "owns": [
+        "application-profile",
+        "workspace",
+        "conversation",
+        "product-history",
+        "host-admission",
+        "credential-reference",
+        "sidecar-supervision"
+      ],
+      "doesNotOwn": [
+        "uar-execution-loop",
+        "uar-task-state",
+        "bossfang-workflow"
+      ]
+    },
+    {
+      "system": "universal-agent-runtime",
+      "owns": [
+        "definition-catalog",
+        "deployment-binding",
+        "team-instance",
+        "agent-instance",
+        "team-task",
+        "task-attempt",
+        "inbox-message",
+        "task-lease",
+        "execution-checkpoint",
+        "team-event"
+      ],
+      "doesNotOwn": [
+        "product-conversation-history",
+        "bossfang-workflow",
+        "fabric-transport-offset"
+      ]
+    },
+    {
+      "system": "librefang",
+      "owns": [
+        "bossfang-workflow",
+        "bossfang-kernel-execution",
+        "delegation-record"
+      ],
+      "doesNotOwn": [
+        "delegated-uar-execution-loop"
+      ]
+    },
+    {
+      "system": "flint-realtime-fabric",
+      "owns": [
+        "transport-envelope",
+        "transport-delivery",
+        "transport-cursor"
+      ],
+      "doesNotOwn": [
+        "uar-task",
+        "agent-scheduling",
+        "effect-authorization"
+      ]
+    },
+    {
+      "system": "surreal-memory-server",
+      "owns": [
+        "scoped-memory-record",
+        "retrieval-provenance"
+      ],
+      "doesNotOwn": [
+        "conversation",
+        "workflow",
+        "task",
+        "approval"
+      ]
+    },
+    {
+      "system": "flint-gate-or-trusted-host-approval",
+      "owns": [
+        "policy-decision",
+        "approval-identity",
+        "grant-revision"
+      ],
+      "doesNotOwn": [
+        "effect-execution",
+        "runtime-task-state"
+      ],
+      "qualification": "The Boss trusted host owns P1 approval presentation and exact tool admission. Flint Gate is the unresolved shared governance provider candidate behind D-GATE."
+    }
+  ],
+  "identities": [
+    {
+      "term": "DefinitionId",
+      "scope": "catalog",
+      "stableAcross": [
+        "rename"
+      ],
+      "versionedBy": [
+        "semantic-version",
+        "sha256-digest"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "PackageId",
+      "scope": "package-catalog",
+      "stableAcross": [
+        "file-install-location"
+      ],
+      "versionedBy": [
+        "package-version",
+        "package-digest",
+        "exact-file-lock"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "RuntimeInstanceId",
+      "scope": "host-profile",
+      "stableAcross": [
+        "endpoint-reconnect"
+      ],
+      "versionedBy": [
+        "provider",
+        "endpoint",
+        "model-reference",
+        "credential-reference",
+        "capability-revision"
+      ],
+      "owner": "runtime-host"
+    },
+    {
+      "term": "DeploymentBindingId",
+      "scope": "owner-workspace-runtime",
+      "stableAcross": [
+        "runtime-restart"
+      ],
+      "versionedBy": [
+        "binding-revision"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "AgentInstanceId",
+      "scope": "owner-workspace",
+      "stableAcross": [
+        "bounded-run",
+        "runtime-restart"
+      ],
+      "versionedBy": [
+        "instance-revision"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "TeamInstanceId",
+      "scope": "owner-workspace-root-graph",
+      "stableAcross": [
+        "bounded-run",
+        "runtime-restart"
+      ],
+      "versionedBy": [
+        "instance-revision",
+        "membership-revision"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "TaskId",
+      "scope": "team-instance",
+      "stableAcross": [
+        "attempt-retry",
+        "stream-reconnect"
+      ],
+      "versionedBy": [
+        "task-revision"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "AttemptId",
+      "scope": "task",
+      "stableAcross": [
+        "one-execution-try"
+      ],
+      "versionedBy": [
+        "lease-epoch",
+        "run-id"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "RunId",
+      "scope": "runtime-execution",
+      "stableAcross": [
+        "one-admitted-run"
+      ],
+      "versionedBy": [
+        "run-generation"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "StepId",
+      "scope": "run",
+      "stableAcross": [
+        "one-logical-step"
+      ],
+      "versionedBy": [
+        "step-revision"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "InvocationId",
+      "scope": "step",
+      "stableAcross": [
+        "one-tool-or-model-call"
+      ],
+      "versionedBy": [
+        "invocation-attempt"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "MessageId",
+      "scope": "authenticated-owner-operation",
+      "stableAcross": [
+        "delivery-retry"
+      ],
+      "versionedBy": [
+        "semantic-content-digest"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "EventId",
+      "scope": "authoritative-event-log",
+      "stableAcross": [
+        "transport-replay",
+        "projection-replay"
+      ],
+      "versionedBy": [],
+      "owner": "event-producer"
+    },
+    {
+      "term": "EventSequence",
+      "scope": "team-event-log",
+      "stableAcross": [
+        "one-committed-ordering"
+      ],
+      "versionedBy": [
+        "monotonic-integer"
+      ],
+      "owner": "universal-agent-runtime"
+    },
+    {
+      "term": "ProjectionCursor",
+      "scope": "authorized-subscription-or-projection",
+      "stableAcross": [
+        "one-retention-generation"
+      ],
+      "versionedBy": [
+        "opaque-cursor-format",
+        "retention-generation"
+      ],
+      "owner": "projection-provider"
+    },
+    {
+      "term": "ArtifactId",
+      "scope": "task-or-workflow",
+      "stableAcross": [
+        "chunked-delivery"
+      ],
+      "versionedBy": [
+        "artifact-revision",
+        "sha256-digest"
+      ],
+      "owner": "producing-authority"
+    },
+    {
+      "term": "ApprovalChallengeId",
+      "scope": "exact-effect-intent",
+      "stableAcross": [
+        "presentation-retry"
+      ],
+      "versionedBy": [
+        "challenge-revision"
+      ],
+      "owner": "flint-gate-or-host-approval-authority"
+    },
+    {
+      "term": "ApprovalDecisionId",
+      "scope": "challenge",
+      "stableAcross": [
+        "decision-replay"
+      ],
+      "versionedBy": [
+        "grant-revision"
+      ],
+      "owner": "flint-gate-or-host-approval-authority"
+    },
+    {
+      "term": "EffectId",
+      "scope": "authenticated-owner-destination-payload",
+      "stableAcross": [
+        "connector-retry",
+        "response-loss"
+      ],
+      "versionedBy": [
+        "effect-intent-revision"
+      ],
+      "owner": "workflow-owner"
+    },
+    {
+      "term": "EffectReceiptId",
+      "scope": "effect",
+      "stableAcross": [
+        "result-replay"
+      ],
+      "versionedBy": [
+        "receipt-revision"
+      ],
+      "owner": "effect-executor"
+    },
+    {
+      "term": "WorkflowId",
+      "scope": "workflow-owner",
+      "stableAcross": [
+        "delegated-run"
+      ],
+      "versionedBy": [
+        "workflow-revision"
+      ],
+      "owner": "librefang-or-declaring-product"
+    },
+    {
+      "term": "ConversationId",
+      "scope": "application-workspace",
+      "stableAcross": [
+        "provider-change",
+        "runtime-restart"
+      ],
+      "versionedBy": [
+        "history-revision"
+      ],
+      "owner": "the-boss-or-originating-product"
+    },
+    {
+      "term": "PrincipalId",
+      "scope": "issuer-tenant",
+      "stableAcross": [
+        "session-renewal"
+      ],
+      "versionedBy": [
+        "credential-or-grant-revision"
+      ],
+      "owner": "identity-authority"
+    },
+    {
+      "term": "WorkspaceId",
+      "scope": "owner",
+      "stableAcross": [
+        "display-path-change"
+      ],
+      "versionedBy": [
+        "workspace-revision"
+      ],
+      "owner": "host-product"
+    }
+  ],
+  "states": {
+    "binding": [
+      "inactive",
+      "ready",
+      "suspended"
+    ],
+    "task": [
+      "queued",
+      "ready",
+      "running",
+      "awaiting_input",
+      "awaiting_approval",
+      "reconciling",
+      "succeeded",
+      "failed",
+      "cancelled"
+    ],
+    "instance": [
+      "inactive",
+      "ready",
+      "active",
+      "suspended",
+      "draining",
+      "stopped"
+    ],
+    "conversionDisposition": [
+      "exact",
+      "translated",
+      "optional-unsupported",
+      "required-unsupported"
+    ],
+    "commandReceipt": [
+      "accepted",
+      "rejected",
+      "conflict"
+    ],
+    "messageReceipt": [
+      "accepted",
+      "delivered",
+      "processed",
+      "rejected"
+    ],
+    "compatibility": [
+      "compatible",
+      "compatible-with-adapter",
+      "blocked",
+      "unverified",
+      "superseded"
+    ],
+    "qualifiers": [
+      "cancelRequested is a durable flag and not terminal cancellation",
+      "AG-UI RUN_FINISHED settles one run segment and not the durable task or team",
+      "message processed does not imply task completion",
+      "approval accepted does not imply effect dispatch or effect success",
+      "effect proposal, approval, admission, dispatch, known result and reconciliation are milestones; C02 owns the normative effect state machine"
+    ],
+    "attempt": [
+      "admitted",
+      "running",
+      "settled",
+      "interrupted",
+      "uncertain"
+    ]
+  },
+  "actions": [
+    {
+      "term": "register",
+      "object": "definition",
+      "completion": "immutable catalog revision committed"
+    },
+    {
+      "term": "bind",
+      "object": "definition",
+      "completion": "private deployment binding revision committed"
+    },
+    {
+      "term": "activate",
+      "object": "instance",
+      "completion": "current authority and capacity admitted"
+    },
+    {
+      "term": "admit",
+      "object": "task-or-turn",
+      "completion": "claim, budget reservation and dispatch intent committed atomically"
+    },
+    {
+      "term": "assign",
+      "object": "task",
+      "completion": "eligible member recorded; no execution implied"
+    },
+    {
+      "term": "claim",
+      "object": "task",
+      "completion": "new lease epoch committed"
+    },
+    {
+      "term": "delegate",
+      "object": "task",
+      "completion": "child task and attenuated context committed"
+    },
+    {
+      "term": "message",
+      "object": "member-or-team",
+      "completion": "durable inbox acceptance; no activation implied"
+    },
+    {
+      "term": "broadcast",
+      "object": "authorized-recipient-set",
+      "completion": "recipient set captured and per-recipient receipts committed"
+    },
+    {
+      "term": "cancel-request",
+      "object": "task-or-attempt",
+      "completion": "durable request recorded; terminal cancellation not implied"
+    },
+    {
+      "term": "cancel-settle",
+      "object": "task",
+      "completion": "no unsettled owned effect remains and task is terminal"
+    },
+    {
+      "term": "approve",
+      "object": "exact-effect-intent",
+      "completion": "current scoped decision committed; effect not executed"
+    },
+    {
+      "term": "dispatch-effect",
+      "object": "effect",
+      "completion": "executor accepted exact admitted intent"
+    },
+    {
+      "term": "reconcile",
+      "object": "effect-or-ownership",
+      "completion": "evidence or authorized operator decision resolves uncertainty"
+    },
+    {
+      "term": "snapshot",
+      "object": "authorized-state",
+      "completion": "versioned projection captured"
+    },
+    {
+      "term": "replay",
+      "object": "events-or-messages",
+      "completion": "authorized retained range delivered without creating new semantic occurrences"
+    },
+    {
+      "term": "recover",
+      "object": "runtime-state",
+      "completion": "old attempts fenced and fresh authority reacquired"
+    }
+  ],
+  "actionGroups": {
+    "catalog": [
+      "preflight",
+      "install",
+      "version",
+      "compare-and-swap-replace"
+    ],
+    "binding": [
+      "preflight",
+      "create",
+      "update",
+      "migrate"
+    ],
+    "instance": [
+      "create",
+      "activate",
+      "suspend",
+      "drain",
+      "stop"
+    ],
+    "task": [
+      "submit",
+      "assign",
+      "claim",
+      "cancel-request",
+      "cancel-settle",
+      "reconcile"
+    ],
+    "message": [
+      "enqueue",
+      "deliver",
+      "process",
+      "broadcast"
+    ],
+    "approvalEffect": [
+      "request",
+      "decide",
+      "revoke",
+      "dispatch",
+      "settle",
+      "reconcile"
+    ],
+    "observation": [
+      "subscribe",
+      "replay",
+      "snapshot",
+      "resync"
+    ],
+    "clientControl": [
+      "attach",
+      "detach",
+      "surface-action"
+    ]
+  },
+  "mutationEnvelope": {
+    "required": [
+      "authenticatedPrincipalScope",
+      "commandId",
+      "targetIdentity"
+    ],
+    "conditional": [
+      "expectedRevision for mutable targets",
+      "canonicalPayloadDigest when authority depends on content"
+    ],
+    "distinctions": [
+      "stop is not cancel",
+      "cancel is not detach",
+      "detach is not drain",
+      "destructive purge is outside this profile"
+    ]
+  }
+}

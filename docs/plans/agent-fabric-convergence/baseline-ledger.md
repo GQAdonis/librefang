@@ -2,7 +2,7 @@
 
 All 11 origin refs were fetched without merging, rebasing or switching a source checkout. All 61 recommendation clusters have a disposition, evidence scope, responsible repository, reserved dependency and acceptance reference. Source inspection is distinct from runtime validation.
 
-The planning baselines below remain immutable. A [27 September merged-baseline refresh](.kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.md) records the six merged I1 delivery commits, current default refs, retired/stale initiative worktrees, the SurrealDB 3.3.0 propagation gaps, and the still-pending Windows `D-UAR-P1` observation. The subsequent [checkpoint merge receipt](.kbd-orchestrator/phases/agent-fabric-convergence/c01/checkpoint-merge-receipt-2026-09-27.md) records the merged recovery and reconciliation PRs. These receipts update current facts without rewriting what C01.1 originally inspected.
+The planning baselines below remain immutable. A [27 September merged-baseline refresh](.kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.md) records the six merged I1 delivery commits, current default refs, retired/stale initiative worktrees and SurrealDB 3.3.0 propagation gaps. Its pending-Windows statement is historical and is superseded by the [accepted P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-contract-checkpoint.md). The [C01.3 compatibility matrix](.kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-compatibility-matrix-v1.md) is the current adoption decision. These receipts update current facts without rewriting what C01.1 originally inspected.
 
 ## Findings that affect the next step
 
@@ -13,7 +13,7 @@ The planning baselines below remain immutable. A [27 September merged-baseline r
 - KnowMe System has embedded/service UAR lanes; KnowMe App’s inspected chat calls inference directly, while cancel/session-list handlers are stubs. Resolve the product boundary before adding another execution path.
 - UAR policy-load failure still selects default permit in the inspected startup path. Its direct-tool handler warrants full route/middleware analysis; this pass does not claim a demonstrated exploit or deployed-profile behavior.
 - Root and desktop UAR lockfiles differ. Fabric pins SurrealDB 3.1.5; KnowMe System locks 3.2.1; KnowMe App declares exact 3.0.5; BossFang/UAR-root/memory lock 3.2.4. No cross-product database compatibility or auto-upgrade is inferred.
-- The `liter-llm` Git tree/prose discrepancy is resolved as an observed documentation mismatch. Exact future adoption remains D-UAR-P1/C01.2 work.
+- The `liter-llm` Git tree/prose discrepancy is resolved as an observed documentation mismatch. Exact future adoption is assigned to the C01.3 provider-first checkpoints and C15.
 
 ## Repositories
 
@@ -108,4 +108,4 @@ Retained means the requirement/audit remains valid, not that every capability is
 
 [Machine ledger](baseline-ledger.json), [recommendation details](.kbd-orchestrator/phases/agent-fabric-convergence/c01/recommendation-dispositions.json), [source receipts](.kbd-orchestrator/phases/agent-fabric-convergence/c01/source-receipts.json), [dependency inventory](.kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-inventory.json), [external checkpoints](.kbd-orchestrator/phases/agent-fabric-convergence/c01/external-checkpoints.json).
 
-C01.2 has now frozen the ownership and API/history/approval contract in [the P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-contract-checkpoint.md). Its operational checkpoint remains unaccepted because Windows x64 installed acceptance is pending in the owning shipping phase. C01.3 must define the vocabulary, compatibility decisions and adoption/rollback sequence after D-UAR-P1 acceptance. No product slice is execution-ready from this ledger alone.
+C01.2 is accepted in [the P1 checkpoint](.kbd-orchestrator/phases/agent-fabric-convergence/c01/p1-contract-checkpoint.md). C01.3 publishes the current [shared contract](.kbd-orchestrator/phases/agent-fabric-convergence/c01/convergence-contract-v1.md). No product slice becomes execution-ready from this ledger alone; its own dependencies, repository change and owner assignment still apply.

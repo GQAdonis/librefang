@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "checkpointId": "D-UAR-P1",
-  "recordedAt": "2026-09-27T00:47:47Z",
-  "status": "contract-frozen-acceptance-pending",
+  "recordedAt": "2026-09-27T03:30:00Z",
+  "status": "accepted",
   "task": "C01.2",
   "contract": {
     "id": "the-boss.uar.sidecar/1",
@@ -31,7 +31,7 @@
   },
   "releaseEvidence": {
     "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration/evidence/release-2.2.3-uar-receipt.json",
-    "sha256": "bde0411907e5f92c400ccace8ddf6d53c764374c81811baaf7f3201e38ab813a",
+    "sha256": "8b738f3a9d917c126415a9c693ab306cc9bd0b2a39ac10278f8e8edfc8fe183d",
     "release": "2.2.3",
     "profile": "uar-enabled",
     "releaseCommit": "1cda4e55535b42dfab8f064d7bbc16d82e0807fa",
@@ -40,7 +40,7 @@
     "publishedRepositoryCommit": "19fc2a7ad658b30b18911e0d240c59c71e876e1e",
     "currentRepositoryMain": "f20b9d9a4fe93043f489f7586331276a672408df",
     "currentUarMain": "cbb511ac61eb6b2928d7a80c67324baeb913ca11",
-    "currentMiniMain": "f38a98a6ed064f9e5b8b9837e8b91781af570d22",
+    "currentMiniMain": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
     "currentConvergenceMain": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
     "platforms": {
       "darwin-arm64": {
@@ -50,11 +50,14 @@
         "note": "The shipping owner records the local installed gate as accepted. The accepted local bytes and notarized published bytes are distinct and remain explicitly recorded."
       },
       "win32-x64": {
-        "status": "pending-operator",
+        "status": "accepted-operator",
         "publishedSha256": "6688b21b33e51a1250c50b2ceb43b898f3375d8aed66b7fe8b12b8dc5056d5f1",
-        "requiredObservation": "Install the published 2.2.3 setup and confirm UAR launch plus effective-port reporting."
+        "observation": "The Windows installation worked and packaged UAR was active on preferred and effective port 1906.",
+        "limitation": "Occupied-port fallback was not exercised on Windows; Apple Silicon separately observed 1906 to 1907 fallback."
       }
-    }
+    },
+    "closeoutCommit": "5f43a25dd027311a8bcbc690eed022031d45aafd",
+    "closeoutPullRequest": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/9"
   },
   "ownership": {
     "theBossMainProcess": [
@@ -149,7 +152,7 @@
       }
     ],
     "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
-    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work.",
+    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs. D-UAR-P1 is now accepted from the separate installed 2.2.3 closeout; I1 still does not transfer or duplicate execution ownership.",
     "mergedBaselineRefresh": {
       "capturedAt": "2026-09-27T00:12:28.349Z",
       "receipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.json",
@@ -158,22 +161,22 @@
     }
   },
   "acceptance": {
-    "checkpointAccepted": false,
-    "blockingCondition": "Published Windows x64 2.2.3 installed acceptance is still pending in the owning shipping phase.",
-    "implementationAdmission": "blocked",
-    "allowedWhilePending": [
-      "planning and documentation",
-      "read-only source reconciliation",
-      "nonoverlapping work whose contract does not depend on D-UAR-P1",
-      "merging and pinning the completed I1 collaboration package and deployment-binding delivery"
+    "checkpointAccepted": true,
+    "acceptedAt": "2026-09-27T03:30:00Z",
+    "blockingCondition": null,
+    "implementationAdmission": "allowed only through each convergence change dependency, repository scope and explicit owner assignment",
+    "admittedWork": [
+      "complete C01.2 and proceed to C01.3",
+      "consume the frozen the-boss.uar.sidecar/1 ownership contract in dependent changes",
+      "plan or implement later changes only when their full dependency set and repository-scoped task are satisfied"
     ],
-    "disallowedWhilePending": [
-      "marking C01.2 complete",
-      "starting overlapping UAR/Boss runtime implementation",
-      "claiming release or runtime conformance from merged documentation"
+    "excludedClaims": [
+      "Windows occupied-port fallback was observed",
+      "UAR P2-P5 are complete",
+      "I2 durable team execution or later convergence changes are implemented"
     ],
     "ownerPhase": "the-boss-shipping-and-settings::uar-working-agent::integration-administration-closeout",
-    "ownerPhaseState": "in progress at canonical revision 943; successor tasks 5.3 in progress and 5.5 pending",
+    "ownerPhaseState": "complete at canonical closeout revision 961; parent uar-working-agent restored at revision 962",
     "recovery": {
       "reason": "kbd-next-phase.mjs treated --help as a phase name and falsely completed the prior integration-administration phase at revisions 932-933 without changing its 35/37 tasks or acceptance evidence",
       "planRevision": 4,
@@ -189,5 +192,30 @@
       }
     },
     "mergeReceipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/checkpoint-merge-receipt-2026-09-27.json"
+  },
+  "closeoutEvidence": {
+    "miniCommit": "5f43a25dd027311a8bcbc690eed022031d45aafd",
+    "pullRequest": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/9",
+    "canonicalParentRevision": 962,
+    "windowsAcceptance": {
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration-closeout/evidence/windows-x64-installed-acceptance-2026-09-26.json",
+      "sha256": "6685957d7bf2f60132795e48e41c3bff36cddaee3563be2383a4958cd00b34ae"
+    },
+    "certification": {
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration-closeout/evidence/c1-final-certification-2026-09-26.json",
+      "sha256": "e49df1d81dad301e02e3b378831ddc51727f961da76630d6841b92d037cdd689",
+      "result": "pass-with-limitations"
+    },
+    "openspecArchive": {
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration-closeout/evidence/c2-openspec-archive-2026-09-26.json",
+      "sha256": "321d096e444b3f166e6d5e52a3cbb16a92f7fe810bec3c0596a684aab0ffc6b5"
+    },
+    "goalCheck": {
+      "path": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/uar-working-agent/children/integration-administration-closeout/evidence/c5-goal-check-2026-09-26.json",
+      "sha256": "8829945e613d5b80f710034e17f2c8c26b3202aac00994cd95acc2ceb03528ba",
+      "result": "PASS"
+    },
+    "reflectionSha256": "554c8da125e65b8ee071677e2155ec419535179d20140058b4f4d7d3ab45feb1",
+    "handoffSha256": "f9af414ef17064a26eed8ebbd63d22fb57f574e6acbf16b2cf265c853ae171b1"
   }
 }
