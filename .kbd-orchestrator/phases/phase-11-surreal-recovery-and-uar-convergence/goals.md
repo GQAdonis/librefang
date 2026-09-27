@@ -56,6 +56,27 @@ Goals are tracked here, not in `progress.json`: the progress schema (`progress.s
 |---|---|---|
 | G1 — Root-cause the SurrealDB regression | NOT MET | 2026-09-27 |
 | G2 — Restore a working state | NOT MET | 2026-09-27 |
-| G3 — Repair KBD state | NOT MET | 2026-09-27 |
+| G3 — Repair KBD state | PARTIAL | 2026-09-27 |
 | G4 — Move the UAR pin to the latest runtime | NOT MET | 2026-09-27 |
-| G5 — Resolve the BossFang / UAR / surreal-memory relationship | NOT MET | 2026-09-27 |
+| G5 — Resolve the BossFang / UAR / surreal-memory relationship | MET | 2026-09-27 |
+
+G3 is PARTIAL, not MET.
+The committed files agree: `project.json`, `current-waypoint.json`, `current-waypoint.md` and `position.json` all place phase-11 at `assess_pending` (waypoint revision 74), phase-10 is closed at `reflect_complete`, and `/kbd-status` renders them without contradiction (commit `5622f35d7`, decision-log D-002).
+The canonical runtime journal (`prometheus kbd status`) still sits at revision 4 on the phase-10 run and names `C-URT-001` as next work, and re-anchoring it is a shared-resource change awaiting operator approval.
+Any KBD step that transitions state through `prometheus kbd` (for example `/kbd-reflect`) would act on that stale state, so G3 becomes MET only once the journal agrees with the committed files.
+
+G5 is MET: the research package (`analysis.md`, `docs/research/bossfang-uar-convergence/`) and ADR 0001 were reviewed and approved by `merge-reviewer` at `d01f5dd14`, and the operator decided placement and scope on 2026-09-27 (decision-log D-003).
+Six G5 questions remain open and are listed in D-003; none blocks this phase's implementation targets.
+
+## Implementation targets for `/kbd-plan`
+
+From ADR 0001 "Migration", scoped by decision-log D-003 (foundation only; M5a–M5c move to phase-12).
+These are the UAR-convergence targets; the G1/G2 SurrealDB recovery changes are planned alongside them.
+
+| Step | Change | Owner | Depends on |
+|---|---|---|---|
+| M1 | Adopt ADR 0001 (status set to Accepted 2026-09-27); add the feature-ledger entries | product-manager | — |
+| M2 | SurrealDB alignment guard in CI, including the SurrealDB version inside `UAR_IMAGE` | surrealdb-schema-engineer | — |
+| M3 | Model gateway via `/v1/messages`; capability check off `/api/chat/completion`; one-release switch for `provider = "uar"` agents with a release note and no deprecated alias | bossfang-feature-steward | UAR field change for full inference-parameter fidelity |
+| M4 | Executor seam at the kernel dispatch point, native implementation only | bossfang-feature-steward | — |
+| G4 | Move `UAR_IMAGE` to at or after `3d6bf056`; verify the sidecar contract (`READY`, health, supervised lifecycle) | bossfang-feature-steward | — |

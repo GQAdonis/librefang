@@ -40,3 +40,39 @@ Re-anchoring the runtime (`prometheus kbd migrate --apply` or a successor `prome
 **Alternatives:** Drive the fix through `prometheus kbd phase/stage/completion` (deferred to the operator for the reason above) · Leave the waypoint marked `generatedBy: kbd-runtime` (rejected: the runtime did not produce it, and the marker disables `kbd_position_sync`).
 
 **Learn more:** `../phase-10-uar-sidecar-availability/decision-log.md` D-001, and `kbd-process-orchestrator/shared/lib/runtime-authority.sh`.
+
+---
+
+## D-003 · Operator decisions on G5: S1 placement, foundation-only scope, one-release gateway switch          [analyze · 2026-09-27]
+
+**TL;DR:** The operator accepted ADR 0001 with placement S1, limited phase-11 to migration steps M1–M4 plus G4, and chose a one-release switch with no deprecated alias for existing `provider = "uar"` agents.
+
+**Why:** These decisions answer ADR open questions 2, 3 and 4 in `docs/architecture/decisions/0001-agent-loop-ownership-and-uar-runtime-integration.md`.
+The ADR and research package (`analysis.md`) were reviewed and approved by `merge-reviewer` at `d01f5dd14` and merged to the phase branch at `d8584d160`.
+
+1. **UAR executor placement: S1.**
+   A full UAR agent run happens only on the BossFang-managed loopback sidecar; external-local and remote UAR instances are model gateways only for now.
+   S2a (authenticated remote admission) is the named future path; S2b is rejected for now.
+   Trade-off: every run keeps BossFang's approval and policy guarantee and no UAR change is needed, but remote and external-local UAR cannot execute BossFang agents until S2a lands.
+2. **Phase-11 scope beyond SurrealDB recovery: foundation only.**
+   Phase-11 takes M1–M4 plus G4 (UAR image pin); M5a–M5c (full UAR runs: run client and AG-UI mapping, admission server, run-scoped `/mcp`) move to phase-12.
+   Trade-off: phase-11 stays small enough to finish alongside the G1/G2 SurrealDB recovery, and delegated UAR runs wait a phase.
+3. **Existing `provider = "uar"` agents: switch in one release.**
+   The gateway moves off the broken `/api/chat/completion` path to `/v1/messages` in one release with a release note, and there is no deprecated alias for the old nested behaviour.
+   Trade-off: operators get one clean behaviour change instead of two, but agents that relied on the nested behaviour change without a fallback release; the release note is the only mitigation.
+   This narrows M3: its "deprecation path" is the release note, not an alias.
+
+**Still open (not decided on 2026-09-27):**
+
+- Whose provider credentials pay for delegated runs: BossFang's (attributable to BossFang budgets) or UAR's own (ADR question 5).
+- `link-uar`: constrain and wire it, or deprecate it (ADR question 6, blocks M7).
+- Whether BossFang and UAR agents ever share one user memory (ADR question 7).
+- Whether surreal-memory will cut release tags (ADR question 8).
+- When the-boss takes the one-way SurrealDB 3.3.0 upgrade (ADR question 8, M10).
+- Whether the-boss hosts BossFang as a sibling sidecar (ADR question 1).
+
+None of these blocks M1–M4 or G4; question 5 must be answered before M5a in phase-12.
+
+**Alternatives:** S2a now (rejected: needs UAR work and a network path into BossFang approvals) · S2b (rejected for now: UAR policy, not BossFang, would decide tool effects) · M5a–M5c in phase-11 (rejected: too large next to the SurrealDB recovery) · One-release deprecated alias for the nested behaviour (rejected: keeps a known-broken path alive for another release).
+
+**Learn more:** ADR 0001 "Options considered", "Decision" and "Migration"; `analysis.md` in this phase directory.

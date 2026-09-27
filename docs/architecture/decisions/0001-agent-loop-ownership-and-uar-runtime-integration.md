@@ -1,7 +1,7 @@
 # ADR 0001: Agent loop ownership and UAR runtime integration
 
 **Date:** 2026-09-27 (revision 2)
-**Status:** Proposed (revision 2 addresses `merge-reviewer` CHANGES REQUESTED on `697090473`; re-review and operator confirmation pending)
+**Status:** Accepted 2026-09-27 by the operator, with placement S1 (revision 2 approved by `merge-reviewer` at `d01f5dd14`; operator decisions recorded in `.kbd-orchestrator/phases/phase-11-surreal-recovery-and-uar-convergence/decision-log.md` D-003)
 **Deciders:** operator; product-manager (bossfang-stewards)
 **Supersedes in scope:** the "UAR as an LLM provider inside the native loop" framing in `docs/agent-fabric-convergence.md`; builds on `docs/architecture/uar-runtime-integration-research.md` and the phase-10 decision log.
 **Evidence:** `docs/research/bossfang-uar-convergence/bossfang-uar-agent-loop-ownership-20260927-5a1c/report.md`
@@ -114,8 +114,11 @@ Negative:
 
 1. Should the-boss host BossFang, as a sibling sidecar with its own store, at the cost of a second daemon, store and version train in the desktop app?
 2. Remote and external-local execution: S1 (full guarantee, managed sidecar only), S2a (full guarantee remotely, needs UAR work and a network path into approvals) or S2b (works remotely now, UAR policy decides tool effects)?
+   **Decided 2026-09-27:** S1; S2a is the named future path; S2b is rejected for now.
 3. For existing `provider = "uar"` agents, switch in one release with a release note, or keep the nested behaviour under a deprecated explicit name for one release?
+   **Decided 2026-09-27:** switch in one release with a release note; no deprecated alias.
 4. Is the UAR executor (M5a to M5c) in phase-11, or only M1 to M4 plus G4?
+   **Decided 2026-09-27:** only M1 to M4 plus G4; M5a to M5c move to phase-12.
 5. Do delegated runs spend BossFang's provider credentials (attributable to BossFang budgets) or UAR's own (no credential transfer, spend outside BossFang budgets)?
 6. Should `link-uar` be constrained and wired (UAR state on BossFang's server, coupled to its SurrealDB minor) or deprecated?
 7. Should BossFang and UAR agents ever share one user memory?
