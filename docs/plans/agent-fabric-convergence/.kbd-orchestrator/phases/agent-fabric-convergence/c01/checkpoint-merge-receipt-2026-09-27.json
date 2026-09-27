@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-27T00:47:47Z",
+  "task": "C01.2",
+  "scope": "Post-merge evidence for the KBD recovery helper and the convergence checkpoint reconciliation. This receipt does not claim installed runtime acceptance.",
+  "merges": [
+    {
+      "repository": "prometheus-skills-mini",
+      "pullRequest": "https://github.com/Prometheus-AGS/prometheus-skills-mini/pull/8",
+      "head": "092392458ef0e1efa74550e024a99895a53fda85",
+      "mergeCommit": "f38a98a6ed064f9e5b8b9837e8b91781af570d22",
+      "mergedAt": "2026-09-27T00:46:52Z",
+      "result": "The read-only KBD help fix, Windows long-path checkout correction and archived OpenSpec records are merged."
+    },
+    {
+      "repository": "librefang",
+      "pullRequest": "https://github.com/GQAdonis/librefang/pull/130",
+      "head": "c695bddbff5ada31f2572c769a2819a6391ca945",
+      "mergeCommit": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
+      "mergedAt": "2026-09-27T00:47:47Z",
+      "result": "The merged I1 baseline refresh, P1 checkpoint reconciliation and repository-policy corrections are merged."
+    }
+  ],
+  "releaseEvidence": {
+    "release": "2.2.3",
+    "repository": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.3",
+    "windowsX64Installer": {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.3/The-Boss-2.2.3-win-x64-setup.exe",
+      "size": 454356807,
+      "sha256": "6688b21b33e51a1250c50b2ceb43b898f3375d8aed66b7fe8b12b8dc5056d5f1"
+    }
+  },
+  "acceptance": {
+    "checkpointAccepted": false,
+    "blockingCondition": "Installed Windows x64 acceptance still must confirm UAR launch, effective-port reporting and port-1906 conflict fallback.",
+    "nextTask": "C01.2"
+  }
+}

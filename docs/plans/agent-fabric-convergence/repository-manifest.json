@@ -15,12 +15,12 @@
       "sourceDivergence": "1400\t7",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:00.460Z",
-      "currentDefaultRevision": "cfd5285df61830d77e4d7a8d646bc1ad5d49146c",
+      "currentDefaultRevision": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
       "convergenceWorktreePresent": true,
-      "currentConvergenceHead": "1c5d5a6261dd26f4df89fd3f95e590636994c60f",
-      "currentConvergenceBranch": "codex/agent-fabric-convergence-c01",
-      "currentConvergenceDivergence": "1\t0",
-      "currentConvergenceState": "active-c01-checkpoint"
+      "currentConvergenceHead": "04a8a278d62e3c833da3906c5d32e2b734e14d15",
+      "currentConvergenceBranch": null,
+      "currentConvergenceDivergence": "0\t0",
+      "currentConvergenceState": "retained-worktree-detached-at-merged-main"
     },
     {
       "name": "universal-agent-runtime",
@@ -175,12 +175,12 @@
       "sourceDivergence": "9\t19",
       "sourceDirty": true,
       "createdAt": "2026-09-24T18:01:09.646Z",
-      "currentDefaultRevision": "677a4e2c71d6a608e778a7106c41e0b00d55df7a",
+      "currentDefaultRevision": "f38a98a6ed064f9e5b8b9837e8b91781af570d22",
       "convergenceWorktreePresent": false,
       "currentConvergenceHead": null,
       "currentConvergenceBranch": null,
       "currentConvergenceDivergence": null,
-      "currentConvergenceState": "manifest-worktree-retired-source-owned-by-shipping-closeout"
+      "currentConvergenceState": "manifest-worktree-retired-source-owned-by-shipping-closeout-help-fix-merged"
     },
     {
       "name": "know-me-app",
@@ -223,6 +223,6 @@
       "currentConvergenceState": "initiative-doc-ahead"
     }
   ],
-  "lastRefreshedAt": "2026-09-27T00:12:28.349Z",
-  "latestRefreshReceipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.json"
+  "lastRefreshedAt": "2026-09-27T00:47:47Z",
+  "latestRefreshReceipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/checkpoint-merge-receipt-2026-09-27.json"
 }
