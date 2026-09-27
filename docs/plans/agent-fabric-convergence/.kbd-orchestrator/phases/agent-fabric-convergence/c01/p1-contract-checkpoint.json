@@ -101,7 +101,13 @@
       { "repository": "the-boss", "url": "https://github.com/Prometheus-AGS/the-boss/pull/10", "head": "7e95983bf5bee223c43a7b11f1bbf7c8fddbd636", "state": "MERGED", "mergedAt": "2026-09-26T21:58:26Z", "mergeCommit": "ba9e3f61a6fcb7b45083fec323be22e30a6347ad" }
     ],
     "integrationEvidence": "prometheus-skills-mini/openspec/changes/archive/2026-09-26-agent-team-uar-deployment/evidence/integration-gate-result.json",
-    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work."
+    "effectOnCheckpoint": "This nonoverlapping delivery advances C03 inputs but does not satisfy Windows installed acceptance or authorize overlapping P1 runtime work.",
+    "mergedBaselineRefresh": {
+      "capturedAt": "2026-09-27T00:12:28.349Z",
+      "receipt": ".kbd-orchestrator/phases/agent-fabric-convergence/c01/merged-baseline-refresh-2026-09-27.json",
+      "planningBaselinesPreserved": true,
+      "checkpointAccepted": false
+    }
   },
   "acceptance": {
     "checkpointAccepted": false,
