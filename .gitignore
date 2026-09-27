@@ -157,3 +157,13 @@ __pycache__/
 deploy/kubernetes/ci-overlay/
 deploy/kubernetes/ci-overlay-managed/
 .agent-team/recovery/
+
+# Compass code graph: commit only the readable reports.
+# graph.json (~550 MB), store/, snapshots/ and cache/ are rebuilt locally with `compass ensure`.
+compass-out/*
+!compass-out/GRAPH_REPORT.md
+!compass-out/orientation.json
+!compass-out/manifest.json
+!compass-out/graph-overview.json
+!compass-out/community-hierarchy.json
+!compass-out/community-quality.json
