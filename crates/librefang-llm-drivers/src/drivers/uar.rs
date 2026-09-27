@@ -1536,36 +1536,88 @@ mod tests {
     use super::*;
     use librefang_types::message::Message;
     use serial_test::serial;
-    use wiremock::matchers::{body_json, body_partial_json, method, path};
+    use wiremock::matchers::{body_partial_json, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    async fn mount_fake_capabilities(server: &MockServer, version: &'static str) {
+    /// Capabilities every admitted fake service advertises.
+    const FAKE_CAPABILITIES: &[&str] = &[
+        "chat.completion",
+        "chat.streaming",
+        "models.list",
+        "service_instance_placement_v1",
+    ];
+
+    /// Endpoint roles a fake service reports for itself, mirroring UAR's
+    /// `GET /api/uar/capabilities` document.
+    fn fake_endpoints(server: &MockServer) -> serde_json::Value {
+        let uri = server.uri();
+        serde_json::json!({
+            "runtime": uri,
+            "administration": format!("{uri}/api/uar"),
+            "models": format!("{uri}/api"),
+            "console": null
+        })
+    }
+
+    fn fake_capabilities_document(
+        server: &MockServer,
+        instance_id: &str,
+        capabilities: &[&str],
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "uar_version": "0.1.0",
+            "instance": {
+                "id": instance_id,
+                "profile": "uar.service-instance/1",
+                "workspace_location": "local"
+            },
+            "endpoints": fake_endpoints(server),
+            "ownership": "external",
+            "placement": { "new": true, "reattach": false, "migrate": false },
+            "capabilities": capabilities
+        })
+    }
+
+    fn fake_compatibility_document(
+        endpoints: serde_json::Value,
+        capabilities: &[&str],
+    ) -> serde_json::Value {
+        serde_json::json!({
+            "compatible": true,
+            "diagnostics": [],
+            "effectiveBinding": {
+                "instanceId": "legacy-default",
+                "profile": "uar.service-instance/1",
+                "workspaceLocation": "local",
+                "endpoints": endpoints,
+                "capabilities": capabilities,
+                "credentialRef": null
+            }
+        })
+    }
+
+    async fn mount_ready(server: &MockServer) {
         Mock::given(method("GET"))
             .and(path("/readyz"))
             .respond_with(ResponseTemplate::new(200))
             .mount(server)
             .await;
+    }
+
+    async fn mount_service_documents(
+        server: &MockServer,
+        capabilities: serde_json::Value,
+        compatibility: serde_json::Value,
+    ) {
+        mount_ready(server).await;
         Mock::given(method("GET"))
-            .and(path("/api/openapi.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "info": {
-                    "title": "Universal Agent Runtime",
-                    "version": version
-                },
-                "paths": {
-                    "/api/chat/completion": { "post": {} }
-                },
-                "components": {
-                    "schemas": {
-                        "ChatCompletionRequest": {
-                            "properties": {
-                                "stream": { "type": "boolean" },
-                                "stream_mode": { "type": "string" }
-                            }
-                        }
-                    }
-                }
-            })))
+            .and(path("/api/uar/capabilities"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(capabilities))
+            .mount(server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/uar/compatibility"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(compatibility))
             .mount(server)
             .await;
         Mock::given(method("GET"))
@@ -1575,9 +1627,30 @@ mod tests {
             .await;
     }
 
-    async fn fake_uar(version: &'static str) -> MockServer {
+    /// Serve a UAR service instance that admits the driver's default
+    /// `legacy-default` candidate.
+    async fn mount_fake_capabilities(server: &MockServer) {
+        mount_service_documents(
+            server,
+            fake_capabilities_document(server, "legacy-default", FAKE_CAPABILITIES),
+            fake_compatibility_document(fake_endpoints(server), FAKE_CAPABILITIES),
+        )
+        .await;
+    }
+
+    async fn completion_requests(server: &MockServer) -> usize {
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|request| request.url.path() == "/api/chat/completion")
+            .count()
+    }
+
+    async fn fake_uar() -> MockServer {
         let server = MockServer::start().await;
-        mount_fake_capabilities(&server, version).await;
+        mount_fake_capabilities(&server).await;
         Mock::given(method("POST"))
             .and(path("/api/chat/completion"))
             .and(body_partial_json(serde_json::json!({
@@ -1617,7 +1690,7 @@ mod tests {
 
     async fn fake_tool_uar() -> MockServer {
         let server = MockServer::start().await;
-        mount_fake_capabilities(&server, "0.1.0").await;
+        mount_fake_capabilities(&server).await;
         Mock::given(method("POST"))
             .and(path("/api/chat/completion"))
             .and(body_partial_json(serde_json::json!({
@@ -1734,7 +1807,7 @@ mod tests {
     #[serial]
     async fn content_filtered_completion_may_have_empty_content() {
         let server = MockServer::start().await;
-        mount_fake_capabilities(&server, "0.1.0").await;
+        mount_fake_capabilities(&server).await;
         Mock::given(method("POST"))
             .and(path("/api/chat/completion"))
             .and(body_partial_json(serde_json::json!({"stream": false})))
@@ -1758,7 +1831,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn completion_and_sse_stream_round_trip_through_sidecar() {
-        let server = fake_uar("0.1.0").await;
+        let server = fake_uar().await;
         set_supervised_endpoint(Some(server.uri()));
         let driver = UarDriver::create(&DriverConfig::default()).unwrap();
 
@@ -1784,7 +1857,7 @@ mod tests {
     #[serial]
     async fn max_token_finish_reason_round_trips_for_completion_and_stream() {
         let server = MockServer::start().await;
-        mount_fake_capabilities(&server, "0.1.0").await;
+        mount_fake_capabilities(&server).await;
         Mock::given(method("POST"))
             .and(path("/api/chat/completion"))
             .and(body_partial_json(serde_json::json!({"stream": false})))
@@ -1828,7 +1901,7 @@ mod tests {
     #[serial]
     async fn truncated_sse_stream_returns_clear_error() {
         let server = MockServer::start().await;
-        mount_fake_capabilities(&server, "0.1.0").await;
+        mount_fake_capabilities(&server).await;
         Mock::given(method("POST"))
             .and(path("/api/chat/completion"))
             .and(body_partial_json(serde_json::json!({"stream": true})))
@@ -1852,7 +1925,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn same_url_republication_rechecks_sidecar_capabilities() {
-        let server = fake_uar("0.1.0").await;
+        let server = fake_uar().await;
         let endpoint = server.uri();
         set_supervised_endpoint(Some(endpoint.clone()));
         let driver = UarDriver::create(&DriverConfig::default()).unwrap();
@@ -1862,11 +1935,11 @@ mod tests {
         driver.complete(request()).await.unwrap();
 
         let requests = server.received_requests().await.unwrap();
-        let openapi_checks = requests
+        let capability_checks = requests
             .iter()
-            .filter(|request| request.url.path() == "/api/openapi.json")
+            .filter(|request| request.url.path() == "/api/uar/capabilities")
             .count();
-        assert_eq!(openapi_checks, 2);
+        assert_eq!(capability_checks, 2);
         set_supervised_endpoint(None);
     }
 
@@ -2088,141 +2161,98 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn incompatible_api_version_is_rejected_before_completion() {
-        let server = fake_uar("1.0.0").await;
-        set_supervised_endpoint(Some(server.uri()));
-        let driver = UarDriver::create(&DriverConfig::default()).unwrap();
-        let error = driver.complete(request()).await.unwrap_err().to_string();
-        assert!(error.contains("incompatible UAR API"), "{error}");
-        assert!(error.contains("version=Some(\"1.0.0\")"), "{error}");
-        set_supervised_endpoint(None);
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn missing_completion_capability_is_rejected_before_completion() {
+    async fn missing_placement_capability_is_rejected_before_completion() {
         let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/readyz"))
-            .respond_with(ResponseTemplate::new(200))
-            .mount(&server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/api/openapi.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "info": {
-                    "title": "Universal Agent Runtime",
-                    "version": "0.1.0"
-                },
-                "paths": {}
-            })))
-            .mount(&server)
-            .await;
+        let advertised = ["chat.completion", "chat.streaming", "models.list"];
+        mount_service_documents(
+            &server,
+            fake_capabilities_document(&server, "legacy-default", &advertised),
+            fake_compatibility_document(fake_endpoints(&server), &advertised),
+        )
+        .await;
         set_supervised_endpoint(Some(server.uri()));
         let driver = UarDriver::create(&DriverConfig::default()).unwrap();
         let error = driver.complete(request()).await.unwrap_err().to_string();
         assert!(
-            error.contains("missing POST /api/chat/completion"),
+            error.contains("lacks required capabilities: service_instance_placement_v1"),
             "{error}"
         );
+        assert_eq!(completion_requests(&server).await, 0);
         set_supervised_endpoint(None);
     }
 
     #[tokio::test]
     #[serial]
-    async fn documented_completion_without_stream_fields_is_rejected() {
+    async fn wrong_instance_identity_is_rejected_before_completion() {
         let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/readyz"))
-            .respond_with(ResponseTemplate::new(200))
-            .mount(&server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/api/openapi.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "info": {
-                    "title": "Universal Agent Runtime",
-                    "version": "0.1.0"
-                },
-                "paths": {
-                    "/api/chat/completion": { "post": {} },
-                    "/v1/chat/completions": { "post": {} }
-                }
-            })))
-            .mount(&server)
-            .await;
+        mount_service_documents(
+            &server,
+            fake_capabilities_document(&server, "someone-else", FAKE_CAPABILITIES),
+            fake_compatibility_document(fake_endpoints(&server), FAKE_CAPABILITIES),
+        )
+        .await;
+        set_supervised_endpoint(Some(server.uri()));
+        let driver = UarDriver::create(&DriverConfig::default()).unwrap();
+        let error = driver.complete(request()).await.unwrap_err().to_string();
+        assert!(error.contains("UAR instance identity mismatch"), "{error}");
+        assert!(error.contains("'someone-else'"), "{error}");
+        assert_eq!(completion_requests(&server).await, 0);
+        set_supervised_endpoint(None);
+    }
 
+    #[tokio::test]
+    #[serial]
+    async fn refused_compatibility_is_rejected_before_completion() {
+        let server = MockServer::start().await;
+        mount_service_documents(
+            &server,
+            fake_capabilities_document(&server, "legacy-default", FAKE_CAPABILITIES),
+            serde_json::json!({
+                "compatible": false,
+                "diagnostics": [{
+                    "field": "expectedProfile",
+                    "code": "unsupported_profile",
+                    "message": "profile is not served here"
+                }],
+                "effectiveBinding": null
+            }),
+        )
+        .await;
         set_supervised_endpoint(Some(server.uri()));
         let driver = UarDriver::create(&DriverConfig::default()).unwrap();
         let error = driver.complete(request()).await.unwrap_err().to_string();
         assert!(
-            error.contains("missing its stream/stream_mode request capabilities"),
+            error.contains("refused the configured service instance expectation"),
             "{error}"
         );
+        assert!(
+            error.contains("expectedProfile:unsupported_profile"),
+            "{error}"
+        );
+        assert_eq!(completion_requests(&server).await, 0);
         set_supervised_endpoint(None);
     }
 
     #[tokio::test]
     #[serial]
-    async fn sparse_pinned_openapi_is_accepted_after_contract_probe() {
+    async fn effective_binding_endpoint_drift_is_rejected_before_completion() {
         let server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/readyz"))
-            .respond_with(ResponseTemplate::new(200))
-            .mount(&server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/api/openapi.json"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "info": {
-                    "title": "Universal Agent Runtime",
-                    "version": "0.1.0"
-                },
-                "paths": {
-                    "/v1/chat/completions": { "post": {} }
-                }
-            })))
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/api/chat/completion"))
-            .and(body_json(serde_json::json!({})))
-            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
-                "error": {
-                    "message": "Request must include a user message",
-                    "type": "invalid_request_error",
-                    "param": "messages",
-                    "code": "invalid_request"
-                }
-            })))
-            .mount(&server)
-            .await;
-        Mock::given(method("GET"))
-            .and(path("/api/models"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
-            .mount(&server)
-            .await;
-        Mock::given(method("POST"))
-            .and(path("/api/chat/completion"))
-            .and(body_partial_json(serde_json::json!({
-                "stream": false,
-                "model": "openai/test-model"
-            })))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "choices": [{
-                    "message": { "role": "assistant", "content": "sparse contract works" },
-                    "finish_reason": "stop"
-                }]
-            })))
-            .mount(&server)
-            .await;
-
+        let mut drifted = fake_endpoints(&server);
+        drifted["models"] = serde_json::json!("http://127.0.0.1:9/api");
+        mount_service_documents(
+            &server,
+            fake_capabilities_document(&server, "legacy-default", FAKE_CAPABILITIES),
+            fake_compatibility_document(drifted, FAKE_CAPABILITIES),
+        )
+        .await;
         set_supervised_endpoint(Some(server.uri()));
         let driver = UarDriver::create(&DriverConfig::default()).unwrap();
-        assert_eq!(
-            response_text(&driver.complete(request()).await.unwrap()),
-            "sparse contract works"
+        let error = driver.complete(request()).await.unwrap_err().to_string();
+        assert!(
+            error.contains("endpoint roles differ from capability discovery"),
+            "{error}"
         );
+        assert_eq!(completion_requests(&server).await, 0);
         set_supervised_endpoint(None);
     }
 }
