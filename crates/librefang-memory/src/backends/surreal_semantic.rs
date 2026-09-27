@@ -646,6 +646,7 @@ mod tests {
             image_url: Some("https://example.com/img.png".to_string()),
             image_embedding: Some(vec![0.9_f32, 0.8]),
             modality: MemoryModality::MultiModal,
+            similarity: None,
         }
     }
 

@@ -238,4 +238,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "ephemeral_runs_v1",
         sql: include_str!("sql/042_ephemeral_runs.surql"),
     },
+    Migration {
+        version: 43,
+        name: "sessions_parent_session_id_v1",
+        sql: include_str!("sql/043_sessions_parent_session_id.surql"),
+    },
 ];

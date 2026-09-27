@@ -239,7 +239,7 @@ async fn test_assemble_triggers_overflow_recovery() {
 #[tokio::test]
 async fn test_assemble_leaves_history_starting_with_user_after_stage_1_trim() {
     let config = ContextEngineConfig::default();
-    let engine = DefaultContextEngine::new(config, make_memory(), None);
+    let engine = DefaultContextEngine::new(config, make_memory(), make_semantic(), None);
 
     // 21 alternating turns, each 30 estimated tokens + 4 framing = 34, plus a 2-token system prompt: 716 estimated tokens against a 1000-token window sits between the 70% and 90% thresholds, so overflow recovery takes Stage 1 (keep the last 10).
     // The drain boundary then lands on message 11, an assistant turn.
@@ -274,7 +274,7 @@ async fn test_assemble_keeps_history_when_leading_user_repair_would_empty_it() {
     use librefang_types::message::{ContentBlock, MessageContent, Role};
 
     let config = ContextEngineConfig::default();
-    let engine = DefaultContextEngine::new(config, make_memory(), None);
+    let engine = DefaultContextEngine::new(config, make_memory(), make_semantic(), None);
 
     // A tool-heavy window: nothing but assistant(ToolUse) / user(ToolResult) pairs, no plain-text user turn.
     // Dropping the leading assistant turn orphans the ToolResult that answered it, which empties the user turn carrying it, which orphans the next pair — the leading-user repair cascades the whole window away.

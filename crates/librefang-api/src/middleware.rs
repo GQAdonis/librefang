@@ -5345,8 +5345,9 @@ mod tests {
     async fn bossfang_logo_stays_public_when_dashboard_reads_require_auth() {
         let auth_state = AuthState {
             api_key_lock: Arc::new(tokio::sync::RwLock::new("secret".to_string())),
+            master_key: Default::default(),
             active_sessions: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            dashboard_auth_enabled: false,
+            dashboard_auth_enabled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             user_api_keys: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             require_auth_for_reads: true,
             allow_no_auth: false,

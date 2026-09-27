@@ -1491,6 +1491,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "surreal-backend"))]
     fn upsert_mcp_server_omits_none_without_skip_annotation() {
         let tmp = tempfile::tempdir().unwrap();
         let config_path = tmp.path().join("config.toml");
@@ -1593,6 +1594,7 @@ mod tests {
     /// independent of every future field repeating a skip annotation.
     /// That is not cosmetic: `apply_http_compat_headers` tests `value` *before* `value_env`, so an empty-string `value` wins and the transport sends an empty header instead of resolving the variable — a silent credential failure.
     #[test]
+    #[cfg(not(feature = "surreal-backend"))]
     fn upsert_mcp_server_preserves_an_env_sourced_http_compat_header_6612() {
         use librefang_types::config::{HttpCompatHeaderConfig, HttpCompatToolConfig};
 
@@ -1689,6 +1691,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "surreal-backend"))]
     fn upsert_mcp_server_rejects_json_null_without_mutating_config() {
         use librefang_types::config::HttpCompatToolConfig;
 
