@@ -2295,6 +2295,13 @@ jobs:
           PLAY_SA_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           if [ -n "$PLAY_SA_JSON" ]; then
+            # Derive the Play package name from the Android bundle identifier (as the iOS lane does) so it can never drift from the .aab it uploads.
+            PACKAGE_NAME=$(jq -r .identifier crates/librefang-desktop/tauri.android.conf.json)
+            if [ -z "$PACKAGE_NAME" ] || [ "$PACKAGE_NAME" = "null" ]; then
+              echo "::error::Could not read .identifier from tauri.android.conf.json"
+              exit 1
+            fi
+            echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON not set — skipping Play Internal Testing upload"
@@ -2311,7 +2318,7 @@ jobs:
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: ai.librefang.app
+          packageName: ${{ steps.play_gate.outputs.package_name }}
           releaseFiles: ${{ steps.art.outputs.aab }}
           track: internal
           status: completed

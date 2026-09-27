@@ -146,6 +146,7 @@ Checks the four Tauri config files after merge:
 - Updater endpoint host is `github.com/GQAdonis/librefang` (not `github.com/librefang`)
 - Tauri minisign pubkey key ID is `E329A6B2863F1707` (the BossFang key, not upstream's `BC91908BD3F1520D`)
 - macOS CLI codesign identifiers in `release.yml` / `release-cli.yml` are `ai.bossfang.*`, and `scripts/tests/test_release_tag_workflow_safety.py` expects them and passes (upstream's copy asserts `ai.librefang.*`; see "Upstream tests that assert upstream identity" in [references/conflict-resolution.md](references/conflict-resolution.md))
+- The Play upload `packageName` in `release.yml` is derived from (or equals) the `tauri.android.conf.json` identifier, not upstream's hardcoded `ai.librefang.app`
 
 For new upstream desktop crates / features, take the upstream code as-is
 (it's the runtime / commands / IPC) but keep our branding overlays.
