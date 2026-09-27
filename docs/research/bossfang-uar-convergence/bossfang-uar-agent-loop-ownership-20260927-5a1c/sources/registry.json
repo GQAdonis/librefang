@@ -611,6 +611,141 @@
       "kind": "web",
       "date": "2026-09-27",
       "thread": "T5"
+    },
+    {
+      "id": "U14",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "title": "UAR host admission HTTP adapter",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U15",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "title": "UAR sidecar launch-token guard",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U16",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "title": "UAR run-scoped MCP server rules",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U17",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "title": "UAR host history caps",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U18",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "title": "UAR admission TTL",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U19",
+      "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "title": "UAR run API at shipped revision",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U20",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "title": "UAR Anthropic request struct",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "R17",
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "title": "provision_uar_namespace",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R18",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "title": "POST /api/storage/link-uar",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R19",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "title": "BossFang /mcp tools/call",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R20",
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "title": "BossFang execute_tool gate",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R21",
+      "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "title": "BossFang iteration default",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R22",
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "title": "Sidecar reads surreal_data_dir only",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R23",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "title": "BossFang Anthropic driver",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R24",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "title": "BossFang budget reservation",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
     }
   ],
   "surreal_memory_used": false,

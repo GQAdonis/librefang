@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+  "chunk_id": "chunk-079",
+  "source_id": "R20",
+  "text": "execute_tool is the public entry point - it runs the approval / capability / taint gate (3-4)"
+}

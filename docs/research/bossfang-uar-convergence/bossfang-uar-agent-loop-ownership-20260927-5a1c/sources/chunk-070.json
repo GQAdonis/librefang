@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+  "chunk_id": "chunk-070",
+  "source_id": "U15",
+  "text": "request.extensions_mut().insert(HostAuthenticated); (168)"
+}

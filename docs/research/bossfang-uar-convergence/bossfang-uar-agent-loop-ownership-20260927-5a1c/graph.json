@@ -9,7 +9,10 @@
         "claim-9363dff3d7dead5c",
         "claim-972884d4177ac0a1",
         "claim-fb0f47e7fa0d45b4",
-        "claim-96daf10083c04638"
+        "claim-96daf10083c04638",
+        "claim-684d4c703e73f0f7",
+        "claim-a716b4256d1af8ac",
+        "claim-d302a4f5dd1907bc"
       ]
     },
     {
@@ -20,7 +23,11 @@
         "claim-415b3506d008ddd0",
         "claim-befc17305727da5a",
         "claim-d214a118ed229a3b",
-        "claim-a3e436efcf11fe93"
+        "claim-a3e436efcf11fe93",
+        "claim-a51659b510049c7a",
+        "claim-198a16feccd8af38",
+        "claim-8ca8059558e6e813",
+        "claim-fe693f727608ea93"
       ]
     },
     {
@@ -39,7 +46,10 @@
         "claim-354373a1a8aba8bb",
         "claim-130d167878b6e506",
         "claim-bec181ae11584d89",
-        "claim-7012d65360018999"
+        "claim-7012d65360018999",
+        "claim-aa0c914109354dd1",
+        "claim-53eb8e711896e878",
+        "claim-f74b4018c3ce624a"
       ]
     },
     {
@@ -54,7 +64,8 @@
         "claim-1b0041b65f29d448",
         "claim-711bbd8a67b2206f",
         "claim-9405e7c86616e163",
-        "claim-b6a572395abf4ad4"
+        "claim-b6a572395abf4ad4",
+        "claim-c9ebbf58ac25f51d"
       ]
     }
   ],
@@ -400,6 +411,142 @@
       "label": "inferred",
       "critical": false,
       "confidence": 0.85,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in BossFang to UAR seams"
+    },
+    {
+      "id": "claim-aa0c914109354dd1",
+      "text": "UAR accepts host tool admission only over a loopback /uar/admission/v1 URL and only from a launch-token-authenticated sidecar host.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "U14",
+        "U15",
+        "U02"
+      ],
+      "contradicts": [],
+      "evidence": "U14: \"base.scheme() == \"http\" && is_loopback(&base) && path == \"/uar/admission/v1\" (77-87); prepare/resolve/cancel/claim/finish paths (102-110)\"; U15: \"request.extensions_mut().insert(HostAuthenticated); (168)\"; U02: \".route(\"/runs\", get(list_runs).post(create_run)) line 40; CreateRunRequest with mcp_servers, tool_admission, history\""
+    },
+    {
+      "id": "claim-53eb8e711896e878",
+      "text": "UAR run-scoped MCP servers must be loopback HTTP or an administrator-registered destination granted to a trusted host role.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.92,
+      "sources": [
+        "U16"
+      ],
+      "contradicts": [],
+      "evidence": "U16: \"MCP server must select one loopback URL or one trusted destination grant (110-117); MCP server URL must be loopback HTTP without userinfo (209-223); host-sessio\""
+    },
+    {
+      "id": "claim-a51659b510049c7a",
+      "text": "The UAR image BossFang ships at 2aaeadd9 has no tool admission, run-scoped MCP servers or seeded history in its run API.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.95,
+      "sources": [
+        "U19",
+        "R14"
+      ],
+      "contradicts": [],
+      "evidence": "U19: \"struct CreateRunRequest { artifact: AgentArtifact, input: String, session_id: Option<String> } (34-38); tool_admission/http.rs, turn/host/mcp.rs, turn/host/hist\"; R14: \"ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9 (10); COPY --from=uar-sidecar-src /usr/local/bin/uar-sidecar (359)\""
+    },
+    {
+      "id": "claim-198a16feccd8af38",
+      "text": "UAR's /v1/messages request type has no max_tokens, temperature or tool_choice fields, so those values are silently dropped.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.92,
+      "sources": [
+        "U20"
+      ],
+      "contradicts": [],
+      "evidence": "U20: \"struct AnthropicMessagesRequest { model, messages, system, tools, stream, session_id, prompt_caching_enabled, #[serde(flatten)] _extra } (3346-3369)\""
+    },
+    {
+      "id": "claim-684d4c703e73f0f7",
+      "text": "UAR caps seeded host history at 1000 messages and 4 MiB and keeps LLM summarisation off in production.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.93,
+      "sources": [
+        "U17",
+        "U10"
+      ],
+      "contradicts": [],
+      "evidence": "U17: \"const MAX_HOST_HISTORY_MESSAGES: usize = 1_000; const MAX_HOST_HISTORY_BYTES: usize = 4 * 1024 * 1024; (8-9)\"; U10: \"Production summarization stays disabled until the ... (4833)\""
+    },
+    {
+      "id": "claim-a716b4256d1af8ac",
+      "text": "UAR's default effect-authority TTL is 300 seconds, overridable per artifact.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.9,
+      "sources": [
+        "U18"
+      ],
+      "contradicts": [],
+      "evidence": "U18: \"pub const DEFAULT_EFFECT_AUTHORITY_TTL_SECONDS: u64 = 300; (32); extensions.budgets.timeout_seconds override (101-106)\""
+    },
+    {
+      "id": "claim-d302a4f5dd1907bc",
+      "text": "BossFang's default iteration cap is 50 while UAR hard-codes 10 tool iterations per run.",
+      "label": "verified",
+      "critical": false,
+      "confidence": 0.93,
+      "sources": [
+        "R21",
+        "U03"
+      ],
+      "contradicts": [],
+      "evidence": "R21: \"pub const DEFAULT_MAX_ITERATIONS: u32 = 50; (147)\"; U03: \"const MAX_TOOL_ITERATIONS: usize = 10; (189)\""
+    },
+    {
+      "id": "claim-8ca8059558e6e813",
+      "text": "BossFang's /mcp tools/call runs the execute_tool approval, capability and taint gate and returns results as content plus isError.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.9,
+      "sources": [
+        "R19",
+        "R20"
+      ],
+      "contradicts": [],
+      "evidence": "R19: \"execute_tool_with_sender_account (1552); \"isError\": result.is_error (1609)\"; R20: \"execute_tool is the public entry point - it runs the approval / capability / taint gate (3-4)\""
+    },
+    {
+      "id": "claim-c9ebbf58ac25f51d",
+      "text": "BossFang's link-uar provisions a uar namespace on BossFang's SurrealDB server but the sidecar supervisor never consumes the written remote config.",
+      "label": "verified",
+      "critical": true,
+      "confidence": 0.85,
+      "sources": [
+        "R17",
+        "R18",
+        "R22"
+      ],
+      "contradicts": [],
+      "evidence": "R17: \"pub async fn provision_uar_namespace( (53)\"; R18: \"librefang_storage::provision_uar_namespace( (504); Build [uar.remote] subtable (556)\"; R22: \"if let Some(path) = config.surreal_data_dir.as_ref() (156); no reader of uar.remote or share_librefang_storage outside config type, CLI and storage route\""
+    },
+    {
+      "id": "claim-f74b4018c3ce624a",
+      "text": "The BossFang-governed UAR executor should be scoped to a managed loopback sidecar until UAR supports authenticated remote host admission.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.8,
+      "sources": [],
+      "contradicts": [],
+      "evidence": "Inferred from verified claims in Embedded vs remote UAR, BossFang to UAR seams"
+    },
+    {
+      "id": "claim-fe693f727608ea93",
+      "text": "The UAR executor depends on moving UAR_IMAGE to a revision at or after 3d6bf056.",
+      "label": "inferred",
+      "critical": true,
+      "confidence": 0.9,
       "sources": [],
       "contradicts": [],
       "evidence": "Inferred from verified claims in BossFang to UAR seams"
@@ -804,6 +951,206 @@
     {
       "from": "claim-d214a118ed229a3b",
       "to": "claim-a3e436efcf11fe93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U15",
+      "type": "cites"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "U02",
+      "type": "cites"
+    },
+    {
+      "from": "claim-53eb8e711896e878",
+      "to": "U16",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "U19",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "R14",
+      "type": "cites"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "U20",
+      "type": "cites"
+    },
+    {
+      "from": "claim-684d4c703e73f0f7",
+      "to": "U17",
+      "type": "cites"
+    },
+    {
+      "from": "claim-684d4c703e73f0f7",
+      "to": "U10",
+      "type": "cites"
+    },
+    {
+      "from": "claim-a716b4256d1af8ac",
+      "to": "U18",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d302a4f5dd1907bc",
+      "to": "R21",
+      "type": "cites"
+    },
+    {
+      "from": "claim-d302a4f5dd1907bc",
+      "to": "U03",
+      "type": "cites"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "R19",
+      "type": "cites"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "R20",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R17",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R18",
+      "type": "cites"
+    },
+    {
+      "from": "claim-c9ebbf58ac25f51d",
+      "to": "R22",
+      "type": "cites"
+    },
+    {
+      "from": "claim-0b0a6608529e4a0c",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-354373a1a8aba8bb",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-130d167878b6e506",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bec181ae11584d89",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-7012d65360018999",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-aa0c914109354dd1",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-53eb8e711896e878",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3e436efcf11fe93",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "claim-f74b4018c3ce624a",
+      "type": "supports"
+    },
+    {
+      "from": "claim-bdfe65f3bc3ca8de",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-415b3506d008ddd0",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-befc17305727da5a",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-d214a118ed229a3b",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a3e436efcf11fe93",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-a51659b510049c7a",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-198a16feccd8af38",
+      "to": "claim-fe693f727608ea93",
+      "type": "supports"
+    },
+    {
+      "from": "claim-8ca8059558e6e813",
+      "to": "claim-fe693f727608ea93",
       "type": "supports"
     }
   ]

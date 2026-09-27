@@ -109,6 +109,28 @@
       "confidence": 0.6,
       "label": "unverified",
       "audit_trail": "Internal UAR drift; not resolvable from BossFang; raised to UAR maintainers."
+    },
+    {
+      "id": "contra-006",
+      "topic": "Embedded vs remote UAR",
+      "claim_a": {
+        "id": "claim-fc7af614f03e8e86",
+        "text": "One UAR service binding gives the same approval and tool guarantees for managed sidecar, external-local and remote placements (revision 1 of this report).",
+        "source": "report.md revision 1 (commit 697090473)",
+        "credibility": null
+      },
+      "claim_b": {
+        "id": "claim-aa0c914109354dd1",
+        "text": "UAR accepts host tool admission only over a loopback /uar/admission/v1 URL and only from a launch-token-authenticated sidecar host.",
+        "source": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+        "credibility": 95
+      },
+      "strategy_tried": "source_authority",
+      "resolved": true,
+      "resolution": "claim_b",
+      "confidence": 0.93,
+      "label": "verified",
+      "audit_trail": "Raised by merge-reviewer (H1); confirmed at tool_admission/http.rs:77-87, routes.rs:532-539, sidecar_guard.rs:168; revision 2 scopes the executor to the managed sidecar (S1)."
     }
   ],
   "detection": {

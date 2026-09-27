@@ -48,4 +48,6 @@ Operator: product-manager role, phase-11 goal G5.
 
 - Local repository files are treated as sources with `repo://<repo>@<rev>/<path>` identifiers, because the question is primarily about first-party code.
 - The surreal-memory MCP server was unreachable in this session (connection refused), so stages 04 and 07 ran in their documented degraded mode: registry and graph are on disk only.
-- The Feynman gate and the in-pipeline adversarial review were not run; the package is therefore `partial` by rule, and the review gate is `merge-reviewer` per the phase-11 acceptance criteria.
+- The Feynman gate was not run, so the package is `partial` by rule.
+- `merge-reviewer` ran as the external adversarial review of revision 1 (commit `697090473`) and returned CHANGES REQUESTED with no CRITICAL findings; revision 2 addresses every finding and awaits re-review.
+- Revision 2 added 15 code sources and 11 claims, all re-read at the cited lines, including the UAR revision BossFang ships (`2aaeadd9`).

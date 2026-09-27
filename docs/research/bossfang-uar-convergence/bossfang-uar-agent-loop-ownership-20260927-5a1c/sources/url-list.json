@@ -67,7 +67,22 @@
     "https://doc.rust-lang.org/cargo/reference/features.html",
     "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
     "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
-    "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture"
+    "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+    "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+    "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+    "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+    "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+    "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+    "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+    "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+    "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+    "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs"
   ],
   "generated_at": "2026-09-27T23:00:00Z",
   "threads": [

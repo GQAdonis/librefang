@@ -160,7 +160,7 @@
       "url": "repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
       "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR run API. repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
       "credibility_score": 95,
-      "confidence": 0.92,
+      "confidence": 0.95,
       "label": "verified"
     },
     {
@@ -169,7 +169,7 @@
       "url": "repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
       "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR tool-calling loop. repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
       "credibility_score": 95,
-      "confidence": 0.9,
+      "confidence": 0.93,
       "label": "verified"
     },
     {
@@ -232,7 +232,7 @@
       "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
       "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR RunManager. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
       "credibility_score": 95,
-      "confidence": 0.9,
+      "confidence": 0.93,
       "label": "verified"
     },
     {
@@ -612,6 +612,141 @@
       "credibility_score": 85,
       "confidence": 0.85,
       "label": "verified"
+    },
+    {
+      "id": "cite-069",
+      "source_id": "U14",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR host admission HTTP adapter. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-070",
+      "source_id": "U15",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR sidecar launch-token guard. repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-071",
+      "source_id": "U16",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR run-scoped MCP server rules. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-072",
+      "source_id": "U17",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR host history caps. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-073",
+      "source_id": "U18",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR admission TTL. repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-074",
+      "source_id": "U19",
+      "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR run API at shipped revision. repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "credibility_score": 95,
+      "confidence": 0.95,
+      "label": "verified"
+    },
+    {
+      "id": "cite-075",
+      "source_id": "U20",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "formatted": "Prometheus-AGS/universal-agent-runtime. (2026). UAR Anthropic request struct. repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "credibility_score": 95,
+      "confidence": 0.92,
+      "label": "verified"
+    },
+    {
+      "id": "cite-076",
+      "source_id": "R17",
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "formatted": "GQAdonis/librefang. (2026). provision_uar_namespace. repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "credibility_score": 95,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-077",
+      "source_id": "R18",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "formatted": "GQAdonis/librefang. (2026). POST /api/storage/link-uar. repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "credibility_score": 95,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-078",
+      "source_id": "R19",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang /mcp tools/call. repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-079",
+      "source_id": "R20",
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang execute_tool gate. repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "credibility_score": 95,
+      "confidence": 0.9,
+      "label": "verified"
+    },
+    {
+      "id": "cite-080",
+      "source_id": "R21",
+      "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang iteration default. repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "credibility_score": 95,
+      "confidence": 0.93,
+      "label": "verified"
+    },
+    {
+      "id": "cite-081",
+      "source_id": "R22",
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "formatted": "GQAdonis/librefang. (2026). Sidecar reads surreal_data_dir only. repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "credibility_score": 90,
+      "confidence": 0.85,
+      "label": "verified"
+    },
+    {
+      "id": "cite-082",
+      "source_id": "R23",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang Anthropic driver. repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
+    },
+    {
+      "id": "cite-083",
+      "source_id": "R24",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "formatted": "GQAdonis/librefang. (2026). BossFang budget reservation. repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "credibility_score": 90,
+      "confidence": 0.6,
+      "label": "unverified"
     }
   ]
 }

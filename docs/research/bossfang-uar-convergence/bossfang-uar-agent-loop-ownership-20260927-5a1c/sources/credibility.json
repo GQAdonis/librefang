@@ -27,7 +27,7 @@
     "repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md": 75,
     "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs": 95,
     "repo://universal-agent-runtime@3d6bf056/src/embedded.rs": 85,
-    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs": 85,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs": 95,
     "repo://universal-agent-runtime@3d6bf056/Cargo.lock": 90,
     "repo://surreal-memory-server@b7e2093/Cargo.toml": 95,
     "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs": 95,
@@ -67,7 +67,21 @@
     "https://doc.rust-lang.org/cargo/reference/features.html": 95,
     "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x": 90,
     "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33": 90,
-    "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture": 85
+    "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture": 85,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs": 95,
+    "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest": 95,
+    "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-types/src/agent.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir": 90,
+    "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs": 90,
+    "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs": 90
   },
   "verified_sources": [
     {
@@ -477,6 +491,96 @@
       "id": "S23",
       "score": 85,
       "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "id": "U14",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "id": "U15",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "id": "U16",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "id": "U17",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "id": "U18",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "id": "U19",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "id": "U20",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "id": "R17",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "id": "R18",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "id": "R19",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "id": "R20",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "id": "R21",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "id": "R22",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "id": "R23",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "id": "R24",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
     }
   ],
   "rubric": "code 85-95 by directness; repository docs 70-80; web primary docs 70-95 by authority",
