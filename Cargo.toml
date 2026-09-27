@@ -34,12 +34,12 @@ members = [
 ]
 
 [workspace.package]
-version = "2026.8.30"
+version = "2026.9.19"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/librefang/librefang"
-homepage = "https://librefang.ai"
-rust-version = "1.94.1"
+repository = "https://github.com/GQAdonis/librefang"
+homepage = "https://github.com/GQAdonis/librefang"
+rust-version = "1.95.0"
 
 [workspace.dependencies]
 # Async runtime
@@ -70,16 +70,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 
 # OpenTelemetry
-# Whole stack aligned on 0.32: `tracing-opentelemetry 0.33` now depends on
-# `opentelemetry 0.32` / `opentelemetry_sdk 0.32`, so the previous 0.31 pin
-# (kept by #4947's revert) is no longer needed. Dependabot bumped
-# `opentelemetry-otlp` to 0.32 (#5270) and `tracing-opentelemetry` to 0.33
-# (#5273) without simultaneously bumping `opentelemetry` /
-# `opentelemetry_sdk` / `opentelemetry-http`, which left two copies of
-# `opentelemetry::trace::Tracer` in the dep graph and broke
-# `SdkTracer: Tracer` in telemetry.rs. This commit completes the upgrade.
-opentelemetry = "0.32"
-opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
+# The whole stack moves together: `opentelemetry`, `opentelemetry_sdk`, `opentelemetry-otlp` and `opentelemetry-http` share one minor, and `tracing-opentelemetry` 0.34 is the release built on `opentelemetry` 0.33.
+# Bumping any one of them alone puts two copies of `opentelemetry` in the graph and breaks trait impls such as `SdkTracer: Tracer` in telemetry.rs and `HeaderInjector: Injector` in the drivers (#5270, #5273, #8455–#8458); Dependabot groups them as `opentelemetry` for that reason.
+opentelemetry = "0.33"
+opentelemetry_sdk = { version = "0.33", features = ["rt-tokio"] }
 # `default-features = false` is critical: opentelemetry-otlp's default feature
 # set enables `http-proto` + `reqwest-blocking-client`, which forces
 # `opentelemetry-http` to pull `reqwest = "0.12"` alongside the workspace
@@ -87,15 +81,12 @@ opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 # (rustls-platform-verifier 0.6 + 0.7, hyper-util, h2, …). We only ship
 # OTLP traces over gRPC (tonic), so the reqwest-based exporters are dead
 # weight. See #3679.
-opentelemetry-otlp = { version = "0.32", default-features = false, features = ["grpc-tonic", "trace", "metrics", "logs"] }
-tracing-opentelemetry = "0.33"
-# W3C trace-context HeaderInjector for outbound LLM HTTP requests. Pulled in
-# explicitly (not transitively via opentelemetry-otlp, which is built with
-# `default-features = false` to avoid its reqwest-based exporters — see the
-# note above). 0.32 aligns with `opentelemetry = "0.32"` and uses `http = 1`,
-# matching the workspace `reqwest = "0.13"` http stack — no second http/reqwest
-# tree is introduced.
-opentelemetry-http = "0.32"
+opentelemetry-otlp = { version = "0.33", default-features = false, features = ["grpc-tonic", "trace", "metrics", "logs"] }
+tracing-opentelemetry = "0.34"
+# W3C trace-context HeaderInjector for outbound LLM HTTP requests.
+# Pulled in explicitly, not transitively via opentelemetry-otlp, which is built with `default-features = false` to avoid its reqwest-based exporters (see the note above).
+# 0.33 aligns with `opentelemetry` 0.33 and uses `http = 1`, matching the workspace `reqwest = "0.13"` http stack, so no second http/reqwest tree is introduced.
+opentelemetry-http = "0.33"
 
 # Prometheus metrics
 metrics = "0.24"
@@ -177,7 +168,7 @@ rmcp = { version = "3.1", default-features = false, features = ["client", "trans
 # marked breaking by upstream, so a caret bump (0.11.x) could change
 # wire-format expectations between minor releases without warning.
 # Bumping this pin is an explicit, reviewed change.
-agent-client-protocol = { version = "=2.0.0", features = ["unstable"] }
+agent-client-protocol = { version = "=2.2.0", features = ["unstable"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 
 # WebSocket client (for Discord/Slack gateway)
@@ -213,10 +204,10 @@ tera = { version = "2", default-features = false }
 # parallel-compilation: Multi-threaded AOT compilation
 # async:                Async host-function support (needed for non-blocking plugin calls)
 # WASI support is part of the wasmtime runtime by default; no separate feature flag needed.
-# Upstream bumped wasmtime to 47; the
+# Upstream bumped wasmtime to 48; the
 # BossFang-only wasmtime-wasi / wasmtime-wasi-http deps below move in lockstep so
 # the workspace links a single wasmtime major version.
-wasmtime = { version = "47", features = [
+wasmtime = { version = "48", features = [
     "cranelift",
     "component-model",
     "cache",
@@ -232,13 +223,13 @@ wasmtime = { version = "47", features = [
 # find their `wasi:*` init imports satisfied. The WasiCtx is deny-by-default
 # (no preopens / no env / no stdio inherit / no network) per phase-7
 # assessment.md D2. These two are BossFang-exclusive — upstream does not pull
-# wasmtime-wasi*, so the version must be carried here, matched to wasmtime 47.
-wasmtime-wasi = "=47.0.3"
+# wasmtime-wasi*, so the version must be carried here, matched to wasmtime 48.
+wasmtime-wasi = "=48.0.2"
 # WASI HTTP bindings — required by the component linker so StarlingMonkey
 # (jco componentize) components that import `wasi:http/types@0.2.10` find
 # the interface bound at instantiation time. Without this, js-kv-counter
 # fails to instantiate even though the JS source never uses HTTP.
-wasmtime-wasi-http = "=47.0.3"
+wasmtime-wasi-http = "=48.0.2"
 
 # HTTP server (for API daemon)
 axum = { version = "0.8", features = ["ws"] }
@@ -246,7 +237,7 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "compression-gzip", "compression-br", "limit"] }
 
 # Home directory resolution
-dirs = "6"
+dirs = "7"
 
 # OS keyring access — libsecret on Linux, Keychain on macOS, Credential Manager
 # on Windows. Falls back to the file-based AES-256-GCM keyring in vault.rs if

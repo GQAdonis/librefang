@@ -5,12 +5,12 @@
 LibreFang is an open-source **Agent Operating System** written in Rust.
 It manages AI agents (LLM-backed), their tools, memory, messaging channels, and inter-agent networking.
 
-- **Language**: Rust (edition 2021, MSRV 1.94.1)
-- **Async runtime**: tokio
-- **Web framework**: axum 0.8 (HTTP + WebSocket)
-- **Database**: SQLite via rusqlite (bundled)
-- **Config**: TOML (`~/.librefang/config.toml`)
-- **Default API address**: `http://127.0.0.1:4545`
+- Language: Rust, edition 2021, MSRV 1.95.0
+- Async: tokio
+- Web: axum 0.8 (HTTP + WebSocket)
+- DB: SurrealDB via `librefang-storage` (embedded RocksDB or remote ws/http); SQLite via bundled rusqlite remains the upstream-compatible fallback
+- Config: TOML at `~/.librefang/config.toml`
+- API: `http://127.0.0.1:4545` (default)
 
 ## Workspace Structure
 

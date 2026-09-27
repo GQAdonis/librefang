@@ -34,8 +34,9 @@ If the file is owned by your deployment rather than by LibreFang, see [managed-c
      `self.config.load()` on every message or request. The ArcSwap
      config swap makes the edit effective on the next use with no extra
      action; the planner records it as informational only.
-3. Hot actions are applied according to the configured `[reload] mode`
-   (`off` / `restart` / `hot` / `hybrid`) — see `should_apply_hot`.
+3. The configured `[reload] mode` (`off` / `restart` / `hot` / `hybrid`) decides whether any of that is applied — see `should_store_config`, which is the gate `reload_config` actually uses.
+   Under `hot` / `hybrid` a plan carrying any change swaps the new config in and runs its hot actions; under `off` / `restart` nothing is applied and the plan is only a preview of what a restart would do.
+   The response distinguishes the two: `config_applied` is `false` and `hot_actions_applied` is empty whenever the mode withheld the swap, with the reason in `warnings` and `status` reported as `partial`.
 
 When `restart_required` is set, the dashboard / API response says so
 explicitly. A field that is `Ignore`/`noop` is **not** a failure — it
@@ -76,6 +77,9 @@ Ignore/noop (effective on next message/request via ArcSwap swap). A field
 may carry more than one class (e.g. **R/H**) when its sub-fields are
 classified differently — the row note spells out which is which.
 
+A sub-field the planner classifies on its own also gets its own `section.sub_key` row (`tts.enabled`, `registry.auto_sync`); the section's row then describes the section minus those keys.
+Dotted rows take part in the drift guard exactly as top-level rows do, so a carve-out that changes class fails the build here as well as in the code.
+
 ### Server / network / bind
 
 | Field | Class | Meaning |
@@ -91,6 +95,7 @@ classified differently — the row note spells out which is which.
 | `allowed_mount_roots` | R | Host directories under which workspace mounts may resolve. |
 | `max_request_body_bytes` | R | Global request-body size cap (router safety net). |
 | `max_upload_size_bytes` | R | Maximum upload size in bytes. |
+| `max_concurrent_uploads` | R | Max in-flight `/upload` requests (sizes a `Semaphore` built once at router construction). |
 | `rate_limit` | R | API and WebSocket rate-limiting config. |
 
 ### Auth / RBAC / dashboard
@@ -99,16 +104,16 @@ classified differently — the row note spells out which is which.
 |---|---|---|
 | `api_key` | N | API bearer key, resolved from `LIBREFANG_API_KEY` / `vault:KEY` / the literal value (effective immediately via config swap). |
 | `api_key_hash` | N | Hash of the API bearer key, `$sha256$…` (recommended, from `librefang hash-api-key`) or `$argon2id$…` (effective immediately via config swap). |
-| `dashboard_user` | H | Dashboard login username (config swap suffices). |
+| `dashboard_user` | H | Dashboard login username (config swap suffices, and the auth middleware re-derives "dashboard credentials are configured" from the new value). **Exception:** on a passkey-enabled daemon the WebAuthn engine's principal is bound at boot, so after a rename registration answers `409 principal_mismatch` for the new name and an existing credential still mints a session under the old one until the daemon restarts — see `docs/architecture/passkey-webauthn.md`. |
 | `dashboard_pass` | H | Dashboard login password. |
 | `dashboard_pass_hash` | H | Argon2id hash of the dashboard password. |
 | `passkey_enabled` | R | Opt-in flag for passkey (WebAuthn/FIDO2) login — the route gating is fixed at boot. |
 | `passkey_rp_id` | R | WebAuthn Relying Party ID — the `Webauthn` instance is built once at boot. |
 | `passkey_rp_origin` | R | WebAuthn Relying Party origin — baked into the `Webauthn` instance at boot. |
-| `users` | H | RBAC user list — rebuilds the `AuthManager`. |
+| `users` | H | RBAC user list — rebuilds the `AuthManager` and republishes the HTTP per-user bearer table, so deleting a `[[users]]` block revokes that key on the REST surface too, not only on the WS / terminal upgrades. |
 | `groups` | N | User groups (#7745) — membership and conferred roles are resolved from the live config on every lookup, so the config swap is the whole of the reload. |
 | `default_owner` | N | Fleet-wide fallback owner for artifacts created by a turn with no authenticated caller (#7744) — parsed from the live config at each creation. Changing it does not rewrite owners already recorded. |
-| `require_auth_for_reads` | R | Whether the dashboard-reads allowlist requires auth. |
+| `require_auth_for_reads` | R | Whether the dashboard-reads allowlist requires auth. Changing the flag itself needs a restart, but only the flag: the middleware re-evaluates "is any credential configured" on every request from the live credential handles, so adding the first `api_key` / `api_key_hash` or the first dashboard username/password closes the allowlist as soon as the reload refreshes them — no restart. The one credential kind that does not participate is `[[users]]`: the middleware's per-user key table is replaced by the `/api/users*` and device-pairing writes, not by a reload, so a hand-edited `[[users]]` block reaches the `AuthManager` (see the `users` row) but not the read gate until the daemon restarts. |
 | `external_auth_proxy` | R | Acknowledges an external auth proxy is in front. |
 | `channel_role_mapping` | R | Maps platform-native channel roles to LibreFang roles. |
 | `external_auth` | H/N | OAuth2/OIDC provider config. **IdP-identity** changes (`enabled`, `issuer_url`, per-provider `id`/`issuer_url`/`jwks_uri` — see `external_auth_idp_changed`) are **H**: they emit `ReloadExternalAuth` to flush the OIDC discovery + JWKS caches, no restart. **Non-IdP** sub-fields (`session_ttl_secs`, `allowed_domains`, `redirect_url`, scopes, audience, `require_email_verified`, `role_map`, `group_map`, `claim_paths`) are **N**: the OAuth layer reads them live from the ArcSwap config on every request (`oauth.rs`: `config_ref()` / `config_snapshot()`), so a bare config swap makes them effective on the next request — no restart, no cache eviction. |
@@ -137,6 +142,7 @@ classified differently — the row note spells out which is which.
 | `local_probe_interval_secs` | R | Interval between local-provider reachability probes. |
 | `thinking` | N | Extended-thinking config (read live per message). |
 | `default_routing` | N | Kernel-wide Smart Model Router defaults. |
+| `model_router` | N | Profile router settings, read live from `config_snapshot()` on every routed turn. The profile catalog itself lives in `model_profiles.toml` and is re-read whenever that file's mtime moves, so editing profiles needs no reload at all. |
 
 ### Prompt / caching / context
 
@@ -177,8 +183,8 @@ classified differently — the row note spells out which is which.
 | `sidecar_channels` | H | Sidecar (external-process) channel adapters (same hot action). |
 | `webhook_triggers` | H | Webhook trigger (external event injection) config. |
 | `max_cron_jobs` | H | Cron scheduler max total jobs across agents. |
-| `queue` | H | Message-queue config — resizes the lane semaphores. |
-| `triggers` | N | Event-trigger system config (cooldowns, depth limits). |
+| `queue` | H/N/R | Message-queue config. `concurrency` is **H**: the reload resizes the live lane semaphores. `max_depth_per_agent` / `max_depth_global` / `task_ttl_secs` are **N**: the first two are read from the live config on every enqueue and the third on every tick of the TTL sweep, so the swap is the whole of applying them (#8219 — before it, all three were read by nothing at all and the row described a knob that did nothing). The TTL sweep is spawned at boot whether or not the TTL is set, and re-derives its own cadence from the live value, so turning the TTL on or off is as hot as changing it. `task_queue_retention_days` is **R**: the retention sweep captures it at boot. Splitting the section this way is what makes a queue edit land at all — while only `concurrency` was classified, an edit to any other field matched no branch, so the plan carried no change, `should_store_config` discarded the reloaded config and the reload answered "no changes detected". |
+| `triggers` | H/N | Event-trigger system config. `cooldown_secs` / `max_per_event` are **H**: `TriggerEngine` copies them into its own fields when it is built at boot, so the reload pushes the new pair into the running engine (`HotAction::UpdateTriggersConfig`). `max_depth` / `max_workflow_secs` are **N**: they are read from the live config on every event and every workflow run. While the whole section was classified **N**, a cooldown or per-event-budget edit was reported as already effective and triggers went on firing at the boot-time values until the daemon restarted. |
 | `auto_reply` | R | Auto-reply background engine config. |
 | `broadcast` | R | Broadcast routing config. |
 | `cron_session_max_tokens` | N | Cron session token-prune threshold. |
@@ -197,9 +203,10 @@ classified differently — the row note spells out which is which.
 | `mcp_runtime_store` | N | Selects where `/api/mcp/servers` writes land (`file` → config.toml, `db` → SQLite `mcp_server_configs`). Read live by the handler; effective on the next write. |
 | `taint_rules` | H | Named taint rule sets pushed into the shared swap (see field note: already-connected servers pick them up on next scan, not via reconnect). |
 | `a2a` | H | Agent-to-Agent protocol config. |
-| `skills` | H | Skills config (bundled + user-installed) — reloads registry. |
+| `skills` | H | Skills config (bundled + user-installed) — reloads registry. The `registry_repo` and `[skills.promotion]` sub-section are effectively **N** within that: both promotion handlers read them from `config_snapshot()` per request, so a change is live on the next promotion regardless of the registry reload the section triggers. They are left inside the section's single hot action deliberately — the reload is cheap and one classification per section is easier to keep honest than a carve-out that has to be re-argued every time a field is added. |
 | `plugins` | R | Plugin registry config. |
 | `registry` | R/N | Registry sync config. `cache_ttl_secs` / `registry_mirror` / `registry_host` are **R**: they are read when the checkout is set up. `auto_sync` is **N**: the 24 h catalog task calls `config_snapshot()` at the top of each tick and passes the value into `sync_catalog_to`, so flipping it off freezes `~/.librefang/registry/` from the next tick on, with no restart. Splitting the section this way is what makes that true — while the whole section was classified R, a registry-only reload produced neither a hot action nor a noop change, so `should_store_config` discarded the new config and the task kept reading the old value until the daemon restarted. Boot's own sync pass has of course already run by reload time, so `auto_sync = false` written *before* a start is still what prevents the boot-time fast-forward. |
+| `registry.auto_sync` | N | The **N** half of the row above, carried as its own row because that is the name `build_reload_plan` gives the change and the granularity the drift guard compares at. |
 | `hands` | N | Hands marketplace SSRF allowlist (`registry_allowed_hosts`) — read live by the install handler per request. |
 | `bindings` | R | Agent bindings for multi-account routing. |
 
@@ -231,9 +238,15 @@ classified differently — the row note spells out which is which.
 | `web` | H | Web tools config (search + fetch) — rebuilds web context. |
 | `browser` | R | Browser automation config — the `BrowserManager` captures it by value at boot with no rebuild path, so a change needs a restart. |
 | `media` | R | Media-understanding config — `MediaEngine` captures it by value at boot with no rebuild path, so a change needs a restart. |
+| `capabilities` | R | Capability routing config — folded into `MediaEngine` and `MediaDriverCache` at boot; same restart contract as `media`. |
 | `links` | N | Link-understanding config. |
 | `canvas` | R | Canvas (A2UI) config. |
-| `tts` | N | Text-to-speech config. |
+| `tts` | R | Text-to-speech config — captured in `TtsEngine`, which `boot.rs` builds once from `config.tts.clone()` with no rebuild path, the same shape as `media` and `browser` above. Covers `provider`, `max_text_length`, `timeout_secs` and the `[tts.openai]` / `[tts.elevenlabs]` / `[tts.google]` / `[tts.custom]` blocks. |
+| `tts.enabled` | N | Re-read per turn by the agent loop, at the call sites that decide whether to lend the `TtsEngine`. |
+| `tts.output_format` | N | Re-read per turn by `tool_text_to_speech`, through `LoopOptions.tts_config`. Carved out of the restart-required half deliberately: `should_store_config` only accepts a plan carrying a hot action or a noop change, so classifying the whole section R would have discarded the swap and left the value resolving to its boot-time value (#8272). |
+| `tts.provider` | N | Read per call by `tool_text_to_speech` off the turn's live `[tts]`, which is also what makes it apply at all on a deployment running the shipped `enabled = false` default (#8296). A pinned provider that turns out not to be configured for text-to-speech degrades to capability detection rather than failing the call. |
+| `tts.google` | N | `voice` / `language_code` / `speaking_rate` / `pitch`, read per call on the media-driver path whenever the driver that will serve the request is Google. Same move as `tts.provider`: off the engine handle, onto the live section. |
+| `tts.elevenlabs.output_format` | N | The #6116 provider query parameter, read per call when the tool omits `format`. The rest of `[tts.elevenlabs]` — `voice_id`, `model_id`, `stability`, `similarity_boost` — still only reaches a provider through `TtsEngine` and stays part of the section's **R** half. |
 
 ### Notifications / inbox / observability
 

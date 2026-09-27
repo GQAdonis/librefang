@@ -5,7 +5,7 @@
 use rusqlite::Connection;
 
 /// Current schema version.
-const SCHEMA_VERSION: u32 = 55;
+const SCHEMA_VERSION: u32 = 61;
 
 /// Run all migrations to bring the database up to date.
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -281,6 +281,32 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     // prior configuration from the dashboard.
     run_step!(55, migrate_v55);
 
+    // v56: persist workflow_runs.total_steps so a run recovered after a
+    // daemon restart reports real progress instead of "step X of 0".
+    run_step!(56, migrate_v56);
+
+    // v57: narrow the `memories_fts_au` trigger to the columns it mirrors.
+    // As created by v50 it fired on every UPDATE of `memories`, including the per-fragment access bump every recall performs and the bulk confidence decay each consolidation sweep runs — rebuilding FTS rows whose content was byte-identical before and after.
+    run_step!(57, migrate_v57);
+    run_step!(58, migrate_v58);
+    run_step!(59, migrate_v59);
+    run_step!(60, migrate_v60);
+
+    // v61 (#7752): add `sessions.parent_session_id` so a sub-agent run
+    // records which session spawned it. The parent can enumerate its
+    // children, and deleting the parent cascades. NULL on every ordinary
+    // session, which is almost all of them.
+    //
+    // 61 is the next free number above main's 60, and it must stay
+    // contiguous rather than skipping ahead to leave room for other open
+    // PRs: `run_step!` gates on `current_version < N` read once at boot, so
+    // a database that reaches N via a binary with a gap below it will never
+    // run the skipped migrations — the backfill at the end of
+    // `run_migrations` writes their audit rows anyway, so the skew is
+    // silent and permanent. Other open PRs also want 61; whichever merges
+    // first keeps it and the rest renumber to 62, 63, … on rebase.
+    run_step!(61, migrate_v61);
+
     // Audit-trail consistency (#3538): user_version must match the count
     // of distinct rows in `migrations`. Drift means an earlier migration
     // applied DDL without recording its audit row — operator tooling
@@ -363,6 +389,23 @@ fn try_column_exists(
         }
     }
     Ok(false)
+}
+
+/// Whether `table` exists at all.
+///
+/// [`try_column_exists`] cannot answer this: `PRAGMA table_info` on a missing
+/// table yields zero rows, so an absent table and an absent column are
+/// indistinguishable through it — and a migration that reads `false` as "add
+/// the column" then fails the `ALTER` outright. A migration whose target table
+/// was created below the schema version a database is stamped at (so its
+/// `CREATE TABLE` step never ran) needs this distinction.
+fn try_table_exists(conn: &Connection, table: &str) -> Result<bool, rusqlite::Error> {
+    let found: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [table],
+        |row| row.get(0),
+    )?;
+    Ok(found > 0)
 }
 
 #[cfg(test)]
@@ -1232,6 +1275,257 @@ fn migrate_v55(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
          VALUES (55, datetime('now'), 'Template (agent-type) version history table')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Version 56: persist `workflow_runs.total_steps`.
+///
+/// The workflow_runs table (v37) never stored the run's step count, so
+/// `row_to_workflow_run` hardcoded `total_steps: 0` on reload — a run
+/// recovered after a daemon restart reported "step X of 0" in the API and
+/// dashboard. Store the actual value so progress survives a restart.
+/// `try_column_exists` keeps the ADD COLUMN idempotent.
+fn migrate_v56(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // A database stamped at or above v37 without ever running v37's DDL has no
+    // `workflow_runs` table to alter. It has no runs to lose progress on either,
+    // so skipping is correct — and unlike v49, which has the same shape, this
+    // migration sits above the version such databases are stamped at, so it is
+    // the first one that would actually hit the missing table.
+    if try_table_exists(conn, "workflow_runs")?
+        && !try_column_exists(conn, "workflow_runs", "total_steps")?
+    {
+        conn.execute(
+            "ALTER TABLE workflow_runs ADD COLUMN total_steps INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (56, datetime('now'), 'Persist workflow_runs.total_steps so run progress survives restart')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v57: only re-index `memories_fts` when an indexed column actually changed.
+///
+/// [`migrate_v50`] created `memories_fts_au` as a bare `AFTER UPDATE ON memories`, with no column list and no `WHEN` guard, so it fired for every UPDATE the crate performs — including ones that cannot change either indexed column.
+/// Two of those are hot.
+/// `SemanticStore::bump_recall_access_counts` issues one `UPDATE memories SET access_count = access_count + 1, accessed_at = ?` per returned fragment at the end of every recall, and `ConsolidationEngine::consolidate` opens each sweep with a single bulk `UPDATE memories SET confidence = MAX(0.1, confidence * ?)` over every stale row.
+/// Each affected row paid a full FTS delete plus re-insert that produced a byte-identical index.
+///
+/// The cost is worse than one wasted delete/insert pair per row.
+/// `memory_id` is declared `UNINDEXED` and an fts5 virtual table carries no secondary index, so `DELETE FROM memories_fts WHERE memory_id = old.id` cannot seek — SQLite plans it as a full scan of the FTS content.
+/// That makes any multi-row UPDATE on `memories` quadratic in store size, and because the decay sweep is a single statement holding SQLite's one write slot, a large store can hold that slot past the 5 s `busy_timeout` and make concurrent memory and session writes fail with `database is locked`.
+///
+/// The `WHEN` clause names both mirrored columns rather than relying on `AFTER UPDATE OF content`: `agent_id` is mirrored into the index too, and an `OF` list alone would still fire for a write that sets a listed column to the value it already held.
+/// `IS NOT` rather than `<>` keeps the comparison correct if either column ever becomes nullable.
+///
+/// `CREATE TRIGGER IF NOT EXISTS` cannot express this — the v50 trigger already occupies the name — so the old one is dropped first.
+/// No rebuild is needed: the index rows this stops rewriting were being rewritten to the value they already had.
+fn migrate_v57(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "
+        DROP TRIGGER IF EXISTS memories_fts_au;
+
+        CREATE TRIGGER memories_fts_au AFTER UPDATE ON memories
+        WHEN new.content IS NOT old.content OR new.agent_id IS NOT old.agent_id
+        BEGIN
+            DELETE FROM memories_fts WHERE memory_id = old.id;
+            INSERT INTO memories_fts (memory_id, agent_id, content)
+            VALUES (new.id, new.agent_id, new.content);
+        END;
+        ",
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (57, datetime('now'), 'Guard memories_fts_au with a WHEN clause so the recall access bump and the decay sweep stop rebuilding identical memories_fts rows')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Version 58: agent manifest version history.
+///
+/// Forward-compatibility step. This table was created by pre-release builds
+/// that numbered it v58 while assembling several unmerged branches, so a
+/// database those builds touched already has it and is stamped at or above 58.
+/// A binary without this step refuses to open such a database at all —
+/// `run_migrations` rejects any `user_version` above `SCHEMA_VERSION`, which is
+/// the correct rule and the reason the step has to exist here rather than be
+/// skipped. `IF NOT EXISTS` makes it a no-op on those databases and a plain
+/// create everywhere else.
+///
+/// The DDL is copied verbatim from the build that ran in production so the
+/// table shape cannot differ between a database that was migrated and one
+/// created fresh. When the feature lands properly its own migration will take
+/// a number above this one and, being `IF NOT EXISTS`, will find the table
+/// already there.
+fn migrate_v58(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS manifest_versions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        TEXT NOT NULL,
+            agent_name      TEXT NOT NULL DEFAULT '',
+            timestamp       TEXT NOT NULL DEFAULT (datetime('now')),
+            manifest_toml   TEXT NOT NULL,
+            change_source   TEXT NOT NULL DEFAULT 'unknown',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_manifest_versions_agent_id
+            ON manifest_versions(agent_id, timestamp DESC);",
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (58, datetime('now'), 'Agent manifest version history table')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Version 59: `workflow_runs.total_steps`, again.
+///
+/// [`migrate_v56`] already adds this column, and this step adds nothing new to
+/// a database that reached 56 through this binary. It exists because the same
+/// change was numbered 59 by the pre-release builds described on
+/// [`migrate_v58`], so databases they touched are stamped at 59 with the column
+/// present, and a binary whose `SCHEMA_VERSION` stops at 57 will not open them.
+///
+/// Guarded the same way v56 is, so it is a no-op wherever the column already
+/// exists — which, after v56, is everywhere.
+fn migrate_v59(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if try_table_exists(conn, "workflow_runs")?
+        && !try_column_exists(conn, "workflow_runs", "total_steps")?
+    {
+        conn.execute(
+            "ALTER TABLE workflow_runs ADD COLUMN total_steps INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (59, datetime('now'), 'Persist workflow_runs.total_steps so run progress survives restart')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Version 60: make `manifest_versions` present wherever the cascade expects it.
+///
+/// [`migrate_v58`] creates the table, but only for a database climbing *through*
+/// 58. Pre-release builds numbered several different tables 58 — one machine's
+/// v58 audit row reads `Create template_versions table`, another's reads
+/// `Agent manifest version history table` — so a database can sit at 58 or 59
+/// with the number recorded and this table absent.
+///
+/// That matters because `manifest_versions` is in `AGENT_SCOPED_TABLES`, and
+/// the cascade issues its `DELETE` unconditionally: on such a database,
+/// removing an agent would fail with "no such table". An error deleting an
+/// agent is worse than the retention leak the cascade entry closes, so rather
+/// than teach the cascade to tolerate a missing table — which would blunt
+/// `agent_cascade_purges_every_agent_keyed_table` for every other entry — this
+/// step makes the invariant true: at 60, the table exists.
+///
+/// Idempotent, and on the machines that already have it the only observable
+/// change is the version stamp and an audit row.
+///
+/// `CREATE TABLE IF NOT EXISTS` alone is not enough, which is the second half of
+/// this step. Once it is established that pre-release builds disagreed with each
+/// other about what 58 meant, it cannot also be assumed they agreed about the
+/// *shape* of what they created: a table that is present with a different column
+/// set makes the `IF NOT EXISTS` a silent no-op and the divergence survives into
+/// a release binary. The cascade still works, because it only needs `agent_id`,
+/// so the failure surfaces much later and elsewhere — wherever `manifest_toml`
+/// or `change_source` is read.
+///
+/// `template_versions` is reconciled for the same reason and is the more urgent
+/// of the two: it is created by [`migrate_v55`], so on a database a pre-release
+/// build stamped at 58 or higher that step is *below the stamp and skipped for
+/// the life of the database*. This is the only place left in the ladder that
+/// will still execute there.
+fn migrate_v60(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS manifest_versions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_id        TEXT NOT NULL,
+            agent_name      TEXT NOT NULL DEFAULT '',
+            timestamp       TEXT NOT NULL DEFAULT (datetime('now')),
+            manifest_toml   TEXT NOT NULL,
+            change_source   TEXT NOT NULL DEFAULT 'unknown',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );",
+    )?;
+
+    // Every column the code reads, with the default `ALTER TABLE ADD COLUMN` accepts.
+    // SQLite refuses a non-constant default there — `datetime('now')` is rejected outright — so a reconciled column gets `''` rather than the expression the `CREATE` uses.
+    // That difference only reaches rows written by the build that created the divergent table; everything written afterwards goes through the INSERTs, which supply the value.
+    for (table, column) in [
+        ("manifest_versions", "agent_id"),
+        ("manifest_versions", "agent_name"),
+        ("manifest_versions", "timestamp"),
+        ("manifest_versions", "manifest_toml"),
+        ("manifest_versions", "change_source"),
+        ("manifest_versions", "created_at"),
+        ("template_versions", "template_name"),
+        ("template_versions", "timestamp"),
+        ("template_versions", "manifest_toml"),
+        ("template_versions", "change_source"),
+    ] {
+        if !try_table_exists(conn, table)? {
+            continue;
+        }
+        if try_column_exists(conn, table, column)? {
+            continue;
+        }
+        let default = if column == "change_source" {
+            "'unknown'"
+        } else {
+            "''"
+        };
+        conn.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} TEXT NOT NULL DEFAULT {default}"),
+            [],
+        )?;
+    }
+
+    // After the reconciliation, not with the `CREATE TABLE` above: the index is over `timestamp`, and on a divergent table that column may not exist yet.
+    // Batched with the create, it failed the whole step with "no such column".
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_manifest_versions_agent_id
+            ON manifest_versions(agent_id, timestamp DESC);",
+    )?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (60, datetime('now'), 'Ensure manifest_versions and template_versions exist with the columns the code reads, on databases a pre-release build stamped past 58')",
+        [],
+    )?;
+    Ok(())
+}
+
+/// v61 (#7752): session parentage — `sessions.parent_session_id`.
+///
+/// Idempotent in both halves: `try_column_exists` guards the `ALTER TABLE`
+/// (SQLite has no `ADD COLUMN IF NOT EXISTS`) and the index is
+/// `CREATE INDEX IF NOT EXISTS`, so re-running against a database that
+/// already has the column is a no-op rather than
+/// "duplicate column name: parent_session_id".
+fn migrate_v61(conn: &Connection) -> Result<(), rusqlite::Error> {
+    if !try_column_exists(conn, "sessions", "parent_session_id")? {
+        conn.execute(
+            "ALTER TABLE sessions ADD COLUMN parent_session_id TEXT DEFAULT NULL",
+            [],
+        )?;
+    }
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id) WHERE parent_session_id IS NOT NULL",
+        [],
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO migrations (version, applied_at, description) \
+         VALUES (61, datetime('now'), 'Add sessions.parent_session_id for sub-agent run lineage (#7752)')",
         [],
     )?;
     Ok(())
@@ -2471,6 +2765,88 @@ mod tests {
         );
     }
 
+    /// The `run_step!` ladder: strictly increasing, contiguous, ending exactly at
+    /// `SCHEMA_VERSION`, each step calling the function named for its own version (#8140).
+    ///
+    /// Read from the source rather than from a migrated database, because the failure this
+    /// guards is invisible at runtime on the only path CI ever takes.
+    /// `run_step!` fires on `current_version < N`, so a second step claiming an already-taken
+    /// `N` never executes on an installation that has passed `N` — and a fresh database, which
+    /// starts at `user_version == 0`, runs every step and shows nothing wrong.
+    /// The feature then 500s on upgraded installs and works perfectly on new ones.
+    ///
+    /// Three separate PRs claimed overlapping numbers on one day, so each clause below exists
+    /// for a shape that actually shipped:
+    ///
+    /// - **Strictly increasing** catches the duplicate directly. Two `run_step!(55, …)` lines
+    ///   compile whenever the two function names differ, and nothing else notices.
+    /// - **Contiguous** catches the other half: a branch that sidesteps a collision by jumping
+    ///   to a free number leaves a hole, which `test_every_migration_records_audit_row` does
+    ///   report — but through a message about audit rows that names neither the gap nor the
+    ///   branch that opened it.
+    /// - **Named for its version** catches renumbering that moved the `run_step!` line and left
+    ///   the function behind, which is how a duplicate survives a rename.
+    ///
+    /// Ending at `SCHEMA_VERSION` is the fourth: bumping the constant without adding the step,
+    /// or adding the step without bumping the constant, are both silent on a fresh install.
+    #[test]
+    fn the_migration_ladder_is_contiguous_and_named_for_its_versions() {
+        let source = include_str!("migration.rs");
+
+        // Only real invocations: `macro_rules! run_step {` and the `$migrate_fn(&tx)?` inside
+        // the macro body do not match, and neither does prose mentioning the macro.
+        let steps: Vec<(u32, &str)> = source
+            .lines()
+            .filter_map(|line| {
+                let rest = line.trim().strip_prefix("run_step!(")?;
+                let (version, callee) = rest.split_once(", ")?;
+                Some((version.parse().ok()?, callee.trim_end_matches(");").trim()))
+            })
+            .collect();
+
+        assert!(
+            !steps.is_empty(),
+            "no `run_step!` invocations parsed — the ladder cannot be empty, so this guard has \
+             stopped matching the source and is no longer checking anything"
+        );
+
+        for pair in steps.windows(2) {
+            let (prev, prev_fn) = pair[0];
+            let (next, next_fn) = pair[1];
+            assert!(
+                next > prev,
+                "the ladder must strictly increase: `run_step!({prev}, {prev_fn})` is followed \
+                 by `run_step!({next}, {next_fn})`. Two steps under one version is the silent \
+                 failure — the second body never runs on an installation already past {prev}"
+            );
+            assert_eq!(
+                next,
+                prev + 1,
+                "the ladder must be contiguous: nothing claims v{} between `run_step!({prev}, \
+                 {prev_fn})` and `run_step!({next}, {next_fn})`. Renumber down to close the gap \
+                 rather than leaving it for a later migration to fill",
+                prev + 1
+            );
+        }
+
+        for (version, callee) in &steps {
+            assert_eq!(
+                *callee,
+                format!("migrate_v{version}"),
+                "`run_step!({version}, {callee})` calls a function not named for its own \
+                 version; after a renumber the two have to move together"
+            );
+        }
+
+        let (last, last_fn) = *steps.last().unwrap();
+        assert_eq!(
+            last, SCHEMA_VERSION,
+            "the ladder ends at `run_step!({last}, {last_fn})` but SCHEMA_VERSION is \
+             {SCHEMA_VERSION}. A constant ahead of the ladder skips a migration on every \
+             upgrade; a ladder ahead of the constant re-runs its last step forever"
+        );
+    }
+
     /// The specific collision from #7924, pinned by description rather than by presence.
     ///
     /// Both rows existing is not enough — that was already true, because the backfill supplied the missing one.
@@ -3286,6 +3662,65 @@ mod tests {
         assert_eq!(id, "old");
     }
 
+    /// v56: the FTS sync trigger must ignore UPDATEs that cannot change an indexed column, and must still fire for the ones that can.
+    ///
+    /// `total_changes()` counts rows written by trigger programs as well as by the statement itself, and an fts5 write touches several shadow-table rows, so the access bump below reports a delta of 1 when the trigger stays asleep and well over 1 when it runs.
+    /// That is the whole regression: every recall ends in one `UPDATE memories SET access_count = access_count + 1` per returned fragment, and each consolidation sweep issues one bulk confidence UPDATE across every stale row.
+    #[test]
+    fn test_migrate_v56_access_bump_leaves_the_fts_index_alone() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO memories (id, agent_id, content, source, scope, confidence, metadata, created_at, accessed_at, access_count, deleted) \
+             VALUES ('m1', 'agent-1', 'the release train leaves on Thursday', 'conversation', 'agent_memory', 1.0, '{}', '2026-07-19T00:00:00+00:00', '2026-07-19T00:00:00+00:00', 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        // The recall access bump, verbatim from `SemanticStore::bump_recall_access_counts`.
+        let before = conn.total_changes();
+        conn.execute(
+            "UPDATE memories SET access_count = access_count + 1, accessed_at = ?1 WHERE id = 'm1'",
+            ["2026-07-20T00:00:00+00:00"],
+        )
+        .unwrap();
+        assert_eq!(
+            conn.total_changes() - before,
+            1,
+            "an access bump changes neither content nor agent_id, so it must write exactly the one `memories` row and nothing in `memories_fts`"
+        );
+
+        // A genuine content edit must still re-index, or the guard would have traded write amplification for a silently stale index.
+        let before_edit = conn.total_changes();
+        conn.execute(
+            "UPDATE memories SET content = 'the postgres primary lives in Frankfurt' WHERE id = 'm1'",
+            [],
+        )
+        .unwrap();
+        assert!(
+            conn.total_changes() - before_edit > 1,
+            "a content edit must still fire the trigger"
+        );
+
+        let fresh: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?1",
+                ["\"postgres\""],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(fresh, 1, "the new content must be searchable");
+        let stale: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM memories_fts WHERE memories_fts MATCH ?1",
+                ["\"thursday\""],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stale, 0, "the replaced content must be gone from the index");
+    }
+
     #[test]
     fn test_migrate_v22_adds_user_id_and_channel_columns() {
         // RBAC M1: pre-existing audit_entries rows must keep working after
@@ -3854,6 +4289,39 @@ mod tests {
         assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
     }
 
+    /// v61 is a no-op against a database that already has the column.
+    ///
+    /// SQLite has no `ADD COLUMN IF NOT EXISTS`, so the `try_column_exists`
+    /// guard is the only thing standing between a re-run and
+    /// "duplicate column name: parent_session_id" on boot. That re-run is not
+    /// hypothetical: another open PR wants this same slot, so this
+    /// migration will be renumbered at least once before it merges, and a
+    /// renumbered migration is one that runs against databases which may
+    /// already carry its DDL.
+    #[test]
+    fn test_migrate_v61_is_a_noop_when_the_column_already_exists() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        assert!(try_column_exists(&conn, "sessions", "parent_session_id").unwrap());
+
+        // Second run, directly and then through the ladder.
+        migrate_v61(&conn).expect("re-running v61 on an existing column must not error");
+        run_migrations(&conn).expect("a second full run must not error");
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+        assert!(try_column_exists(&conn, "sessions", "parent_session_id").unwrap());
+
+        // The audit row is recorded exactly once — `INSERT OR IGNORE` rather
+        // than a second row claiming the same version was applied twice.
+        let audit_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM migrations WHERE version = 61",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(audit_rows, 1, "v61 must record exactly one migrations row");
+    }
+
     #[test]
     fn test_migrate_v10_partial_apply_does_not_panic() {
         // #3452 — simulate a DB that crashed mid-v10 with the agent_id columns
@@ -4137,6 +4605,184 @@ mod tests {
         );
     }
 
+    /// The case this pair of migrations exists for, reproduced.
+    ///
+    /// A pre-release build stamped a production database at 59 and left
+    /// `workflow_runs.total_steps` already present. Before these steps existed
+    /// the daemon refused to open it outright — `run_migrations` rejects any
+    /// `user_version` above `SCHEMA_VERSION`, and the operator's only signal was
+    /// "Downgrade is not supported" on a boot loop.
+    #[test]
+    fn a_database_a_pre_release_build_stamped_at_59_still_opens() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        // Stand where the pre-release build left it: the column is there and
+        // the stamp is ahead of anything this binary wrote itself.
+        assert!(try_column_exists(&conn, "workflow_runs", "total_steps").unwrap());
+        // Pragma and audit ladder agree at 59, which is the real state on the
+        // machine that failed: its `MAX(version)` and `user_version` were both
+        // 59. Rewinding only the pragma manufactures the inconsistency
+        // `InconsistentLadder` already refuses, which is a different test.
+        conn.execute("DELETE FROM migrations WHERE version > 59", [])
+            .unwrap();
+        conn.pragma_update(None, "user_version", 59i64).unwrap();
+
+        run_migrations(&conn).expect("a database stamped at 59 must still open");
+        // And is carried the rest of the way rather than left where it was.
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+    }
+
+    /// The other half: a database that stopped at 57 climbs to 59 without
+    /// tripping over a column v56 already added.
+    #[test]
+    fn the_forward_compat_steps_are_no_ops_when_their_changes_are_already_present() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        // A database that genuinely stopped at 57: the pragma and the audit
+        // ladder agree. Rewinding only the pragma manufactures the
+        // inconsistency `InconsistentLadder` exists to refuse, which is a
+        // different test and one the guard already covers.
+        conn.execute("DELETE FROM migrations WHERE version > 57", [])
+            .unwrap();
+        conn.pragma_update(None, "user_version", 57i64).unwrap();
+
+        run_migrations(&conn)
+            .expect("re-running the forward-compat steps over their own result must not fail");
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+
+        // Exactly one of each, not a duplicate from the second pass.
+        for (kind, name) in [
+            ("table", "manifest_versions"),
+            ("index", "idx_manifest_versions_agent_id"),
+        ] {
+            let n: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type=?1 AND name=?2",
+                    rusqlite::params![kind, name],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 1, "{kind} {name} must exist exactly once");
+        }
+    }
+
+    /// The hazard `CREATE TABLE IF NOT EXISTS` cannot address on its own.
+    ///
+    /// A pre-release build that created one of these tables with a different
+    /// column set leaves the `IF NOT EXISTS` a silent no-op, so the divergence
+    /// survives into a release binary. For `template_versions` there is no
+    /// second chance anywhere else in the ladder: [`migrate_v55`] creates it,
+    /// and on a database stamped at 58 or higher that step is below the stamp
+    /// and never runs again.
+    ///
+    /// Both tables are seeded here missing the columns the code reads, at a
+    /// stamp past 58, and must come back complete.
+    #[test]
+    fn v60_reconciles_a_table_a_pre_release_build_created_with_fewer_columns() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Stand where such a build left it: both tables present but truncated,
+        // and the stamp past the steps that would otherwise have created them.
+        conn.execute_batch(
+            "DROP TABLE manifest_versions;
+             DROP TABLE template_versions;
+             CREATE TABLE manifest_versions (
+                 id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                 agent_id TEXT NOT NULL
+             );
+             CREATE TABLE template_versions (
+                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                 template_name TEXT NOT NULL
+             );",
+        )
+        .unwrap();
+        conn.execute("DELETE FROM migrations WHERE version > 59", [])
+            .unwrap();
+        conn.pragma_update(None, "user_version", 59i64).unwrap();
+
+        // The fixture must actually be divergent, or this passes vacuously.
+        assert!(!try_column_exists(&conn, "manifest_versions", "manifest_toml").unwrap());
+        assert!(!try_column_exists(&conn, "template_versions", "manifest_toml").unwrap());
+
+        run_migrations(&conn).expect("a stamped-past-58 database must still open");
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+
+        for (table, column) in [
+            ("manifest_versions", "agent_name"),
+            ("manifest_versions", "timestamp"),
+            ("manifest_versions", "manifest_toml"),
+            ("manifest_versions", "change_source"),
+            ("manifest_versions", "created_at"),
+            ("template_versions", "timestamp"),
+            ("template_versions", "manifest_toml"),
+            ("template_versions", "change_source"),
+        ] {
+            assert!(
+                try_column_exists(&conn, table, column).unwrap(),
+                "{table}.{column} must be reconciled — nothing later in the ladder will"
+            );
+        }
+
+        // And the reconciled table is writable through the shape the code uses.
+        conn.execute(
+            "INSERT INTO manifest_versions (agent_id, agent_name, manifest_toml, change_source) \
+             VALUES ('a', 'n', 'name = \"x\"', 'edit')",
+            [],
+        )
+        .expect("the reconciled table must accept the columns the code writes");
+    }
+
+    /// The hazard v60 exists for.
+    ///
+    /// Pre-release builds numbered different tables 58 — one machine's audit
+    /// row for 58 reads `Create template_versions table`, another's reads the
+    /// manifest one — so a database can be stamped at 59 with
+    /// `manifest_versions` absent. That table is in the agent cascade, whose
+    /// `DELETE` is unconditional, so removing an agent there would fail with
+    /// "no such table".
+    #[test]
+    fn a_database_stamped_past_58_without_manifest_versions_gets_it() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Stand where such a machine stands: stamped past 58, table gone.
+        conn.execute_batch("DROP TABLE manifest_versions").unwrap();
+        conn.execute("DELETE FROM migrations WHERE version > 59", [])
+            .unwrap();
+        conn.pragma_update(None, "user_version", 59i64).unwrap();
+        assert!(!try_table_exists(&conn, "manifest_versions").unwrap());
+
+        run_migrations(&conn).expect("must migrate rather than refuse");
+
+        assert!(
+            try_table_exists(&conn, "manifest_versions").unwrap(),
+            "the cascade issues an unconditional DELETE against this table, so it has to be here"
+        );
+        assert_eq!(get_schema_version(&conn).unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn the_forward_compat_steps_record_their_audit_rows_under_their_own_versions() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        for v in [58i64, 59i64, 60i64] {
+            let description: String = conn
+                .query_row(
+                    "SELECT description FROM migrations WHERE version = ?1",
+                    rusqlite::params![v],
+                    |row| row.get(0),
+                )
+                .unwrap_or_else(|_| {
+                    panic!("v{v} must have recorded an audit row under version {v}")
+                });
+            assert!(
+                !description.trim().is_empty(),
+                "v{v} audit row must say what it did"
+            );
+        }
+    }
+
     #[test]
     fn v54_is_idempotent_across_repeated_boots() {
         let conn = Connection::open_in_memory().unwrap();
@@ -4208,6 +4854,15 @@ mod tests {
                 chat_id TEXT NOT NULL,
                 user_id TEXT NOT NULL,
                 PRIMARY KEY (chat_id, user_id)
+            );
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY,
+                agent_id TEXT NOT NULL,
+                messages BLOB NOT NULL,
+                context_window_tokens INTEGER DEFAULT 0,
+                message_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
             CREATE TABLE migrations (
                 version INTEGER PRIMARY KEY,

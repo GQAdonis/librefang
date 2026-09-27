@@ -83,14 +83,10 @@ pdf-extract = "0.12"
 # SSH transport for the optional remote-exec backend (#3332).
 # Locked behind the `ssh-backend` feature so the dependency tree stays
 # trim for users who only need the local / Docker backends.
-# 0.61 is the first release patched for the russh / russh-cryptovec
-# advisories (GHSA-wwx6-x28x-8259, GHSA-g9f8-wqj9-fjw5, …). The separate
-# `russh-keys` crate was merged into `russh::keys` after 0.50, so it is
-# no longer a direct dependency. russh pulls its own `rand_core` for the
-# handshake RNG; this crate never hands an RNG across that boundary, so
-# the duplicate coexists with the workspace's `rand = "0.10"` rather than
-# colliding on the trait surface.
-russh = { version = "0.61", optional = true }
+# 0.62.5 is the first release patched for every russh advisory currently published (GHSA-5xvq-cp9x-6p6r, GHSA-cqjc-rmpq-xprq, GHSA-g9hv-x236-4qp3, GHSA-m65r-rprj-r5rg), on top of the earlier russh / russh-cryptovec ones fixed in 0.61 (GHSA-wwx6-x28x-8259, GHSA-g9f8-wqj9-fjw5, …).
+# The separate `russh-keys` crate was merged into `russh::keys` after 0.50, so it is no longer a direct dependency.
+# russh pulls its own `rand_core` for the handshake RNG; this crate never hands an RNG across that boundary, so the duplicate coexists with the workspace's `rand = "0.10"` rather than colliding on the trait surface.
+russh = { version = "0.62.5", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -111,6 +107,11 @@ seccompiler = { version = "0.5", optional = true }
 [dev-dependencies]
 # Phase-8 C-005: test-stub feature enables KernelHandleStub used by plugin_example_* tests.
 librefang-kernel-handle = { path = "../librefang-kernel-handle", features = ["test-stub"] }
+# `test-util` enables `#[tokio::test(start_paused = true)]`, used by the media
+# capability-routing test that proves a hung vision provider cannot hold a turn
+# open. Not in the `full` feature set; same spelling `librefang-kernel` and
+# `librefang-acp` already use.
+tokio = { workspace = true, features = ["test-util"] }
 serial_test = "4"
 proptest = "1"
 metrics-util = { version = "0.20", features = ["debugging"] }

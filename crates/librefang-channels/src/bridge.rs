@@ -259,11 +259,17 @@ pub trait ChannelBridgeHandle: Send + Sync {
     /// becomes the scope), `Some(<sender.platform_id>)` otherwise — the same
     /// pair the channel resolver uses to derive
     /// [`librefang_types::agent::SessionId::for_channel`] for inbound traffic.
+    /// `is_internal_system` decides how a reserved channel name resolves:
+    /// external traffic is `ext-`-scoped by `session_scope`, internal
+    /// traffic addresses the system session directly. It is a parameter, not
+    /// an adapter-side assumption, so a future internal caller states what
+    /// it means instead of inheriting `false` silently (#7701 review).
     async fn reset_channel_session(
         &self,
         _agent_id: AgentId,
         _channel: &str,
         _chat_id: Option<&str>,
+        _is_internal_system: bool,
     ) -> Result<String, String> {
         Err("Not implemented".to_string())
     }
@@ -275,6 +281,7 @@ pub trait ChannelBridgeHandle: Send + Sync {
         _agent_id: AgentId,
         _channel: &str,
         _chat_id: Option<&str>,
+        _is_internal_system: bool,
     ) -> Result<String, String> {
         Err("Not implemented".to_string())
     }
@@ -287,6 +294,7 @@ pub trait ChannelBridgeHandle: Send + Sync {
         _agent_id: AgentId,
         _channel: &str,
         _chat_id: Option<&str>,
+        _is_internal_system: bool,
     ) -> Result<String, String> {
         Err("Not implemented".to_string())
     }
@@ -379,6 +387,22 @@ pub trait ChannelBridgeHandle: Send + Sync {
         _conversation_id: &str,
     ) -> Option<AgentId> {
         None
+    }
+
+    /// Persist the explicit per-conversation `/agent` override that [`resolve_conversation_override`](Self::resolve_conversation_override) reads back (#5671 Model A, #7140).
+    /// `instance` and `conversation_id` are the same keys the lookup uses — `metadata["account_id"]` and `sender.platform_id`.
+    /// `agent_id` is the agent the command resolved or spawned; the implementation records it by its registry name, because that is what the binding store holds.
+    /// `bound_by` is the audit-trail actor, `"user:<sender id>"` from the command path.
+    ///
+    /// Default is a no-op returning `Ok(())`: a handle without a binding store also resolves no override, so the router user default the `/agent` arm writes alongside stays authoritative there.
+    async fn set_conversation_override(
+        &self,
+        _instance: &str,
+        _conversation_id: &str,
+        _agent_id: AgentId,
+        _bound_by: &str,
+    ) -> Result<(), String> {
+        Ok(())
     }
 
     /// Resolve the instance default agent for a channel instance (#5671 Model A) — seeded from `[[sidecar_channels]] agent`, the lower of the two binding levels.
@@ -1210,6 +1234,33 @@ fn sanitizer_text_to_check(content: &ChannelContent) -> Option<String> {
     }
 }
 
+/// Acquire one per-adapter dispatch permit, giving up if the bridge shuts down first.
+///
+/// The permit is taken on the intake loop, *before* a message is handed to a spawned dispatch task, and moved into that task.
+/// That is what makes the per-adapter cap real backpressure: while every permit is out, the intake loop stops polling the adapter stream, so the adapter's own bounded channel and its configured overflow policy decide what happens to the excess.
+/// Acquiring the permit inside the spawned task instead bounded only how many tasks were simultaneously inside `dispatch_message` — the loop still drained the stream at line rate, so every inbound message became a detached, untracked task parked on the permit queue, answered minutes late and lost without a journal entry if the daemon stopped first.
+///
+/// Returns `None` when the shutdown signal fires (or its sender is gone), so the caller breaks out of its loop rather than parking on a queue that shutdown will not drain.
+async fn acquire_dispatch_permit(
+    semaphore: &Arc<tokio::sync::Semaphore>,
+    shutdown: &mut watch::Receiver<bool>,
+) -> Option<tokio::sync::OwnedSemaphorePermit> {
+    // Checked before the select, not only inside it: a caller that keeps looping after a `None` (the debounce loop's flush arm does) would otherwise park on the semaphore with no escape, because `changed()` only resolves on a *new* value and this receiver has already observed the shutdown.
+    if *shutdown.borrow() {
+        return None;
+    }
+    loop {
+        tokio::select! {
+            acquired = semaphore.clone().acquire_owned() => return acquired.ok(),
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
+                    return None;
+                }
+            }
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn flush_debounced(
     debouncer: &MessageDebouncer,
@@ -1220,7 +1271,8 @@ fn flush_debounced(
     adapter: &Arc<dyn ChannelAdapter>,
     rate_limiter: &ChannelRateLimiter,
     sanitizer: &Arc<InputSanitizer>,
-    semaphore: &Arc<tokio::sync::Semaphore>,
+    // Dispatch permit acquired by the caller before the flush is spawned, so the per-adapter cap applies before the work exists rather than after (see `acquire_dispatch_permit`).
+    permit: tokio::sync::OwnedSemaphorePermit,
     journal: &Option<crate::message_journal::MessageJournal>,
     thread_ownership: &Arc<crate::thread_ownership::ThreadOwnershipRegistry>,
 ) -> Option<tokio::task::JoinHandle<()>> {
@@ -1232,14 +1284,11 @@ fn flush_debounced(
     let rate_limiter = rate_limiter.clone();
     let sanitizer = Arc::clone(sanitizer);
     let journal = journal.clone();
-    let sem = semaphore.clone();
     let thread_ownership = Arc::clone(thread_ownership);
 
     let join_handle = tokio::spawn(async move {
-        let _permit = match sem.acquire().await {
-            Ok(p) => p,
-            Err(_) => return,
-        };
+        // Held for the whole flush; released when this task ends.
+        let _permit = permit;
 
         if !media.is_empty() {
             // Finish each coalesced attachment's deferred enrichment (image description / audio transcription — LLM round-trips kept off the ingest loop) and concatenate, in arrival order.
@@ -1537,14 +1586,9 @@ impl BridgeManager {
 
     /// Start an adapter: subscribe to its message stream and spawn a dispatch task.
     ///
-    /// Each incoming message is dispatched as a concurrent task so that slow LLM
-    /// calls (10-30s) don't block subsequent messages. This prevents voice/media
-    /// messages sent in quick succession from appearing "lost" — all messages
-    /// begin processing immediately. Per-agent serialization (to prevent session
-    /// corruption) is handled by the kernel's `agent_msg_locks`.
-    ///
-    /// A semaphore limits concurrent dispatch tasks to prevent unbounded memory
-    /// growth under burst traffic.
+    /// Each message is dispatched on its own task, so a slow LLM turn (10-30s) does not stall the messages behind it and voice/media sent in quick succession does not appear "lost"; per-agent serialization, which is what prevents session corruption, is left to the kernel's `agent_msg_locks`.
+    /// Concurrency is capped per adapter at 32 permits, and the permit is taken *before* the next message is pulled off the stream, which makes the cap backpressure rather than a queue: while all 32 are out the adapter stops being read at all, and its own bounded channel plus its configured overflow policy (for a sidecar, `SidecarOverflowPolicy`, default `Block`) decide what happens to the excess.
+    /// So under saturation a message does *not* begin processing immediately — it waits where the platform or the adapter can still see it, instead of becoming a detached task that answers minutes late and is lost without a journal entry if the daemon stops first (see `acquire_dispatch_permit`).
     pub async fn start_adapter(
         &mut self,
         adapter: Arc<dyn ChannelAdapter>,
@@ -1628,6 +1672,15 @@ impl BridgeManager {
             let task = tokio::spawn(async move {
                 let mut stream = std::pin::pin!(stream);
                 loop {
+                    // Hold a dispatch permit before pulling the next message off the adapter stream.
+                    // Taking it here rather than inside the spawned task is what turns the cap into backpressure — the loop stops draining the stream while all permits are out, so the adapter's bounded channel and overflow policy handle the excess instead of the daemon accumulating detached tasks that answer minutes late.
+                    let permit = match acquire_dispatch_permit(&semaphore, &mut shutdown).await {
+                        Some(p) => p,
+                        None => {
+                            info!("Shutting down channel adapter {}", adapter_clone.name());
+                            break;
+                        }
+                    };
                     tokio::select! {
                         msg = stream.next() => {
                             match msg {
@@ -1638,13 +1691,10 @@ impl BridgeManager {
                                     let rate_limiter = rate_limiter.clone();
                                     let sanitizer = sanitizer.clone();
                                     let journal = journal.clone();
-                                    let sem = semaphore.clone();
                                     let thread_ownership = Arc::clone(&thread_ownership);
                                     tokio::spawn(async move {
-                                        let _permit = match sem.acquire().await {
-                                            Ok(p) => p,
-                                            Err(_) => return,
-                                        };
+                                        // Held for the whole dispatch; released when this task ends.
+                                        let _permit = permit;
                                         dispatch_message(
                                             &message,
                                             &handle,
@@ -1680,6 +1730,8 @@ impl BridgeManager {
             let mut buffers: HashMap<String, SenderBuffer> = HashMap::new();
 
             let mut typing_rx = adapter_clone.typing_events();
+            // A second receiver for the flush arm: the select's own shutdown branch holds `&mut shutdown` for as long as the loop lives, so the permit wait cannot borrow it.
+            let mut shutdown_for_flush = shutdown.clone();
 
             let task = tokio::spawn(async move {
                 let mut stream = std::pin::pin!(stream);
@@ -1702,7 +1754,10 @@ impl BridgeManager {
                                     let keys: Vec<String> = buffers.keys().cloned().collect();
                                     let mut handles = Vec::new();
                                     for key in keys {
-                                        if let Some(handle) = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, &semaphore, &journal, &thread_ownership) {
+                                        let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                                            break;
+                                        };
+                                        if let Some(handle) = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, permit, &journal, &thread_ownership) {
                                             handles.push(handle);
                                         }
                                     }
@@ -1737,14 +1792,22 @@ impl BridgeManager {
                             debouncer.on_typing(&sender_key, event.is_typing, &mut buffers);
                         }
                         Some(key) = flush_rx.recv() => {
-                            let _ = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, &semaphore, &journal, &thread_ownership);
+                            // Same ordering as the fast path: the permit is taken before the flush task exists, so a saturated adapter stops draining its stream instead of stacking up detached tasks.
+                            // The wait has to be shutdown-aware, because awaiting the permit here parks the whole `select!` — including the shutdown branch below — and `stop()` joins this task with no timeout, so an inline wait would let a saturated adapter hold a channel reload for a full dispatch turn.
+                            if let Some(permit) = acquire_dispatch_permit(&semaphore, &mut shutdown_for_flush).await {
+                                let _ = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, permit, &journal, &thread_ownership);
+                            }
+                            // On `None` the flush is skipped and the loop re-enters the select, where this task's own `shutdown` receiver still has the unobserved change and takes the drain path.
                         }
                         _ = shutdown.changed() => {
                             if *shutdown.borrow() {
                                 let keys: Vec<String> = buffers.keys().cloned().collect();
                                 let mut handles = Vec::new();
                                 for key in keys {
-                                    if let Some(handle) = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, &semaphore, &journal, &thread_ownership) {
+                                    let Ok(permit) = semaphore.clone().acquire_owned().await else {
+                                        break;
+                                    };
+                                    if let Some(handle) = flush_debounced(&debouncer, &key, &mut buffers, &handle, &router, &adapter_clone, &rate_limiter, &sanitizer, permit, &journal, &thread_ownership) {
                                         handles.push(handle);
                                     }
                                 }
@@ -2295,12 +2358,24 @@ impl BridgeManager {
                                             .map(|s| s.to_string())
                                             .collect::<Vec<_>>()
                                             .join("; ");
+                                        // `remedy` is a field, not part of the
+                                        // message: it takes four different
+                                        // values above, and interpolating a
+                                        // varying value into the event
+                                        // *message* splits one condition into
+                                        // four distinct strings, so every log
+                                        // backend that groups by message stops
+                                        // being able to count how often this
+                                        // fires. The four fields below are
+                                        // already structured for that reason;
+                                        // `remedy` was the exception.
                                         warn!(
                                             request_id = %approval.request_id,
                                             requesting_agent = %requesting_agent,
                                             adapters = adapters.len(),
                                             skipped = %considered,
-                                            "Approval reached no channel: {remedy}"
+                                            remedy = %remedy,
+                                            "Approval reached no channel"
                                         );
                                     }
                                 }
@@ -3724,7 +3799,7 @@ async fn handle_send_error<F, Fut>(
 struct RouteResolution {
     /// Resolved agent, or `None` when no eligible agent exists.
     agent_id: Option<AgentId>,
-    /// The message explicitly named this agent — an `@`-mention the adapter surfaced, or a match against the agent's own declared alias.
+    /// The message explicitly named this agent — an `@`-mention the adapter surfaced, or a match against the agent's own declared alias — or the conversation's explicit `/agent` override selected it.
     /// The conversation-ownership gate treats an addressed dispatch as a re-claim so a user can hand the thread from one agent to another mid-conversation (#5323).
     /// A continuation that merely inherits the sticky holder is *not* addressed.
     addressed: bool,
@@ -3920,15 +3995,15 @@ async fn resolve_or_fallback(
     }
 
     // Explicit per-conversation `/agent` override (#5671, upper binding level).
-    // A deliberate user command, so it outranks the #5323 sticky holder below:
-    // a fresh `/agent` must be able to re-point a conversation that already has
-    // a sticky claim. Applies to DMs and groups alike (not gated on is_group).
+    // A deliberate user command, so it outranks the #5323 sticky holder below: a fresh `/agent` must be able to re-point a conversation that already has a sticky claim.
+    // Applies to DMs and groups alike (not gated on is_group).
+    // Returned as `addressed` so the conversation-ownership gate re-claims for it: resolution never falls through to the sticky holder while an override exists, so a plain result would leave the previous agent's live claim in place and the gate would silently suppress every message after `/agent` until that claim's TTL ran out (#7140).
     if let Some((instance, conversation_id)) = binding_keys {
         if let Some(id) = handle
             .resolve_conversation_override(instance, conversation_id)
             .await
         {
-            return RouteResolution::plain(id);
+            return RouteResolution::addressed(id);
         }
     }
 
@@ -4512,6 +4587,7 @@ async fn dispatch_message(
                 args,
                 handle,
                 router,
+                early_agent_id,
                 &message.sender,
                 &message.channel,
                 message.metadata.get("account_id").and_then(|v| v.as_str()),
@@ -4930,6 +5006,7 @@ async fn dispatch_message(
                     &args,
                     handle,
                     router,
+                    early_agent_id,
                     &message.sender,
                     &message.channel,
                     message.metadata.get("account_id").and_then(|v| v.as_str()),
@@ -5953,7 +6030,7 @@ async fn maybe_describe_inbound_image_with_timeout(
                 return None;
             }
             Some(ContentBlock::Text {
-                text: format!("[Image description: {trimmed}]"),
+                text: librefang_types::media::image_description_block_text(trimmed),
                 provider_metadata: None,
             })
         }
@@ -6252,7 +6329,12 @@ const INBOUND_DESCRIPTION_TIMEOUT: std::time::Duration = std::time::Duration::fr
 /// User-facing text for an inbound image description that didn't produce a
 /// usable result. Deliberately opaque to avoid leaking provider error
 /// envelopes into the LLM prompt.
-const IMAGE_DESCRIPTION_UNAVAILABLE_BLOCK: &str = "[Image description unavailable]";
+///
+/// Re-exported from `librefang-types` rather than spelled out here: the agent
+/// loop matches on this exact text to detect that an image was already
+/// described, so the two sides must not drift.
+const IMAGE_DESCRIPTION_UNAVAILABLE_BLOCK: &str =
+    librefang_types::media::IMAGE_DESCRIPTION_UNAVAILABLE;
 
 /// Extract a basename-style filename from the path component of a URL.
 ///
@@ -7189,23 +7271,24 @@ async fn apply_channel_reset(
     targets: &[AgentId],
     channel: &str,
     chat_id: Option<&str>,
+    is_internal_system: bool,
 ) -> String {
     let mut replies: Vec<String> = Vec::new();
     for agent_id in targets {
         let reply = match kind {
             ChannelResetKind::New => {
                 handle
-                    .reset_channel_session(*agent_id, channel, chat_id)
+                    .reset_channel_session(*agent_id, channel, chat_id, is_internal_system)
                     .await
             }
             ChannelResetKind::Reboot => {
                 handle
-                    .reboot_channel_session(*agent_id, channel, chat_id)
+                    .reboot_channel_session(*agent_id, channel, chat_id, is_internal_system)
                     .await
             }
             ChannelResetKind::Compact => {
                 handle
-                    .compact_channel_session(*agent_id, channel, chat_id)
+                    .compact_channel_session(*agent_id, channel, chat_id, is_internal_system)
                     .await
             }
         }
@@ -7234,47 +7317,28 @@ async fn apply_channel_reset(
 /// `sender_user_id` is `message.metadata[SENDER_USER_ID_KEY]` (see [`sender_user_id`]), which the `/new` / `/reboot` / `/compact` arms need to reproduce the session scope `build_sender_context` derived for the inbound message.
 /// Passing `&sender.platform_id` here is wrong whenever the adapter carries the sender id in metadata and leaves `platform_id` empty — that is the #7701 drift.
 /// Callers hold the `ChannelMessage`, so they can always supply it.
+///
+/// `resolved_agent` is the agent this conversation's chat resolves to — the caller's [`resolve_or_fallback`] result for the same message, so every agent-scoped arm (`/new`, `/btw`, `/model`, `/think`, …) acts on the agent the user is actually talking to.
+/// Commands used to re-resolve through `AgentRouter::resolve_with_context` alone, which skips the thread route, group addressing, the `/agent` conversation override, the sticky holder, per-peer bindings and the instance default; whenever any of those decided the chat, the command acted on a different agent than the chat reached (#7140).
 #[allow(clippy::too_many_arguments)]
 async fn handle_command(
     name: &str,
     args: &[String],
     handle: &Arc<dyn ChannelBridgeHandle>,
     router: &Arc<AgentRouter>,
+    resolved_agent: Option<AgentId>,
     sender: &ChannelUser,
     channel_type: &crate::types::ChannelType,
     account_id: Option<&str>,
     overrides: Option<&ChannelOverrides>,
     sender_user_id: &str,
 ) -> String {
-    // Helper closure: build a `BindingContext` for the command and resolve
-    // the target agent via the context-aware resolver. This is what the
-    // regular message dispatch path uses (`resolve_or_fallback` →
-    // `resolve_with_context`) — the #5672 regression was that command arms
-    // called the context-less `resolve()` and lost the `account_id` along
-    // the way, so every bot's command would collapse to the first-registered
-    // channel default.
-    let resolve_for_command = || {
-        let ctx = crate::router::BindingContext {
-            channel: std::borrow::Cow::Borrowed(crate::router::channel_type_to_str(channel_type)),
-            account_id: account_id.map(std::borrow::Cow::Borrowed),
-            peer_id: std::borrow::Cow::Borrowed(sender.platform_id.as_str()),
-            guild_id: None,
-            roles: smallvec::SmallVec::new(),
-        };
-        router.resolve_with_context(
-            channel_type,
-            &sender.platform_id,
-            sender.librefang_user.as_deref(),
-            &ctx,
-        )
-    };
-
     // The agents a `/new` / `/reboot` / `/compact` has to cover.
     // Normally exactly one: the agent this chat resolves to.
-    // A sender with broadcast routing talks to several at once, and each keeps its own session for this chat, so a reset that stopped at the router-resolved agent would leave the others replying from the cleared history.
+    // A sender with broadcast routing talks to several at once, and each keeps its own session for this chat, so a reset that stopped at the resolved agent would leave the others replying from the cleared history.
     let reset_targets = || {
         let mut targets: Vec<AgentId> = Vec::new();
-        if let Some(agent_id) = resolve_for_command() {
+        if let Some(agent_id) = resolved_agent {
             targets.push(agent_id);
         }
         for (_, maybe_id) in router.resolve_broadcast(&sender.platform_id) {
@@ -7347,32 +7411,56 @@ async fn handle_command(
                 ),
                 None => router.set_user_default(sender.platform_id.clone(), agent_id),
             };
-            match handle.find_agent_by_name(agent_name).await {
-                Ok(Some(agent_id)) => {
-                    store_user_default(agent_id);
-                    format!("Now talking to agent: {agent_name}")
-                }
-                Ok(None) => {
-                    // Try to spawn it
-                    match handle.spawn_agent_by_name(agent_name).await {
-                        Ok(agent_id) => {
-                            store_user_default(agent_id);
-                            format!("Spawned and connected to agent: {agent_name}")
-                        }
-                        Err(e) => {
-                            format!("Agent '{agent_name}' not found and could not spawn: {e}")
-                        }
+            let (agent_id, ack) = match handle.find_agent_by_name(agent_name).await {
+                Ok(Some(agent_id)) => (agent_id, format!("Now talking to agent: {agent_name}")),
+                // Try to spawn it
+                Ok(None) => match handle.spawn_agent_by_name(agent_name).await {
+                    Ok(agent_id) => (
+                        agent_id,
+                        format!("Spawned and connected to agent: {agent_name}"),
+                    ),
+                    Err(e) => {
+                        return format!("Agent '{agent_name}' not found and could not spawn: {e}");
+                    }
+                },
+                Err(e) => return format!("Error finding agent: {e}"),
+            };
+            store_user_default(agent_id);
+            // On a channel instance (#5671) the router user default above is not enough: `resolve_or_fallback` consults the instance default before it ever reaches the router, so a sidecar seeded with `agent = "A"` kept routing chat to A after `/agent B` acked (#7140).
+            // The per-conversation override is the binding level built for this command — it outranks the sticky holder and the instance default — so persist the selection there, under the exact `(account_id, sender.platform_id)` keys the chat path reads it back with.
+            if let Some(instance) = account_id.filter(|s| !s.is_empty()) {
+                if !sender.platform_id.is_empty() {
+                    let bound_by = format!("user:{sender_user_id}");
+                    if let Err(e) = handle
+                        .set_conversation_override(
+                            instance,
+                            &sender.platform_id,
+                            agent_id,
+                            &bound_by,
+                        )
+                        .await
+                    {
+                        warn!(
+                            instance,
+                            conversation_id = %sender.platform_id,
+                            agent = %agent_name,
+                            error = %e,
+                            "failed to persist /agent conversation override"
+                        );
+                        return format!(
+                            "{ack}\nWarning: the selection could not be saved for this conversation ({e}), so messages here may keep going to the previous agent."
+                        );
                     }
                 }
-                Err(e) => format!("Error finding agent: {e}"),
             }
+            ack
         }
         "btw" => {
             if args.is_empty() {
                 return "Usage: /btw <question> — ask a side question without affecting session history".to_string();
             }
             let question = args.join(" ");
-            let agent_id = resolve_for_command();
+            let agent_id = resolved_agent;
             // Build a minimal SenderContext so the kernel can apply the
             // same peer-scoped memory lookup that the regular message path
             // uses (#4923) — otherwise the agent re-asks the user's name
@@ -7405,6 +7493,10 @@ async fn handle_command(
                 &targets,
                 &ch,
                 chat.as_deref(),
+                // Channel commands are external ingress by construction: a
+                // reserved-looking name here is already `ext-`-scoped by
+                // `session_scope`, never the internal system session.
+                false,
             )
             .await
         }
@@ -7420,6 +7512,10 @@ async fn handle_command(
                 &targets,
                 &ch,
                 chat.as_deref(),
+                // Channel commands are external ingress by construction: a
+                // reserved-looking name here is already `ext-`-scoped by
+                // `session_scope`, never the internal system session.
+                false,
             )
             .await
         }
@@ -7435,11 +7531,15 @@ async fn handle_command(
                 &targets,
                 &ch,
                 chat.as_deref(),
+                // Channel commands are external ingress by construction: a
+                // reserved-looking name here is already `ext-`-scoped by
+                // `session_scope`, never the internal system session.
+                false,
             )
             .await
         }
         "model" => {
-            let agent_id = resolve_for_command();
+            let agent_id = resolved_agent;
             match agent_id {
                 Some(aid) => {
                     if args.is_empty() {
@@ -7459,7 +7559,7 @@ async fn handle_command(
             }
         }
         "stop" => {
-            let agent_id = resolve_for_command();
+            let agent_id = resolved_agent;
             match agent_id {
                 Some(aid) => handle
                     .stop_run(aid)
@@ -7469,7 +7569,7 @@ async fn handle_command(
             }
         }
         "usage" => {
-            let agent_id = resolve_for_command();
+            let agent_id = resolved_agent;
             match agent_id {
                 Some(aid) => handle
                     .session_usage(aid)
@@ -7487,7 +7587,7 @@ async fn handle_command(
                     return format!("Unknown argument '{other}'. Usage: /think [on|off]");
                 }
             };
-            let agent_id = resolve_for_command();
+            let agent_id = resolved_agent;
             match agent_id {
                 Some(aid) => {
                     // Same (channel, chat_id) pair `/new` resets and the next inbound turn resolves its session from, plus the account dimension — see `ConversationScope` (#7140).
@@ -7522,7 +7622,7 @@ async fn handle_command(
                 // to that channel, the same binding every other command in
                 // this dispatcher resolves through.
                 handle
-                    .run_workflow_text(wf_name, &input, resolve_for_command())
+                    .run_workflow_text(wf_name, &input, resolved_agent)
                     .await
             } else {
                 "Usage: /workflow run <name> [input]".to_string()
@@ -7536,7 +7636,7 @@ async fn handle_command(
             };
             match librefang_types::goal::parse_goal_args(&args.join(" ")) {
                 None => usage(),
-                Some((description, loop_engineering)) => match resolve_for_command() {
+                Some((description, loop_engineering)) => match resolved_agent {
                     Some(aid) => handle
                         .create_and_start_goal(aid, &description, loop_engineering)
                         .await
@@ -8073,6 +8173,7 @@ mod tests {
             agent_id: AgentId,
             channel: &str,
             chat_id: Option<&str>,
+            _is_internal_system: bool,
         ) -> Result<String, String> {
             self.resets.lock().unwrap().push((
                 agent_id,
@@ -8088,6 +8189,7 @@ mod tests {
             agent_id: AgentId,
             channel: &str,
             chat_id: Option<&str>,
+            _is_internal_system: bool,
         ) -> Result<String, String> {
             self.reboots.lock().unwrap().push((
                 agent_id,
@@ -8103,6 +8205,7 @@ mod tests {
             agent_id: AgentId,
             channel: &str,
             chat_id: Option<&str>,
+            _is_internal_system: bool,
         ) -> Result<String, String> {
             self.compacts.lock().unwrap().push((
                 agent_id,
@@ -8141,6 +8244,42 @@ mod tests {
         }
     }
 
+    /// The agent `dispatch_message` hands `handle_command` for a command from `sender`: the same `resolve_or_fallback` call, on a synthetic command message carrying `account_id` the way the sidecar stamps it.
+    /// Tests that exercise an agent-scoped command arm use this rather than a hard-coded id, so they keep covering the resolution the command actually runs under (#5672, #7140).
+    async fn dispatch_resolution(
+        handle: &Arc<dyn ChannelBridgeHandle>,
+        router: &Arc<AgentRouter>,
+        sender: &ChannelUser,
+        channel: &ChannelType,
+        account_id: Option<&str>,
+    ) -> Option<AgentId> {
+        let mut metadata = std::collections::HashMap::new();
+        if let Some(aid) = account_id {
+            metadata.insert(
+                "account_id".to_string(),
+                serde_json::Value::String(aid.to_string()),
+            );
+        }
+        let message = ChannelMessage {
+            channel: channel.clone(),
+            platform_message_id: "1".into(),
+            sender: sender.clone(),
+            content: ChannelContent::Command {
+                name: "noop".into(),
+                args: Vec::new(),
+            },
+            target_agent: None,
+            timestamp: chrono::Utc::now(),
+            is_group: false,
+            thread_id: None,
+            metadata,
+        };
+        let thread_ownership = Arc::new(crate::thread_ownership::ThreadOwnershipRegistry::new());
+        resolve_or_fallback(&message, handle, router, &thread_ownership)
+            .await
+            .agent_id
+    }
+
     /// A sender with broadcast routing talks to several agents at once, and each of them keeps its own session for this chat.
     /// `/new` resolved a single agent through the router chain, so the other targets kept answering out of the history the user had just asked to clear — the command acked, the conversation did not change (#7140).
     #[tokio::test]
@@ -8161,6 +8300,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            dispatch_resolution(&handle, &router, &sender, &ChannelType::Telegram, None).await,
             &sender,
             &ChannelType::Telegram,
             None,
@@ -8209,6 +8349,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            dispatch_resolution(&handle, &router, &sender, &ChannelType::Telegram, None).await,
             &sender,
             &ChannelType::Telegram,
             None,
@@ -8247,6 +8388,7 @@ mod tests {
                 &[],
                 &handle,
                 &router,
+                None,
                 &sender,
                 &ChannelType::Telegram,
                 None,
@@ -8530,6 +8672,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -8544,6 +8687,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -8554,6 +8698,11 @@ mod tests {
         assert!(result.contains("/agents"));
     }
 
+    /// `/goal` is declared in the channel `CommandDef` table with
+    /// `telegram_menu: true`, so Telegram advertises it in the bot menu. A
+    /// conflict resolution once dropped the handler while leaving the
+    /// declaration in place, and the command answered "Unknown command: /goal"
+    /// straight from the bot menu. Assert the arm exists and is reachable.
     #[tokio::test]
     async fn test_handle_command_goal_is_dispatched() {
         let agent_id = AgentId::new();
@@ -8567,11 +8716,13 @@ mod tests {
             librefang_user: None,
         };
 
+        // No description → the arm's own usage string, never the fallthrough.
         let usage = handle_command(
             "goal",
             &[],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -8584,11 +8735,16 @@ mod tests {
             "expected the /goal usage string, got: {usage}"
         );
 
+        // With a description the command reaches the handle. MockHandle keeps
+        // the trait's default `create_and_start_goal`, so the reply is either
+        // the default's error or the no-agent-selected notice — both prove the
+        // arm is wired. The one thing it must never be is the fallthrough.
         let dispatched = handle_command(
             "goal",
             &["ship".to_string(), "the report".to_string()],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -8621,6 +8777,7 @@ mod tests {
             &["coder".to_string()],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -8633,6 +8790,143 @@ mod tests {
         // Verify router was updated
         let resolved = router.resolve(&ChannelType::Telegram, "user1", None);
         assert_eq!(resolved, Some(agent_id));
+    }
+
+    /// Records `set_conversation_override` writes, optionally failing them, so the `/agent` arm's binding-store write can be asserted directly (#7140).
+    struct OverrideRecorderHandle {
+        agents: Vec<(AgentId, String)>,
+        fail_with: Option<String>,
+        writes: Mutex<Vec<(String, String, AgentId, String)>>,
+    }
+
+    #[async_trait]
+    impl ChannelBridgeHandle for OverrideRecorderHandle {
+        async fn send_message(&self, _agent_id: AgentId, message: &str) -> Result<String, String> {
+            Ok(format!("Echo: {message}"))
+        }
+        async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+            Ok(self
+                .agents
+                .iter()
+                .find(|(_, n)| n == name)
+                .map(|(id, _)| *id))
+        }
+        async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+            Ok(self.agents.clone())
+        }
+        async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+            Err("spawn not implemented in mock".to_string())
+        }
+        async fn set_conversation_override(
+            &self,
+            instance: &str,
+            conversation_id: &str,
+            agent_id: AgentId,
+            bound_by: &str,
+        ) -> Result<(), String> {
+            self.writes.lock().unwrap().push((
+                instance.to_string(),
+                conversation_id.to_string(),
+                agent_id,
+                bound_by.to_string(),
+            ));
+            match &self.fail_with {
+                Some(e) => Err(e.clone()),
+                None => Ok(()),
+            }
+        }
+        fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+            // Test mock: no event bus to forward to.
+        }
+    }
+
+    /// `/agent` in a group on a channel instance binds the conversation (the group-chat id), and credits the member who typed it — not the chat — in `bound_by`.
+    /// A channel without an `account_id` has no binding-store instance to key on, so it keeps the router user default only.
+    #[tokio::test]
+    async fn agent_command_persists_conversation_override_on_instances() {
+        let agent_id = AgentId::new();
+        let recorder = Arc::new(OverrideRecorderHandle {
+            agents: vec![(agent_id, "coder".to_string())],
+            fail_with: None,
+            writes: Mutex::new(Vec::new()),
+        });
+        let handle: Arc<dyn ChannelBridgeHandle> = recorder.clone();
+        let router = Arc::new(AgentRouter::new());
+        let group = channel_user("group-chat-9");
+
+        let reply = handle_command(
+            "agent",
+            &["coder".to_string()],
+            &handle,
+            &router,
+            None,
+            &group,
+            &ChannelType::Telegram,
+            Some("tg-bot"),
+            None,
+            "member-7",
+        )
+        .await;
+        assert_eq!(reply, "Now talking to agent: coder");
+        assert_eq!(
+            recorder.writes.lock().unwrap().clone(),
+            vec![(
+                "tg-bot".to_string(),
+                "group-chat-9".to_string(),
+                agent_id,
+                "user:member-7".to_string(),
+            )],
+        );
+
+        let reply = handle_command(
+            "agent",
+            &["coder".to_string()],
+            &handle,
+            &router,
+            None,
+            &channel_user("user1"),
+            &ChannelType::CLI,
+            None,
+            None,
+            "user1",
+        )
+        .await;
+        assert_eq!(reply, "Now talking to agent: coder");
+        assert_eq!(
+            recorder.writes.lock().unwrap().len(),
+            1,
+            "no account_id means no binding-store instance to write under",
+        );
+    }
+
+    /// A failed binding-store write must not be acked as a clean switch: on an instance with a default agent the router user default alone does not win, so the user has to be told the selection may not take effect (#7140).
+    #[tokio::test]
+    async fn agent_command_reports_a_failed_override_write() {
+        let agent_id = AgentId::new();
+        let handle: Arc<dyn ChannelBridgeHandle> = Arc::new(OverrideRecorderHandle {
+            agents: vec![(agent_id, "coder".to_string())],
+            fail_with: Some("database is locked".to_string()),
+            writes: Mutex::new(Vec::new()),
+        });
+        let router = Arc::new(AgentRouter::new());
+
+        let reply = handle_command(
+            "agent",
+            &["coder".to_string()],
+            &handle,
+            &router,
+            None,
+            &channel_user("peer-1"),
+            &ChannelType::Telegram,
+            Some("tg-bot"),
+            None,
+            "peer-1",
+        )
+        .await;
+        assert!(
+            reply.contains("could not be saved") && reply.contains("database is locked"),
+            "got: {reply}"
+        );
     }
 
     /// Mock that reports channel-instance bindings, exercising the #5671
@@ -8929,6 +9223,26 @@ mod tests {
             Some(overridden),
             "the explicit per-conversation override must outrank the sticky holder"
         );
+
+        // `dispatch_message` runs the ownership gate on the resolved agent next (#7140).
+        // Resolving to the override is not enough if the gate then suppresses it because the previous agent still holds a live claim: the message after `/agent` would be dropped silently instead of reaching the selected agent.
+        assert!(
+            conversation_ownership_allows(
+                &msg,
+                &handle,
+                &thread_ownership,
+                None,
+                overridden,
+                resolved.addressed,
+            )
+            .await,
+            "the ownership gate must let the override agent through despite the sticky claim"
+        );
+        assert_eq!(
+            thread_ownership.current_holder(&build_thread_key(&msg).unwrap()),
+            Some(overridden),
+            "the override agent takes the claim over, so the sticky holder cannot re-suppress it"
+        );
     }
 
     /// MockHandle that records which `agent_id` `/model` was dispatched to,
@@ -9001,6 +9315,14 @@ mod tests {
             &[],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &sender,
+                &ChannelType::Telegram,
+                Some("bot-b"),
+            )
+            .await,
             &sender,
             &ChannelType::Telegram,
             Some("bot-b"),
@@ -9014,6 +9336,14 @@ mod tests {
             &[],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &sender,
+                &ChannelType::Telegram,
+                Some("bot-c"),
+            )
+            .await,
             &sender,
             &ChannelType::Telegram,
             Some("bot-c"),
@@ -9060,6 +9390,14 @@ mod tests {
             &["on".to_string()],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &chat_one,
+                &ChannelType::Telegram,
+                Some("bot-a"),
+            )
+            .await,
             &chat_one,
             &ChannelType::Telegram,
             Some("bot-a"),
@@ -9074,6 +9412,14 @@ mod tests {
             &["off".to_string()],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &chat_two,
+                &ChannelType::Telegram,
+                Some("bot-a"),
+            )
+            .await,
             &chat_two,
             &ChannelType::Telegram,
             Some("bot-a"),
@@ -9130,6 +9476,14 @@ mod tests {
                 &["on".to_string()],
                 &handle,
                 &router,
+                dispatch_resolution(
+                    &handle,
+                    &router,
+                    &chat,
+                    &ChannelType::Telegram,
+                    Some(account),
+                )
+                .await,
                 &chat,
                 &ChannelType::Telegram,
                 Some(account),
@@ -9170,6 +9524,14 @@ mod tests {
             &["of".to_string()],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &chat,
+                &ChannelType::Telegram,
+                Some("bot-a"),
+            )
+            .await,
             &chat,
             &ChannelType::Telegram,
             Some("bot-a"),
@@ -9189,6 +9551,14 @@ mod tests {
             &[],
             &handle,
             &router,
+            dispatch_resolution(
+                &handle,
+                &router,
+                &chat,
+                &ChannelType::Telegram,
+                Some("bot-a"),
+            )
+            .await,
             &chat,
             &ChannelType::Telegram,
             Some("bot-a"),
@@ -9231,6 +9601,7 @@ mod tests {
             &["agent-C".to_string()],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::Telegram,
             Some("bot-a"),
@@ -10186,6 +10557,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -10215,6 +10587,7 @@ mod tests {
             &["what is rust?".to_string()],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,
@@ -10242,6 +10615,7 @@ mod tests {
             &[],
             &handle,
             &router,
+            None,
             &sender,
             &ChannelType::CLI,
             None,

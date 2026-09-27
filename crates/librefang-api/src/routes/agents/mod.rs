@@ -13,7 +13,7 @@ use dashmap::DashMap;
 use librefang_channels::types::SenderContext;
 use librefang_kernel::kernel_handle::prelude::*;
 use librefang_kernel::kernel_handle::SessionWriter;
-use librefang_types::agent::{AgentId, AgentIdentity, AgentManifest, ResetScope};
+use librefang_types::agent::{AgentId, AgentIdentity, AgentManifest, AgentPersonality, ResetScope};
 use librefang_types::i18n::ErrorTranslator;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -24,7 +24,7 @@ mod config;
 mod ephemeral;
 mod files;
 mod identity;
-mod lifecycle;
+pub(crate) mod lifecycle;
 mod messaging;
 mod observability;
 mod sessions;
@@ -195,6 +195,10 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
             axum::routing::get(get_agent_mcp_servers).put(set_agent_mcp_servers),
         )
         .route(
+            "/agents/{id}/model_routing",
+            axum::routing::get(get_agent_model_routing).put(set_agent_model_routing),
+        )
+        .route(
             "/agents/{id}/channels",
             axum::routing::get(get_agent_channels).put(set_agent_channels),
         )
@@ -218,6 +222,10 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
         .route(
             "/agents/{id}/reload",
             axum::routing::post(reload_agent_manifest),
+        )
+        .route(
+            "/agents/{id}/manifest",
+            axum::routing::get(get_agent_manifest_toml),
         )
         .route(
             "/agents/{id}/files",
@@ -247,6 +255,16 @@ pub fn router() -> axum::Router<std::sync::Arc<AppState>> {
             "/agents/{id}/push",
             axum::routing::post(push_message),
         )
+}
+
+/// Why the kernel will not route this agent's model, or `None` when routing is live (#8446).
+///
+/// Stable mode freezes model choice: `agent_execution.rs` resolves neither the profile router (`mode = "flexible"`) nor the tier router (`[routing]` / `[default_routing]`) and applies only `pinned_model`, falling back to the manifest model.
+/// A routing configuration is still valid to store and takes effect once the mode changes, so the surfaces that show or accept one report this reason instead of refusing the write.
+/// Reads the same live config snapshot the execution path reads, because `mode` is a read-live field on `POST /api/config/reload`.
+pub(crate) fn model_routing_inert_reason(state: &AppState) -> Option<&'static str> {
+    (state.kernel.config_ref().mode == librefang_types::config::KernelMode::Stable)
+        .then_some("stable_mode")
 }
 
 /// Refuse a write that would change the *definition* of an agent the deployment provisioned (#6695).
@@ -301,11 +319,15 @@ const DEFAULT_AGENT_LIST_LIMIT: usize = 500;
 const MAX_AGENT_LIST_LIMIT: usize = 500;
 
 /// Enrich an `AgentEntry` into a JSON value with catalog data.
+///
+/// `provisioned` is the agent's declaration in the deployment's provisioning tree, or `None` when it is the operator's own.
+/// It is a parameter rather than a lookup inside this function because the function has no kernel handle, and because a list endpoint resolving it per row should be the caller's decision to make.
 pub(crate) fn enrich_agent_json(
     e: &librefang_types::agent::AgentEntry,
     dm: &librefang_types::config::DefaultModelConfig,
     catalog: Option<&librefang_kernel::model_catalog::ModelCatalog>,
     bulk_stats: Option<&std::collections::HashMap<String, (u64, f64)>>,
+    provisioned: Option<&librefang_kernel::provisioning::ResourceProvenance>,
 ) -> serde_json::Value {
     let provider = if e.manifest.model.provider.is_empty() || e.manifest.model.provider == "default"
     {
@@ -387,6 +409,13 @@ pub(crate) fn enrich_agent_json(
         "resume_pending": e.resume_pending,
         "reset_reason": e.reset_reason,
         "has_processed_message": e.has_processed_message,
+        // Whether the deployment declares this agent, and where.
+        //
+        // `guard_provisioned_agent` refuses eleven manifest-writing routes with `423 Locked` on a provisioned agent, and the kernel has known which agents those are all along — but the payload never said, so a client could not tell before trying (#8354).
+        // An operator would type an emoji and save, or pick an image and upload the whole thing, only to be refused at the end by something that was never going to work.
+        //
+        // `source` is the declaring file, which is the one thing a client needs beyond "you cannot": it says where to go and change it instead.
+        "provisioned": provisioned.map(|p| serde_json::json!({ "source": p.source })),
     })
 }
 
@@ -397,12 +426,13 @@ pub(crate) fn effective_default_model(
     override_dm.cloned().unwrap_or_else(|| base.clone())
 }
 
-/// Merge a partial identity update onto an agent's stored identity (#6608).
+/// Merge a partial appearance update onto an agent's stored identity (#6608).
 ///
-/// PATCH semantics for the six `AgentIdentity` fields: an `incoming` field of `None` means "not provided by the caller" and preserves the stored value; `Some(v)` overwrites it.
+/// PATCH semantics for the three `AgentIdentity` fields (`emoji`, `avatar_url`, `color`): an `incoming` field of `None` means "not provided by the caller" and preserves the stored value; `Some(v)` overwrites it.
+/// The three personality fields both routes also accept are not merged here: they are written into IDENTITY.md's front matter by `LibreFangKernel::set_agent_personality` (#8447), and a file edit keeps every key it is not given by construction.
 ///
-/// Both `PATCH /api/agents/{id}/identity` and `PATCH /api/agents/{id}/config` write these same six fields, and #6608 was the two drifting into opposite semantics: `/config` merged, `/identity` built a fresh `AgentIdentity` from the request alone, so `PATCH {"emoji": "X"}` through `/identity` nulled the other five fields and returned `200`.
-/// Routing both handlers through this one function is what keeps them from diverging again — a per-handler copy of the six-line merge is exactly what produced the bug.
+/// Both `PATCH /api/agents/{id}/identity` and `PATCH /api/agents/{id}/config` write these same fields, and #6608 was the two drifting into opposite semantics: `/config` merged, `/identity` built a fresh `AgentIdentity` from the request alone, so `PATCH {"emoji": "X"}` through `/identity` nulled the other fields and returned `200`.
+/// Routing both handlers through this one function is what keeps them from diverging again — a per-handler copy of the merge is exactly what produced the bug.
 ///
 /// Neither endpoint can set a field back to `None`, because `None` is already spoken for by "not provided".
 /// The closest available operation is to store an empty string: `Some("")` passes both handlers' `color` / `avatar_url` validators (each is guarded by `!x.is_empty()`) and is stored as `Some("")`, which `GET /api/agents/{id}` then reports as `""` rather than `null`.
@@ -414,15 +444,60 @@ pub(crate) fn merge_agent_identity(
         emoji: incoming.emoji.or(current.emoji),
         avatar_url: incoming.avatar_url.or(current.avatar_url),
         color: incoming.color.or(current.color),
-        archetype: incoming.archetype.or(current.archetype),
-        vibe: incoming.vibe.or(current.vibe),
-        greeting_style: incoming.greeting_style.or(current.greeting_style),
     }
+}
+
+/// Map a `set_agent_personality` failure (#8447) onto the response both identity PATCH routes return.
+///
+/// `Conflict` covers the agent whose IDENTITY.md cannot be edited in place (missing, not a regular file, front matter never closed): answering 200 there would repeat the bug this write exists to fix, an edit reported as applied that the prompt never sees.
+pub(crate) fn personality_write_error(
+    e: &crate::error::KernelError,
+    t: &ErrorTranslator,
+) -> (StatusCode, Json<serde_json::Value>) {
+    use crate::error::KernelError;
+    use librefang_types::error::LibreFangError;
+    let status = match e {
+        KernelError::LibreFang(LibreFangError::AgentNotFound(_)) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({"error": t.t("api-error-agent-not-found")})),
+            );
+        }
+        KernelError::LibreFang(LibreFangError::InvalidInput(_)) => StatusCode::BAD_REQUEST,
+        KernelError::LibreFang(LibreFangError::Conflict(_)) => StatusCode::CONFLICT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    (
+        status,
+        Json(serde_json::json!({"error": kernel_err_body(status, e, t)})),
+    )
+}
+
+/// Refuse a personality value with a line break before a PATCH applies any of its fields (#8447).
+///
+/// The kernel refuses it too, but only when it gets there; both routes apply other fields first, so the check has to run with the rest of the request validation for a rejected body to change nothing.
+pub(crate) fn reject_multiline_personality(
+    personality: &AgentPersonality,
+    t: &ErrorTranslator,
+) -> Option<(StatusCode, Json<serde_json::Value>)> {
+    personality.multiline_field().map(|key| {
+        let reason = format!("`{key}` must be a single line");
+        (
+            StatusCode::BAD_REQUEST,
+            Json(
+                serde_json::json!({"error": t.t_args("api-error-generic", &[("error", &reason)])}),
+            ),
+        )
+    })
 }
 
 /// Resolve the session id the attachment blocks should be written to,
 /// mirroring the resolver used by `send_message_*` in
-/// `kernel::messaging`. Pure function (no I/O, no kernel reads) so it can
+/// `kernel::messaging`. The channel branch delegates to
+/// `LibreFangKernel::channel_session_id` — the single resolver every
+/// dispatch path names (#7701 review: this used to be the fourth inline
+/// `for_sender_scope` mirror, and without the reserved-name guard it could
+/// drift from the other three). Pure function (no I/O, no kernel reads) so it can
 /// be unit-tested directly and so call sites can assert which session id
 /// the attachment landed in.
 ///
@@ -453,10 +528,15 @@ pub(crate) fn resolve_attachment_session_id(
     }
     if let Some(ctx) = sender_context {
         if !ctx.channel.is_empty() && !ctx.use_canonical_session {
-            return librefang_types::agent::SessionId::for_sender_scope(
+            // The channel branch now goes through the kernel's centralized
+            // resolver, not an inline `for_sender_scope`: the reserved-name
+            // guard (`resolve_scope_channel`) lives in one place, so this
+            // fourth site cannot drift from the other three (#7701 review).
+            return librefang_kernel::LibreFangKernel::channel_session_id(
                 agent_id,
                 &ctx.channel,
                 ctx.chat_id.as_deref(),
+                ctx.is_internal_system,
             );
         }
     }
@@ -692,6 +772,13 @@ fn kernel_err_to_status(e: &crate::error::KernelError) -> StatusCode {
     use librefang_types::error::LibreFangError;
     match e {
         KernelError::LibreFang(LibreFangError::AgentNotFound(_)) => StatusCode::NOT_FOUND,
+        // The other two "not found" shapes the kernel can produce. Leaving
+        // them in the `_` arm reported a missing session, or a tool-level
+        // resource a `ToolError::NotFound` had already typed, as a server
+        // fault — and `kernel_err_body` then scrubbed the reason away, so the
+        // caller could not tell a bad id from an outage.
+        KernelError::LibreFang(LibreFangError::SessionNotFound(_)) => StatusCode::NOT_FOUND,
+        KernelError::LibreFang(LibreFangError::ResourceNotFound { .. }) => StatusCode::NOT_FOUND,
         KernelError::LibreFang(LibreFangError::AgentAlreadyExists(_)) => StatusCode::CONFLICT,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
@@ -962,13 +1049,10 @@ mod tests {
             emoji: Some("stored-emoji".to_string()),
             avatar_url: Some("https://example.invalid/stored.png".to_string()),
             color: Some("#000001".to_string()),
-            archetype: Some("stored-archetype".to_string()),
-            vibe: Some("stored-vibe".to_string()),
-            greeting_style: Some("stored-greeting".to_string()),
         }
     }
 
-    /// A one-field update must preserve the other five.
+    /// A one-field update must preserve the other two.
     /// This is #6608 in unit form: the pre-fix `/identity` handler dropped them.
     #[test]
     fn merge_agent_identity_preserves_fields_the_caller_omitted() {
@@ -985,30 +1069,21 @@ mod tests {
             Some("https://example.invalid/stored.png")
         );
         assert_eq!(merged.color.as_deref(), Some("#000001"));
-        assert_eq!(merged.archetype.as_deref(), Some("stored-archetype"));
-        assert_eq!(merged.vibe.as_deref(), Some("stored-vibe"));
-        assert_eq!(merged.greeting_style.as_deref(), Some("stored-greeting"));
     }
 
     /// Every field is wired to its own counterpart.
-    /// A transposed pair (`vibe: incoming.archetype.or(...)`) is precisely the drift class this helper exists to prevent, and only a per-field assertion catches it, so each field is driven with a distinguishable value.
+    /// A transposed pair (`color: incoming.emoji.or(...)`) is precisely the drift class this helper exists to prevent, and only a per-field assertion catches it, so each field is driven with a distinguishable value.
     #[test]
     fn merge_agent_identity_maps_each_field_to_itself() {
         let incoming = AgentIdentity {
             emoji: Some("in-emoji".to_string()),
             avatar_url: Some("in-avatar".to_string()),
             color: Some("in-color".to_string()),
-            archetype: Some("in-archetype".to_string()),
-            vibe: Some("in-vibe".to_string()),
-            greeting_style: Some("in-greeting".to_string()),
         };
         let merged = merge_agent_identity(full_identity(), incoming);
         assert_eq!(merged.emoji.as_deref(), Some("in-emoji"));
         assert_eq!(merged.avatar_url.as_deref(), Some("in-avatar"));
         assert_eq!(merged.color.as_deref(), Some("in-color"));
-        assert_eq!(merged.archetype.as_deref(), Some("in-archetype"));
-        assert_eq!(merged.vibe.as_deref(), Some("in-vibe"));
-        assert_eq!(merged.greeting_style.as_deref(), Some("in-greeting"));
     }
 
     /// An empty string is the documented way to clear a field, since `None` already means "not provided".
@@ -1033,9 +1108,6 @@ mod tests {
         assert_eq!(merged.emoji, full_identity().emoji);
         assert_eq!(merged.avatar_url, full_identity().avatar_url);
         assert_eq!(merged.color, full_identity().color);
-        assert_eq!(merged.archetype, full_identity().archetype);
-        assert_eq!(merged.vibe, full_identity().vibe);
-        assert_eq!(merged.greeting_style, full_identity().greeting_style);
     }
 
     /// The pre-fix prefix-match (`"image/"`) let SVG, BMP, TIFF, HEIC and
@@ -1864,6 +1936,19 @@ mod tests {
         assert_eq!(req.max_output_tokens, Some(Some(8192)));
     }
 
+    /// #8290: the local-model samplers are accepted on the same tri-state contract.
+    #[test]
+    fn test_patch_config_request_accepts_the_local_model_samplers() {
+        let req: PatchAgentConfigRequest =
+            serde_json::from_str(r#"{"top_k": 40, "min_p": 0.05, "repeat_penalty": null}"#)
+                .unwrap();
+        assert_eq!(req.top_k, Some(Some(40)));
+        assert_eq!(req.min_p, Some(Some(0.05)));
+        assert_eq!(req.repeat_penalty, Some(None));
+        let absent: PatchAgentConfigRequest = serde_json::from_str("{}").unwrap();
+        assert_eq!(absent.top_k, None);
+    }
+
     /// `reasoning_effort` is deliberately not on this request: it is an
     /// endpoint fact, not an agent preference, and letting an agent force it
     /// on reintroduces the gateway-rejects-every-turn failure of #7770.
@@ -1988,6 +2073,38 @@ mod tests {
         );
     }
 
+    /// The reserved-name guard applies at the attachment site too. An
+    /// external sender whose channel happens to carry a reserved system
+    /// name ("cron") must not land on the internal system session id —
+    /// before the migration to `LibreFangKernel::channel_session_id` this
+    /// was the fourth inline `for_sender_scope` mirror, and the only one
+    /// of the four without the guard (#7701 review).
+    #[test]
+    fn resolve_attachment_session_id_guards_reserved_channel_names() {
+        use librefang_channels::types::SenderContext;
+        use librefang_types::agent::SessionId;
+        let agent_id = AgentId::new();
+        let registry_default = SessionId::new();
+        let sender = SenderContext {
+            channel: "cron".to_string(),
+            user_id: "user-1".to_string(),
+            chat_id: Some("chat-XYZ".to_string()),
+            display_name: "Alice".to_string(),
+            use_canonical_session: false,
+            is_internal_system: false,
+            ..Default::default()
+        };
+        let resolved =
+            resolve_attachment_session_id(agent_id, Some(&sender), None, registry_default);
+        let unguarded =
+            SessionId::for_sender_scope(agent_id, &sender.channel, sender.chat_id.as_deref());
+        assert_ne!(
+            resolved, unguarded,
+            "an external 'cron' channel must be remapped by the reserved-name \
+             guard instead of colliding with the internal system session id"
+        );
+    }
+
     /// Explicit `session_id_override` (multi-tab WebUI, REST callers that
     /// already pinned a session) must win over channel-derived resolution
     /// AND over the registry-default fallback. Mirrors priority #1 in the
@@ -2107,6 +2224,7 @@ mod monitoring_tests {
             webhook_router: Arc::new(tokio::sync::RwLock::new(Arc::new(axum::Router::new()))),
             api_key_lock: Arc::new(tokio::sync::RwLock::new(String::new())),
             master_key: Default::default(),
+            dashboard_auth_enabled: Default::default(),
             user_api_keys: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             config_write_lock: tokio::sync::Mutex::new(()),
             pending_a2a_agents: dashmap::DashMap::new(),

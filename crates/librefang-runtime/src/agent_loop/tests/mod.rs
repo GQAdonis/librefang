@@ -7,6 +7,7 @@ use super::model::needs_qualified_model_id;
 use super::retry::{BASE_RETRY_DELAY_MS, MAX_RETRIES};
 use super::text_recovery::{
     looks_like_hallucinated_action, parse_dash_dash_args, parse_json_tool_call_object,
+    replace_unrecoverable_tool_call_reply, should_attempt_text_recovery,
     user_message_has_action_intent,
 };
 use super::tool_call::{
@@ -32,6 +33,51 @@ fn test_max_iterations_constant() {
     );
 }
 
+// #8236: text-based tool-call recovery must not run on the turn the
+// block-stall degrade (#5979) forced tools-stripped, or a markup call
+// promoted back from text re-arms the very loop the degrade exists to
+// break. See `should_attempt_text_recovery`'s doc-comment for the full
+// mechanism.
+#[test]
+fn test_should_attempt_text_recovery_skips_forced_tools_stripped_turn() {
+    assert!(!should_attempt_text_recovery(
+        true, // forced_tools_stripped_this_turn
+        StopReason::EndTurn,
+        true, // tool_calls_empty
+    ));
+    assert!(!should_attempt_text_recovery(
+        true,
+        StopReason::StopSequence,
+        true,
+    ));
+}
+
+#[test]
+fn test_should_attempt_text_recovery_runs_on_a_normal_turn() {
+    assert!(should_attempt_text_recovery(
+        false, // forced_tools_stripped_this_turn
+        StopReason::EndTurn,
+        true, // tool_calls_empty
+    ));
+}
+
+#[test]
+fn test_should_attempt_text_recovery_requires_empty_tool_calls_and_end_turn() {
+    // Unrelated to the forced-tools-stripped gate: recovery is still scoped
+    // to EndTurn/StopSequence turns with no native tool_calls, exactly as
+    // before #8236.
+    assert!(!should_attempt_text_recovery(
+        false,
+        StopReason::ToolUse,
+        true
+    ));
+    assert!(!should_attempt_text_recovery(
+        false,
+        StopReason::EndTurn,
+        false
+    ));
+}
+
 #[test]
 fn context_compaction_updates_working_and_persistent_messages() {
     let current_user = Message::user("current user");
@@ -43,6 +89,7 @@ fn context_compaction_updates_working_and_persistent_messages() {
     let mut session = Session {
         id: librefang_types::agent::SessionId::new(),
         agent_id: librefang_types::agent::AgentId::new(),
+        parent_session_id: None,
         messages: original.clone(),
         context_window_tokens: 0,
         label: None,
@@ -94,6 +141,7 @@ fn context_compaction_preserves_current_turn_when_engine_omits_it() {
     let mut session = Session {
         id: librefang_types::agent::SessionId::new(),
         agent_id: librefang_types::agent::AgentId::new(),
+        parent_session_id: None,
         messages: vec![
             Message::user("old user"),
             current_user.clone(),
@@ -135,6 +183,7 @@ fn context_compaction_uses_last_duplicate_as_current_turn_boundary() {
     let mut session = Session {
         id: librefang_types::agent::SessionId::new(),
         agent_id: librefang_types::agent::AgentId::new(),
+        parent_session_id: None,
         messages: original.clone(),
         context_window_tokens: 0,
         label: None,
@@ -170,6 +219,7 @@ fn context_compaction_keeps_full_current_turn_when_first_message_repeats() {
     let mut session = Session {
         id: librefang_types::agent::SessionId::new(),
         agent_id: librefang_types::agent::AgentId::new(),
+        parent_session_id: None,
         messages: original.clone(),
         context_window_tokens: 0,
         label: None,
@@ -918,6 +968,7 @@ fn silent_response_single_source_of_truth() {
 
 mod integration;
 mod recovery;
+mod sampling_params;
 mod sender;
 mod utilities;
 mod vision_gate;

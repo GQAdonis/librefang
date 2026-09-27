@@ -1017,6 +1017,8 @@ fn test_spawn_agent_applies_local_default_model_override() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "default".to_string(),
                     model: "default".to_string(),
                     max_tokens: Some(4096),
@@ -1499,6 +1501,8 @@ fn test_set_agent_model_clears_overrides_when_provider_changes() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "cloudverse".to_string(),
                     model: "anthropic-claude-4-5-sonnet".to_string(),
                     max_tokens: Some(4096),
@@ -1616,6 +1620,225 @@ fn test_set_agent_model_clears_overrides_when_provider_changes() {
     assert_eq!(inherited.manifest.model.model, "default");
     assert!(inherited.manifest.model.api_key_env.is_none());
     assert!(inherited.manifest.model.base_url.is_none());
+
+    kernel.shutdown();
+}
+
+/// #7781 review: the credential half of a provider switch was already cleared
+/// (`test_set_agent_model_clears_overrides_when_provider_changes`); the
+/// capacity half was not.
+/// `context_window` / `max_output_tokens` describe what the *endpoint* can do,
+/// so an operator moving an agent from a large-window provider to a small-window
+/// one through the dashboard's model picker left the old endpoint's window
+/// attached to the new one — the same gap the model router closed for
+/// `apply_routed_profile` and `apply_tier_routed_model`, in the file next door.
+/// Both paths now share `clear_stale_provider_overrides`.
+#[test]
+fn switching_provider_also_drops_the_old_endpoints_capacity_limits() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-provider-switch-limits");
+    std::fs::create_dir_all(&home_dir).unwrap();
+
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    // An agent pinned to a provider whose endpoint accepts a 200k window.
+    let agent_id = kernel
+        .spawn_agent_inner(
+            AgentManifest {
+                name: "switch-provider-limits-agent".to_string(),
+                source_template: None,
+                description: "carries the previous endpoint's limits".to_string(),
+                author: "test".to_string(),
+                module: "builtin:chat".to_string(),
+                model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
+                    provider: "cloudverse".to_string(),
+                    model: "anthropic-claude-4-5-sonnet".to_string(),
+                    api_key_env: Some("CLOUDVERSE_API_KEY".to_string()),
+                    base_url: Some("https://cloudverse.freshworkscorp.com/api/v1".to_string()),
+                    context_window: Some(200_000),
+                    max_output_tokens: Some(64_000),
+                    // Flattened verbatim into the request body, so it only
+                    // means anything to the provider it was set for.
+                    extra_params: std::collections::BTreeMap::from([(
+                        "enable_memory".to_string(),
+                        serde_json::json!(true),
+                    )]),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            None,
+            None,
+            None,
+        )
+        .expect("agent should spawn");
+
+    let pre = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent registry entry");
+    assert_eq!(pre.manifest.model.context_window, Some(200_000));
+    assert_eq!(pre.manifest.model.max_output_tokens, Some(64_000));
+    assert!(pre
+        .manifest
+        .model
+        .extra_params
+        .contains_key("enable_memory"));
+
+    // The dashboard's model picker, switching to a different provider.
+    kernel
+        .set_agent_model(agent_id, "gpt-4o-mini", Some("openai"))
+        .expect("provider switch should succeed");
+
+    let post = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent registry entry after switch");
+    assert_eq!(post.manifest.model.provider, "openai");
+    assert_eq!(
+        post.manifest.model.context_window, None,
+        "the previous endpoint's context_window must not cap the new provider — \
+         resolution falls back to the registry / probe chain for the new model"
+    );
+    assert_eq!(
+        post.manifest.model.max_output_tokens, None,
+        "the previous endpoint's max_output_tokens must not cap the new provider"
+    );
+    assert!(
+        post.manifest.model.extra_params.is_empty(),
+        "extra_params is flattened verbatim into the request body, so carrying the \
+         previous provider's keys onto the new one sends parameters it does not know: \
+         {:?}",
+        post.manifest.model.extra_params
+    );
+
+    // The same-provider swap keeps them: on one endpoint these are a
+    // deliberate per-agent override, not a leftover.
+    kernel
+        .agents
+        .registry
+        .update_context_window(agent_id, Some(128_000))
+        .expect("seed a deliberate per-agent window");
+    kernel
+        .agents
+        .registry
+        .update_model_max_output_tokens(agent_id, Some(16_000))
+        .expect("seed a deliberate per-agent output cap");
+    kernel
+        .set_agent_model(agent_id, "gpt-4o", Some("openai"))
+        .expect("same-provider model swap should succeed");
+
+    let same_provider = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent after same-provider swap");
+    assert_eq!(
+        same_provider.manifest.model.context_window,
+        Some(128_000),
+        "a same-provider model swap must preserve a deliberate per-agent context_window"
+    );
+    assert_eq!(
+        same_provider.manifest.model.max_output_tokens,
+        Some(16_000),
+        "a same-provider model swap must preserve a deliberate per-agent max_output_tokens"
+    );
+
+    kernel.shutdown();
+}
+
+/// The same five-field clear also runs on the boot restore path, under a branch
+/// whose first disjunct — `is_default_provider && is_default_model` — is true for
+/// a row that is *already* on the `default` sentinel. There the two assignments
+/// above it restate what is there and no endpoint moves, so clearing is not
+/// repointing hygiene: it is data loss on a path that runs on every restart.
+///
+/// Without the gate an operator's hand-set window, output cap and
+/// `[model.extra_params]` on any agent inheriting the global model are nulled by
+/// the next daemon restart and made permanent by the following `save_agent`.
+#[test]
+fn restarting_keeps_the_overrides_of_an_agent_already_on_the_default_sentinel() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-boot-restore-overrides");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+
+    let agent_id = {
+        let kernel =
+            LibreFangKernel::boot_with_config(config.clone()).expect("first boot should succeed");
+        let id = kernel
+            .spawn_agent_inner(
+                AgentManifest {
+                    name: "sentinel-overrides-agent".to_string(),
+                    source_template: None,
+                    description: "inherits the global model, with deliberate overrides".to_string(),
+                    author: "test".to_string(),
+                    module: "builtin:chat".to_string(),
+                    model: ModelConfig {
+                        mode: librefang_types::agent::ModelMode::Fixed,
+                        router_override: None,
+                        // Already the sentinel: the restore branch restates these.
+                        provider: "default".to_string(),
+                        model: "default".to_string(),
+                        context_window: Some(32_000),
+                        max_output_tokens: Some(8_000),
+                        extra_params: std::collections::BTreeMap::from([(
+                            "enable_memory".to_string(),
+                            serde_json::json!(true),
+                        )]),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                None,
+                None,
+                None,
+            )
+            .expect("agent should spawn");
+        kernel.shutdown();
+        id
+    };
+
+    // Second boot over the same home — the restore the deploy's restart performs.
+    let kernel = LibreFangKernel::boot_with_config(config).expect("second boot should succeed");
+    let restored = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("the agent should be restored");
+
+    assert_eq!(
+        restored.manifest.model.context_window,
+        Some(32_000),
+        "a restart must not null a window the operator set on an agent that never moved endpoints"
+    );
+    assert_eq!(
+        restored.manifest.model.max_output_tokens,
+        Some(8_000),
+        "same for the output cap: nothing repointed, so nothing is stale"
+    );
+    assert!(
+        restored
+            .manifest
+            .model
+            .extra_params
+            .contains_key("enable_memory"),
+        "extra_params is provider-specific, but this agent's provider did not change: {:?}",
+        restored.manifest.model.extra_params
+    );
 
     kernel.shutdown();
 }
@@ -3344,7 +3567,13 @@ async fn test_task_board_sweep_resets_stuck_in_progress_task() {
 
     // Post and claim a task so status = in_progress.
     let task_id = mem
-        .task_post("Stuck work", "Worker will stall", Some("worker"), None)
+        .task_post(
+            "Stuck work",
+            "Worker will stall",
+            Some("worker"),
+            None,
+            librefang_memory::TaskQueueCaps::UNLIMITED,
+        )
         .await
         .expect("post");
     let claimed = mem
@@ -3383,6 +3612,87 @@ async fn test_task_board_sweep_resets_stuck_in_progress_task() {
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0]["id"], task_id);
     assert_eq!(pending[0]["assigned_to"], "");
+
+    kernel.shutdown();
+}
+
+/// `[queue] max_depth_global` reaches the kernel's enqueue, and reaching it answers `QuotaExceeded` rather than `Internal`.
+///
+/// The distinction is the whole point of wiring it: `Internal` reaches an HTTP client as a scrubbed 500, which says "the daemon broke" and invites an immediate retry of the request the cap just declined. `QuotaExceeded` maps to 429 (#8219).
+#[tokio::test(flavor = "multi_thread")]
+async fn queue_depth_cap_reaches_task_post_and_answers_as_a_quota() {
+    use librefang_runtime::kernel_handle::TaskQueue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    config.queue.max_depth_global = 1;
+    // The shipped 3600s default spawns a sweep at boot; off so it cannot race the assertions.
+    config.queue.task_ttl_secs = 0;
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("Kernel should boot"));
+    kernel.clone().set_self_handle();
+
+    kernel
+        .task_post("first", "body", None, None)
+        .await
+        .expect("the first post fits the cap");
+
+    let err = kernel
+        .task_post("second", "body", None, None)
+        .await
+        .expect_err("the second post exceeds max_depth_global = 1");
+    assert!(
+        matches!(
+            err,
+            librefang_runtime::kernel_handle::KernelOpError::QuotaExceeded(_)
+        ),
+        "a full queue must not be flattened into Internal: {err:?}"
+    );
+
+    kernel.shutdown();
+}
+
+/// The cap is read from the live config on every post, so `POST /api/config/reload` moves it without a restart.
+///
+/// Capturing it at boot would have made a knob in a section whose other fields hot-reload quietly restart-required, which is the class of bug `docs/operations/config-reload.md` exists to prevent.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_reloaded_queue_depth_cap_takes_effect_without_a_restart() {
+    use librefang_runtime::kernel_handle::TaskQueue;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    config.queue.max_depth_global = 1;
+    config.queue.task_ttl_secs = 0;
+    let kernel = Arc::new(LibreFangKernel::boot_with_config(config).expect("Kernel should boot"));
+    kernel.clone().set_self_handle();
+
+    kernel.task_post("first", "body", None, None).await.unwrap();
+    kernel
+        .task_post("second", "body", None, None)
+        .await
+        .expect_err("at the cap");
+
+    let mut raised = (*kernel.config.load_full()).clone();
+    raised.queue.max_depth_global = 10;
+    kernel.config.store(Arc::new(raised));
+
+    kernel
+        .task_post("second", "body", None, None)
+        .await
+        .expect("the raised cap is in force on the next post");
 
     kernel.shutdown();
 }
@@ -9131,6 +9441,300 @@ async fn test_push_notification_health_check_failed_no_targets_when_unconfigured
     kernel.shutdown();
 }
 
+// ---------------------------------------------------------------------------
+// `autonomous.heartbeat_channel` — the per-agent shorthand for this same alert.
+//
+// The manifest field round-tripped through agent.toml and the dashboard form
+// for a long time with no Rust reader at all: an operator who filled in
+// "Heartbeat Channel" and nothing else got no alert, while the dashboard
+// echoed the setting back as if it were in effect. It now resolves into the
+// `health_check_failed` target list, one layer more specific than
+// `[notification] alert_channels` and one layer less specific than a
+// `[[notification.agent_rules]]` entry naming the event. These tests pin all
+// three layers against each other.
+// ---------------------------------------------------------------------------
+
+/// Register a running agent whose manifest carries `autonomous.heartbeat_channel`.
+fn register_agent_with_heartbeat_channel(
+    kernel: &LibreFangKernel,
+    name: &str,
+    heartbeat_channel: &str,
+) -> AgentId {
+    let mut manifest = test_manifest(name, "heartbeat routing test agent", vec![]);
+    manifest.autonomous = Some(librefang_types::agent::AutonomousConfig {
+        heartbeat_channel: Some(heartbeat_channel.to_string()),
+        ..Default::default()
+    });
+    let id = AgentId::new();
+    let entry = AgentEntry {
+        id,
+        name: name.to_string(),
+        manifest,
+        state: AgentState::Running,
+        ..Default::default()
+    };
+    kernel.agents.registry.register(entry).unwrap();
+    id
+}
+
+/// Boot a kernel for the heartbeat-alert routing tests, with an owner user carrying `channel_bindings`.
+fn boot_kernel_for_heartbeat_alerts(
+    notification: NotificationConfig,
+    owner_bindings: HashMap<String, String>,
+) -> LibreFangKernel {
+    use librefang_types::config::UserConfig;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    // The kernel keeps reading from this home for the rest of the test.
+    std::mem::forget(dir);
+
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        notification,
+        users: vec![UserConfig {
+            name: "Owner".to_string(),
+            role: "owner".to_string(),
+            channel_bindings: owner_bindings,
+            ..Default::default()
+        }],
+        ..KernelConfig::default()
+    };
+
+    LibreFangKernel::boot_with_config(config).expect("Kernel should boot")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_heartbeat_alert_prefers_per_agent_heartbeat_channel_over_alert_channels() {
+    // Without the manifest field being read, this alert lands on "global-ops":
+    // the per-agent value is the whole point of the knob, so it must win.
+    let notification = NotificationConfig {
+        approval_channels: Vec::new(),
+        alert_channels: vec![NotificationTarget {
+            channel_type: "test".to_string(),
+            recipient: "global-ops".to_string(),
+            thread_id: None,
+        }],
+        agent_rules: Vec::new(),
+    };
+    let kernel = boot_kernel_for_heartbeat_alerts(notification, HashMap::new());
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_agent_with_heartbeat_channel(&kernel, "night-watch", "test:oncall-phone");
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    assert_eq!(
+        recorded,
+        vec![
+            "oncall-phone:Agent \"night-watch\" is unresponsive (inactive for 90s)".to_string()
+        ],
+        "autonomous.heartbeat_channel must route this agent's alert instead of the global alert_channels"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_heartbeat_alert_agent_rule_still_overrides_heartbeat_channel() {
+    // Precedence lock: the shorthand carries one target and no thread id, so a
+    // rule written against health_check_failed stays the authoritative form.
+    //
+    // The pattern is the agent's *name*, which is how `agent_pattern` is documented and the only spelling an operator can write by hand — the caller identifies the agent by a UUID minted at registration.
+    // A rule matched against the id alone would lose to the shorthand here, which is the opposite of what every doc surface for this field promises.
+    let notification = NotificationConfig {
+        approval_channels: Vec::new(),
+        alert_channels: Vec::new(),
+        agent_rules: vec![AgentNotificationRule {
+            agent_pattern: "night-watch".to_string(),
+            channels: vec![NotificationTarget {
+                channel_type: "test".to_string(),
+                recipient: "rule-topic".to_string(),
+                thread_id: None,
+            }],
+            events: vec!["health_check_failed".to_string()],
+        }],
+    };
+    let kernel = boot_kernel_for_heartbeat_alerts(notification, HashMap::new());
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_agent_with_heartbeat_channel(&kernel, "night-watch", "test:oncall-phone");
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    assert_eq!(
+        recorded,
+        vec!["rule-topic:Agent \"night-watch\" is unresponsive (inactive for 90s)".to_string()],
+        "a matching [[notification.agent_rules]] entry must still win over the manifest shorthand"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_agent_rule_pattern_matches_agent_name_and_uuid() {
+    // `agent_pattern` is documented as a glob over agent names, and a name glob is the only form an operator can write ahead of time — the UUID is minted at registration.
+    // Matching the id as well keeps the identifier callers actually pass usable, so both halves are pinned here.
+    let kernel = boot_kernel_for_heartbeat_alerts(NotificationConfig::default(), HashMap::new());
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_agent_with_heartbeat_channel(&kernel, "night-watch", "test:oncall-phone");
+
+    let rule_to = |pattern: &str, recipient: &str| NotificationConfig {
+        approval_channels: Vec::new(),
+        alert_channels: Vec::new(),
+        agent_rules: vec![AgentNotificationRule {
+            agent_pattern: pattern.to_string(),
+            channels: vec![NotificationTarget {
+                channel_type: "test".to_string(),
+                recipient: recipient.to_string(),
+                thread_id: None,
+            }],
+            events: vec!["health_check_failed".to_string()],
+        }],
+    };
+    let swap_notification = |notification: NotificationConfig| {
+        let mut cfg = (*kernel.config.load_full()).clone();
+        cfg.notification = notification;
+        kernel.config.store(Arc::new(cfg));
+    };
+
+    swap_notification(rule_to("night-*", "by-name"));
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    swap_notification(rule_to(&id.to_string(), "by-uuid"));
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    let msg = "Agent \"night-watch\" is unresponsive (inactive for 90s)";
+    assert_eq!(
+        recorded,
+        vec![format!("by-name:{msg}"), format!("by-uuid:{msg}")],
+        "agent_pattern must match the agent's name glob as documented, and its id as passed by callers"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_heartbeat_alert_bare_channel_uses_owner_channel_binding() {
+    // `heartbeat_channel = "test"` names a channel type and no recipient, so
+    // the recipient comes from the owner's channel_bindings — the same binding
+    // owner notifications are delivered to. Nothing is configured under
+    // [notification], so an unread manifest field means total silence here.
+    let mut owner_bindings = HashMap::new();
+    owner_bindings.insert("test".to_string(), "owner-chat".to_string());
+    let kernel = boot_kernel_for_heartbeat_alerts(NotificationConfig::default(), owner_bindings);
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_agent_with_heartbeat_channel(&kernel, "night-watch", "test");
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    assert_eq!(
+        recorded,
+        vec!["owner-chat:Agent \"night-watch\" is unresponsive (inactive for 90s)".to_string()],
+        "a bare heartbeat_channel must borrow the owner's binding for that channel"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_heartbeat_alert_unresolvable_channel_falls_back_to_alert_channels() {
+    // A bare channel with no owner binding cannot be addressed. That is an
+    // operator mistake worth a WARN, not a reason to drop the alert: the
+    // configured [notification] routing must still fire.
+    let notification = NotificationConfig {
+        approval_channels: Vec::new(),
+        alert_channels: vec![NotificationTarget {
+            channel_type: "test".to_string(),
+            recipient: "global-ops".to_string(),
+            thread_id: None,
+        }],
+        agent_rules: Vec::new(),
+    };
+    let kernel = boot_kernel_for_heartbeat_alerts(notification, HashMap::new());
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_agent_with_heartbeat_channel(&kernel, "night-watch", "test");
+    assert!(
+        kernel.heartbeat_alert_target(id, "night-watch").is_none(),
+        "an unaddressable heartbeat_channel must resolve to no per-agent target"
+    );
+    kernel.dispatch_heartbeat_alert(id, "night-watch", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    assert_eq!(
+        recorded,
+        vec!["global-ops:Agent \"night-watch\" is unresponsive (inactive for 90s)".to_string()],
+        "an unaddressable heartbeat_channel must degrade to [notification] routing, not swallow the alert"
+    );
+
+    kernel.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_heartbeat_alert_without_heartbeat_channel_uses_alert_channels() {
+    // The overwhelmingly common shape — no manifest shorthand at all — must
+    // route exactly as it did before the shorthand existed.
+    let notification = NotificationConfig {
+        approval_channels: Vec::new(),
+        alert_channels: vec![NotificationTarget {
+            channel_type: "test".to_string(),
+            recipient: "global-ops".to_string(),
+            thread_id: None,
+        }],
+        agent_rules: Vec::new(),
+    };
+    let kernel = boot_kernel_for_heartbeat_alerts(notification, HashMap::new());
+    let adapter = Arc::new(RecordingChannelAdapter::new("test"));
+    let sent = adapter.sent.clone();
+    kernel
+        .mesh
+        .channel_adapters
+        .insert("test".to_string(), adapter);
+
+    let id = register_test_agent(&kernel, "plain-agent");
+    kernel.dispatch_heartbeat_alert(id, "plain-agent", 90).await;
+
+    let recorded = sent.lock().unwrap().clone();
+    assert_eq!(
+        recorded,
+        vec!["global-ops:Agent \"plain-agent\" is unresponsive (inactive for 90s)".to_string()],
+        "an agent with no heartbeat_channel must keep routing through alert_channels"
+    );
+
+    kernel.shutdown();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_push_notification_unknown_event_type_yields_no_targets() {
     // Regression: the global-fallback match arm has an explicit allowlist
@@ -10518,7 +11122,34 @@ fn goal_run_start_reports_unset_self_handle() {
     let goal_id = librefang_types::goal::GoalId::new();
     let agent_id = AgentId::new();
 
-    assert!(!kernel.goal_run_start(goal_id, agent_id, Some(1)));
+    assert_eq!(
+        kernel.goal_run_start(goal_id, agent_id, Some(1), false, None, None, None),
+        crate::goal_runner::GoalRunStart::Unavailable,
+        "an unset self-handle is a fault on this host, not a missing goal"
+    );
+    assert!(kernel.goal_run_status(goal_id).is_none());
+}
+
+/// #7785 review: `goal_run_start` used to end with `self.workflows.goal_runner.start(...); true`,
+/// discarding the runner's own refusal — `GoalRunner::start` answers `GoalNotFound`
+/// when the goal is missing from the shared store (the race a deletion wins
+/// against a caller's stale read). The goal here is simply never seeded, the
+/// same "not found when the runner loads it" condition, and self_handle is
+/// set so the run reaches the runner's `start()` rather than bailing out on
+/// the earlier unset-handle check this file already covers above.
+#[test]
+fn goal_run_start_propagates_the_runners_refusal_of_a_missing_goal() {
+    let (kernel, _dir) = minimal_kernel("goal-run-start-missing-goal");
+    let kernel = Arc::new(kernel);
+    LibreFangKernel::set_self_handle(&kernel);
+    let goal_id = librefang_types::goal::GoalId::new();
+    let agent_id = AgentId::new();
+
+    assert_eq!(
+        kernel.goal_run_start(goal_id, agent_id, Some(1), false, None, None, None),
+        crate::goal_runner::GoalRunStart::GoalNotFound,
+        "a goal absent from the store must not be reported as started"
+    );
     assert!(kernel.goal_run_status(goal_id).is_none());
 }
 
@@ -10625,6 +11256,43 @@ fn resolve_dispatch_session_id_uses_channel_only_when_no_chat_id() {
     );
     let expected = SessionId::for_channel(agent_id, "slack");
     assert_eq!(got, Some(expected));
+}
+
+/// #7701: the session a channel `/new` resets is derived from `(channel, chat_id)` alone, with no `SenderContext` in hand, so it can only be right if it goes through the same function the inbound turn went through.
+/// Both sides call `channel_session_id`; this pins them together so re-inlining `for_sender_scope` at either end — which is how #7701 happened twice — fails here instead of silently resetting a session nobody is talking in.
+///
+/// The reserved-name case is the one that drifts without being noticed: a `Custom("cron")` adapter's turn lands on `ext-cron`, and a reset that skipped the guard would clear `cron`, the kernel's internal session.
+#[test]
+fn channel_reset_target_matches_the_session_the_dispatch_resolver_picks() {
+    for (channel, chat_id) in [
+        ("telegram", Some("chat-42")),
+        ("slack", None),
+        ("cron", Some("chat-7")),
+    ] {
+        let agent_id = AgentId::new();
+        let entry_sid = SessionId::new();
+        let sender = dummy_sender(channel, chat_id);
+        let dispatched = resolve_dispatch_session_id(
+            "builtin:chat",
+            agent_id,
+            entry_sid,
+            librefang_types::agent::SessionMode::Persistent,
+            Some(&sender),
+            None,
+            None,
+        );
+        // What `KernelBridgeAdapter::channel_session` computes for `/new`.
+        let reset_target = LibreFangKernel::channel_session_id(agent_id, channel, chat_id, false);
+        assert_eq!(
+            dispatched,
+            Some(reset_target),
+            "channel {channel:?} chat {chat_id:?}: a reset must address the session the turn landed in"
+        );
+        assert_ne!(
+            reset_target, entry_sid,
+            "channel {channel:?}: the reset must not collapse onto the canonical (WebUI) session"
+        );
+    }
 }
 
 #[test]
@@ -13708,6 +14376,85 @@ async fn reload_config_with_invalid_toml_preserves_live_config() {
     kernel.shutdown();
 }
 
+/// The `[triggers] cooldown_secs` / `max_per_event` hot-reload has three parts: the planner emitting `HotAction::UpdateTriggersConfig`, `TriggerEngine::apply_config` adopting the pair, and the arm in `apply_hot_actions_inner` that carries one to the other.
+/// The unit tests cover the two ends, so this one covers the wire — an action that reaches no apply arm leaves the engine on its boot-time budget and cooldown while every other test still passes.
+#[tokio::test(flavor = "multi_thread")]
+async fn reload_pushes_trigger_cooldown_and_per_event_budget_into_the_live_engine() {
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+
+    // Clamp first so the on-disk file matches what `boot_with_config` holds in memory, exactly as the #4664 regression above does.
+    let mut baseline = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    baseline.clamp_bounds();
+    let config_path = home_dir.join("config.toml");
+    std::fs::write(
+        &config_path,
+        toml::to_string_pretty(&baseline).expect("serialize baseline config"),
+    )
+    .expect("write baseline config.toml");
+
+    let kernel =
+        LibreFangKernel::boot_with_config(baseline.clone()).expect("kernel boot with baseline");
+    assert_eq!(kernel.config_ref().triggers.max_per_event, 10);
+    assert_eq!(kernel.config_ref().triggers.cooldown_secs, 5);
+
+    // Five triggers, none carrying a per-trigger `cooldown_secs`, so each inherits whatever default the engine is holding.
+    for _ in 0..5 {
+        kernel
+            .workflows
+            .triggers
+            .register(
+                AgentId::new(),
+                TriggerPattern::All,
+                "Event: {{event}}".to_string(),
+                0,
+            )
+            .expect("register trigger");
+    }
+
+    let event = Event::new(
+        AgentId::new(),
+        EventTarget::Broadcast,
+        EventPayload::System(SystemEvent::HealthCheck {
+            status: "ok".to_string(),
+        }),
+    );
+    assert_eq!(
+        kernel.workflows.triggers.evaluate(&event).0.len(),
+        5,
+        "the boot-time per-event budget of 10 lets all five fire"
+    );
+
+    // Rewrite the same baseline with only `[triggers]` changed.
+    let mut updated = baseline;
+    updated.triggers.cooldown_secs = 0;
+    updated.triggers.max_per_event = 2;
+    std::fs::write(
+        &config_path,
+        toml::to_string_pretty(&updated).expect("serialize updated config"),
+    )
+    .expect("write updated config.toml");
+
+    kernel
+        .reload_config()
+        .await
+        .expect("reload of a triggers-only edit must succeed");
+
+    // Both edits are in force on the engine the kernel actually runs: the new budget caps the matches at two, and the reloaded cooldown of 0 is what lets any of them fire a second time at all — the boot-time 5 s window would have suppressed all five.
+    assert_eq!(
+        kernel.workflows.triggers.evaluate(&event).0.len(),
+        2,
+        "the reloaded per-event budget and cooldown must reach the live trigger engine"
+    );
+
+    kernel.shutdown();
+}
+
 // ─── #5117: kill_agent_with_purge propagates DB delete failure ───────────────
 
 /// Happy-path regression for #5117: `kill_agent_with_purge` previously
@@ -14270,6 +15017,7 @@ fn boot_canonical_recovery_advances_pointer_to_most_recently_active_session_5198
     let stale_session = librefang_memory::session::Session {
         id: stale_session_id,
         agent_id,
+        parent_session_id: None,
         messages: vec![],
         context_window_tokens: 0,
         label: None,
@@ -14293,6 +15041,7 @@ fn boot_canonical_recovery_advances_pointer_to_most_recently_active_session_5198
     let active_session = librefang_memory::session::Session {
         id: active_session_id,
         agent_id,
+        parent_session_id: None,
         messages: vec![
             librefang_types::message::Message::user("hello"),
             librefang_types::message::Message::assistant("world"),
@@ -14490,6 +15239,318 @@ async fn compact_session_serializes_with_message_writers_without_self_deadlock()
     kernel.shutdown();
 }
 
+/// A streaming turn that serializes on the per-SESSION lock must register that session in the task-local held-lock registry, or its own pre-loop auto-compaction re-acquires the same non-reentrant `tokio::sync::Mutex` on the very task that holds it and parks forever.
+///
+/// The asymmetry this pins down: `send_message_full_inner` registers both the agent-scoped and the session-scoped lock, while the streaming spawn body used to register only the agent-scoped one.
+/// A `session_id_override` that is not the agent's canonical session selects `session_msg_locks[sid]` with `agent_scoped = false`, and the pre-loop hook then calls `compact_agent_session_in_lock_scope(.., agent_scoped = false)`, whose session arm consults `is_session_held(sid)` — `false`, because nothing had registered it — and falls through to `lock_owned().await` on the mutex this same task is already holding.
+/// The turn's `JoinHandle` then never resolves: the session stays wedged until the daemon restarts, and every later operation on it blocks behind the leaked guard, including `reset_one_session`, which takes the agent lock first and so wedges the whole agent.
+///
+/// Reaching it takes no crafted request: the ACP adapter derives each editor session's LibreFang session id with `Uuid::new_v5` from the ACP id (`librefang-acp/src/session.rs: SessionState::for_acp_id`) and passes it as `session_id_override`, and the dashboard appends `?session_id=` for any pinned session — neither is ever the agent's canonical session, so on default config the trigger is just that session crossing `threshold_messages`.
+///
+/// Unlike the `issue_5125_streaming_spawn_body_*` tests above, which reconstruct the spawn body's lock state by hand and therefore pass whether or not the production site registers anything, this one drives the real streaming entry — which is why it is the one that fails without the fix.
+/// The kernel is explicitly driverless (#7743), so the turn dies at the LLM call and touches no network; what is asserted is that it finishes at all, and that the compaction it was blocked on actually ran.
+#[tokio::test(flavor = "multi_thread")]
+async fn streaming_turn_on_non_canonical_session_survives_in_turn_auto_compaction() {
+    use librefang_memory::session::Session as MemSession;
+    use librefang_types::message::Message;
+
+    // Comfortably past the default `threshold_messages` (30) so the pre-loop hook decides a compaction is due, and past `keep_recent` (10) so the compactor actually trims rather than short-circuiting.
+    const SEEDED_MESSAGES: usize = 40;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    // Same discipline as `reentrant_test_kernel`: keep the tempdir alive until process exit so a background write that outlives `shutdown()` cannot race its teardown.
+    std::mem::forget(dir);
+    let kernel = Arc::new(
+        LibreFangKernel::boot_with_config(KernelConfig {
+            home_dir: home_dir.clone(),
+            data_dir: home_dir.join("data"),
+            default_model: DefaultModelConfig::driverless(),
+            ..KernelConfig::default()
+        })
+        .expect("kernel should boot"),
+    );
+    // The streaming entry builds its kernel-handle argument via `kernel_handle()`, which panics if the self-handle weak ref was never installed.
+    kernel.set_self_handle();
+
+    let agent_id = kernel
+        .spawn_agent(test_manifest(
+            "streaming-session-lock",
+            "streaming session-lock regression",
+            vec![],
+        ))
+        .expect("spawn should succeed");
+    let canonical_session_id = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent entry")
+        .session_id;
+
+    // A second session owned by the same agent — the shape a dashboard `?session_id=` pin or an ACP editor session produces. Being non-canonical is exactly what selects the per-session lock namespace.
+    let pinned_session_id = SessionId::new();
+    assert_ne!(
+        pinned_session_id, canonical_session_id,
+        "test invariant: the override must not collapse onto the canonical session, or the turn takes the per-agent lock instead"
+    );
+
+    kernel
+        .memory
+        .substrate
+        .save_session(&MemSession {
+            id: pinned_session_id,
+            agent_id,
+            parent_session_id: None,
+            messages: (0..SEEDED_MESSAGES)
+                .map(|i| Message::user(format!("seeded message {i}")))
+                .collect(),
+            context_window_tokens: 0,
+            label: None,
+            model_override: None,
+            messages_generation: 0,
+            last_repaired_generation: None,
+            peer_id: None,
+        })
+        .expect("seeding the over-threshold session should succeed");
+
+    let (rx, handle) = kernel
+        .send_message_streaming_with_routing_and_session_override(
+            agent_id,
+            "ping",
+            None,
+            Some(pinned_session_id),
+        )
+        .await
+        .expect("the streaming turn must dispatch");
+
+    // Drain the event stream. The turn's producer awaits on a bounded channel, so an undrained receiver could stall it for a reason unrelated to the lock and mask the signal this test is after.
+    let drain = tokio::spawn(async move {
+        let mut rx = rx;
+        while rx.recv().await.is_some() {}
+    });
+
+    let joined = tokio::time::timeout(std::time::Duration::from_secs(60), handle).await;
+    drain.abort();
+    // The turn's own result is deliberately not asserted — a driverless kernel fails it at the LLM call. Resolving at all is the contract under test.
+    let _turn_result = joined
+        .expect(
+            "the streaming turn must finish — without the session registration its task \
+             self-deadlocks re-acquiring session_msg_locks[pinned_session_id] from inside the \
+             pre-loop auto-compaction, and this timeout fires",
+        )
+        .expect("the streaming turn task must not panic");
+
+    // Positive evidence that the turn got *through* the compactor rather than bailing out somewhere ahead of it: the pre-loop hook trimmed the pinned session down to `keep_recent`.
+    let compacted = kernel
+        .memory
+        .substrate
+        .get_session(pinned_session_id)
+        .expect("get_session must not error")
+        .expect("the pinned session must still exist");
+    assert!(
+        compacted.messages.len() < SEEDED_MESSAGES,
+        "the in-turn auto-compaction must have run on the pinned session, but it still holds {} of the {SEEDED_MESSAGES} seeded messages",
+        compacted.messages.len()
+    );
+
+    kernel.shutdown();
+}
+
+/// Boot a driverless kernel with its self-handle installed, spawn one agent, and seed `session_id` with `messages` user messages owned by it.
+/// Shared by the #8507 non-streaming auto-compaction tests below.
+async fn kernel_with_seeded_session(
+    name: &str,
+    session_id: Option<SessionId>,
+    messages: usize,
+) -> (Arc<LibreFangKernel>, AgentId, SessionId) {
+    use librefang_memory::session::Session as MemSession;
+    use librefang_types::message::Message;
+
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    // Same discipline as `reentrant_test_kernel`: keep the tempdir alive until process exit so a background write that outlives `shutdown()` cannot race its teardown.
+    std::mem::forget(dir);
+    let kernel = Arc::new(
+        LibreFangKernel::boot_with_config(KernelConfig {
+            home_dir: home_dir.clone(),
+            data_dir: home_dir.join("data"),
+            default_model: DefaultModelConfig::driverless(),
+            ..KernelConfig::default()
+        })
+        .expect("kernel should boot"),
+    );
+    kernel.set_self_handle();
+    let agent_id = kernel
+        .spawn_agent(test_manifest(
+            name,
+            "non-streaming auto-compaction regression",
+            vec![],
+        ))
+        .expect("spawn should succeed");
+    let session_id = session_id.unwrap_or_else(|| {
+        kernel
+            .agents
+            .registry
+            .get(agent_id)
+            .expect("agent entry")
+            .session_id
+    });
+    kernel
+        .memory
+        .substrate
+        .save_session(&MemSession {
+            id: session_id,
+            agent_id,
+            parent_session_id: None,
+            messages: (0..messages)
+                .map(|i| Message::user(format!("seeded message {i}")))
+                .collect(),
+            context_window_tokens: 0,
+            label: None,
+            model_override: None,
+            messages_generation: 0,
+            last_repaired_generation: None,
+            peer_id: None,
+        })
+        .expect("seeding the over-threshold session should succeed");
+    (kernel, agent_id, session_id)
+}
+
+/// A non-streaming turn on an over-threshold session must auto-compact it before the loop runs (#8507).
+/// Before the fix both automatic compaction sites lived only in the streaming sender, so a session driven through `send_message_full` (channel bridges, cron, `agent_send`, the REST message route) was only ever trimmed and its `compaction_cursor` stayed 0.
+/// This drives the per-session-lock shape: a non-canonical `session_id_override` makes `send_message_full_inner` take `session_msg_locks[sid]`, so the compactor has to recognise that lock as held by this task instead of parking on it, the same hazard `streaming_turn_on_non_canonical_session_survives_in_turn_auto_compaction` pins for the streaming path.
+/// The kernel is driverless (#7743), so the turn itself fails at the LLM call; what is asserted is that it returns and that the compaction ran first.
+#[tokio::test(flavor = "multi_thread")]
+async fn non_streaming_turn_on_non_canonical_session_auto_compacts_without_self_deadlock() {
+    // Past the default `threshold_messages` (30) so the pre-loop check fires, and past `keep_recent` (10) so the compactor trims.
+    const SEEDED_MESSAGES: usize = 40;
+    let pinned = SessionId::new();
+    let (kernel, agent_id, session_id) =
+        kernel_with_seeded_session("nonstream-session-lock", Some(pinned), SEEDED_MESSAGES).await;
+    let canonical = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent entry")
+        .session_id;
+    assert_ne!(
+        session_id, canonical,
+        "test invariant: the override must not collapse onto the canonical session, or the turn takes the per-agent lock instead"
+    );
+
+    let turn = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        kernel.send_message_with_session_override(
+            agent_id,
+            "ping",
+            None,
+            None,
+            None,
+            Some(session_id),
+        ),
+    )
+    .await;
+    // The turn's own result is not asserted: a driverless kernel fails it at the LLM call. Returning at all is part of the contract.
+    let _ = turn.expect(
+        "the non-streaming turn must finish; if the compactor re-acquires session_msg_locks[sid] on the task that holds it, this timeout fires",
+    );
+
+    let compacted = kernel
+        .memory
+        .substrate
+        .get_session(session_id)
+        .expect("get_session must not error")
+        .expect("the pinned session must still exist");
+    assert!(
+        compacted.messages.len() < SEEDED_MESSAGES,
+        "the non-streaming pre-loop auto-compaction must have run on the pinned session, but it still holds {} of the {SEEDED_MESSAGES} seeded messages",
+        compacted.messages.len()
+    );
+
+    kernel.shutdown();
+}
+
+/// The per-agent-lock sibling of the test above (#8507): a plain `send_message` on the agent's canonical session takes `agent_msg_locks[agent]`, and the pre-loop auto-compaction must both run and recognise that lock as held.
+#[tokio::test(flavor = "multi_thread")]
+async fn non_streaming_turn_on_canonical_session_auto_compacts_without_self_deadlock() {
+    const SEEDED_MESSAGES: usize = 40;
+    let (kernel, agent_id, session_id) =
+        kernel_with_seeded_session("nonstream-agent-lock", None, SEEDED_MESSAGES).await;
+
+    let turn = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        kernel.send_message(agent_id, "ping"),
+    )
+    .await;
+    let _ = turn.expect(
+        "the non-streaming turn must finish; if the compactor re-acquires agent_msg_locks[agent] on the task that holds it, this timeout fires",
+    );
+
+    let compacted = kernel
+        .memory
+        .substrate
+        .get_session(session_id)
+        .expect("get_session must not error")
+        .expect("the canonical session must still exist");
+    assert!(
+        compacted.messages.len() < SEEDED_MESSAGES,
+        "the non-streaming pre-loop auto-compaction must have run on the canonical session, but it still holds {} of the {SEEDED_MESSAGES} seeded messages",
+        compacted.messages.len()
+    );
+
+    kernel.shutdown();
+}
+
+/// `compact_agent_session_with_id` with no explicit session id must not take the per-agent lock twice.
+/// It acquires `agent_msg_locks[agent]` on the caller's behalf and then delegates with `agent_scoped = false`; when `session_id_override` is `None` the helper falls past its session arm into a fallback that reaches for that same mutex.
+/// The `is_held` check guarding that fallback is what lets it through rather than what stops it: a caller arriving through `KernelApi` has no `held_agent_locks::scope`, registration outside one is inert, so `is_held` answers `false` at both acquisitions and the second parks the task on a lock only that task could release.
+///
+/// The sibling of the streaming-path registration above: same defect class (a lock the registry does not know about, consulted again downstream on the same task), different remedy, because here there is no scope to register into and the right answer is to take the lock once.
+/// No in-tree caller passes `None` today — channel dispatch always names a session — which is exactly why it is worth pinning before one does.
+#[tokio::test(flavor = "multi_thread")]
+async fn compact_with_id_and_no_session_override_does_not_double_take_the_agent_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let home_dir = dir.path().to_path_buf();
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    // Same discipline as `reentrant_test_kernel`: keep the tempdir alive until process exit so a background write that outlives `shutdown()` cannot race its teardown.
+    std::mem::forget(dir);
+    let kernel = LibreFangKernel::boot_with_config(KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        default_model: DefaultModelConfig::driverless(),
+        ..KernelConfig::default()
+    })
+    .expect("kernel should boot");
+
+    let agent_id = kernel
+        .spawn_agent(test_manifest(
+            "compact-no-session-override",
+            "agent-lock double-take regression",
+            vec![],
+        ))
+        .expect("spawn should succeed");
+
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        kernel.compact_agent_session_with_id(agent_id, None, false),
+    )
+    .await
+    .expect(
+        "compaction with no session override must not hang — with the outer guard taken \
+         unconditionally it self-deadlocks re-acquiring agent_msg_locks[agent] and this timeout \
+         fires",
+    )
+    .expect("empty-session compaction should succeed");
+    assert!(
+        result.starts_with("No compaction needed"),
+        "the agent's canonical session is empty, so the gate should short-circuit; got: {result}"
+    );
+
+    kernel.shutdown();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_gate_passes_when_tokens_above_threshold_but_messages_below() {
     use librefang_memory::session::Session as MemSession;
@@ -14548,6 +15609,7 @@ async fn test_compact_gate_passes_when_tokens_above_threshold_but_messages_below
     let session = MemSession {
         id: session_id,
         agent_id,
+        parent_session_id: None,
         messages,
         context_window_tokens: 0,
         label: None,
@@ -14632,6 +15694,8 @@ fn test_context_report_uses_catalog_context_window_not_200k() {
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
         model: ModelConfig {
+            mode: librefang_types::agent::ModelMode::Fixed,
+            router_override: None,
             provider: "fake-provider".to_string(),
             model: "fake-1m-model".to_string(),
             ..Default::default()
@@ -14680,6 +15744,8 @@ fn test_context_report_honours_manifest_context_window_override() {
         author: "test".to_string(),
         module: "builtin:chat".to_string(),
         model: ModelConfig {
+            mode: librefang_types::agent::ModelMode::Fixed,
+            router_override: None,
             provider: "ollama".to_string(),
             model: "some-local-model".to_string(),
             context_window: Some(262_144),
@@ -14795,6 +15861,8 @@ fn sync_default_model_agents_migrates_legacy_and_keeps_default_sentinel() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "default".to_string(),
                     model: "default".to_string(),
                     max_tokens: Some(4096),
@@ -14821,6 +15889,8 @@ fn sync_default_model_agents_migrates_legacy_and_keeps_default_sentinel() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "anthropic".to_string(),
                     model: "claude-old-default".to_string(),
                     max_tokens: Some(4096),
@@ -15127,6 +16197,8 @@ fn sync_default_model_agents_with_old_model_spares_agents_on_other_models() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "openrouter".to_string(),
                     model: "poolside/laguna-xs.2:free".to_string(),
                     max_tokens: Some(4096),
@@ -15154,6 +16226,8 @@ fn sync_default_model_agents_with_old_model_spares_agents_on_other_models() {
                 author: "test".to_string(),
                 module: "builtin:chat".to_string(),
                 model: ModelConfig {
+                    mode: librefang_types::agent::ModelMode::Fixed,
+                    router_override: None,
                     provider: "openrouter".to_string(),
                     model: "openai/gpt-4o".to_string(),
                     max_tokens: Some(4096),
@@ -17508,6 +18582,24 @@ fn ephemeral_spawn_wires_every_capability_the_permanent_path_wires() {
          kernel-backed tool answers `Unavailable`, and a worker could never reach \
          `agent_spawn`, which is what the depth guard exists to bound"
     );
+
+    // Same shape, same reason (#7789 review): the four `apply_model_override`
+    // unit tests exercise the extracted function, and nothing else asserts the
+    // spawn path still calls it. Whether it is called, and on what, *is* an
+    // argument at a call site — inline the block again, or narrow it back to
+    // `&mut manifest.model`, and every provider- and model-keyed field of the
+    // parent (its endpoint, its key, its window, its output cap, its extension
+    // params, its whole fallback chain) rides into the worker unchanged, with
+    // no test the poorer.
+    assert!(
+        ephemeral.contains("apply_model_override(&mut manifest, over)"),
+        "the ephemeral spawn path must hand the *whole* manifest to \
+         `apply_model_override`. Scoped to `manifest.model` it structurally \
+         cannot clear `fallback_models`, whose entries carry their own \
+         `api_key_env` and `base_url` — so the first fallback promotes the \
+         worker onto the parent's model with the parent's credential, past \
+         `allowed_profiles` and `cost_budget` alike"
+    );
 }
 
 /// A worker that spawns a worker is bounded by the same counter `agent_send`
@@ -18037,4 +19129,452 @@ fn a_requested_iteration_cap_is_clamped_to_the_operator_ceiling() {
         10,
         "zero is not a request for a worker that does nothing before answering"
     );
+}
+
+/// Buffered `tracing` writer for the #8221 warning tests.
+///
+/// Kept local to this pair of tests rather than promoted to a shared helper: `config.rs` and `cron.rs` each carry their own copy, and factoring the three together is a change to two files this PR has no other reason to touch.
+#[derive(Clone)]
+struct CapturedLogs(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for CapturedLogs {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CapturedLogs {
+    type Writer = CapturedLogs;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+impl CapturedLogs {
+    fn new() -> Self {
+        Self(Arc::new(std::sync::Mutex::new(Vec::new())))
+    }
+
+    /// Install this buffer as the calling thread's subscriber for the duration of the returned guard.
+    fn install(&self) -> tracing::subscriber::DefaultGuard {
+        use tracing_subscriber::layer::SubscriberExt;
+        let layer = tracing_subscriber::fmt::layer()
+            .with_writer(self.clone())
+            .with_ansi(false)
+            .with_target(false);
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(layer))
+    }
+
+    fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).expect("utf8")
+    }
+}
+
+/// A `KernelConfig` rooted in `dir` with `[tool_exec]` pointed at a well-formed SSH backend.
+///
+/// Well-formed matters: `ToolExecConfig::validate` rejects `kind = "ssh"` without a populated sub-table, and boot turns that rejection into a `BootFailed`. The configuration under test is the one that passes every existing check and still does nothing.
+fn ssh_tool_exec_config(dir: &std::path::Path) -> KernelConfig {
+    let home_dir = dir.join("librefang-tool-exec-warning-test");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        tool_exec: librefang_types::tool_exec::ToolExecConfig {
+            kind: librefang_types::tool_exec::BackendKind::Ssh,
+            ssh: Some(librefang_types::tool_exec::SshBackendConfig {
+                host: "build.example.com".to_string(),
+                user: "agent".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..KernelConfig::default()
+    }
+}
+
+/// #8221: booting with `[tool_exec] kind = "ssh"` must say out loud that tool calls still run on the daemon host.
+///
+/// `docs/architecture/tool-exec-backends.md` has promised this warning since #3332 and it was never implemented, which left the deferral invisible: `librefang_runtime::tool_exec_backend::build_backend` has no production caller, so the resolved kind reaches nothing.
+/// An operator who set this to keep shell commands off the daemon machine got the opposite of what they configured, with a clean boot and no log line anywhere.
+///
+/// Asserting on the rendered text rather than on a predicate, because the text is the entire deliverable — a warning nobody can act on is the same defect one level up.
+#[test]
+fn boot_warns_that_a_non_local_tool_exec_backend_does_not_route_tool_calls_8221() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config = ssh_tool_exec_config(tmp.path());
+
+    let logs = CapturedLogs::new();
+    let kernel = {
+        let _g = logs.install();
+        LibreFangKernel::boot_with_config(config).expect(
+            "a well-formed non-local backend is a missing feature, not a broken config; boot must succeed",
+        )
+    };
+
+    let captured = logs.text();
+    assert!(
+        captured.contains("#8221"),
+        "warning must cite the tracking issue so the operator can find the status; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("ssh"),
+        "warning must name the backend that was configured and ignored; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("not a sandbox"),
+        "warning must deny the security property an operator most plausibly assumed; captured: {captured:?}"
+    );
+
+    kernel.shutdown();
+}
+
+/// #8220: booting with `[docker] mode = "all"` must say out loud that agent tool calls still run on the daemon host.
+///
+/// Nothing in the daemon matches on `[docker] mode`, so an operator who set it believing they had moved every agent into a container moved nothing — `shell_exec` and `process_start` kept running as subprocesses, and the only path into a container stayed the `docker_exec` tool the model chooses for itself.
+/// The rest of `[docker]` is live and governs those containers, which is what made the gap so easy to miss: the section visibly works.
+///
+/// `enabled` is left `false` deliberately. The mode is meaningless either way, and warning only when Docker is enabled would have hidden it from exactly the operator most likely to be wrong — the one who set `mode` and expected it to be the switch.
+#[test]
+fn boot_warns_that_a_docker_sandbox_mode_does_not_route_tool_calls_8220() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-docker-mode-warning-test");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    config.docker.mode = librefang_types::config::DockerSandboxMode::All;
+
+    let logs = CapturedLogs::new();
+    let kernel = {
+        let _g = logs.install();
+        LibreFangKernel::boot_with_config(config).expect(
+            "an unimplemented mode is a missing feature, not a broken config; boot must succeed",
+        )
+    };
+
+    let captured = logs.text();
+    assert!(
+        captured.contains("#8220"),
+        "warning must cite the tracking issue so the operator can find the status; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("all"),
+        "warning must name the mode that was configured and ignored; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("not a sandbox"),
+        "warning must deny the security property an operator most plausibly assumed; captured: {captured:?}"
+    );
+
+    kernel.shutdown();
+}
+
+/// The default config must boot silent: a warning that fires for everyone is one nobody reads.
+#[test]
+fn boot_does_not_warn_about_docker_mode_when_it_is_off_8220() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-docker-mode-quiet-test");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    assert_eq!(
+        config.docker.mode,
+        librefang_types::config::DockerSandboxMode::Off,
+        "the shipped default is what this test is about"
+    );
+
+    let logs = CapturedLogs::new();
+    let kernel = {
+        let _g = logs.install();
+        LibreFangKernel::boot_with_config(config).expect("boot")
+    };
+    assert!(
+        !logs.text().contains("#8220"),
+        "the default configuration must not produce the warning; captured: {:?}",
+        logs.text()
+    );
+
+    kernel.shutdown();
+}
+
+/// #8221, per-agent half: the same gap reached through `agent.toml`'s `tool_exec_backend`.
+///
+/// Warned per spawn rather than at boot because a manifest can be written long after the daemon started, so a boot-time sweep would never see it.
+/// The kernel here boots on the default (local) config, which also proves the two warnings are independent — this one fires with nothing wrong in `config.toml`.
+#[test]
+fn spawn_warns_that_a_per_agent_tool_exec_backend_does_not_route_tool_calls_8221() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp
+        .path()
+        .join("librefang-per-agent-tool-exec-warning-test");
+    std::fs::create_dir_all(&home_dir).unwrap();
+    let mut config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    // `validate_override` rejects an override whose sub-table is absent, so the manifest needs a config that can satisfy it. `kind` stays `local`: only the per-agent override is under test.
+    config.tool_exec.ssh = Some(librefang_types::tool_exec::SshBackendConfig {
+        host: "build.example.com".to_string(),
+        user: "agent".to_string(),
+        ..Default::default()
+    });
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let manifest = AgentManifest {
+        name: "remote-runner".to_string(),
+        description: "asks for a backend that does not exist yet".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        tool_exec_backend: Some(librefang_types::tool_exec::BackendKind::Ssh),
+        ..Default::default()
+    };
+
+    let logs = CapturedLogs::new();
+    {
+        let _g = logs.install();
+        kernel
+            .validate_spawnable(&manifest, "remote-runner")
+            .expect("an unimplemented backend must not make an agent unspawnable");
+    }
+
+    let captured = logs.text();
+    assert!(
+        captured.contains("#8221"),
+        "warning must cite the tracking issue; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("remote-runner"),
+        "warning must name the agent, since one manifest among many is the thing to fix; captured: {captured:?}"
+    );
+    assert!(
+        captured.contains("not a sandbox"),
+        "warning must deny the security property an operator most plausibly assumed; captured: {captured:?}"
+    );
+
+    // A local override is the configured default and must stay silent, or the warning becomes noise on every spawn.
+    let local = AgentManifest {
+        name: "local-runner".to_string(),
+        module: "builtin:chat".to_string(),
+        tool_exec_backend: Some(librefang_types::tool_exec::BackendKind::Local),
+        ..Default::default()
+    };
+    let quiet = CapturedLogs::new();
+    {
+        let _g = quiet.install();
+        kernel
+            .validate_spawnable(&local, "local-runner")
+            .expect("local override is always valid");
+    }
+    assert!(
+        !quiet.text().contains("#8221"),
+        "an explicit local override must not warn; captured: {:?}",
+        quiet.text()
+    );
+
+    kernel.shutdown();
+}
+
+/// Regression for #7991 review: `reset_session` (and `reboot_session`, which
+/// shares the same `reset_one_session` implementation) used to delete the
+/// target session through the cascading `delete_session`, so resetting a
+/// session that had spawned sub-agent children silently deleted the whole
+/// descendant subtree with it — a "reset this one chat" call that took
+/// unrelated delegated audit trail down too, with nothing in the return
+/// value to say so.
+///
+/// Uses `reboot_session` (not `reset_session`) so the test doesn't need a
+/// working aux LLM client — `save_session_summary` only runs on the
+/// `reset_session` path, and its `>= 2 messages` gate is irrelevant here;
+/// the fix under test is about the delete primitive, not the summary.
+#[tokio::test(flavor = "multi_thread")]
+async fn resetting_a_session_does_not_cascade_delete_its_children() {
+    let kernel = cascade_test_kernel();
+    let agent_id = register_test_agent(&kernel, "reset-lineage-parent");
+
+    let parent = kernel.memory.substrate.create_session(agent_id).unwrap();
+    let child = librefang_memory::session::Session {
+        id: SessionId::new(),
+        agent_id,
+        parent_session_id: Some(parent.id),
+        messages: Vec::new(),
+        context_window_tokens: 0,
+        label: None,
+        model_override: None,
+        messages_generation: 0,
+        last_repaired_generation: None,
+        peer_id: None,
+    };
+    kernel.memory.substrate.save_session(&child).unwrap();
+
+    kernel
+        .reboot_session(agent_id, ResetScope::Session(parent.id))
+        .await
+        .expect("reboot must succeed");
+
+    assert!(
+        kernel
+            .memory
+            .substrate
+            .get_session(child.id)
+            .unwrap()
+            .is_some(),
+        "resetting the parent must not cascade-delete a child session — \
+         that is what the cascading `delete_session` is for, and \
+         `reset_session`/`reboot_session` must use the non-cascading \
+         `delete_session_only` instead"
+    );
+    let recreated_parent = kernel
+        .memory
+        .substrate
+        .get_session(parent.id)
+        .unwrap()
+        .expect("the parent sid must be recreated empty at the same id");
+    assert!(recreated_parent.messages.is_empty());
+}
+
+/// A rename must reach the next turn's prompt, not only the file on disk (#8469).
+///
+/// The workspace identity files are cached for `PROMPT_CACHE_TTL`, so a rename that rewrote IDENTITY.md without dropping the cache entry would keep serving the old `name:` for up to 30 s after `PATCH` reported success.
+#[tokio::test(flavor = "multi_thread")]
+async fn rename_agent_drops_cached_identity_so_the_next_turn_sees_the_new_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-rename-identity-cache");
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let manifest = AgentManifest {
+        name: "cache-a".to_string(),
+        description: "rename identity cache test agent".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        ..Default::default()
+    };
+    let agent_id = kernel.spawn_agent(manifest).expect("spawn should succeed");
+    let workspace = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent must be registered")
+        .manifest
+        .workspace
+        .expect("spawned agent has a workspace");
+
+    let warmed = kernel.cached_workspace_metadata(&workspace, false);
+    assert!(
+        warmed
+            .identity_md
+            .as_deref()
+            .is_some_and(|md| md.contains("\nname: cache-a\n")),
+        "the warmed cache must hold the spawn-time IDENTITY.md, got: {:?}",
+        warmed.identity_md
+    );
+
+    kernel
+        .rename_agent(agent_id, "cache-b".to_string())
+        .expect("rename should succeed");
+
+    let identity = kernel
+        .cached_workspace_metadata(&workspace, false)
+        .identity_md
+        .expect("IDENTITY.md must still be readable after the rename");
+    assert!(
+        identity.contains("\nname: cache-b\n") && !identity.contains("\nname: cache-a\n"),
+        "the next prompt build must see the renamed IDENTITY.md, not the cached one: {identity}"
+    );
+
+    kernel.shutdown();
+}
+
+/// A personality edit must reach the next turn's prompt, not only the file on disk (#8447).
+///
+/// The workspace identity files are cached for `PROMPT_CACHE_TTL`, so a write that did not drop the cache entry would keep serving the old front matter after `PATCH` reported success.
+#[tokio::test(flavor = "multi_thread")]
+async fn set_agent_personality_drops_cached_identity_so_the_next_turn_sees_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home_dir = tmp.path().join("librefang-kernel-personality-cache");
+    std::fs::create_dir_all(home_dir.join("data")).unwrap();
+    let config = KernelConfig {
+        home_dir: home_dir.clone(),
+        data_dir: home_dir.join("data"),
+        ..KernelConfig::default()
+    };
+    let kernel = LibreFangKernel::boot_with_config(config).expect("Kernel should boot");
+
+    let manifest = AgentManifest {
+        name: "personality-cache".to_string(),
+        description: "personality identity cache test agent".to_string(),
+        author: "test".to_string(),
+        module: "builtin:chat".to_string(),
+        ..Default::default()
+    };
+    let agent_id = kernel.spawn_agent(manifest).expect("spawn should succeed");
+    let workspace = kernel
+        .agents
+        .registry
+        .get(agent_id)
+        .expect("agent must be registered")
+        .manifest
+        .workspace
+        .expect("spawned agent has a workspace");
+
+    let warmed = kernel.cached_workspace_metadata(&workspace, false);
+    assert!(
+        warmed
+            .identity_md
+            .as_deref()
+            .is_some_and(|md| md.contains("\nvibe: helpful\n")),
+        "the warmed cache must hold the spawn-time IDENTITY.md, got: {:?}",
+        warmed.identity_md
+    );
+
+    kernel
+        .set_agent_personality(
+            agent_id,
+            &librefang_types::agent::AgentPersonality {
+                vibe: Some("technical".to_string()),
+                ..Default::default()
+            },
+        )
+        .expect("personality write should succeed");
+
+    let identity = kernel
+        .cached_workspace_metadata(&workspace, false)
+        .identity_md
+        .expect("IDENTITY.md must still be readable after the write");
+    assert!(
+        identity.contains("\nvibe: technical\n") && !identity.contains("\nvibe: helpful\n"),
+        "the next prompt build must see the new front matter, not the cached one: {identity}"
+    );
+
+    let unknown = kernel.set_agent_personality(
+        AgentId::new(),
+        &librefang_types::agent::AgentPersonality {
+            vibe: Some("x".to_string()),
+            ..Default::default()
+        },
+    );
+    assert!(
+        matches!(
+            unknown,
+            Err(KernelError::LibreFang(LibreFangError::AgentNotFound(_)))
+        ),
+        "{unknown:?}"
+    );
+
+    kernel.shutdown();
 }

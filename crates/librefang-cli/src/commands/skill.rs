@@ -9,6 +9,53 @@ use crate::commands::prelude::*;
 // Skill commands
 // ---------------------------------------------------------------------------
 
+/// Resolve the GitHub token for `skill publish`: the environment first, then
+/// the vault.
+///
+/// This mirrors `resolve_github_token` in the API's skills routes
+/// (`crates/librefang-api/src/routes/skills/mod.rs`) so the same machine cannot
+/// promote a skill through the HTTP API and fail to publish one from the CLI.
+/// `GH_TOKEN` stays in the environment tier, where it always was; the vault is
+/// keyed on `GITHUB_TOKEN` only, matching the API.
+///
+/// Reading the vault does not prompt for a passphrase, so a locked or absent
+/// vault is a `None` rather than a hang — but on the no-env path
+/// `CredentialVault::unlock` consults the OS keyring (the migrating variant of
+/// `resolve_master_key`), which can surface a platform consent dialog.
+fn resolve_github_token(vault_path: &std::path::Path) -> Option<String> {
+    for var in ["GITHUB_TOKEN", "GH_TOKEN"] {
+        if let Ok(token) = std::env::var(var) {
+            if !token.trim().is_empty() {
+                return Some(token);
+            }
+        }
+    }
+    github_token_from_vault(vault_path)
+}
+
+/// Read `GITHUB_TOKEN` out of the credential vault, or `None` when the vault
+/// does not exist, cannot be unlocked, or holds no such entry.
+fn github_token_from_vault(vault_path: &std::path::Path) -> Option<String> {
+    let mut vault = librefang_extensions::vault::CredentialVault::new(vault_path.to_path_buf());
+    if !vault.exists() {
+        return None;
+    }
+    if let Err(error) = vault.unlock() {
+        // Not fatal: the caller falls through to the "set a token" message.
+        // A warn (not debug) so it is visible at the CLI's default level — a
+        // vault that holds the token but will not unlock is otherwise
+        // indistinguishable from an empty one, and the failure it describes is
+        // precisely the one the "set a token" message cannot explain (#8179
+        // review).
+        tracing::warn!(%error, "could not unlock the vault while resolving GITHUB_TOKEN");
+        return None;
+    }
+    vault
+        .get("GITHUB_TOKEN")
+        .map(|token| token.to_string())
+        .filter(|token| !token.trim().is_empty())
+}
+
 /// Validate that a skill name from an (untrusted) manifest is safe to use as a
 /// single path component under the skills directory.
 ///
@@ -50,16 +97,59 @@ pub(crate) fn resolve_skills_dir(hand: Option<&str>) -> PathBuf {
     }
 }
 
+/// Marketplace config built from `[skills.promotion]` in the config file (#8180) — `--config` when given, `config.toml` under the LibreFang home otherwise.
+///
+/// `api_base_url` and `release_org` name the GitHub host and organisation the release path talks to, so `skill publish` and the GitHub-releases fallback of `skill install` can reach a GitHub Enterprise Server installation.
+/// An unreadable config falls back to defaults with the same warning other commands print; an unsafe value in the section is fatal, because the publish path attaches the GitHub token to every request built from it.
+fn marketplace_config(
+    config: Option<&std::path::Path>,
+) -> librefang_skills::marketplace::MarketplaceConfig {
+    let config = load_config(config).unwrap_or_else(|e| {
+        eprintln!(
+            "{}",
+            i18n::t_args(
+                "common-warning-config-default",
+                &[("error", &e.to_string())]
+            )
+        );
+        librefang_types::config::KernelConfig::default()
+    });
+    librefang_skills::marketplace::MarketplaceConfig::from_promotion(&config.skills.promotion)
+        .unwrap_or_else(|e| {
+            eprintln!(
+                "{}",
+                i18n::t_args(
+                    "skill-marketplace-config-invalid",
+                    &[("error", &e.to_string())]
+                )
+            );
+            std::process::exit(1);
+        })
+}
+
 /// Marketplace config pointed at the synced registry checkout (#6569).
 ///
 /// `~/.librefang/registry` is maintained by `registry_sync` and honours `registry.registry_host`, so this works against a Codeberg mirror as well as GitHub.
-/// Without it, search and install fall back to the `librefang-skills` GitHub org, which does not exist.
-fn marketplace_config_with_registry() -> librefang_skills::marketplace::MarketplaceConfig {
+/// Without it, install falls back to the GitHub releases of `skills.promotion.release_org` (default `librefang-skills`, which does not exist).
+fn marketplace_config_with_registry(
+    config: Option<&std::path::Path>,
+) -> librefang_skills::marketplace::MarketplaceConfig {
+    marketplace_config(config).with_registry_dir(librefang_home().join("registry"))
+}
+
+/// Registry-checkout config for the paths that never build a GitHub API request — `search_registry` and `install_from_git` read neither `registry_url` nor `github_org`.
+///
+/// They stay on the defaults so an unreadable config or an invalid `[skills.promotion]` value, which only the release path consumes, cannot fail or add warnings to a purely local search or a `git clone`.
+fn registry_checkout_config() -> librefang_skills::marketplace::MarketplaceConfig {
     librefang_skills::marketplace::MarketplaceConfig::default()
         .with_registry_dir(librefang_home().join("registry"))
 }
 
-pub(crate) fn cmd_skill_install(source: &str, hand: Option<&str>) {
+pub(crate) fn cmd_skill_install(
+    source: &str,
+    hand: Option<&str>,
+    config: Option<&std::path::Path>,
+) {
     let skills_dir = resolve_skills_dir(hand);
     std::fs::create_dir_all(&skills_dir).unwrap_or_else(|e| {
         let err_msg = e.to_string();
@@ -77,9 +167,8 @@ pub(crate) fn cmd_skill_install(source: &str, hand: Option<&str>) {
             None,
         );
         sp.tick(1);
-        let client = librefang_skills::marketplace::MarketplaceClient::new(
-            marketplace_config_with_registry(),
-        );
+        let client =
+            librefang_skills::marketplace::MarketplaceClient::new(registry_checkout_config());
         match client.install_from_git(source, &skills_dir) {
             Ok(version) => {
                 if let Some(h) = hand {
@@ -298,7 +387,7 @@ pub(crate) fn cmd_skill_install(source: &str, hand: Option<&str>) {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Registry checkout first, GitHub-releases org as the fallback (#6569).
         let client = librefang_skills::marketplace::MarketplaceClient::new(
-            marketplace_config_with_registry(),
+            marketplace_config_with_registry(config),
         );
         match rt.block_on(client.install(source, &skills_dir)) {
             Ok(version) => {
@@ -406,8 +495,7 @@ pub(crate) fn cmd_skill_remove(name: &str, hand: Option<&str>) {
 }
 
 pub(crate) fn cmd_skill_search(query: &str) {
-    let client =
-        librefang_skills::marketplace::MarketplaceClient::new(marketplace_config_with_registry());
+    let client = librefang_skills::marketplace::MarketplaceClient::new(registry_checkout_config());
     // Reads the synced registry checkout instead of a forge search API (#6569): the previous GitHub `org:librefang-skills` query 422'd because that org does not exist, so every search failed.
     match client.search_registry(query) {
         Ok(results) if results.is_empty() => {
@@ -604,6 +692,7 @@ pub(crate) fn cmd_skill_publish(
     tag: Option<String>,
     output: Option<PathBuf>,
     dry_run: bool,
+    config: Option<&std::path::Path>,
 ) {
     let skill_path = resolve_skill_path(path);
     let prepared =
@@ -662,7 +751,8 @@ pub(crate) fn cmd_skill_publish(
         )
     );
 
-    let repo = repo.unwrap_or_else(|| format!("librefang-skills/{}", packaged.manifest.skill.name));
+    let marketplace_cfg = marketplace_config(config);
+    let repo = repo.unwrap_or_else(|| marketplace_cfg.default_repo(&packaged.manifest.skill.name));
     let tag = tag.unwrap_or_else(|| format!("v{}", packaged.manifest.skill.version));
 
     if dry_run {
@@ -672,12 +762,10 @@ pub(crate) fn cmd_skill_publish(
         return;
     }
 
-    let token = std::env::var("GITHUB_TOKEN")
-        .or_else(|_| std::env::var("GH_TOKEN"))
-        .unwrap_or_else(|_| {
-            eprintln!("{}", i18n::t("skill-github-token-required"));
-            std::process::exit(1);
-        });
+    let token = resolve_github_token(&librefang_home().join("vault.enc")).unwrap_or_else(|| {
+        eprintln!("{}", i18n::t("skill-github-token-required"));
+        std::process::exit(1);
+    });
 
     let release_notes = format!(
         "{}\n\nSHA256: `{}`\n\nInstall with:\n`librefang skill install {}`",
@@ -698,9 +786,7 @@ pub(crate) fn cmd_skill_publish(
     let mut sp = progress::auto(&sp_title, None);
     sp.tick(1);
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let client = librefang_skills::marketplace::MarketplaceClient::new(
-        librefang_skills::marketplace::MarketplaceConfig::default(),
-    );
+    let client = librefang_skills::marketplace::MarketplaceClient::new(marketplace_cfg);
     let published = rt
         .block_on(
             client.publish_bundle(librefang_skills::marketplace::MarketplacePublishRequest {
@@ -1504,7 +1590,122 @@ pub(crate) fn cmd_skill_pending(sub: PendingCommands) {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_skill_name;
+    use super::{github_token_from_vault, resolve_github_token, validate_skill_name};
+    use crate::test_env::with_env_vars;
+
+    /// Seed a vault at `path` holding `GITHUB_TOKEN`.
+    ///
+    /// init → unlock → set, the same order `cmd_vault_init` / `cmd_vault_set`
+    /// use: `set` refuses on a locked handle and `init` does not unlock.
+    fn seed_vault_with_token(path: &std::path::Path, token: &str) {
+        let mut vault = librefang_extensions::vault::CredentialVault::new(path.to_path_buf());
+        vault.init().expect("vault init");
+        vault.unlock().expect("vault unlock");
+        vault
+            .set(
+                "GITHUB_TOKEN".to_string(),
+                zeroize::Zeroizing::new(token.to_string()),
+            )
+            .expect("vault set");
+    }
+
+    /// The defect this fixes: with neither environment variable set, the CLI
+    /// used to exit 1 while the HTTP routes on the same machine resolved the
+    /// token from the vault.
+    #[test]
+    fn resolves_the_token_from_the_vault_when_the_environment_has_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = base64_key();
+
+        // 32 raw bytes, base64-encoded — LIBREFANG_VAULT_KEY is checked on
+        // its decoded length, not its character count.
+        with_env_vars(
+            &[
+                ("LIBREFANG_VAULT_KEY", Some(&key)),
+                ("GITHUB_TOKEN", None),
+                ("GH_TOKEN", None),
+            ],
+            || {
+                // Underscore, not `vault-token`: `tests/i18n_checks.rs` treats any
+                // lowercase hyphenated literal whose first segment matches a locale key
+                // prefix as a message id, and `vault-` is one, so the hyphenated
+                // spelling would demand a `vault-token` entry in every locale.
+                seed_vault_with_token(&vault_path, "vault_token");
+
+                assert_eq!(
+                    resolve_github_token(&vault_path).as_deref(),
+                    Some("vault_token")
+                );
+            },
+        );
+    }
+
+    /// Environment first, vault second — the same order as the API's
+    /// `resolve_github_token`. Reversing it would swap one split for another.
+    #[test]
+    fn the_environment_wins_over_the_vault() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let vault_path = dir.path().join("vault.enc");
+        let key = base64_key();
+
+        // Seeding happens once; each phase re-applies the vault key.
+        with_env_vars(
+            &[("LIBREFANG_VAULT_KEY", Some(&key)), ("GH_TOKEN", None)],
+            || seed_vault_with_token(&vault_path, "vault_token"),
+        );
+
+        // GITHUB_TOKEN comes first in the environment tier.
+        with_env_vars(
+            &[
+                ("LIBREFANG_VAULT_KEY", Some(&key)),
+                ("GH_TOKEN", None),
+                ("GITHUB_TOKEN", Some("env-token")),
+            ],
+            || {
+                assert_eq!(
+                    resolve_github_token(&vault_path).as_deref(),
+                    Some("env-token")
+                );
+            },
+        );
+
+        // GH_TOKEN stays in the environment tier, ahead of the vault.
+        with_env_vars(
+            &[
+                ("LIBREFANG_VAULT_KEY", Some(&key)),
+                ("GITHUB_TOKEN", None),
+                ("GH_TOKEN", Some("gh-token")),
+            ],
+            || {
+                assert_eq!(
+                    resolve_github_token(&vault_path).as_deref(),
+                    Some("gh-token")
+                );
+            },
+        );
+    }
+
+    /// A missing vault is a `None`, not a panic or a prompt — `skill publish`
+    /// on a machine that never ran `librefang vault init` must still reach the
+    /// "set a token" message.
+    ///
+    /// Deliberately does not take the env lock: the vault's absence short-
+    /// circuits in `github_token_from_vault` before any environment read, so
+    /// there is nothing here that could race an env-mutating sibling.
+    #[test]
+    fn a_missing_vault_resolves_to_none() {
+        let dir = tempfile::TempDir::new().unwrap();
+        assert_eq!(
+            github_token_from_vault(&dir.path().join("absent.enc")),
+            None
+        );
+    }
+
+    fn base64_key() -> String {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode([7u8; 32])
+    }
 
     #[test]
     fn validate_skill_name_accepts_plain_names() {

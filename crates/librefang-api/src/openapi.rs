@@ -47,10 +47,14 @@ use crate::types;
         routes::list_agent_templates,
         routes::get_agent_template,
         routes::get_agent_template_toml,
+        routes::put_agent_template_toml,
+        routes::post_agent_template_toml,
         routes::create_agent_type,
         routes::update_agent_type,
         routes::delete_agent_type,
         routes::promote_agent_type,
+        routes::get_registry_diff,
+        routes::restore_from_registry,
         routes::list_template_history,
         routes::restore_template_version,
         routes::list_commands,
@@ -99,6 +103,8 @@ use crate::types;
         routes::set_agent_mcp_servers,
         routes::get_agent_channels,
         routes::set_agent_channels,
+        routes::get_agent_model_routing,
+        routes::set_agent_model_routing,
         routes::update_agent_identity,
         routes::patch_agent_config,
         routes::patch_hand_agent_runtime_config,
@@ -114,6 +120,7 @@ use crate::types;
         routes::inject_message,
         routes::push_message,
         routes::reload_agent_manifest,
+        routes::get_agent_manifest_toml,
         routes::suspend_agent,
         routes::resume_agent,
         routes::agent_metrics,
@@ -219,6 +226,7 @@ use crate::types;
         routes::add_custom_model,
         routes::remove_custom_model,
         routes::list_providers,
+        routes::list_model_router_profiles,
         routes::get_provider,
         routes::set_provider_key,
         routes::delete_provider_key,
@@ -355,6 +363,15 @@ use crate::types;
         routes::effective_permissions,
         routes::authz::whoami,
 
+        // ── Media generation / understanding ──
+        routes::generate_image,
+        routes::synthesize_speech,
+        routes::submit_video,
+        routes::poll_video_task,
+        routes::generate_music,
+        routes::transcribe_audio,
+        routes::list_media_providers,
+
         // ── Memory (KV) ──
         routes::get_agent_kv,
         routes::get_agent_kv_key,
@@ -416,6 +433,15 @@ use crate::types;
 
         // ── Inbox ──
         routes::inbox_status,
+
+        // ── Knowledge bases ──
+        routes::knowledge::list_bases,
+        routes::knowledge::create_base,
+        routes::knowledge::delete_base,
+        routes::knowledge::list_documents,
+        routes::knowledge::put_document,
+        routes::knowledge::delete_document,
+        routes::knowledge::set_holders,
 
         // ── Webhooks ──
         routes::webhook_wake,
@@ -607,9 +633,27 @@ use crate::types;
         (name = "users", description = "RBAC user management — CRUD over UserConfig entries plus bulk CSV import"),
         (name = "groups", description = "User groups — CRUD over GroupConfig entries, membership, and the per-user reverse lookup"),
         (name = "vault", description = "Credential vault writes — store, list presence of, and delete the secrets the daemon resolves at runtime. Values are never returned"),
+        (name = "media", description = "Media generation (image, speech, video, music) and transcription; provider selection follows the `[capabilities]` routing block"),
     ),
 )]
 pub struct ApiDoc;
+
+/// `/api/*` paths that are deliberately **not** mounted under `/api/v1`.
+///
+/// `build_router` nests `api_v1_routes()` at both `/api` and `/api/v1`, so
+/// duplicating an `/api/*` path into `/api/v1/*` is correct for everything
+/// defined there. It is wrong for the handful of routes registered directly on
+/// the app: those exist only under `/api`, and a blind copy advertises a route
+/// the router answers with a 404.
+///
+/// Version discovery is unversioned by design — it is the one endpoint a
+/// client has to reach *before* it knows which version to ask for
+/// (`server.rs`: "API version discovery endpoint (not versioned itself)").
+///
+/// `tests/dead_route_audit_test.rs` dispatches every path of the **served**
+/// spec against the real router, so a route that belongs here and is missing
+/// fails CI instead of reaching clients.
+const UNVERSIONED_API_PATHS: &[&str] = &["/api/versions"];
 
 /// GET /api/openapi.json — Serve the auto-generated OpenAPI specification.
 ///
@@ -645,6 +689,9 @@ pub async fn openapi_spec() -> impl IntoResponse {
     if let Some(paths) = spec.get("paths").and_then(|p| p.as_object()).cloned() {
         let mut v1_entries: Vec<(String, serde_json::Value)> = Vec::new();
         for (path, ops) in &paths {
+            if UNVERSIONED_API_PATHS.contains(&path.as_str()) {
+                continue;
+            }
             if let Some(suffix) = path.strip_prefix("/api/") {
                 let v1_path = format!("/api/v1/{suffix}");
                 if !paths.contains_key(&v1_path) {

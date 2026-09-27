@@ -86,6 +86,56 @@ def main():
     assert_in(".connect_timeout(DEFAULT_CONNECT_TIMEOUT)", rs, "rust-default-client-connect-timeout")
     assert_in("pub fn with_client(base_url: impl Into<String>, client: Client) -> Self", rs, "rust-custom-client-constructor")
 
+    # Raw-body endpoints. Every SDK's default request path sends
+    # `Content-Type: application/json`, so an operation whose requestBody
+    # declares only a non-JSON type must not be emitted through it — the
+    # handler rejects the content type before it ever reads the body, making
+    # the generated method a 400 in every case.
+    raw_ops = [
+        operation
+        for operations in tag_ops.values()
+        for operation in operations
+        if operation["raw_body_ct"]
+    ]
+    expect(
+        {o["op_id"]: o["raw_body_ct"] for o in raw_ops}
+        == {
+            "post_agent_template_toml": "text/plain",
+            "put_agent_template_toml": "text/plain",
+            "put_document": "application/octet-stream",
+            "transcribe_audio": "audio/webm",
+            "upload_file": "application/octet-stream",
+        },
+        f"unexpected raw-body operations: {[(o['op_id'], o['raw_body_ct']) for o in raw_ops]}",
+    )
+    expect(
+        all(not o["has_body"] for o in raw_ops),
+        "a raw-body operation must not also take the JSON body path",
+    )
+
+    assert_matches(
+        r'def\s+transcribe_audio\(\s*self,\s*body:\s*bytes,\s*content_type:\s*str\s*=\s*"audio/webm"\s*\)',
+        py,
+        "python-transcribe-raw-sig",
+    )
+    assert_in('self._c._request("POST", "/api/media/transcribe", body, content_type=content_type)', py, "python-transcribe-raw-call")
+    assert_matches(r"async\s+transcribeAudio\(\s*body,\s*contentType\s*\)", js, "js-transcribe-raw-sig")
+    assert_matches(
+        r"TranscribeAudio\(\s*body\s+\[\]byte,\s*contentType\s+string\s*\)",
+        go,
+        "go-transcribe-raw-sig",
+    )
+    assert_in("func (c *Client) requestRaw(", go, "go-raw-request-helper")
+    assert_matches(
+        r"pub\s+async\s+fn\s+transcribe_audio\(\s*&self,\s*body:\s*Vec<u8>,\s*content_type:\s*Option<&str>,?\s*\)",
+        rs,
+        "rust-transcribe-raw-sig",
+    )
+    assert_in("async fn do_req_raw(", rs, "rust-raw-request-helper")
+    # The upload endpoint has the same shape and had the same defect; it also
+    # keeps its path parameter ahead of the body.
+    assert_matches(r"async\s+uploadFile\(\s*id,\s*body,\s*contentType\s*\)", js, "js-upload-raw-sig")
+
     # Stream correctness
     assert_in("bufio.NewReaderSize", go, "go-bufio-reader")
     assert_not_in('strings.Split(string(buf[:n])', go, "go-no-bare-split")
@@ -144,6 +194,66 @@ def main():
     # SSE line-size cap
     assert_in("MAX_SSE_LINE", rs, "rust-max-sse")
     assert_in("maxSSELine", go, "go-max-sse")
+
+    # Raw (non-JSON) request bodies (#8028): `put_agent_template_toml` and
+    # `upload_file` declare a `text/plain` / `application/octet-stream`
+    # requestBody, not `application/json`. Every generated caller must send
+    # the string/bytes it was given as-is — JSON-encoding it produces a body
+    # the server's extractor can't parse, so every call answered 400 no
+    # matter what the caller passed.
+    #
+    # The names below are the shared raw-body support that landed on main: the
+    # op dict keys the content type as `raw_body_ct`, and a caller takes bytes
+    # plus an optional content type. This block first spelled its own parallel
+    # support `raw_content_type` with `str` bodies; the merge that brought in
+    # the shared version replaced the generator half and left these assertions
+    # on the old spelling. What they check is unchanged — a raw-body caller
+    # must not be routed through the JSON path, which `content_type` selects.
+    toml_put = next(
+        o for o in tag_ops.get("system", []) if o["op_id"] == "put_agent_template_toml"
+    )
+    expect(toml_put["raw_body_ct"] == "text/plain", "put_agent_template_toml raw content type")
+    upload = next(o for o in tag_ops.get("agents", []) if o["op_id"] == "upload_file")
+    expect(
+        upload["raw_body_ct"] == "application/octet-stream",
+        "upload_file raw content type",
+    )
+    # A JSON endpoint must not be swept into the raw-body path.
+    expect(tools["raw_body_ct"] == "", "invoke_tool must stay JSON-encoded")
+
+    assert_in(
+        'def put_agent_template_toml(self, name: str, body: bytes, content_type: str = "text/plain"):',
+        py,
+        "python-toml-raw-body-sig",
+    )
+    assert_in(
+        'self._c._request("PUT", f"/api/templates/{name}/toml", body, content_type=content_type)',
+        py,
+        "python-toml-raw-body-call",
+    )
+    assert_in(
+        'def upload_file(self, id: str, body: bytes, content_type: str = "application/octet-stream"):',
+        py,
+        "python-upload-raw-body-sig",
+    )
+    assert_not_in("def put_agent_template_toml(self, name: str, **data)", py, "python-toml-no-dict-body")
+
+    assert_in("async putAgentTemplateToml(name, body, contentType) {", js, "js-toml-raw-body-sig")
+    assert_in('body, undefined, contentType || "text/plain"', js, "js-toml-raw-body-call")
+
+    assert_in(
+        "func (r *SystemResource) PutAgentTemplateToml(name string, body []byte, contentType string)",
+        go,
+        "go-toml-raw-body-sig",
+    )
+    assert_in('r.client.requestRaw("PUT"', go, "go-toml-raw-body-call")
+
+    assert_in(
+        "pub async fn put_agent_template_toml(&self, name: &str, body: Vec<u8>, content_type: Option<&str>)",
+        rs,
+        "rust-toml-raw-body-sig",
+    )
+    assert_in("do_req_raw(", rs, "rust-toml-raw-body-call")
 
     # Reserved-word escape works
     expect(mod._py_safe("class") == "class_", "Python reserved-word escape")

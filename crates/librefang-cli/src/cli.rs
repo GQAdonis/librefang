@@ -384,7 +384,7 @@ pub(crate) enum Commands {
     },
     /// Quick daemon health check.
     #[command(
-        long_about = "Perform a quick health check on the running daemon.\n\nReturns basic connectivity and status info. For comprehensive diagnostics,\nuse `librefang doctor` instead.\n\nExamples:\n  librefang health          # Pretty-printed output\n  librefang health --json   # JSON output for monitoring"
+        long_about = "Perform a quick health check on the running daemon.\n\nReturns basic connectivity and status info. For comprehensive diagnostics,\nuse `librefang doctor` instead.\n\nExits 1 when the daemon reports a degraded subsystem. `/api/health` is a\nliveness probe, so it answers HTTP 200 even then and the exit code is what\na monitor should key on.\n\nExamples:\n  librefang health          # Pretty-printed output\n  librefang health --json   # JSON output for monitoring"
     )]
     Health {
         /// Output as JSON for scripting.
@@ -836,7 +836,7 @@ pub(crate) enum SkillCommands {
     Publish {
         /// Skill directory, skill.toml, SKILL.md, or package.json. Defaults to the current directory.
         path: Option<PathBuf>,
-        /// Target GitHub repo in owner/name form. Defaults to librefang-skills/<skill-name>.
+        /// Target GitHub repo in owner/name form. Defaults to <skills.promotion.release_org>/<skill-name>, i.e. librefang-skills/<skill-name> unless configured.
         #[arg(long)]
         repo: Option<String>,
         /// Release tag to create or update. Defaults to v<skill-version>.
@@ -1257,7 +1257,7 @@ pub(crate) enum AgentCommands {
     },
     /// Set an agent property (model, or one of its inference parameters).
     #[command(
-        long_about = "Set a property on a running agent.\n\nFields:\n  model               Model id; provider can be set as a prefix\n  temperature         Sampling temperature (0.0-2.0)\n  max_tokens          Output tokens to request\n  top_p               Nucleus sampling (0.0-1.0)\n  frequency_penalty   -2.0 to 2.0\n  presence_penalty    -2.0 to 2.0\n  context_window      Context-window override for this endpoint\n  max_output_tokens   Output-cap override for this endpoint\n\nThe agent's own value wins over the per-model override. Pass `inherit`\nto drop the agent's value and let the per-model override (or the system\ndefault) supply it again.\n\nAsking for more than the model's known limit is reported, not clamped:\nthe value you set is the value that gets sent.\n\nExamples:\n  librefang agent set <ID> model gpt-4o\n  librefang agent set <ID> model claude-code/claude-sonnet\n  librefang agent set <ID> temperature 0.2\n  librefang agent set <ID> temperature inherit"
+        long_about = "Set a property on a running agent.\n\nFields:\n  model               Model id; provider can be set as a prefix\n  temperature         Sampling temperature (0.0-2.0)\n  max_tokens          Output tokens to request\n  top_p               Nucleus sampling (0.0-1.0)\n  frequency_penalty   -2.0 to 2.0\n  presence_penalty    -2.0 to 2.0\n  top_k               Top-K sampling, a whole number of 1 or more\n  min_p               Minimum probability (0.0-1.0)\n  repeat_penalty      Repetition penalty (0.01-2.0, 1.0 = off)\n  context_window      Context-window override for this endpoint\n  max_output_tokens   Output-cap override for this endpoint\n\nThe agent's own value wins over the per-model override. Pass `inherit`\nto drop the agent's value and let the per-model override (or the system\ndefault) supply it again.\n\nAsking for more than the model's known limit is reported, not clamped:\nthe value you set is the value that gets sent.\n\nExamples:\n  librefang agent set <ID> model gpt-4o\n  librefang agent set <ID> model claude-code/claude-sonnet\n  librefang agent set <ID> temperature 0.2\n  librefang agent set <ID> temperature inherit"
     )]
     Set {
         /// Agent ID (UUID).
@@ -1266,6 +1266,46 @@ pub(crate) enum AgentCommands {
         field: String,
         /// New value, or `inherit` to clear the agent's own value.
         value: String,
+    },
+    /// Show an agent's model routing settings.
+    #[command(
+        long_about = "Show whether an agent uses its own model or lets the router pick one\nper task, plus any profile allowlist and cost budget.\n\nExamples:\n  librefang agent routing coder\n  librefang agent routing coder --json"
+    )]
+    Routing {
+        /// Agent ID (UUID) or name.
+        agent_id: String,
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Update an agent's model routing settings.
+    #[command(
+        long_about = "Switch an agent between a fixed model and router-chosen models, and\nconstrain what the router may pick.\n\n`--mode fixed` clears the allowlist and the budget: they only describe a\nrouting decision that will not happen.\n\nExamples:\n  librefang agent routing-set coder --mode flexible\n  librefang agent routing-set coder --mode flexible --profiles coder,quick\n  librefang agent routing-set coder --mode flexible --budget medium\n  librefang agent routing-set coder --mode fixed"
+    )]
+    RoutingSet {
+        /// Agent ID (UUID) or name.
+        agent_id: String,
+        /// "fixed" (use the agent's own model) or "flexible" (let the router pick).
+        #[arg(long, default_value = "flexible")]
+        mode: String,
+        /// Comma-separated profile names the router may pick. Omit to leave the stored allowlist unchanged; pass an empty string to allow any profile.
+        #[arg(long)]
+        profiles: Option<String>,
+        /// Highest cost tier the router may pick: cheap, medium or expensive. Omit to leave the stored budget unchanged; pass an empty string to clear it (no cap).
+        #[arg(long)]
+        budget: Option<String>,
+        /// Profile to use when nothing matches the task.
+        #[arg(long)]
+        default_profile: Option<String>,
+    },
+    /// List the resolved model-router profile catalog.
+    #[command(
+        long_about = "List the model profiles the router matches against: the builtin\ncatalog with ~/.librefang/model_profiles.toml merged over it.\n\nExamples:\n  librefang agent routing-profiles\n  librefang agent routing-profiles --json"
+    )]
+    RoutingProfiles {
+        /// Output as JSON for scripting.
+        #[arg(long)]
+        json: bool,
     },
 }
 

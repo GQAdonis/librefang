@@ -75,6 +75,34 @@ fn warn_if_concurrency_fields_changed(
     );
 }
 
+/// Clear the overrides that describe the *previous* provider's endpoint —
+/// its credentials, its capacity limits, and its non-standard request
+/// parameters — so a provider change never leaves them attached to the new
+/// one (#7781 review).
+///
+/// Shared by every path that repoints an agent at a different provider:
+/// [`AgentRegistry::switch_model_provider`] (the dashboard's model picker,
+/// via `set_agent_model`), the model router's `apply_routed_profile` /
+/// `apply_tier_routed_model`, and the boot-time normalisation of a restored
+/// legacy agent back to the `default` sentinel. One list of fields, so a
+/// future addition cannot be cleared on one path and forgotten on the other —
+/// which is exactly how `context_window` / `max_output_tokens` came to be
+/// dropped by the router and kept by the picker.
+///
+/// The fields left alone are the ones that mean the same thing on any
+/// endpoint: `max_tokens`, the four sampling knobs, `system_prompt`, and the
+/// router's own `mode` / `router_override`. `extra_params` is not one of
+/// them — it is flattened verbatim into the request body and is
+/// provider-specific by definition (Qwen's `enable_memory` has no meaning to
+/// Anthropic, which rejects the unknown key rather than ignoring it).
+pub(crate) fn clear_stale_provider_overrides(model: &mut librefang_types::agent::ModelConfig) {
+    model.api_key_env = None;
+    model.base_url = None;
+    model.context_window = None;
+    model.max_output_tokens = None;
+    model.extra_params.clear();
+}
+
 impl AgentRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
@@ -446,6 +474,53 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Update an agent's tags, keeping `entry.tags` (index-backing),
+    /// `entry.manifest.tags` (what gets persisted to `agent.toml`), and the
+    /// `tag_index` all in sync (#7742).
+    ///
+    /// `replace_manifest`'s doc comment explains why a blind manifest swap
+    /// leaves tags alone: `entry.tags` and `tag_index` are a snapshot taken
+    /// at spawn time, and nothing upstream serializes tag writes for a
+    /// single agent — and `update_tags` has no callers yet, so the
+    /// atomicity a single held guard would buy is unexercised. What the
+    /// held guard would cost is permanent: it contradicts the file's one
+    /// lock-ordering contract (index maintenance happens after the entry
+    /// guard is released, "so the two DashMaps are never held at once",
+    /// see `replace_manifest_and_retag`), and it is only safe as long as
+    /// nobody writes the obvious `find_by_tag` — walk a bucket, then
+    /// `agents.get(id)` inside the loop (#7749 review). This matches the
+    /// documented shape instead: mutate the entry under its guard, drop
+    /// it, then run both index passes.
+    pub fn update_tags(&self, id: AgentId, tags: Vec<String>) -> LibreFangResult<()> {
+        let (old_tags, tags) = {
+            let mut slot = self
+                .agents
+                .get_mut(&id)
+                .ok_or_else(|| LibreFangError::AgentNotFound(id.to_string()))?;
+            let inner = Arc::make_mut(slot.value_mut());
+            let old_tags = std::mem::replace(&mut inner.tags, tags.clone());
+            inner.manifest.tags = tags.clone();
+            inner.last_active = chrono::Utc::now();
+            (old_tags, tags)
+        };
+        for tag in old_tags.iter().filter(|t| !tags.contains(t)) {
+            if let Entry::Occupied(mut bucket) = self.tag_index.entry(tag.clone()) {
+                bucket.get_mut().retain(|&agent_id| agent_id != id);
+                if bucket.get().is_empty() {
+                    bucket.remove();
+                }
+            }
+        }
+        for tag in tags.iter().filter(|t| !old_tags.contains(t)) {
+            let mut bucket = self.tag_index.entry(tag.clone()).or_default();
+            if !bucket.contains(&id) {
+                bucket.push(id);
+            }
+        }
+        self.notify_changed();
+        Ok(())
+    }
+
     /// Update an agent's visual identity (emoji, avatar, color).
     pub fn update_identity(
         &self,
@@ -506,6 +581,46 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Point an agent at a **different** provider's model, dropping every
+    /// override that described the previous provider's endpoint (#7781
+    /// review).
+    ///
+    /// Distinct from [`Self::update_model_and_provider`], which is the
+    /// same-provider swap and must leave genuine per-agent overrides alone.
+    pub fn switch_model_provider(
+        &self,
+        id: AgentId,
+        new_model: String,
+        new_provider: String,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.model = new_model;
+            entry.manifest.model.provider = new_provider;
+            clear_stale_provider_overrides(&mut entry.manifest.model);
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Replace an agent's whole `[model]` block.
+    ///
+    /// For restoring a snapshot taken before a multi-field mutation — the
+    /// caller already holds every value, and putting them back one setter at
+    /// a time would leave the entry half-rolled-back in between.
+    pub fn set_model_config(
+        &self,
+        id: AgentId,
+        model: librefang_types::agent::ModelConfig,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model = model;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
     /// Update an agent's max_tokens (requested response length).
     ///
     /// `None` clears the agent's own value, putting the field back to
@@ -560,6 +675,36 @@ impl AgentRegistry {
         Ok(())
     }
 
+    /// Update an agent's top-k sampling. `None` = inherit.
+    pub fn update_top_k(&self, id: AgentId, value: Option<u32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.top_k = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's minimum-probability (min-p) sampling. `None` = inherit.
+    pub fn update_min_p(&self, id: AgentId, value: Option<f32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.min_p = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's repetition penalty. `None` = inherit.
+    pub fn update_repeat_penalty(&self, id: AgentId, value: Option<f32>) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.repeat_penalty = value;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
     /// Update an agent's context-window override (`agent.toml: [model] context_window`).
     ///
     /// A limit, not a preference: it tells the runtime what the endpoint can
@@ -595,6 +740,25 @@ impl AgentRegistry {
     ) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             entry.manifest.web_search_augmentation = mode;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Update an agent's model selection mode and per-agent router override
+    /// (profile allowlist + cost budget). Mutates the manifest only; use
+    /// [`crate::LibreFangKernel::set_agent_model_routing`] to also persist to
+    /// SQLite and `agent.toml`. Mirrors `update_web_search_augmentation`.
+    pub fn update_model_routing(
+        &self,
+        id: AgentId,
+        mode: librefang_types::agent::ModelMode,
+        router_override: Option<librefang_types::model_profile::AgentRouterOverride>,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.model.mode = mode;
+            entry.manifest.model.router_override = router_override;
             entry.last_active = chrono::Utc::now();
         })?;
         self.notify_changed();
@@ -648,6 +812,24 @@ impl AgentRegistry {
     pub fn update_channels(&self, id: AgentId, channels: Vec<String>) -> LibreFangResult<()> {
         self.with_entry_mut(id, |entry| {
             entry.manifest.channels = channels;
+            entry.last_active = chrono::Utc::now();
+        })?;
+        self.notify_changed();
+        Ok(())
+    }
+
+    /// Replace an agent's named-workspace declarations.
+    ///
+    /// The whole map is replaced rather than merged, matching every other
+    /// allowlist setter here: a caller that wants to add one entry sends the
+    /// map it wants to end up with, and "remove the last one" stays expressible.
+    pub fn update_workspaces(
+        &self,
+        id: AgentId,
+        workspaces: std::collections::HashMap<String, librefang_types::agent::WorkspaceDecl>,
+    ) -> LibreFangResult<()> {
+        self.with_entry_mut(id, |entry| {
+            entry.manifest.workspaces = workspaces;
             entry.last_active = chrono::Utc::now();
         })?;
         self.notify_changed();
@@ -785,7 +967,9 @@ impl AgentRegistry {
     }
 
     /// Update an agent's name (also updates the name index).
-    pub fn update_name(&self, id: AgentId, new_name: String) -> LibreFangResult<()> {
+    ///
+    /// Returns the previous name, read under the same entry lock as the write, so a caller reconciling on-disk state (IDENTITY.md, #8469) compares against the name this call actually replaced rather than one read earlier.
+    pub fn update_name(&self, id: AgentId, new_name: String) -> LibreFangResult<String> {
         // #4980 nit: reject renames into the reserved `_operator:`
         // namespace — synthetic operator-node step-result names would
         // collide with the real agent and make run history ambiguous.
@@ -818,7 +1002,7 @@ impl AgentRegistry {
         };
         self.name_index.remove(&old_name);
         self.notify_changed();
-        Ok(())
+        Ok(old_name)
     }
 
     /// Update an agent's description.
@@ -1057,6 +1241,64 @@ mod tests {
         assert_eq!(
             registry.tag_index.get("shared").unwrap().as_slice(),
             &[second_id]
+        );
+    }
+
+    #[test]
+    fn update_tags_syncs_entry_tags_manifest_tags_and_tag_index_7742() {
+        let registry = AgentRegistry::new();
+        let mut entry = test_entry("tag-update-agent");
+        entry.tags = vec!["alpha".to_string(), "beta".to_string()];
+        entry.manifest.tags = vec!["alpha".to_string(), "beta".to_string()];
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        // Drop "alpha", keep "beta", add "gamma".
+        registry
+            .update_tags(id, vec!["beta".to_string(), "gamma".to_string()])
+            .unwrap();
+
+        let refreshed = registry.get(id).unwrap();
+        assert_eq!(
+            refreshed.tags,
+            vec!["beta".to_string(), "gamma".to_string()]
+        );
+        assert_eq!(
+            refreshed.manifest.tags, refreshed.tags,
+            "manifest.tags must mirror entry.tags after update_tags"
+        );
+
+        assert!(
+            !registry.tag_index.contains_key("alpha"),
+            "dropped tag's bucket should be pruned once empty"
+        );
+        assert_eq!(registry.tag_index.get("beta").unwrap().as_slice(), &[id]);
+        assert_eq!(registry.tag_index.get("gamma").unwrap().as_slice(), &[id]);
+    }
+
+    #[test]
+    fn update_tags_removing_last_tag_leaves_no_empty_bucket_7742() {
+        let registry = AgentRegistry::new();
+        let mut entry = test_entry("tag-cleanup-agent");
+        entry.tags = vec!["solo".to_string()];
+        entry.manifest.tags = vec!["solo".to_string()];
+        let id = entry.id;
+        registry.register(entry).unwrap();
+
+        // Remove the agent's only tag: the "solo" bucket becomes empty and
+        // must be pruned rather than left behind as an empty vector, mirroring
+        // `remove()`'s cleanup.
+        registry.update_tags(id, vec![]).unwrap();
+
+        let refreshed = registry.get(id).unwrap();
+        assert!(refreshed.tags.is_empty(), "entry.tags must end up empty");
+        assert_eq!(
+            refreshed.manifest.tags, refreshed.tags,
+            "manifest.tags must mirror entry.tags"
+        );
+        assert!(
+            !registry.tag_index.contains_key("solo"),
+            "removing the last tag must prune the bucket it occupied"
         );
     }
 

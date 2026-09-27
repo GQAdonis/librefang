@@ -405,6 +405,7 @@ const SPA_ROUTES: &[&str] = &[
     "goals",
     "groups",
     "hands",
+    "knowledge",
     "logs",
     "mcp-servers",
     "media",
