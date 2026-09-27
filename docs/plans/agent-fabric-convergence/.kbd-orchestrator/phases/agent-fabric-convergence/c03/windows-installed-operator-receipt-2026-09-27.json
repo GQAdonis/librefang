@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "checkpoint": "D-UAR-P1",
+  "reportedOn": "2026-09-27",
+  "evidenceSource": "operator-report",
+  "status": "accepted-operator",
+  "platform": "windows",
+  "operatorStatement": "The windows installation worked, and the UAR is active at port 1906 on the windows machine",
+  "acceptedClaims": {
+    "installationWorked": true,
+    "uarLaunched": true,
+    "preferredPort": 1906,
+    "effectivePort": 1906
+  },
+  "claimBoundary": {
+    "accepts": [
+      "installed presence",
+      "UAR launch",
+      "preferred-port binding at port 1906"
+    ],
+    "unobserved": [
+      "occupied-port fallback",
+      "broader UAR workflows"
+    ]
+  },
+  "phaseStatus": {
+    "c03Complete": false,
+    "reason": "This operator report is narrow installed-runtime evidence and does not certify the complete C03 contract or workflow surface."
+  }
+}
