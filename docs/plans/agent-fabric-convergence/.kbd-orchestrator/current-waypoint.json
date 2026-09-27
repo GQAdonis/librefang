@@ -2,10 +2,10 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 203,
-  "derivedRevision": 203,
+  "sourceRevision": 212,
+  "derivedRevision": 212,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 203
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 212
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -21,16 +21,16 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": "agent-fabric-convergence",
   "childPointer": null,
-  "change": "afc-c02-governed-action-and-approval-boundary",
-  "currentTask": "C02.1",
+  "change": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "currentTask": "C03.1",
   "status": "ready",
   "completionMetric": "implementation",
-  "implementationCompleted": 3,
+  "implementationCompleted": 4,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 203,
+  "revision": 212,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c02-governed-action-and-approval-boundary",
-  "nextTask": "C02.1",
-  "updatedAt": "2026-09-27T03:54:41.521687Z"
+  "nextChange": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+  "nextTask": "C03.1",
+  "updatedAt": "2026-09-27T05:52:50.498115Z"
 }

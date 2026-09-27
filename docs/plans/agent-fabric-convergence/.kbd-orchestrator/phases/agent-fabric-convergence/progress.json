@@ -2,25 +2,25 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 203,
-  "derivedRevision": 203,
+  "sourceRevision": 212,
+  "derivedRevision": 212,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 203
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 212
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-27T03:54:41.521687Z",
+  "last_updated": "2026-09-27T05:52:50.498115Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
-  "changes_completed": 1,
+  "changes_completed": 2,
   "implementation_total": 18,
-  "implementation_completed": 1,
+  "implementation_completed": 2,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 1,
+      "completed": 2,
       "total": 18,
       "status": "IN_PROGRESS"
     },
@@ -55,12 +55,12 @@
     {
       "id": "afc-c02-governed-action-and-approval-boundary",
       "title": "C02 — Governed action and approval boundary",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+      "tasks_done": 3,
+      "last_task_completed": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+      "next_task_pending": null,
       "blockers": []
     },
     {

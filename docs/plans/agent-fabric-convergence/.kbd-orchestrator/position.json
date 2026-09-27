@@ -2,24 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 203,
-  "derivedRevision": 203,
+  "sourceRevision": 212,
+  "derivedRevision": 212,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 203
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 212
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-27T03:54:41.521687Z",
+  "updatedAt": "2026-09-27T05:52:50.498115Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c02-governed-action-and-approval-boundary",
-    "C02.1"
+    "afc-c03-lossless-definitions-and-collaboration-document-profile",
+    "C03.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 3,
+      "done": 4,
       "total": 20
     },
     "children": [
@@ -29,7 +29,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 1,
+          "done": 2,
           "total": 18
         },
         "children": [
@@ -89,9 +89,9 @@
           {
             "type": "change",
             "id": "afc-c02-governed-action-and-approval-boundary",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
