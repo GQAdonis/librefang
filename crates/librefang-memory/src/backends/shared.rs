@@ -17,7 +17,7 @@
 //! All `SurrealStorage::new()` calls in the workspace are now funnelled
 //! through [`open_shared_memory_storage`].
 //! A caller that wires both backends opens it once and shares the resulting `Arc<SurrealStorage>` between them; the `open_with_storage` factories on each backend type also delegate here.
-//! The kernel does not reach this path today (`[memory] vector_backend` has no `"surreal"` arm in boot), so its callers are the backend factories and tests.
+//! The kernel reaches it through [`crate::SurrealSemanticBackend::open_with_storage`] when `[memory] vector_backend` resolves to `"surreal"`.
 //!
 //! ## Embedding dimensions
 //!
@@ -30,6 +30,22 @@ use std::sync::Arc;
 
 #[cfg(feature = "surreal-backend")]
 use crate::proactive::EmbeddingFn;
+
+/// Build a [`librefang_types::error::LibreFangError::Memory`] that keeps the whole cause chain.
+///
+/// surreal-memory reports failures as `anyhow` chains whose outermost context is often generic ("add_memory failed") while the cause that names the defect sits at the root (a schema rejection, a parse error).
+/// `to_string()` keeps only the outermost layer, so the message is rendered with `{:#}` and the error itself stays on the `source()` chain.
+#[cfg(feature = "surreal-backend")]
+pub(crate) fn memory_error(
+    context: &str,
+    error: impl Into<anyhow::Error>,
+) -> librefang_types::error::LibreFangError {
+    let error: anyhow::Error = error.into();
+    librefang_types::error::LibreFangError::Memory {
+        message: format!("{context}: {error:#}"),
+        source: Some(error.into()),
+    }
+}
 
 /// Adapts librefang's [`EmbeddingFn`] to surreal-memory's `EmbeddingService` with the dimension the caller declared for it.
 #[cfg(feature = "surreal-backend")]
@@ -162,7 +178,7 @@ pub async fn open_shared_memory_storage(
         }),
     )
     .await
-    .map_err(|e| format!("shared memory SurrealStorage: {e}"))?;
+    .map_err(|e| format!("shared memory SurrealStorage: {e:#}"))?;
     Ok(Arc::new(storage))
 }
 
@@ -206,5 +222,19 @@ mod tests {
         let err = bridge.embed("x").await.unwrap_err().to_string();
         assert!(err.contains("3-dimensional"), "{err}");
         assert!(err.contains("opened for 4 dimensions"), "{err}");
+    }
+
+    /// `to_string()` on an anyhow chain keeps only the outermost context; the helper must carry the root cause into the message and onto `source()`.
+    #[test]
+    fn memory_error_keeps_the_whole_cause_chain() {
+        let root = anyhow::anyhow!("Found field 'metadata.librefang', but no such field exists");
+        let err = memory_error("remember", root.context("add_memory failed"));
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("remember: add_memory failed"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("metadata.librefang"), "{rendered}");
+        assert!(std::error::Error::source(&err).is_some());
     }
 }

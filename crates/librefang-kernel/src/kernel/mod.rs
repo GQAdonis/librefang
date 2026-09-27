@@ -147,6 +147,7 @@ mod task_registry;
 mod tools_and_skills;
 pub use tools_and_skills::{PendingSkillMcpDeclarations, SemanticMemoryAccess, SkillReloadOutcome};
 mod triggers_and_workflow;
+mod vector_backend;
 
 // `cron_deliver_response`, `cron_fan_out_targets`, and `cron_script_wake_gate`
 // are now consumed by `kernel::cron_tick` after Phase 3b lifted the cron
