@@ -11,16 +11,7 @@ use rusqlite::{Connection, OpenFlags};
 use crate::error::{StorageError, StorageResult};
 use crate::migrate::MigrationPlan;
 
-/// Tables the migrator copies. Same list as
-/// [`super::sqlite_to_surreal::TABLES`] so dry runs and live runs report
-/// identical entries.
-const TABLES: &[&str] = &[
-    "audit_entries",
-    "hook_traces",
-    "circuit_breaker_states",
-    "totp_lockout",
-    "agents",
-];
+use super::IMPORTED_TABLES as TABLES;
 
 pub(super) fn plan(sqlite_path: &Path) -> StorageResult<MigrationPlan> {
     if !sqlite_path.exists() {

@@ -8,21 +8,20 @@
 //!
 //! ## Scope
 //!
-//! Only the operational tables that are persisted by the matching
-//! SurrealDB backends in Phase 5 + 6 are migrated:
-//!
-//! | SQLite table              | SurrealDB table             |
-//! |---------------------------|-----------------------------|
-//! | `audit_entries`           | `audit_entries`             |
-//! | `hook_traces`             | `hook_traces`               |
-//! | `circuit_breaker_states`  | `circuit_breaker_states`    |
-//! | `totp_lockout`            | `totp_lockout`              |
-//! | `agents`                  | `agents` (Surreal schemaless registry) |
+//! The operational tables that have a SurrealDB backend are copied; [`IMPORTED_TABLES`] is the authoritative list, and the dry-run planner counts exactly the same tables.
 //!
 //! Rich semantic memory (the `memories` / `entities` / `relations`
 //! tables in `librefang-memory`) lives in surreal-memory's own schema
 //! and is intentionally out of scope here — operators who want to carry
 //! semantic data forward should use surreal-memory's own importers.
+//!
+//! ## Opaque BLOB columns
+//!
+//! The SQLite store keeps session histories and agent manifests as MessagePack BLOBs.
+//! `librefang-storage` sits below `librefang-types`, so it cannot name `Message` or `AgentManifest`; a [`LegacyBlobDecoder`] turns those BLOBs into the JSON the SurrealDB backends read.
+//! [`GenericBlobDecoder`] handles every named-field encoding.
+//! `canonical_sessions.messages` is written positionally (`rmp_serde::to_vec`), which only a typed decoder can read, so callers that link `librefang-memory` should pass its decoder to [`migrate_sqlite_to_surreal_with_decoder`].
+//! A row whose BLOB cannot be decoded is skipped and reported in [`MigrationReceipt::errors`]; it is never imported as an empty history.
 //!
 //! ## Idempotency
 //!
@@ -50,6 +49,48 @@ mod sqlite_to_surreal;
 
 #[cfg(feature = "sqlite-backend")]
 mod sqlite_plan;
+
+#[cfg(feature = "sqlite-backend")]
+mod blob;
+
+#[cfg(feature = "sqlite-backend")]
+pub use blob::GenericBlobDecoder;
+
+/// Legacy SQLite tables the importer copies, in copy order.
+///
+/// The dry-run planner counts the same list, so a dry run and a live run report identical tables.
+pub const IMPORTED_TABLES: &[&str] = &[
+    "audit_entries",
+    "hook_traces",
+    "circuit_breaker_states",
+    "totp_lockout",
+    "agents",
+    "sessions",
+    "canonical_sessions",
+    "kv_store",
+    "task_queue",
+    "usage_events",
+    "paired_devices",
+    "prompt_versions",
+    "prompt_experiments",
+];
+
+/// Decodes the opaque BLOB columns of the legacy SQLite store into the JSON shapes the SurrealDB backends read.
+///
+/// Each method returns an error string for a BLOB it cannot decode; the importer then skips that row and reports it.
+pub trait LegacyBlobDecoder: Send + Sync {
+    /// `sessions.messages`: MessagePack (`rmp_serde::to_vec_named`) of `Vec<Message>`.
+    /// Returns a JSON array of message objects, as `serde_json::to_value(&messages)` would.
+    fn session_messages(&self, blob: &[u8]) -> Result<serde_json::Value, String>;
+
+    /// `canonical_sessions.messages`: MessagePack (`rmp_serde::to_vec`, positional) of `Vec<CanonicalEntry>`, or of `Vec<Message>` on older databases.
+    /// Returns a JSON array of message objects, the shape `SurrealSessionBackend::append_canonical` stores.
+    fn canonical_messages(&self, blob: &[u8]) -> Result<serde_json::Value, String>;
+
+    /// `agents.manifest`: MessagePack (`rmp_serde::to_vec_named`) of `AgentManifest`, or JSON on older databases.
+    /// Returns a JSON object.
+    fn agent_manifest(&self, blob: &[u8]) -> Result<serde_json::Value, String>;
+}
 
 /// Migration source/target pair.
 ///
@@ -158,10 +199,11 @@ pub fn plan_sqlite(sqlite_path: &Path) -> StorageResult<MigrationPlan> {
     }
 }
 
-/// Run the SQLite → SurrealDB migration end-to-end.
+/// Run the SQLite → SurrealDB migration end-to-end with the [`GenericBlobDecoder`].
 ///
 /// On success returns a [`MigrationReceipt`]; if `opts.receipt_dir` is
 /// `Some`, the same receipt is also written to disk before returning.
+/// Canonical-session histories need a typed decoder; with this entry point their rows are skipped and reported in the receipt, so prefer [`migrate_sqlite_to_surreal_with_decoder`] where one is available.
 ///
 /// # Errors
 ///
@@ -175,18 +217,45 @@ pub fn migrate_sqlite_to_surreal(
 ) -> StorageResult<MigrationReceipt> {
     #[cfg(all(feature = "sqlite-backend", feature = "surreal-backend"))]
     {
-        sqlite_to_surreal::run(sqlite_path, session, opts)
+        sqlite_to_surreal::run(sqlite_path, session, opts, &GenericBlobDecoder)
     }
     #[cfg(not(all(feature = "sqlite-backend", feature = "surreal-backend")))]
     {
         let _ = (sqlite_path, opts);
-        Err(StorageError::BackendDisabled {
-            backend: if cfg!(feature = "sqlite-backend") {
-                "surreal"
-            } else {
-                "sqlite"
-            },
-        })
+        Err(backends_disabled())
+    }
+}
+
+/// Run the SQLite → SurrealDB migration end-to-end, decoding BLOB columns with `decoder`.
+///
+/// # Errors
+///
+/// Same as [`migrate_sqlite_to_surreal`].
+pub fn migrate_sqlite_to_surreal_with_decoder(
+    sqlite_path: &Path,
+    #[allow(unused_variables)] session: &crate::pool::SurrealSession,
+    opts: &MigrationOptions,
+    #[allow(unused_variables)] decoder: &dyn LegacyBlobDecoder,
+) -> StorageResult<MigrationReceipt> {
+    #[cfg(all(feature = "sqlite-backend", feature = "surreal-backend"))]
+    {
+        sqlite_to_surreal::run(sqlite_path, session, opts, decoder)
+    }
+    #[cfg(not(all(feature = "sqlite-backend", feature = "surreal-backend")))]
+    {
+        let _ = (sqlite_path, opts);
+        Err(backends_disabled())
+    }
+}
+
+#[cfg(not(all(feature = "sqlite-backend", feature = "surreal-backend")))]
+fn backends_disabled() -> StorageError {
+    StorageError::BackendDisabled {
+        backend: if cfg!(feature = "sqlite-backend") {
+            "surreal"
+        } else {
+            "sqlite"
+        },
     }
 }
 
