@@ -8234,10 +8234,12 @@ pub struct MemoryConfig {
     ///
     /// | Value | Behaviour |
     /// |-------|-----------|
-    /// | `"auto"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in; SQLite otherwise. |
-    /// | `"surreal"` | Force SurrealDB HNSW+BM25 hybrid search via `SurrealSemanticBackend`. Requires `surreal-backend` feature. |
+    /// | `"auto"` (default / unset) | SurrealDB when the `surreal-backend` feature is compiled in and an embedding driver is configured; SQLite otherwise, and when the SurrealDB memory store cannot be opened (logged). |
+    /// | `"surreal"` | SurrealDB HNSW index in the surreal-memory store (`SurrealSemanticBackend` as the substrate's `VectorStore`). Boot fails without the `surreal-backend` feature, an embedding driver, or a reachable store. |
     /// | `"sqlite"` | Force SQLite cosine-similarity in-process store (`SqliteVectorStore`). |
     /// | `"http"` | Remote HTTP vector store (`HttpVectorStore`); see `vector_store_url`. |
+    ///
+    /// SQLite remains the system of record in every mode; the external backend only ranks vectors, and recall hydrates its hits from SQLite.
     #[serde(default)]
     pub vector_backend: Option<String>,
     /// Base URL for the HTTP vector store (used when `vector_backend = "http"`).
