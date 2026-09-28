@@ -698,6 +698,7 @@ impl LibreFangKernel {
         let mut ephemeral_session = librefang_memory::session::Session {
             id: ephemeral_session_id,
             agent_id,
+            parent_session_id: None,
             messages: Vec::new(),
             context_window_tokens: 0,
             label: Some("ephemeral /btw".to_string()),
@@ -770,6 +771,7 @@ impl LibreFangKernel {
                 // ephemeral /btw turns; default-off config is a no-op.
                 parallel_tools_config: Some(self.config.load().parallel_tools.clone()),
                 canvas_config: Some(self.config.load().canvas.clone()),
+                tts_config: Some(self.config.load().tts.clone()),
                 // Ephemeral /btw is a user-initiated turn, not a system fork.
                 system_call: false,
                 // #7744: `/btw` runs on an empty ephemeral session and the
@@ -919,12 +921,32 @@ impl LibreFangKernel {
     /// marker stripping), so reusing it would leave the autonomous internal
     /// path — which sets a reserved `"autonomous"` channel without
     /// `is_internal_cron` — to be wrongly rewritten to `ext-autonomous`.
+    /// Kernel-side alias for [`librefang_channels::types::resolve_scope_channel`], kept so the existing call sites and their tests read unchanged.
+    ///
+    /// The body moved to `librefang-channels` because `librefang-runtime` and `librefang-api` derive channel-scoped session ids too and could not reach a `pub(super)` helper — both of them skipped the guard as a result (#8243).
     pub(super) fn resolve_scope_channel(channel: &str, is_internal_system: bool) -> String {
-        if is_internal_system || !librefang_channels::types::is_reserved_system_channel(channel) {
-            channel.to_string()
-        } else {
-            librefang_channels::types::sanitize_channel_name(channel)
-        }
+        librefang_channels::types::resolve_scope_channel(channel, is_internal_system)
+    }
+
+    /// The `SessionId` a channel-scoped turn lands on.
+    ///
+    /// Single source of truth for the kernel-side dispatch and reset paths.
+    /// The reserved-name guard underneath it now lives in [`librefang_channels::types::resolve_scope_channel`], which is where the crates that cannot depend on `librefang-kernel` reach it: `librefang-runtime`'s `mirror_channel_send_to_session` derived its target with a bare `SessionId::for_sender_scope` until #8243, so a `channel_send` to a reserved name mirrored into the kernel's own session while every path here resolved `ext-<name>`.
+    /// Every dispatch resolver takes this branch for a `SenderContext` that names a channel and does not set `use_canonical_session` (`send_message_full_with_upstream`, `execute_llm_agent`, the streaming resolver), and the channel bridge's `/new` / `/reboot` / `/compact` handlers must name the same session or they reset one nobody is talking in.
+    ///
+    /// #7701 is what disagreement looks like, and it has now cost two rounds: the channels half of the pair drifted first (`session_scope` in `librefang-channels::bridge` is the mirror of this function, and its doc-comment carries that half of the story), and the kernel half re-inlined `for_sender_scope(agent, resolve_scope_channel(..), chat)` at three sites that each had to remember the reserved-name guard.
+    /// A reset that derives its own id "succeeds" against an empty session while the conversation the user can see keeps every message — the failure is silent on both ends, because the ack is generated from the reset that did nothing.
+    pub fn channel_session_id(
+        agent_id: AgentId,
+        channel: &str,
+        chat_id: Option<&str>,
+        is_internal_system: bool,
+    ) -> SessionId {
+        SessionId::for_sender_scope(
+            agent_id,
+            &Self::resolve_scope_channel(channel, is_internal_system),
+            chat_id,
+        )
     }
 
     /// Internal: send a message with all optional parameters (content blocks + sender context).
@@ -1328,7 +1350,7 @@ impl LibreFangKernel {
                             agent_id.to_string(),
                             librefang_runtime::audit::AuditAction::AgentMessage,
                             "agent loop skipped",
-                            "No LLM provider configured — configure via dashboard settings",
+                            "failed: no LLM provider configured — configure via dashboard settings",
                         );
                     }
                     return Ok(result);
@@ -1786,6 +1808,7 @@ impl LibreFangKernel {
             gateway_compression: Some(self.config.load().gateway_compression.clone()),
             parallel_tools_config: Some(self.config.load().parallel_tools.clone()),
             canvas_config: Some(self.config.load().canvas.clone()),
+            tts_config: Some(self.config.load().tts.clone()),
             // User-initiated main turn, not a system-internal fork.
             system_call: false,
             // #7744: resolved in `send_message_streaming_with_sender_and_opts`,
@@ -1986,6 +2009,7 @@ impl LibreFangKernel {
             gateway_compression: Some(self.config.load().gateway_compression.clone()),
             parallel_tools_config: Some(self.config.load().parallel_tools.clone()),
             canvas_config: Some(self.config.load().canvas.clone()),
+            tts_config: Some(self.config.load().tts.clone()),
             // #6463: this is a system-internal fork (currently only the
             // auto_dream background cycle) with no attributable end
             // user — it runs on the parent's canonical session with a `None`
@@ -2084,6 +2108,7 @@ impl LibreFangKernel {
             gateway_compression: Some(self.config.load().gateway_compression.clone()),
             parallel_tools_config: Some(self.config.load().parallel_tools.clone()),
             canvas_config: Some(self.config.load().canvas.clone()),
+            tts_config: Some(self.config.load().tts.clone()),
             // User-initiated main turn, not a system-internal fork.
             system_call: false,
             // #7744: resolved in `send_message_streaming_with_sender_and_opts`,
@@ -2314,14 +2339,15 @@ impl LibreFangKernel {
         } else {
             match sender_context {
                 Some(ctx) if !ctx.channel.is_empty() && !ctx.use_canonical_session => {
-                    // Audit: cron-channel-name-not-reserved. Defense-in-depth
-                    // at the kernel boundary — see `resolve_scope_channel`.
-                    let scope_channel =
-                        Self::resolve_scope_channel(&ctx.channel, ctx.is_internal_system);
-                    let derived = SessionId::for_sender_scope(
+                    // Audit: cron-channel-name-not-reserved. The reserved-name
+                    // defense-in-depth lives inside `channel_session_id`, which
+                    // the `/new` / `/reboot` / `/compact` handlers also call so
+                    // a reset addresses this exact session (#7701).
+                    let derived = Self::channel_session_id(
                         agent_id,
-                        &scope_channel,
+                        &ctx.channel,
                         ctx.chat_id.as_deref(),
+                        ctx.is_internal_system,
                     );
                     // #3692: surface when the channel branch silently
                     // overrides a non-default manifest `session_mode`.
@@ -2430,6 +2456,7 @@ impl LibreFangKernel {
         let mut session = existing_session.unwrap_or_else(|| librefang_memory::session::Session {
             id: effective_session_id,
             agent_id,
+            parent_session_id: None,
             messages: Vec::new(),
             context_window_tokens: 0,
             label: None,
@@ -2905,35 +2932,15 @@ impl LibreFangKernel {
         // reload barrier before spawning the async task.
         drop(_config_guard);
 
-        // Acquire the same session/agent lock as the non-streaming path so concurrent
-        // turns are serialized. Clone the Arc here (sync fn); lock inside the spawn.
-        // `agent_scoped` tracks whether we are taking the per-agent lock (vs. a
-        // per-session lock for session_id_override callers): only the agent-scoped
-        // branch needs the task-local `held_agent_locks` registration so the
-        // re-entrant `agent_send` (#5125) / `channel_send` mirror (#5126) tool
-        // paths can observe this streaming turn's holding of agent_msg_locks
-        // and skip / reject as appropriate. Mirrors the non-streaming site at
-        // `send_message_full_inner` (~L871-906).
-        // Collapse an override that targets the agent's canonical session onto
-        // the per-agent lock, exactly as the non-streaming
-        // `send_message_full_inner` site does: an override equal to
-        // `entry.session_id` writes the SAME session the no-override persistent
-        // path writes, so taking the per-session lock here while that path
-        // takes the per-agent lock would let the two write one session under
-        // two mutexes concurrently (lost update). `effective_session_id`
-        // already resolves to the canonical id in that case, so only the lock
-        // namespace changes; a no-override channel dispatch keeps the per-agent
-        // lock (narrow fix — the channel-derived variant is unchanged here).
+        // Acquire the same session/agent lock as the non-streaming path so concurrent turns are serialized.
+        // Clone the Arc here (sync fn); lock inside the spawn.
+        // `agent_scoped` tracks whether we are taking the per-agent lock (vs. a per-session lock for session_id_override callers); whichever branch is taken, the lock is registered in the matching task-local `held_agent_locks` set inside the spawn so the re-entrant `agent_send` (#5125) / `channel_send` mirror (#5126) tool paths and the in-turn auto-compaction can observe this streaming turn's holding of it and skip / reject as appropriate.
+        // Mirrors the non-streaming site at `send_message_full_inner` (~L871-906).
+        // Collapse an override that targets the agent's canonical session onto the per-agent lock, exactly as the non-streaming `send_message_full_inner` site does: an override equal to `entry.session_id` writes the SAME session the no-override persistent path writes, so taking the per-session lock here while that path takes the per-agent lock would let the two write one session under two mutexes concurrently (lost update).
+        // `effective_session_id` already resolves to the canonical id in that case, so only the lock namespace changes; a no-override channel dispatch keeps the per-agent lock (narrow fix — the channel-derived variant is unchanged here).
         //
-        // Re-read the canonical id FRESH here rather than reusing the `entry`
-        // snapshot captured ~760 lines above (line ~2065): `entry.session_id`
-        // is mutable via `switch_agent_session` (#4291), and this non-async fn
-        // does substantial preemptible synchronous work (catalog/budget/quota,
-        // session-mode resolution) between that fetch and this decision, so a
-        // concurrent rotation could leave the snapshot stale and mis-select the
-        // lock namespace — reintroducing the very race this fix closes. Mirrors
-        // the non-streaming `send_message_full_inner` site, and the fork branch
-        // above which reads the parent session id from `loop_opts`, not `entry`.
+        // Re-read the canonical id FRESH here rather than reusing the `entry` snapshot captured ~760 lines above (line ~2065): `entry.session_id` is mutable via `switch_agent_session` (#4291), and this non-async fn does substantial preemptible synchronous work (catalog/budget/quota, session-mode resolution) between that fetch and this decision, so a concurrent rotation could leave the snapshot stale and mis-select the lock namespace — reintroducing the very race this fix closes.
+        // Mirrors the non-streaming `send_message_full_inner` site, and the fork branch above which reads the parent session id from `loop_opts`, not `entry`.
         let canonical_session_id = self.agents.registry.get(agent_id).map(|e| e.session_id);
         let session_scoped_lock =
             matches!(session_id_override, Some(sid) if Some(sid) != canonical_session_id);
@@ -2979,18 +2986,24 @@ impl LibreFangKernel {
             // prevents concurrent streaming + non-streaming writes from
             // producing last-write-wins data loss on session history.
             let _session_guard = session_lock.lock().await;
-            // Record that this task now holds `agent_msg_locks[agent_id]` so the
-            // re-entrant `agent_send` (#5125) and `channel_send`-mirror (#5126)
-            // tool paths — which run inside `run_agent_loop_streaming` below on
-            // this same task — can detect the self-re-entry instead of
-            // deadlocking on the non-reentrant `tokio::sync::Mutex`. Only the
-            // agent-scoped lock is tracked: the session-scoped
-            // (`session_id_override`) lock is a different key space those two
-            // paths never re-acquire. Mirrors the non-streaming site at
-            // `send_message_full_inner` (~L890-906); declared *after*
-            // `_session_guard` so drop order is registry-then-mutex.
+            // Record that this task now holds `agent_msg_locks[agent_id]` so the re-entrant `agent_send` (#5125) and `channel_send`-mirror (#5126) tool paths — which run inside `run_agent_loop_streaming` below on this same task — can detect the self-re-entry instead of deadlocking on the non-reentrant `tokio::sync::Mutex`.
+            // The session-scoped lock gets its own registration below rather than being tracked under `agent_id`, which would risk a false-positive rejection.
+            // Mirrors the non-streaming site at `send_message_full_inner` (~L890-906); declared *after* `_session_guard` so drop order is registry-then-mutex.
             let _held_guard = if agent_scoped {
                 Some(librefang_runtime::held_agent_locks::HeldLockGuard::register(agent_id))
+            } else {
+                None
+            };
+            // Session-scoped sibling of `_held_guard`, mirroring the second registration at `send_message_full_inner`.
+            // This is not optional bookkeeping on the streaming path: the pre-loop auto-compaction a few lines below calls `compact_agent_session_in_lock_scope(.., agent_scoped = false)`, which re-acquires `session_msg_locks[effective_session_id]` on THIS task unless the registry reports it held — the very mutex `_session_guard` is holding, so an unregistered session-scoped turn parks forever the moment its session crosses the compaction threshold.
+            // It also arms the keyed-`agent_send` cycle rejection for tool calls issued during the turn, which is dead code without a registration to observe.
+            // Gated on `session_scoped_lock`, the same bit that selected the `session_msg_locks` entry above and the exact negation of `agent_scoped`, so the two registrations are mutually exclusive and exhaustive: every turn registers precisely the one lock it holds.
+            let _held_session_guard = if session_scoped_lock {
+                Some(
+                    librefang_runtime::held_agent_locks::HeldSessionLockGuard::register(
+                        effective_session_id,
+                    ),
+                )
             } else {
                 None
             };
@@ -3013,71 +3026,18 @@ impl LibreFangKernel {
                 }
             }
 
-            // Recompute `needs_compact` against the freshly-reloaded session.
-            // Computing it on the pre-lock snapshot was racy: a concurrent
-            // turn that wrote history while we were queued on `session_lock`
-            // could have pushed us across (or back below) the threshold,
-            // causing this turn to either skip a compact that is now due or
-            // re-compact a session another turn just compacted.
-            let needs_compact = {
-                use librefang_runtime::compactor::{
-                    estimate_token_count, needs_compaction as check_compact,
-                    needs_compaction_by_tokens,
-                };
-                let by_messages = check_compact(&session, &compaction_config_snapshot);
-                let estimated = estimate_token_count(
-                    &session.messages,
-                    Some(&manifest.model.system_prompt),
-                    None,
-                );
-                let by_tokens = needs_compaction_by_tokens(estimated, &compaction_config_snapshot);
-                if by_tokens && !by_messages {
-                    info!(
-                        agent_id = %agent_id,
-                        estimated_tokens = estimated,
-                        messages = session.messages.len(),
-                        "Token-based compaction triggered (messages below threshold but tokens above)"
-                    );
-                }
-                by_messages || by_tokens
-            };
-
-            // Auto-compact if the session is large before running the loop.
-            // Pass the in-turn session id so the compactor operates on
-            // the SAME session the outer loop just measured. Using the
-            // plain `compact_agent_session(agent_id)` re-looked up via
-            // `entry.session_id`, which for channel-derived or
-            // `session_mode = "new"` sessions points at a *different*
-            // session — and the compactor ended up inspecting an empty
-            // one and returning "0 messages, threshold 30" while the
-            // real session was 57 messages deep and overflowing.
-            // Fork turns must not trigger auto-compaction. Compaction mutates
-            // the canonical session on disk — so a dream or auto_memorize fork
-            // could compact the user's real conversation, breaking the
-            // ephemeral-fork guarantee. Main turns are unaffected: they hit
-            // the same check and compact as before.
-            if needs_compact && !loop_opts.is_fork {
-                info!(agent_id = %agent_id, messages = session.messages.len(), "Auto-compacting session");
-                match kernel_clone
-                    .compact_agent_session_in_lock_scope(
+            // Decide against the freshly-reloaded session, not the pre-lock snapshot: a concurrent turn that wrote history while this one queued on `session_lock` could have moved it across the threshold in either direction.
+            // Fork turns must not auto-compact: compaction rewrites the canonical session on disk, so a dream or auto_memorize fork would compact the user's real conversation.
+            if !loop_opts.is_fork {
+                kernel_clone
+                    .auto_compact_before_turn(
                         agent_id,
-                        Some(session.id),
-                        false,
+                        &mut session,
+                        &manifest.model.system_prompt,
+                        &compaction_config_snapshot,
                         agent_scoped,
                     )
-                    .await
-                {
-                    Ok(msg) => {
-                        info!(agent_id = %agent_id, "{msg}");
-                        // Reload the session after compaction
-                        if let Ok(Some(reloaded)) = memory.get_session(session.id) {
-                            session = reloaded;
-                        }
-                    }
-                    Err(e) => {
-                        warn!(agent_id = %agent_id, "Auto-compaction failed: {e}");
-                    }
-                }
+                    .await;
             }
 
             let mut skill_snapshot = kernel_clone
@@ -3392,47 +3352,15 @@ impl LibreFangKernel {
                         .registry
                         .set_state(agent_id, AgentState::Running);
 
-                    // Post-loop compaction check: if session now exceeds token threshold,
-                    // trigger compaction in background for the next call.
-                    // Forks skip — compaction rewrites the canonical session
-                    // on disk, which would leak fork context into the user's
-                    // real conversation history.
+                    // Post-loop compaction: if the session is now over the token threshold, compact it in the background for the next call.
+                    // Forks skip, for the same reason as the pre-loop check.
                     if !loop_opts.is_fork {
-                        use librefang_runtime::compactor::{
-                            estimate_token_count, needs_compaction_by_tokens, CompactionConfig,
-                        };
-                        let compact_cfg = kernel_clone.config.load();
-                        // #4976: merge per-agent [compaction] overrides on
-                        // top of the global config. The token threshold
-                        // ratio is the field that primarily gates this
-                        // post-loop check, and it's now per-agent
-                        // tunable.
-                        let config = CompactionConfig::from_toml_with_overrides(
-                            &compact_cfg.compaction,
+                        kernel_clone.spawn_compaction_after_turn(
+                            agent_id,
+                            &session,
                             manifest.compaction.as_ref(),
+                            agent_scoped,
                         );
-                        let estimated = estimate_token_count(&session.messages, None, None);
-                        if needs_compaction_by_tokens(estimated, &config) {
-                            let kc = kernel_clone.clone();
-                            let sid = session.id;
-                            // #3740: spawn_logged so compaction panics surface in logs.
-                            spawn_logged("post_loop_compaction", async move {
-                                info!(agent_id = %agent_id, estimated_tokens = estimated, "Post-loop compaction triggered");
-                                // Pass the session id explicitly (same
-                                // reason as the pre-loop path above).
-                                if let Err(e) = kc
-                                    .compact_agent_session_in_lock_scope(
-                                        agent_id,
-                                        Some(sid),
-                                        false,
-                                        agent_scoped,
-                                    )
-                                    .await
-                                {
-                                    warn!(agent_id = %agent_id, "Post-loop compaction failed: {e}");
-                                }
-                            });
-                        }
                     }
 
                     // Skill evolution hot-reload: mirror the non-streaming

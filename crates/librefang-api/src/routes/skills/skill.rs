@@ -15,6 +15,9 @@ fn read_skill_catalog_registry(
 /// GET /api/skills — List installed skills.
 ///
 /// `categories` always reflects all skills regardless of the `?category=` filter.
+///
+/// Each item carries both directions of a skill's tool relationship, named so they cannot be confused (#8445): `tools_count` counts the tools the skill *provides*, while `required_tools` / `required_tools_count` / `required_capabilities` echo the manifest's `[requirements]` table, i.e. what the agent must be granted for the skill to run.
+/// The `required_*` lists are always present; a skill that declares nothing reports empty lists, which is a different fact from "unknown".
 #[utoipa::path(
     get,
     path = "/api/skills",
@@ -82,6 +85,9 @@ pub async fn list_skills(
                 "author": s.manifest.skill.author,
                 "runtime": format!("{:?}", s.manifest.runtime.runtime_type),
                 "tools_count": s.manifest.tools.provided.len(),
+                "required_tools": s.manifest.requirements.tools,
+                "required_tools_count": s.manifest.requirements.tools.len(),
+                "required_capabilities": s.manifest.requirements.capabilities,
                 "tags": s.manifest.skill.tags,
                 "enabled": s.enabled,
                 "source": source,
@@ -902,6 +908,9 @@ pub async fn create_skill(
 
 /// Get detailed information about a specific skill, including linked files,
 /// tags, evolution history, and readiness status.
+///
+/// `tools` lists the tools the skill *provides*; `required_tools` and `required_capabilities` list what it *needs* from the host, from the manifest's `[requirements]` table (#8445).
+/// Both `required_*` lists are always present and empty when the skill declares nothing.
 #[utoipa::path(
     get,
     path = "/api/skills/{name}",
@@ -958,6 +967,8 @@ pub async fn get_skill_detail(
             "tags": manifest.skill.tags,
             "runtime": format!("{:?}", manifest.runtime.runtime_type),
             "tools": tools,
+            "required_tools": manifest.requirements.tools,
+            "required_capabilities": manifest.requirements.capabilities,
             "has_prompt_context": manifest.prompt_context.is_some(),
             "prompt_context_length": manifest.prompt_context.as_ref().map(|c| c.len()).unwrap_or(0),
             "source": manifest.source,
@@ -995,6 +1006,7 @@ pub async fn get_skill_detail(
         (status = 400, description = "Invalid request"),
         (status = 401, description = "No GitHub token configured"),
         (status = 404, description = "Skill not found"),
+        (status = 500, description = "Invalid skills.promotion configuration"),
         (status = 502, description = "GitHub request failed")
     )
 )]
@@ -1014,18 +1026,11 @@ pub async fn propose_skill_to_registry(
         .into_json_tuple();
     };
 
-    let registry_repo = state
-        .kernel
-        .config_snapshot()
-        .skills
-        .registry_repo
-        .clone()
-        .filter(|r| !r.trim().is_empty())
-        .unwrap_or_else(|| librefang_skills::registry_pr::DEFAULT_REGISTRY_REPO.to_string());
+    let skills_config = state.kernel.config_snapshot().skills.clone();
 
     let evolution = librefang_skills::evolution::get_evolution_info(&skill);
 
-    run_registry_proposal(&skill, &evolution, &registry_repo, &token).await
+    run_registry_proposal(&skill, &evolution, &skills_config, &token).await
 }
 
 /// Shared core for the two "propose to registry" routes: the installed-skill
@@ -1038,15 +1043,21 @@ pub async fn propose_skill_to_registry(
 async fn run_registry_proposal(
     skill: &librefang_skills::InstalledSkill,
     evolution: &librefang_skills::evolution::SkillEvolutionMeta,
-    registry_repo: &str,
+    skills_config: &librefang_types::config::SkillsConfig,
     token: &str,
 ) -> (StatusCode, Json<serde_json::Value>) {
+    let registry_repo = skills_config
+        .registry_repo
+        .clone()
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or_else(|| librefang_skills::registry_pr::DEFAULT_REGISTRY_REPO.to_string());
     let result = librefang_skills::registry_pr::propose_skill_to_registry(
         librefang_skills::registry_pr::ProposeRequest {
             skill,
             evolution,
-            registry_repo,
+            registry_repo: &registry_repo,
             token,
+            promotion: &skills_config.promotion,
         },
     )
     .await;
@@ -1065,6 +1076,14 @@ async fn run_registry_proposal(
         }
         Err(librefang_skills::SkillError::InvalidManifest(msg)) => {
             ApiErrorResponse::bad_request(msg).into_json_tuple()
+        }
+        // A server-side configuration error is not a malformed request: the
+        // promotion validators (`api_base_url`, `fork_owner`, `base_branch`,
+        // fork-parent) name the exact config key, and the value was
+        // operator-supplied, so it is echoed rather than scrubbed (#8179
+        // review).
+        Err(librefang_skills::SkillError::InvalidConfig(msg)) => {
+            ApiErrorResponse::internal(msg).into_json_tuple()
         }
         Err(librefang_skills::SkillError::NotFound(msg)) => {
             ApiErrorResponse::not_found(msg).into_json_tuple()
@@ -1100,6 +1119,7 @@ async fn run_registry_proposal(
         (status = 400, description = "Invalid candidate id"),
         (status = 401, description = "No GitHub token configured"),
         (status = 404, description = "Candidate not found"),
+        (status = 500, description = "Invalid skills.promotion configuration"),
         (status = 502, description = "GitHub request failed")
     )
 )]
@@ -1131,14 +1151,7 @@ pub async fn propose_pending_to_registry(
         .into_json_tuple();
     };
 
-    let registry_repo = state
-        .kernel
-        .config_snapshot()
-        .skills
-        .registry_repo
-        .clone()
-        .filter(|r| !r.trim().is_empty())
-        .unwrap_or_else(|| librefang_skills::registry_pr::DEFAULT_REGISTRY_REPO.to_string());
+    let skills_config = state.kernel.config_snapshot().skills.clone();
 
     // For an update candidate, carry the target skill's evolution history
     // into the PR description (version diff / changelog). For a create, or
@@ -1163,7 +1176,7 @@ pub async fn propose_pending_to_registry(
         Err(e) => return ApiErrorResponse::internal_scrub(e.to_string()).into_json_tuple(),
     };
 
-    let response = run_registry_proposal(&staged.skill, &evolution, &registry_repo, &token).await;
+    let response = run_registry_proposal(&staged.skill, &evolution, &skills_config, &token).await;
 
     // Best-effort cleanup of the staging directory — the proposal is done
     // (success or failure) and the temp tree is no longer needed.

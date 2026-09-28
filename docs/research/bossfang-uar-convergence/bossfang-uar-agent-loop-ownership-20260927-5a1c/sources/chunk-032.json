@@ -1,0 +1,6 @@
+{
+  "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs",
+  "chunk_id": "chunk-032",
+  "source_id": "M03",
+  "text": "SurrealStorage::new calls run_migrations then ensure_embedding_indexes (719-745)"
+}

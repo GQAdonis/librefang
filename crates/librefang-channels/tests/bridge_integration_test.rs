@@ -77,7 +77,27 @@ impl MockAdapter {
         channel_type: ChannelType,
         overrides: Option<ChannelOverrides>,
     ) -> (Arc<Self>, mpsc::Sender<ChannelMessage>) {
-        let (tx, rx) = mpsc::channel(256);
+        Self::build(name, channel_type, overrides, 256)
+    }
+
+    /// Like `new`, but the adapter's inbound channel is bounded at `capacity`
+    /// rather than 256, so a test can observe the bridge's dispatch cap
+    /// pushing back on the stream instead of the queue absorbing the burst.
+    fn new_with_capacity(
+        name: &str,
+        channel_type: ChannelType,
+        capacity: usize,
+    ) -> (Arc<Self>, mpsc::Sender<ChannelMessage>) {
+        Self::build(name, channel_type, None, capacity)
+    }
+
+    fn build(
+        name: &str,
+        channel_type: ChannelType,
+        overrides: Option<ChannelOverrides>,
+        capacity: usize,
+    ) -> (Arc<Self>, mpsc::Sender<ChannelMessage>) {
+        let (tx, rx) = mpsc::channel(capacity);
         let (shutdown_tx, _shutdown_rx) = watch::channel(false);
 
         let adapter = Arc::new(Self {
@@ -2376,6 +2396,78 @@ async fn test_approval_listener_scopes_delivery_to_requesting_agent_adapter() {
     manager.stop().await;
 }
 
+/// #8160 regression: direct routing carries only the channel type, so it must
+/// still honor each adapter's account-qualified agent binding. Otherwise every
+/// adapter of the same type sends the approval keyboard to the originating
+/// chat, even when that adapter belongs to a different agent.
+#[tokio::test]
+async fn test_approval_listener_direct_route_scopes_to_requesting_agent_adapter() {
+    use librefang_types::event::{ApprovalRequestedEvent, Event, EventPayload, EventTarget};
+
+    let (handle, event_tx) = EventBusHandle::new();
+    let handle = Arc::new(handle);
+
+    let agent_a = AgentId::new();
+    let agent_b = AgentId::new();
+    let router = AgentRouter::new();
+    router.set_channel_default("telegram:bot-a".to_string(), agent_a);
+    router.set_channel_default("telegram:bot-b".to_string(), agent_b);
+    let router = Arc::new(router);
+
+    let adapter_a = NotifyingAdapter::with_account("telegram-a", "bot-a", Vec::new());
+    let adapter_b = NotifyingAdapter::with_account("telegram-b", "bot-b", Vec::new());
+    let adapter_a_ref = adapter_a.clone();
+    let adapter_b_ref = adapter_b.clone();
+
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter_a).await.unwrap();
+    manager.start_adapter(adapter_b).await.unwrap();
+    manager.start_approval_listener().await;
+
+    wait_until("approval listener subscribed", || {
+        event_tx.receiver_count() >= 1
+    })
+    .await;
+
+    event_tx
+        .send(Arc::new(Event::new(
+            agent_a,
+            EventTarget::System,
+            EventPayload::ApprovalRequested(ApprovalRequestedEvent {
+                request_id: "8160aaaa11112222".to_string(),
+                agent_id: agent_a.0.to_string(),
+                tool_name: "file_write".to_string(),
+                description: "write a file".to_string(),
+                risk_level: "high".to_string(),
+                sender_id: Some("user-1".to_string()),
+                channel: Some("telegram".to_string()),
+                chat_id: Some("originating-chat".to_string()),
+            }),
+        )))
+        .expect("broadcast send");
+
+    wait_until("approval delivered through originating adapter", || {
+        !adapter_a_ref.get_sent().is_empty()
+    })
+    .await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let sent_a = adapter_a_ref.get_sent();
+    assert_eq!(
+        sent_a.len(),
+        1,
+        "the adapter bound to the requesting agent should direct-route once: {sent_a:?}",
+    );
+    assert_eq!(sent_a[0].0, "originating-chat");
+    assert!(
+        adapter_b_ref.get_sent().is_empty(),
+        "an adapter bound to another agent must not direct-route the same approval: {:?}",
+        adapter_b_ref.get_sent(),
+    );
+
+    manager.stop().await;
+}
+
 /// #4985 follow-up: an adapter with no router binding (no
 /// `channel_default` set for its channel key) is suppressed rather than
 /// leaked to. Pre-fix code would have broadcast to it; the post-fix
@@ -3602,6 +3694,18 @@ async fn test_approval_direct_route_failure_does_not_claim_coverage() {
         !aggregate.contains("no adapter has a channel_default"),
         "routing is configured here — the operator must not be sent to channel_default, got: {aggregate}"
     );
+    // The remedy varies per occurrence, so it belongs in a field: interpolated
+    // into the message it splits one condition into four strings and every
+    // backend that aggregates by message loses the count (#8228 review).
+    assert!(
+        aggregate.contains("message=Approval reached no channel "),
+        "the event message must stay a constant; the varying remedy belongs in its \
+         own field, got: {aggregate}"
+    );
+    assert!(
+        aggregate.contains("remedy="),
+        "the remedy must still reach the operator, as a field, got: {aggregate}"
+    );
 
     manager.stop().await;
 }
@@ -3821,6 +3925,301 @@ async fn broadcast_dispatch_carries_the_per_chat_session_scope() {
     assert_eq!(
         reached, expected,
         "both broadcast targets must receive the turn"
+    );
+
+    manager.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch cap must be backpressure, not a cap on parked tasks
+// ---------------------------------------------------------------------------
+
+/// A handle whose turns never finish, so every dispatch that reaches it keeps
+/// its dispatch permit for the duration of the test.
+struct SaturatingHandle {
+    agent_id: AgentId,
+    in_flight: Arc<std::sync::atomic::AtomicUsize>,
+    /// Created with zero permits and never topped up — acquiring it pends forever.
+    never_released: tokio::sync::Semaphore,
+}
+
+#[async_trait]
+impl ChannelBridgeHandle for SaturatingHandle {
+    async fn send_message(&self, _agent_id: AgentId, _message: &str) -> Result<String, String> {
+        self.in_flight
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _forever = self.never_released.acquire().await;
+        Ok("unreachable".to_string())
+    }
+
+    async fn find_agent_by_name(&self, _name: &str) -> Result<Option<AgentId>, String> {
+        Ok(Some(self.agent_id))
+    }
+
+    async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+        Ok(vec![(self.agent_id, "coder".to_string())])
+    }
+
+    async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+        Err("mock: spawn not implemented".to_string())
+    }
+
+    fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+        // Test mock: no event bus to forward to.
+    }
+}
+
+/// The per-adapter dispatch cap must bound how many messages leave the adapter
+/// stream, not merely how many are simultaneously inside `dispatch_message`.
+///
+/// The permit used to be acquired inside the spawned task, so the intake loop
+/// drained the stream at line rate and turned every inbound message into a
+/// detached task parked on the permit queue: memory and reply latency grew with
+/// the burst, and the adapter's own bounded channel never applied any pressure.
+/// With the permit taken before the message is handed off, a saturated adapter
+/// stops being read and its bounded channel fills, which is what lets the
+/// adapter's overflow policy decide what happens to the excess.
+#[tokio::test]
+async fn test_dispatch_cap_backpressures_the_adapter_stream() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // Mirrors the bridge's per-adapter `Semaphore::new(32)`.
+    const CAP: usize = 32;
+    const QUEUE: usize = 4;
+    const TOTAL: usize = CAP + QUEUE + 16;
+
+    let agent_id = AgentId::new();
+    let in_flight = Arc::new(AtomicUsize::new(0));
+    let handle = Arc::new(SaturatingHandle {
+        agent_id,
+        in_flight: Arc::clone(&in_flight),
+        never_released: tokio::sync::Semaphore::new(0),
+    });
+    let router = Arc::new(AgentRouter::new());
+    router.set_user_default("user1".to_string(), agent_id);
+
+    let (adapter, tx) = MockAdapter::new_with_capacity("saturating", ChannelType::Telegram, QUEUE);
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter.clone()).await.unwrap();
+
+    // Feed from a separate task so the test can see how far the producer gets:
+    // once the cap is saturated the intake loop stops pulling, the adapter's
+    // bounded channel fills, and `send` stops completing.
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let accepted_by_producer = Arc::clone(&accepted);
+    let producer = tokio::spawn(async move {
+        for i in 0..TOTAL {
+            let msg = make_text_msg(ChannelType::Telegram, "user1", &format!("burst {i}"));
+            if tx.send(msg).await.is_err() {
+                break;
+            }
+            accepted_by_producer.fetch_add(1, Ordering::SeqCst);
+        }
+    });
+
+    wait_until("every dispatch permit taken", || {
+        in_flight.load(Ordering::SeqCst) >= CAP
+    })
+    .await;
+
+    // Unfixed, the loop keeps spawning one parked task per message and the
+    // producer runs to completion in this window.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    let taken = accepted.load(Ordering::SeqCst);
+    assert!(
+        taken <= CAP + QUEUE + 1,
+        "the dispatch cap must stop the intake loop from draining the stream, \
+         but {taken} of {TOTAL} messages were accepted",
+    );
+    assert!(
+        !producer.is_finished(),
+        "the producer must still be blocked on the adapter's bounded channel",
+    );
+
+    manager.abort();
+    producer.abort();
+}
+
+// ---------------------------------------------------------------------------
+// #7140: commands and chat must agree on the agent a conversation talks to
+// ---------------------------------------------------------------------------
+
+/// Kernel handle modelling the #5671 channel-instance binding store: an instance default (the `[[sidecar_channels]] agent` seed) plus a writable per-conversation override table, so `/agent` can be observed persisting a selection the chat path then honours.
+struct ConversationBindingHandle {
+    agents: Vec<(AgentId, String)>,
+    instance: String,
+    instance_default: AgentId,
+    /// `(instance, conversation_id) -> (agent_id, bound_by)` written by `set_conversation_override`.
+    overrides: Mutex<HashMap<(String, String), (AgentId, String)>>,
+    /// Every agent a chat turn was dispatched to.
+    received: Mutex<Vec<AgentId>>,
+    /// Every agent a `/new` reset reached.
+    resets: Mutex<Vec<AgentId>>,
+}
+
+#[async_trait]
+impl ChannelBridgeHandle for ConversationBindingHandle {
+    async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String> {
+        self.received.lock().unwrap().push(agent_id);
+        Ok(format!("Echo: {message}"))
+    }
+
+    async fn find_agent_by_name(&self, name: &str) -> Result<Option<AgentId>, String> {
+        Ok(self
+            .agents
+            .iter()
+            .find(|(_, n)| n == name)
+            .map(|(id, _)| *id))
+    }
+
+    async fn list_agents(&self) -> Result<Vec<(AgentId, String)>, String> {
+        Ok(self.agents.clone())
+    }
+
+    async fn spawn_agent_by_name(&self, _manifest_name: &str) -> Result<AgentId, String> {
+        Err("mock: spawn not implemented".to_string())
+    }
+
+    async fn resolve_conversation_override(
+        &self,
+        instance: &str,
+        conversation_id: &str,
+    ) -> Option<AgentId> {
+        self.overrides
+            .lock()
+            .unwrap()
+            .get(&(instance.to_string(), conversation_id.to_string()))
+            .map(|(id, _)| *id)
+    }
+
+    async fn set_conversation_override(
+        &self,
+        instance: &str,
+        conversation_id: &str,
+        agent_id: AgentId,
+        bound_by: &str,
+    ) -> Result<(), String> {
+        self.overrides.lock().unwrap().insert(
+            (instance.to_string(), conversation_id.to_string()),
+            (agent_id, bound_by.to_string()),
+        );
+        Ok(())
+    }
+
+    async fn resolve_instance_default(&self, instance: &str) -> Option<AgentId> {
+        (instance == self.instance).then_some(self.instance_default)
+    }
+
+    async fn reset_channel_session(
+        &self,
+        agent_id: AgentId,
+        channel: &str,
+        _chat_id: Option<&str>,
+        _is_internal_system: bool,
+    ) -> Result<String, String> {
+        self.resets.lock().unwrap().push(agent_id);
+        Ok(format!(
+            "Session reset for this {channel} chat. Other surfaces untouched."
+        ))
+    }
+
+    fn record_consumer_lag(&self, _n: u64, _ctx: &'static str) {
+        // Test mock: no event bus to forward to.
+    }
+}
+
+fn with_account(mut msg: ChannelMessage, instance: &str) -> ChannelMessage {
+    msg.metadata.insert(
+        "account_id".to_string(),
+        serde_json::Value::String(instance.to_string()),
+    );
+    msg
+}
+
+/// Regression for #7140 root causes 2 and 3, driven through the real `BridgeManager`.
+/// A sidecar instance whose default is agent A: `/new` has to reset A (the agent chat goes to), `/agent B` has to persist a per-conversation override, and from then on chat and `/new` both have to reach B.
+/// Before the fix `/new` resolved through the router alone and found nothing, and `/agent B` wrote only a router user default that the instance default outranks, so chat kept going to A while the ack said "Now talking to agent: B".
+#[tokio::test]
+async fn test_agent_command_sticks_and_commands_follow_chat_routing() {
+    let agent_a = AgentId::new();
+    let agent_b = AgentId::new();
+    let handle = Arc::new(ConversationBindingHandle {
+        agents: vec![
+            (agent_a, "alpha".to_string()),
+            (agent_b, "beta".to_string()),
+        ],
+        instance: "tg-bot".to_string(),
+        instance_default: agent_a,
+        overrides: Mutex::new(HashMap::new()),
+        received: Mutex::new(Vec::new()),
+        resets: Mutex::new(Vec::new()),
+    });
+    let router = Arc::new(AgentRouter::new());
+    let (adapter, tx) = MockAdapter::new("binding-adapter", ChannelType::Telegram);
+    let mut manager = BridgeManager::new(handle.clone(), router);
+    manager.start_adapter(adapter.clone()).await.unwrap();
+
+    // 1. `/new` before any selection resets the instance default, the agent chat is routed to.
+    tx.send(with_account(
+        make_command_msg(ChannelType::Telegram, "peer-1", "new", vec![]),
+        "tg-bot",
+    ))
+    .await
+    .unwrap();
+    wait_until("first /new reply", || !adapter.get_sent().is_empty()).await;
+    assert_eq!(
+        handle.resets.lock().unwrap().clone(),
+        vec![agent_a],
+        "/new must reset the agent the conversation's chat resolves to; replies: {:?}",
+        adapter.get_sent(),
+    );
+
+    // 2. `/agent beta` persists a per-conversation override under the same keys the chat path reads.
+    tx.send(with_account(
+        make_command_msg(ChannelType::Telegram, "peer-1", "agent", vec!["beta"]),
+        "tg-bot",
+    ))
+    .await
+    .unwrap();
+    wait_until("/agent reply", || adapter.get_sent().len() >= 2).await;
+    assert_eq!(adapter.get_sent()[1].1, "Now talking to agent: beta");
+    assert_eq!(
+        handle
+            .overrides
+            .lock()
+            .unwrap()
+            .get(&("tg-bot".to_string(), "peer-1".to_string()))
+            .cloned(),
+        Some((agent_b, "user:peer-1".to_string())),
+        "/agent must write the per-conversation binding the chat path consults",
+    );
+
+    // 3. The next ordinary message reaches the selected agent, not the instance default.
+    tx.send(with_account(
+        make_text_msg(ChannelType::Telegram, "peer-1", "hello"),
+        "tg-bot",
+    ))
+    .await
+    .unwrap();
+    wait_until("chat reply", || adapter.get_sent().len() >= 3).await;
+    assert_eq!(
+        handle.received.lock().unwrap().clone(),
+        vec![agent_b],
+        "chat must follow the /agent selection",
+    );
+
+    // 4. And `/new` now resets the agent the user is actually talking to.
+    tx.send(with_account(
+        make_command_msg(ChannelType::Telegram, "peer-1", "new", vec![]),
+        "tg-bot",
+    ))
+    .await
+    .unwrap();
+    wait_until("second /new reply", || adapter.get_sent().len() >= 4).await;
+    assert_eq!(
+        handle.resets.lock().unwrap().clone(),
+        vec![agent_a, agent_b]
     );
 
     manager.stop().await;

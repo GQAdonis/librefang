@@ -12,7 +12,23 @@
 /// SAME `SessionId` as the cron-fire path, so two write streams could
 /// interleave into one session history. The `is_internal_cron` flag
 /// gated behaviour but not SessionId derivation.
-pub const RESERVED_SYSTEM_CHANNEL_NAMES: &[&str] = &["cron", "autonomous", "webui"];
+pub const RESERVED_SYSTEM_CHANNEL_NAMES: &[&str] = &[
+    SYSTEM_CHANNEL_CRON,
+    SYSTEM_CHANNEL_AUTONOMOUS,
+    SYSTEM_CHANNEL_WEBUI,
+];
+
+/// A cron job firing on a schedule. No interactive surface waits on the reply.
+pub const SYSTEM_CHANNEL_CRON: &str = "cron";
+
+/// A background autonomous tick. No interactive surface waits on the reply.
+pub const SYSTEM_CHANNEL_AUTONOMOUS: &str = "autonomous";
+
+/// The dashboard chat. Reserved because it derives a `SessionId` like the
+/// others, but unlike them a live user *is* waiting on the reply — which is why
+/// callers that care about that distinction must name this constant rather than
+/// test membership of [`RESERVED_SYSTEM_CHANNEL_NAMES`].
+pub const SYSTEM_CHANNEL_WEBUI: &str = "webui";
 
 /// Returns true when `name` would collide with a kernel-internal
 /// system channel (case-insensitive). Used by `channel_type_str` to
@@ -22,6 +38,21 @@ pub const RESERVED_SYSTEM_CHANNEL_NAMES: &[&str] = &["cron", "autonomous", "webu
 pub fn is_reserved_system_channel(name: &str) -> bool {
     let lower = name.trim().to_ascii_lowercase();
     RESERVED_SYSTEM_CHANNEL_NAMES.iter().any(|r| *r == lower)
+}
+
+/// The channel name to derive a `SessionId` from, given whether the caller is the kernel itself.
+///
+/// This is the whole of the reserved-name guard as the session layer needs it, and every derivation of a channel-scoped `SessionId` must go through it.
+/// An internal caller keeps the raw name because `cron`, `autonomous` and `webui` *are* its sessions; anyone else gets [`sanitize_channel_name`], so an operator-supplied channel called `cron` derives `ext-cron` and cannot write into the kernel's own history.
+///
+/// It lives here rather than on the kernel because the callers are spread across four crates — the kernel's dispatch and execution resolvers, the `channel_send` mirror in `librefang-runtime`, and attachment injection in `librefang-api` — and the two that were written against `SessionId::for_sender_scope` directly both derived the wrong session for a reserved name (#8243).
+/// Being reachable is the point: the guard was already a one-liner, and what made it skippable was living behind `pub(super)` in the crate that happened to write it first.
+pub fn resolve_scope_channel(channel: &str, is_internal_system: bool) -> String {
+    if is_internal_system {
+        channel.to_string()
+    } else {
+        sanitize_channel_name(channel)
+    }
 }
 
 /// Sanitize a raw channel name before it reaches `SessionId`

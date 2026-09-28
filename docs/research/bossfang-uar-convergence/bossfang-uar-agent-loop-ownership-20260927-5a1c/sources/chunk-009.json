@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs",
+  "chunk_id": "chunk-009",
+  "source_id": "R09",
+  "text": "writes mcp_config.json pointing at the daemon /mcp endpoint (327-435); --allowedTools mcp__librefang"
+}

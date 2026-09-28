@@ -65,3 +65,16 @@ The repaired contract is pinned by immutable source SHA
 `2aaeadd9c28f27532a03e68d5035b248a0cef5b8`, independently probed from GHCR, and exercised
 through BossFang's authenticated `/api/uar/test` route. A final adversarial review passed with
 zero critical, warning, or suggestion findings.
+
+## D-001 · Close phase-10 without a recommended next phase          [reflect · 2026-09-27]
+
+**TL;DR:** Phase-10 is closed at `reflect_complete` with 8/8 implementation, evidence and publication COMPLETE, and certification waived; phase-11 was opened by operator direction, not seeded from this reflection.
+
+**Why:** `reflection.md` has no "Recommended Next Phase" section, so `/kbd-next-phase` (commit `259f44819`) had nothing to seed and warned that the stage was not reflection-complete.
+The waypoint it read carried `implementationCompleted 56 / implementationTotal 66`, which is the project-wide rollup from `position.json` (all eleven phases, including unfinished phase-8 and phase-9), not phase-10's own 8/8 change counter; that is where the "Goals met: 56/66" report came from.
+Reconciliation on 2026-09-27 (phase-11 G3) wrote the missing `execute` and `reflect` handoffs with `kbd_stage_handoff_write`, set the stage flags in `progress.json`, recorded evidence from `verification.md` and merged PRs #108, #109, #112, #118 and #120, and recorded publication from PR #120 plus the pinned GHCR image `2aaeadd9`.
+Certification is waived rather than claimed: no signed `prometheus kbd gate` receipts exist, and the canonical runtime replica for this project is still at revision 2 (a 2026-07-31 legacy import) while the committed projections claim `sourceRevision` 72.
+
+**Alternatives:** Retroactively add a "Recommended Next Phase" section to `reflection.md` (rejected: it would fabricate a recommendation that was never made) · Mark certification COMPLETE from the unsigned gate results (rejected: those are evidence, not signed certification) · Replay the missing transitions through `prometheus kbd` (deferred to the operator: it writes to the shared machine-local event store and would re-render projections at a revision lower than the committed 72).
+
+**Learn more:** `verification.md`, `handoffs/execute.handoff.json`, `handoffs/reflect.handoff.json`, and `../phase-11-surreal-recovery-and-uar-convergence/decision-log.md`.

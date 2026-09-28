@@ -1,0 +1,6 @@
+{
+  "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs",
+  "chunk_id": "chunk-033",
+  "source_id": "M04",
+  "text": "v20_defines_idempotent_operation_ledger; v21_persists_executor_lifecycle"
+}

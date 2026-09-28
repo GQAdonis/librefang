@@ -1,0 +1,588 @@
+{
+  "credibility_scores": {
+    "repo://librefang@259f44819/crates/librefang-runtime/src/agent_loop/mod.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs": 95,
+    "repo://librefang@259f44819/Cargo.toml": 95,
+    "repo://librefang@259f44819/crates/librefang-storage/src/config.rs": 95,
+    "repo://librefang@259f44819/docs/agent-fabric-convergence.md": 75,
+    "repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs": 90,
+    "repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml": 90,
+    "repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md": 80,
+    "repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs": 85,
+    "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs": 95,
+    "repo://librefang@259f44819/Dockerfile": 95,
+    "repo://librefang@259f44819/Cargo.lock": 95,
+    "repo://librefang@259f44819/crates/librefang-kernel/src/approval.rs": 90,
+    "repo://universal-agent-runtime@3d6bf056/src/server.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/Cargo.toml": 95,
+    "repo://universal-agent-runtime@3d6bf056/versions.toml": 85,
+    "repo://universal-agent-runtime@3d6bf056/vendor/git/README.md": 85,
+    "repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md": 75,
+    "repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md": 75,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/embedded.rs": 85,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/Cargo.lock": 90,
+    "repo://surreal-memory-server@b7e2093/Cargo.toml": 95,
+    "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs": 95,
+    "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs": 95,
+    "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs": 95,
+    "repo://surreal-memory-server@b7e2093/CLAUDE.md": 70,
+    "repo://surreal-memory-server@6acb605/Cargo.toml": 95,
+    "repo://the-boss@1fe9acff43/build/integration-sources.json": 95,
+    "repo://the-boss@1fe9acff43/build/integration-artifacts.json": 95,
+    "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts": 95,
+    "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarRuntimeConnection.ts": 95,
+    "repo://the-boss@1fe9acff43/src/main/services/prometheus/managedServices.ts": 90,
+    "repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts": 90,
+    "repo://the-boss@1fe9acff43/PRODUCT.md": 70,
+    "repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md": 75,
+    "repo://the-boss@1fe9acff43/resources/prometheus-skills-mini/.prometheus/postmortems/2026-09-20-surreal-memory-mirror-write-failed.md": 70,
+    "repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)": 90,
+    "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar": 85,
+    "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations": 85,
+    "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern": 85,
+    "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/": 90,
+    "https://docs.dapr.io/concepts/dapr-services/sidecar/": 80,
+    "https://a2a-protocol.org/latest/specification/": 90,
+    "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents": 80,
+    "https://agentclientprotocol.com/overview/introduction": 85,
+    "https://zed.dev/blog/bring-your-own-agent-to-zed": 75,
+    "https://docs.ag-ui.com/concepts/events": 80,
+    "https://modelcontextprotocol.io/specification/2025-06-18/server/tools": 90,
+    "https://developers.openai.com/api/docs/guides/function-calling": 85,
+    "https://code.claude.com/docs/en/agent-sdk/overview": 85,
+    "https://code.claude.com/docs/en/agent-sdk/permissions": 85,
+    "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html": 85,
+    "https://github.com/langchain-ai/agent-protocol": 70,
+    "https://learn.microsoft.com/en-us/agent-framework/overview/": 80,
+    "https://doc.rust-lang.org/cargo/reference/resolver.html": 95,
+    "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html": 95,
+    "https://doc.rust-lang.org/cargo/reference/features.html": 95,
+    "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x": 90,
+    "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33": 90,
+    "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture": 85,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs": 95,
+    "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs": 95,
+    "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest": 95,
+    "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-types/src/agent.rs": 95,
+    "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir": 90,
+    "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs": 90,
+    "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs": 90
+  },
+  "verified_sources": [
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/agent_loop/mod.rs",
+      "id": "R01",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs",
+      "id": "R02",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "id": "R03",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs",
+      "id": "R04",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/Cargo.toml",
+      "id": "R05",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/config.rs",
+      "id": "R06",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+      "id": "R07",
+      "score": 75,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs",
+      "id": "R08",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs",
+      "id": "R09",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml",
+      "id": "R10",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md",
+      "id": "R11",
+      "score": 80,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs",
+      "id": "R12",
+      "score": 85,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs",
+      "id": "R13",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/Dockerfile",
+      "id": "R14",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/Cargo.lock",
+      "id": "R15",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/approval.rs",
+      "id": "R16",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs",
+      "id": "U01",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
+      "id": "U02",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
+      "id": "U03",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs",
+      "id": "U04",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+      "id": "U05",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/versions.toml",
+      "id": "U06",
+      "score": 85,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/vendor/git/README.md",
+      "id": "U07",
+      "score": 85,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md",
+      "id": "U08",
+      "score": 75,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md",
+      "id": "U09",
+      "score": 75,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
+      "id": "U10",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/embedded.rs",
+      "id": "U11",
+      "score": 85,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "id": "U12",
+      "score": 85,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.lock",
+      "id": "U13",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://surreal-memory-server@b7e2093/Cargo.toml",
+      "id": "M01",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs",
+      "id": "M02",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs",
+      "id": "M03",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs",
+      "id": "M04",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://surreal-memory-server@b7e2093/CLAUDE.md",
+      "id": "M05",
+      "score": 70,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://surreal-memory-server@6acb605/Cargo.toml",
+      "id": "M06",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/build/integration-sources.json",
+      "id": "B01",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/build/integration-artifacts.json",
+      "id": "B02",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+      "id": "B03",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+      "id": "B04",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/src/main/services/prometheus/managedServices.ts",
+      "id": "B05",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts",
+      "id": "B06",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/PRODUCT.md",
+      "id": "B07",
+      "score": 70,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md",
+      "id": "B08",
+      "score": 75,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/resources/prometheus-skills-mini/.prometheus/postmortems/2026-09-20-surreal-memory-mirror-write-failed.md",
+      "id": "B09",
+      "score": 70,
+      "basis": "first-party design document"
+    },
+    {
+      "url": "repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)",
+      "id": "B10",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+      "id": "S1",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations",
+      "id": "S2",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern",
+      "id": "S3",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+      "id": "S4",
+      "score": 90,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://docs.dapr.io/concepts/dapr-services/sidecar/",
+      "id": "S5",
+      "score": 80,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "id": "S6",
+      "score": 90,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "id": "S7",
+      "score": 80,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://agentclientprotocol.com/overview/introduction",
+      "id": "S8",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://zed.dev/blog/bring-your-own-agent-to-zed",
+      "id": "S9",
+      "score": 75,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://docs.ag-ui.com/concepts/events",
+      "id": "S10",
+      "score": 80,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+      "id": "S11",
+      "score": 90,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "id": "S12",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://code.claude.com/docs/en/agent-sdk/overview",
+      "id": "S13",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://code.claude.com/docs/en/agent-sdk/permissions",
+      "id": "S14",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html",
+      "id": "S15",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://github.com/langchain-ai/agent-protocol",
+      "id": "S16",
+      "score": 70,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/agent-framework/overview/",
+      "id": "S17",
+      "score": 80,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://doc.rust-lang.org/cargo/reference/resolver.html",
+      "id": "S18",
+      "score": 95,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html",
+      "id": "S19",
+      "score": 95,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://doc.rust-lang.org/cargo/reference/features.html",
+      "id": "S20",
+      "score": 95,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
+      "id": "S21",
+      "score": 90,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
+      "id": "S22",
+      "score": 90,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+      "id": "S23",
+      "score": 85,
+      "basis": "primary documentation fetched with exact quote"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "id": "U14",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "id": "U15",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "id": "U16",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "id": "U17",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "id": "U18",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "id": "U19",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "id": "U20",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "id": "R17",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "id": "R18",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "id": "R19",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "id": "R20",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "id": "R21",
+      "score": 95,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "id": "R22",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "id": "R23",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    },
+    {
+      "url": "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "id": "R24",
+      "score": 90,
+      "basis": "first-party source read at pinned revision"
+    }
+  ],
+  "rubric": "code 85-95 by directness; repository docs 70-80; web primary docs 70-95 by authority",
+  "sycophancy_correction_used": false
+}

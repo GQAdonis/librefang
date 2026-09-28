@@ -4,13 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Storage backend abstractions for librefang (SurrealDB 3.0 + optional SQLite)."
+description = "Storage backend abstractions for librefang (SurrealDB 3.3 + optional SQLite)."
 
 [features]
 default = ["surreal-backend"]
 
-# Embedded or remote SurrealDB 3.0 backend (default).
-surreal-backend = ["dep:surrealdb", "dep:surrealdb-core"]
+# Embedded or remote SurrealDB 3.3 backend (default).
+surreal-backend = ["dep:surrealdb", "dep:surrealdb-core", "dep:surrealdb-types"]
 
 # Legacy SQLite backend (opt-in, mirrors the pre-3.0 storage layout).
 sqlite-backend = ["dep:rusqlite"]
@@ -28,12 +28,14 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 
 surrealdb = { workspace = true, optional = true }
-# Explicit transitive pin: forces the workspace =3.0.5 constraint to apply so
-# `cargo update -p surrealdb-core` can never silently bump past 3.0.5.
+# Explicit transitive pin: forces the workspace =3.3.0 constraint to apply so
+# `cargo update -p surrealdb-core` can never silently bump past 3.3.0.
 # Without this explicit dep, workspace.dependencies pins only take effect when
 # a crate lists the dep with { workspace = true } — putting it here (where
 # surrealdb-core is already a transitive dep of surrealdb) makes the pin load-bearing.
 surrealdb-core = { workspace = true, optional = true }
+# Same reason for surrealdb-types, which surreal-memory also depends on directly.
+surrealdb-types = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 sha2 = { workspace = true }
 hex = { workspace = true }

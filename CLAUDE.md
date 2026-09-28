@@ -21,6 +21,8 @@ Full enumeration: `docs/development/ai-safety-hooks.md`.
 The short list of things that get blocked:
 
 - Editing files or running mutating git commands in the **main worktree**.
+  The one exception is `git pull --ff-only [origin [main]]` (optionally with `-q`, `-v` or `--prune`), which fast-forwards the checked-out `main` to `origin/main` and cannot create a commit unless repo config overrides the pull strategy (for example `pull.twohead`).
+  Any other form of `git pull` stays blocked, because a later `--ff` / `--no-ff`, a strategy, `--squash` or another ref would defeat that guarantee.
 - Force-push to `main` / `master`; `--no-verify` / `--no-gpg-sign` on any git command.
 - Staging sensitive files (`.env*`, `*.pem`, `id_rsa`, `credentials*`, …) and broad `git add -A` / `git add .` — stage specific paths.
 - Claude / Anthropic attribution in a commit message, **or** a commit author identity that resolves to Claude / Anthropic.
@@ -38,6 +40,38 @@ git config merge.ours.driver true
 `.gitattributes` declares `merge=ours` for all `.kbd-orchestrator/**/*.json`
 and `.kbd-orchestrator/**/*.md` files. Without the driver registered, git
 falls back to manual conflict resolution on those files.
+
+## Default operating mode: delegate to the agent team
+
+Every non-trivial task in this repo runs through the **`bossfang-stewards`** agent team (`.agent-team/project-routing.json` → `.agent-team/bossfang-stewards/team.json`).
+The main session is the orchestrator: it plans, dispatches roles, combines their results, and reports.
+It does not do role work itself when a role owns that work.
+Only trivial single-file changes (a typo, a one-line obvious fix) skip delegation.
+
+| Work | Role |
+|---|---|
+| Roadmap, feature ledger, acceptance criteria, KBD phases and OpenSpec changes (`docs/bossfang/`, `.kbd-orchestrator/`, `openspec/changes/`) | `product-manager` |
+| Any upstream `librefang/librefang` sync (`docs/upstream-merges/`, the upstream-merge skill, `scripts/enforce-branding.py`) | `upstream-merge-manager` |
+| SurrealDB schema and migrations, `librefang-storage`, the Surreal backends in `librefang-memory` (the surreal-memory substrate), SurrealDB / surreal-memory version pins | `surrealdb-schema-engineer` |
+| UAR (`librefang-uar-spec`, the `UarDriver`, the runtime pin), the config store overlay, desktop identity, branding assets | `bossfang-feature-steward` |
+| Independent review of every upstream sync before it merges to `main` | `merge-reviewer` |
+
+How to use the team:
+
+- **Use it to the maximum.**
+  Split work so that every role with an independent piece runs, and run those roles **in parallel**.
+- **Isolate parallel roles.**
+  Each role gets its own linked worktree (branched from the shared base) and its own `CARGO_TARGET_DIR`, so their commits and builds never collide.
+  The orchestrator combines the commits afterwards and re-verifies the combined tree.
+- **Invoke by role.**
+  Spawn the native agent (`.claude/agents/<role>.md`) when the harness exposes it; otherwise spawn a general-purpose agent and hand it the role file to follow.
+- **Work no role owns** (general kernel, API, dashboard, CLI or hook code) still goes to a delegated agent in its own worktree, which follows this file.
+- **Review is independent.**
+  Nothing merges to `main` without a review in a fresh context, never the builder's.
+  `merge-reviewer` reviews upstream syncs; every other change gets a fresh-context reviewer agent (for example `code-reviewer`, `rust-reviewer`, or `security-reviewer` for hooks and auth).
+- **Hand off explicitly.**
+  A role that finds work owned by another role reports it as a handoff.
+  The orchestrator dispatches it rather than letting the finder absorb it.
 
 ## Process Discipline
 
@@ -181,21 +215,30 @@ LibreFang is an open-source Agent Operating System written in Rust (31 crate dir
 
 **Do NOT run `cargo build` or `cargo run` locally.**
 **`cargo test` is allowed only when scoped with `-p <crate>` / `--package <crate>`** — the unscoped workspace-wide form contends with the user's other sessions on the shared `target/` directory.
-Full workspace build / test runs in CI.
 
-After every change:
+### Verify locally. Never wait on CI.
+
+**CI is not a verification step in this repo.** It is slow, and waiting on it stalls work that a local `cargo check` answers in a minute or two.
+
+- **Never** push a branch and then poll GitHub Actions for the result.
+- **Never** describe a change as "verified by CI", and never defer a failing or skipped check to CI.
+- **Never** treat a red or skipped CI lane as a reason to pause — verify the same property locally instead.
+- **Never** build `Dockerfile.rust-dev` to run a check. That image exists for hosts with no native toolchain; this host has one, and building it costs ~20 minutes.
+
+There is a native `cargo` toolchain on the development host. Use it:
 
 ```bash
+export CARGO_TARGET_DIR=/tmp/librefang-target-<worktree>   # keep off the shared target/
+export SKIP_DASHBOARD_BUILD=1                              # build.rs soft-skips without pnpm
+
 cargo check --workspace --lib                          # Compile-check only
 cargo clippy --workspace --all-targets -- -D warnings  # Zero warnings
-cargo test -p <crate>                                  # Only when verifying behavior in one crate
-
-# Quick unit-only lane, mirrors CI's Test / Unit (lib+bin):
-cargo nextest run --workspace -E 'kind(lib) | kind(bin)' --no-fail-fast
+cargo test -p <crate>                                  # Behaviour, one crate at a time
 ```
 
-`docs/development/build-and-verify.md` covers the rest: the two CI test lanes and why the nextest filter expression is used instead of `--lib --bins`, the `librefang-desktop` Windows exclusion (#6729), and how to verify **without a native toolchain** via `Dockerfile.rust-dev` and a per-worktree target volume.
-Read it before declaring a change unverified on a host that has no `cargo`.
+Both env vars matter. `CARGO_TARGET_DIR` keeps a linked worktree off the shared `target/` so a check here cannot contend with another session. `SKIP_DASHBOARD_BUILD=1` stops `librefang-api/build.rs` shelling out to `pnpm`, which dominates a cold check and is irrelevant to Rust correctness.
+
+Read cargo's **own** exit status, not a wrapper's. Writing `VAR=$?` and then piping to `tail` makes the shell report `tail`'s status — a failed build then looks like success. Write the status as the final action (`cmd > log 2>&1; echo $? > log.status`) and read that file.
 
 ## MANDATORY: Integration Testing (refs #3721)
 
@@ -360,10 +403,9 @@ as the default persistent storage, with SQLite retained only as a legacy opt-in 
 **Crate**: `librefang-storage` (`crates/librefang-storage/`)
 **Migration files**: `crates/librefang-storage/src/migrations/sql/*.surql` (24+ migrations)
 **Feature flags**: `surreal-backend` (default), `sqlite-backend` (opt-in legacy)
-**Version pin**: `surrealdb = { version = "=3.2.4" }` **and** `surrealdb-core = { version = "=3.2.4" }`
-  in workspace `Cargo.toml` — both lines move together. `=` on `surrealdb` does NOT transitively
-  constrain `surrealdb-core`, so pinning only the former lets `cargo update` drift core onto a
-  newer minor that breaks the client. Coordinate with surreal-memory and UAR before changing.
+**Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=3.3.0`, in workspace `Cargo.toml` — the three lines move together.
+  `=` on `surrealdb` does NOT transitively constrain `surrealdb-core` or `surrealdb-types`, so `librefang-storage` lists both as direct optional deps to make the pins load-bearing.
+  Coordinate with surreal-memory before changing.
 
 **After every upstream merge:**
 1. Check if upstream added new SQLite `CREATE TABLE` or `ALTER TABLE` statements
@@ -381,22 +423,17 @@ SurrealDB-native memory substrate with semantic search, knowledge graphs, and ta
 
 **Crate**: `librefang-memory` (`crates/librefang-memory/`)
 **Backends**: `crates/librefang-memory/src/backends/surreal*.rs` (9 backend files)
-**Dependency**: `surreal-memory = { git = "https://github.com/Prometheus-AGS/surreal-memory-server", branch = "main", features = ["embedded"] }`
+**Dependency**: `surreal-memory = { git = "https://github.com/Prometheus-AGS/surreal-memory-server.git", rev = "b7e2093a267ca8655fbe85693c0ddfc52711ab6b", default-features = false, features = ["embedded"] }` — pinned by `rev`; keep the URL/rev form byte-identical (see the comment in `Cargo.toml`).
 
 **After every upstream merge:**
 1. If upstream changes the `librefang-memory` API surface (e.g., `Arc<Mutex<Connection>>`
    → r2d2 `Pool`), update BossFang's surreal backend implementations to match
 2. Never remove the `surreal-backend` feature from `librefang-memory/Cargo.toml`
 3. The `embedded` feature on surreal-memory must remain — no external SurrealDB service needed
-4. Run `cargo update -p surreal-memory` to pull any new commits from `branch = "main"`
-   into `Cargo.lock`. surreal-memory's internal connection architecture changes
-   under us (most recently: 2026-05-24 ArcSwap rewrite + typed `RetryAction` +
-   `SURREAL_QUERY_TIMEOUT_MS` env var + embedded in-flight semaphore) but the
-   `MemoryStorage` trait surface is held stable — so picking up the latest is
-   typically zero-risk on our side. Two operational env vars surface from those
-   internals if you need them: `SURREAL_QUERY_TIMEOUT_MS` (per-query deadline,
-   default 10000 ms) and `SURREAL_EMBEDDED_MAX_INFLIGHT` (concurrent embedded
-   ops, default 16 = RocksDB default stripe count).
+4. surreal-memory is pinned by `rev`, not a branch, so a bump is a deliberate edit of the workspace `Cargo.toml` followed by `cargo update -p surreal-memory`.
+   Its `surrealdb` pin is exact, so a new rev usually moves our `surrealdb` / `surrealdb-core` / `surrealdb-types` pins with it (see Shared SurrealDB Version Pin).
+   Since rev `b7e2093` it retries SurrealDB 3.3 `TransactionConflict` errors on every write and shares one `Surreal<Any>` session rather than cloning per call (in SDK 3.x a clone is a new server-side session).
+   Two operational env vars surface from its internals: `SURREAL_QUERY_TIMEOUT_MS` (per-query deadline, default 10000 ms) and `SURREAL_EMBEDDED_MAX_INFLIGHT` (concurrent embedded ops, default 16 = RocksDB default stripe count).
 
 ### 3. Universal Agent Runtime (UAR) as a Runtime Provider
 
@@ -452,23 +489,23 @@ paper over a missing feature declaration — declare the feature and forward it.
 
 ### Shared SurrealDB Version Pin
 
-All three systems (librefang-storage, surreal-memory, UAR) must link the same surrealdb
-client. The workspace `Cargo.toml` pins:
+librefang-storage and surreal-memory link the same in-process surrealdb client.
+The workspace `Cargo.toml` pins:
 ```toml
-surrealdb = { version = "=3.2.4", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
-surrealdb-core = { version = "=3.2.4", default-features = false }
+surrealdb = { version = "=3.3.0", default-features = false, features = ["kv-rocksdb", "protocol-ws", "protocol-http"] }
+surrealdb-core = { version = "=3.3.0", default-features = false }
+surrealdb-types = { version = "=3.3.0", default-features = false }
 ```
-Upgrade both lines together, and check the other two systems first.
+Upgrade the three lines together, and check surreal-memory first.
 Version drift causes duplicate dep link errors that break the entire build.
+Verify with `cargo tree -i surrealdb`, `-i surrealdb-core`, `-i surrealdb-types` and `-i surreal-memory`: each must show exactly one version.
 
-What each system demands, as of the 3.2.4 bump:
+What each system demands, as of the 3.3.0 bump:
 
-- `surreal-memory` pins a **caret** `^3.2.0`, which any 3.2.x satisfies — flexible.
-- `universal-agent-runtime` pins an **exact** `=3.2.4` (`Cargo.toml` in that repo) — rigid, and
-  historically the sole source of the lockstep constraint. Since phase-8 C-001 un-forced
-  `uar-driver` out of the default build, a default `cargo check` no longer links UAR at all, so
-  the exact pin only binds builds that opt into `--features uar-driver` (the `Dockerfile` image
-  does). Keep the two in step anyway: cargo cannot unify two different exact `=` pins.
+- `surreal-memory` (rev `b7e2093`) pins an **exact** `surrealdb = "=3.3.0"` and `surrealdb-types = "=3.3.0"` — rigid, so its rev and our pin must move in step.
+- `universal-agent-runtime` also pins `=3.3.0`, but it is no longer linked in-process: `uar-driver` in `librefang-llm-drivers` is an empty feature and UAR runs as a sidecar, so its pin does not bind this workspace.
+- The remote SurrealDB server (`k8s/base/surrealdb-statefulset.yaml`) runs `surrealdb/surrealdb:v3.3.0`, the same minor as the client.
+- Embedded (RocksDB) datastores are migrated in place, one way, the first time a 3.3.0 client opens them; take a copy of the embedded `librefang.surreal` / `librefang-memory.surreal` directories under the configured storage data dir before the first 3.3.0 boot if a rollback to 3.2.x must stay possible.
 
 ### 4. Env-var aliases (BOSSFANG_* preferred, LIBREFANG_* fallback)
 
@@ -601,3 +638,9 @@ The rules you must not break without asking:
   It exists for containers that drop to a numeric uid without a passwd entry and inherit a placeholder home (`/nonexistent`, `/var/empty`, `/dev/null`), leaving the CLI unable to find `~/.claude/.credentials.json`.
   The override is ignored when the inherited home is already a real directory, and when it points at a non-directory the driver logs a `WARN` and falls back rather than honouring it.
 - When parallel agents modify the same crate, `Option::None` defaults for new fields compile silently but disable the feature. Always write the integration test at the injection site, not just the implementation site.
+
+<!-- prometheus-team-routing:start v1 -->
+For every code task, read `.agent-team/project-routing.json`, then its active team manifest and the relevant role instructions. Default to that team, selecting only roles whose responsibilities and ownership match the work. Preserve native permissions, models, concurrency limits and existing project instructions.
+For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.
+Use native delegation when available. If unavailable, follow the selected role instructions sequentially and report that limitation. Review in the builder context is not independent review. Keep reviewers dormant until the complete implementation phase; allow one batched correction/confirmation cycle. Respect user-only skill invocation restrictions. Zed external ACP agents use their own native configuration; parallel UI threads are not an automatic delegation API.
+<!-- prometheus-team-routing:end -->

@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/versions.toml",
+  "chunk_id": "chunk-022",
+  "source_id": "U06",
+  "text": "surrealdb = 3.3.0; surrealdb_server = 3.3.0; liter_llm = 1.18.2; surreal_memory_server_commit = 432eaa1"
+}

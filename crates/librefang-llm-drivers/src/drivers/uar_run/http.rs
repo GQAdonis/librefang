@@ -1,4 +1,5 @@
 use librefang_types::uar_run::UarDelegatedRunProjection;
+use librefang_types::config::{UarServiceOwnership, UarWorkspaceLocality};
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::Value;
@@ -7,13 +8,41 @@ use super::wire::{WireReceipt, WireRuntimeDescriptor};
 use super::{Transport, UarRunClient, UarRunClientError};
 
 impl UarRunClient {
-    pub(super) async fn transport(&self) -> Result<Transport, UarRunClientError> {
+    pub(super) async fn transport(
+        &self,
+        verified_principal: &str,
+    ) -> Result<Transport, UarRunClientError> {
         let (base, credential, binding) = super::super::uar::full_run_transport()
             .await
             .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
+        if binding.ownership != UarServiceOwnership::Managed
+            || binding.workspace_locality != UarWorkspaceLocality::Local
+        {
+            return Err(UarRunClientError::Binding(
+                "full-run delegation requires the selected managed local UAR sidecar".to_string(),
+            ));
+        }
+        let url = reqwest::Url::parse(&base)
+            .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
+        if url.scheme() != "http"
+            || !url
+                .host_str()
+                .and_then(|host| host.parse::<std::net::IpAddr>().ok())
+                .is_some_and(|host| host.is_loopback())
+        {
+            return Err(UarRunClientError::Binding(
+                "managed full-run endpoint must use loopback HTTP".to_string(),
+            ));
+        }
+        if credential.is_none() {
+            return Err(UarRunClientError::Binding(
+                "managed full-run endpoint has no launch-token credential".to_string(),
+            ));
+        }
         Ok(Transport {
             base: endpoint(&base, "api/uar/full-harness/v1"),
             credential,
+            verified_principal: verified_principal.to_string(),
             binding,
         })
     }
@@ -33,7 +62,8 @@ impl UarRunClient {
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))
-            .header("x-uar-workspace-id", workspace_id);
+            .header("x-uar-workspace-id", workspace_id)
+            .header("x-uar-principal", &transport.verified_principal);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }
@@ -95,7 +125,8 @@ impl UarRunClient {
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))
-            .header("x-uar-workspace-id", workspace_id);
+            .header("x-uar-workspace-id", workspace_id)
+            .header("x-uar-principal", &transport.verified_principal);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }

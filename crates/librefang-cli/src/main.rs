@@ -32,7 +32,15 @@ pub(crate) mod mcp;
 pub mod progress;
 pub mod table;
 pub(crate) mod templates;
+#[cfg(test)]
+pub(crate) mod test_env_lock;
 pub(crate) mod tui;
+
+/// Shared env-mutation test helper: save/restore around a closure, taken by
+/// `doctor.rs` and `commands/skill.rs`, which race otherwise. The lock itself
+/// is `test_env_lock`'s, so all env-var tests in this binary hold one mutex.
+#[cfg(test)]
+pub(crate) mod test_env;
 pub(crate) mod ui;
 
 use clap::Parser;
@@ -444,6 +452,21 @@ fn main() {
                 field,
                 value,
             } => cmd_agent_set(&agent_id, &field, &value),
+            AgentCommands::Routing { agent_id, json } => cmd_agent_routing_show(&agent_id, json),
+            AgentCommands::RoutingSet {
+                agent_id,
+                mode,
+                profiles,
+                budget,
+                default_profile,
+            } => cmd_agent_routing_set(
+                &agent_id,
+                &mode,
+                profiles.as_deref(),
+                budget.as_deref(),
+                default_profile.as_deref(),
+            ),
+            AgentCommands::RoutingProfiles { json } => cmd_agent_routing_profiles(json),
         },
         Some(Commands::Workflow(sub)) => match sub {
             WorkflowCommands::List => cmd_workflow_list(),
@@ -501,7 +524,9 @@ fn main() {
         },
         Some(Commands::Migrate(args)) => cmd_migrate(args),
         Some(Commands::Skill(sub)) => match sub {
-            SkillCommands::Install { source, hand } => cmd_skill_install(&source, hand.as_deref()),
+            SkillCommands::Install { source, hand } => {
+                cmd_skill_install(&source, hand.as_deref(), cli.config.as_deref())
+            }
             SkillCommands::List { hand } => cmd_skill_list(hand.as_deref()),
             SkillCommands::Remove { name, hand } => cmd_skill_remove(&name, hand.as_deref()),
             SkillCommands::Search { query } => cmd_skill_search(&query),
@@ -512,7 +537,7 @@ fn main() {
                 tag,
                 output,
                 dry_run,
-            } => cmd_skill_publish(path, repo, tag, output, dry_run),
+            } => cmd_skill_publish(path, repo, tag, output, dry_run, cli.config.as_deref()),
             SkillCommands::Create => cmd_skill_create(),
             SkillCommands::Evolve(sub) => cmd_skill_evolve(sub),
             SkillCommands::Pending(sub) => cmd_skill_pending(sub),

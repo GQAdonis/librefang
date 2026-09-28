@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+  "chunk_id": "chunk-069",
+  "source_id": "U14",
+  "text": "base.scheme() == \"http\" && is_loopback(&base) && path == \"/uar/admission/v1\" (77-87); prepare/resolve/cancel/claim/finish paths (102-110)"
+}

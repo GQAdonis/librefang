@@ -1,0 +1,6 @@
+{
+  "url": "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+  "chunk_id": "chunk-049",
+  "source_id": "S4",
+  "text": "Sidecar containers have their own independent lifecycles."
+}

@@ -1,0 +1,6 @@
+{
+  "url": "repo://surreal-memory-server@6acb605/Cargo.toml",
+  "chunk_id": "chunk-035",
+  "source_id": "M06",
+  "text": "surrealdb = { version = \"=3.2.4\" }"
+}

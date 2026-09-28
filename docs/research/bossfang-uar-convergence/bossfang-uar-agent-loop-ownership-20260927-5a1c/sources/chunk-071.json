@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+  "chunk_id": "chunk-071",
+  "source_id": "U16",
+  "text": "MCP server must select one loopback URL or one trusted destination grant (110-117); MCP server URL must be loopback HTTP without userinfo (209-223); host-session or uar:mcp:delegate (351-361)"
+}

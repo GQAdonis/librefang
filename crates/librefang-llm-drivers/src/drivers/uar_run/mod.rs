@@ -90,6 +90,7 @@ pub struct PreparedAdmission {
 struct Transport {
     base: String,
     credential: Option<Zeroizing<String>>,
+    verified_principal: String,
     binding: UarEffectiveBinding,
 }
 
@@ -219,8 +220,9 @@ impl UarRunClient {
         &self,
         admission: &UarRunAdmission,
         prepared: &PreparedAdmission,
+        verified_principal: &str,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport().await?;
+        let transport = self.transport(verified_principal).await?;
         validate_service_placement(
             &prepared.body,
             &transport.binding,
@@ -236,6 +238,7 @@ impl UarRunClient {
             .collect();
         Ok(UarDelegatedRunProjection {
             boss_task_id: admission.boss_task_id.clone(),
+            verified_principal: verified_principal.to_string(),
             delegation_id: admission.delegation_id.clone(),
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
@@ -276,7 +279,7 @@ impl UarRunClient {
         prepared: &PreparedAdmission,
         pending: &UarDelegatedRunProjection,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport().await?;
+        let transport = self.transport(&pending.verified_principal).await?;
         ensure_same_binding(pending, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, pending).await?;
         let receipt: WireReceipt = self
@@ -291,7 +294,7 @@ impl UarRunClient {
                 true,
             )
             .await?;
-        receipt.into_projection(admission, prepared, transport.binding)
+        receipt.into_projection(admission, prepared, transport.binding, &pending.verified_principal)
     }
 
     pub async fn resolve(
@@ -300,7 +303,7 @@ impl UarRunClient {
         admission: &UarRunAdmission,
         prepared: &PreparedAdmission,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport().await?;
+        let transport = self.transport(&projection.verified_principal).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let receipt: WireReceipt = self
@@ -314,7 +317,7 @@ impl UarRunClient {
                 &admission.workspace_id,
             )
             .await?;
-        receipt.into_projection(admission, prepared, transport.binding)
+        receipt.into_projection(admission, prepared, transport.binding, &projection.verified_principal)
     }
 
     pub async fn lookup(
@@ -439,7 +442,7 @@ impl UarRunClient {
         operation: &'static str,
         uncertain_on_transport: bool,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport().await?;
+        let transport = self.transport(&projection.verified_principal).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let receipt: WireReceipt = self

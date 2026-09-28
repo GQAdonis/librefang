@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # audit-tauri-desktop.sh — Phase 3c of the librefang-upstream-merge skill.
 #
-# Verifies the four Tauri configs and the minisign pubkey survived the
-# merge unchanged. See references/tauri-desktop-checklist.md for fixes
-# when a check fails.
+# Verifies that the four Tauri configs, the minisign pubkey, the macOS CLI code-signing identifiers and the Play package name survived the merge unchanged.
+# See references/tauri-desktop-checklist.md for fixes when a check fails.
 #
 # Exit codes:
-#   0 — all four checks pass
+#   0 — all checks pass
 #   1 — one or more checks failed; specifics on stderr
 
 set -euo pipefail
@@ -122,6 +121,44 @@ for icon in icon.png icon.ico 32x32.png 128x128.png "128x128@2x.png"; do
     ok "icons/$icon present (${size} bytes)"
   fi
 done
+
+# 6. macOS CLI code-signing identity. The release workflows sign the CLI and the Telegram sidecar under `ai.bossfang.*`, and upstream's release-safety test (#8234) asserts its own `ai.librefang.*` identifiers.
+# A sync takes that test as-is, so it fails CI on the fork until its expectation table is flipped (2026-09-27 sync).
+# Check both sides: the workflows must sign BossFang identifiers, and the test must expect them.
+workflows="$toplevel/.github/workflows"
+sign_hits="$(grep -hoE '^[[:space:]]*sign .* ai\.[a-z]+\.[a-z-]+[[:space:]]*$' "$workflows/release.yml" "$workflows/release-cli.yml" 2>/dev/null | awk '{print $NF}' | sort -u || true)"
+if [ -z "$sign_hits" ]; then
+  fail "no macOS codesign identifiers found in release.yml / release-cli.yml"
+elif echo "$sign_hits" | grep -qv '^ai\.bossfang\.'; then
+  fail "release workflows sign non-BossFang identifiers: $(echo "$sign_hits" | grep -v '^ai\.bossfang\.' | tr '\n' ' ')"
+else
+  ok "release workflows sign only ai.bossfang.* ($(echo "$sign_hits" | tr '\n' ' '))"
+fi
+# The Play upload's packageName must be the Android bundle identifier, or every upload is rejected (and silently, since the step is continue-on-error).
+# Accept either the derived form (read from tauri.android.conf.json in the play_gate step) or a literal equal to that identifier.
+android_id="$(json_field "$desktop/tauri.android.conf.json" identifier)"
+play_pkg="$(grep -E '^[[:space:]]*packageName:' "$workflows/release.yml" 2>/dev/null | head -1 | sed -E 's/^[[:space:]]*packageName:[[:space:]]*//; s/[[:space:]]+$//' || true)"
+case "$play_pkg" in
+  '') fail "release.yml Play upload has no packageName" ;;
+  *steps.play_gate.outputs.package_name*)
+    if grep -qF 'jq -r .identifier crates/librefang-desktop/tauri.android.conf.json' "$workflows/release.yml"; then
+      ok "release.yml Play packageName derived from tauri.android.conf.json ($android_id)"
+    else
+      fail "release.yml Play packageName uses play_gate output but play_gate no longer reads tauri.android.conf.json"
+    fi ;;
+  "$android_id") ok "release.yml Play packageName = $android_id" ;;
+  *) fail "release.yml Play packageName = '$play_pkg' (expected '$android_id' from tauri.android.conf.json, preferably derived)" ;;
+esac
+safety_test="$toplevel/scripts/tests/test_release_tag_workflow_safety.py"
+if [ -f "$safety_test" ]; then
+  if grep -qE '"ai\.librefang\.' "$safety_test"; then
+    fail "$(basename "$safety_test") still expects ai.librefang.* identifiers — flip its expectation table to ai.bossfang.*"
+  elif python3 "$safety_test" >/dev/null 2>&1; then
+    ok "$(basename "$safety_test") passes"
+  else
+    fail "$(basename "$safety_test") fails — run it directly for the message"
+  fi
+fi
 
 echo
 if [ "$fail_count" -eq 0 ]; then

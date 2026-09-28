@@ -76,6 +76,12 @@ message_journal.jsonl
 # Node.js (packages/)
 node_modules/
 
+# Python bytecode cache. Any `python3 scripts/tests/*.py` leaves one of these
+# next to the source it imported, so without this every checkout that runs a
+# test goes dirty with an untracked directory and no change to show for it.
+__pycache__/
+*.py[cod]
+
 # OS
 .DS_Store
 Thumbs.db
@@ -107,7 +113,16 @@ result
 !.claude/skills/librefang-upstream-merge/references/*.md
 !.claude/skills/librefang-upstream-merge/scripts/
 !.claude/skills/librefang-upstream-merge/scripts/*.sh
-.codex
+# bossfang-stewards agent team: native role definitions are shared (see .agent-team/).
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/product-manager.md
+!.claude/agents/upstream-merge-manager.md
+!.claude/agents/surrealdb-schema-engineer.md
+!.claude/agents/bossfang-feature-steward.md
+!.claude/agents/merge-reviewer.md
+.codex/*
+!.codex/agents/
 .omc/
 .qwen/
 # OpenSpec generates per-tool instruction shims (slash commands + skills) into
@@ -115,8 +130,13 @@ result
 # `openspec update`, so they stay local like every other agent-tool config here
 # (`.claude/*` and `.codex` above). The shared artefact is `openspec/` itself,
 # which IS tracked. See AGENTS.md → OpenSpec.
-.opencode/
+.opencode/*
+!.opencode/agents/
 .kimi/
+# MiniMax: launch mcode with MINIMAX_DATA_DIR=<repo>/.minimax to load team agents;
+# everything else mcode writes there (sessions, credentials) stays local.
+.minimax/*
+!.minimax/agents/
 *.swp
 *.swo
 *~
@@ -136,3 +156,14 @@ __pycache__/
 # than in /tmp — but it is CI scratch, not a committed overlay.
 deploy/kubernetes/ci-overlay/
 deploy/kubernetes/ci-overlay-managed/
+.agent-team/recovery/
+
+# Compass code graph: commit only the readable reports.
+# graph.json (~550 MB), store/, snapshots/ and cache/ are rebuilt locally with `compass ensure`.
+compass-out/*
+!compass-out/GRAPH_REPORT.md
+!compass-out/orientation.json
+!compass-out/manifest.json
+!compass-out/graph-overview.json
+!compass-out/community-hierarchy.json
+!compass-out/community-quality.json

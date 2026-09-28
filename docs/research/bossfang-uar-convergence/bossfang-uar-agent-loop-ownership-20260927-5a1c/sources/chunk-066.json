@@ -1,0 +1,6 @@
+{
+  "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
+  "chunk_id": "chunk-066",
+  "source_id": "S21",
+  "text": "the 3.x binary cannot directly read 2.x data"
+}

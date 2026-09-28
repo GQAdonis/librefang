@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs",
+  "chunk_id": "chunk-013",
+  "source_id": "R13",
+  "text": "execute_llm_agent at 623; check_quota 645-648; check_all_and_record 1845"
+}

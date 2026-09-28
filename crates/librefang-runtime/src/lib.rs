@@ -88,6 +88,7 @@ pub use librefang_runtime_media::media_understanding;
 pub mod media_understanding;
 pub mod model_catalog;
 pub mod model_metadata;
+pub(crate) mod network_meter;
 pub mod parallel_dispatch;
 pub mod pdf_text;
 pub mod pii_filter;
@@ -126,6 +127,11 @@ pub mod tool_runner;
 pub mod trace_store;
 pub use tool_classifier::classify_tool;
 pub mod tts;
+// Its only callers are `browser_tools` and `tool_runner::media`, both of which
+// are feature-gated; with neither feature on, the whole module is unreachable
+// and `--no-default-features` fails the `warnings = "deny"` lint. Pre-existing
+// breakage, fixed here because it blocks verifying that build configuration.
+#[cfg_attr(not(any(feature = "media", feature = "browser")), allow(dead_code))]
 pub(crate) mod uploaded_file;
 pub mod web_cache;
 pub mod web_content;

@@ -232,6 +232,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             last_active: chrono::Utc::now(),
             parent: None,
+            parent_unknown: false,
             children: vec![],
             session_id,
             source_toml_path: None,

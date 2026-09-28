@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+  "chunk_id": "chunk-021",
+  "source_id": "U05",
+  "text": "surrealdb = { version = \"=3.3.0\", optional = true, features = [\"kv-surrealkv\"] } (478); surreal-memory path vendor/git/... (392)"
+}

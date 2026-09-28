@@ -9,6 +9,7 @@ import {
   progressForGoalStatus,
   runIndependentBatch,
 } from "./GoalsPage";
+import { useAgents } from "../lib/queries/agents";
 import { useGoals, useGoalTemplates, useGoalRun } from "../lib/queries/goals";
 import {
   useCreateGoal,
@@ -16,8 +17,14 @@ import {
   useDeleteGoal,
   useStartGoalRun,
   useStopGoalRun,
+  usePauseGoalRun,
+  useResumeGoalRun,
 } from "../lib/mutations/goals";
-import type { GoalItem, GoalTemplate } from "../api";
+import type { AgentItem, GoalItem, GoalTemplate } from "../api";
+
+vi.mock("../lib/queries/agents", () => ({
+  useAgents: vi.fn(),
+}));
 
 vi.mock("../lib/queries/goals", () => ({
   useGoals: vi.fn(),
@@ -31,6 +38,8 @@ vi.mock("../lib/mutations/goals", () => ({
   useDeleteGoal: vi.fn(),
   useStartGoalRun: vi.fn(),
   useStopGoalRun: vi.fn(),
+  usePauseGoalRun: vi.fn(),
+  useResumeGoalRun: vi.fn(),
 }));
 
 vi.mock("react-i18next", async () => {
@@ -46,6 +55,7 @@ vi.mock("react-i18next", async () => {
   };
 });
 
+const useAgentsMock = useAgents as unknown as ReturnType<typeof vi.fn>;
 const useGoalsMock = useGoals as unknown as ReturnType<typeof vi.fn>;
 const useGoalTemplatesMock = useGoalTemplates as unknown as ReturnType<typeof vi.fn>;
 const useGoalRunMock = useGoalRun as unknown as ReturnType<typeof vi.fn>;
@@ -54,6 +64,8 @@ const useUpdateGoalMock = useUpdateGoal as unknown as ReturnType<typeof vi.fn>;
 const useDeleteGoalMock = useDeleteGoal as unknown as ReturnType<typeof vi.fn>;
 const useStartGoalRunMock = useStartGoalRun as unknown as ReturnType<typeof vi.fn>;
 const useStopGoalRunMock = useStopGoalRun as unknown as ReturnType<typeof vi.fn>;
+const usePauseGoalRunMock = usePauseGoalRun as unknown as ReturnType<typeof vi.fn>;
+const useResumeGoalRunMock = useResumeGoalRun as unknown as ReturnType<typeof vi.fn>;
 
 interface QueryShape<T> {
   data: T;
@@ -98,7 +110,16 @@ function setMutations(opts: {
   useDeleteGoalMock.mockReturnValue({ mutateAsync: del, isPending: false });
   useStartGoalRunMock.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   useStopGoalRunMock.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  usePauseGoalRunMock.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  useResumeGoalRunMock.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   return { create, update, del };
+}
+
+// `t` is mocked as `key:{options}`, so a label asked for with a `defaultValue` renders as the whole serialised pair.
+function openTemplatesTab(): void {
+  fireEvent.click(
+    screen.getByText('goals.template_library:{"defaultValue":"Templates"}'),
+  );
 }
 
 function renderPage(): void {
@@ -139,6 +160,11 @@ const CHILD_GOAL: GoalItem = {
   progress: 0,
 };
 
+const AGENTS: AgentItem[] = [
+  { id: "a-worker", name: "worker" },
+  { id: "a-reviewer", name: "reviewer" },
+];
+
 const COMPLETED_GOAL: GoalItem = {
   id: "g-done",
   title: "Finished goal",
@@ -150,6 +176,7 @@ describe("GoalsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setMutations();
+    useAgentsMock.mockReturnValue(makeQuery<AgentItem[]>(AGENTS));
     // GoalRunControl calls useGoalRun for every rendered goal; default to an
     // idle (no active run) query so the control renders its start button.
     useGoalRunMock.mockReturnValue(makeQuery({ running: false }));
@@ -172,6 +199,9 @@ describe("GoalsPage", () => {
       makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
     );
     renderPage();
+
+    // The template grid moved behind its own tab so the empty page can keep the create form; the landing tab is "my goals" whether or not any exist.
+    openTemplatesTab();
 
     expect(screen.getByText("goals.pick_template")).toBeInTheDocument();
     expect(screen.getByText("Launch")).toBeInTheDocument();
@@ -216,6 +246,7 @@ describe("GoalsPage", () => {
     const { create } = setMutations();
     renderPage();
 
+    openTemplatesTab();
     fireEvent.click(screen.getByText("goals.use_template"));
 
     // Flush the allSettled batch.
@@ -293,6 +324,250 @@ describe("GoalsPage", () => {
     // `parent_id: ""` used to reach the backend and fail its parent-existence check with "Parent goal '' not found"; `agent_id: ""` persisted an unparsable assignment that broke the goal runner's start route.
     expect(payload).not.toHaveProperty("parent_id");
     expect(payload).not.toHaveProperty("agent_id");
+    // Same rule for the loop-engineering ids: the backend rejects a non-UUID
+    // verify_agent_id outright, and `""` is not a UUID.
+    expect(payload).not.toHaveProperty("verify_agent_id");
+    expect(payload).not.toHaveProperty("evaluator_model");
+    // And a blank cadence: `""` fails the backend's integer check, while
+    // omitting the field is what leaves the goal on the default 2s.
+    expect(payload).not.toHaveProperty("tick_interval_secs");
+  });
+
+  // The runner reads the cadence on every autonomous run, so the control must
+  // be reachable without ticking loop engineering first.
+  it("sends the tick interval as a number on create, ungated by loop engineering", async () => {
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { create } = setMutations();
+    renderPage();
+
+    fireEvent.change(
+      screen.getByPlaceholderText("goals.goal_title_placeholder"),
+      { target: { value: "Slow burn" } },
+    );
+    // By label, not by placeholder: the placeholder now interpolates the
+    // default so the number is not spelled into five translations.
+    fireEvent.change(screen.getByLabelText("goals.tick_interval"), {
+      target: { value: "900" },
+    });
+
+    const submitBtn = screen
+      .getAllByText("goals.create_goal")
+      .map((el) => el.closest("button"))
+      .find((b): b is HTMLButtonElement => !!b && b.type === "submit");
+    fireEvent.click(submitBtn!);
+
+    await Promise.resolve();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const payload = create.mock.calls[0][0] as Record<string, unknown>;
+    // A string would fail the backend's `as_u64()` check with a 400.
+    expect(payload.tick_interval_secs).toBe(900);
+    expect(payload).toMatchObject({ title: "Slow burn", loop_engineering: false });
+  });
+
+  // The edit block is not a `<form>` and Save is a plain button, so the input's
+  // own `min` / `max` never trigger constraint validation. The cadence rides in
+  // the same payload as the title, status, progress and agent changes, and
+  // `validate_tick_interval` refuses the request before the `structured_modify`
+  // transaction — so sending it threw away every other change in the edit and
+  // reported only the cadence.
+  it("refuses an out-of-range cadence on edit rather than discarding the rest of the edit", async () => {
+    const paced: GoalItem = { ...PARENT_GOAL, tick_interval_secs: 30 };
+    useGoalsMock.mockReturnValue(makeQuery([paced]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { update } = setMutations();
+    renderPage();
+
+    fireEvent.click(screen.getByTitle("common.edit"));
+
+    fireEvent.change(screen.getByDisplayValue("Parent goal"), {
+      target: { value: "Renamed while I was here" },
+    });
+    fireEvent.change(screen.getByDisplayValue("30"), {
+      target: { value: "90000" },
+    });
+
+    fireEvent.click(screen.getByText("common.save"));
+    await Promise.resolve();
+
+    expect(update).not.toHaveBeenCalled();
+    // The row stays open with the title edit intact, so it is not lost.
+    expect(screen.getByDisplayValue("Renamed while I was here")).toBeTruthy();
+    expect(screen.getByDisplayValue("90000")).toBeTruthy();
+  });
+
+  // Submitted directly rather than by clicking, on purpose: a click runs the
+  // browser's constraint validation, which already stops these values on the
+  // create form. `submit` is the path that skips it, so this is the case the
+  // handler's own check is the only thing standing in front of.
+  it.each([
+    ["a fraction the API's integer check refuses", "1.5"],
+    ["one under the floor", "0"],
+    ["one over the ceiling", "90000"],
+  ])("refuses %s on create even when constraint validation is bypassed", async (_label, raw) => {
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { create } = setMutations();
+    renderPage();
+
+    const title = screen.getByPlaceholderText("goals.goal_title_placeholder");
+    fireEvent.change(title, { target: { value: "Slow burn" } });
+    fireEvent.change(screen.getByLabelText("goals.tick_interval"), {
+      target: { value: raw },
+    });
+
+    fireEvent.submit(title.closest("form")!);
+    await Promise.resolve();
+
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("pre-fills the tick interval on edit and clears it with null when emptied", async () => {
+    const paced: GoalItem = { ...PARENT_GOAL, tick_interval_secs: 30 };
+    useGoalsMock.mockReturnValue(makeQuery([paced]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { update } = setMutations();
+    renderPage();
+
+    fireEvent.click(screen.getByTitle("common.edit"));
+
+    const tickInput = screen.getByDisplayValue("30") as HTMLInputElement;
+    fireEvent.change(tickInput, { target: { value: "" } });
+
+    fireEvent.click(screen.getByText("common.save"));
+    await Promise.resolve();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const { data } = update.mock.calls[0][0] as { data: Record<string, unknown> };
+    // `null` is the backend's clear signal; `""` would be rejected as a
+    // malformed integer instead of restoring the default cadence.
+    expect(data.tick_interval_secs).toBeNull();
+  });
+
+  // Loop engineering is opt-in, so the controls that configure it stay out of
+  // the way until it is switched on — and a goal that never switches it on
+  // must say so explicitly rather than omitting the field.
+  it("reveals the verifier and evaluator controls only once loop engineering is ticked", () => {
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    renderPage();
+
+    expect(
+      screen.queryByPlaceholderText("goals.evaluator_model_placeholder"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("goals.loop_engineering"));
+
+    expect(
+      screen.getByPlaceholderText("goals.evaluator_model_placeholder"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("goals.no_verifier_selected")).toBeInTheDocument();
+  });
+
+  it("sends the loop-engineering configuration on create", async () => {
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { create } = setMutations();
+    renderPage();
+
+    fireEvent.change(
+      screen.getByPlaceholderText("goals.goal_title_placeholder"),
+      { target: { value: "Verified goal" } },
+    );
+    fireEvent.click(screen.getByLabelText("goals.loop_engineering"));
+    // The verifier is picked from the agent list, not typed: a hand-typed id
+    // is how a goal ends up storing something the run route has to reject.
+    fireEvent.change(screen.getByLabelText("goals.verifier_agent"), {
+      target: { value: "a-reviewer" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("goals.evaluator_model_placeholder"),
+      { target: { value: "haiku" } },
+    );
+
+    const submitBtn = screen
+      .getAllByText("goals.create_goal")
+      .map((el) => el.closest("button"))
+      .find((b): b is HTMLButtonElement => !!b && b.type === "submit");
+    fireEvent.click(submitBtn!);
+
+    await Promise.resolve();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({
+      title: "Verified goal",
+      loop_engineering: true,
+      verify_agent_id: "a-reviewer",
+      evaluator_model: "haiku",
+    });
+  });
+
+  // #7785 review (m3): the verifier dropdown filters out the assigned agent,
+  // but picking the verifier FIRST and then assigning the goal to that same
+  // agent left the now-filtered id in the draft. The select rendered blank
+  // (no option matches its value) while the submit still carried the
+  // forbidden pair, so the operator got a 400 with nothing on screen
+  // explaining it. The blank select is why the DOM value proves nothing here
+  // — with the bug it is blank too; what discriminates is the payload.
+  it("drops the verifier when the goal is reassigned to that same agent", async () => {
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    const { create } = setMutations();
+    renderPage();
+
+    fireEvent.change(
+      screen.getByPlaceholderText("goals.goal_title_placeholder"),
+      { target: { value: "Self-verification trap" } },
+    );
+    fireEvent.click(screen.getByLabelText("goals.loop_engineering"));
+    fireEvent.change(screen.getByLabelText("goals.verifier_agent"), {
+      target: { value: "a-reviewer" },
+    });
+    // Now assign the goal itself to the agent already chosen as verifier.
+    fireEvent.change(screen.getByLabelText("goals.assigned_agent"), {
+      target: { value: "a-reviewer" },
+    });
+
+    const submitBtn = screen
+      .getAllByText("goals.create_goal")
+      .map((el) => el.closest("button"))
+      .find((b): b is HTMLButtonElement => !!b && b.type === "submit");
+    fireEvent.click(submitBtn!);
+
+    await Promise.resolve();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]).toMatchObject({
+      title: "Self-verification trap",
+      agent_id: "a-reviewer",
+    });
+    expect(create.mock.calls[0][0]).not.toHaveProperty("verify_agent_id");
+  });
+
+  it("marks a loop-engineered goal in the tree and leaves a plain one unmarked", () => {
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+
+    useGoalsMock.mockReturnValue(makeQuery([PARENT_GOAL]));
+    const plain = render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <GoalsPage />
+      </QueryClientProvider>,
+    );
+    // The badge carries the hint as its title, which the checkbox label does
+    // not — so this identifies the tree marker and nothing else.
+    expect(
+      plain.queryByTitle("goals.loop_engineering_hint"),
+    ).not.toBeInTheDocument();
+    plain.unmount();
+
+    useGoalsMock.mockReturnValue(
+      makeQuery([{ ...PARENT_GOAL, loop_engineering: true }]),
+    );
+    renderPage();
+    expect(screen.getByTitle("goals.loop_engineering_hint")).toBeInTheDocument();
   });
 
   it("does not submit the create form when the title is whitespace-only", () => {
@@ -431,6 +706,49 @@ describe("GoalsPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("3/10")).toBeInTheDocument();
   });
+
+  const RUNNING_RUN = {
+    goal_id: "g-r",
+    agent_id: "a1",
+    phase: "running",
+    iteration: 2,
+    max_iterations: 10,
+    last_progress: 20,
+    started_at: "",
+    updated_at: "",
+  } as const;
+
+  it("fires usePauseGoalRun from the pause button on a running goal", async () => {
+    const goalWithAgent: GoalItem = { ...PARENT_GOAL, agent_id: "a1" };
+    useGoalsMock.mockReturnValue(makeQuery([goalWithAgent]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    useGoalRunMock.mockReturnValue(makeQuery({ running: true, run: RUNNING_RUN }));
+    const pause = vi.fn().mockResolvedValue({});
+    usePauseGoalRunMock.mockReturnValue({ mutateAsync: pause, isPending: false });
+    renderPage();
+
+    fireEvent.click(screen.getByTitle("goals.run_pause"));
+    await Promise.resolve();
+
+    expect(pause).toHaveBeenCalledWith("g-parent");
+  });
+
+  it("fires useResumeGoalRun from the resume button on a paused run", async () => {
+    const goalWithAgent: GoalItem = { ...PARENT_GOAL, agent_id: "a1" };
+    useGoalsMock.mockReturnValue(makeQuery([goalWithAgent]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    useGoalRunMock.mockReturnValue(
+      makeQuery({ running: false, run: { ...RUNNING_RUN, phase: "paused" } }),
+    );
+    const resume = vi.fn().mockResolvedValue(undefined);
+    useResumeGoalRunMock.mockReturnValue({ mutateAsync: resume, isPending: false });
+    renderPage();
+
+    fireEvent.click(screen.getByTitle("goals.run_resume"));
+    await Promise.resolve();
+
+    expect(resume).toHaveBeenCalledWith("g-parent");
+  });
 });
 
 describe("GoalsPage helpers", () => {
@@ -484,6 +802,7 @@ describe("GoalsPage helpers", () => {
 describe("GoalRunPhaseBadge", () => {
   const API_PHASES = [
     "running",
+    "paused",
     "finished",
     "max_iterations_reached",
     "rate_limited",
@@ -525,18 +844,25 @@ describe("GoalRunPhaseBadge", () => {
     expect(badge!.querySelector("svg")!.getAttribute("class")).not.toMatch(/\bmr-/);
   });
 
+  // `paused` is what #7973 adds, so it is a *known* phase from here on and can
+  // no longer stand in for the unknown one this test is about. The phase named
+  // here has to be one no arm of the switch matches — that is the whole premise —
+  // so it is deliberately not a member of `GoalRunState["phase"]`.
+  // (Coverage for `paused` itself is `"renders the paused phase as a known one,
+  // under warning and led by its icon"` below.)
   it("renders an unknown phase under the neutral variant with its own key, not a confident Stopped", () => {
-    // "paused" is the phase #7973 adds — the unknown-phase case that fires first here.
-    const { container } = render(<GoalRunPhaseBadge phase="paused" />);
+    const { container } = render(<GoalRunPhaseBadge phase="awaiting_review" />);
 
     // The label is asked of i18n by the phase's own key with the raw phase as
-    // the fallback, so a locale that gains `run_phase_paused` starts using it
-    // with no code change. The previous shape gated translation on a hardcoded
-    // `labelKey` per phase, so an unknown phase could never pick one up.
+    // the fallback, so a locale that gains the key starts using it with no code
+    // change. The previous shape gated translation on a hardcoded `labelKey` per
+    // phase, so an unknown phase could never pick one up.
     // (`t` is mocked here as `key:{options}`; in production this renders the
-    // translation when the key exists and "paused" when it does not.)
+    // translation when the key exists and the raw phase when it does not.)
     expect(
-      screen.getByText('goals.run_phase_paused:{"defaultValue":"paused"}'),
+      screen.getByText(
+        'goals.run_phase_awaiting_review:{"defaultValue":"awaiting review"}',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/goals\.run_phase_stopped/)).not.toBeInTheDocument();
 
@@ -549,6 +875,23 @@ describe("GoalRunPhaseBadge", () => {
     // The unknown branch is the one that keeps the dot, having no icon.
     expect(badge.querySelectorAll("span[aria-hidden='true']")).toHaveLength(1);
     expect(badge.querySelectorAll("svg")).toHaveLength(0);
+  });
+
+  // The arm this branch adds, and the one a merge with #8067 could have dropped
+  // without any other test noticing: without it "paused" falls through to
+  // `default`, which is what the unknown-phase case above asserts and would
+  // therefore still be green.
+  it("gives paused its own warning variant and icon rather than the unknown fallback", () => {
+    const { container } = render(<GoalRunPhaseBadge phase="paused" />);
+    const badge = container.querySelector("span.inline-flex")!;
+
+    expect(
+      screen.getByText('goals.run_phase_paused:{"defaultValue":"paused"}'),
+    ).toBeInTheDocument();
+    expect(badge.className).toContain("bg-warning/10");
+    expect(badge.className).not.toContain("bg-main");
+    expect(badge.querySelectorAll("svg")).toHaveLength(1);
+    expect(badge.querySelectorAll("span[aria-hidden='true']")).toHaveLength(0);
   });
 });
 
@@ -617,5 +960,122 @@ describe("GoalsPage run phase is rendered once per row", () => {
     expect(
       screen.getAllByText('goals.run_phase_stopped:{"defaultValue":"stopped"}'),
     ).toHaveLength(1);
+  });
+});
+
+// A fresh daemon has no goals, and the `goals.length === 0` branch used to draw the template grid and nothing else — the create form, the KPIs, the global progress card and the tree all lived exclusively in the populated branch.
+// Three daemons on one host, running the same binary and the same bundle byte for byte, showed different Goals screens purely because one of them happened to hold a goal.
+// On the two empty ones the only way to get a goal was to accept one of six canned templates, and when `GET /api/goals/templates` failed there was no action on the page at all.
+describe("GoalsPage keeps every create path reachable with zero goals", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setMutations();
+    useGoalRunMock.mockReturnValue(makeQuery({ running: false }));
+  });
+
+  it("renders the create form when there are no goals", () => {
+    useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
+    useGoalTemplatesMock.mockReturnValue(
+      makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
+    );
+    renderPage();
+
+    expect(document.querySelector("#goal-create-title")).not.toBeNull();
+  });
+
+  it("offers both a create and a templates action from the empty state", () => {
+    useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
+    useGoalTemplatesMock.mockReturnValue(
+      makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
+    );
+    renderPage();
+
+    const empty = screen.getByRole("status");
+    expect(within(empty).getByText("goals.create_goal")).toBeInTheDocument();
+    expect(
+      within(empty).getByText(
+        'goals.browse_templates:{"defaultValue":"Browse templates"}',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  // `useGoalTemplates` has no error branch on this page, so a failed template fetch is indistinguishable from an empty one: `templates` is `[]` either way.
+  // The empty state must still offer the action that does not depend on that query.
+  it("still offers the create action when no templates loaded", () => {
+    useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    renderPage();
+
+    const empty = screen.getByRole("status");
+    expect(within(empty).getByText("goals.create_goal")).toBeInTheDocument();
+    expect(
+      within(empty).queryByText(/goals\.browse_templates/),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector("#goal-create-title")).not.toBeNull();
+  });
+
+  // The empty page and the populated page are the same page: switching to the templates tab reaches the grid that used to be the whole empty branch.
+  it("reaches the template grid from the templates tab", () => {
+    useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
+    useGoalTemplatesMock.mockReturnValue(
+      makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
+    );
+    renderPage();
+
+    expect(screen.queryByText("goals.use_template")).not.toBeInTheDocument();
+    openTemplatesTab();
+    expect(screen.getByText("Launch")).toBeInTheDocument();
+    expect(screen.getByText("goals.use_template")).toBeInTheDocument();
+  });
+
+  // The regression guard for the restructure itself: everything the populated branch shipped has to survive the move into a tab panel, and the KPI/progress pair must stay out of the empty page (four zeroes are noise).
+  it("keeps the populated page whole inside the goals tab", () => {
+    const assigned: GoalItem = { ...COMPLETED_GOAL, id: "g-assigned", status: "in_progress", agent_id: "a1" };
+    useGoalsMock.mockReturnValue(
+      makeQuery([PARENT_GOAL, CHILD_GOAL, COMPLETED_GOAL, assigned]),
+    );
+    useGoalTemplatesMock.mockReturnValue(
+      makeQuery<GoalTemplate[]>([SAMPLE_TEMPLATE]),
+    );
+    renderPage();
+
+    // Two tabs, the goals one selected — no auto-switch to templates on a page that has goals or on one that does not.
+    const tabs = within(screen.getByRole("tablist")).getAllByRole("tab");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0]).toHaveAttribute("aria-selected", "true");
+
+    // KPI row and global progress card.
+    expect(screen.getByText("goals.total")).toBeInTheDocument();
+    expect(screen.getByText("goals.overall_progress")).toBeInTheDocument();
+    expect(screen.getByText("25%")).toBeInTheDocument();
+    expect(screen.getByText("goals.clear_all")).toBeInTheDocument();
+
+    // Create form and tree.
+    expect(document.querySelector("#goal-create-title")).not.toBeNull();
+    expect(screen.getByText("goals.goal_tree")).toBeInTheDocument();
+    expect(screen.getByText("Parent goal")).toBeInTheDocument();
+
+    // Run controls keep both of their shapes: no agent prompts for one, an assigned goal can start.
+    expect(screen.getAllByTitle("goals.run_needs_agent").length).toBeGreaterThan(0);
+    expect(screen.getByTitle("goals.run_start")).toBeInTheDocument();
+
+    // Row actions.
+    expect(screen.getAllByTitle("common.edit").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle("common.delete").length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle("goals.toggle_reset").length).toBeGreaterThan(0);
+
+    // The header action is unconditional — it is the one Workflows gates on `hasWorkflows`.
+    expect(screen.getByTitle("goals.create_goal (n)")).toBeInTheDocument();
+  });
+
+  it("keeps the header create action on the empty page", () => {
+    useGoalsMock.mockReturnValue(makeQuery<GoalItem[]>([]));
+    useGoalTemplatesMock.mockReturnValue(makeQuery<GoalTemplate[]>([]));
+    renderPage();
+
+    expect(screen.getByTitle("goals.create_goal (n)")).toBeInTheDocument();
+    // Four counters reading zero are noise, and the loading-skeleton test already fixes that `goals.total` stays away from a page with no data.
+    expect(screen.queryByText("goals.total")).not.toBeInTheDocument();
+    expect(screen.queryByText("goals.overall_progress")).not.toBeInTheDocument();
   });
 });

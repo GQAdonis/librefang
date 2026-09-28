@@ -16,6 +16,11 @@ BossFang MUST invoke UAR complete runs through the versioned full-harness client
 - **WHEN** BossFang admits a full UAR run
 - **THEN** UAR owns the execution loop and BossFang retains only a correlation projection.
 
+#### Scenario: Selected instance is outside the managed sidecar boundary
+
+- **WHEN** the selected UAR instance is external-local, remote or outside the managed loopback endpoint
+- **THEN** BossFang refuses full-run admission under ADR 0001 placement S1, while model-provider access remains separate.
+
 ### Requirement: Admission is retry-safe
 
 BossFang MUST persist a stable admission ID and canonical digest before the first admission request and MUST reconcile any uncertain response by that same ID.
@@ -42,7 +47,7 @@ BossFang MUST persist a stable admission ID and canonical digest before the firs
 
 ### Requirement: Projection preserves control identity
 
-The kernel-owned A2A task store MUST retain BossFang task ID, admission ID and digest, selected instance/effective binding, exact definition identity and diagnostics, native UAR task/run IDs, lifecycle and cancellation state, cursor, epoch and retention.
+The kernel-owned A2A task store MUST retain BossFang task ID, original authenticated principal, admission ID and digest, selected instance/effective binding, exact definition identity and diagnostics, native UAR task/run IDs, lifecycle and cancellation state, cursor, epoch and retention.
 
 #### Scenario: Process reconnects
 
@@ -76,7 +81,7 @@ BossFang MUST expose lookup, observe, approve, cancel and detach as distinct ope
 #### Scenario: Controls use the frozen UAR protocol
 
 - **WHEN** BossFang controls a delegated task
-- **THEN** it uses the snake_case `/api/uar/full-harness/v1` wire, sends the runtime bearer and `x-uar-workspace-id`, supplies the current revision for mutations, and observes events with `last_event_id`.
+- **THEN** it uses the snake_case `/api/uar/full-harness/v1` wire, sends the managed sidecar launch bearer, `x-uar-workspace-id` and the retained original user as `x-uar-principal`, supplies the current revision for mutations, and observes events with `last_event_id`.
 
 #### Scenario: Caller observes incrementally
 

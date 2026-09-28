@@ -29,7 +29,8 @@
         "Full-run delegation is distinct from native BossFang execution and UAR model-provider access.",
         "UAR exclusively owns the delegated token, model and tool loop.",
         "BossFang owns the parent workflow, delegation control and correlation receipt without replaying delegated tools.",
-        "Every delegated trace identifies universal-agent-runtime as executor."
+        "Every delegated trace identifies universal-agent-runtime as executor.",
+        "Initial full-run admission is limited to the BossFang-managed loopback UAR sidecar under ADR 0001 placement S1; external-local and remote instances remain model gateways until S2a."
       ]
     },
     {
@@ -46,7 +47,8 @@
         "The same key and digest return the same native receipt without another run.",
         "The same qualified key with a different digest is refused with admission_digest_conflict.",
         "A lost response becomes admission-unresolved and is reconciled without replay.",
-        "Identity and placement derive from the authenticated C04 service binding, never payload claims."
+        "Identity and placement derive from the authenticated C04 service binding, never payload claims.",
+        "BossFang retains the original authenticated user principal and asserts it on every full-run request only through the launch-token-authenticated managed sidecar."
       ]
     },
     {

@@ -64,7 +64,9 @@ pub(crate) struct UarOperatorStatus {
 
 async fn operator_status(state: &AppState) -> UarOperatorStatus {
     let lifecycle = state.uar_supervisor.status().await;
-    let configured = state.kernel.config_ref().uar.as_ref();
+    // `config_ref()` hands back an `arc_swap::Guard`; take an owned snapshot so the borrow outlives this statement and no guard is held across the `.await` below.
+    let kernel_config = std::sync::Arc::clone(&state.kernel.config_ref());
+    let configured = kernel_config.uar.as_ref();
     let selected_instance = configured.and_then(|config| config.selected_instance().ok());
     let selected_instance_id = selected_instance
         .as_ref()

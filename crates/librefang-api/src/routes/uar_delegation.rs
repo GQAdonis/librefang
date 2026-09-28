@@ -86,6 +86,14 @@ mod enabled {
         api_user: Option<Extension<AuthenticatedApiUser>>,
         Json(mut admission): Json<UarRunAdmission>,
     ) -> Response {
+        let Some(verified_user) = api_user.as_ref() else {
+            return api_error(
+                StatusCode::UNAUTHORIZED,
+                "authenticated_owner_required",
+                "Full-run delegation requires an authenticated BossFang user",
+            );
+        };
+        let verified_principal = format!("user:{}", verified_user.0.user_id);
         if admission.boss_task_id.trim().is_empty() {
             admission.boss_task_id = uuid::Uuid::new_v4().to_string();
         }
@@ -130,7 +138,10 @@ mod enabled {
             );
         }
         let client = state.uar_run_control.as_ref();
-        let pending = match client.prepare_projection(&admission, &prepared).await {
+        let pending = match client
+            .prepare_projection(&admission, &prepared, &verified_principal)
+            .await
+        {
             Ok(projection) => projection,
             Err(error) => return client_error(error),
         };

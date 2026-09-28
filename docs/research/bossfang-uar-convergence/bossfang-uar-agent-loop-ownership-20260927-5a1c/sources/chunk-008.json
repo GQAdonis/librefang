@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs",
+  "chunk_id": "chunk-008",
+  "source_id": "R08",
+  "text": "pub trait LlmDriver: Send + Sync at 570; fn is_coding_agent at 635"
+}

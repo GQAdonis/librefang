@@ -11,7 +11,7 @@ These are target contracts, not claims of implemented support. `Cxx` refers to t
 | The Boss + both managed sidecars | Sibling processes supervised by the studio | BossFang uses the declared UAR instance and does not start a duplicate; paths/stores are isolated | C04–C05, C14 |
 | Headless BossFang + child UAR | BossFang is the configured supervisor; studio is optional | Studio disconnect cannot stop headless work; service drain differs from run cancel | C05–C06 |
 | External-local instances | OS/container supervisor owns lifetime; apps attach | Closing/removing a connection does not kill an unowned process | C04, C14 |
-| Local BossFang → remote UAR | UAR executes on its declared workspace host | Remote admission timeout reconciles the original run; no implicit local fallback or path aliasing | C05, C18 |
+| Local BossFang → remote UAR | Authenticated remote admission under the future S2a contract; UAR executes on its declared workspace host | Remote admission timeout reconciles the original run; no implicit local fallback or path aliasing. C05 supports managed loopback delegation only. | C18 (after S2a) |
 | Remote BossFang → local worker | Authenticated worker registration/outbound connectivity or controlled tunnel | Remote localhost is never interpreted as the user's host; offline worker state is visible | C18 |
 | Independent cloud or colocated sidecars | Explicit deployment supervisor; one executor/task owner | Scaling/restart cannot produce duplicate ownership; managed and external profiles negotiate capabilities | C18 |
 | UAR local observer | Local committed-event publication and per-observer durable inbox | Two monitors receive independent copies scoped to producer and conversation; replay does not create effects | C07 |

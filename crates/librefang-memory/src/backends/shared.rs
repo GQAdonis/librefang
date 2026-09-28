@@ -15,31 +15,62 @@
 //! the lock race and the kernel failed to boot.
 //!
 //! All `SurrealStorage::new()` calls in the workspace are now funnelled
-//! through [`open_shared_memory_storage`].  The kernel calls it exactly once
-//! at boot and shares the resulting `Arc<SurrealStorage>` between both
-//! backends; the legacy `open_with_storage` factories on each backend type
-//! also delegate here so standalone (test-only) callers continue to work.
+//! through [`open_shared_memory_storage`].
+//! A caller that wires both backends opens it once and shares the resulting `Arc<SurrealStorage>` between them; the `open_with_storage` factories on each backend type also delegate here.
+//! The kernel does not reach this path today (`[memory] vector_backend` has no `"surreal"` arm in boot), so its callers are the backend factories and tests.
+//!
+//! ## Embedding dimensions
+//!
+//! `SurrealStorage` embeds every memory it writes and every query it searches with the embedding service it was opened with, and sizes its HNSW indexes from that service's `dimensions()`.
+//! The caller therefore supplies the same embedding driver the rest of the system uses, together with its dimension (`EmbeddingDriver::dimensions()`, which honours `[memory] embedding_dimensions` and otherwise infers it from `embedding_model`).
+//! There is no embedding-less mode: a zero dimension is rejected before any connection is made.
 
 #[cfg(feature = "surreal-backend")]
 use std::sync::Arc;
 
 #[cfg(feature = "surreal-backend")]
-struct NoopEmbedding;
+use crate::proactive::EmbeddingFn;
+
+/// Adapts librefang's [`EmbeddingFn`] to surreal-memory's `EmbeddingService` with the dimension the caller declared for it.
+#[cfg(feature = "surreal-backend")]
+struct EmbeddingBridge {
+    driver: Arc<dyn EmbeddingFn>,
+    dimensions: usize,
+}
 
 #[cfg(feature = "surreal-backend")]
 #[async_trait::async_trait]
-impl surreal_memory::EmbeddingService for NoopEmbedding {
-    async fn embed(&self, _text: &str) -> anyhow::Result<surreal_memory::embeddings::Embedding> {
-        Ok(vec![])
+impl surreal_memory::EmbeddingService for EmbeddingBridge {
+    async fn embed(&self, text: &str) -> anyhow::Result<surreal_memory::embeddings::Embedding> {
+        let embedding = self
+            .driver
+            .embed_one(text)
+            .await
+            .map_err(|e| anyhow::anyhow!("embedding driver failed: {e}"))?;
+        // A vector of the wrong length would be rejected by the HNSW index, or worse, compared against vectors of another model; fail with the cause instead.
+        if embedding.len() != self.dimensions {
+            anyhow::bail!(
+                "embedding driver returned a {}-dimensional vector, but the shared memory storage was opened for {} dimensions",
+                embedding.len(),
+                self.dimensions
+            );
+        }
+        Ok(embedding)
     }
+
     async fn embed_batch(
         &self,
         texts: Vec<String>,
     ) -> anyhow::Result<Vec<surreal_memory::embeddings::Embedding>> {
-        Ok(texts.iter().map(|_| vec![]).collect())
+        let mut embeddings = Vec::with_capacity(texts.len());
+        for text in &texts {
+            embeddings.push(self.embed(text).await?);
+        }
+        Ok(embeddings)
     }
+
     fn dimensions(&self) -> usize {
-        0
+        self.dimensions
     }
 }
 
@@ -55,18 +86,32 @@ impl surreal_memory::EmbeddingService for NoopEmbedding {
 /// so the operational store on `librefang.surreal` (owned by
 /// `SurrealConnectionPool`) is never touched.
 ///
-/// The internal embedding service is a [`NoopEmbedding`] — real embeddings
-/// are supplied at query time by the `ContextEngine`'s `EmbeddingDriver` via
-/// `SemanticBackend::recall`'s `query_embedding` parameter.
+/// `embedding` is the embedding driver the storage uses for every write and search, and `dimensions` is its output dimension, which sizes the HNSW indexes.
+/// Pass the driver the context engine uses and its `dimensions()`; surreal-memory rebuilds the indexes when the dimension changes on an empty store and refuses to open when stored vectors have a different dimension.
+///
+/// # Errors
+///
+/// Returns an error when `dimensions` is zero, or when the storage cannot be opened.
 #[cfg(feature = "surreal-backend")]
 pub async fn open_shared_memory_storage(
     storage_cfg: &librefang_storage::config::StorageConfig,
+    embedding: Arc<dyn EmbeddingFn>,
+    dimensions: usize,
 ) -> Result<Arc<surreal_memory::SurrealStorage>, String> {
     use surreal_memory::storage::surreal::{SurrealConfig, SurrealMode};
+    use surreal_memory::SurrealAuthLevel;
+
+    if dimensions == 0 {
+        return Err(
+            "shared memory SurrealStorage needs a non-zero embedding dimension; configure an embedding provider (`[memory] embedding_model` / `embedding_dimensions`)".to_string(),
+        );
+    }
 
     let mem_cfg = storage_cfg.memory_storage_config();
     let sm_config = match &mem_cfg.backend {
         librefang_storage::config::StorageBackendKind::Embedded { path } => SurrealConfig {
+            // No credentials in embedded mode; Root is surreal-memory's own default.
+            auth_level: SurrealAuthLevel::Root,
             mode: SurrealMode::Embedded,
             endpoint: None,
             embedded_path: Some(path.to_string_lossy().to_string()),
@@ -77,21 +122,31 @@ pub async fn open_shared_memory_storage(
             retry: surreal_memory::RetryConfig::default(),
         },
         librefang_storage::config::StorageBackendKind::Remote(remote) => {
-            let password = std::env::var(&remote.password_env).unwrap_or_default();
+            // The operational pool refuses to connect without this credential; match it rather than opening an unauthenticated session that fails later on the first permission check.
+            let password = std::env::var(&remote.password_env)
+                .ok()
+                .filter(|v| !v.is_empty())
+                .ok_or_else(|| {
+                    format!(
+                        "shared memory SurrealStorage: missing credential env var `{}`",
+                        remote.password_env
+                    )
+                })?;
             SurrealConfig {
+                // Same level selection as the operational pool (`librefang_storage::pool`): the `root`
+                // system user is defined ON ROOT and must sign in at root level, while any other user is
+                // treated as namespace-scoped. Both stores read the same `[storage.backend]` credentials,
+                // so they must agree or one of them fails to authenticate.
+                auth_level: if remote.username == "root" {
+                    SurrealAuthLevel::Root
+                } else {
+                    SurrealAuthLevel::Namespace
+                },
                 mode: SurrealMode::Server,
                 endpoint: Some(remote.url.clone()),
                 embedded_path: None,
-                username: if remote.username.is_empty() {
-                    None
-                } else {
-                    Some(remote.username.clone())
-                },
-                password: if password.is_empty() {
-                    None
-                } else {
-                    Some(password)
-                },
+                username: Some(remote.username.clone()),
+                password: Some(password),
                 namespace: remote.namespace.clone(),
                 database: remote.database.clone(),
                 retry: surreal_memory::RetryConfig::default(),
@@ -99,8 +154,57 @@ pub async fn open_shared_memory_storage(
         }
     };
 
-    let storage = surreal_memory::SurrealStorage::new(&sm_config, Arc::new(NoopEmbedding))
-        .await
-        .map_err(|e| format!("shared memory SurrealStorage: {e}"))?;
+    let storage = surreal_memory::SurrealStorage::new(
+        &sm_config,
+        Arc::new(EmbeddingBridge {
+            driver: embedding,
+            dimensions,
+        }),
+    )
+    .await
+    .map_err(|e| format!("shared memory SurrealStorage: {e}"))?;
     Ok(Arc::new(storage))
+}
+
+#[cfg(all(test, feature = "surreal-backend"))]
+mod tests {
+    use super::*;
+    use librefang_types::error::LibreFangResult;
+    use surreal_memory::EmbeddingService;
+
+    struct FixedEmbedding(usize);
+
+    #[async_trait::async_trait]
+    impl EmbeddingFn for FixedEmbedding {
+        async fn embed_one(&self, _text: &str) -> LibreFangResult<Vec<f32>> {
+            Ok(vec![0.5; self.0])
+        }
+    }
+
+    #[tokio::test]
+    async fn bridge_reports_declared_dimension_and_passes_matching_vectors() {
+        let bridge = EmbeddingBridge {
+            driver: Arc::new(FixedEmbedding(4)),
+            dimensions: 4,
+        };
+        assert_eq!(bridge.dimensions(), 4);
+        assert_eq!(bridge.embed("x").await.unwrap().len(), 4);
+        let batch = bridge
+            .embed_batch(vec!["a".into(), "b".into()])
+            .await
+            .unwrap();
+        assert_eq!(batch.len(), 2);
+    }
+
+    /// A driver whose output disagrees with the declared dimension would corrupt the HNSW index; the bridge must refuse the vector.
+    #[tokio::test]
+    async fn bridge_rejects_vectors_of_another_dimension() {
+        let bridge = EmbeddingBridge {
+            driver: Arc::new(FixedEmbedding(3)),
+            dimensions: 4,
+        };
+        let err = bridge.embed("x").await.unwrap_err().to_string();
+        assert!(err.contains("3-dimensional"), "{err}");
+        assert!(err.contains("opened for 4 dimensions"), "{err}");
+    }
 }

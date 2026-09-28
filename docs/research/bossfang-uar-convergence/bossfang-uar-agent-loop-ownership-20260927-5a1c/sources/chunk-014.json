@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/Dockerfile",
+  "chunk_id": "chunk-014",
+  "source_id": "R14",
+  "text": "ARG UAR_IMAGE=ghcr.io/gqadonis/universal-agent-runtime:2aaeadd9 (10); COPY --from=uar-sidecar-src /usr/local/bin/uar-sidecar (359)"
+}

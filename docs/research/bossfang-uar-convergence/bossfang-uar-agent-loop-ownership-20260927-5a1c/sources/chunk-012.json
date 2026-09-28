@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs",
+  "chunk_id": "chunk-012",
+  "source_id": "R12",
+  "text": "line 92: remember cannot write on surreal-memory b7e2093 because memory.metadata is not FLEXIBLE"
+}

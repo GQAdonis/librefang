@@ -15,14 +15,15 @@ impl UarRunClient {
         after: u64,
     ) -> Result<Vec<UarRunEvent>, UarRunClientError> {
         let task_id = require_task_id(projection)?;
-        let transport = self.transport().await?;
+        let transport = self.transport(&projection.verified_principal).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let suffix = format!("tasks/{task_id}/stream?last_event_id={after}");
         let mut request = self
             .client
             .get(endpoint(&transport.base, &suffix))
-            .header("x-uar-workspace-id", &projection.workspace_id);
+            .header("x-uar-workspace-id", &projection.workspace_id)
+            .header("x-uar-principal", &transport.verified_principal);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }

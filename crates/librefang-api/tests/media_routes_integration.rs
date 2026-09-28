@@ -23,7 +23,7 @@ use axum::body::Body;
 use axum::http::{HeaderValue, Method, Request, StatusCode};
 use axum::Router;
 use librefang_api::routes::{self, AppState};
-use librefang_testing::{MockKernelBuilder, TestAppState};
+use librefang_testing::{CatalogSeed, MockKernelBuilder, TestAppState};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -93,8 +93,12 @@ async fn boot_clears_provider_credentials_from_the_environment() {
 }
 
 async fn boot() -> Harness {
+    boot_with_catalog(None).await
+}
+
+async fn boot_with_catalog(seed: Option<CatalogSeed>) -> Harness {
     clear_media_provider_env();
-    let test = TestAppState::with_builder(MockKernelBuilder::new().with_config(|cfg| {
+    let mut builder = MockKernelBuilder::new().with_config(|cfg| {
         cfg.default_model = librefang_types::config::DefaultModelConfig {
             provider: "ollama".to_string(),
             model: "test-model".to_string(),
@@ -104,7 +108,11 @@ async fn boot() -> Harness {
             extra_params: std::collections::BTreeMap::new(),
             cli_profile_dirs: Vec::new(),
         };
-    }));
+    });
+    if let Some(seed) = seed {
+        builder = builder.with_catalog_seed(seed);
+    }
+    let test = TestAppState::with_builder(builder);
     let state = test.state.clone();
     let app = Router::new()
         .nest("/api", routes::media::router())
@@ -418,6 +426,108 @@ async fn media_providers_lists_all_known_with_unconfigured_status() {
             "unexpected configured=true with no API keys: {p}"
         );
     }
+}
+
+/// A registry provider this daemon has no way to reach is not listed at all.
+///
+/// The `Err` branch narrows the registry's declared set to what the generic OpenAI-compatible driver implements, which is image generation and nothing else.
+/// For a provider that declares only video — no compiled-in driver, and no overlap with the generic one — that leaves an empty array.
+///
+/// An entry with no capabilities is worse than no entry: it files under no dashboard tab and reads as "this provider can do nothing" rather than "we have no way to serve this yet".
+/// The route is called `list_media_providers`; a provider nothing can serve is not one.
+///
+/// Reachable without a code change, because the provider registry is fetched rather than checked in — a video-only entry can arrive at any time.
+#[tokio::test(flavor = "multi_thread")]
+async fn media_providers_omits_a_provider_nothing_here_can_serve() {
+    let providers = vec![librefang_types::model_catalog::ProviderInfo {
+        id: "videoonly".to_string(),
+        display_name: "Video Only".to_string(),
+        api_key_env: "VIDEOONLY_API_KEY".to_string(),
+        media_capabilities: vec!["video_generation".into()],
+        ..Default::default()
+    }];
+    let h = boot_with_catalog(Some((providers, Vec::new()))).await;
+    let (status, body) = json_request(&h, Method::GET, "/api/media/providers", None).await;
+    assert_eq!(status, StatusCode::OK, "got: {body:?}");
+    let listed = body["providers"].as_array().expect("providers array");
+
+    assert!(
+        !listed.iter().any(|p| p["name"] == "videoonly"),
+        "a provider whose only declared capability the generic driver cannot \
+         serve must be omitted, not listed with an empty array: {body}"
+    );
+    // The compiled-in drivers are still there — the omission is scoped to the unreachable entry, not a blanket filter.
+    let names: Vec<&str> = listed.iter().filter_map(|p| p["name"].as_str()).collect();
+    assert!(
+        names.contains(&"google_tts"),
+        "built-in drivers must survive: {names:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn media_providers_lists_registry_declared_providers_with_no_builtin_driver() {
+    // `byteplus` is the real case this guards: it declares image and video
+    // generation in `librefang/librefang-registry`, has no compiled-in driver,
+    // and was absent from the five-name constant this route used to enumerate.
+    // `detect_for_capability` could already select it — so the daemon could
+    // pick a provider the dashboard never listed.
+    let providers = vec![
+        librefang_types::model_catalog::ProviderInfo {
+            id: "byteplus".to_string(),
+            display_name: "BytePlus".to_string(),
+            api_key_env: "BYTEPLUS_API_KEY".to_string(),
+            media_capabilities: vec!["image_generation".into(), "video_generation".into()],
+            ..Default::default()
+        },
+        librefang_types::model_catalog::ProviderInfo {
+            id: "anthropic".to_string(),
+            display_name: "Anthropic".to_string(),
+            api_key_env: "ANTHROPIC_API_KEY".to_string(),
+            media_capabilities: Vec::new(),
+            ..Default::default()
+        },
+    ];
+    let h = boot_with_catalog(Some((providers, Vec::new()))).await;
+    let (status, body) = json_request(&h, Method::GET, "/api/media/providers", None).await;
+    assert_eq!(status, StatusCode::OK, "got: {body:?}");
+    let listed = body["providers"].as_array().expect("providers array");
+    let names: Vec<&str> = listed.iter().filter_map(|p| p["name"].as_str()).collect();
+
+    assert!(
+        names.contains(&"byteplus"),
+        "registry provider declaring media_capabilities is missing from: {names:?}"
+    );
+    // A provider with no compiled-in driver reports what it would serve *here*,
+    // which is what the generic OpenAI-compatible driver implements — images
+    // and nothing else. The registry declares the service can also do video,
+    // and this assertion used to repeat that, which made configuring the
+    // provider look like it removed a capability: the driver reports only
+    // `image_generation`, so the dashboard's video tab dropped byteplus at the
+    // exact moment it started working. One answer on both sides of
+    // `configured` is the honest one; offering video here would advertise a
+    // path that has no implementation behind it.
+    let byteplus = listed
+        .iter()
+        .find(|p| p["name"] == "byteplus")
+        .expect("byteplus entry");
+    assert_eq!(
+        byteplus["capabilities"],
+        serde_json::json!(["image_generation"]),
+        "unconfigured capabilities must be what we can actually serve: {byteplus}"
+    );
+    assert_eq!(byteplus["configured"], false, "got: {byteplus}");
+
+    // `google_tts` has a working driver and no registry entry at all. Reading
+    // the list from the registry must not drop it.
+    assert!(
+        names.contains(&"google_tts"),
+        "built-in driver without a registry entry was dropped: {names:?}"
+    );
+    // A provider that declares no media capabilities is not a media provider.
+    assert!(
+        !names.contains(&"anthropic"),
+        "non-media provider leaked into the media list: {names:?}"
+    );
 }
 
 // ── POST /media/transcribe ──────────────────────────────────────────────

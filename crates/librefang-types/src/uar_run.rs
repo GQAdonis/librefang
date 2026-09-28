@@ -58,6 +58,8 @@ pub enum UarProjectionRetention {
 #[serde(rename_all = "camelCase")]
 pub struct UarDelegatedRunProjection {
     pub boss_task_id: String,
+    /// Original authenticated BossFang user asserted to the managed sidecar.
+    pub verified_principal: String,
     pub delegation_id: String,
     pub admission_key: String,
     pub request_digest: String,

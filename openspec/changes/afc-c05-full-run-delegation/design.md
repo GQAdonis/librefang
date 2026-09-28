@@ -20,9 +20,9 @@ The projection stores the BossFang task ID, admission identity/digest, selected 
 
 ### One control seam outside `LlmDriver`
 
-`UarRunControl` is the single app-owned authority shared by the delegation and A2A routes. Its isolated `UarRunClient` implementation exposes admit, lookup, observe, approve, cancel, detach and steer without entering the model-driver interface. The current supervised binding supplies the runtime endpoint and protected runtime-role credential only after C04 compatibility admission. All wire types remain isolated in the client module so protocol field evolution does not affect kernel or public route contracts.
+`UarRunControl` is the single app-owned authority shared by the delegation and A2A routes. Its isolated `UarRunClient` implementation exposes admit, lookup, observe, approve, cancel, detach and steer without entering the model-driver interface. The current supervised binding supplies the runtime endpoint and protected runtime-role credential only after C04 compatibility admission. Accepted ADR 0001 placement S1 restricts full-run admission to a managed loopback sidecar; external-local and remote instances remain model gateways until S2a. All wire types remain isolated in the client module so protocol field evolution does not affect kernel or public route contracts.
 
-The downstream UAR wire is snake_case under `/api/uar/full-harness/v1`: `GET /capabilities`, `POST /tasks`, `GET /admissions/{admission_id}`, `GET /tasks/{task_id}`, `GET /tasks/{task_id}/stream?last_event_id={cursor}`, and the task control routes. Every call carries the runtime bearer and `x-uar-workspace-id`. BossFang's public `/uar/delegations` JSON remains its own camelCase API and does not redefine the UAR protocol.
+The downstream UAR wire is snake_case under `/api/uar/full-harness/v1`: `GET /capabilities`, `POST /tasks`, `GET /admissions/{admission_id}`, `GET /tasks/{task_id}`, `GET /tasks/{task_id}/stream?last_event_id={cursor}`, and the task control routes. Every call carries the runtime bearer, `x-uar-workspace-id`, and the original authenticated BossFang user in `x-uar-principal`. UAR accepts that principal only after the managed sidecar launch-token guard authenticates the host. BossFang's public `/uar/delegations` JSON remains its own camelCase API and does not redefine the UAR protocol.
 
 ### One BossFang task projection
 

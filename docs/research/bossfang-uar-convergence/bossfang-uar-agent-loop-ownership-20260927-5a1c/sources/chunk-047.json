@@ -1,0 +1,6 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations",
+  "chunk_id": "chunk-047",
+  "source_id": "S2",
+  "text": "Sidecars add overhead, especially latency, which makes them unsuitable for applications with frequent communication between components."
+}

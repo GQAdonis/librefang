@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs",
+  "chunk_id": "chunk-003",
+  "source_id": "R03",
+  "text": ".post(format!(\"{endpoint}/api/chat/completion\")) at 895; \"tools\": tools_to_openai_json(&request.tools) at 1484; \"memory_enabled\": false at 1489; wiremock tests from 1556"
+}

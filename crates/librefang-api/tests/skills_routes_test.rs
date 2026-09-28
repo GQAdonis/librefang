@@ -123,6 +123,26 @@ input_schema = {{ type = "object" }}
     std::fs::write(skill_dir.join("skill.toml"), manifest).expect("write skill.toml");
 }
 
+/// Same as [`install_skill`] (no tags), plus a `[requirements]` table declaring the built-in tools and host capabilities the skill needs (#8445).
+fn install_skill_with_requirements(home: &Path, name: &str, tools: &[&str], caps: &[&str]) {
+    install_skill(home, name, &[]);
+    let quote = |items: &[&str]| -> String {
+        items
+            .iter()
+            .map(|i| format!("\"{i}\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let path = home.join("skills").join(name).join("skill.toml");
+    let mut manifest = std::fs::read_to_string(&path).expect("read skill.toml");
+    manifest.push_str(&format!(
+        "\n[requirements]\ntools = [{}]\ncapabilities = [{}]\n",
+        quote(tools),
+        quote(caps)
+    ));
+    std::fs::write(&path, manifest).expect("rewrite skill.toml");
+}
+
 /// Drop a `SKILL.md`-only entry into `<home>/registry/skills/<name>/` so the
 /// `/api/skills/registry` cache walker has something to enumerate.
 fn install_registry_skill(home: &Path, name: &str, description: &str) {
@@ -280,6 +300,100 @@ async fn skills_detail_returns_full_manifest() {
     // Evolution metadata block is always present, even for fresh installs.
     assert!(body["evolution"].is_object(), "{body:?}");
     assert_eq!(body["evolution"]["use_count"], 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn skills_detail_reports_declared_requirements_8445() {
+    let h = boot().await;
+    install_skill_with_requirements(h.home(), "needy", &["web_fetch"], &["NetConnect(*)"]);
+    h._state.kernel.reload_skills();
+
+    let (status, body) = json_request(&h, Method::GET, "/api/skills/needy", None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["required_tools"],
+        serde_json::json!(["web_fetch"]),
+        "{body:?}"
+    );
+    assert_eq!(
+        body["required_capabilities"],
+        serde_json::json!(["NetConnect(*)"]),
+        "{body:?}"
+    );
+    // `tools` keeps meaning "provided by the skill" and stays separate from what it needs.
+    let tools = body["tools"].as_array().expect("tools array");
+    assert_eq!(tools.len(), 1, "{body:?}");
+    assert_eq!(tools[0]["name"], "needy_tool");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn skills_list_reports_declared_requirements_8445() {
+    let h = boot().await;
+    install_skill_with_requirements(
+        h.home(),
+        "needy",
+        &["web_fetch", "shell_exec"],
+        &["NetConnect(*)"],
+    );
+    h._state.kernel.reload_skills();
+
+    let (status, body) = json_request(&h, Method::GET, "/api/skills", None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let item = body["items"]
+        .as_array()
+        .expect("items array")
+        .iter()
+        .find(|s| s["name"] == "needy")
+        .unwrap_or_else(|| panic!("needy missing from list: {body:?}"));
+    // Declaration order is preserved: it is the manifest's own list, not a set.
+    assert_eq!(
+        item["required_tools"],
+        serde_json::json!(["web_fetch", "shell_exec"]),
+        "{item:?}"
+    );
+    assert_eq!(item["required_tools_count"], 2, "{item:?}");
+    assert_eq!(
+        item["required_capabilities"],
+        serde_json::json!(["NetConnect(*)"]),
+        "{item:?}"
+    );
+    assert_eq!(
+        item["tools_count"], 1,
+        "provided count is unchanged: {item:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn skills_without_requirements_report_empty_lists_8445() {
+    let h = boot().await;
+    install_skill(h.home(), "plain", &[]);
+    h._state.kernel.reload_skills();
+
+    // "Declared, and it is nothing" must be an empty array, never a missing key or null.
+    let (status, detail) = json_request(&h, Method::GET, "/api/skills/plain", None).await;
+    assert_eq!(status, StatusCode::OK, "{detail:?}");
+    assert_eq!(
+        detail["required_tools"],
+        serde_json::json!([]),
+        "{detail:?}"
+    );
+    assert_eq!(
+        detail["required_capabilities"],
+        serde_json::json!([]),
+        "{detail:?}"
+    );
+
+    let (status, list) = json_request(&h, Method::GET, "/api/skills", None).await;
+    assert_eq!(status, StatusCode::OK, "{list:?}");
+    let item = &list["items"][0];
+    assert_eq!(item["name"], "plain", "{list:?}");
+    assert_eq!(item["required_tools"], serde_json::json!([]), "{item:?}");
+    assert_eq!(item["required_tools_count"], 0, "{item:?}");
+    assert_eq!(
+        item["required_capabilities"],
+        serde_json::json!([]),
+        "{item:?}"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -847,6 +961,56 @@ async fn skills_propose_without_token_returns_401() {
             .to_lowercase()
             .contains("github"),
         "401 error should mention GitHub token: {body:?}"
+    );
+}
+
+/// A misconfigured `skills.promotion.api_base_url` is a server-side config
+/// problem, not a malformed request: `RegistryGithubClient::new` validates
+/// it eagerly, before any network call, so this is deterministic without a
+/// live GitHub. It must land as 500 (`SkillError::InvalidConfig`) — not the
+/// `SkillError::InvalidManifest` 400 branch, and not the generic 502
+/// "GitHub request failed" catch-all a reordered `match` would silently
+/// fall through to (#8179 review, finding 7).
+#[tokio::test(flavor = "multi_thread")]
+async fn skills_propose_with_invalid_promotion_config_returns_500() {
+    let test = TestAppState::with_builder(MockKernelBuilder::new().with_config(|cfg| {
+        cfg.skills.promotion.api_base_url = Some("http://ghe.internal/api/v3".to_string());
+    }));
+    let state = test.state.clone();
+    let app = Router::new()
+        .nest("/api", routes::skills::router())
+        .with_state(state.clone());
+    let h = Harness {
+        app,
+        _state: state,
+        test,
+    };
+    install_skill(h.home(), "proposable-skill", &["data"]);
+    h._state.kernel.reload_skills();
+    // Vault rather than the process env — a token here only needs to be
+    // non-empty to clear the 401 branch, and mutating process env is racy
+    // across parallel tests in this binary.
+    h._state
+        .kernel
+        .vault_set("GITHUB_TOKEN", "t0ken")
+        .expect("vault_set GITHUB_TOKEN");
+
+    let (status, body) = json_request(
+        &h,
+        Method::POST,
+        "/api/skills/proposable-skill/propose",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR, "{body:?}");
+    assert!(
+        body["error"]
+            .as_str()
+            .or_else(|| body["error"]["message"].as_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .contains("api_base_url"),
+        "500 error should name the misconfigured field: {body:?}"
     );
 }
 

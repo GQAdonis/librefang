@@ -354,9 +354,25 @@ pub(crate) fn daemon_client() -> reqwest::blocking::Client {
     daemon_client_with_api_key(read_api_key().as_deref())
 }
 
+/// The timeout `daemon_client` and friends build with when the caller does not name one.
+pub(crate) const DEFAULT_DAEMON_CLIENT_TIMEOUT_SECS: u64 = 120;
+
 pub(crate) fn daemon_client_with_api_key(api_key: Option<&str>) -> reqwest::blocking::Client {
-    let mut builder =
-        crate::http_client::client_builder().timeout(std::time::Duration::from_secs(120));
+    daemon_client_with_api_key_and_timeout(
+        api_key,
+        std::time::Duration::from_secs(DEFAULT_DAEMON_CLIENT_TIMEOUT_SECS),
+    )
+}
+
+/// A daemon client whose timeout the caller chooses.
+///
+/// Exists for the one request whose duration is bounded by the work rather than by the network: `POST /api/workflows/{id}/run?wait=true` asks the daemon to hold the connection, so the wait it asks for and the timeout the client is built with have to be chosen together (#8170).
+/// Every other command wants [`DEFAULT_DAEMON_CLIENT_TIMEOUT_SECS`] and should keep calling `daemon_client`.
+pub(crate) fn daemon_client_with_api_key_and_timeout(
+    api_key: Option<&str>,
+    timeout: std::time::Duration,
+) -> reqwest::blocking::Client {
+    let mut builder = crate::http_client::client_builder().timeout(timeout);
 
     if let Some(key) = api_key {
         let mut headers = reqwest::header::HeaderMap::new();
@@ -413,6 +429,10 @@ pub(crate) fn daemon_json(
 /// the user but still returns the (often empty) body, so a caller that only
 /// checked `body["error"]` would treat a 4xx/5xx with no JSON error as
 /// success — the #6492 CLI `approvals approve` false-success bug.
+///
+/// The exit code stays the caller's responsibility: this helper calls `std::process::exit` only for a transport error, and returns normally on an HTTP error status.
+/// Every message it and its callers print goes to stdout (`ui::error` is a `println!`), so for a mutating command the process exit code is the only signal a script or agent driving the CLI can key on — a failure path that merely prints and returns reports a rejected write as success.
+/// Mutation call sites must therefore `std::process::exit(1)` after printing their message.
 pub(crate) fn daemon_json_checked(
     resp: Result<reqwest::blocking::Response, reqwest::Error>,
 ) -> (reqwest::StatusCode, serde_json::Value) {

@@ -65,10 +65,26 @@ Everything else. Specifically:
 
 - Runtime / kernel / API logic that isn't a brand surface
 - New tools, channels, providers, drivers
-- Test files (unless they assert on a BossFang-specific string)
+- Test files (unless they assert on a BossFang-specific string — see "Upstream tests that assert upstream identity" below)
 - Workflow files that don't touch BossFang-renamed artifact names
 - Anything in `crates/librefang-uar-spec/` (BossFang-exclusive but stable surface)
 - Anything in `crates/librefang-storage/` migrations (BossFang-exclusive; upstream doesn't ship migrations here)
+
+## Upstream tests that assert upstream identity
+
+Take-upstream-as-is is wrong for a test whose expectations are upstream identity values that BossFang overrides.
+These merge cleanly (no conflict marker), so they only surface as a CI failure after the sync lands.
+Take upstream's test logic, then flip the identity expectations to the BossFang value the fork actually ships — never flip the fork's surface back to match the test.
+
+| Test or workflow value | Upstream value | BossFang value | Source of truth |
+|---|---|---|---|
+| `.github/workflows/release.yml` `mobile_android` "Upload to Play Internal Testing" `packageName` | `ai.librefang.app` (hardcoded) | `${{ steps.play_gate.outputs.package_name }}`, derived in `play_gate` from `tauri.android.conf.json` (`ai.bossfang.app`) | `crates/librefang-desktop/tauri.android.conf.json` `identifier`. The step is `continue-on-error`, so a mismatch fails every Play upload silently. |
+| `scripts/tests/test_release_tag_workflow_safety.py` `MACOS_CLI_SIGNING_JOBS` (#8234) | `ai.librefang.cli`, `ai.librefang.sidecar-telegram` | `ai.bossfang.cli`, `ai.bossfang.sidecar-telegram` | the `sign <binary> <identifier>` lines in the `cli_mac` / `cli_mac_mini` jobs of `.github/workflows/release.yml` and `release-cli.yml` |
+
+Found in the 2026-09-27 sync: the Quality job's "Check release workflow input safety" step failed on `main` until the table was flipped.
+`scripts/audit-tauri-desktop.sh` check 6 now fails when that test still expects `ai.librefang.*`, when a release workflow signs a non-BossFang identifier, or when the Play `packageName` is not the Android identifier.
+The Play `packageName` row is a workflow value, not a test: it merged in upstream form and went unnoticed because its step is `continue-on-error`.
+After every sync, also run each `scripts/tests/*.py` / `*.sh` the Quality job in `.github/workflows/ci.yml` runs, and grep the merge diff for new `ai.librefang.` / `LibreFang` literals under `scripts/tests/` to catch the next test of this kind.
 
 ## After conflict resolution
 

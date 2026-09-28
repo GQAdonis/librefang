@@ -5,12 +5,45 @@
 LibreFang is an open-source **Agent Operating System** written in Rust.
 It manages AI agents (LLM-backed), their tools, memory, messaging channels, and inter-agent networking.
 
-- **Language**: Rust (edition 2021, MSRV 1.94.1)
-- **Async runtime**: tokio
-- **Web framework**: axum 0.8 (HTTP + WebSocket)
-- **Database**: SQLite via rusqlite (bundled)
-- **Config**: TOML (`~/.librefang/config.toml`)
-- **Default API address**: `http://127.0.0.1:4545`
+- Language: Rust, edition 2021, MSRV 1.95.0
+- Async: tokio
+- Web: axum 0.8 (HTTP + WebSocket)
+- DB: SurrealDB via `librefang-storage` (embedded RocksDB or remote ws/http); SQLite via bundled rusqlite remains the upstream-compatible fallback
+- Config: TOML at `~/.librefang/config.toml`
+- API: `http://127.0.0.1:4545` (default)
+
+## Default operating mode: delegate to the agent team
+
+Every non-trivial task in this repo runs through the **`bossfang-stewards`** agent team (`.agent-team/project-routing.json` → `.agent-team/bossfang-stewards/team.json`).
+The main session is the orchestrator: it plans, dispatches roles, combines their results, and reports.
+It does not do role work itself when a role owns that work.
+Only trivial single-file changes (a typo, a one-line obvious fix) skip delegation.
+
+| Work | Role |
+|---|---|
+| Roadmap, feature ledger, acceptance criteria, KBD phases and OpenSpec changes (`docs/bossfang/`, `.kbd-orchestrator/`, `openspec/changes/`) | `product-manager` |
+| Any upstream `librefang/librefang` sync (`docs/upstream-merges/`, the upstream-merge skill, `scripts/enforce-branding.py`) | `upstream-merge-manager` |
+| SurrealDB schema and migrations, `librefang-storage`, the Surreal backends in `librefang-memory` (the surreal-memory substrate), SurrealDB / surreal-memory version pins | `surrealdb-schema-engineer` |
+| UAR (`librefang-uar-spec`, the `UarDriver`, the runtime pin), the config store overlay, desktop identity, branding assets | `bossfang-feature-steward` |
+| Independent review of every upstream sync before it merges to `main` | `merge-reviewer` |
+
+How to use the team:
+
+- **Use it to the maximum.**
+  Split work so that every role with an independent piece runs, and run those roles **in parallel**.
+- **Isolate parallel roles.**
+  Each role gets its own linked worktree (branched from the shared base) and its own `CARGO_TARGET_DIR`, so their commits and builds never collide.
+  The orchestrator combines the commits afterwards and re-verifies the combined tree.
+- **Invoke by role.**
+  Use the harness's native definition for the role (`.claude/agents/`, `.codex/agents/`, `.kimi-code/agents/`, `.opencode/agents/`, `.minimax/agents/`).
+  Where the harness has no native delegation, follow the role instructions sequentially and say so.
+- **Work no role owns** (general kernel, API, dashboard, CLI or hook code) still goes to a delegated agent in its own worktree, which follows this file.
+- **Review is independent.**
+  Nothing merges to `main` without a review in a fresh context, never the builder's.
+  `merge-reviewer` reviews upstream syncs; every other change gets a fresh-context reviewer agent (for example `code-reviewer`, `rust-reviewer`, or `security-reviewer` for hooks and auth).
+- **Hand off explicitly.**
+  A role that finds work owned by another role reports it as a handoff.
+  The orchestrator dispatches it rather than letting the finder absorb it.
 
 ## Workspace Structure
 
@@ -60,6 +93,29 @@ cargo build --workspace --lib        # Build libraries only (use when CLI binary
 cargo test --workspace               # Run all tests
 cargo clippy --workspace --all-targets -- -D warnings  # Lint (zero warnings policy)
 ```
+
+### Verify locally. Never wait on CI.
+
+**CI is not a verification step in this repo.** It is slow, and waiting on it stalls work a local `cargo check` answers in a minute or two.
+
+- **Never** push a branch and then poll GitHub Actions for the result.
+- **Never** describe a change as "verified by CI", and never defer a failing or skipped check to CI.
+- **Never** treat a red or skipped CI lane as a reason to pause — verify the same property locally instead.
+- **Never** build `Dockerfile.rust-dev` to run a check. That image is for hosts with no native toolchain; this host has one, and building it costs ~20 minutes.
+
+There is a native `cargo` toolchain on the development host. Use it:
+
+```bash
+export CARGO_TARGET_DIR=/tmp/librefang-target-<worktree>   # keep off the shared target/
+export SKIP_DASHBOARD_BUILD=1                              # build.rs soft-skips without pnpm
+
+cargo check --workspace --lib
+cargo test -p <crate>
+```
+
+`SKIP_DASHBOARD_BUILD=1` stops `librefang-api/build.rs` shelling out to `pnpm`, which dominates a cold check and is irrelevant to Rust correctness.
+
+Read cargo's **own** exit status, not a wrapper's: `VAR=$?` followed by a pipe makes the shell report the pipe's status, so a failed build reads as success. Write it as the final action (`cmd > log 2>&1; echo $? > log.status`) and read that file.
 
 ## OpenSpec
 
@@ -223,19 +279,16 @@ migration files in `crates/librefang-storage/src/migrations/sql/`. Feature: `sur
 (default). After upstream merge, map any new upstream SQLite schema changes to new `.surql`
 migration files and register them in `src/migrations/mod.rs`.
 
-**Version pin**: `surrealdb = "=3.2.4"` **and** `surrealdb-core = "=3.2.4"` in workspace
-`Cargo.toml` — both move together, since `=` on the client does not constrain core. Do NOT
-upgrade without coordinating surreal-memory and UAR git refs — version drift breaks the build.
+**Version pin**: `surrealdb`, `surrealdb-core` **and** `surrealdb-types`, all `=3.3.0`, in workspace `Cargo.toml` — the three move together, since `=` on the client does not constrain the other two.
+Do NOT upgrade without moving the `surreal-memory` rev in step (currently `b7e2093`, which pins `=3.3.0` itself) — version drift breaks the build.
+UAR runs as a sidecar and no longer links surrealdb in-process.
 
 ### surreal-memory Integration (`librefang-memory` surreal backends)
 
 BossFang memory uses `surreal-memory` from `https://github.com/Prometheus-AGS/surreal-memory-server`.
 Implementation in `crates/librefang-memory/src/backends/surreal*.rs` (9 backend files).
-Dependency is pinned to `branch = "main"`; run `cargo update -p surreal-memory` after
-every upstream merge to pull the latest connection-architecture fixes (most recently
-the 2026-05-24 ArcSwap rewrite + typed `RetryAction` + `SURREAL_QUERY_TIMEOUT_MS` env
-var + embedded in-flight semaphore — the `MemoryStorage` trait surface is held stable,
-so picking it up is typically zero-risk on our side).
+The dependency is pinned by `rev` (currently `b7e2093`), not a branch, so a bump is a deliberate edit of the workspace `Cargo.toml` followed by `cargo update -p surreal-memory`.
+Its `surrealdb = "=3.3.0"` pin is exact, so the rev and our SurrealDB pins move together.
 
 Never remove; never switch to upstream's SQLite memory backend. The `embedded` feature must
 remain active (no external SurrealDB service required).
@@ -260,3 +313,9 @@ update `librefang-uar-spec/src/types.rs` if `AgentManifest` shape changes.
 - Config fields added to `KernelConfig` MUST also be added to its `Default` impl.
 - The `AgentLoopResult` response field is `.response`, not `.response_text`.
 - The CLI daemon command is `start` (not `daemon`).
+
+<!-- prometheus-team-routing:start v1 -->
+For every code task, read `.agent-team/project-routing.json`, then its active team manifest and the relevant role instructions. Default to that team, selecting only roles whose responsibilities and ownership match the work. Preserve native permissions, models, concurrency limits and existing project instructions.
+For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.
+Use native delegation when available. If unavailable, follow the selected role instructions sequentially and report that limitation. Review in the builder context is not independent review. Keep reviewers dormant until the complete implementation phase; allow one batched correction/confirmation cycle. Respect user-only skill invocation restrictions. Zed external ACP agents use their own native configuration; parallel UI threads are not an automatic delegation API.
+<!-- prometheus-team-routing:end -->

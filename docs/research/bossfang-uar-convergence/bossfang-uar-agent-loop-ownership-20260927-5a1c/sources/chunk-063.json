@@ -1,0 +1,6 @@
+{
+  "url": "https://doc.rust-lang.org/cargo/reference/resolver.html",
+  "chunk_id": "chunk-063",
+  "source_id": "S18",
+  "text": "If two compatible versions cannot be unified because of conflicting version requirements, Cargo will error."
+}

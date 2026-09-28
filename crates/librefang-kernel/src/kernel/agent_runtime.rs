@@ -349,9 +349,12 @@ impl LibreFangKernel {
     ) -> KernelResult<String> {
         // Public callers do not carry the dispatch lock-domain bit.
         // Serialize with the agent-scoped writers used by channel dispatch first, then let the scoped helper also cover an explicit-session writer.
-        let _agent_guard = if librefang_runtime::held_agent_locks::is_held(agent_id) {
-            None
-        } else {
+        // Only when a session id is actually named, though: that is the case where the helper below goes after a *different* mutex (`session_msg_locks[sid]`), so the two acquisitions cover two lock domains.
+        // With no session id the helper's fallback arm reaches for this very `agent_msg_locks[agent_id]`, and holding it here as well would re-acquire a non-reentrant mutex on the same task.
+        // The `is_held` check does not save that case; it is what lets it through: registration is inert outside a `held_agent_locks::scope`, and a caller arriving through `KernelApi` has none, so `is_held` answers `false` here and again in the fallback and the same mutex is taken twice.
+        let _agent_guard = if session_id_override.is_some()
+            && !librefang_runtime::held_agent_locks::is_held(agent_id)
+        {
             let lock = self
                 .agents
                 .agent_msg_locks
@@ -359,9 +362,94 @@ impl LibreFangKernel {
                 .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
                 .clone();
             Some(lock.lock_owned().await)
+        } else {
+            None
         };
         self.compact_agent_session_in_lock_scope(agent_id, session_id_override, force, false)
             .await
+    }
+
+    /// Pre-turn automatic compaction, shared by the streaming and non-streaming senders (#8507).
+    /// Compacts `session` when it is over the message or token threshold, then reloads it from storage so the turn runs on the compacted history.
+    /// Must be called with the turn's serialization lock held and registered in `held_agent_locks`; `agent_scoped` names which of the two locks that is, so the compactor does not re-acquire it.
+    /// Callers skip it for fork turns: compaction rewrites the canonical session on disk, which a fork must never touch.
+    pub(crate) async fn auto_compact_before_turn(
+        &self,
+        agent_id: AgentId,
+        session: &mut librefang_memory::session::Session,
+        system_prompt: &str,
+        config: &librefang_runtime::compactor::CompactionConfig,
+        agent_scoped: bool,
+    ) {
+        use librefang_runtime::compactor::{
+            estimate_token_count, needs_compaction, needs_compaction_by_tokens,
+        };
+        let by_messages = needs_compaction(session, config);
+        let estimated = estimate_token_count(&session.messages, Some(system_prompt), None);
+        let by_tokens = needs_compaction_by_tokens(estimated, config);
+        if by_tokens && !by_messages {
+            info!(
+                agent_id = %agent_id,
+                estimated_tokens = estimated,
+                messages = session.messages.len(),
+                "Token-based compaction triggered (messages below threshold but tokens above)"
+            );
+        }
+        if !(by_messages || by_tokens) {
+            return;
+        }
+        // Pass the in-turn session id so the compactor operates on the same session just measured; `entry.session_id` points at a different session for channel-derived and `session_mode = "new"` turns.
+        info!(agent_id = %agent_id, messages = session.messages.len(), "Auto-compacting session");
+        match self
+            .compact_agent_session_in_lock_scope(agent_id, Some(session.id), false, agent_scoped)
+            .await
+        {
+            Ok(msg) => {
+                info!(agent_id = %agent_id, "{msg}");
+                if let Ok(Some(reloaded)) = self.memory.substrate.get_session(session.id) {
+                    *session = reloaded;
+                }
+            }
+            Err(e) => {
+                warn!(agent_id = %agent_id, "Auto-compaction failed: {e}");
+            }
+        }
+    }
+
+    /// Post-turn automatic compaction, shared by the streaming and non-streaming senders (#8507).
+    /// When the session a turn just wrote is over the token threshold, compacts it in the background so the next turn starts from a summary.
+    /// The spawned task runs outside the turn's `held_agent_locks` scope, so it waits for the turn's lock to be released before loading the session.
+    /// Callers skip it for fork turns, for the same reason as [`Self::auto_compact_before_turn`].
+    pub(crate) fn spawn_compaction_after_turn(
+        self: &Arc<Self>,
+        agent_id: AgentId,
+        session: &librefang_memory::session::Session,
+        manifest_compaction: Option<&librefang_types::agent::CompactionOverrides>,
+        agent_scoped: bool,
+    ) {
+        use librefang_runtime::compactor::{
+            estimate_token_count, needs_compaction_by_tokens, CompactionConfig,
+        };
+        let cfg = self.config.load();
+        // #4976: per-agent [compaction] overrides on top of the global config; the token threshold ratio is the field that gates this check.
+        let config =
+            CompactionConfig::from_toml_with_overrides(&cfg.compaction, manifest_compaction);
+        let estimated = estimate_token_count(&session.messages, None, None);
+        if !needs_compaction_by_tokens(estimated, &config) {
+            return;
+        }
+        let kernel = Arc::clone(self);
+        let sid = session.id;
+        // #3740: spawn_logged so compaction panics surface in logs.
+        super::spawn_logged("post_loop_compaction", async move {
+            info!(agent_id = %agent_id, estimated_tokens = estimated, "Post-loop compaction triggered");
+            if let Err(e) = kernel
+                .compact_agent_session_in_lock_scope(agent_id, Some(sid), false, agent_scoped)
+                .await
+            {
+                warn!(agent_id = %agent_id, "Post-loop compaction failed: {e}");
+            }
+        });
     }
 
     /// Compact a session using the same lock domain selected by the caller's message turn.
@@ -410,6 +498,7 @@ impl LibreFangKernel {
             }
         } else {
             // The public default-session entry point always sets `agent_scoped = true`; keep this defensive fallback aligned.
+            // It is also the live arm for `compact_agent_session_with_id(agent, None, ..)`, which is why that caller must not pre-take `agent_msg_locks[agent_id]`: this acquisition is the only serialization that shape gets.
             if librefang_runtime::held_agent_locks::is_held(agent_id) {
                 None
             } else {
@@ -436,6 +525,7 @@ impl LibreFangKernel {
             .unwrap_or_else(|| librefang_memory::session::Session {
                 id: target_session_id,
                 agent_id,
+                parent_session_id: None,
                 messages: Vec::new(),
                 context_window_tokens: 0,
                 label: None,
@@ -636,6 +726,7 @@ impl LibreFangKernel {
             .unwrap_or_else(|| librefang_memory::session::Session {
                 id: target_session_id,
                 agent_id,
+                parent_session_id: None,
                 messages: Vec::new(),
                 context_window_tokens: 0,
                 label: None,

@@ -416,12 +416,17 @@ fn reduce_model(model: ModelConfig) -> ModelConfig {
         top_p,
         frequency_penalty,
         presence_penalty,
+        top_k,
+        min_p,
+        repeat_penalty,
         system_prompt,
         api_key_env: _,
         base_url: _,
         context_window,
         max_output_tokens,
         extra_params: _,
+        mode,
+        router_override,
     } = model;
 
     ModelConfig {
@@ -432,12 +437,17 @@ fn reduce_model(model: ModelConfig) -> ModelConfig {
         top_p,
         frequency_penalty,
         presence_penalty,
+        top_k,
+        min_p,
+        repeat_penalty,
         system_prompt,
         api_key_env: None,
         base_url: None,
         context_window,
         max_output_tokens,
         extra_params: BTreeMap::new(),
+        mode,
+        router_override,
     }
 }
 
@@ -472,6 +482,7 @@ fn reduce_capabilities(capabilities: ManifestCapabilities) -> ManifestCapabiliti
         shell: _,
         ofp_discover,
         ofp_connect: _,
+        routing,
     } = capabilities;
 
     ManifestCapabilities {
@@ -484,6 +495,11 @@ fn reduce_capabilities(capabilities: ManifestCapabilities) -> ManifestCapabiliti
         shell: Vec::new(),
         ofp_discover,
         ofp_connect: Vec::new(),
+        // Media capability routing names a provider and a model, exactly like
+        // `[model] provider` / `[model] model` — which [`reduce_model`] keeps.
+        // It describes what the type needs, carries no host target and no
+        // credential, so it survives publication for the same reason.
+        routing,
     }
 }
 

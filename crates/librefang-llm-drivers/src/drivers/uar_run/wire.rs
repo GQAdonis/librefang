@@ -116,6 +116,7 @@ impl WireReceipt {
         admission: &UarRunAdmission,
         prepared: &PreparedAdmission,
         binding: UarEffectiveBinding,
+        verified_principal: &str,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
         let admission_id = self
             .admission_id
@@ -160,6 +161,7 @@ impl WireReceipt {
         let cancellation: UarRunCancellation = self.cancellation.into();
         Ok(UarDelegatedRunProjection {
             boss_task_id: admission.boss_task_id.clone(),
+            verified_principal: verified_principal.to_string(),
             delegation_id: admission.delegation_id.clone(),
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
@@ -217,7 +219,12 @@ impl WireReceipt {
             definition_diagnostics: projection.definition_diagnostics.clone(),
             run: Map::new(),
         };
-        let mut merged = self.into_projection(&admission, &prepared, binding)?;
+        let mut merged = self.into_projection(
+            &admission,
+            &prepared,
+            binding,
+            &projection.verified_principal,
+        )?;
         merged.boss_projection_retention = projection.boss_projection_retention;
         merged.uar_thread_id.clone_from(&projection.uar_thread_id);
         merged

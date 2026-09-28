@@ -29,6 +29,7 @@ Full-run delegation is a separate execution mode from native BossFang execution 
 - The existing UAR `LlmDriver` path remains a model-provider path and cannot be relabeled as full-run delegation.
 - Every receipt and trace identifies the selected mode and `executor = universal-agent-runtime` for a delegated run.
 - A single delegated attempt produces no more than one UAR admission and one set of tool effects.
+- Initial C05 full-run admission uses only the BossFang-managed loopback UAR sidecar under accepted ADR 0001 placement S1. External-local and remote instances remain model gateways until authenticated remote admission S2a is accepted and implemented.
 
 ### 2. Idempotent admission and recoverable control identity
 
@@ -44,6 +45,7 @@ The selected UAR instance is the authenticated C04 endpoint and the target deplo
 - A lost or timed-out response becomes `admission-unresolved`; BossFang reconciles by the same qualified key and never retries as a new admission.
 - A mutation response that is lost after dispatch does not prove that the operation failed or did not occur.
 - Identity and placement come from the authenticated C04 service binding and verified principal. Payload-supplied owner, tenant, instance or credential identity is not authoritative.
+- BossFang retains the original authenticated user principal in the projection and asserts it only over the launch-token-authenticated managed sidecar connection on every full-run request.
 
 The admission receipt carries `delegationId`, `admissionKey`, `requestDigest`, qualified owner and target binding, selected UAR instance/profile, effective service binding, UAR task/thread/root/run identities when known, state/revision/cursor, retention profile and expiry, and uncertainty flags. It contains no raw credential or protected prompt payload.
 

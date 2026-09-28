@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+  "chunk_id": "chunk-028",
+  "source_id": "U12",
+  "text": "scoped to one run-owned Boss bridge"
+}

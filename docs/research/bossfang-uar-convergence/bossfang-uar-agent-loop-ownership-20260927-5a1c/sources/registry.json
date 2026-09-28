@@ -1,0 +1,753 @@
+{
+  "sources": [
+    {
+      "id": "R01",
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/agent_loop/mod.rs",
+      "title": "BossFang agent loop (run_agent_loop)",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R02",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/messaging.rs",
+      "title": "Kernel dispatch by module prefix",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R03",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/uar.rs",
+      "title": "UarDriver HTTP/SSE driver",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R04",
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs",
+      "title": "UAR sidecar supervisor",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R05",
+      "url": "repo://librefang@259f44819/Cargo.toml",
+      "title": "Workspace SurrealDB and surreal-memory pins",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R06",
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/config.rs",
+      "title": "Storage namespaces and embedded/remote config",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R07",
+      "url": "repo://librefang@259f44819/docs/agent-fabric-convergence.md",
+      "title": "Agent Fabric Convergence planning note (BossFang)",
+      "publisher": "GQAdonis/librefang",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R08",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-driver/src/lib.rs",
+      "title": "LlmDriver trait",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R09",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/claude_code.rs",
+      "title": "claude-code driver MCP bridge",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R10",
+      "url": "repo://librefang@259f44819/k8s/base/surrealdb-statefulset.yaml",
+      "title": "k8s SurrealDB StatefulSet",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R11",
+      "url": "repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md",
+      "title": "Phase-10 decision log",
+      "publisher": "GQAdonis/librefang",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R12",
+      "url": "repo://librefang@259f44819/crates/librefang-memory/tests/surreal_vector_integration_test.rs",
+      "title": "Semantic remember defect note at b7e2093",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R13",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/kernel/agent_execution.rs",
+      "title": "execute_llm_agent and metering hooks",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R14",
+      "url": "repo://librefang@259f44819/Dockerfile",
+      "title": "BossFang image UAR sidecar copy",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R15",
+      "url": "repo://librefang@259f44819/Cargo.lock",
+      "title": "BossFang lockfile",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R16",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel/src/approval.rs",
+      "title": "ApprovalManager",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "U01",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs",
+      "title": "UAR HTTP server routes",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U02",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/api/routes.rs",
+      "title": "UAR run API",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U03",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/llm/orchestrator.rs",
+      "title": "UAR tool-calling loop",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U04",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/bin/uar-sidecar.rs",
+      "title": "uar-sidecar binary",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U05",
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.toml",
+      "title": "UAR manifest pins",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U06",
+      "url": "repo://universal-agent-runtime@3d6bf056/versions.toml",
+      "title": "UAR authoritative pins",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U07",
+      "url": "repo://universal-agent-runtime@3d6bf056/vendor/git/README.md",
+      "title": "UAR vendored sources provenance",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U08",
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/librefang-integration.md",
+      "title": "UAR librefang integration note",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U09",
+      "url": "repo://universal-agent-runtime@3d6bf056/docs/agent-fabric-convergence.md",
+      "title": "Agent Fabric Convergence (UAR)",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U10",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/manager.rs",
+      "title": "UAR RunManager",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U11",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/embedded.rs",
+      "title": "UAR EmbeddedRuntime builder",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U12",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "title": "UAR host tool admission port",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U13",
+      "url": "repo://universal-agent-runtime@3d6bf056/Cargo.lock",
+      "title": "UAR lockfile",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "M01",
+      "url": "repo://surreal-memory-server@b7e2093/Cargo.toml",
+      "title": "surreal-memory workspace pins",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "M02",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/mod.rs",
+      "title": "MemoryStorage trait",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "M03",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/surreal.rs",
+      "title": "SurrealStorage connect and migrations",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "M04",
+      "url": "repo://surreal-memory-server@b7e2093/crates/surreal-memory/src/storage/migrations/mod.rs",
+      "title": "surreal-memory migrations",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "M05",
+      "url": "repo://surreal-memory-server@b7e2093/CLAUDE.md",
+      "title": "surreal-memory agent instructions",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "M06",
+      "url": "repo://surreal-memory-server@6acb605/Cargo.toml",
+      "title": "surreal-memory at the-boss pin",
+      "publisher": "Prometheus-AGS/surreal-memory-server",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T3"
+    },
+    {
+      "id": "B01",
+      "url": "repo://the-boss@1fe9acff43/build/integration-sources.json",
+      "title": "the-boss source pins",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B02",
+      "url": "repo://the-boss@1fe9acff43/build/integration-artifacts.json",
+      "title": "the-boss artifact pins",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B03",
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarSidecarService.ts",
+      "title": "the-boss UAR sidecar service",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B04",
+      "url": "repo://the-boss@1fe9acff43/src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+      "title": "the-boss UAR run connection",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B05",
+      "url": "repo://the-boss@1fe9acff43/src/main/services/prometheus/managedServices.ts",
+      "title": "the-boss managed Docker services",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B06",
+      "url": "repo://the-boss@1fe9acff43/src/shared/types/prometheusIntegration.ts",
+      "title": "the-boss integration defaults",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B07",
+      "url": "repo://the-boss@1fe9acff43/PRODUCT.md",
+      "title": "the-boss product statement",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B08",
+      "url": "repo://the-boss@1fe9acff43/.kbd-orchestrator/phases/the-boss-shipping-and-settings/children/the-boss-universal-agent-runtime/goals.md",
+      "title": "the-boss UAR runtime goals",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B09",
+      "url": "repo://the-boss@1fe9acff43/resources/prometheus-skills-mini/.prometheus/postmortems/2026-09-20-surreal-memory-mirror-write-failed.md",
+      "title": "surreal-memory mirror write postmortem",
+      "publisher": "Prometheus-AGS/prometheus-skills-mini",
+      "kind": "doc",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "B10",
+      "url": "repo://the-boss@1fe9acff43/(repository search: src packages scripts build electron-builder.yml package.json)",
+      "title": "the-boss search for librefang/bossfang",
+      "publisher": "Prometheus-AGS/the-boss",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T4"
+    },
+    {
+      "id": "S1",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar",
+      "title": "Sidecar pattern",
+      "publisher": "Microsoft Azure Architecture Center",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S2",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#issues-and-considerations",
+      "title": "Sidecar pattern: issues and considerations",
+      "publisher": "Microsoft Azure Architecture Center",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S3",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sidecar#when-to-use-this-pattern",
+      "title": "Sidecar pattern: when to use",
+      "publisher": "Microsoft Azure Architecture Center",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S4",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/",
+      "title": "Sidecar Containers",
+      "publisher": "Kubernetes",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S5",
+      "url": "https://docs.dapr.io/concepts/dapr-services/sidecar/",
+      "title": "Dapr sidecar (daprd) overview",
+      "publisher": "Dapr",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S6",
+      "url": "https://a2a-protocol.org/latest/specification/",
+      "title": "Agent2Agent Protocol Specification",
+      "publisher": "A2A Project",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S7",
+      "url": "https://www.linuxfoundation.org/press/linux-foundation-launches-the-agent2agent-protocol-project-to-enable-secure-intelligent-communication-between-ai-agents",
+      "title": "Linux Foundation Launches the Agent2Agent Protocol Project",
+      "publisher": "Linux Foundation",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S8",
+      "url": "https://agentclientprotocol.com/overview/introduction",
+      "title": "Agent Client Protocol: Introduction",
+      "publisher": "Agent Client Protocol",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S9",
+      "url": "https://zed.dev/blog/bring-your-own-agent-to-zed",
+      "title": "Bring Your Own Agent to Zed",
+      "publisher": "Zed Industries (Nathan Sobo)",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S10",
+      "url": "https://docs.ag-ui.com/concepts/events",
+      "title": "AG-UI Events",
+      "publisher": "AG-UI / CopilotKit",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S11",
+      "url": "https://modelcontextprotocol.io/specification/2025-06-18/server/tools",
+      "title": "MCP Specification 2025-06-18: Tools",
+      "publisher": "Model Context Protocol",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S12",
+      "url": "https://developers.openai.com/api/docs/guides/function-calling",
+      "title": "Function calling",
+      "publisher": "OpenAI",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S13",
+      "url": "https://code.claude.com/docs/en/agent-sdk/overview",
+      "title": "Agent SDK overview",
+      "publisher": "Anthropic",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S14",
+      "url": "https://code.claude.com/docs/en/agent-sdk/permissions",
+      "title": "Configure permissions",
+      "publisher": "Anthropic",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S15",
+      "url": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html",
+      "title": "Host agent or tools with Amazon Bedrock AgentCore Runtime",
+      "publisher": "Amazon Web Services",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S16",
+      "url": "https://github.com/langchain-ai/agent-protocol",
+      "title": "Agent Protocol",
+      "publisher": "LangChain",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S17",
+      "url": "https://learn.microsoft.com/en-us/agent-framework/overview/",
+      "title": "Microsoft Agent Framework Overview",
+      "publisher": "Microsoft Learn",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S18",
+      "url": "https://doc.rust-lang.org/cargo/reference/resolver.html",
+      "title": "Dependency Resolution",
+      "publisher": "The Cargo Book",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S19",
+      "url": "https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html",
+      "title": "Specifying Dependencies",
+      "publisher": "The Cargo Book",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S20",
+      "url": "https://doc.rust-lang.org/cargo/reference/features.html",
+      "title": "Features",
+      "publisher": "The Cargo Book",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S21",
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/2x-to-3x",
+      "title": "Migrating 2.x to 3.x",
+      "publisher": "SurrealDB",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S22",
+      "url": "https://surrealdb.com/docs/build/migrating/from-old-surrealdb-versions/32-to-33",
+      "title": "Migrating 3.2 to 3.3",
+      "publisher": "SurrealDB",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "S23",
+      "url": "https://surrealdb.com/docs/learn/schema-management/multi-tenancy/namespace-and-database-architecture",
+      "title": "Namespace & database architecture",
+      "publisher": "SurrealDB",
+      "kind": "web",
+      "date": "2026-09-27",
+      "thread": "T5"
+    },
+    {
+      "id": "U14",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/http.rs",
+      "title": "UAR host admission HTTP adapter",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U15",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/security/sidecar_guard.rs",
+      "title": "UAR sidecar launch-token guard",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U16",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/mcp.rs",
+      "title": "UAR run-scoped MCP server rules",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U17",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/turn/host/history.rs",
+      "title": "UAR host history caps",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U18",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/uar/runtime/tool_admission/mod.rs",
+      "title": "UAR admission TTL",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U19",
+      "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+      "title": "UAR run API at shipped revision",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "U20",
+      "url": "repo://universal-agent-runtime@3d6bf056/src/server.rs#AnthropicMessagesRequest",
+      "title": "UAR Anthropic request struct",
+      "publisher": "Prometheus-AGS/universal-agent-runtime",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T2"
+    },
+    {
+      "id": "R17",
+      "url": "repo://librefang@259f44819/crates/librefang-storage/src/provision.rs",
+      "title": "provision_uar_namespace",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R18",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/storage.rs",
+      "title": "POST /api/storage/link-uar",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R19",
+      "url": "repo://librefang@259f44819/crates/librefang-api/src/routes/network.rs",
+      "title": "BossFang /mcp tools/call",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R20",
+      "url": "repo://librefang@259f44819/crates/librefang-runtime/src/tool_runner/dispatch.rs",
+      "title": "BossFang execute_tool gate",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R21",
+      "url": "repo://librefang@259f44819/crates/librefang-types/src/agent.rs",
+      "title": "BossFang iteration default",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R22",
+      "url": "repo://librefang@259f44819/crates/librefang-channels/src/uar_sidecar.rs#surreal_data_dir",
+      "title": "Sidecar reads surreal_data_dir only",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R23",
+      "url": "repo://librefang@259f44819/crates/librefang-llm-drivers/src/drivers/anthropic.rs",
+      "title": "BossFang Anthropic driver",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    },
+    {
+      "id": "R24",
+      "url": "repo://librefang@259f44819/crates/librefang-kernel-metering/src/lib.rs",
+      "title": "BossFang budget reservation",
+      "publisher": "GQAdonis/librefang",
+      "kind": "code",
+      "date": "2026-09-27",
+      "thread": "T1"
+    }
+  ],
+  "surreal_memory_used": false,
+  "note": "surreal-memory MCP unreachable; registry kept on disk"
+}

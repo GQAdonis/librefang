@@ -21,6 +21,15 @@ interface StepLadderInputProps {
   customLabel: string;
   /** Placeholder for the custom field. */
   customPlaceholder?: string;
+  /**
+   * Bounds and granularity for the custom field, matching what the parameter
+   * accepts. These were hardcoded to `min="1"`, which is right for a token
+   * count and wrong for every sampling parameter — a temperature of 0 and a
+   * penalty of -2 are both legitimate, and the browser marked them invalid.
+   */
+  min?: number;
+  max?: number;
+  step?: number;
   /** Optional advisory shown under the control, e.g. an over-limit warning. */
   warning?: string;
 }
@@ -46,6 +55,9 @@ export function StepLadderInput({
   customLabel,
   customPlaceholder,
   warning,
+  min,
+  max,
+  step,
 }: StepLadderInputProps) {
   const id = useId();
   const rungs = ladderUpTo(ladder, cap);
@@ -64,8 +76,25 @@ export function StepLadderInput({
   const offLadder = value.trim() !== "" && !isOnLadder(rungs, numeric);
   const isCustom = customMode || offLadder;
 
+  // What the operator typed, kept as they typed it.
+  //
+  // The field is controlled by `value`, and a call site that stores the parsed
+  // number rather than the text hands back a different string for the same
+  // number: the model settings drawer keeps `temperature: number`, so `-0` —
+  // a legitimate penalty — comes back as `String(-0)`, which is `"0"`. React
+  // then rewrites the DOM and the minus sign vanishes from under the operator
+  // mid-keystroke; the rest of `-0.25` lands on `0.25` and a positive value is
+  // saved with no error shown.
+  //
+  // The draft is only what is displayed. Every keystroke still reaches the
+  // parent, so nothing about what gets stored changes — this only stops the
+  // parent's rounding of the *representation* from editing the input.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shownValue = isCustom && draft !== null ? draft : value;
+
   const pick = (next: string): void => {
     setCustomMode(false);
+    setDraft(null);
     onChange(next);
   };
 
@@ -77,15 +106,20 @@ export function StepLadderInput({
     }`;
 
   return (
+    // `role="group"` + `aria-labelledby`, not `<label for>`: the rungs are a
+    // set of buttons, and a <label> pointing at the <div> that holds them is
+    // not an association any browser or assistive technology honours — the
+    // element is non-labellable, so the control announced itself as an
+    // unnamed group.
     <div className="space-y-1.5">
-      <label htmlFor={id} className="text-xs font-bold text-text-dim">
+      <span id={`${id}-label`} className="block text-xs font-bold text-text-dim">
         {label}
-      </label>
-      <div id={id} className="flex flex-wrap gap-1.5">
+      </span>
+      <div role="group" aria-labelledby={`${id}-label`} className="flex flex-wrap gap-1.5">
         <button
           type="button"
-          aria-pressed={value.trim() === ""}
-          className={rungClass(value.trim() === "")}
+          aria-pressed={!isCustom && value.trim() === ""}
+          className={rungClass(!isCustom && value.trim() === "")}
           onClick={() => pick("")}
         >
           {inheritLabel}
@@ -105,11 +139,15 @@ export function StepLadderInput({
           type="button"
           aria-pressed={isCustom}
           className={rungClass(isCustom)}
-          // Seed the field with the current preset so the operator edits a number
-          // rather than starting from an empty box.
+          // Seed the field from the current preset so the operator edits a
+          // number rather than starting from an empty box — but only when there
+          // IS one. Entering custom from `inherit` used to emit the smallest
+          // rung, which at the call sites that persist writes an override
+          // nobody chose and arms their Save button.
           onClick={() => {
             setCustomMode(true);
-            onChange(numeric !== null ? String(numeric) : String(rungs[0] ?? 1));
+            setDraft(null);
+            if (numeric !== null) onChange(String(numeric));
           }}
         >
           {customLabel}
@@ -118,16 +156,23 @@ export function StepLadderInput({
       {isCustom ? (
         <input
           type="number"
-          min="1"
-          value={value}
+          min={min}
+          max={max}
+          step={step}
+          value={shownValue}
           aria-label={`${label} — ${customLabel}`}
-          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={warning ? true : undefined}
+          aria-describedby={warning ? `${id}-warning` : undefined}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            onChange(e.target.value);
+          }}
           placeholder={customPlaceholder}
           className="w-full rounded-lg border border-border-subtle bg-main px-2 py-1 text-xs font-mono outline-none focus:border-brand"
         />
       ) : null}
       {warning ? (
-        <p className="text-[11px] text-red-400 flex items-start gap-1">
+        <p id={`${id}-warning`} className="text-[11px] text-red-400 flex items-start gap-1">
           <span aria-hidden="true">⚠</span>
           <span>{warning}</span>
         </p>

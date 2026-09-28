@@ -1,0 +1,6 @@
+{
+  "url": "repo://librefang@259f44819/.kbd-orchestrator/phases/phase-10-uar-sidecar-availability/decision-log.md",
+  "chunk_id": "chunk-011",
+  "source_id": "R11",
+  "text": "D-1 child process in-container supervised by BossFang; D-2 un-force uar-driver now, delete later"
+}

@@ -1,0 +1,6 @@
+{
+  "url": "repo://universal-agent-runtime@2aaeadd9/src/uar/api/routes.rs",
+  "chunk_id": "chunk-074",
+  "source_id": "U19",
+  "text": "struct CreateRunRequest { artifact: AgentArtifact, input: String, session_id: Option<String> } (34-38); tool_admission/http.rs, turn/host/mcp.rs, turn/host/history.rs absent at 2aaeadd9"
+}
