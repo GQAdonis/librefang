@@ -114,6 +114,25 @@ pub struct RouteDecision {
     pub binding_revision: Option<String>,
 }
 
+/// Immutable metadata of an admitted provider-native source occurrence.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceOccurrenceReceipt {
+    /// Deterministic occurrence identifier.
+    pub occurrence_id: String,
+    /// Hash of the complete normalized source scope.
+    pub scope_key: String,
+    /// Provider/account/workspace/room/thread/sender provenance.
+    pub scope: ChannelScope,
+    /// Stable provider-native message identifier.
+    pub native_message_id: String,
+    /// Immutable selected, conflicting, or unavailable route decision.
+    pub decision: RouteDecision,
+    /// Route revision pinned when admitted, if a handler was selected.
+    pub route_revision: Option<u64>,
+    /// RFC-3339 admission timestamp.
+    pub recorded_at: String,
+}
+
 /// Latest route binding for future occurrences in this exact scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RouteAffinity {
@@ -219,17 +238,6 @@ mod surreal_impl {
     const REVISIONS: &str = "channel_route_revisions";
     const DISPATCH: &str = "channel_route_dispatch";
 
-    #[derive(Debug, Clone, Deserialize, Serialize)]
-    struct StoredOccurrence {
-        occurrence_id: String,
-        scope_key: String,
-        scope: ChannelScope,
-        native_message_id: String,
-        decision: RouteDecision,
-        route_revision: Option<u64>,
-        recorded_at: String,
-    }
-
     /// SurrealDB-backed channel route store, valid for embedded one-host or
     /// shared remote installations. The caller owns capability reporting.
     #[derive(Clone)]
@@ -249,6 +257,16 @@ mod surreal_impl {
         pub async fn affinity(&self, scope: &ChannelScope) -> StorageResult<Option<RouteAffinity>> {
             scope.validate()?;
             self.read(AFFINITY, &scope.key()).await
+        }
+
+        /// Read immutable normalized source and route metadata without
+        /// re-admitting or dispatching the provider message.
+        pub async fn source_occurrence(
+            &self,
+            occurrence_id: &str,
+        ) -> StorageResult<Option<SourceOccurrenceReceipt>> {
+            validate_occurrence_id(occurrence_id)?;
+            self.read(OCCURRENCES, occurrence_id).await
         }
 
         /// Admit a native occurrence exactly once, pinning its immutable route.
@@ -272,7 +290,10 @@ mod surreal_impl {
                 ));
             }
             let id = source.id();
-            if let Some(existing) = self.read::<StoredOccurrence>(OCCURRENCES, &id).await? {
+            if let Some(existing) = self
+                .read::<SourceOccurrenceReceipt>(OCCURRENCES, &id)
+                .await?
+            {
                 return self.admission(existing, false).await;
             }
 
@@ -298,7 +319,7 @@ mod surreal_impl {
                     _ => None,
                 };
                 let now = chrono::Utc::now().to_rfc3339();
-                let row = StoredOccurrence {
+                let row = SourceOccurrenceReceipt {
                     occurrence_id: id.clone(),
                     scope_key: source.scope.key(),
                     scope: source.scope.clone(),
@@ -310,8 +331,9 @@ mod surreal_impl {
                 match self.write_admission(&row, affinity.as_ref()).await {
                     Ok(()) => return self.admission(row, true).await,
                     Err(error) => {
-                        if let Some(existing) =
-                            self.read::<StoredOccurrence>(OCCURRENCES, &id).await?
+                        if let Some(existing) = self
+                            .read::<SourceOccurrenceReceipt>(OCCURRENCES, &id)
+                            .await?
                         {
                             return self.admission(existing, false).await;
                         }
@@ -513,7 +535,7 @@ mod surreal_impl {
 
         async fn write_admission(
             &self,
-            row: &StoredOccurrence,
+            row: &SourceOccurrenceReceipt,
             affinity: Option<&RouteAffinity>,
         ) -> StorageResult<()> {
             let id = &row.occurrence_id;
@@ -616,7 +638,7 @@ mod surreal_impl {
 
         async fn admission(
             &self,
-            row: StoredOccurrence,
+            row: SourceOccurrenceReceipt,
             is_new: bool,
         ) -> StorageResult<RouteAdmission> {
             let dispatch: Option<DispatchReceipt> = self.read(DISPATCH, &row.occurrence_id).await?;

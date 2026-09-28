@@ -34,6 +34,7 @@
 
 pub mod config;
 pub mod channel_routes;
+pub mod channel_actions;
 pub mod config_store;
 pub mod error;
 pub mod migrate;
@@ -49,7 +50,7 @@ pub use config::{
 pub use channel_routes::ChannelRouteStore;
 pub use channel_routes::{
     ChannelScope, DispatchClaim, DispatchReceipt, DispatchState, RouteAdmission, RouteAffinity,
-    RouteDecision, RouteOutcome, SourceOccurrence,
+    RouteDecision, RouteOutcome, SourceOccurrence, SourceOccurrenceReceipt,
 };
 #[cfg(feature = "surreal-backend")]
 pub use config_store::SurrealConfigStore;

@@ -253,4 +253,14 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "channel_routes_v1",
         sql: include_str!("sql/045_channel_routes.surql"),
     },
+    Migration {
+        version: 46,
+        name: "channel_causal_actions_v1",
+        sql: include_str!("sql/046_channel_causal_actions.surql"),
+    },
+    Migration {
+        version: 47,
+        name: "channel_observer_deliveries_v1",
+        sql: include_str!("sql/047_channel_observer_deliveries.surql"),
+    },
 ];
