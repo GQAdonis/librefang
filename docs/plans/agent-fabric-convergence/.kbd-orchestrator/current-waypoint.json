@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 251,
-  "derivedRevision": 251,
+  "sourceRevision": 252,
+  "derivedRevision": 252,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 12
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 13
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -33,9 +33,9 @@
   "implementationCompleted": 9,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 251,
+  "revision": 252,
   "exactNextCommand": "/kbd-status",
   "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
   "nextTask": "C08.1",
-  "updatedAt": "2026-09-28T05:10:05.877770Z"
+  "updatedAt": "2026-09-28T05:18:21.237601Z"
 }

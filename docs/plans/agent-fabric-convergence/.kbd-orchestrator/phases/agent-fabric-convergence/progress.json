@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 251,
-  "derivedRevision": 251,
+  "sourceRevision": 252,
+  "derivedRevision": 252,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 12
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 13
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T05:10:05.877770Z",
+  "last_updated": "2026-09-28T05:18:21.237601Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 7,
@@ -152,8 +152,8 @@
     {
       "id": "afc-c08-bossfang-and-fabric-observer-routing",
       "title": "C08 — BossFang and Fabric observer routing",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
