@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c06-durable-ordinary-agent-instances-partial",
+  "recordedAt": "2026-09-28T03:53:20Z",
+  "result": "partial",
+  "source": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "c05BaseCommit": "fcfce6d226b50eee502c5f272e9215112d933e29",
+    "preImplementationDesignCommit": "fce1e308c18b94223fb9b1fce4f3e066f1daedc3",
+    "implementationCommit": "8dc4a6ce595b65d704f1a784af4eb78165866c1f",
+    "branch": "codex/agent-fabric-convergence-c06",
+    "provider": "SurrealKV through surrealdb Rust SDK =3.3.0",
+    "selectedCapability": "durable ordinary-agent instances only on the SurrealKV provider",
+    "sourceClaims": [
+      "src/uar/runtime/instance/**",
+      "src/uar/persistence/agent_instances.rs",
+      "src/uar/persistence/providers/surreal.rs",
+      "src/uar/api/agent_instances.rs"
+    ]
+  },
+  "integrationGate": {
+    "command": "cargo test --test agent_fabric_c06_gate --features afc-c06-gate -- --test-threads=1",
+    "exitCode": 0,
+    "result": "2 passed; 0 failed",
+    "log": "/tmp/afc-c06-gate-rerun.log",
+    "logSha256": "69604e72aa8503c8aa4f063bfd3dbb25455e6fb8e689ac4628def5c1641e453b",
+    "sourceProvenance": "The gate ran against the complete production working tree. Rust formatting and OpenSpec task bookkeeping followed before implementation commit 8dc4a6ce; the compiled source was not rebuilt at that exact commit.",
+    "observed": [
+      "owner/workspace isolation and distinct logical identities",
+      "bounded command admission, duplicate receipt and conflict",
+      "fresh root IDs across turns and cold restart",
+      "lifecycle commands and committed event replay-gap snapshot",
+      "ordinary run compatibility and provider-specific capability discovery",
+      "blocked governed file-write approval with cancellation and no late effect",
+      "abrupt process crash retaining an uncertain attempt without replay",
+      "operator-only exact-attempt reconciliation and subsequent fresh turn"
+    ]
+  },
+  "remainingAcceptance": [
+    "Deterministic claim-to-dispatch stale-epoch protected-effect race evidence is not present.",
+    "Repeated failed activation through exhaustion has not been exercised by the production gate.",
+    "Storage backup/restore and rollback evidence is not recorded.",
+    "The gate has not been rerun against the exact implementation commit after formatting.",
+    "C06.2 and C06.3 remain open; this receipt does not certify C06 or team/federation support."
+  ],
+  "scope": {
+    "host": "macOS arm64 local real-host SurrealKV integration",
+    "installedWindowsAcceptanceClaimed": false,
+    "installedMacAcceptanceClaimed": false,
+    "releaseArtifactClaimed": false
+  }
+}

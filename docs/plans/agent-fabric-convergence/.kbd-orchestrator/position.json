@@ -2,18 +2,19 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 239,
-  "derivedRevision": 239,
+  "sourceRevision": 242,
+  "derivedRevision": 242,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 3
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T01:57:16.993329Z",
+  "updatedAt": "2026-09-28T03:34:30.189874Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c06-durable-addressable-instances-and-bounded-turns",
-    "C06.1"
+    "C06.2"
   ],
   "root": {
     "type": "phase",
@@ -126,9 +127,9 @@
           {
             "type": "change",
             "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
-            "status": "PENDING",
+            "status": "IN_PROGRESS",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },

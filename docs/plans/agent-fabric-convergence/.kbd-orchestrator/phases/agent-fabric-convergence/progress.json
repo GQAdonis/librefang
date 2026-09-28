@@ -2,17 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 239,
-  "derivedRevision": 239,
+  "sourceRevision": 242,
+  "derivedRevision": 242,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 3
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T01:57:16.993329Z",
+  "last_updated": "2026-09-28T03:34:30.189874Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 5,
@@ -129,12 +130,12 @@
     {
       "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
       "title": "C06 — Durable addressable instances and bounded turns",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+      "tasks_done": 1,
+      "last_task_completed": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+      "next_task_pending": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
       "blockers": []
     },
     {
