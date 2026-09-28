@@ -1907,7 +1907,8 @@ pub async fn build_router(
     )
     .with_runtime_config(uar_config.as_ref())
     .with_instance_config(selected_uar_instance.as_ref().ok())
-    .with_probe_bearer(uar_probe_bearer);
+    .with_probe_bearer(uar_probe_bearer)
+    .with_channel_gate_from_host();
     if managed_uar {
         if let Some(config) = uar_config.as_ref() {
             let remote = config.remote.clone().or_else(|| {

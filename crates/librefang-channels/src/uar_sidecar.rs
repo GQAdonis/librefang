@@ -258,6 +258,23 @@ impl UarSidecarSupervisor {
         self
     }
 
+    /// Give the managed UAR process its own effect-only Gate credential. The
+    /// administrative grant writer credential is never forwarded to UAR.
+    #[must_use]
+    pub fn with_channel_gate_from_host(mut self) -> Self {
+        let url = std::env::var("LIBREFANG_CHANNEL_GATE_URL").ok();
+        let token = std::env::var("LIBREFANG_UAR_CHANNEL_GATE_EFFECT_TOKEN").ok();
+        if let (Some(url), Some(token)) = (url, token) {
+            if !url.trim().is_empty() && !token.trim().is_empty() {
+                self.environment.extend([
+                    ("UAR_CHANNEL_GATE_URL".to_string(), url),
+                    ("UAR_CHANNEL_GATE_BEARER_TOKEN".to_string(), token),
+                ]);
+            }
+        }
+        self
+    }
+
     #[must_use]
     pub fn with_startup_error(mut self, error: String) -> Self {
         self.startup_error = Some(error);
