@@ -1017,11 +1017,96 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         }
     }
 
+    async fn admit_channel_handler_action(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        referenced_native_id: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            use librefang_storage::channel_actions::{
+                ActionAdmission, ActionKind, ActionState, CausalActionRequest, CausalPolicy,
+                ReplyTargetScope,
+            };
+            if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+                return Ok(None);
+            }
+            let store = self.channel_action_store().await?;
+            let target = ReplyTargetScope::from(&stored_channel_scope(&source.scope));
+            let parent = if let Some(native_id) = referenced_native_id {
+                let action_id = store
+                    .lookup_provider_echo(&target, native_id)
+                    .await
+                    .map_err(|error| format!("resolve referenced Discord message: {error}"))?
+                    .ok_or_else(|| {
+                        "referenced Discord message has no same-scope outbound action".to_string()
+                    })?;
+                let receipt = store
+                    .action_receipt(&action_id)
+                    .await
+                    .map_err(|error| format!("read referenced Discord action: {error}"))?
+                    .ok_or_else(|| "referenced Discord action is absent".to_string())?;
+                if receipt.kind != ActionKind::Reply
+                    || receipt.state != ActionState::Completed
+                    || receipt.reply_target.as_ref() != Some(&target)
+                {
+                    return Err(
+                        "referenced Discord action is not a completed same-scope reply".into(),
+                    );
+                }
+                Some(receipt)
+            } else {
+                None
+            };
+            let root_occurrence_id = parent.as_ref().map_or_else(
+                || admission.occurrence_id.clone(),
+                |receipt| receipt.root_occurrence_id.clone(),
+            );
+            let request = CausalActionRequest {
+                root_occurrence_id,
+                source_occurrence_id: admission.occurrence_id.clone(),
+                parent_action_id: parent.as_ref().map(|receipt| receipt.action_id.clone()),
+                action_key: format!("handler-forward-v1:{handler}"),
+                route_identity: format!("handler:{handler}"),
+                kind: ActionKind::Forward,
+                reply_target: None,
+                reply_grant: None,
+                policy: CausalPolicy::default(),
+                original_principal: parent.as_ref().map_or_else(
+                    || source.scope.sender.clone(),
+                    |receipt| receipt.original_principal.clone(),
+                ),
+                actor_id: handler.to_owned(),
+            };
+            let result = store
+                .admit_action(&request)
+                .await
+                .map_err(|error| format!("admit causal handler: {error}"))?;
+            return match result {
+                ActionAdmission::New(receipt) | ActionAdmission::Replay(receipt) => {
+                    Ok(Some(receipt.action_id))
+                }
+                ActionAdmission::Suppressed(receipt) => Err(format!(
+                    "causal handler suppressed before execution: {}",
+                    receipt.suppression_reason.unwrap_or_default()
+                )),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, referenced_native_id);
+            Ok(None)
+        }
+    }
+
     async fn admit_channel_reply(
         &self,
         source: &SourceOccurrence,
         admission: &RouteAdmission,
         handler: &str,
+        parent_action_id: Option<&str>,
         _payload: &[u8],
     ) -> Result<Option<String>, String> {
         #[cfg(feature = "surreal-backend")]
@@ -1036,13 +1121,36 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
             let target = librefang_storage::channel_actions::ReplyTargetScope::from(
                 &stored_channel_scope(&source.scope),
             );
+            let store = self.channel_action_store().await?;
+            let parent = if let Some(action_id) = parent_action_id {
+                let receipt = store
+                    .action_receipt(action_id)
+                    .await
+                    .map_err(|error| format!("read causal handler: {error}"))?
+                    .ok_or_else(|| "causal handler action is absent".to_string())?;
+                if receipt.kind != librefang_storage::channel_actions::ActionKind::Forward
+                    || receipt.source_occurrence_id != admission.occurrence_id
+                    || receipt.actor_id != handler
+                    || receipt.state != librefang_storage::channel_actions::ActionState::Claimed
+                {
+                    return Err(
+                        "causal handler is not the claimed predecessor of this reply".into(),
+                    );
+                }
+                Some(receipt)
+            } else {
+                None
+            };
             let request = librefang_storage::channel_actions::CausalActionRequest {
-                root_occurrence_id: admission.occurrence_id.clone(),
+                root_occurrence_id: parent.as_ref().map_or_else(
+                    || admission.occurrence_id.clone(),
+                    |receipt| receipt.root_occurrence_id.clone(),
+                ),
                 source_occurrence_id: admission.occurrence_id.clone(),
-                parent_action_id: None,
+                parent_action_id: parent.as_ref().map(|receipt| receipt.action_id.clone()),
                 action_key: format!("handler-reply-v1:{handler}"),
                 route_identity: format!(
-                    "reply:{}:{}:{}:{}:{}",
+                    "reply:{handler}:{}:{}:{}:{}:{}",
                     source.scope.provider,
                     source.scope.account,
                     source.scope.workspace,
@@ -1058,12 +1166,13 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     allowed_target: target,
                 }),
                 policy: librefang_storage::channel_actions::CausalPolicy::default(),
-                original_principal: source.scope.sender.clone(),
+                original_principal: parent.as_ref().map_or_else(
+                    || source.scope.sender.clone(),
+                    |receipt| receipt.original_principal.clone(),
+                ),
                 actor_id: handler.to_owned(),
             };
-            let result = self
-                .channel_action_store()
-                .await?
+            let result = store
                 .admit_action(&request)
                 .await
                 .map_err(|error| format!("admit scoped channel reply: {error}"))?;
@@ -1082,7 +1191,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         }
         #[cfg(not(feature = "surreal-backend"))]
         {
-            let _ = (source, admission, handler);
+            let _ = (source, admission, handler, parent_action_id);
             Ok(None)
         }
     }
@@ -1150,7 +1259,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     payload_sha256: None,
                     classification: "scoped_reply",
                     root_occurrence_id: &receipt.root_occurrence_id,
-                    parent_action_id: None,
+                    parent_action_id: receipt.parent_action_id.as_deref(),
                     route_identity: &receipt.route_identity,
                     visited_routes: &receipt.visited_routes,
                     remaining_depth: receipt.remaining_depth,
@@ -3982,10 +4091,12 @@ pub async fn start_channel_bridge_with_config(
     } else {
         #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
         match crate::channel_observers::ObserverTransportConfig::from_host() {
-            Ok(Some(config)) if matches!(
-                &kernel.config_ref().storage.backend,
-                librefang_storage::StorageBackendKind::Remote(_)
-            ) => {
+            Ok(Some(config))
+                if matches!(
+                    &kernel.config_ref().storage.backend,
+                    librefang_storage::StorageBackendKind::Remote(_)
+                ) =>
+            {
                 let storage = kernel.config_ref().storage.clone();
                 let flush_config = config.clone();
                 let mut flush_shutdown = manager.shutdown_signal();

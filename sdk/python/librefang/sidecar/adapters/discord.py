@@ -341,6 +341,13 @@ def parse_message_create(
         # Preserve Discord's native workspace identity for the durable
         # channel scope. DMs have no guild and stay on the legacy route.
         metadata["guild_id"] = guild_id
+        # This is only an opaque lookup pointer. Rust resolves the native ID
+        # against a completed, same-scope outbound action before using lineage.
+        reference = d.get("message_reference") if d.get("type") == 19 else None
+        if isinstance(reference, dict):
+            referenced_id = reference.get("message_id")
+            if isinstance(referenced_id, str) and referenced_id:
+                metadata["reply_to_native_message_id"] = referenced_id
     # Named mentions so the bridge can route a guild message to a specific
     # non-default agent (#5323). Each mentioned user contributes its username
     # and (when set) global display name; the bridge matches them against

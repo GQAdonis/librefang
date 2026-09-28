@@ -183,6 +183,18 @@ pub trait ChannelBridgeHandle: Send + Sync {
         Err("durable channel dispatch is unsupported".to_string())
     }
 
+    /// Resolve a Discord reply's provider ID only through a same-scope,
+    /// completed outbound receipt, then admit the selected handler route.
+    async fn admit_channel_handler_action(
+        &self,
+        _source: &SourceOccurrence,
+        _admission: &RouteAdmission,
+        _handler: &str,
+        _referenced_native_id: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
     /// Admit one source-scoped reply into the durable causal budget. `None`
     /// retains the legacy adapter path where native identity is unavailable.
     async fn admit_channel_reply(
@@ -190,6 +202,7 @@ pub trait ChannelBridgeHandle: Send + Sync {
         _source: &SourceOccurrence,
         _admission: &RouteAdmission,
         _handler: &str,
+        _parent_action_id: Option<&str>,
         _payload: &[u8],
     ) -> Result<Option<String>, String> {
         Ok(None)
@@ -3740,6 +3753,7 @@ async fn send_scoped_response(
             &dispatch.source,
             &dispatch.admission,
             &dispatch.handler_name,
+            dispatch.causal_action_id.as_deref(),
             formatted.as_bytes(),
         )
         .await
@@ -4146,6 +4160,7 @@ struct DurableDispatch {
     admission: RouteAdmission,
     handler_name: String,
     claimant: String,
+    causal_action_id: Option<String>,
 }
 
 enum DurableRouteResult {
@@ -4368,6 +4383,7 @@ async fn admit_durable_dispatch(
             admission,
             handler_name,
             claimant: uuid::Uuid::new_v4().to_string(),
+            causal_action_id: None,
         },
     }
 }
@@ -4427,6 +4443,67 @@ async fn claim_durable_dispatch(
         Err(error) => {
             error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
                 "Channel dispatch claim failed; no agent execution");
+            false
+        }
+    }
+}
+
+/// Causal admission occurs after the existing dispatch claim and Gate handler
+/// release, but before an agent or auto-reply can execute. A replay or route
+/// revisit stops here, with no second channel effect.
+async fn claim_causal_handler_action(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&mut DurableDispatch>,
+    message: &ChannelMessage,
+) -> bool {
+    let Some(dispatch) = dispatch else {
+        return true;
+    };
+    if dispatch.source.scope.provider != "discord"
+        || !message.is_group
+        || message
+            .metadata
+            .get("guild_id")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
+    {
+        return true;
+    }
+    let referenced_id = message
+        .metadata
+        .get("reply_to_native_message_id")
+        .and_then(serde_json::Value::as_str);
+    let action_id = match handle
+        .admit_channel_handler_action(
+            &dispatch.source,
+            &dispatch.admission,
+            &dispatch.handler_name,
+            referenced_id,
+        )
+        .await
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => return true,
+        Err(error) => {
+            warn!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+                "Causal handler route refused before execution");
+            return false;
+        }
+    };
+    match handle
+        .claim_channel_reply(&action_id, &dispatch.claimant)
+        .await
+    {
+        Ok(true) => {
+            dispatch.causal_action_id = Some(action_id);
+            true
+        }
+        Ok(false) => {
+            warn!(action_id = %action_id, "Causal handler already claimed or terminal");
+            false
+        }
+        Err(error) => {
+            error!(action_id = %action_id, %error, "Causal handler claim failed");
             false
         }
     }
@@ -4511,6 +4588,19 @@ async fn finish_durable_dispatch(
     success: bool,
 ) {
     let Some(dispatch) = dispatch else { return };
+    if let Some(action_id) = dispatch.causal_action_id.as_deref() {
+        let outcome = if success {
+            ChannelReplyOutcome::Completed
+        } else {
+            ChannelReplyOutcome::Uncertain
+        };
+        if let Err(error) = handle
+            .settle_channel_reply(action_id, &dispatch.claimant, outcome)
+            .await
+        {
+            error!(action_id, %error, "Could not settle causal handler action");
+        }
+    }
     let result = if success {
         handle
             .complete_channel_dispatch(&dispatch.admission.occurrence_id, &dispatch.claimant, true)
@@ -5907,7 +5997,7 @@ async fn dispatch_message(
         return;
     }
 
-    let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
+    let mut durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
         DurableRouteResult::Legacy => None,
         DurableRouteResult::Drop(reason) => {
             warn!(channel = ct_str, %reason, "Channel source suppressed before dispatch");
@@ -5993,6 +6083,10 @@ async fn dispatch_message(
     }
 
     if !authorize_durable_handler_execution(handle, durable.as_ref(), message).await {
+        return;
+    }
+    if !claim_causal_handler_action(handle, durable.as_mut(), message).await {
+        finish_durable_dispatch(handle, durable.as_ref(), false).await;
         return;
     }
 
@@ -7962,7 +8056,7 @@ async fn dispatch_with_blocks(
         return;
     }
 
-    let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
+    let mut durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
         DurableRouteResult::Legacy => None,
         DurableRouteResult::Drop(reason) => {
             warn!(channel = ct_str, %reason, "Channel source suppressed before dispatch");
@@ -8045,6 +8139,10 @@ async fn dispatch_with_blocks(
         return;
     }
     if !authorize_durable_handler_execution(handle, durable.as_ref(), message).await {
+        return;
+    }
+    if !claim_causal_handler_action(handle, durable.as_mut(), message).await {
+        finish_durable_dispatch(handle, durable.as_ref(), false).await;
         return;
     }
     let journal_id = durable
