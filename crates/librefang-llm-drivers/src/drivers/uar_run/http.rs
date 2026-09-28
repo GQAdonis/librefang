@@ -112,7 +112,7 @@ impl UarRunClient {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn json<T: for<'de> Deserialize<'de>>(
+    pub(super) async fn json<T: for<'de> Deserialize<'de>>(
         &self,
         transport: &Transport,
         method: Method,
@@ -176,7 +176,7 @@ impl UarRunClient {
         }
         let status = response.status();
         let payload = response.text().await.unwrap_or_default();
-        let refusal = serde_json::from_str::<WireErrorEnvelope>(&payload)
+        let refusal: Option<librefang_types::uar_run::UarRunRefusal> = serde_json::from_str::<WireErrorEnvelope>(&payload)
             .ok()
             .map(|item| item.error.into());
         let message = refusal

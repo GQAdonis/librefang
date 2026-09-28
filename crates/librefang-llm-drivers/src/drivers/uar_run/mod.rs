@@ -11,7 +11,7 @@ use librefang_types::{
     config::UarEffectiveBinding,
     uar_run::{
         UarDelegatedRunProjection, UarProjectionRetention, UarRunAdmission, UarRunCancellation,
-        UarRunRefusal, UarRunRetention, UarSteerOutcome,
+        UarRunRefusal, UarSteerOutcome,
     },
 };
 use reqwest::{Method, StatusCode};
@@ -163,7 +163,7 @@ impl UarRunClient {
                     .to_string(),
             ));
         }
-        body.entry("deployment_binding_id".into())
+        body.entry("deployment_binding_id")
             .or_insert_with(|| Value::String(admission.target_binding_id.clone()));
 
         let digest = canonical_digest(&Value::Object(body.clone()));

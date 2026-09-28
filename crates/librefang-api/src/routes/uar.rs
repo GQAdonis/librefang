@@ -408,7 +408,13 @@ async fn dispatch_message_send(
                     }],
                 }],
             );
-            stored_task_response(state, id, &task_id)
+            delegated_tasks::dispatch_tasks_get(
+                state,
+                api_user,
+                id,
+                Some(serde_json::json!({ "id": task_id })),
+            )
+            .await
         }
         Err(e) => {
             state.kernel.a2a_tasks().fail(
@@ -420,7 +426,13 @@ async fn dispatch_message_send(
                     }],
                 },
             );
-            stored_task_response(state, id, &task_id)
+            delegated_tasks::dispatch_tasks_get(
+                state,
+                api_user,
+                id,
+                Some(serde_json::json!({ "id": task_id })),
+            )
+            .await
         }
     }
 }

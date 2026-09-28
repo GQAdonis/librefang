@@ -1875,7 +1875,7 @@ pub async fn build_router(
     let resolved_uar_credentials = selected_uar_instance
         .as_ref()
         .map(|instance| resolve_uar_credentials(kernel.as_ref(), instance))
-        .unwrap_or_else(|| Ok(Default::default()));
+        .unwrap_or_else(|_| Ok(Default::default()));
     #[cfg(feature = "uar-driver")]
     let uar_probe_bearer = resolved_uar_credentials
         .as_ref()
