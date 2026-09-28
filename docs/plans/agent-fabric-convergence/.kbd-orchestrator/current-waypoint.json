@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 245,
-  "derivedRevision": 245,
+  "sourceRevision": 251,
+  "derivedRevision": 251,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 6
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 12
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,19 +23,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c07-local-scoped-observers-with-durable-delivery",
-  "currentTask": "C07.1",
+  "change": "afc-c08-bossfang-and-fabric-observer-routing",
+  "currentTask": "C08.1",
   "status": "ready",
   "lifecycle": "ready",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 8,
+  "implementationCompleted": 9,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 245,
+  "revision": 251,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c07-local-scoped-observers-with-durable-delivery",
-  "nextTask": "C07.1",
-  "updatedAt": "2026-09-28T04:23:10.245606Z"
+  "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
+  "nextTask": "C08.1",
+  "updatedAt": "2026-09-28T05:10:05.877770Z"
 }
