@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c05-bossfang-full-run-delegation",
+  "initiativeChange": "afc-c05-bossfang-full-run-delegation",
+  "recordedAt": "2026-09-28T02:08:52Z",
+  "result": "pass",
+  "repositories": {
+    "librefang": {
+      "commit": "bd4510505b448e97af2f540e349f020b92ef41df",
+      "branch": "codex/agent-fabric-convergence-c05",
+      "surrealdbSdk": "3.3.0"
+    },
+    "universalAgentRuntime": {
+      "commit": "fcfce6d226b50eee502c5f272e9215112d933e29",
+      "branch": "codex/afc-c05-full-run-delegation",
+      "surrealdbSdk": "3.3.0"
+    }
+  },
+  "integrationGate": {
+    "command": "node scripts/integration/afc-c05-gate.mjs --boss-bin target/debug/librefang --uar-bin <C05 UAR>/target/debug/universal-agent-runtime --sidecar-bin <C05 UAR>/target/debug/uar-sidecar --stub-bin <C05 UAR>/target/debug/stub-llm --uar-root <C05 UAR> --root /private/tmp/afc-c05-gate-artifacts",
+    "artifact": "/private/tmp/afc-c05-gate-artifacts/afc-c05-gate-G6QZsh/receipt.json",
+    "exitCode": 0,
+    "result": "pass",
+    "gateObservedBossHead": "03946030be44ed075ee09b0082e52df457d093f8",
+    "sourceProvenance": "The gate ran against the complete working-tree code and binary; those exact code and gate-script changes were committed afterward as bd4510505b448e97af2f540e349f020b92ef41df without rebuilding or changing the binary.",
+    "catalogPersistedAcrossProcesses": true,
+    "bindingRevisionedForNewManagedEndpoint": true,
+    "lostAdmissionResponseReconciled": true,
+    "lostApprovalResponsePreservedAcrossLookup": true,
+    "stableReplayAndChangedRequestConflict": true,
+    "approvedToolEffectExactlyOnce": true,
+    "modelRequests": 2,
+    "cancelTerminal": true,
+    "detachPreservedExecution": true,
+    "unsupportedSteerTyped": true,
+    "rootA2aLookup": true,
+    "ownerAndUnauthenticatedBoundary": true,
+    "exactDefinitionAndDiagnosticsRetained": true,
+    "binaries": {
+      "librefang": { "size": 516453064, "sha256": "2a85ddc66cf1b9a6d2f8d5173fd3e440d242587d41c05c09319bb0de97593a9d" },
+      "universalAgentRuntime": { "size": 513384504, "sha256": "9c09da7a7cb3182d7308cce6d46f18749537dfe001c7246efc07c030c2617838" },
+      "uarSidecar": { "size": 511997392, "sha256": "447ae77054ce49f44b58cc719c2c736ad05219f6bb87176e5cc329ab5cb74c3b" },
+      "stubLlm": { "size": 6232984, "sha256": "962680b48f7697f655ae472ff8cdbadf49cafff572ae08985082e30184cdb944" }
+    }
+  },
+  "scope": {
+    "host": "macOS arm64 local production-path integration gate",
+    "installedWindowsAcceptanceClaimed": false,
+    "releaseArtifactClaimed": false,
+    "retention": "UAR full-harness task authority remains process-ephemeral and reports that limit; durable logical instances are C06",
+    "endpointChange": "The persisted C03 effective binding pins endpoint roles; the gate explicitly revisions it after the managed sidecar selects a new port"
+  }
+}

@@ -17,4 +17,4 @@
 
 ## 4. Complete-boundary evidence
 
-- [ ] 4.1 Run the single C05 integration gate and record exact source/UAR revisions and observable outcomes.
+- [x] 4.1 Run the single C05 integration gate and record exact source/UAR revisions and observable outcomes.
