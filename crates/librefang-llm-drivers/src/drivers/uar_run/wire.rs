@@ -226,6 +226,15 @@ impl WireReceipt {
             &projection.verified_principal,
         )?;
         merged.boss_projection_retention = projection.boss_projection_retention;
+        // UAR's execution receipt has no evidence that a previously uncertain
+        // external effect or BossFang recovery outcome has been settled.
+        merged.effect_state.clone_from(&projection.effect_state);
+        merged.recovery_state.clone_from(&projection.recovery_state);
+        for diagnostic in &projection.remote_diagnostics {
+            if !merged.remote_diagnostics.contains(diagnostic) {
+                merged.remote_diagnostics.push(diagnostic.clone());
+            }
+        }
         merged.uar_thread_id.clone_from(&projection.uar_thread_id);
         merged
             .uar_root_run_id

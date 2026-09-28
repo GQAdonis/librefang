@@ -128,7 +128,7 @@ mod enabled {
                     "The BossFang task is already bound to different admission inputs",
                 );
             }
-            return reconcile_existing(&state, existing, &admission, &prepared).await;
+            return reconcile_existing(&state, existing).await;
         }
         if store.get(&admission.boss_task_id).is_some() {
             return api_error(
@@ -186,8 +186,6 @@ mod enabled {
     async fn reconcile_existing(
         state: &Arc<AppState>,
         projection: UarDelegatedRunProjection,
-        admission: &UarRunAdmission,
-        prepared: &librefang_llm_drivers::drivers::uar_run::PreparedAdmission,
     ) -> Response {
         if projection.admission_state == "refused" {
             return api_error(
@@ -200,7 +198,7 @@ mod enabled {
         let refreshed = if projection.uar_task_id.is_some() {
             client.lookup(&projection).await
         } else {
-            client.resolve(&projection, admission, prepared).await
+            client.resolve(&projection).await
         };
         match refreshed {
             Ok(projection) => saved_view(state, projection, StatusCode::OK),

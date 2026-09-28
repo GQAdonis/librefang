@@ -226,8 +226,10 @@ async function run() {
   const boss = launch('boss', bins.boss, ['--config', configPath, 'start', '--foreground', '--bind', `127.0.0.1:${bossPort}`], uarRoot,
     { ...childEnv, LIBREFANG_HOME: bossHome, LIBREFANG_API_KEY: bossKey,
       C05_REAL_SIDECAR_BIN: bins.sidecar, C05_DROP_FIRST_ADMISSION: '1',
+      C05_DROP_FIRST_APPROVAL: '1',
       C05_GATE_TOKEN: gateToken, C05_PRINCIPAL: principal,
       C05_PROXY_DROP_MARKER: join(root, 'dropped-admission.json'),
+      C05_PROXY_APPROVAL_DROP_MARKER: join(root, 'dropped-approval.json'),
       C05_PROXY_ERROR_MARKER: join(root, 'proxy-error.log'),
       C05_PROXY_ENV_MARKER: join(root, 'sidecar-storage.txt'),
       C05_SIDECAR_LOG: join(root, 'managed-sidecar.log') });
@@ -317,8 +319,13 @@ async function run() {
   check((await readFile(marker, 'utf8').catch(() => '')).length === 0, 'effect ran before verified approval');
   const approved = await expected(bossBase, `${path}/${admission.bossTaskId}/approve`, {
     ...bossAuth, method: 'POST', body: { approvalId: pendingApprovalId, approved: true },
-  }, [200]);
+  }, [202]);
   check(approved.uarTaskId === replay.uarTaskId, 'approval changed UAR task identity');
+  check(approved.effectState === 'effect_unconfirmed', 'lost approval response did not retain effect uncertainty');
+  await access(join(root, 'dropped-approval.json'));
+  const reconciledApproval = await expected(bossBase, `${path}/${admission.bossTaskId}`, bossAuth, [200]);
+  check(reconciledApproval.effectState === 'effect_unconfirmed',
+    'remote lookup cleared effect uncertainty without settlement evidence');
   const completed = await until('UAR-owned tool loop completion', async () => {
     const value = await expected(bossBase, `${path}/${admission.bossTaskId}`, bossAuth, [200]);
     return ['completed', 'failed', 'cancelled', 'done', 'error'].includes(value.executionState) ? value : null;
@@ -389,7 +396,8 @@ async function run() {
     root, managedInstance: instanceId, workspaceId, ownerVerified: first.verifiedPrincipal === principal,
     bossTaskId: replay.bossTaskId, uarTaskId: replay.uarTaskId, uarRunId: replay.uarRunId,
     runtimeEpoch: replay.runtimeEpoch, executionState: completed.executionState,
-    lostRemoteResponseReconciled: true, replayStable: true, changedReplayRefused: true,
+    lostRemoteResponseReconciled: true, lostApprovalResponsePreserved: true,
+    replayStable: true, changedReplayRefused: true,
     unauthenticatedRefused: true, approvalForwarded: true, cancellationTerminal: true,
     detachPreservedExecution: true, steerRefused: true, rootA2aLookup: true,
     toolLoopObserved: true, effectExactlyOnce: true,

@@ -762,9 +762,48 @@ impl A2aTaskStore {
             librefang_types::uar_run::UarProjectionRetention::ProcessEphemeral
         };
         projection.boss_projection_retention = retention;
+        if let Some(stored) = self.get_uar_delegation(&projection.boss_task_id) {
+            // Concurrent remote observations may finish out of order. Keep the
+            // newer UAR state while still advancing an independently observed
+            // event cursor from a stale response.
+            let stale = projection.revision < stored.revision
+                || (projection.revision == stored.revision && projection.cursor < stored.cursor);
+            let mut selected = if stale { stored.clone() } else { projection.clone() };
+            selected.cursor = selected.cursor.max(stored.cursor).max(projection.cursor);
+            // BossFang's uncertain effect is local evidence, not part of the
+            // UAR revision. A concurrent receipt cannot settle it by omission.
+            if stored.effect_state == "effect_unconfirmed"
+                || projection.effect_state == "effect_unconfirmed"
+            {
+                selected.effect_state = "effect_unconfirmed".to_string();
+                for diagnostic in stored
+                    .remote_diagnostics
+                    .iter()
+                    .chain(projection.remote_diagnostics.iter())
+                {
+                    let code = diagnostic.get("code").and_then(serde_json::Value::as_str);
+                    if matches!(
+                        code,
+                        Some("operation_outcome_unresolved" | "admission_outcome_unresolved")
+                    ) && !selected.remote_diagnostics.contains(diagnostic)
+                    {
+                        selected.remote_diagnostics.push(diagnostic.clone());
+                    }
+                }
+            }
+            projection = selected;
+        }
         let committed = self.db_upsert_uar_delegation(&projection)?;
         lock_a2a_recover(&self.uar_delegations, "UAR delegations")
-            .insert(projection.boss_task_id.clone(), projection);
+            .insert(projection.boss_task_id.clone(), projection.clone());
+        if let Some(mut task) = self.get(&projection.boss_task_id) {
+            task.status = uar_projection_task_status(&projection).into();
+            self.db_upsert(&task);
+            if let Some(tracked) = lock_a2a_recover(&self.tasks, "tasks").get_mut(&task.id) {
+                tracked.task.status = task.status;
+                tracked.updated_at = Instant::now();
+            }
+        }
         Ok(committed)
     }
 
@@ -869,6 +908,21 @@ impl A2aTaskStore {
     /// Whether the store is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+fn uar_projection_task_status(
+    projection: &librefang_types::uar_run::UarDelegatedRunProjection,
+) -> A2aTaskStatus {
+    match projection.execution_state.as_str() {
+        "submitted" => A2aTaskStatus::Submitted,
+        "approval_required" | "approval-required" | "input_required" => {
+            A2aTaskStatus::InputRequired
+        }
+        "completed" => A2aTaskStatus::Completed,
+        "failed" | "rejected" => A2aTaskStatus::Failed,
+        "cancelled" => A2aTaskStatus::Cancelled,
+        _ => A2aTaskStatus::Working,
     }
 }
 

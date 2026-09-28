@@ -300,8 +300,6 @@ impl UarRunClient {
     pub async fn resolve(
         &self,
         projection: &UarDelegatedRunProjection,
-        admission: &UarRunAdmission,
-        prepared: &PreparedAdmission,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
         let transport = self.transport(&projection.verified_principal).await?;
         ensure_same_binding(projection, &transport.binding)?;
@@ -310,14 +308,14 @@ impl UarRunClient {
             .json(
                 &transport,
                 Method::GET,
-                &format!("admissions/{}", admission.admission_key),
+                &format!("admissions/{}", projection.admission_key),
                 None,
                 "admission reconciliation",
                 false,
-                &admission.workspace_id,
+                &projection.workspace_id,
             )
             .await?;
-        receipt.into_projection(admission, prepared, transport.binding, &projection.verified_principal)
+        receipt.merge_projection(projection, transport.binding)
     }
 
     pub async fn lookup(

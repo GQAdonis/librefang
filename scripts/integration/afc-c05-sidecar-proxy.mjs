@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Gate-only managed sidecar transport fault: lose one accepted admission response.
+// Gate-only managed sidecar transport faults: lose accepted admission and approval responses.
 
 import { spawn } from 'node:child_process';
 import { createWriteStream, writeFileSync } from 'node:fs';
@@ -20,6 +20,8 @@ let ready = false;
 let readyBytes = '';
 let faultArmed = process.env.C05_DROP_FIRST_ADMISSION === '1';
 let faultReserved = false;
+let approvalFaultArmed = process.env.C05_DROP_FIRST_APPROVAL === '1';
+let approvalReserved = false;
 let launchToken;
 let launchInput = '';
 const server = createServer((incoming, outgoing) => {
@@ -40,6 +42,10 @@ const server = createServer((incoming, outgoing) => {
       && incoming.url?.split('?', 1)[0] === '/api/uar/full-harness/v1/tasks';
     const faultCandidate = faultArmed && !faultReserved && admission;
     if (faultCandidate) faultReserved = true;
+    const approval = incoming.method === 'POST'
+      && /^\/api\/uar\/full-harness\/v1\/tasks\/[^/]+\/tool-approval$/.test(incoming.url?.split('?', 1)[0] ?? '');
+    const approvalFaultCandidate = approvalFaultArmed && !approvalReserved && approval;
+    if (approvalFaultCandidate) approvalReserved = true;
 
     const upstream = httpRequest({
       hostname: '127.0.0.1',
@@ -55,17 +61,23 @@ const server = createServer((incoming, outgoing) => {
         } : {}),
       },
     }, (response) => {
-      if (faultCandidate && response.statusCode >= 200 && response.statusCode < 300) {
-        faultArmed = false;
+      if ((faultCandidate || approvalFaultCandidate)
+        && response.statusCode >= 200 && response.statusCode < 300) {
+        if (faultCandidate) faultArmed = false;
+        if (approvalFaultCandidate) approvalFaultArmed = false;
         response.resume();
         response.on('end', () => {
-          const marker = process.env.C05_PROXY_DROP_MARKER;
-          if (marker) writeFileSync(marker, 'dropped accepted admission response\n');
+          const marker = faultCandidate
+            ? process.env.C05_PROXY_DROP_MARKER
+            : process.env.C05_PROXY_APPROVAL_DROP_MARKER;
+          if (marker) writeFileSync(marker,
+            faultCandidate ? 'dropped accepted admission response\n' : 'dropped accepted approval response\n');
           outgoing.destroy();
         });
         return;
       }
       if (faultCandidate) faultReserved = false;
+      if (approvalFaultCandidate) approvalReserved = false;
       outgoing.writeHead(response.statusCode, response.headers);
       response.pipe(outgoing);
     });
@@ -74,6 +86,7 @@ const server = createServer((incoming, outgoing) => {
         writeFileSync(process.env.C05_PROXY_ERROR_MARKER, `${error.message}\n`);
       }
       if (faultCandidate) faultReserved = false;
+      if (approvalFaultCandidate) approvalReserved = false;
       if (!outgoing.headersSent) outgoing.writeHead(502);
       outgoing.end(error.message);
     });

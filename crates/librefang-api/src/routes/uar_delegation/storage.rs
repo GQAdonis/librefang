@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use librefang_kernel::a2a::{A2aTask, A2aTaskStatus};
+use librefang_kernel::a2a::A2aTask;
 use librefang_types::uar_run::UarDelegatedRunProjection;
 
 use crate::{routes::AppState, types::api_error};
@@ -77,11 +77,6 @@ pub(super) fn persist_and_sync(
     projection: UarDelegatedRunProjection,
 ) -> Result<UarDelegatedRunProjection, Response> {
     let projection = persist_projection(state, projection)?;
-    let store = state.kernel.a2a_tasks();
-    if let Some(mut task) = store.get(&projection.boss_task_id) {
-        task.status = task_status(&projection).into();
-        store.insert(task);
-    }
     Ok(projection)
 }
 
@@ -103,15 +98,4 @@ fn persistence_error(task_id: &str, error: &str) -> Response {
         "delegation_persistence_failed",
         "The UAR delegation projection could not be committed",
     )
-}
-
-fn task_status(projection: &UarDelegatedRunProjection) -> A2aTaskStatus {
-    match projection.execution_state.as_str() {
-        "submitted" => A2aTaskStatus::Submitted,
-        "approval_required" | "approval-required" => A2aTaskStatus::InputRequired,
-        "completed" => A2aTaskStatus::Completed,
-        "failed" | "rejected" => A2aTaskStatus::Failed,
-        "cancelled" => A2aTaskStatus::Cancelled,
-        _ => A2aTaskStatus::Working,
-    }
 }

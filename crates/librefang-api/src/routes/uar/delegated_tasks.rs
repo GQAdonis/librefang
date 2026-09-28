@@ -7,8 +7,6 @@ use crate::{
 use axum::Extension;
 use librefang_kernel::a2a::A2aTask;
 #[cfg(feature = "uar-driver")]
-use librefang_kernel::a2a::A2aTaskStatus;
-#[cfg(feature = "uar-driver")]
 use librefang_types::uar_run::UarDelegatedRunProjection;
 
 use super::{rpc_error, JsonRpcResponse, TaskRefParams};
@@ -142,7 +140,6 @@ fn parse_task_ref(
 fn persist_and_sync(state: &AppState, projection: UarDelegatedRunProjection) -> Result<(), String> {
     let store = state.kernel.a2a_tasks();
     let task_id = projection.boss_task_id.clone();
-    let status = task_status(&projection);
     let retention = store.put_uar_delegation(projection)?;
     let stored = store
         .get_uar_delegation(&task_id)
@@ -150,25 +147,7 @@ fn persist_and_sync(state: &AppState, projection: UarDelegatedRunProjection) -> 
     if stored.boss_projection_retention != retention {
         return Err("committed UAR delegation retention did not match the store".to_string());
     }
-    if let Some(mut task) = store.get(&task_id) {
-        task.status = status.into();
-        store.insert(task);
-    }
     Ok(())
-}
-
-#[cfg(feature = "uar-driver")]
-fn task_status(projection: &UarDelegatedRunProjection) -> A2aTaskStatus {
-    match projection.execution_state.as_str() {
-        "submitted" => A2aTaskStatus::Submitted,
-        "approval_required" | "approval-required" | "input_required" => {
-            A2aTaskStatus::InputRequired
-        }
-        "completed" => A2aTaskStatus::Completed,
-        "failed" | "rejected" => A2aTaskStatus::Failed,
-        "cancelled" => A2aTaskStatus::Cancelled,
-        _ => A2aTaskStatus::Working,
-    }
 }
 
 pub(crate) fn caller_scope(api_user: Option<&AuthenticatedApiUser>) -> Option<String> {
