@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 242,
-  "derivedRevision": 242,
+  "sourceRevision": 245,
+  "derivedRevision": 245,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 3
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 6
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,19 +23,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c06-durable-addressable-instances-and-bounded-turns",
-  "currentTask": "C06.2",
+  "change": "afc-c07-local-scoped-observers-with-durable-delivery",
+  "currentTask": "C07.1",
   "status": "ready",
   "lifecycle": "ready",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 7,
+  "implementationCompleted": 8,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 242,
+  "revision": 245,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c06-durable-addressable-instances-and-bounded-turns",
-  "nextTask": "C06.2",
-  "updatedAt": "2026-09-28T03:34:30.189874Z"
+  "nextChange": "afc-c07-local-scoped-observers-with-durable-delivery",
+  "nextTask": "C07.1",
+  "updatedAt": "2026-09-28T04:23:10.245606Z"
 }

@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 242,
-  "derivedRevision": 242,
+  "sourceRevision": 245,
+  "derivedRevision": 245,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 3
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 6
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T03:34:30.189874Z",
+  "last_updated": "2026-09-28T04:23:10.245606Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
-  "changes_completed": 5,
+  "changes_completed": 6,
   "implementation_total": 18,
-  "implementation_completed": 5,
+  "implementation_completed": 6,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 5,
+      "completed": 6,
       "total": 18,
       "status": "IN_PROGRESS"
     },
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 7,
+      "completed": 8,
       "total": 20,
       "status": "IN_PROGRESS"
     },
@@ -130,12 +130,12 @@
     {
       "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
       "title": "C06 — Durable addressable instances and bounded turns",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
-      "next_task_pending": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
+      "tasks_done": 3,
+      "last_task_completed": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
