@@ -79,9 +79,27 @@ pub fn observer_envelope(
     target: &ObserverTarget,
     source: &librefang_storage::SourceOccurrenceReceipt,
     delivery: &librefang_storage::channel_actions::ObserverDeliveryReceipt,
+    action: &librefang_storage::channel_actions::ActionReceipt,
     policy_revision: &str,
     text: &str,
 ) -> Result<Value, String> {
+    use librefang_storage::channel_actions::{ActionKind, CausalPolicy};
+    let policy = CausalPolicy::default();
+    let fanout = policy.max_fanout.checked_sub(action.remaining_fanout)
+        .ok_or_else(|| "observer action fanout exceeds its pinned policy".to_string())?;
+    if action.action_id != delivery.action_id
+        || action.source_occurrence_id != source.occurrence_id
+        || action.kind != ActionKind::ObserverCopy
+        || action.route_identity != format!("observer:{}", target.subscription_id)
+        || action.visited_routes.last() != Some(&action.route_identity)
+        || action.depth == 0
+        || action.depth > policy.max_depth
+        || action.remaining_depth != policy.max_depth - action.depth
+        || fanout == 0
+        || delivery.subscription_id != target.subscription_id
+    {
+        return Err("observer action lineage does not match the durable delivery".into());
+    }
     let revision = source.route_revision
         .ok_or_else(|| "observer source route has no revision".to_string())?;
     let handler = match &source.decision.outcome {
@@ -117,12 +135,12 @@ pub fn observer_envelope(
             "classification": "policy_filtered",
         },
         "causal": {
-            "root_occurrence_id": source.occurrence_id,
-            "parent_action_id": null,
-            "action_id": delivery.action_id,
-            "depth": 1,
-            "fanout": 1,
-            "visited_routes": [],
+            "root_occurrence_id": action.root_occurrence_id,
+            "parent_action_id": action.parent_action_id,
+            "action_id": action.action_id,
+            "depth": action.depth,
+            "fanout": fanout,
+            "visited_routes": action.visited_routes,
         },
         "projection": {"text": text},
     }))
@@ -388,6 +406,9 @@ pub async fn flush_pending_observers(
                     .await.map_err(|error| format!("withhold stale observer copy: {error}"))?;
                 continue;
             }
+            let action = actions.action_receipt(&delivery.action_id).await
+                .map_err(|error| format!("read observer action lineage: {error}"))?
+                .ok_or_else(|| "observer delivery has no durable causal action".to_string())?;
             let claimant = Uuid::new_v4().to_string();
             let claim = actions.claim_observer_delivery(
                 &subscriber.subscription_id, delivery.sequence, &claimant, &delivery.grant_revision,
@@ -411,9 +432,16 @@ pub async fn flush_pending_observers(
                 source_grant_issuer: subscriber.source_grant_issuer.clone(),
                 source_grant_id: subscriber.source_grant_id.clone(),
             };
-            let envelope = observer_envelope(
-                config, &target, &source, &delivery, &recipient.policy_revision, &text,
-            )?;
+            let envelope = match observer_envelope(
+                config, &target, &source, &delivery, &action, &recipient.policy_revision, &text,
+            ) {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    actions.mark_observer_uncertain(&subscriber.subscription_id, delivery.sequence, &claimant)
+                        .await.map_err(|failure| format!("mark invalid observer lineage uncertain: {failure}"))?;
+                    return Err(error);
+                }
+            };
             if let Err(error) = publish_to_fabric(config, &target, &envelope).await {
                 actions.mark_observer_uncertain(&subscriber.subscription_id, delivery.sequence, &claimant)
                     .await.map_err(|err| format!("mark Fabric publication uncertain: {err}"))?;
