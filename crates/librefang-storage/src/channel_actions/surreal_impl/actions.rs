@@ -114,6 +114,17 @@ impl ChannelActionStore {
             .await
     }
 
+    /// Record a definitive Gate denial before the channel sender is called.
+    /// The claimed action remains terminal so a replay cannot re-issue it.
+    pub async fn withhold_effect(
+        &self,
+        action_id: &str,
+        claimant: &str,
+    ) -> StorageResult<ActionState> {
+        self.transition_effect(action_id, claimant, ActionState::Withheld)
+            .await
+    }
+
     /// List only unclaimed reply/forward effects for restart recovery.
     pub async fn pending_effects(&self, limit: usize) -> StorageResult<Vec<ActionReceipt>> {
         self.list_effects("state = 'pending' AND kind != 'observer_copy'", limit)

@@ -4,7 +4,9 @@
 //! `start_channel_bridge()` entry point called by the daemon.
 
 use crate::workflow::WorkflowId;
-use librefang_channels::bridge::{BridgeManager, ChannelBridgeHandle};
+use librefang_channels::bridge::{
+    BridgeManager, ChannelBridgeHandle, ChannelEchoLineage, ChannelReplyOutcome,
+};
 use librefang_channels::channel_route::{
     ChannelScope, DispatchClaim, DispatchState, RouteAdmission, RouteAffinity, RouteDecision,
     RouteOutcome, SourceOccurrence,
@@ -661,6 +663,20 @@ impl KernelBridgeAdapter {
             .map_err(|error| format!("open channel route store: {error}"))
     }
 
+    #[cfg(feature = "surreal-backend")]
+    async fn channel_action_store(
+        &self,
+    ) -> Result<librefang_storage::channel_actions::ChannelActionStore, String> {
+        let cfg = self.kernel.config_ref().storage.clone();
+        let session = librefang_storage::shared_pool()
+            .open(&cfg)
+            .await
+            .map_err(|error| format!("open channel action storage: {error}"))?;
+        librefang_storage::channel_actions::ChannelActionStore::open(&session)
+            .await
+            .map_err(|error| format!("open channel action store: {error}"))
+    }
+
     /// The per-turn thinking override to apply to a message from `sender`.
     ///
     /// `None` — no `/think` was issued in this conversation, so the agent manifest / global `[thinking]` default stands untouched. This is the read half of `set_thinking`; both sides derive the key the same way, so a preference set in one chat is invisible to every other chat and to every other agent.
@@ -726,7 +742,9 @@ fn stored_route_outcome(outcome: &RouteOutcome) -> librefang_storage::RouteOutco
 fn channel_route_outcome(outcome: librefang_storage::RouteOutcome) -> RouteOutcome {
     match outcome {
         librefang_storage::RouteOutcome::Selected { handler } => RouteOutcome::Selected { handler },
-        librefang_storage::RouteOutcome::Conflict { handlers } => RouteOutcome::Conflict { handlers },
+        librefang_storage::RouteOutcome::Conflict { handlers } => {
+            RouteOutcome::Conflict { handlers }
+        }
         librefang_storage::RouteOutcome::Unavailable { reason } => {
             RouteOutcome::Unavailable { reason }
         }
@@ -897,7 +915,11 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                 Some(librefang_storage::DispatchState::Claimed) => DispatchState::Claimed,
                 Some(librefang_storage::DispatchState::Completed) => DispatchState::Completed,
                 Some(librefang_storage::DispatchState::Uncertain) => DispatchState::Uncertain,
-                None if matches!(&admitted.outcome, librefang_storage::RouteOutcome::Selected { .. }) => {
+                None if matches!(
+                    &admitted.outcome,
+                    librefang_storage::RouteOutcome::Selected { .. }
+                ) =>
+                {
                     return Err("selected channel route has no dispatch receipt".into());
                 }
                 None => DispatchState::Ready,
@@ -995,6 +1017,254 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         }
     }
 
+    async fn admit_channel_reply(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        _payload: &[u8],
+    ) -> Result<Option<String>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+                return Ok(None);
+            }
+            let grant_id = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_ID")
+                .map_err(|_| "scoped reply grant ID is not configured".to_string())?;
+            let grant_revision = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_REVISION")
+                .map_err(|_| "scoped reply grant revision is not configured".to_string())?;
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            let request = librefang_storage::channel_actions::CausalActionRequest {
+                root_occurrence_id: admission.occurrence_id.clone(),
+                source_occurrence_id: admission.occurrence_id.clone(),
+                parent_action_id: None,
+                action_key: format!("handler-reply-v1:{handler}"),
+                route_identity: format!(
+                    "reply:{}:{}:{}:{}:{}",
+                    source.scope.provider,
+                    source.scope.account,
+                    source.scope.workspace,
+                    source.scope.room,
+                    source.scope.thread.as_deref().unwrap_or("")
+                ),
+                kind: librefang_storage::channel_actions::ActionKind::Reply,
+                reply_target: Some(target.clone()),
+                reply_grant: Some(librefang_storage::channel_actions::ReplyGrantReceipt {
+                    grant_id,
+                    grant_revision,
+                    scope: librefang_storage::channel_actions::ReplyGrantScope::SourceOnly,
+                    allowed_target: target,
+                }),
+                policy: librefang_storage::channel_actions::CausalPolicy::default(),
+                original_principal: source.scope.sender.clone(),
+                actor_id: handler.to_owned(),
+            };
+            let result = self
+                .channel_action_store()
+                .await?
+                .admit_action(&request)
+                .await
+                .map_err(|error| format!("admit scoped channel reply: {error}"))?;
+            return Ok(Some(match result {
+                librefang_storage::channel_actions::ActionAdmission::New(receipt)
+                | librefang_storage::channel_actions::ActionAdmission::Replay(receipt) => {
+                    receipt.action_id
+                }
+                librefang_storage::channel_actions::ActionAdmission::Suppressed(receipt) => {
+                    return Err(format!(
+                        "scoped reply suppressed: {}",
+                        receipt.suppression_reason.unwrap_or_default()
+                    ));
+                }
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler);
+            Ok(None)
+        }
+    }
+
+    async fn claim_channel_reply(&self, action_id: &str, claimant: &str) -> Result<bool, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            return match self
+                .channel_action_store()
+                .await?
+                .claim_effect(action_id, claimant)
+                .await
+                .map_err(|error| format!("claim scoped reply: {error}"))?
+            {
+                librefang_storage::channel_actions::ActionClaim::Acquired(_) => Ok(true),
+                librefang_storage::channel_actions::ActionClaim::NotClaimable(_)
+                | librefang_storage::channel_actions::ActionClaim::Missing => Ok(false),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, claimant);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn release_channel_reply(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        action_id: &str,
+        payload: &[u8],
+    ) -> Result<bool, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let receipt = self
+                .channel_action_store()
+                .await?
+                .action_receipt(action_id)
+                .await
+                .map_err(|error| format!("read scoped reply: {error}"))?
+                .ok_or_else(|| "scoped reply action is absent".to_string())?;
+            let grant_issuer = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER")
+                .map_err(|_| "scoped reply grant issuer is not configured".to_string())?;
+            let grant_id = receipt
+                .reply_grant_id
+                .as_deref()
+                .ok_or_else(|| "scoped reply grant is absent".to_string())?;
+            let route_revision = admission
+                .route_revision
+                .ok_or_else(|| "scoped reply route revision is absent".to_string())?
+                .to_string();
+            let effect_key = format!("channel-scoped-reply-v1:{action_id}");
+            let released = crate::channel_authority::release_channel_effect(
+                &crate::channel_authority::ChannelEffectInput {
+                    effect_key: &effect_key,
+                    occurrence_id: &admission.occurrence_id,
+                    action: crate::channel_authority::ChannelEffectAction::ScopedReply,
+                    scope: &source.scope,
+                    recipient: &source.scope.room,
+                    handler,
+                    route_revision: &route_revision,
+                    payload,
+                    payload_sha256: None,
+                    classification: "scoped_reply",
+                    root_occurrence_id: &receipt.root_occurrence_id,
+                    parent_action_id: None,
+                    route_identity: &receipt.route_identity,
+                    visited_routes: &receipt.visited_routes,
+                    remaining_depth: receipt.remaining_depth,
+                    remaining_fanout: receipt.remaining_fanout,
+                    grant_issuer: &grant_issuer,
+                    grant_id,
+                },
+            )
+            .await;
+            return match released {
+                Ok(released) => Ok(receipt.reply_grant_revision.as_deref()
+                    == Some(released.grant_revision.to_string().as_str())),
+                Err(error) if error.contains("refused the effect (4") => Ok(false),
+                Err(error) => Err(error),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, action_id, payload);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn settle_channel_reply(
+        &self,
+        action_id: &str,
+        claimant: &str,
+        outcome: ChannelReplyOutcome,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let store = self.channel_action_store().await?;
+            let state = match outcome {
+                ChannelReplyOutcome::Completed => store.complete_effect(action_id, claimant).await,
+                ChannelReplyOutcome::Withheld => store.withhold_effect(action_id, claimant).await,
+                ChannelReplyOutcome::Uncertain => {
+                    store.mark_effect_uncertain(action_id, claimant).await
+                }
+            };
+            return state
+                .map(|_| ())
+                .map_err(|error| format!("settle scoped reply: {error}"));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, claimant, outcome);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn bind_channel_provider_echo(
+        &self,
+        action_id: &str,
+        source: &SourceOccurrence,
+        native_message_id: &str,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            return self
+                .channel_action_store()
+                .await?
+                .bind_provider_echo(action_id, &target, native_message_id)
+                .await
+                .map(|_| ())
+                .map_err(|error| format!("bind channel provider echo: {error}"));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, source, native_message_id);
+            Err("provider echo binding is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn channel_provider_echo(
+        &self,
+        source: &SourceOccurrence,
+    ) -> Result<Option<ChannelEchoLineage>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            let store = self.channel_action_store().await?;
+            let action_id = store
+                .lookup_provider_echo(&target, &source.native_message_id)
+                .await
+                .map_err(|error| format!("lookup channel provider echo: {error}"))?;
+            let Some(action_id) = action_id else {
+                return Ok(None);
+            };
+            let receipt = store
+                .action_receipt(&action_id)
+                .await
+                .map_err(|error| format!("read channel echo lineage: {error}"))?
+                .ok_or_else(|| "provider echo references an absent causal action".to_string())?;
+            return Ok(Some(ChannelEchoLineage {
+                action_id: receipt.action_id,
+                root_occurrence_id: receipt.root_occurrence_id,
+                parent_action_id: receipt.parent_action_id,
+                visited_routes: receipt.visited_routes,
+                remaining_depth: receipt.remaining_depth,
+                remaining_fanout: receipt.remaining_fanout,
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = source;
+            Ok(None)
+        }
+    }
+
     async fn authorize_channel_handler_execution(
         &self,
         source: &SourceOccurrence,
@@ -1012,12 +1282,18 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
             .map_err(|_| "handler execution grant issuer is not configured".to_string())?;
         let grant_id = std::env::var("LIBREFANG_CHANNEL_HANDLER_GRANT_ID")
             .map_err(|_| "handler execution grant ID is not configured".to_string())?;
-        let route_revision = admission.route_revision
+        let route_revision = admission
+            .route_revision
             .ok_or_else(|| "durable handler route revision is absent".to_string())?
             .to_string();
-        let action_id = admission.action_id.as_deref()
+        let action_id = admission
+            .action_id
+            .as_deref()
             .ok_or_else(|| "durable handler action ID is absent".to_string())?;
-        let effect_key = format!("channel-handler-execution-v1:{}:{action_id}", admission.occurrence_id);
+        let effect_key = format!(
+            "channel-handler-execution-v1:{}:{action_id}",
+            admission.occurrence_id
+        );
         let route_identity = format!("{}:{handler}", admission.occurrence_id);
         crate::channel_authority::release_channel_effect(
             &crate::channel_authority::ChannelEffectInput {
@@ -3043,9 +3319,15 @@ async fn redispatch_durable_journal_entry(
         && receipt.scope.room == entry.sender_id
         && receipt.scope.thread == entry.thread_id
         && entry.agent_name.as_deref() == Some(receipt.handler.as_str())
-        && entry.metadata.get("action_id").and_then(serde_json::Value::as_str)
+        && entry
+            .metadata
+            .get("action_id")
+            .and_then(serde_json::Value::as_str)
             == Some(receipt.action_id.as_str())
-        && entry.metadata.get("route_revision").and_then(serde_json::Value::as_u64)
+        && entry
+            .metadata
+            .get("route_revision")
+            .and_then(serde_json::Value::as_u64)
             == Some(receipt.route_revision);
     if !same_source {
         warn!(id = %entry.message_id, "Durable journal and dispatch receipt disagree; refusing replay");

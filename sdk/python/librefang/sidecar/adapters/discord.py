@@ -379,12 +379,18 @@ def parse_message_create(
 # ---------------------------------------------------------------------------
 
 
+class _PartialSendError(RuntimeError):
+    def __init__(self, message: str, native_message_ids: list[str]):
+        super().__init__(message)
+        self.native_message_ids = native_message_ids
+
+
 class DiscordAdapter(SidecarAdapter):
     # Discord supports typing indicators (POST /channels/{id}/typing)
     # but no reactions / interactive / streaming in this initial
     # migration — matches the Rust adapter's surface (it only
     # implements send + send_typing).
-    capabilities: list = ["typing"]
+    capabilities: list = ["typing", "native_send_receipt"]
 
     SCHEMA = Schema(
         name="discord",
@@ -525,17 +531,23 @@ class DiscordAdapter(SidecarAdapter):
             raise RuntimeError("discord /gateway/bot missing 'url'")
         return f"{ws_url}{GATEWAY_QUERY}"
 
-    def _send_message(self, channel_id: str, text: str) -> None:
+    def _send_message(self, channel_id: str, text: str, require_receipt: bool = False) -> list[str]:
         """Chunk-aware ``POST /channels/{channel_id}/messages``. Discord
         rejects messages > 2000 UTF-16 code units; we split first."""
         chunks = _split_to_utf16_chunks(text, DISCORD_MESSAGE_LIMIT)
         url = f"{self.api_base}/channels/{channel_id}/messages"
+        native_ids: list[str] = []
         for chunk in chunks:
             payload = json.dumps({"content": chunk}).encode("utf-8")
-            status, _resp, raw, resp_hdrs = self._http(
-                url, method="POST", body=payload,
-                headers=self._auth_headers(content_type=True),
-            )
+            try:
+                status, _resp, raw, resp_hdrs = self._http(
+                    url, method="POST", body=payload,
+                    headers=self._auth_headers(content_type=True),
+                )
+            except Exception as exc:
+                if require_receipt:
+                    raise _PartialSendError(str(exc), native_ids) from exc
+                raise
             if status == 429:
                 # Discord-side rate-limit. Honour Retry-After and
                 # retry once. The Rust adapter warned and dropped on
@@ -546,10 +558,15 @@ class DiscordAdapter(SidecarAdapter):
                 log.warn("discord 429; sleeping then retrying once",
                          retry_after_secs=wait)
                 time.sleep(wait)
-                status, _resp, raw, resp_hdrs = self._http(
-                    url, method="POST", body=payload,
-                    headers=self._auth_headers(content_type=True),
-                )
+                try:
+                    status, _resp, raw, resp_hdrs = self._http(
+                        url, method="POST", body=payload,
+                        headers=self._auth_headers(content_type=True),
+                    )
+                except Exception as exc:
+                    if require_receipt:
+                        raise _PartialSendError(str(exc), native_ids) from exc
+                    raise
             if status >= 300:
                 snippet = raw[:200].decode("utf-8", "replace") if raw else ""
                 # Match the Rust adapter's fail-open behaviour: log
@@ -557,6 +574,19 @@ class DiscordAdapter(SidecarAdapter):
                 # carry-on shape, and chunks downstream still send).
                 log.warn("discord send failed",
                          status=status, body=snippet)
+                if require_receipt:
+                    raise _PartialSendError(
+                        f"discord send failed with HTTP {status}", native_ids,
+                    )
+                continue
+            if require_receipt:
+                message_id = _resp.get("id") if isinstance(_resp, dict) else None
+                if not isinstance(message_id, str) or not message_id:
+                    raise _PartialSendError(
+                        "discord send returned no native message ID", native_ids,
+                    )
+                native_ids.append(message_id)
+        return native_ids
 
     def _send_typing(self, channel_id: str) -> None:
         url = f"{self.api_base}/channels/{channel_id}/typing"
@@ -841,8 +871,9 @@ class DiscordAdapter(SidecarAdapter):
             text = "(Unsupported content type)"
         else:
             text = cmd.text or ""
-        await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_event_loop().run_in_executor(
             None, self._send_message, str(channel_id), text,
+            bool(getattr(cmd, "action_id", None)),
         )
 
     async def on_command(self, cmd) -> None:
@@ -850,7 +881,7 @@ class DiscordAdapter(SidecarAdapter):
         # ``typing``.
         from librefang.sidecar.protocol import Send, TypingCmd
         if isinstance(cmd, Send):
-            await self.on_send(cmd)
+            return await self.on_send(cmd)
         elif isinstance(cmd, TypingCmd):
             await asyncio.get_event_loop().run_in_executor(
                 None, self._send_typing, cmd.channel_id,

@@ -183,6 +183,59 @@ pub trait ChannelBridgeHandle: Send + Sync {
         Err("durable channel dispatch is unsupported".to_string())
     }
 
+    /// Admit one source-scoped reply into the durable causal budget. `None`
+    /// retains the legacy adapter path where native identity is unavailable.
+    async fn admit_channel_reply(
+        &self,
+        _source: &SourceOccurrence,
+        _admission: &RouteAdmission,
+        _handler: &str,
+        _payload: &[u8],
+    ) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
+    async fn claim_channel_reply(&self, _action_id: &str, _claimant: &str) -> Result<bool, String> {
+        Err("durable channel reply is unsupported".into())
+    }
+
+    /// A definitive Gate denial is distinct from an ambiguous release/send.
+    async fn release_channel_reply(
+        &self,
+        _source: &SourceOccurrence,
+        _admission: &RouteAdmission,
+        _handler: &str,
+        _action_id: &str,
+        _payload: &[u8],
+    ) -> Result<bool, String> {
+        Err("durable channel reply authority is unsupported".into())
+    }
+
+    async fn settle_channel_reply(
+        &self,
+        _action_id: &str,
+        _claimant: &str,
+        _outcome: ChannelReplyOutcome,
+    ) -> Result<(), String> {
+        Err("durable channel reply is unsupported".into())
+    }
+
+    async fn bind_channel_provider_echo(
+        &self,
+        _action_id: &str,
+        _source: &SourceOccurrence,
+        _native_message_id: &str,
+    ) -> Result<(), String> {
+        Err("provider echo binding is unsupported".into())
+    }
+
+    async fn channel_provider_echo(
+        &self,
+        _source: &SourceOccurrence,
+    ) -> Result<Option<ChannelEchoLineage>, String> {
+        Ok(None)
+    }
+
     /// Authorize the selected handler effect after a durable claim and before
     /// invoking the agent loop. The local-only default does not imply that
     /// cross-host observer delivery is enabled.
@@ -874,6 +927,23 @@ pub trait ChannelBridgeHandle: Send + Sync {
     ) -> Result<Option<String>, String> {
         Ok(None)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ChannelReplyOutcome {
+    Completed,
+    Withheld,
+    Uncertain,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChannelEchoLineage {
+    pub action_id: String,
+    pub root_occurrence_id: String,
+    pub parent_action_id: Option<String>,
+    pub visited_routes: Vec<String>,
+    pub remaining_depth: u8,
+    pub remaining_fanout: u8,
 }
 
 struct PendingMessage {
@@ -3637,6 +3707,135 @@ async fn send_response(
     }
 }
 
+/// One source-scoped reply action. A provider result with some accepted IDs
+/// and a later failure binds those IDs before recording uncertainty, so its
+/// echo cannot become another source turn.
+async fn send_scoped_response(
+    adapter: &dyn ChannelAdapter,
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&DurableDispatch>,
+    user: &ChannelUser,
+    text: String,
+    thread_id: Option<&str>,
+    output_format: OutputFormat,
+) -> bool {
+    let Some(dispatch) = dispatch else {
+        send_response(adapter, user, text, thread_id, output_format).await;
+        return true;
+    };
+    if user.platform_id != dispatch.source.scope.room
+        || thread_id != dispatch.source.scope.thread.as_deref()
+    {
+        error!(occurrence_id = %dispatch.admission.occurrence_id,
+            "Scoped reply target differs from immutable source scope");
+        return false;
+    }
+    let formatted = if adapter.owns_formatting() {
+        text.clone()
+    } else {
+        formatter::format_for_channel(&text, output_format)
+    };
+    let action = match handle
+        .admit_channel_reply(
+            &dispatch.source,
+            &dispatch.admission,
+            &dispatch.handler_name,
+            formatted.as_bytes(),
+        )
+        .await
+    {
+        Ok(Some(action)) => action,
+        Ok(None) => {
+            send_response(adapter, user, text, thread_id, output_format).await;
+            return true;
+        }
+        Err(error) => {
+            error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+                "Scoped reply admission failed; no channel post");
+            return false;
+        }
+    };
+    let claimant = &dispatch.claimant;
+    match handle.claim_channel_reply(&action, claimant).await {
+        Ok(true) => {}
+        Ok(false) => {
+            warn!(action_id = %action, "Scoped reply already claimed or terminal; no repost");
+            return false;
+        }
+        Err(error) => {
+            error!(action_id = %action, %error, "Scoped reply claim failed; no channel post");
+            return false;
+        }
+    }
+    let outcome = match handle
+        .release_channel_reply(
+            &dispatch.source,
+            &dispatch.admission,
+            &dispatch.handler_name,
+            &action,
+            formatted.as_bytes(),
+        )
+        .await
+    {
+        Ok(true) => None,
+        Ok(false) => {
+            warn!(action_id = %action, "Gate withheld scoped reply before channel send");
+            Some(ChannelReplyOutcome::Withheld)
+        }
+        Err(error) => {
+            error!(action_id = %action, %error,
+                "Gate reply release outcome is uncertain; no channel send");
+            Some(ChannelReplyOutcome::Uncertain)
+        }
+    };
+    if let Some(outcome) = outcome {
+        if let Err(error) = handle
+            .settle_channel_reply(&action, claimant, outcome)
+            .await
+        {
+            error!(action_id = %action, %error, "Could not settle refused scoped reply");
+        }
+        return false;
+    }
+    let sent = adapter
+        .send_with_native_receipt(user, ChannelContent::Text(formatted), thread_id, &action)
+        .await;
+    let mut complete = false;
+    match sent {
+        Ok(receipt) => {
+            complete = receipt.error.is_none() && !receipt.native_message_ids.is_empty();
+            for native_id in receipt.native_message_ids {
+                if let Err(error) = handle
+                    .bind_channel_provider_echo(&action, &dispatch.source, &native_id)
+                    .await
+                {
+                    error!(action_id = %action, %error, "Provider echo binding failed");
+                    complete = false;
+                }
+            }
+            if let Some(error) = receipt.error {
+                error!(action_id = %action, %error, "Provider reply had an uncertain result");
+            }
+        }
+        Err(error) => {
+            error!(action_id = %action, %error, "Provider reply result is uncertain");
+        }
+    }
+    let outcome = if complete {
+        ChannelReplyOutcome::Completed
+    } else {
+        ChannelReplyOutcome::Uncertain
+    };
+    if let Err(error) = handle
+        .settle_channel_reply(&action, claimant, outcome)
+        .await
+    {
+        error!(action_id = %action, %error, "Could not settle scoped reply result");
+        return false;
+    }
+    complete
+}
+
 fn default_output_format_for_channel(channel_type: &str) -> OutputFormat {
     formatter::default_output_format_for_channel(channel_type)
 }
@@ -3951,6 +4150,7 @@ struct DurableDispatch {
 
 enum DurableRouteResult {
     Legacy,
+    Drop(String),
     Admitted {
         agent_id: AgentId,
         dispatch: DurableDispatch,
@@ -3970,6 +4170,29 @@ async fn admit_durable_dispatch(
     let Some(source) = SourceOccurrence::from_message(message) else {
         return DurableRouteResult::Legacy;
     };
+    match handle.channel_provider_echo(&source).await {
+        Ok(Some(lineage)) => {
+            info!(
+                action_id = %lineage.action_id,
+                root_occurrence_id = %lineage.root_occurrence_id,
+                parent_action_id = ?lineage.parent_action_id,
+                visited_routes = ?lineage.visited_routes,
+                remaining_depth = lineage.remaining_depth,
+                remaining_fanout = lineage.remaining_fanout,
+                "Provider echo retained original causal lineage; suppressing re-entry"
+            );
+            return DurableRouteResult::Drop(format!(
+                "provider echo belongs to outbound action {}",
+                lineage.action_id
+            ));
+        }
+        Ok(None) => {}
+        Err(error) => {
+            return DurableRouteResult::Drop(format!(
+                "provider echo lookup failed; refusing possible repost: {error}"
+            ));
+        }
+    }
     if let Some(reason) = &resolution.unavailable {
         return DurableRouteResult::Stop(reason.clone());
     }
@@ -4217,7 +4440,11 @@ async fn publish_durable_observers(
     let Some(dispatch) = dispatch else { return };
     if dispatch.source.scope.provider != "discord"
         || !message.is_group
-        || message.metadata.get("guild_id").and_then(serde_json::Value::as_str).is_none()
+        || message
+            .metadata
+            .get("guild_id")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
     {
         return;
     }
@@ -4240,12 +4467,18 @@ async fn authorize_durable_handler_execution(
     dispatch: Option<&DurableDispatch>,
     message: &ChannelMessage,
 ) -> bool {
-    let Some(dispatch) = dispatch else { return true };
+    let Some(dispatch) = dispatch else {
+        return true;
+    };
     // C08 governed source profile is Discord guild only. DMs and other
     // adapters retain their local route behavior without claiming Gate support.
     if dispatch.source.scope.provider != "discord"
         || !message.is_group
-        || message.metadata.get("guild_id").and_then(serde_json::Value::as_str).is_none()
+        || message
+            .metadata
+            .get("guild_id")
+            .and_then(serde_json::Value::as_str)
+            .is_none()
     {
         return true;
     }
@@ -5676,6 +5909,10 @@ async fn dispatch_message(
 
     let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
         DurableRouteResult::Legacy => None,
+        DurableRouteResult::Drop(reason) => {
+            warn!(channel = ct_str, %reason, "Channel source suppressed before dispatch");
+            return;
+        }
         DurableRouteResult::Admitted {
             agent_id: selected,
             dispatch,
@@ -5769,21 +6006,30 @@ async fn dispatch_message(
     // call was needed.
     if let Some(reply) = handle.check_auto_reply(agent_id, &text).await {
         let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
-        send_response(adapter, &message.sender, reply, thread_id, output_format).await;
+        let replied = send_scoped_response(
+            adapter,
+            handle,
+            durable.as_ref(),
+            &message.sender,
+            reply,
+            thread_id,
+            output_format,
+        )
+        .await;
         handle
             .record_delivery(
                 agent_id,
                 ct_str,
                 &message.sender.platform_id,
-                true,
+                replied,
                 None,
                 thread_id,
             )
             .await;
         if let Some(j) = journal {
-            j.record_outcome(journal_id, true, None).await;
+            j.record_outcome(journal_id, replied, None).await;
         }
-        finish_durable_dispatch(handle, durable.as_ref(), true).await;
+        finish_durable_dispatch(handle, durable.as_ref(), replied).await;
         return;
     }
 
@@ -5983,8 +6229,10 @@ async fn dispatch_message(
                             } else {
                                 buffered_text
                             };
-                            send_response(
+                            let replied = send_scoped_response(
                                 adapter,
+                                handle,
+                                durable.as_ref(),
                                 &message.sender,
                                 buffered_text,
                                 thread_id,
@@ -6031,7 +6279,8 @@ async fn dispatch_message(
                             if let Some(j) = journal {
                                 j.record_outcome(journal_id, kernel_ok, err_str).await;
                             }
-                            finish_durable_dispatch(handle, durable.as_ref(), kernel_ok).await;
+                            finish_durable_dispatch(handle, durable.as_ref(), kernel_ok && replied)
+                                .await;
                             return;
                         }
                         // Buffer was empty OR kernel errored on a
@@ -6131,14 +6380,28 @@ async fn dispatch_message(
             } else {
                 accumulated
             };
-            send_response(
+            let replied = send_scoped_response(
                 adapter,
+                handle,
+                durable.as_ref(),
                 &message.sender,
                 accumulated,
                 thread_id,
                 output_format,
             )
             .await;
+            if !replied {
+                if let Some(j) = journal {
+                    j.record_outcome(
+                        journal_id,
+                        false,
+                        Some("scoped reply was not delivered".into()),
+                    )
+                    .await;
+                }
+                finish_durable_dispatch(handle, durable.as_ref(), false).await;
+                return;
+            }
         }
         let err_str = kernel_status.as_ref().err().cloned();
         handle
@@ -6175,7 +6438,28 @@ async fn dispatch_message(
             if !response.is_empty() {
                 let response =
                     maybe_prefix_response(handle, overrides.as_ref(), agent_id, response).await;
-                send_response(adapter, &message.sender, response, thread_id, output_format).await;
+                if !send_scoped_response(
+                    adapter,
+                    handle,
+                    durable.as_ref(),
+                    &message.sender,
+                    response,
+                    thread_id,
+                    output_format,
+                )
+                .await
+                {
+                    if let Some(j) = journal {
+                        j.record_outcome(
+                            journal_id,
+                            false,
+                            Some("scoped reply was not delivered".into()),
+                        )
+                        .await;
+                    }
+                    finish_durable_dispatch(handle, durable.as_ref(), false).await;
+                    return;
+                }
             }
             handle
                 .record_delivery(
@@ -6198,8 +6482,10 @@ async fn dispatch_message(
                 error!(channel = ct_str, error = %e,
                     "Durable channel handler failed; route is retained and outcome is uncertain");
                 if !adapter.suppress_error_responses() {
-                    send_response(
+                    let _ = send_scoped_response(
                         adapter,
+                        handle,
+                        durable.as_ref(),
                         &message.sender,
                         format!("Agent error: {e}"),
                         thread_id,
@@ -7678,6 +7964,10 @@ async fn dispatch_with_blocks(
 
     let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
         DurableRouteResult::Legacy => None,
+        DurableRouteResult::Drop(reason) => {
+            warn!(channel = ct_str, %reason, "Channel source suppressed before dispatch");
+            return;
+        }
         DurableRouteResult::Admitted {
             agent_id: selected,
             dispatch,
@@ -7809,7 +8099,28 @@ async fn dispatch_with_blocks(
             .await;
             if !response.is_empty() {
                 let response = maybe_prefix_response(handle, overrides, agent_id, response).await;
-                send_response(adapter, &message.sender, response, thread_id, output_format).await;
+                if !send_scoped_response(
+                    adapter,
+                    handle,
+                    durable.as_ref(),
+                    &message.sender,
+                    response,
+                    thread_id,
+                    output_format,
+                )
+                .await
+                {
+                    if let Some(j) = journal {
+                        j.record_outcome(
+                            journal_id,
+                            false,
+                            Some("scoped reply was not delivered".into()),
+                        )
+                        .await;
+                    }
+                    finish_durable_dispatch(handle, durable.as_ref(), false).await;
+                    return;
+                }
             }
             if let Some(j) = journal {
                 j.record_outcome(journal_id, true, None).await;
@@ -7832,8 +8143,10 @@ async fn dispatch_with_blocks(
                 error!(channel = ct_str, error = %e,
                     "Durable multimodal handler failed; route is retained and outcome is uncertain");
                 if !adapter.suppress_error_responses() {
-                    send_response(
+                    let _ = send_scoped_response(
                         adapter,
+                        handle,
+                        durable.as_ref(),
                         &message.sender,
                         format!("Agent error: {e}"),
                         thread_id,

@@ -265,8 +265,21 @@ async def run(
                     stop.set()
                     return
                 try:
-                    await adapter.on_command(cmd)
+                    result = await adapter.on_command(cmd)
+                    if isinstance(cmd, Send) and cmd.action_id:
+                        ids = result if isinstance(result, list) else []
+                        emit({"method": "send_result", "params": {
+                            "action_id": cmd.action_id,
+                            "native_message_ids": ids,
+                            "error": None if ids else "provider did not return native message IDs",
+                        }})
                 except Exception as e:  # noqa: BLE001
+                    if isinstance(cmd, Send) and cmd.action_id:
+                        emit({"method": "send_result", "params": {
+                            "action_id": cmd.action_id,
+                            "native_message_ids": getattr(e, "native_message_ids", []),
+                            "error": str(e),
+                        }})
                     # The bare except is load-bearing: we cannot raise out
                     # of `reader()` without taking down the entire sidecar
                     # process for one bad command. But the previous
