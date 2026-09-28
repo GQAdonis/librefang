@@ -71,6 +71,7 @@ fn api_v1_routes(webhook_body_limit: usize) -> Router<Arc<AppState>> {
         .merge(routes::prompts::router())
         .merge(routes::terminal::router())
         .merge(routes::uar::router())
+        .merge(routes::uar_delegation::router())
         .merge(routes::uar_supervisor::router())
         .merge(routes::storage::router())
         .merge(routes::users::router())
@@ -1799,6 +1800,8 @@ pub async fn build_router(
     let state = Arc::new(AppState {
         kernel: kernel.clone(),
         uar_supervisor,
+        #[cfg(feature = "uar-driver")]
+        uar_run_control: Arc::new(librefang_llm_drivers::drivers::uar_run::UarRunClient::default()),
         started_at: Instant::now(),
         // Snapshot now, while this is still the config the kernel booted with
         // and `kernel.embedding()` still reflects it. `/api/ready` compares the
