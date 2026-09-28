@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 333,
-  "derivedRevision": 333,
+  "sourceRevision": 335,
+  "derivedRevision": 335,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 94
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 96
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -33,9 +33,9 @@
   "implementationCompleted": 11,
   "implementationTotal": 22,
   "planRevision": 5,
-  "revision": 333,
+  "revision": 335,
   "exactNextCommand": "Implement C09.1 durable local team board in UAR and Boss; pnpm build:mac:arm64 and operate packaged app at the completed increment boundary",
   "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
   "nextTask": "C08.2",
-  "updatedAt": "2026-09-28T19:46:23.098922Z"
+  "updatedAt": "2026-09-28T20:52:03.970230Z"
 }

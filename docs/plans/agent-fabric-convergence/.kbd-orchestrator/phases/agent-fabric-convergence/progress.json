@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 333,
-  "derivedRevision": 333,
+  "sourceRevision": 335,
+  "derivedRevision": 335,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 94
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 96
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T19:46:23.098922Z",
+  "last_updated": "2026-09-28T20:52:03.970230Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 19,
   "changes_completed": 8,
@@ -177,9 +177,9 @@
       "status": "PENDING",
       "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
-      "next_task_pending": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+      "tasks_done": 2,
+      "last_task_completed": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+      "next_task_pending": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
       "blockers": []
     },
     {

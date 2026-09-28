@@ -2,15 +2,15 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 333,
-  "derivedRevision": 333,
+  "sourceRevision": 335,
+  "derivedRevision": 335,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 94
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 96
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T19:46:23.098922Z",
+  "updatedAt": "2026-09-28T20:52:03.970230Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c08-bossfang-and-fabric-observer-routing",
@@ -187,7 +187,7 @@
             "id": "afc-c09-bounded-teams-and-shared-task-board",
             "status": "PENDING",
             "progress": {
-              "done": 1,
+              "done": 2,
               "total": 3
             }
           },
