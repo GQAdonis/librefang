@@ -248,4 +248,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "sessions_messages_array_v1",
         sql: include_str!("sql/044_sessions_messages_array.surql"),
     },
+    Migration {
+        version: 45,
+        name: "channel_routes_v1",
+        sql: include_str!("sql/045_channel_routes.surql"),
+    },
 ];
