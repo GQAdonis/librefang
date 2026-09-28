@@ -12,15 +12,15 @@ Implementation tasks are grouped by initiative C08.1–C08.3. Static inspection 
 ## 2. C08.2 — Provider-first observer contracts and bridge
 
 - [ ] 2.1 Record accepted immutable D-GATE and D-FRF provider revisions and their source-disclosure, recipient-delivery, envelope, replay, and cancel/detach contracts; record the explicit UAR channel-source profile revision. Verify each against its own repository's production source and integration receipt. Until these exist, cross-host observer admission remains unsupported.
-- [ ] 2.2 Add the BossFang source adapter and independent subscriber cursor/queue projection, with current disclosure and delivery rechecks and metadata-only unauthorized projection. Verify by tracing route occurrence to each recipient and the revocation-before-release branch without conflating Fabric group offsets with observer cursors.
-- [ ] 2.3 Consume versioned Fabric envelopes without losing occurrence, channel scope, handler, principal, binding/policy revisions or causal fields, and reject incompatible envelopes. Verify by source-tracing producer and consumer field mappings; record the exact provider revision in the acceptance receipt.
+- [x] 2.2 Add the BossFang source adapter and independent subscriber cursor/queue projection, with current disclosure and delivery rechecks and metadata-only unauthorized projection. Verify by tracing route occurrence to each recipient and the revocation-before-release branch without conflating Fabric group offsets with observer cursors.
+- [x] 2.3 Consume versioned Fabric envelopes without losing occurrence, channel scope, handler, principal, binding/policy revisions or causal fields, and reject incompatible envelopes. Verify by source-tracing producer and consumer field mappings; record the exact provider revision in the acceptance receipt.
 - [ ] 2.4 Route authorized recipient execution through the selected BossFang handler or UAR service binding, never a second loop; preserve the separate cancel and detach contracts. Verify by tracing both control operations to their actual owners and the unsupported result where runtime cancellation is absent.
 
 ## 3. C08.3 — Scoped effects and reaction bounds
 
-- [ ] 3.1 Persist reply/action identities and exact source scope grants before sending. Verify by static inspection that observer copies and historical replay cannot call the channel sender, while uncertain retries reuse the same action ID.
-- [ ] 3.2 Reconcile provider echoes with outbound action IDs; reject cross-room/account/workspace/thread replies without a separate grant. Verify by tracing send, echo ingress, and denial paths through the same source/action identity.
-- [ ] 3.3 Carry root occurrence, parent action, visited routes, remaining depth and cumulative fanout through every local and cross-host reaction; stop A-B-A revisits and exhausted budgets with operator-visible results. Verify by static inspection that a downstream host cannot reset a causal budget.
+- [x] 3.1 Persist reply/action identities and exact source scope grants before sending. Verify by static inspection that observer copies and historical replay cannot call the channel sender, while uncertain retries reuse the same action ID.
+- [x] 3.2 Reconcile provider echoes with outbound action IDs; reject cross-room/account/workspace/thread replies without a separate grant. Verify by tracing send, echo ingress, and denial paths through the same source/action identity.
+- [x] 3.3 Carry root occurrence, parent action, visited routes, remaining depth and cumulative fanout through every local and cross-host reaction; stop A-B-A revisits and exhausted budgets with operator-visible results. Verify by static inspection that a downstream host cannot reset a causal budget.
 
 ## 4. Completed change boundary
 

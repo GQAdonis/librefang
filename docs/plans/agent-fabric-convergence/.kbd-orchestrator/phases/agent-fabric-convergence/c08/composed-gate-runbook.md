@@ -1,46 +1,55 @@
-# C08 composed production gate — runbook and blank receipt
+# C08 service-boundary gate — prepared, not executed
 
-**Prepared, not executed.** Run this once after C08.1–C08.3 production wiring is complete. This document is an execution checklist and evidence template, not a passing receipt. Do not substitute unit tests, a static source trace, or the C07 local-observer gate. If a required scenario fails, fix the finding and rerun only this composed gate. Keep the cross-host profile unsupported until it passes.
+The operator has deprioritized live Discord acceptance. Continue BossFang, Gate, Fabric, UAR and shared SurrealDB work without waiting for a disposable guild or bot credential. `scripts/integration/afc-c08-gate.mjs` prepares an honest service-boundary inspection. **No C08 gate has run, and no channel-source or cross-host acceptance is claimed.**
 
-## Frozen inputs before the run
+## Plan reconciliation
 
-Record exact Git SHAs for BossFang, Gate, Fabric, and UAR, the SurrealDB server/image digest and client pins, Iggy image/revision, policy and grant revision, adapter/sidecar revision, workspace/binding revision, and binaries actually started. The source candidates at preparation are BossFang `b75886ad3bf52f1d9cd6b71279b09cc83f0b6656`, Gate `b153970518b0f3ce6c83f41e7b9ac59f6187c0b2`, Fabric `8966d6b1fef002a663d98f762955b2d273f8c07d`, and UAR `b18397a3b23eb97a9e0da2618bc1747f99e7cc04`. They are **not accepted checkpoints**; replace them with the final source heads before execution. BossFang, UAR, and Fabric source manifests pin the SurrealDB 3.3.0 client; the server used by this gate must be recorded separately.
+The [product design](../../../../../../../openspec/changes/afc-c08-channel-routing/design.md) describes one final gate containing provider ingress, conflict, observer fanout, grant revocation, restart/replay, reply echo, A→B→A, and detach/cancel. The source implements a qualified Discord-guild route but exposes no API that creates a normalized channel occurrence through the production channel bridge. Direct SurrealDB row insertion would bypass route admission, Gate, Fabric and UAR; it cannot establish an integration pass. No disposable Discord credential is available, and the operator does not want this dependency to hold up subsequent work.
 
-Use a private Gate admin address, one shared remote SurrealDB 3.3.0 database for both BossFang hosts, durable UAR channel-observer storage, and the Fabric Iggy broker. Keep test workspaces, sidecar instances, ports, and persistent stores isolated from customer data. Do not print bearer tokens, grant secrets, database passwords, message content, or raw provider payload into this receipt. Use distinct verified credentials for Gate grant administration (`afc.channel.grants.write`) and effect execution (`afc.channel.effects.execute`); the UAR sidecar receives only the latter through BossFang's `LIBREFANG_UAR_CHANNEL_GATE_EFFECT_TOKEN` handoff.
+Before calling the KBD phase complete, revise its accepted plan to separate **service-boundary integration** from **channel-source acceptance**. The former records exact binaries and source revisions, operational BossFang ×2, Gate, Fabric, UAR and SurrealDB 3.3.0, authenticated capabilities and durable observer state where an already-admitted source exists. The latter retains actual channel ingress, same-root causal reaction, grant timing, restart recovery, echo and runtime control as `UNSUPPORTED`/`UNVERIFIED` until observed. Live Discord network interoperability is outside the present customer priority and must not be presented as passed. `/api/channels/route-capability` currently advertises `cross_host_observers: false`; leave that unchanged.
 
-| Component | Actual startup/configuration source to use | Required readiness evidence |
-|---|---|---|
-| Gate | `flint-gate` binary from `crates/flint-gate`; `config.example.yaml`/private config, Postgres-backed authority migration `0007_channel_effect_authority.sql`, private admin listener (default `:4457`). `POST /authority/channels/{grants,evaluate,release}` and `GET /authority/channels/capabilities` are in `crates/flint-gate-core/src/admin/mod.rs`. | Process and Postgres healthy; versioned authority capability returned with authenticated caller. A port listening alone does not prove authority operational. |
-| Fabric | `frf-gateway` from `crates/frf-gateway`; its `Config::from_env` requires `IGGY_CONNECTION_STRING`, `GATEWAY_JWKS_URL`, `JWT_AUDIENCE`, and either Keto configuration or `AUTHZ_BACKEND=verified-identity`. HTTP bind defaults to `:8080`; gRPC to `:9090`. `frf.routed-observer/1` is defined in `crates/frf-domain/src/routed_observer.rs`. | Gateway, broker, identity verification, versioned publish and replay operational. A transport offset is not a subscriber cursor. |
-| UAR | BossFang supervises `uar-sidecar`; `src/bin/uar-sidecar.rs` requires its launch token on stdin, binds loopback from port 1906 upward, and emits `READY:{port}`. Its independent `/api/uar/channel-observers/v1/capabilities` and subscription/delivery APIs are registered in `src/server.rs`; the C07 `/observers/v1` profile is separate. | Effective sidecar port, authenticated `uar.channel-source/1` capability, shared durable store and two independent subscription IDs/cursors. Do not start the sidecar manually without its supervised token contract. |
-| BossFang | `bossfang start --foreground` from the `librefang-cli` binary, with a distinct home/config/API port per host and one shared remote `[storage.backend]`. Gate URL, effect token, and service identity come from `crates/librefang-api/src/channel_authority.rs`. `GET /api/channels/route-capability` describes the local profile. | Both hosts have distinct process identity, same route store, operational local route capability, and actual Discord guild metadata/native IDs. Discord DMs, other adapters, batches, incomplete native identity, and SQLite are legacy/unsupported for this profile. |
+Candidate source revisions are BossFang `bcdb61764` (plus any later exact head), Gate `b153970518b0f3ce6c83f41e7b9ac59f6187c0b2`, Fabric `8966d6b1fef002a663d98f762955b2d273f8c07d`, and UAR `b18397a3b23eb97a9e0da2618bc1747f99e7cc04`. These are **not accepted provider checkpoints**. Record final commits and binary hashes at execution.
 
-Build these binaries serially where they share a Rust target directory; do not launch another writer against the same target. Record build exit and artifact identity as part of this **final** gate, not as an earlier standalone verification loop. Use the real Discord guild adapter and a disposable guild/room. Configure a separate explicit operator grant for reassignment; a mention alone cannot displace retained affinity.
+## Read-only collector at the completed phase boundary
 
-## One composed scenario
+The collector calls BossFang `/api/channels/route-capability` on both hosts, Gate `/authority/channels/capabilities`, Fabric `/readyz`, UAR `/api/uar/channel-observers/v1/capabilities` and UAR subscriptions. It reads seven C08 durable tables through SurrealDB 3.x `POST /sql` ([official HTTP contract](https://surrealdb.com/docs/surrealdb/reference-guide/http-protocol)) and hashes supplied binary bytes. It sends no provider message, mutates no grant, restarts no process and writes no storage row. Those effects require their real owners.
 
-1. Admit a native Discord guild message whose two equal-priority bindings select different handlers. Capture the single immutable occurrence, `RouteOutcome::Conflict`, and absence of handler action. Grant and perform a revision-checked explicit reassignment through `POST /api/channels/route-reassign`; admit the next native message and record the chosen handler/revision. A plain mention of another handler while affinity exists must be refused.
-2. Create two authorized UAR channel-source subscriptions and one denied subscriber, all scoped to the exact provider/account/workspace/room/thread/source. Admit one source. Confirm independent delivery IDs, cursors and acknowledgments for the two authorized subscribers, no content or delivery for the denied third, and exactly one selected execution-loop owner. Record separate Gate source-disclosure, recipient-delivery and handler-execution effect receipts.
-3. Hold one queued delivery, revoke its grant, then release the queue. Capture the current Gate denial/withheld result. Restart BossFang, Fabric and UAR at the documented boundaries, replay the transport record, and capture retained route affinity and each subscriber's independently persisted cursor. A Fabric group offset must not be used as an observer cursor.
-4. Issue one authorized reply in the exact source scope, replay the source and inject the provider echo. Record stable action ID and one outbound post; uncertain outcome must remain uncertain until reconciled, never be blindly resent. Attempt a different room/account/workspace/thread and require a separate current grant or a refusal.
-5. Attempt a rooted A→B→A reaction and fanout/depth exhaustion. Capture the root, parent action, visited route set, cumulative fanout/depth and terminal suppression. The current channel-side Discord reply path is root-only until trusted parent propagation is implemented; do **not** claim generalized nested channel reaction support merely because storage bounds actions or Fabric carries causal fields. If this mandatory chain cannot be exercised through the real production path, record failure/unsupported rather than pass.
-6. Stop a Fabric observation stream while a UAR or BossFang run continues, then request runtime cancellation through the actual owner. Capture distinct `detach`, `cancelled`, or `unsupported` outcomes and the run's true final state.
+Create a private config outside the repository. Credential **values** belong only in environment variables, not this file or a command line:
 
-## Fill only after execution
+```json
+{
+  "services": {
+    "bossA": {"url":"http://127.0.0.1:18789","tokenEnv":"C08_BOSS_A_TOKEN"},
+    "bossB": {"url":"http://127.0.0.1:18790","tokenEnv":"C08_BOSS_B_TOKEN"},
+    "gate": {"url":"http://127.0.0.1:4457","tokenEnv":"C08_GATE_EFFECT_TOKEN"},
+    "fabric": {"url":"http://127.0.0.1:8080"},
+    "uar": {"url":"http://127.0.0.1:1906","tokenEnv":"C08_UAR_HOST_TOKEN","workspace":"gate-workspace"}
+  },
+  "surreal": {"url":"http://127.0.0.1:8000","namespace":"gate-ns","database":"gate-db","userEnv":"C08_SURREAL_USER","passwordEnv":"C08_SURREAL_PASSWORD"},
+  "binaries": {
+    "bossA": {"path":"/absolute/path/bossfang","sourceRevision":"exact-source-sha"},
+    "bossB": {"path":"/absolute/path/bossfang","sourceRevision":"exact-source-sha"},
+    "gate": {"path":"/absolute/path/flint-gate","sourceRevision":"exact-source-sha"},
+    "fabric": {"path":"/absolute/path/frf-gateway","sourceRevision":"exact-source-sha"},
+    "uar": {"path":"/absolute/path/uar-sidecar","sourceRevision":"exact-source-sha"}
+  },
+  "evidence": {}
+}
+```
 
-| Field | Actual value / artifact link |
-|---|---|
-| UTC start/end; operator; host IDs and platform | PENDING |
-| BossFang / Gate / Fabric / UAR exact source SHAs | PENDING |
-| Binary hashes; SurrealDB/Iggy versions and image digests | PENDING |
-| Policy digest/revision; grant issuer and **nonsecret** grant IDs/revisions | PENDING |
-| Discord adapter/source and binding revisions; scope with sensitive fields redacted | PENDING |
-| Two-handler conflict and reassignment receipt | PENDING |
-| Two authorized cursors and denied third | PENDING |
-| Revocation-before-release and restart/replay receipts | PENDING |
-| Reply/action echo, scope refusal, A→B→A, depth/fanout receipts | PENDING |
-| Detach versus owner cancellation result | PENDING |
-| Failure/remediation and exact rerun receipt, if any | PENDING |
-| Final verdict (`PASS`/`FAIL`/`UNSUPPORTED`); accepted provider checkpoints, if proven | PENDING |
+`surreal.tokenEnv` may replace user/password variables for bearer authentication. Optional `evidence` IDs correlate **already-admitted** sources and actions with live storage; the script never accepts them as outcomes. It emits only fingerprints and state. The verdict remains `unsupported` if the service probes succeed but mandatory channel outcomes are unproven; a contradictory live record returns `failed`.
 
-A passing local gate does not certify installed Windows x64 or Apple Silicon operation. Those remain separate release/acceptance claims.
+```text
+node scripts/integration/afc-c08-gate.mjs --config /private/c08.json --out /private/c08-receipt.json
+```
+
+Keep the private receipt and service logs out of the repository if they contain user scope IDs or content. A listening port, HTTP capability response, Fabric offset, synthetic SQL row or manually entered Boolean cannot certify cross-host channel operation.
+
+## Acceptance gaps retained
+
+- Source now resolves a native reply reference against a **same-scope completed outbound action** and derives parent lineage from BossFang storage rather than trusting sidecar parent metadata (`bcdb61764`). This source path has not been executed in the composed gate.
+- A real A→B→A requires Gate-authorized revision-CAS reassignment A→B and B→A. Its causal sequence is A forward → A reply → B forward → B reply → attempted A forward under one root. A plain mention of B, an A→A echo or direct row insertion does not count. Five action rows alone cannot attest the corresponding authorization/effect boundary.
+- Gate revocation-before-release, all three restart epochs, cross-scope refusal, injected provider echo, and Fabric detach versus owner cancellation have no complete combined receipt API in current source. The collector keeps them blocked even when nearby storage rows exist.
+- UAR observer copies are independent deliveries, not permission to execute or post. Fabric offsets are transport positions, not subscriber cursors or execution ownership.
+
+The source and service-boundary result can inform the next phase now. Do not mark the original C08 channel-source gate, provider acceptance, or installed Windows/Mac acceptance complete from this collector.
