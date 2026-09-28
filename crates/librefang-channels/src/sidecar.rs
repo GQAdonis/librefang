@@ -24,6 +24,10 @@ use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, info, warn};
 
+/// Set by the host reader from the configured adapter name, never accepted
+/// from a sidecar message's provider-controlled metadata.
+pub(crate) const CONFIGURED_INSTANCE_KEY: &str = "__configured_instance__";
+
 fn lock_std_recover<'a, T>(
     mutex: &'a std::sync::Mutex<T>,
     name: &'static str,
@@ -1570,6 +1574,10 @@ async fn spawn_once(
                                     metadata.insert(
                                         crate::channel_route::NATIVE_MESSAGE_ID_KEY.to_string(),
                                         serde_json::Value::Bool(native_message_id),
+                                    );
+                                    metadata.insert(
+                                        CONFIGURED_INSTANCE_KEY.to_string(),
+                                        serde_json::Value::String(adapter_name.clone()),
                                     );
                                     let account_kind = if metadata
                                         .get("account_id")

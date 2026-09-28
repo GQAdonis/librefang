@@ -4123,10 +4123,31 @@ async fn admit_durable_dispatch(
     }
 }
 
-fn route_journal_metadata(dispatch: &DurableDispatch) -> HashMap<String, serde_json::Value> {
+fn route_journal_metadata(
+    dispatch: &DurableDispatch,
+    message: &ChannelMessage,
+    adapter: &dyn ChannelAdapter,
+) -> HashMap<String, serde_json::Value> {
     let mut metadata = HashMap::new();
     if let Ok(source) = serde_json::to_value(&dispatch.source) {
         metadata.insert("source_occurrence".to_string(), source);
+    }
+    // The sidecar reader overwrites this marker with its configured instance.
+    // Account in source_occurrence may instead be the provider's native ID.
+    if message
+        .metadata
+        .get(crate::sidecar::CONFIGURED_INSTANCE_KEY)
+        .and_then(serde_json::Value::as_str)
+        == Some(adapter.name())
+    {
+        let instance = adapter.name();
+        metadata.insert("configured_instance".to_string(), instance.into());
+        // API registration uses adapter.name() as its base key and the
+        // configured sidecar name as its qualifier, both this same value.
+        metadata.insert(
+            "adapter_registry_key".to_string(),
+            format!("{instance}:{instance}").into(),
+        );
     }
     if let Some(revision) = dispatch.admission.route_revision {
         metadata.insert("route_revision".to_string(), revision.into());
@@ -5618,7 +5639,7 @@ async fn dispatch_message(
             thread_id: thread_id.map(|s| s.to_string()),
             metadata: durable
                 .as_ref()
-                .map(route_journal_metadata)
+                .map(|dispatch| route_journal_metadata(dispatch, message, adapter))
                 .unwrap_or_default(),
             next_retry_after: None,
         };
@@ -7613,7 +7634,7 @@ async fn dispatch_with_blocks(
             thread_id: thread_id.map(|s| s.to_string()),
             metadata: durable
                 .as_ref()
-                .map(route_journal_metadata)
+                .map(|dispatch| route_journal_metadata(dispatch, message, adapter))
                 .unwrap_or_default(),
             next_retry_after: None,
         };
