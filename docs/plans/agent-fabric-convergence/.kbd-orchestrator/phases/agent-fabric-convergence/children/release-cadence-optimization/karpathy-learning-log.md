@@ -26,3 +26,19 @@ Recorder result: degraded. Local session-log append and durable progress-memory 
 ## Testing accounting
 
 No test suite, new compiler invocation, application build or production integration gate was started during this assessment. The already-running C08 build was read to completion. Prior-session admissions of a Python syntax check and starting the Cargo build before its gate runner was ready remain recorded deviations; this is not a comprehensive audit of all earlier tool calls. Compass indexing/querying is source-navigation work, and the assessment artifact's required review is a process-stage check, not a production-code verification loop.
+
+## Analyze learning entries — proposals pending feedback
+
+| ID | Observed fact | Candidate correction and falsifier |
+|---|---|---|
+| L13 | Operator requires a working exact-command local Mac build after every hourly delivery. Current command forces UAR=0 through compile, packaging and validation. | Make enabled packaging the exact-command default in later execution. Falsifier: built app cannot start its bundled UAR and perform the completed customer action. |
+| L14 | Both canonical UAR payload records must share source; first C08 local UAR build has no target cache. | Use a source-bound local arm64 payload, preserve public manifest integrity; do not promise first cold build within60minutes. |
+| L15 | Current UAR release profile excludes Mac Intel and Windows ARM64. | Track required platform enablement explicitly; never label the four-platform non-UAR profile as full UAR support. |
+| L16 | Per-boundary publication decision is explicitly required. | Record now/wait per delivered artifact and hold publication on missing answer. Local use and later source-isolated work need not wait. |
+| L17 | Existing shell lifecycle, KBD ledger and progress recorder already supply most coordination functions. | Adapt existing roles and link compact metrics instead of building another scheduler/log store. Falsifier: existing contracts cannot represent observed ownership/feedback needs. |
+
+No production test, compiler invocation or application build was launched during Analyze. Research consisted of read-only source inspection, one GitHub discovery and Context7 documentation lookup, followed by review of completed process artifacts. End-of-stage learning ingestion status will be recorded after its single bounded attempt.
+
+Analyze checkpoint: completed revision265, paused266. Eight candidates; one independent native artifact review PASS, zero findings; canonical cross-model identities unverified. Sycophancy screen PASS score0. No parent reorder or production execution. Resume only after operator feedback to Plan. The pause CLI returned plain text, not JSON; canonical pause succeeded, local receipt creation was resumed without repeating the transition.
+
+Analyze recorder result: local session log and durable receipt succeeded; shared pk ingestion timed out after the5-second bounded attempt. Remote learning availability remains unconfirmed. No retry loop.

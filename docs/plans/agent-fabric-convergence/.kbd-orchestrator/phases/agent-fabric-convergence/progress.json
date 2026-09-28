@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 260,
-  "derivedRevision": 260,
+  "sourceRevision": 265,
+  "derivedRevision": 265,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 21
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 26
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T07:16:01.543329Z",
+  "last_updated": "2026-09-28T07:34:46.554560Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 7,

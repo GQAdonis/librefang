@@ -1,0 +1,225 @@
+{
+  "phase": "agent-fabric-convergence::release-cadence-optimization",
+  "generated_at": "2026-09-28T07:31:55.316Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier1": 1,
+      "tier2": 2,
+      "tier3": 0,
+      "tier4": 0
+    }
+  },
+  "gaps_addressed": [
+    "hourly-local-app",
+    "platform-publication-choice",
+    "complete-phase-boundaries",
+    "parallel-resource-ownership",
+    "learning-evidence",
+    "hourly-code-graph"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Existing Electron builder and UAR-enabled Mac package path",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Usable local Mac app at each complete delivery boundary",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/package.json",
+          "claim": "build:mac:arm64 forces UAR=0; enabled alternate exists; electron-builder pin26.15.6."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://github.com/electron-userland/electron-builder/blob/master/website/docs/contents.md",
+          "claim": "extraResources installs native files outside app.asar; executable sidecars should use physical resource paths."
+        }
+      ],
+      "risks": [
+        "Build command change is proposed only.",
+        "DMG integrity is not app/UAR operational acceptance."
+      ],
+      "decision_rationale": "Make the exact required command produce enabled local UAR payloads, reuse native packaging and one completed-phase gate."
+    },
+    {
+      "id": "cand-002",
+      "name": "Existing UAR sidecar packaging plus local Mac payload record",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Remove Windows payload dependency from local Mac delivery",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/.claude/worktrees/afc-c08-uar/scripts/package-boss-sidecar.mjs",
+          "claim": "Existing script emits tar and file checksums with HEAD provenance."
+        },
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/scripts/import-uar-sidecar-payloads.cjs",
+          "claim": "Canonical importer requires Windows x64 and Mac ARM64 payloads from same revision."
+        }
+      ],
+      "risks": [
+        "Local overlay does not exist yet.",
+        "Dirty sources cannot be labeled solely with HEAD.",
+        "Local payload must never leak into public CI manifest."
+      ],
+      "decision_rationale": "Freeze committed source and validate source/architecture/archive and file hashes in an explicit local-only input; preserve immutable public manifest contracts."
+    },
+    {
+      "id": "cand-003",
+      "name": "Frozen multi-platform release jobs and serialized publication",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Per-delivery operator-controlled macOS and Windows rollout",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/scripts/release-profile.cjs",
+          "claim": "Non-UAR profile supports four architectures; UAR-enabled currently only win32-x64 and darwin-arm64."
+        },
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/scripts/release-preflight.cjs",
+          "claim": "Source/version/profile consistency is enforced for reuse."
+        }
+      ],
+      "risks": [
+        "Mac Intel and Windows ARM64 UAR payloads and packaging remain required work.",
+        "No latest-source mutation after boundary freeze."
+      ],
+      "decision_rationale": "Reuse release machinery; add missing UAR targets through approved implementation, publish only on a recorded boundary choice, no Linux."
+    },
+    {
+      "id": "cand-004",
+      "name": "Existing agent team lifecycle and bounded optimization observer",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Parallel ownership without Cargo contention or testing loops",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/.codex/plugins/cache/prometheus-skill-pack/prometheus-process-skills/1.6.0/agent-team-creator/SKILL.md",
+          "claim": "Existing team-update/task ownership and expected revision operations exist; native harness executes work."
+        }
+      ],
+      "risks": [
+        "Role exports still contain conflicting test-first policy.",
+        "Different stacks share hardware."
+      ],
+      "decision_rationale": "Separate runtime, Boss UI, packaging and documentation ownership; one heavy local build writer; observer can advise from logs, never authorize tests or replan."
+    },
+    {
+      "id": "cand-005",
+      "name": "KBD/OpenSpec with existing Karpathy progress recorder",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Traceability and delivery learning without a second scheduler",
+      "verdict": "adopt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/scripts/record-progress.mjs",
+          "claim": "Existing recorder provides durable local log/receipt with bounded remote pk delivery."
+        },
+        {
+          "tier": 1,
+          "source_url": ".kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/karpathy-learning-log.md",
+          "claim": "Previous local receipt succeeded but shared pk ingest timed out; historical agent durations unknown."
+        }
+      ],
+      "risks": [
+        "Existing closed event schema is not a full telemetry store.",
+        "Unknown timings must remain unknown."
+      ],
+      "decision_rationale": "Link a small per-delivery metric artifact through existing events; preserve canonical task ownership and C-package meanings."
+    },
+    {
+      "id": "cand-006",
+      "name": "Worktree-local incremental Compass refresh",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Hourly code navigation with bounded resource use",
+      "verdict": "adapt",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": ".kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/source-evidence.json",
+          "claim": "Cold UAR update134.98s; ~0.88GB graph, incomplete coverage; real controller query succeeded."
+        }
+      ],
+      "risks": [
+        "Incremental cost unmeasured.",
+        "43 identity collisions prevent confident negative coverage."
+      ],
+      "decision_rationale": "Refresh changed active worktrees hourly, serialize with heavy packaging, record actual delay and affected-symbol query; no repeat full scans of clean roots."
+    },
+    {
+      "id": "cand-007",
+      "name": "All platforms on each hourly local critical path",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Immediate usable local app with optional broader release",
+      "verdict": "reject",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/scripts/release-profile.cjs",
+          "claim": "Two requested UAR architectures not yet enabled."
+        },
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/scripts/import-uar-sidecar-payloads.cjs",
+          "claim": "Existing public import couples two native payloads."
+        }
+      ],
+      "risks": [
+        "Native CI delays and absent target support can stall local delivery."
+      ],
+      "decision_rationale": "Keep immutable public release inputs but remove them as prerequisites to a fresh local Mac artifact."
+    },
+    {
+      "id": "cand-008",
+      "name": "Runtime-only sidecar path override as local delivery",
+      "kind": "pattern",
+      "registry": "none",
+      "fit_for_gap": "Self-contained fresh UAR inside DMG",
+      "verdict": "reject",
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "/Users/gqadonis/Projects/prometheus/the-boss/src/main/ai/runtime/uar/uarPayload.ts",
+          "claim": "Runtime owner inspected uarPayload.ts:63–70: THE_BOSS_UAR_SIDECAR_PATH redirects launch but does not embed payload. Reject this as packaged acceptance."
+        }
+      ],
+      "risks": [
+        "Developer machine can hide stale or missing packaged binary."
+      ],
+      "decision_rationale": "Require the built app to launch its packaged helper, with runtime path override cleared."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "Exact local arm64 command with current packaged UAR and source-bound payload staging",
+      "why_no_candidate": "Existing scripts disable UAR or require both platform records; adapting existing repo code is smaller than new tooling.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "UAR-enabled Mac Intel and Windows ARM64 release payloads",
+      "why_no_candidate": "Current UAR profile lists only customer-critical pair; platform prerequisites must be implemented and honestly accounted for.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Core and Boss UI delivery slices mapped to existing C packages",
+      "why_no_candidate": "Existing sequential roadmap delays UI; needs operator-approved dependency revision, not a replacement framework.",
+      "capability_gap_id": null
+    }
+  ]
+}

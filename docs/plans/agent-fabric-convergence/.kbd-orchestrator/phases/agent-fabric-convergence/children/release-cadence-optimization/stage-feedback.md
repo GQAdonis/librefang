@@ -1,13 +1,15 @@
 # Stage feedback register
 
-The operator explicitly requires a stop after each stage. Completion of an artifact is not approval of its conclusions or authorization to enter the next stage.
+The operator requires a stop after every stage. A completed artifact does not authorize its successor.
 
 | Stage | Authorization | Result | Successor permission |
 |---|---|---|---|
-| Assess | User request, 2026-09-28 | Complete at canonical revision260; run paused at261 for feedback | Analyze pending feedback |
-| Analyze | Pending | Not started | Plan pending feedback |
-| Plan | Pending | Not started | Execute pending feedback |
-| Execute | Pending | Not started | Reflect pending feedback |
-| Reflect | Pending | Not started | Parent restoration pending feedback |
+| Assess | Initial child request | Complete revision260; paused261; commit e4b19524b | Operator accepted and supplied local Mac requirement |
+| Analyze | “That does” plus hourly local Mac delivery clarification, 2026-09-28 | Complete revision265; paused266 for feedback | Plan awaits feedback |
+| Plan | Pending | Not started | Execute awaits feedback |
+| Execute | Pending | Not started | Reflect awaits feedback |
+| Reflect | Pending | Not started | Parent restoration awaits feedback |
 
-The operator's target is useful independently releasable work each hour of agent runtime. The clock definition and delivery thresholds remain explicit assessment questions; do not silently substitute commits or invisible backend work for usable releases. Do not remove existing C-package requirements while assessing.
+## Feedback incorporated
+
+Every hourly delivery ends in a functioning `pnpm build:mac:arm64` local app, followed by an explicit choice: update all macOS and Windows platforms now, or wait until next delivery. No Linux. Publication remains pending when the operator has not answered. A failed build or incomplete feature is not a delivery. No production build is authorized during this Analyze stage.

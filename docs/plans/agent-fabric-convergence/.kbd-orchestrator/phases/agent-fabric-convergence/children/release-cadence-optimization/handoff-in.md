@@ -34,3 +34,7 @@ Coordination checkout: /Users/gqadonis/Projects/prometheus/worktrees/agent-fabri
 ## Scope and instruction conflicts
 
 Use the mini Node KBD adapters and typed Prometheus runtime commands, never edits to generated projections. The old user skill path was absent; the installed process plugin and mini skills were read. Legacy shell/Python examples do not override the Node-only instruction. Test-first language in BossFang instructions/team definitions does not override the operator's complete-phase integration rule. The generic KBD adapter permits optional analyze, but this child's five explicit stages are all mandatory.
+
+## Post-assessment scope clarification
+
+On 2026-09-28 the operator accepted Assess and required the exact local Mac build at every hourly delivery plus a per-boundary macOS/Windows publication choice; Linux excluded. Analyze entered revision263. The original parent checkpoint and all C-package requirements remain preserved. See goals.md and stage-feedback.md for current approval scope.

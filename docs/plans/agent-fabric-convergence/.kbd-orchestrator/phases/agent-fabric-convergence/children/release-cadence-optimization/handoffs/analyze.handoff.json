@@ -1,0 +1,15 @@
+{
+  "stage": "analyze",
+  "completedAt": "2026-09-28T07:34:46.140Z",
+  "outputs": [
+    "analysis.md",
+    "library-candidates.json",
+    "decision-log.md",
+    "stage-feedback.md",
+    "review/analyze/findings.json"
+  ],
+  "nextStage": "spec",
+  "summaryForNext": "Eight candidates: adapt enabled local Mac packaging/source-bound arm64 payload, existing platform release/team/graph tooling; adopt Karpathy/KBD. Recommend local usable app then explicit all-macOS/Windows publication choice; no Linux. Exact command currently disables UAR, public payload imports couple Windows/Mac, two additional UAR targets missing. Proposals only; C01-C18 unchanged, C08 open. Native artifact review PASS, canonical model identities unverified. STOP for operator feedback before Plan. Generic nextStage spec is optional metadata; user five-stage chain requires Plan/OpenSpec artifacts next after feedback; no skipped user-required stage.",
+  "skipped": false,
+  "skipReason": null
+}
