@@ -2,24 +2,24 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 253,
-  "derivedRevision": 253,
+  "sourceRevision": 261,
+  "derivedRevision": 261,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 14
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 22
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T06:20:51.380899Z",
+  "updatedAt": "2026-09-28T07:16:02.525665Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c08-bossfang-and-fabric-observer-routing",
-    "C08.2"
+    "release-cadence-optimization",
+    "assess"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
-    "status": "ready",
+    "status": "paused",
     "progress": {
       "done": 9,
       "total": 20
@@ -35,6 +35,18 @@
           "total": 18
         },
         "children": [
+          {
+            "type": "phase",
+            "id": "release-cadence-optimization",
+            "canonicalId": "agent-fabric-convergence::release-cadence-optimization",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 0,
+              "total": 0
+            },
+            "children": [],
+            "annotations": []
+          },
           {
             "type": "phase",
             "id": "uar-team-specification",

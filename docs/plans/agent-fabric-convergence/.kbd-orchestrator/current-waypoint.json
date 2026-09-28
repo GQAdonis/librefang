@@ -2,40 +2,42 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 253,
-  "derivedRevision": 253,
+  "sourceRevision": 261,
+  "derivedRevision": 261,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 14
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 22
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "release-cadence-optimization"
   ],
   "phaseIds": [
-    "agent-fabric-convergence"
+    "agent-fabric-convergence",
+    "agent-fabric-convergence::release-cadence-optimization"
   ],
-  "activePhaseId": "agent-fabric-convergence",
-  "activePhase": "agent-fabric-convergence",
+  "activePhaseId": "agent-fabric-convergence::release-cadence-optimization",
+  "activePhase": "release-cadence-optimization",
   "phase": "agent-fabric-convergence",
-  "parentPhase": null,
-  "childPointer": null,
-  "change": "afc-c08-bossfang-and-fabric-observer-routing",
-  "currentTask": "C08.2",
-  "status": "ready",
-  "lifecycle": "ready",
-  "stageId": null,
-  "stageStatus": null,
+  "parentPhase": "agent-fabric-convergence",
+  "childPointer": "release-cadence-optimization",
+  "change": null,
+  "currentTask": null,
+  "status": "paused",
+  "lifecycle": "paused",
+  "stageId": "assess",
+  "stageStatus": "COMPLETE",
   "completionMetric": "implementation",
   "implementationCompleted": 9,
   "implementationTotal": 20,
   "planRevision": 3,
-  "revision": 253,
-  "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
-  "nextTask": "C08.2",
-  "updatedAt": "2026-09-28T06:20:51.380899Z"
+  "revision": 261,
+  "exactNextCommand": "/kbd-assess agent-fabric-convergence > release-cadence-optimization",
+  "nextChange": null,
+  "nextTask": null,
+  "updatedAt": "2026-09-28T07:16:02.525665Z"
 }

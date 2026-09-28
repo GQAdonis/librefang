@@ -1,0 +1,19 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-6-sol",
+  "producer_model": "gpt-6-astra",
+  "isolation_mode": "harness-native",
+  "cross_model_check": "unverified-native-identity",
+  "findings": [],
+  "checked_classes": [
+    "Shipping-boundary evidence: the assessment now distinguishes C06/C07 internal integration gates from independently shipping increments.",
+    "Compass status: the assessment now says one bounded update completed and identifies the remaining hourly-cadence gap.",
+    "Parent return point: the assessment now records the entry handoff and identifies restoration as future work."
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

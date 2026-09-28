@@ -1,0 +1,23 @@
+{
+  "allowedWritePaths": [
+    ".kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/**",
+    ".prometheus/session-log.md",
+    ".prometheus/progress-memory-receipts/**",
+    ".prometheus/progress-memory-outbox/**"
+  ],
+  "deniedPaths": [
+    "product source and manifests outside a later approved execution plan"
+  ],
+  "inheritsConstraints": true,
+  "__note": "Edit allowedWritePaths to widen the child loop's write surface. .kbd-orchestrator/** and SCRATCHPAD.md are always allowed. Enforced advisorily by check-child-scope.mjs.",
+  "externalDerivedOutputPaths": [
+    "/Users/gqadonis/.claude/worktrees/afc-c08-uar/compass-out/**"
+  ],
+  "stageFeedbackRequired": [
+    "assess",
+    "analyze",
+    "plan",
+    "execute",
+    "reflect"
+  ]
+}
