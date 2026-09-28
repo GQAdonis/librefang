@@ -196,6 +196,19 @@ pub trait ChannelBridgeHandle: Send + Sync {
         Ok(())
     }
 
+    /// Queue authorized observer copies independently of the selected handler.
+    /// The implementation owns disclosure checks and durable replay; a source
+    /// occurrence alone does not authorize sharing its message content.
+    async fn publish_channel_observers(
+        &self,
+        _source: &SourceOccurrence,
+        _admission: &RouteAdmission,
+        _handler: &str,
+        _message: &ChannelMessage,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Send a message to an agent and get the text response.
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String>;
 
@@ -4196,6 +4209,32 @@ async fn claim_durable_dispatch(
     }
 }
 
+async fn publish_durable_observers(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&DurableDispatch>,
+    message: &ChannelMessage,
+) {
+    let Some(dispatch) = dispatch else { return };
+    if dispatch.source.scope.provider != "discord"
+        || !message.is_group
+        || message.metadata.get("guild_id").and_then(serde_json::Value::as_str).is_none()
+    {
+        return;
+    }
+    if let Err(error) = handle
+        .publish_channel_observers(
+            &dispatch.source,
+            &dispatch.admission,
+            &dispatch.handler_name,
+            message,
+        )
+        .await
+    {
+        error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+            "Channel observer publication failed; selected handler remains independent");
+    }
+}
+
 async fn authorize_durable_handler_execution(
     handle: &Arc<dyn ChannelBridgeHandle>,
     dispatch: Option<&DurableDispatch>,
@@ -5711,6 +5750,7 @@ async fn dispatch_message(
         }
     }
 
+    publish_durable_observers(handle, durable.as_ref(), message).await;
     if !claim_durable_dispatch(handle, durable.as_ref()).await {
         return;
     }
@@ -7710,6 +7750,7 @@ async fn dispatch_with_blocks(
         }
     }
 
+    publish_durable_observers(handle, durable.as_ref(), message).await;
     if !claim_durable_dispatch(handle, durable.as_ref()).await {
         return;
     }
