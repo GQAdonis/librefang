@@ -291,7 +291,11 @@ def parse_message_create(
     channel_id = d.get("channel_id")
     if not isinstance(channel_id, str):
         return None
-    message_id = str(d.get("id") or "0")
+    native_message_id = d.get("id")
+    message_id = (
+        native_message_id
+        if isinstance(native_message_id, str) and native_message_id else None
+    )
     username = str(author.get("username") or "Unknown")
     discriminator = str(author.get("discriminator") or "0000")
     display_name = (
@@ -333,6 +337,10 @@ def parse_message_create(
         metadata["was_mentioned"] = True
     if account_id is not None:
         metadata["account_id"] = account_id
+    if is_group:
+        # Preserve Discord's native workspace identity for the durable
+        # channel scope. DMs have no guild and stay on the legacy route.
+        metadata["guild_id"] = guild_id
     # Named mentions so the bridge can route a guild message to a specific
     # non-default agent (#5323). Each mentioned user contributes its username
     # and (when set) global display name; the bridge matches them against

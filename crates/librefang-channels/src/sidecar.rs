@@ -1560,6 +1560,30 @@ async fn spawn_once(
                                         "Received message from sidecar"
                                     );
                                     let mut metadata = params.metadata;
+                                    // The sidecar transport alone knows whether this ID came
+                                    // from the provider. Do not let adapter metadata assert the
+                                    // replay-safe profile for a generated legacy UUID.
+                                    let native_message_id = params
+                                        .message_id
+                                        .as_deref()
+                                        .is_some_and(|id| !id.trim().is_empty());
+                                    metadata.insert(
+                                        crate::channel_route::NATIVE_MESSAGE_ID_KEY.to_string(),
+                                        serde_json::Value::Bool(native_message_id),
+                                    );
+                                    let account_kind = if metadata
+                                        .get("account_id")
+                                        .and_then(serde_json::Value::as_str)
+                                        .is_some_and(|id| !id.trim().is_empty())
+                                    {
+                                        "native"
+                                    } else {
+                                        "configured_instance"
+                                    };
+                                    metadata.insert(
+                                        crate::channel_route::ACCOUNT_KIND_KEY.to_string(),
+                                        serde_json::Value::String(account_kind.to_string()),
+                                    );
                                     // #5227 follow-up — sidecar protocol
                                     // splits `user_id` (the human sender)
                                     // and `channel_id` (the chat the

@@ -3,6 +3,10 @@
 //! Defines `ChannelBridgeHandle` (implemented by librefang-api on the kernel) and
 //! `BridgeManager` which owns running adapters and dispatches messages.
 
+use crate::channel_route::{
+    ChannelScope, DispatchClaim, RouteAdmission, RouteAffinity, RouteDecision, RouteOutcome,
+    SourceOccurrence,
+};
 use crate::formatter;
 use crate::rate_limiter::ChannelRateLimiter;
 use crate::router::AgentRouter;
@@ -130,6 +134,55 @@ impl ReplyEnvelope {
 /// Implemented in librefang-api on the actual kernel.
 #[async_trait]
 pub trait ChannelBridgeHandle: Send + Sync {
+    /// Read the durable route before evaluating agent-specific channel policy.
+    /// `None` means no retained route or an unsupported local storage profile.
+    async fn channel_route_affinity(
+        &self,
+        _scope: &ChannelScope,
+    ) -> Result<Option<RouteAffinity>, String> {
+        Ok(None)
+    }
+
+    /// Conditionally persist the source occurrence and its one handler
+    /// decision. `None` is a typed unsupported local storage profile; an
+    /// error is a supported profile whose store is unavailable and must not
+    /// silently fall through to nondurable execution.
+    async fn admit_channel_route(
+        &self,
+        _occurrence: &SourceOccurrence,
+        _decision: &RouteDecision,
+    ) -> Result<Option<RouteAdmission>, String> {
+        Ok(None)
+    }
+
+    /// Claim the stable handler action before invoking an agent loop.
+    async fn claim_channel_dispatch(
+        &self,
+        _occurrence_id: &str,
+        _claimant: &str,
+    ) -> Result<DispatchClaim, String> {
+        Err("durable channel dispatch is unsupported".to_string())
+    }
+
+    /// Record a known terminal handler result. An uncertain result must use
+    /// `mark_channel_dispatch_uncertain` instead of pretending it failed.
+    async fn complete_channel_dispatch(
+        &self,
+        _occurrence_id: &str,
+        _claimant: &str,
+        _success: bool,
+    ) -> Result<(), String> {
+        Err("durable channel dispatch is unsupported".to_string())
+    }
+
+    async fn mark_channel_dispatch_uncertain(
+        &self,
+        _occurrence_id: &str,
+        _claimant: &str,
+    ) -> Result<(), String> {
+        Err("durable channel dispatch is unsupported".to_string())
+    }
+
     /// Send a message to an agent and get the text response.
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String>;
 
@@ -995,6 +1048,15 @@ impl MessageDebouncer {
 
         let first = messages.remove(0);
         let mut merged_msg = first.message;
+        // A debounced batch contains multiple provider occurrences. Reusing
+        // its first native ID as the identity of the combined text would make
+        // a later redelivery suppress the other messages. The combined
+        // legacy dispatch remains local until a batch occurrence contract is
+        // defined; individual messages retain native provenance above.
+        merged_msg.metadata.insert(
+            crate::channel_route::NATIVE_MESSAGE_ID_KEY.to_string(),
+            serde_json::Value::Bool(false),
+        );
         // Per-message media payloads, in arrival order, enriched + concatenated by the flush task.
         // Text placeholders for these same messages are still merged into `merged_msg` below (preserving the pre-#6348 behaviour where a coalesced media message also contributes its `content_to_text` line), so a failed download is never silently dropped — it survives as its placeholder.
         let mut media: Vec<DownloadedMedia> = Vec::new();
@@ -3803,6 +3865,10 @@ struct RouteResolution {
     /// The conversation-ownership gate treats an addressed dispatch as a re-claim so a user can hand the thread from one agent to another mid-conversation (#5323).
     /// A continuation that merely inherits the sticky holder is *not* addressed.
     addressed: bool,
+    /// A retained route exists but cannot safely be used. Never choose a
+    /// different handler by falling through to process-local defaults.
+    unavailable: Option<String>,
+    retained: bool,
 }
 
 impl RouteResolution {
@@ -3810,19 +3876,312 @@ impl RouteResolution {
         Self {
             agent_id: None,
             addressed: false,
+            unavailable: None,
+            retained: false,
         }
     }
     fn plain(id: AgentId) -> Self {
         Self {
             agent_id: Some(id),
             addressed: false,
+            unavailable: None,
+            retained: false,
         }
     }
     fn addressed(id: AgentId) -> Self {
         Self {
             agent_id: Some(id),
             addressed: true,
+            unavailable: None,
+            retained: false,
         }
+    }
+
+    fn retained(id: AgentId) -> Self {
+        Self {
+            agent_id: Some(id),
+            addressed: false,
+            unavailable: None,
+            retained: true,
+        }
+    }
+
+    fn unavailable(reason: String) -> Self {
+        Self {
+            agent_id: None,
+            addressed: false,
+            unavailable: Some(reason),
+            retained: false,
+        }
+    }
+}
+
+struct DurableDispatch {
+    source: SourceOccurrence,
+    admission: RouteAdmission,
+    handler_name: String,
+    claimant: String,
+}
+
+enum DurableRouteResult {
+    Legacy,
+    Admitted {
+        agent_id: AgentId,
+        dispatch: DurableDispatch,
+    },
+    Stop(String),
+}
+
+/// The conditional storage admission is shared by text and media. It runs
+/// only after the caller's normal policy and RBAC gates, and before the
+/// recovery journal and any agent action.
+async fn admit_durable_dispatch(
+    message: &ChannelMessage,
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    router: &Arc<AgentRouter>,
+    resolution: &RouteResolution,
+) -> DurableRouteResult {
+    let Some(source) = SourceOccurrence::from_message(message) else {
+        return DurableRouteResult::Legacy;
+    };
+    if let Some(reason) = &resolution.unavailable {
+        return DurableRouteResult::Stop(reason.clone());
+    }
+
+    if resolution.addressed {
+        match handle.channel_route_affinity(&source.scope).await {
+            Ok(Some(affinity)) => {
+                let Some(selected_id) = resolution.agent_id else {
+                    return DurableRouteResult::Stop(
+                        "Explicit channel target is unavailable".to_string(),
+                    );
+                };
+                let selected_name = match resolve_agent_name(handle, selected_id).await {
+                    Some(name) => name,
+                    None => {
+                        return DurableRouteResult::Stop(
+                            "Explicit channel target has no stable name".to_string(),
+                        )
+                    }
+                };
+                if affinity.handler != selected_name {
+                    return DurableRouteResult::Stop(format!(
+                        "Channel route is retained by '{}'; changing it to '{}' requires a separate authorized reassignment",
+                        affinity.handler, selected_name
+                    ));
+                }
+            }
+            Ok(_) => {}
+            Err(error) => {
+                return DurableRouteResult::Stop(format!("Channel affinity lookup failed: {error}"))
+            }
+        }
+    }
+
+    let mut reason = if resolution.addressed {
+        "explicit_address"
+    } else if resolution.retained {
+        "retained_affinity"
+    } else {
+        "configured_or_default"
+    };
+    let mut outcome = match resolution.agent_id {
+        Some(id) => match resolve_agent_name(handle, id).await {
+            Some(handler) => RouteOutcome::Selected { handler },
+            None => RouteOutcome::Unavailable {
+                reason: "Selected channel handler cannot be resolved by stable name".to_string(),
+            },
+        },
+        None => RouteOutcome::Unavailable {
+            reason: "No eligible channel handler".to_string(),
+        },
+    };
+
+    if resolution.addressed
+        && message.metadata.get("thread_route_agent").is_none()
+        && message.target_agent.is_none()
+    {
+        let mut mentioned = Vec::new();
+        for name in mention_names(message) {
+            if let Ok(Some(id)) = handle.find_agent_by_name(&name).await {
+                if agent_allows_channel(handle, id, &source.scope.provider).await
+                    && !mentioned.contains(&name)
+                {
+                    mentioned.push(name);
+                }
+            }
+        }
+        if mentioned.len() > 1 {
+            mentioned.sort();
+            reason = "equal_priority_explicit_mention_conflict";
+            outcome = RouteOutcome::Conflict {
+                handlers: mentioned,
+            };
+        }
+    } else if !resolution.addressed && !resolution.retained {
+        let ctx = binding_context(message);
+        let specific = router.top_binding_names(&ctx, true);
+        let mut candidates = if !specific.is_empty() {
+            specific
+        } else if let Some(instance) = message
+            .metadata
+            .get("account_id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|instance| !instance.is_empty())
+        {
+            if handle.resolve_instance_default(instance).await.is_some() {
+                // The configured instance default outranks channel-only rules.
+                Vec::new()
+            } else {
+                router.top_binding_names(&ctx, false)
+            }
+        } else {
+            router.top_binding_names(&ctx, false)
+        };
+        let mut eligible = Vec::new();
+        for name in candidates.drain(..) {
+            if let Ok(Some(id)) = handle.find_agent_by_name(&name).await {
+                if agent_allows_channel(handle, id, &source.scope.provider).await {
+                    eligible.push(name);
+                }
+            }
+        }
+        let candidates = eligible;
+        if candidates.len() > 1 {
+            reason = "equal_specificity_binding_conflict";
+            outcome = RouteOutcome::Conflict {
+                handlers: candidates,
+            };
+        }
+    }
+
+    let decision = RouteDecision {
+        outcome,
+        reason: reason.to_string(),
+        binding_revision: None,
+    };
+    let admission = match handle.admit_channel_route(&source, &decision).await {
+        Ok(Some(admission)) => admission,
+        Ok(None) => return DurableRouteResult::Legacy,
+        Err(error) => {
+            return DurableRouteResult::Stop(format!("Channel route admission failed: {error}"))
+        }
+    };
+    let handler_name = match &admission.outcome {
+        RouteOutcome::Selected { handler } => handler.clone(),
+        RouteOutcome::Conflict { handlers } => {
+            return DurableRouteResult::Stop(format!(
+                "Channel route conflict between: {}",
+                handlers.join(", ")
+            ));
+        }
+        RouteOutcome::Unavailable { reason } => {
+            return DurableRouteResult::Stop(format!("Channel route unavailable: {reason}"));
+        }
+    };
+    let Some(selected_id) = handle
+        .find_agent_by_name(&handler_name)
+        .await
+        .ok()
+        .flatten()
+    else {
+        return DurableRouteResult::Stop(format!(
+            "Retained channel handler '{handler_name}' is not running"
+        ));
+    };
+    if !agent_allows_channel(handle, selected_id, &source.scope.provider).await {
+        return DurableRouteResult::Stop(format!(
+            "Retained channel handler '{handler_name}' is ineligible for this channel"
+        ));
+    }
+    if resolution.agent_id != Some(selected_id) {
+        // A competing host may have committed an affinity after our read.
+        // The agent-specific policy already evaluated above belongs to a
+        // different handler, so refuse this turn and let the next intake
+        // evaluate the committed route from the beginning.
+        return DurableRouteResult::Stop(format!(
+            "Channel route changed to '{handler_name}' during admission; retry the message"
+        ));
+    }
+    if !matches!(
+        admission.dispatch,
+        crate::channel_route::DispatchState::Ready
+    ) {
+        return DurableRouteResult::Stop(format!(
+            "Channel occurrence already has dispatch state {:?}",
+            admission.dispatch
+        ));
+    }
+    DurableRouteResult::Admitted {
+        agent_id: selected_id,
+        dispatch: DurableDispatch {
+            source,
+            admission,
+            handler_name,
+            claimant: uuid::Uuid::new_v4().to_string(),
+        },
+    }
+}
+
+fn route_journal_metadata(dispatch: &DurableDispatch) -> HashMap<String, serde_json::Value> {
+    let mut metadata = HashMap::new();
+    if let Ok(source) = serde_json::to_value(&dispatch.source) {
+        metadata.insert("source_occurrence".to_string(), source);
+    }
+    if let Some(revision) = dispatch.admission.route_revision {
+        metadata.insert("route_revision".to_string(), revision.into());
+    }
+    if let Some(action_id) = &dispatch.admission.action_id {
+        metadata.insert("action_id".to_string(), action_id.clone().into());
+    }
+    metadata
+}
+
+async fn claim_durable_dispatch(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&DurableDispatch>,
+) -> bool {
+    let Some(dispatch) = dispatch else {
+        return true;
+    };
+    match handle
+        .claim_channel_dispatch(&dispatch.admission.occurrence_id, &dispatch.claimant)
+        .await
+    {
+        Ok(DispatchClaim::Acquired) => true,
+        Ok(other) => {
+            warn!(occurrence_id = %dispatch.admission.occurrence_id, claim = ?other,
+                "Channel dispatch not acquired; no agent execution");
+            false
+        }
+        Err(error) => {
+            error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+                "Channel dispatch claim failed; no agent execution");
+            false
+        }
+    }
+}
+
+async fn finish_durable_dispatch(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&DurableDispatch>,
+    success: bool,
+) {
+    let Some(dispatch) = dispatch else { return };
+    let result = if success {
+        handle
+            .complete_channel_dispatch(&dispatch.admission.occurrence_id, &dispatch.claimant, true)
+            .await
+    } else {
+        // Once the agent call has started, its external effects may already
+        // have happened. A returned error is not proof that retry is safe.
+        handle
+            .mark_channel_dispatch_uncertain(&dispatch.admission.occurrence_id, &dispatch.claimant)
+            .await
+    };
+    if let Err(error) = result {
+        error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+            "Could not persist channel dispatch outcome");
     }
 }
 
@@ -3961,6 +4320,25 @@ async fn resolve_or_fallback(
         None
     };
 
+    if SourceOccurrence::from_message(message).is_some() {
+        if let Some(id) = message.target_agent {
+            if agent_allows_channel(handle, id, ct).await {
+                return RouteResolution::addressed(id);
+            }
+            return RouteResolution::unavailable(
+                "Explicit channel target is ineligible".to_string(),
+            );
+        }
+        if let Some(id) = thread_route_agent_id {
+            if agent_allows_channel(handle, id, ct).await {
+                return RouteResolution::addressed(id);
+            }
+            return RouteResolution::unavailable(
+                "Explicit thread target is ineligible".to_string(),
+            );
+        }
+    }
+
     // Channel-instance binding keys (#5671 Model A), extracted once and reused
     // by both binding levels below. `instance` is the sidecar's config `name`,
     // stamped onto inbound messages as `metadata["account_id"]` (sidecar.rs).
@@ -4004,6 +4382,28 @@ async fn resolve_or_fallback(
             .await
         {
             return RouteResolution::addressed(id);
+        }
+    }
+
+    // Durable affinity outranks process-local ownership, configured bindings,
+    // and defaults. Only the explicit addressing/override branches above can
+    // request a new revision; a missing or ineligible holder is a recovery
+    // condition, not permission to pick another agent.
+    if let Some(source) = SourceOccurrence::from_message(message) {
+        match handle.channel_route_affinity(&source.scope).await {
+            Ok(Some(affinity)) => match handle.find_agent_by_name(&affinity.handler).await {
+                Ok(Some(id)) if agent_allows_channel(handle, id, ct).await => {
+                    return RouteResolution::retained(id);
+                }
+                _ => {
+                    return RouteResolution::unavailable(format!(
+                        "Retained channel handler '{}' is unavailable at route revision {}",
+                        affinity.handler, affinity.revision
+                    ));
+                }
+            },
+            Ok(None) => {}
+            Err(reason) => return RouteResolution::unavailable(reason),
         }
     }
 
@@ -4330,6 +4730,18 @@ async fn dispatch_message(
 
     // Resolve target agent early so per-agent overrides can take priority
     let resolution = resolve_or_fallback(message, handle, router, thread_ownership).await;
+    if let Some(reason) = &resolution.unavailable {
+        warn!(channel = ct_str, %reason, "Channel route requires recovery");
+        send_response(
+            adapter,
+            &message.sender,
+            "Channel route unavailable. Ask the operator to inspect the channel logs.".to_string(),
+            message.thread_id.as_deref(),
+            default_output_format_for_channel(ct_str),
+        )
+        .await;
+        return;
+    }
     let early_agent_id = resolution.agent_id;
     let agent_addressed = resolution.addressed;
 
@@ -5118,7 +5530,7 @@ async fn dispatch_message(
         }
     }
 
-    let agent_id = match early_agent_id {
+    let mut agent_id = match early_agent_id {
         Some(id) => id,
         None => {
             send_response(
@@ -5133,23 +5545,6 @@ async fn dispatch_message(
             return;
         }
     };
-
-    // Conversation-ownership gate (#3334 / #5323). A topic-less group now
-    // claims by chat id, DMs can opt in, and the key is scoped per peer /
-    // account. An explicit @-mention or a fresh address re-claims for the new
-    // agent.
-    if !conversation_ownership_allows(
-        message,
-        handle,
-        thread_ownership,
-        overrides.as_ref(),
-        agent_id,
-        agent_addressed,
-    )
-    .await
-    {
-        return;
-    }
 
     let channel_key = channel_type_str(&message.channel).to_string();
 
@@ -5169,57 +5564,51 @@ async fn dispatch_message(
         return;
     }
 
-    // Auto-reply check — if enabled, the engine decides whether to process this message.
-    // If auto-reply is enabled but suppressed for this message, skip agent call entirely.
-    if let Some(reply) = handle.check_auto_reply(agent_id, &text).await {
-        let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
-        send_response(adapter, &message.sender, reply, thread_id, output_format).await;
-        handle
-            .record_delivery(
-                agent_id,
-                ct_str,
-                &message.sender.platform_id,
-                true,
-                None,
-                thread_id,
-            )
-            .await;
-        return;
-    }
-
-    // --- Group-history drain (gating pass survived all early-return gates) ---
-    //
-    // Done here, after rate-limit / reply-intent / command-policy /
-    // thread-ownership / RBAC / auto-reply have all let the message
-    // through — earlier in the gating block we'd erase the buffer even
-    // when one of these suppressed the dispatch, costing the very
-    // context the next addressed turn was meant to recover. The drained
-    // count is log-only in v1; the kernel-side prompt enrichment that
-    // consumes `drained` is the follow-up PR.
-    if message.is_group {
-        if let Some(buffer) = crate::group_history::global() {
-            let key = crate::group_history::group_key(ct_str, &message.sender.platform_id);
-            if let Some(drained) = buffer.drain(&key).await {
-                info!(
-                    event = "group_history_drained",
-                    channel = ct_str,
-                    group = %message.sender.platform_id,
-                    entries = drained.len(),
-                    "drained prior group entries on gating pass",
-                );
-            }
+    let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
+        DurableRouteResult::Legacy => None,
+        DurableRouteResult::Admitted {
+            agent_id: selected,
+            dispatch,
+        } => {
+            agent_id = selected;
+            Some(dispatch)
         }
+        DurableRouteResult::Stop(reason) => {
+            warn!(channel = ct_str, %reason, "Channel route not dispatched");
+            send_response(adapter, &message.sender, reason, thread_id, output_format).await;
+            return;
+        }
+    };
+
+    // Process-local ownership remains the legacy fallback only. A supported
+    // durable route is authoritative even when a stale hot-path claim names
+    // a different agent.
+    if durable.is_none()
+        && !conversation_ownership_allows(
+            message,
+            handle,
+            thread_ownership,
+            overrides.as_ref(),
+            agent_id,
+            agent_addressed,
+        )
+        .await
+    {
+        return;
     }
 
     // --- Message journal: record before dispatch for crash recovery ---
     if let Some(j) = journal {
         let entry = crate::message_journal::JournalEntry {
-            message_id: message.platform_message_id.clone(),
+            message_id: durable
+                .as_ref()
+                .map(|d| d.admission.occurrence_id.clone())
+                .unwrap_or_else(|| message.platform_message_id.clone()),
             channel: ct_str.to_string(),
             sender_id: message.sender.platform_id.clone(),
             sender_name: message.sender.display_name.clone(),
             content: text.clone(),
-            agent_name: None, // resolved at re-dispatch if needed
+            agent_name: durable.as_ref().map(|d| d.handler_name.clone()),
             received_at: message.timestamp,
             status: crate::message_journal::JournalStatus::Processing,
             attempts: 0,
@@ -5227,7 +5616,10 @@ async fn dispatch_message(
             updated_at: chrono::Utc::now(),
             is_group: message.is_group,
             thread_id: thread_id.map(|s| s.to_string()),
-            metadata: std::collections::HashMap::new(),
+            metadata: durable
+                .as_ref()
+                .map(route_journal_metadata)
+                .unwrap_or_default(),
             next_retry_after: None,
         };
         if !j.record(entry).await {
@@ -5245,6 +5637,50 @@ async fn dispatch_message(
             )
             .await;
             return;
+        }
+    }
+
+    if !claim_durable_dispatch(handle, durable.as_ref()).await {
+        return;
+    }
+
+    let journal_id = durable
+        .as_ref()
+        .map(|d| d.admission.occurrence_id.as_str())
+        .unwrap_or(&message.platform_message_id);
+
+    // Auto-reply is a channel effect too. It happens after the durable claim
+    // so a replay cannot bypass occurrence deduplication just because no LLM
+    // call was needed.
+    if let Some(reply) = handle.check_auto_reply(agent_id, &text).await {
+        let reply = maybe_prefix_response(handle, overrides.as_ref(), agent_id, reply).await;
+        send_response(adapter, &message.sender, reply, thread_id, output_format).await;
+        handle
+            .record_delivery(
+                agent_id,
+                ct_str,
+                &message.sender.platform_id,
+                true,
+                None,
+                thread_id,
+            )
+            .await;
+        if let Some(j) = journal {
+            j.record_outcome(journal_id, true, None).await;
+        }
+        finish_durable_dispatch(handle, durable.as_ref(), true).await;
+        return;
+    }
+
+    // --- Group-history drain (all dispatch gates have passed) ---
+    if message.is_group {
+        if let Some(buffer) = crate::group_history::global() {
+            let key = crate::group_history::group_key(ct_str, &message.sender.platform_id);
+            if let Some(drained) = buffer.drain(&key).await {
+                info!(event = "group_history_drained", channel = ct_str,
+                    group = %message.sender.platform_id, entries = drained.len(),
+                    "drained prior group entries on gating pass");
+            }
         }
     }
 
@@ -5404,13 +5840,10 @@ async fn dispatch_message(
                             )
                             .await;
                         if let Some(j) = journal {
-                            j.record_outcome(
-                                &message.platform_message_id,
-                                kernel_ok,
-                                kernel_err_str.clone(),
-                            )
-                            .await;
+                            j.record_outcome(journal_id, kernel_ok, kernel_err_str.clone())
+                                .await;
                         }
+                        finish_durable_dispatch(handle, durable.as_ref(), kernel_ok).await;
                         return;
                     }
                     Err(e) => {
@@ -5481,9 +5914,9 @@ async fn dispatch_message(
                                 )
                                 .await;
                             if let Some(j) = journal {
-                                j.record_outcome(&message.platform_message_id, kernel_ok, err_str)
-                                    .await;
+                                j.record_outcome(journal_id, kernel_ok, err_str).await;
                             }
+                            finish_durable_dispatch(handle, durable.as_ref(), kernel_ok).await;
                             return;
                         }
                         // Buffer was empty OR kernel errored on a
@@ -5508,9 +5941,9 @@ async fn dispatch_message(
                             )
                             .await;
                         if let Some(j) = journal {
-                            j.record_outcome(&message.platform_message_id, false, Some(err_str))
-                                .await;
+                            j.record_outcome(journal_id, false, Some(err_str)).await;
                         }
+                        finish_durable_dispatch(handle, durable.as_ref(), false).await;
                         return;
                     }
                 }
@@ -5604,9 +6037,9 @@ async fn dispatch_message(
             )
             .await;
         if let Some(j) = journal {
-            j.record_outcome(&message.platform_message_id, success, err_str)
-                .await;
+            j.record_outcome(journal_id, success, err_str).await;
         }
+        finish_durable_dispatch(handle, durable.as_ref(), success).await;
         return;
     }
 
@@ -5640,39 +6073,55 @@ async fn dispatch_message(
                 )
                 .await;
             if let Some(j) = journal {
-                j.record_outcome(&message.platform_message_id, true, None)
-                    .await;
+                j.record_outcome(journal_id, true, None).await;
             }
+            finish_durable_dispatch(handle, durable.as_ref(), true).await;
         }
         Err(e) => {
             let sender_ctx_retry = sender_ctx.clone();
-            handle_send_error(
-                &e,
-                agent_id,
-                &channel_key,
-                handle,
-                router,
-                adapter,
-                &message.sender,
-                msg_id,
-                ct_str,
-                thread_id,
-                output_format,
-                overrides.as_ref(),
-                |new_id| {
-                    let h = handle.clone();
-                    let t = text.clone();
-                    async move {
-                        h.send_message_with_sender(new_id, &t, &sender_ctx_retry)
-                            .await
-                    }
-                },
-            )
-            .await;
+            if durable.is_some() {
+                error!(channel = ct_str, error = %e,
+                    "Durable channel handler failed; route is retained and outcome is uncertain");
+                if !adapter.suppress_error_responses() {
+                    send_response(
+                        adapter,
+                        &message.sender,
+                        format!("Agent error: {e}"),
+                        thread_id,
+                        output_format,
+                    )
+                    .await;
+                }
+            } else {
+                handle_send_error(
+                    &e,
+                    agent_id,
+                    &channel_key,
+                    handle,
+                    router,
+                    adapter,
+                    &message.sender,
+                    msg_id,
+                    ct_str,
+                    thread_id,
+                    output_format,
+                    overrides.as_ref(),
+                    |new_id| {
+                        let h = handle.clone();
+                        let t = text.clone();
+                        async move {
+                            h.send_message_with_sender(new_id, &t, &sender_ctx_retry)
+                                .await
+                        }
+                    },
+                )
+                .await;
+            }
             if let Some(j) = journal {
-                j.record_outcome(&message.platform_message_id, false, Some(e.to_string()))
+                j.record_outcome(journal_id, false, Some(e.to_string()))
                     .await;
             }
+            finish_durable_dispatch(handle, durable.as_ref(), false).await;
         }
     }
 }
@@ -7066,7 +7515,19 @@ async fn dispatch_with_blocks(
     thread_ownership: &Arc<crate::thread_ownership::ThreadOwnershipRegistry>,
 ) {
     let resolution = resolve_or_fallback(message, handle, router, thread_ownership).await;
-    let agent_id = match resolution.agent_id {
+    if let Some(reason) = &resolution.unavailable {
+        warn!(channel = ct_str, %reason, "Multimodal channel route requires recovery");
+        send_response(
+            adapter,
+            &message.sender,
+            "Channel route unavailable. Ask the operator to inspect the channel logs.".to_string(),
+            thread_id,
+            output_format,
+        )
+        .await;
+        return;
+    }
+    let mut agent_id = match resolution.agent_id {
         Some(id) => id,
         None => {
             send_response(
@@ -7081,23 +7542,6 @@ async fn dispatch_with_blocks(
             return;
         }
     };
-
-    // Conversation-ownership gate (#3334 / #5323). Mirrors the text-path check
-    // in `dispatch_message`. Multimodal messages may not include a
-    // platform-level @-mention marker; the shared helper still honours a fresh
-    // address surfaced during resolution.
-    if !conversation_ownership_allows(
-        message,
-        handle,
-        thread_ownership,
-        overrides,
-        agent_id,
-        resolution.addressed,
-    )
-    .await
-    {
-        return;
-    }
 
     let channel_key = channel_type_str(&message.channel).to_string();
 
@@ -7117,16 +7561,49 @@ async fn dispatch_with_blocks(
         return;
     }
 
+    let durable = match admit_durable_dispatch(message, handle, router, &resolution).await {
+        DurableRouteResult::Legacy => None,
+        DurableRouteResult::Admitted {
+            agent_id: selected,
+            dispatch,
+        } => {
+            agent_id = selected;
+            Some(dispatch)
+        }
+        DurableRouteResult::Stop(reason) => {
+            warn!(channel = ct_str, %reason, "Multimodal channel route not dispatched");
+            send_response(adapter, &message.sender, reason, thread_id, output_format).await;
+            return;
+        }
+    };
+
+    if durable.is_none()
+        && !conversation_ownership_allows(
+            message,
+            handle,
+            thread_ownership,
+            overrides,
+            agent_id,
+            resolution.addressed,
+        )
+        .await
+    {
+        return;
+    }
+
     // --- Message journal: record before dispatch for crash recovery ---
     if let Some(j) = journal {
         let text = content_to_text(&message.content);
         let entry = crate::message_journal::JournalEntry {
-            message_id: message.platform_message_id.clone(),
+            message_id: durable
+                .as_ref()
+                .map(|d| d.admission.occurrence_id.clone())
+                .unwrap_or_else(|| message.platform_message_id.clone()),
             channel: ct_str.to_string(),
             sender_id: message.sender.platform_id.clone(),
             sender_name: message.sender.display_name.clone(),
             content: text,
-            agent_name: None,
+            agent_name: durable.as_ref().map(|d| d.handler_name.clone()),
             received_at: message.timestamp,
             status: crate::message_journal::JournalStatus::Processing,
             attempts: 0,
@@ -7134,7 +7611,10 @@ async fn dispatch_with_blocks(
             updated_at: chrono::Utc::now(),
             is_group: message.is_group,
             thread_id: thread_id.map(|s| s.to_string()),
-            metadata: std::collections::HashMap::new(),
+            metadata: durable
+                .as_ref()
+                .map(route_journal_metadata)
+                .unwrap_or_default(),
             next_retry_after: None,
         };
         if !j.record(entry).await {
@@ -7154,6 +7634,14 @@ async fn dispatch_with_blocks(
             return;
         }
     }
+
+    if !claim_durable_dispatch(handle, durable.as_ref()).await {
+        return;
+    }
+    let journal_id = durable
+        .as_ref()
+        .map(|d| d.admission.occurrence_id.as_str())
+        .unwrap_or(&message.platform_message_id);
 
     if !typing_indicator_suppressed(overrides.and_then(|o| o.typing_mode)) {
         if let Err(e) = adapter.send_typing(&message.sender).await {
@@ -7205,9 +7693,9 @@ async fn dispatch_with_blocks(
                 send_response(adapter, &message.sender, response, thread_id, output_format).await;
             }
             if let Some(j) = journal {
-                j.record_outcome(&message.platform_message_id, true, None)
-                    .await;
+                j.record_outcome(journal_id, true, None).await;
             }
+            finish_durable_dispatch(handle, durable.as_ref(), true).await;
             handle
                 .record_delivery(
                     agent_id,
@@ -7221,32 +7709,48 @@ async fn dispatch_with_blocks(
         }
         Err(e) => {
             let sender_ctx_retry = sender_ctx.clone();
-            handle_send_error(
-                &e,
-                agent_id,
-                &channel_key,
-                handle,
-                router,
-                adapter,
-                &message.sender,
-                msg_id,
-                ct_str,
-                thread_id,
-                output_format,
-                overrides,
-                |new_id| {
-                    let h = handle.clone();
-                    async move {
-                        h.send_message_with_blocks_and_sender(new_id, blocks, &sender_ctx_retry)
-                            .await
-                    }
-                },
-            )
-            .await;
+            if durable.is_some() {
+                error!(channel = ct_str, error = %e,
+                    "Durable multimodal handler failed; route is retained and outcome is uncertain");
+                if !adapter.suppress_error_responses() {
+                    send_response(
+                        adapter,
+                        &message.sender,
+                        format!("Agent error: {e}"),
+                        thread_id,
+                        output_format,
+                    )
+                    .await;
+                }
+            } else {
+                handle_send_error(
+                    &e,
+                    agent_id,
+                    &channel_key,
+                    handle,
+                    router,
+                    adapter,
+                    &message.sender,
+                    msg_id,
+                    ct_str,
+                    thread_id,
+                    output_format,
+                    overrides,
+                    |new_id| {
+                        let h = handle.clone();
+                        async move {
+                            h.send_message_with_blocks_and_sender(new_id, blocks, &sender_ctx_retry)
+                                .await
+                        }
+                    },
+                )
+                .await;
+            }
             if let Some(j) = journal {
-                j.record_outcome(&message.platform_message_id, false, Some(e.to_string()))
+                j.record_outcome(journal_id, false, Some(e.to_string()))
                     .await;
             }
+            finish_durable_dispatch(handle, durable.as_ref(), false).await;
         }
     }
 }
