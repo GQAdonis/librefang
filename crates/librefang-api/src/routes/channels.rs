@@ -19,6 +19,10 @@
 pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
     axum::Router::new()
         .route("/channels", axum::routing::get(list_channels))
+        .route(
+            "/channels/route-capability",
+            axum::routing::get(channel_route_capability),
+        )
         .route("/channels/reload", axum::routing::post(reload_channels))
         // Single read-only QR endpoint that replaces the four removed
         // pre-migration ones (`/{wechat,whatsapp}/qr/{start,status}`).
@@ -61,6 +65,58 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::types::ApiErrorResponse;
+
+/// Report the local channel route profile without implying cross-host
+/// observer authority. A remote SurrealDB transport is shared storage; it
+/// does not by itself grant Fabric delivery or Gate execution rights.
+pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    #[cfg(feature = "surreal-backend")]
+    {
+        let cfg = state.kernel.config_ref().storage.clone();
+        let profile = match &cfg.backend {
+            librefang_storage::StorageBackendKind::Remote(_) => "remote_shared",
+            librefang_storage::StorageBackendKind::Embedded { .. } => "embedded_local",
+        };
+        let result = async {
+            let session = librefang_storage::shared_pool().open(&cfg).await?;
+            librefang_storage::migrations::apply_pending(
+                session.client(),
+                librefang_storage::migrations::OPERATIONAL_MIGRATIONS,
+            )
+            .await
+            .map_err(|error| librefang_storage::StorageError::Backend(error.to_string()))?;
+            librefang_storage::ChannelRouteStore::open(&session).await?;
+            Ok::<(), librefang_storage::StorageError>(())
+        }
+        .await;
+        let operational = result.is_ok();
+        if let Err(error) = result {
+            tracing::warn!(%error, "channel route storage capability check failed");
+        }
+        return Json(serde_json::json!({
+            "profile": profile,
+            "operational": operational,
+            "native_source_required": true,
+            "cross_host_observers": false,
+            "reason": if operational {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String("Channel route storage could not be opened. Inspect server logs and the storage configuration.".into())
+            },
+        }));
+    }
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+        let _ = state;
+        Json(serde_json::json!({
+            "profile": "unsupported",
+            "operational": false,
+            "native_source_required": true,
+            "cross_host_observers": false,
+            "reason": "This build does not include SurrealDB route storage.",
+        }))
+    }
+}
 
 // All channel handlers below resolve the LibreFang home directory via
 // `state.kernel.home_dir()` so they honour the kernel's authoritative
