@@ -330,6 +330,16 @@ mod surreal_impl {
             }))
         }
 
+        /// Read an existing dispatch receipt without admitting a source or
+        /// changing its route. Used to reconcile a journal entry on restart.
+        pub async fn dispatch_receipt(
+            &self,
+            occurrence_id: &str,
+        ) -> StorageResult<Option<DispatchReceipt>> {
+            validate_occurrence_id(occurrence_id)?;
+            self.read(DISPATCH, occurrence_id).await
+        }
+
         /// Claim pending dispatch once. A claimed receipt is never resent by
         /// this API, even if the claimant process later dies.
         pub async fn claim_dispatch(
