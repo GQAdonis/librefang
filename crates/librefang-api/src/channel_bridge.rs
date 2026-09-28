@@ -1029,6 +1029,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                 handler,
                 route_revision: &route_revision,
                 payload,
+                payload_sha256: None,
                 classification: "handler_payload",
                 root_occurrence_id: &admission.occurrence_id,
                 parent_action_id: None,
@@ -1042,6 +1043,31 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         )
         .await?;
         Ok(())
+    }
+
+    async fn publish_channel_observers(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        message: &librefang_channels::types::ChannelMessage,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            return crate::channel_observers::queue_observers(
+                &self.kernel.config_ref().storage,
+                source,
+                admission,
+                handler,
+                message,
+            )
+            .await;
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, message);
+            Ok(())
+        }
     }
 
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String> {
@@ -3672,6 +3698,51 @@ pub async fn start_channel_bridge_with_config(
     if started_names.is_empty() {
         (None, Vec::new(), webhook_router)
     } else {
+        #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
+        match crate::channel_observers::ObserverTransportConfig::from_host() {
+            Ok(Some(config)) if matches!(
+                &kernel.config_ref().storage.backend,
+                librefang_storage::StorageBackendKind::Remote(_)
+            ) => {
+                let storage = kernel.config_ref().storage.clone();
+                let flush_config = config.clone();
+                let mut flush_shutdown = manager.shutdown_signal();
+                manager.track_task(tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                    loop {
+                        tokio::select! {
+                            _ = interval.tick() => {
+                                if let Err(error) = crate::channel_observers::flush_pending_observers(&storage, &flush_config).await {
+                                    warn!(%error, "Observer outbox flush needs attention");
+                                }
+                            }
+                            _ = flush_shutdown.changed() => break,
+                        }
+                    }
+                }));
+                let storage = kernel.config_ref().storage.clone();
+                let mut consume_shutdown = manager.shutdown_signal();
+                manager.track_task(tokio::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            result = crate::channel_observers::consume_fabric_to_uar(&config, &storage) => {
+                                if let Err(error) = result {
+                                    warn!(%error, "Observer Fabric subscription needs attention");
+                                }
+                            }
+                            _ = consume_shutdown.changed() => break,
+                        }
+                        tokio::select! {
+                            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+                            _ = consume_shutdown.changed() => break,
+                        }
+                    }
+                }));
+            }
+            Ok(None) => {}
+            Ok(Some(_)) => warn!("Cross-host observer transport requires remote shared SurrealDB"),
+            Err(error) => warn!(%error, "Observer transport host configuration is incomplete"),
+        }
         // Forward `ApprovalRequested` kernel events to channel adapters so
         // human approvers see a prompt in their configured chat instead of
         // having to poll the dashboard (#4875). Started after the adapter

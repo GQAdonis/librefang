@@ -27,6 +27,22 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
             "/channels/routes/reassign",
             axum::routing::post(reassign_channel_route),
         )
+        .route(
+            "/channels/observers",
+            axum::routing::get(list_channel_observers).post(create_channel_observer),
+        )
+        .route(
+            "/channels/observers/{id}/unresolved",
+            axum::routing::get(unresolved_channel_observer_deliveries),
+        )
+        .route(
+            "/channels/observers/{id}/pause",
+            axum::routing::post(pause_channel_observer),
+        )
+        .route(
+            "/channels/observers/{id}/revoke",
+            axum::routing::post(revoke_channel_observer),
+        )
         .route("/channels/reload", axum::routing::post(reload_channels))
         // Single read-only QR endpoint that replaces the four removed
         // pre-migration ones (`/{wechat,whatsapp}/qr/{start,status}`).
@@ -94,6 +110,14 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
         }
         .await;
         let operational = result.is_ok();
+        let fabric_configured = matches!(
+            crate::channel_observers::ObserverTransportConfig::from_host(),
+            Ok(Some(_)),
+        );
+        #[cfg(feature = "uar-driver")]
+        let uar_ingress_ready = librefang_llm_drivers::drivers::uar::supervised_channel_binding().is_some();
+        #[cfg(not(feature = "uar-driver"))]
+        let uar_ingress_ready = false;
         if let Err(error) = result {
             tracing::warn!(%error, "channel route storage capability check failed");
         }
@@ -103,6 +127,8 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             "native_source_required": true,
             "cross_host_observers": false,
             "gate_effects_configured": crate::channel_authority::configured_for_effects(),
+            "fabric_transport_configured": fabric_configured,
+            "uar_ingress_ready": uar_ingress_ready,
             "governed_handler_profile": if operational && crate::channel_authority::configured_for_effects() {
                 "discord_guild"
             } else {
@@ -219,6 +245,7 @@ pub async fn reassign_channel_route(
             handler: &request.handler,
             route_revision: &route_revision,
             payload: &bytes,
+            payload_sha256: None,
             classification: "metadata_only",
             root_occurrence_id: &identity,
             parent_action_id: None,
@@ -256,6 +283,206 @@ pub async fn reassign_channel_route(
             "error": "durable channel route storage is unsupported",
         })))
     }
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateChannelObserverRequest {
+    observer_instance_id: String,
+    source: librefang_channels::channel_route::ChannelScope,
+    source_grant_issuer: String,
+    source_grant_id: String,
+    recipient_grant_issuer: String,
+    recipient_grant_id: String,
+    recipient_grant_revision: String,
+}
+
+/// Register the UAR subscription first, then bind its returned stable ID to
+/// the BossFang source filter and independent durable cursor.
+pub async fn create_channel_observer(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateChannelObserverRequest>,
+) -> impl IntoResponse {
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
+    {
+        use librefang_storage::channel_actions::{ChannelActionStore, ObserverSubscriptionRequest};
+        if !matches!(&state.kernel.config_ref().storage.backend, librefang_storage::StorageBackendKind::Remote(_))
+            || !crate::channel_authority::configured_for_effects()
+            || !matches!(crate::channel_observers::ObserverTransportConfig::from_host(), Ok(Some(_)))
+        {
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({
+                "error": "remote shared storage, Gate and Fabric must be configured for observers",
+            })));
+        }
+        if request.source.provider != "discord"
+            || request.observer_instance_id.trim().is_empty()
+            || request.recipient_grant_revision.trim().is_empty()
+        {
+            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({
+                "error": "Discord guild source, observer instance and recipient grant revision are required",
+            })));
+        }
+        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+            Ok(session) => session,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+        };
+        let store = match ChannelActionStore::open(&session).await {
+            Ok(store) => store,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+        };
+        let filter_id = match crate::channel_observers::source_filter_id(&request.source) {
+            Ok(filter) => filter,
+            Err(error) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error":error}))),
+        };
+        let subscription_id = match crate::channel_observers::create_uar_subscription(
+            &request.observer_instance_id,
+            &request.source,
+            &request.recipient_grant_issuer,
+            &request.recipient_grant_id,
+        ).await {
+            Ok(id) => id,
+            Err(error) => return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error":error}))),
+        };
+        let binding = ObserverSubscriptionRequest {
+            subscription_id: subscription_id.clone(),
+            subscriber_id: subscription_id.clone(),
+            observer_instance_id: request.observer_instance_id,
+            uar_workspace_id: request.source.workspace,
+            filter_id,
+            source_grant_issuer: request.source_grant_issuer,
+            source_grant_id: request.source_grant_id,
+            recipient_grant_issuer: request.recipient_grant_issuer,
+            recipient_grant_id: request.recipient_grant_id,
+            grant_revision: request.recipient_grant_revision,
+        };
+        match store.subscribe_observer(&binding).await {
+            Ok(saved) => (StatusCode::CREATED, Json(serde_json::json!({"subscription":saved}))),
+            Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({
+                "error":"UAR subscription was created but BossFang cursor registration failed; reconcile the returned UAR subscription before retrying",
+                "uar_subscription_id":subscription_id,
+            }))),
+        }
+    }
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    {
+        let _ = (state, request);
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+    }
+}
+
+pub async fn list_channel_observers(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    #[cfg(feature = "surreal-backend")]
+    {
+        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+            Ok(session) => session,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+        };
+        let store = match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
+            Ok(store) => store,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+        };
+        match store.list_observer_subscriptions(1000).await {
+            Ok(rows) => (StatusCode::OK, Json(serde_json::json!({"subscriptions":rows}))),
+            Err(_) => (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer subscriptions unavailable"}))),
+        }
+    }
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+        let _ = state;
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+    }
+}
+
+pub async fn unresolved_channel_observer_deliveries(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    #[cfg(feature = "surreal-backend")]
+    {
+        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+            Ok(session) => session,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+        };
+        let store = match librefang_storage::channel_actions::ChannelActionStore::open(&session).await {
+            Ok(store) => store,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+        };
+        match store.unresolved_observer_deliveries(&id, 1000).await {
+            Ok(rows) => (StatusCode::OK, Json(serde_json::json!({
+                "subscription_id":id,
+                "deliveries":rows,
+                "recovery":"Compare each delivery ID with Fabric and UAR receipts before operator reconciliation; claimed and uncertain copies are never reposted automatically",
+            }))),
+            Err(_) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
+        }
+    }
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+        let _ = (state, id);
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+    }
+}
+
+/// Stop future release at UAR first, then persist the matching local status.
+/// A partial transition is reported with its stable subscription ID so an
+/// operator can reconcile the two authorities without replaying any copy.
+async fn change_channel_observer_status(
+    state: Arc<AppState>,
+    id: String,
+    action: &'static str,
+) -> (StatusCode, Json<serde_json::Value>) {
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
+    {
+        use librefang_storage::channel_actions::{ChannelActionStore, ObserverStatus};
+        let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
+            Ok(session) => session,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer storage unavailable"}))),
+        };
+        let store = match ChannelActionStore::open(&session).await {
+            Ok(store) => store,
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer store unavailable"}))),
+        };
+        let subscriber = match store.get_observer_subscription(&id).await {
+            Ok(Some(subscriber)) => subscriber,
+            Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
+            Err(_) => return (StatusCode::SERVICE_UNAVAILABLE, Json(serde_json::json!({"error":"observer subscription unavailable"}))),
+        };
+        let target_status = if action == "pause" { ObserverStatus::Paused } else { ObserverStatus::Revoked };
+        if subscriber.status == target_status {
+            return (StatusCode::OK, Json(serde_json::json!({"subscription":subscriber})));
+        }
+        if subscriber.status == ObserverStatus::Revoked || (action == "pause" && subscriber.status != ObserverStatus::Active) {
+            return (StatusCode::CONFLICT, Json(serde_json::json!({"error":"observer status cannot transition", "subscription_id":id})));
+        }
+        let target = crate::channel_observers::ObserverTarget {
+            subscription_id: id.clone(),
+            uar_workspace_id: subscriber.uar_workspace_id.clone(),
+            source_grant_issuer: subscriber.source_grant_issuer.clone(),
+            source_grant_id: subscriber.source_grant_id.clone(),
+        };
+        if let Err(error) = crate::channel_observers::change_uar_subscription(&target, action).await {
+            return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({"error":error, "subscription_id":id})));
+        }
+        match store.set_observer_status(&id, subscriber.status, target_status).await {
+            Ok(saved) => (StatusCode::OK, Json(serde_json::json!({"subscription":saved}))),
+            Err(_) => (StatusCode::CONFLICT, Json(serde_json::json!({
+                "error":"UAR subscription changed but BossFang status did not; reconcile before retrying",
+                "subscription_id":id,
+            }))),
+        }
+    }
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    {
+        let _ = (state, id, action);
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({"error":"observer profile is unsupported by this build"})))
+    }
+}
+
+pub async fn pause_channel_observer(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    change_channel_observer_status(state, id, "pause").await
+}
+
+pub async fn revoke_channel_observer(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> impl IntoResponse {
+    change_channel_observer_status(state, id, "revoke").await
 }
 
 // All channel handlers below resolve the LibreFang home directory via

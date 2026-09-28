@@ -11,6 +11,7 @@ impl ChannelActionStore {
         for (name, value) in [
             ("subscription_id", &request.subscription_id),
             ("subscriber_id", &request.subscriber_id),
+            ("observer_instance_id", &request.observer_instance_id),
             ("uar_workspace_id", &request.uar_workspace_id),
             ("filter_id", &request.filter_id),
             ("source_grant_issuer", &request.source_grant_issuer),
@@ -32,6 +33,7 @@ impl ChannelActionStore {
         let row = ObserverSubscription {
             subscription_id: request.subscription_id.clone(),
             subscriber_id: request.subscriber_id.clone(),
+            observer_instance_id: request.observer_instance_id.clone(),
             uar_workspace_id: request.uar_workspace_id.clone(),
             filter_id: request.filter_id.clone(),
             source_grant_issuer: request.source_grant_issuer.clone(),
@@ -135,6 +137,10 @@ impl ChannelActionStore {
             "source_grant_revision",
         )?;
         required(&request.projection.classification, "classification")?;
+        let text = request.projection.text.as_deref().ok_or_else(|| {
+            StorageError::InvalidConfig("observer delivery requires a filtered text projection".into())
+        })?;
+        let projection_sha256 = hex::encode(Sha256::digest(text.as_bytes()));
         validate_digest(&request.occurrence_id, "occurrence_id")?;
         if request.action.kind != ActionKind::ObserverCopy
             || request.action.source_occurrence_id != request.occurrence_id
@@ -225,6 +231,8 @@ impl ChannelActionStore {
                 action_id: action_id.clone(),
                 sequence: subscription.next_sequence,
                 grant_revision: request.grant_revision.clone(),
+                projection_sha256,
+                classification: request.projection.classification.clone(),
                 state: ObserverDeliveryState::Pending,
                 claimant: None,
                 withheld_reason: None,
@@ -765,6 +773,7 @@ fn same_subscription(
 ) -> StorageResult<ObserverSubscription> {
     if existing.subscription_id != request.subscription_id
         || existing.subscriber_id != request.subscriber_id
+        || existing.observer_instance_id != request.observer_instance_id
         || existing.uar_workspace_id != request.uar_workspace_id
         || existing.filter_id != request.filter_id
         || existing.source_grant_issuer != request.source_grant_issuer

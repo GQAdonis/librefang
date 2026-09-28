@@ -263,4 +263,9 @@ pub const OPERATIONAL_MIGRATIONS: &[Migration] = &[
         name: "channel_observer_deliveries_v1",
         sql: include_str!("sql/047_channel_observer_deliveries.surql"),
     },
+    Migration {
+        version: 48,
+        name: "channel_observer_projection_digest_v1",
+        sql: include_str!("sql/048_channel_observer_projection_digest.surql"),
+    },
 ];

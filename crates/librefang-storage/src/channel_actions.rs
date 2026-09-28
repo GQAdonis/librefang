@@ -246,6 +246,8 @@ pub struct ObserverSubscriptionRequest {
     pub subscription_id: String,
     /// Authorized recipient identity.
     pub subscriber_id: String,
+    /// UAR agent instance that receives the copy; distinct from subscription ID.
+    pub observer_instance_id: String,
     /// Destination UAR workspace for this recipient.
     pub uar_workspace_id: String,
     /// Opaque Gate-owned source-filter identity; never raw source content.
@@ -281,6 +283,9 @@ pub struct ObserverSubscription {
     pub subscription_id: String,
     /// Authorized recipient identity.
     pub subscriber_id: String,
+    /// Gate recipient identity of the UAR observer instance.
+    #[serde(default)]
+    pub observer_instance_id: String,
     /// Destination UAR workspace.
     pub uar_workspace_id: String,
     /// Gate-owned source filter identity.
@@ -375,6 +380,13 @@ pub struct ObserverDeliveryReceipt {
     pub sequence: u64,
     /// Grant revision checked at enqueue.
     pub grant_revision: String,
+    /// Digest of the sealed UTF-8 text projection; sufficient for a current
+    /// Gate recheck without reading protected content before authorization.
+    #[serde(default)]
+    pub projection_sha256: String,
+    /// Source-disclosure classification pinned at enqueue.
+    #[serde(default)]
+    pub classification: String,
     /// Current state.
     pub state: ObserverDeliveryState,
     /// Claimant that crossed the delivery boundary.

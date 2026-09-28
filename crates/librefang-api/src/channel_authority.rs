@@ -30,6 +30,9 @@ pub struct ChannelEffectInput<'a> {
     pub handler: &'a str,
     pub route_revision: &'a str,
     pub payload: &'a [u8],
+    /// Recheck a sealed projection by its immutable digest without reading
+    /// the protected text before current authority is evaluated.
+    pub payload_sha256: Option<&'a str>,
     pub classification: &'a str,
     pub root_occurrence_id: &'a str,
     pub parent_action_id: Option<Uuid>,
@@ -49,6 +52,7 @@ struct GateDecision {
     occurrence_id: String,
     action: ChannelEffectAction,
     disposition: String,
+    reason: String,
     grant_revision: i64,
     policy_revision: String,
 }
@@ -85,6 +89,21 @@ pub fn configured_for_effects() -> bool {
 pub async fn release_channel_effect(
     input: &ChannelEffectInput<'_>,
 ) -> Result<ReleasedChannelEffect, String> {
+    channel_effect(input, true).await
+}
+
+/// Read current grant and Cedar eligibility without releasing a second
+/// external effect. Used immediately before an already-queued observer copy.
+pub async fn evaluate_channel_effect(
+    input: &ChannelEffectInput<'_>,
+) -> Result<ReleasedChannelEffect, String> {
+    channel_effect(input, false).await
+}
+
+async fn channel_effect(
+    input: &ChannelEffectInput<'_>,
+    release: bool,
+) -> Result<ReleasedChannelEffect, String> {
     let base = configured("LIBREFANG_CHANNEL_GATE_URL")?;
     let base = base.trim_end_matches('/');
     let url = reqwest::Url::parse(base).map_err(|_| "invalid Gate URL".to_string())?;
@@ -98,7 +117,11 @@ pub async fn release_channel_effect(
     let subject = configured("LIBREFANG_CHANNEL_GATE_IDENTITY_SUBJECT")?;
     let identity_revision = configured("LIBREFANG_CHANNEL_GATE_IDENTITY_REVISION")?;
     let effect_id = Uuid::new_v5(&Uuid::NAMESPACE_URL, input.effect_key.as_bytes());
-    let payload_sha = hex::encode(Sha256::digest(input.payload));
+    let payload_sha = match input.payload_sha256 {
+        Some(digest) if digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit()) => digest.to_string(),
+        Some(_) => return Err("invalid channel payload digest".into()),
+        None => hex::encode(Sha256::digest(input.payload)),
+    };
     let request = serde_json::json!({
         "protocol": PROTOCOL,
         "effect_id": effect_id,
@@ -142,7 +165,12 @@ pub async fn release_channel_effect(
         .build()
         .map_err(|error| format!("create Gate client: {error}"))?;
     let endpoint = format!("{base}/authority/channels");
-    for (stage, expected) in [("evaluate", "eligible"), ("release", "released")] {
+    let stages: &[(&str, &str)] = if release {
+        &[("evaluate", "eligible"), ("release", "released")]
+    } else {
+        &[("evaluate", "eligible")]
+    };
+    for &(stage, expected) in stages {
         let response = client
             .post(format!("{endpoint}/{stage}"))
             .bearer_auth(&token)
@@ -164,9 +192,9 @@ pub async fn release_channel_effect(
             || std::mem::discriminant(&decision.action) != std::mem::discriminant(&input.action)
             || decision.disposition != expected
         {
-            return Err(format!("Gate channel {stage} did not authorize the exact effect"));
+            return Err(format!("Gate channel {stage} did not authorize the exact effect: {}", decision.reason));
         }
-        if stage == "release" {
+        if stage == "release" || !release {
             return Ok(ReleasedChannelEffect {
                 effect_id,
                 grant_revision: decision.grant_revision,
