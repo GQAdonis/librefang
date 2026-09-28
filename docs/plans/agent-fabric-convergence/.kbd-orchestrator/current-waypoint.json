@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 266,
-  "derivedRevision": 266,
+  "sourceRevision": 275,
+  "derivedRevision": 275,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 27
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 36
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -25,19 +25,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": "agent-fabric-convergence",
   "childPointer": "release-cadence-optimization",
-  "change": null,
-  "currentTask": null,
+  "change": "afc-release-cadence-optimization",
+  "currentTask": "1.1",
   "status": "paused",
   "lifecycle": "paused",
-  "stageId": "analyze",
+  "stageId": "plan",
   "stageStatus": "COMPLETE",
   "completionMetric": "implementation",
   "implementationCompleted": 9,
-  "implementationTotal": 20,
+  "implementationTotal": 21,
   "planRevision": 3,
-  "revision": 266,
+  "revision": 275,
   "exactNextCommand": "/kbd-assess agent-fabric-convergence > release-cadence-optimization",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-09-28T07:34:47.124Z"
+  "nextChange": "afc-release-cadence-optimization",
+  "nextTask": "1.1",
+  "updatedAt": "2026-09-28T07:52:47.906630Z"
 }

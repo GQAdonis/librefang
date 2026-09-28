@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 265,
-  "derivedRevision": 265,
+  "sourceRevision": 274,
+  "derivedRevision": 274,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 26
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 35
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T07:34:46.554560Z",
+  "last_updated": "2026-09-28T07:52:47.323649Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 7,
@@ -52,7 +52,7 @@
     "primaryCounter": "implementation",
     "implementation": {
       "completed": 9,
-      "total": 20,
+      "total": 21,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -275,9 +275,9 @@
     "release-cadence-optimization": {
       "status": "IN_PROGRESS",
       "changes_completed": 0,
-      "changes_total": 0,
+      "changes_total": 1,
       "implementation_completed": 0,
-      "implementation_total": 0,
+      "implementation_total": 1,
       "certification_status": "NOT_TRACKED",
       "handoff": null,
       "completed_at": null

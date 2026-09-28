@@ -42,3 +42,18 @@ No production test, compiler invocation or application build was launched during
 Analyze checkpoint: completed revision265, paused266. Eight candidates; one independent native artifact review PASS, zero findings; canonical cross-model identities unverified. Sycophancy screen PASS score0. No parent reorder or production execution. Resume only after operator feedback to Plan. The pause CLI returned plain text, not JSON; canonical pause succeeded, local receipt creation was resumed without repeating the transition.
 
 Analyze recorder result: local session log and durable receipt succeeded; shared pk ingestion timed out after the5-second bounded attempt. Remote learning availability remains unconfirmed. No retry loop.
+
+## Plan learning entries
+
+| ID | Observation | Applied planning decision |
+|---|---|---|
+| L18 | Current OpenSpec list reports C06 0/3 and C08 0/3 while earlier canonical receipts describe C06 complete and C08 1/3. | Reconcile only receipt-proven mirror rows; map canonical IDs to OpenSpec numbering. No retest, new canonical completion or parent begin-task under child. |
+| L19 | Inspected mini/full HMA agent-team creators already defer reviews to complete phase; only two BossFang role prompts still say test-first. | Repair owning team manifest and its exports, preserve compliant pack sources; no blanket skill rewrite. |
+| L20 | An initial Plan draft deferred even roadmap/team changes to another proposal. | Corrected to apply approved process changes during child Execute. Keep actual product code outside child; avoid recursive planning without operational change. |
+| L21 | Existing Superpowers task-level TDD/review guidance conflicts with direct operator requirement. | Retain explicit ownership/handoffs but replace intermediate tests/reviews with one completed shipping gate. User-selected team/KBD method remains unchanged. |
+
+Plan-stage work is documentation, source inspection and canonical planning operations only. No product test suite, compiler, installer build or service probe has been run.
+
+Plan checkpoint: completed revision274, paused275. One process change and four tasks registered, all pending. One adversarial review/correction batch resolved clock endpoints and graph owner; confirmation PASS, sycophancy score0. OpenSpec strict artifact validation passed once. No production tests, compiler or app builds. Reflect and parent restoration are later stage actions.
+
+Plan recorder result: local session log and durable receipt succeeded; shared pk ingestion timed out after one bounded attempt. Remote availability unconfirmed; no retry loop. Pause command reported canonical revision275; completed-stage projection remains at274.

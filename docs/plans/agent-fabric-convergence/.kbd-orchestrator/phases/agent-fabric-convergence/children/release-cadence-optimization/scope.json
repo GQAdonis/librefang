@@ -3,7 +3,8 @@
     ".kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/**",
     ".prometheus/session-log.md",
     ".prometheus/progress-memory-receipts/**",
-    ".prometheus/progress-memory-outbox/**"
+    ".prometheus/progress-memory-outbox/**",
+    "openspec/changes/afc-release-cadence-optimization/**"
   ],
   "deniedPaths": [
     "product source and manifests outside a later approved execution plan"
@@ -19,5 +20,6 @@
     "plan",
     "execute",
     "reflect"
-  ]
+  ],
+  "planningScopeNote": "Operator authorized Plan only. OpenSpec artifacts for this child are permitted; proposed execute targets require approval and do not grant product write permission now."
 }

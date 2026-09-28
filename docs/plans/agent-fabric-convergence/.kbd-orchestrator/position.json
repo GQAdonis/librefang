@@ -2,19 +2,21 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 266,
-  "derivedRevision": 266,
+  "sourceRevision": 275,
+  "derivedRevision": 275,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 27
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 36
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T07:34:47.124Z",
+  "updatedAt": "2026-09-28T07:52:47.906630Z",
   "cursor": [
     "agent-fabric-convergence",
     "release-cadence-optimization",
-    "analyze"
+    "plan",
+    "afc-release-cadence-optimization",
+    "1.1"
   ],
   "root": {
     "type": "phase",
@@ -22,7 +24,7 @@
     "status": "paused",
     "progress": {
       "done": 9,
-      "total": 20
+      "total": 21
     },
     "children": [
       {
@@ -42,9 +44,19 @@
             "status": "IN_PROGRESS",
             "progress": {
               "done": 0,
-              "total": 0
+              "total": 1
             },
-            "children": [],
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-release-cadence-optimization",
+                "status": "PENDING",
+                "progress": {
+                  "done": 0,
+                  "total": 4
+                }
+              }
+            ],
             "annotations": []
           },
           {

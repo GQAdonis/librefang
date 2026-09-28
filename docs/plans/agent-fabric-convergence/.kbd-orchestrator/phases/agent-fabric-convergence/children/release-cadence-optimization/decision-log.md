@@ -15,3 +15,17 @@ Retain Rust UAR, TypeScript/Electron Boss, Node process tooling, existing KBD/Op
 ## D04 — instruction conflicts
 
 Legacy test-first role language and repeated cargo-check/test ladders conflict with the operator's completed-phase integration requirement. Follow the operator now; propose source/export corrections in Plan and implement only after Execute approval. Artifact review here evaluates the completed Analyze documents only; it does not authorize product verification.
+
+## D05 — Plan authorized, execution still held
+
+Operator said “Yes, plan.” after the Analyze handoff. Resumed revision267 and entered Plan268. Local-Mac-first approach is the planning basis. One process OpenSpec change will preserve C01–C18 and define complete shipping increments; no catalog-only release by default, no production edits now. Child OpenSpec path explicitly added to its planning write scope.
+
+## D06 — scope and source correction during Plan
+
+Child Execute will apply approved authored roadmap and team/process changes, not recurse into another proposal phase. Product binaries/UI/runtime code remain in the parent shipping increments. Live inspection confirmed two conflicting role prompts in coordination .agent-team/bossfang-stewards/team.json. Mini/full creator guidance at inspected HMA source revisions already defers reviews to the complete phase; leave compliant sources unchanged and record compatibility. No global hourly policy or new scheduler is needed.
+
+Superpowers writing-plans contributes concrete ownership and handoffs. Its TDD, per-task review and default output-path instructions are superseded by operator phase-boundary testing and canonical KBD/OpenSpec locations. The selected existing team remains the execution method.
+
+## D07 — bounded Plan review corrections
+
+Independent reviewer found incompatible local/publication clock endpoints and unnamed graph execution ownership. Separate local-delivery, publication and end-to-end clocks; hourly target ends at functioning local readiness, all waits remain attributed and no overlap is double-counted. KBD lead runs Compass update/query under heavy-writer admission; observer remains read-only. One correction batch, then confirmation.
