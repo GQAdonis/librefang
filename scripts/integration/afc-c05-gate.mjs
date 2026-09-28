@@ -258,6 +258,18 @@ async function run() {
   })}`);
   check(sidecarCapabilities.bindingOwnerId === ownerId, 'managed sidecar changed the authenticated owner');
   check(sidecarBinding.status === 200, 'managed sidecar did not load the installed binding from persistent storage');
+  // The effective binding receipt pins endpoint roles. A managed restart that
+  // selects a new port requires an explicit, revisioned rebind before runs.
+  const rebound = structuredClone(binding);
+  rebound.revision = 2;
+  rebound.contentDigest = digest(rebound);
+  const reboundResult = await expected(sidecarBase,
+    '/__c05/api/v1/collaboration/deployment-bindings', {
+      ...sidecarAuth, method: 'POST',
+      body: { commandId: 'c05-rebind-after-restart', expectedRevision: 1, binding: rebound },
+    }, [201]);
+  check(reboundResult.binding?.revision === 2 && reboundResult.preflight?.activationSupported === true,
+    'managed sidecar did not revision the persisted binding for its current endpoint roles');
   const effective = status.effective_binding;
   const admission = {
     bossTaskId: 'c05-managed-bound-task', delegationId: 'new', admissionKey: 'new',
