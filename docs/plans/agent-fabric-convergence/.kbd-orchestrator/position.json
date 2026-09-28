@@ -2,25 +2,26 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 239,
-  "derivedRevision": 239,
+  "sourceRevision": 245,
+  "derivedRevision": 245,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 6
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T01:57:16.993329Z",
+  "updatedAt": "2026-09-28T04:23:10.245606Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c06-durable-addressable-instances-and-bounded-turns",
-    "C06.1"
+    "afc-c07-local-scoped-observers-with-durable-delivery",
+    "C07.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 7,
+      "done": 8,
       "total": 20
     },
     "children": [
@@ -30,7 +31,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 5,
+          "done": 6,
           "total": 18
         },
         "children": [
@@ -126,9 +127,9 @@
           {
             "type": "change",
             "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },

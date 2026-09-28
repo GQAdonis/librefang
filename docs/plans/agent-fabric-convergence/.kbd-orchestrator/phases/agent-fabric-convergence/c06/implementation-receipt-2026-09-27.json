@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c06-durable-ordinary-agent-instances",
+  "recordedAt": "2026-09-28T04:20:00Z",
+  "result": "pass",
+  "source": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "c05BaseCommit": "fcfce6d226b50eee502c5f272e9215112d933e29",
+    "preImplementationDesignCommit": "fce1e308c18b94223fb9b1fce4f3e066f1daedc3",
+    "implementationCommit": "58932c4636855c4c01bbb9522d70dfb6fce8d8aa",
+    "branch": "codex/agent-fabric-convergence-c06",
+    "provider": "SurrealKV through surrealdb Rust SDK =3.3.0",
+    "selectedCapability": "durable ordinary-agent instances only on the SurrealKV provider",
+    "sourceClaims": [
+      "src/uar/runtime/instance/**",
+      "src/uar/persistence/agent_instances.rs",
+      "src/uar/persistence/providers/surreal.rs",
+      "src/uar/api/agent_instances.rs"
+    ]
+  },
+  "authorityFixtures": {
+    "policyRevision": "policy:c03:1",
+    "representationGrantRevision": 1,
+    "initialBindingRevisions": [1, 1],
+    "invalidationBindingRevision": 2,
+    "workspaces": ["workspace:c03", "workspace:c06-second"]
+  },
+  "integrationGate": {
+    "command": "cargo test --test agent_fabric_c06_gate --features afc-c06-gate -- --test-threads=1",
+    "exitCode": 0,
+    "result": "2 passed; 0 failed",
+    "log": "/tmp/afc-c06-claim-gate.log",
+    "logSha256": "dabf7403ae26a8c92f96681cb2fd284c3f3e9d4e6d4724e09585ab77ecfb24fd",
+    "sourceProvenance": "The gate compiled the production and test tree later captured unchanged in implementationCommit. Only OpenSpec bookkeeping was uncommitted during the gate.",
+    "observed": [
+      "authenticated owner/workspace isolation and distinct logical instance identities",
+      "bounded command admission, duplicate receipt and conflicting-command refusal",
+      "fresh root IDs across turns and cold process restart",
+      "revisioned lifecycle, finite activation retry exhaustion and persisted failure diagnostic",
+      "committed instance event snapshot, live delivery, durable replay and retention-gap snapshot",
+      "ordinary run compatibility and SurrealKV-specific capability discovery",
+      "blocked governed file-write approval cancellation without a late effect",
+      "post-claim terminal effect cancellation retained EffectUncertain, held the old epoch and queued restart, and did not replay the turn",
+      "abrupt process crash retained the exact uncertain attempt without replay",
+      "operator-only exact-attempt reconciliation followed by a fresh turn",
+      "cold SurrealKV directory backup restored into an isolated host with a known instance and completed command receipt"
+    ]
+  },
+  "scopeLimitations": [
+    "The public host interface cannot deterministically pause the micro-window between a persisted tool claim and dispatch; the gate exercises post-claim cancellation and the epoch hold instead.",
+    "This receipt proves the local macOS arm64 real-host SurrealKV path. It does not certify installed Windows or Mac packages, team activation, federation or cross-host takeover."
+  ],
+  "scope": {
+    "host": "macOS arm64 local real-host SurrealKV integration",
+    "installedWindowsAcceptanceClaimed": false,
+    "installedMacAcceptanceClaimed": false,
+    "releaseArtifactClaimed": false
+  }
+}
