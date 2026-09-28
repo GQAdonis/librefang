@@ -2,42 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 303,
-  "derivedRevision": 303,
+  "sourceRevision": 310,
+  "derivedRevision": 310,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 64
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 71
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence",
-    "release-cadence-optimization"
+    "agent-fabric-convergence"
   ],
   "phaseIds": [
-    "agent-fabric-convergence",
-    "agent-fabric-convergence::release-cadence-optimization"
+    "agent-fabric-convergence"
   ],
-  "activePhaseId": "agent-fabric-convergence::release-cadence-optimization",
-  "activePhase": "release-cadence-optimization",
+  "activePhaseId": "agent-fabric-convergence",
+  "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
-  "childPointer": "release-cadence-optimization",
-  "change": null,
-  "currentTask": null,
+  "parentPhase": null,
+  "childPointer": null,
+  "change": "afc-d01-local-mac-durable-agent-delivery",
+  "currentTask": "D01.1",
   "status": "paused",
   "lifecycle": "paused",
-  "stageId": "execute",
-  "stageStatus": "COMPLETE",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
   "implementationCompleted": 10,
   "implementationTotal": 22,
   "planRevision": 4,
-  "revision": 303,
-  "exactNextCommand": "Complete cadence child Execute; await feedback for Reflect and restore parent to D01.1. C09 is next customer capability, C08 remains open.",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-09-28T08:12:11.276156Z"
+  "revision": 310,
+  "exactNextCommand": "/kbd-status",
+  "nextChange": "afc-d01-local-mac-durable-agent-delivery",
+  "nextTask": "D01.1",
+  "updatedAt": "2026-09-28T08:23:06.614926Z"
 }

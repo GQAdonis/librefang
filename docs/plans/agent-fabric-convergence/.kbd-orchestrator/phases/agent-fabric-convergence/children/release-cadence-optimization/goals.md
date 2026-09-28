@@ -14,3 +14,7 @@ Every hourly delivery must end with a functioning local Apple Silicon applicatio
 After EACH local delivery ask whether to update all macOS and Windows targets now or wait until the next delivery. Linux is excluded. No answer is not publication approval. Track darwin-arm64, darwin-x64, win32-x64 and win32-arm64 separately; current UAR support gaps cannot be hidden by publishing a non-UAR build.
 
 Cadence planning will count elapsed delivery time, including build and waits, with aggregate agent effort separately recorded when observable. This is a planning interpretation, not a measured hourly guarantee. Preserve stage feedback stops: Analyze was authorized at that checkpoint. The operator subsequently approved Plan with “Yes, plan.”; Execute still awaits feedback.
+
+## Lifecycle closeout authorization — 2026-09-28
+
+The earlier authorization paragraph is historical. Execute was subsequently approved and completed. The operator now invoked `/kbd-reflect release-cadence-optimization`, authorizing reflection, archival and parent restoration. Stop for feedback before starting D01 production execution.

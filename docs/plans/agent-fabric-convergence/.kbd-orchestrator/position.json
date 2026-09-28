@@ -2,19 +2,19 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 303,
-  "derivedRevision": 303,
+  "sourceRevision": 310,
+  "derivedRevision": 310,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 64
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 71
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T08:12:11.276156Z",
+  "updatedAt": "2026-09-28T08:23:06.614926Z",
   "cursor": [
     "agent-fabric-convergence",
-    "release-cadence-optimization",
-    "execute"
+    "afc-d01-local-mac-durable-agent-delivery",
+    "D01.1"
   ],
   "root": {
     "type": "phase",
@@ -39,7 +39,7 @@
             "type": "phase",
             "id": "release-cadence-optimization",
             "canonicalId": "agent-fabric-convergence::release-cadence-optimization",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
               "done": 1,
               "total": 1

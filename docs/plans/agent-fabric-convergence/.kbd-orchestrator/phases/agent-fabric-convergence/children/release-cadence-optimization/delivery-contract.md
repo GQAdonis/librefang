@@ -1,6 +1,6 @@
 # Delivery contract: working local Boss, then an explicit platform decision
 
-**Contract stage:** process implementation for `afc-release-cadence-optimization` task 1.1. This document sets acceptance and handoff rules; it does not report a build, installed result, release, or website deployment. Product changes belong to the first subsequent parent shipping increment. The [approved plan](plan.md) and [OpenSpec contract](../../../../../openspec/changes/afc-release-cadence-optimization/specs/release-cadence-governance/spec.md) govern its scope.
+**Contract stage:** process implementation for `afc-release-cadence-optimization` task 1.1. This document sets acceptance and handoff rules; it does not report a build, installed result, release, or website deployment. Product changes belong to the first subsequent parent shipping increment. The [approved plan](plan.md) and [OpenSpec contract](../../../../../openspec/specs/release-cadence-governance/spec.md) govern its scope.
 
 ## What constitutes one local delivery
 

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-28T08:23:06.058Z",
+  "canonicalRevision": 310,
+  "childStatus": "complete",
+  "parentActivePath": {
+    "phasePath": [
+      "agent-fabric-convergence"
+    ],
+    "phaseId": "agent-fabric-convergence",
+    "stageId": null,
+    "changeId": "afc-d01-local-mac-durable-agent-delivery",
+    "taskId": "D01.1",
+    "commit": "c9d1f4105b37e01e5a3e10ff0551d815c99b0099"
+  },
+  "canonicalWaypoint": {
+    "schemaVersion": "5",
+    "generatedBy": "kbd-runtime",
+    "projectionContractVersion": 2,
+    "sourceRevision": 310,
+    "derivedRevision": 310,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 71
+    },
+    "conflictCount": 0,
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "runId": "project-20260924T180329Z",
+    "path": [
+      "agent-fabric-convergence"
+    ],
+    "phaseIds": [
+      "agent-fabric-convergence"
+    ],
+    "activePhaseId": "agent-fabric-convergence",
+    "activePhase": "agent-fabric-convergence",
+    "phase": "agent-fabric-convergence",
+    "parentPhase": null,
+    "childPointer": null,
+    "change": "afc-d01-local-mac-durable-agent-delivery",
+    "currentTask": "D01.1",
+    "status": "paused",
+    "lifecycle": "paused",
+    "stageId": null,
+    "stageStatus": null,
+    "completionMetric": "implementation",
+    "implementationCompleted": 10,
+    "implementationTotal": 22,
+    "planRevision": 4,
+    "revision": 310,
+    "exactNextCommand": "/kbd-status",
+    "nextChange": "afc-d01-local-mac-durable-agent-delivery",
+    "nextTask": "D01.1",
+    "updatedAt": "2026-09-28T08:23:06.614926Z"
+  },
+  "conflicts": {},
+  "childExit": {
+    "exitCode": 0,
+    "guard": "precommit and postcommit phase guards passed",
+    "hooks": "reflect:after, phase:after and child:after returned without reported errors"
+  },
+  "meaning": "Parent restored and D01.1 is derived next. Existing parent Execute stage remains in_progress; phase activation clears the active stage cursor. No task started.",
+  "parentStage": {
+    "id": "execute",
+    "title": "Execution",
+    "sequence": 5,
+    "status": "in_progress"
+  },
+  "lifecycle": "paused",
+  "rejectedNoOpCommands": [
+    "stage enter execute refused because stage already exists",
+    "stage transition in-progress refused because already InProgress"
+  ]
+}
