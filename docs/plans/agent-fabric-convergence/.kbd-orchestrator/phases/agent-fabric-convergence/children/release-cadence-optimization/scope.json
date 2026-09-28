@@ -4,7 +4,12 @@
     ".prometheus/session-log.md",
     ".prometheus/progress-memory-receipts/**",
     ".prometheus/progress-memory-outbox/**",
-    "openspec/changes/afc-release-cadence-optimization/**"
+    "openspec/changes/afc-release-cadence-optimization/**",
+    "work-packages.json",
+    "dependencies.md",
+    "recommendations.json",
+    "openspec/changes/afc-c*/**",
+    "openspec/changes/afc-d01-local-mac-durable-agent-delivery/**"
   ],
   "deniedPaths": [
     "product source and manifests outside a later approved execution plan"
@@ -21,5 +26,14 @@
     "execute",
     "reflect"
   ],
-  "planningScopeNote": "Operator authorized Plan only. OpenSpec artifacts for this child are permitted; proposed execute targets require approval and do not grant product write permission now."
+  "planningScopeNote": "Execute authorized for authored process/team/roadmap changes. Product changes are scheduled for D1 after child Reflect and parent restoration.",
+  "externalAuthoredWritePaths": [
+    "../../../.agent-team/bossfang-stewards/**",
+    "../../../.codex/agents/**",
+    "../../../.claude/agents/**",
+    "../../../AGENTS.md",
+    "../../../CLAUDE.md",
+    "../../../.agent-team/project-routing.json"
+  ],
+  "executionAuthorization": "Operator approved Execute and full-build website-pointer requirements. Authored roadmap/team/process files only; no product code/builds/publication. Reflect/archive/parent restoration await feedback."
 }

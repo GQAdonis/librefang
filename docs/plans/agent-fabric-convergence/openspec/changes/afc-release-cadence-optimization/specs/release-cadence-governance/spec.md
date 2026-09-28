@@ -55,3 +55,10 @@ Local-delivery elapsed SHALL end at functioning local readiness and include earl
 #### Scenario: Process implementation finishes
 - **WHEN** all process tasks and their single artifact gate complete
 - **THEN** Execute stops for feedback; Reflect, archive and parent restoration do not happen without their required authorization
+
+### Requirement: Full publication includes deployed installer pointers
+A selected full publication SHALL include all four macOS/Windows installers, exact GitHub Release URLs, source revisions, architecture, size, checksums and signing status; committed release metadata; committed generated landing data; deployment of https://the-boss.know-me.tools; and live link/download-byte evidence. One serialized publisher SHALL merge platform results without regressing newer entries. A build or upload alone MUST NOT complete publication.
+
+#### Scenario: Installer upload succeeds but deployment fails
+- **WHEN** installer artifacts exist but the landing deployment or live download evidence is missing
+- **THEN** publication remains pending or failed with an actionable reason and retains the prior working pointers until replacements are ready

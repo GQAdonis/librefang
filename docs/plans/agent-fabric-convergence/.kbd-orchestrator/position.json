@@ -2,29 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 275,
-  "derivedRevision": 275,
+  "sourceRevision": 303,
+  "derivedRevision": 303,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 36
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 64
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T07:52:47.906630Z",
+  "updatedAt": "2026-09-28T08:12:11.276156Z",
   "cursor": [
     "agent-fabric-convergence",
     "release-cadence-optimization",
-    "plan",
-    "afc-release-cadence-optimization",
-    "1.1"
+    "execute"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "paused",
     "progress": {
-      "done": 9,
-      "total": 21
+      "done": 10,
+      "total": 22
     },
     "children": [
       {
@@ -34,7 +32,7 @@
         "status": "IN_PROGRESS",
         "progress": {
           "done": 7,
-          "total": 18
+          "total": 19
         },
         "children": [
           {
@@ -43,16 +41,16 @@
             "canonicalId": "agent-fabric-convergence::release-cadence-optimization",
             "status": "IN_PROGRESS",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 1
             },
             "children": [
               {
                 "type": "change",
                 "id": "afc-release-cadence-optimization",
-                "status": "PENDING",
+                "status": "COMPLETE",
                 "progress": {
-                  "done": 0,
+                  "done": 4,
                   "total": 4
                 }
               }
@@ -102,6 +100,15 @@
               }
             ],
             "annotations": []
+          },
+          {
+            "type": "change",
+            "id": "afc-d01-local-mac-durable-agent-delivery",
+            "status": "PENDING",
+            "progress": {
+              "done": 0,
+              "total": 4
+            }
           },
           {
             "type": "change",

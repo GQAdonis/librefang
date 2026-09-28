@@ -29,3 +29,7 @@ Superpowers writing-plans contributes concrete ownership and handoffs. Its TDD, 
 ## D07 — bounded Plan review corrections
 
 Independent reviewer found incompatible local/publication clock endpoints and unnamed graph execution ownership. Separate local-delivery, publication and end-to-end clocks; hourly target ends at functioning local readiness, all waits remain attributed and no overlap is double-counted. KBD lead runs Compass update/query under heavy-writer admission; observer remains read-only. One correction batch, then confirmation.
+
+## D08 — Execute authorized and full publication includes the live site
+
+Operator invoked `/kbd-execute release-cadence-optimization` and required all remaining KBD tasks, changes and phases to support cadence. Apply authored roadmap/team changes now. Register a selectable D1 delivery control change separately from original C01–C18 scope; retain original task/evidence meaning. Full build publication must update GitHub installers, repository metadata, the landing repository and https://the-boss.know-me.tools with the actual new installer URLs. A build/upload alone is not publication completion. No production build or site deployment belongs to this process child. Execute stops for feedback before Reflect, archive and parent restoration, overriding the generic Execute skill archive timing.

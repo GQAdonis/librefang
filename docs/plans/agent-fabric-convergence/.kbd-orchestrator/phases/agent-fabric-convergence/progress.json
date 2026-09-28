@@ -2,28 +2,28 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 274,
-  "derivedRevision": 274,
+  "sourceRevision": 302,
+  "derivedRevision": 302,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 35
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 63
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T07:52:47.323649Z",
+  "last_updated": "2026-09-28T08:12:10.623626Z",
   "last_updated_by": "kbd-runtime",
-  "changes_total": 18,
+  "changes_total": 19,
   "changes_completed": 7,
-  "implementation_total": 18,
+  "implementation_total": 19,
   "implementation_completed": 7,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
       "completed": 7,
-      "total": 18,
+      "total": 19,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -51,8 +51,8 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 9,
-      "total": 21,
+      "completed": 10,
+      "total": 22,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -72,6 +72,17 @@
     }
   },
   "changes": [
+    {
+      "id": "afc-d01-local-mac-durable-agent-delivery",
+      "title": "Local Mac durable-agent delivery",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
+      "tasks_total": 4,
+      "tasks_done": 0,
+      "last_task_completed": null,
+      "next_task_pending": "Freeze source and repair packaged UAR profile",
+      "blockers": []
+    },
     {
       "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
       "title": "C01 — Baseline reconciliation and shared contracts",
@@ -274,9 +285,9 @@
   "children": {
     "release-cadence-optimization": {
       "status": "IN_PROGRESS",
-      "changes_completed": 0,
+      "changes_completed": 1,
       "changes_total": 1,
-      "implementation_completed": 0,
+      "implementation_completed": 1,
       "implementation_total": 1,
       "certification_status": "NOT_TRACKED",
       "handoff": null,

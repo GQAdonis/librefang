@@ -57,3 +57,12 @@ Plan-stage work is documentation, source inspection and canonical planning opera
 Plan checkpoint: completed revision274, paused275. One process change and four tasks registered, all pending. One adversarial review/correction batch resolved clock endpoints and graph owner; confirmation PASS, sycophancy score0. OpenSpec strict artifact validation passed once. No production tests, compiler or app builds. Reflect and parent restoration are later stage actions.
 
 Plan recorder result: local session log and durable receipt succeeded; shared pk ingestion timed out after one bounded attempt. Remote availability unconfirmed; no retry loop. Pause command reported canonical revision275; completed-stage projection remains at274.
+
+## Execute learning entries
+
+- L22: Changing an authored next-work sentence does not change the canonical selector. Registered sequence-zero D01 and four pending tasks through typed KBD commands while retaining the active child and original C01–C18 history. Reflect must confirm the restored selector.
+- L23: A full release needs an explicit website obligation. Bound GitHub installer bytes, release metadata, landing source, Lovable deployment and live URLs into one publication contract; upload alone is incomplete.
+- L24: Only two role prompts conflicted with the completed-phase testing rule. Repaired source and generated native exports and added a bounded observer; compliant mini/full pack sources remained untouched.
+- L25: Final artifact checker initially matched lowercase read-only against capitalized Read-only. Corrected only that predicate; retained the failed receipt. No production code change or test/build was warranted.
+
+Testing accounting for Execute: no product tests, compiler checks, app builds or service probes. Team manifest validation/export were generation operations. After all authored implementation, one completed-process artifact gate and OpenSpec schema validation; cumulative independent review follows. No claims of a new functioning app, website deployment or installed acceptance.

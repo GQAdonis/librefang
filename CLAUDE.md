@@ -639,6 +639,10 @@ The rules you must not break without asking:
   The override is ignored when the inherited home is already a real directory, and when it points at a non-directory the driver logs a `WARN` and falls back rather than honouring it.
 - When parallel agents modify the same crate, `Option::None` defaults for new fields compile silently but disable the feature. Always write the integration test at the injection site, not just the implementation site.
 
+### Agent Fabric Convergence phase gate
+
+For `agent-fabric-convergence` and its `release-cadence-optimization` child, follow the approved [delivery contract](docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/delivery-contract.md): finish the complete production increment, then run one real integration gate and the required local package build. Test-first, per-edit, per-route and scoped cargo-check/test examples elsewhere in this file or role instructions are deferred to that completed-phase boundary for this initiative. The single shared heavy build writer and KBD lead coordinate the boundary; observer roles cannot authorize it. This scoped precedence leaves other projects and phases unchanged.
+
 <!-- prometheus-team-routing:start v1 -->
 For every code task, read `.agent-team/project-routing.json`, then its active team manifest and the relevant role instructions. Default to that team, selecting only roles whose responsibilities and ownership match the work. Preserve native permissions, models, concurrency limits and existing project instructions.
 For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.
