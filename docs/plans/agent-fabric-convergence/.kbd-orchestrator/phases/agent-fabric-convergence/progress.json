@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 252,
-  "derivedRevision": 252,
+  "sourceRevision": 253,
+  "derivedRevision": 253,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 13
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 14
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T05:18:21.237601Z",
+  "last_updated": "2026-09-28T06:20:51.380899Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 18,
   "changes_completed": 7,
@@ -152,12 +152,12 @@
     {
       "id": "afc-c08-bossfang-and-fabric-observer-routing",
       "title": "C08 — BossFang and Fabric observer routing",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "tasks_done": 1,
+      "last_task_completed": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "next_task_pending": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
       "blockers": []
     },
     {
