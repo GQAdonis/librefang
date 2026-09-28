@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "eventId": "kpm-afc-c09-1-delivery-20260928",
+  "observedAt": "2026-09-28T19:47:16.071Z",
+  "runId": "project-20260924T180329Z",
+  "boundary": "task",
+  "status": "complete",
+  "phaseId": "agent-fabric-convergence",
+  "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+  "taskId": "C09.1",
+  "taskClass": "product",
+  "elapsedHours": 1.1229802777777778,
+  "touchedFiles": [
+    "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-1-evidence.md",
+    "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/tasks.md",
+    ".prometheus/cadence/artifacts/c09-team-planning-run.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm build:mac:arm64",
+      "exitCode": 0,
+      "summary": "Completed exact Mac ARM64 application build; DMG SHA-256 10c2c652fa15fe16d56bfe3cc6b3a494b7aa645f9c3bb4a4033d75e23b7f434e. Native UAR sidecar build used one Cargo writer. Two observed app contract mismatches required rebuilds."
+    },
+    {
+      "command": "node delivery-cadence/scripts/boss-launch.mjs --scenario uar-team-planning-scenario.mjs --require-scenario",
+      "exitCode": 0,
+      "summary": "Packaged application saved supervisor, map/reduce and peer boards, recovered after UAR restart, isolated a second workspace, and displayed the board in Teams settings. No unit or partial suites were run."
+    }
+  ],
+  "commitSha": null,
+  "blocker": null,
+  "exactNextWork": "C09.2 atomic task claims, fenced reassignment, narrowed child authority and mailbox grants, with a completed Mac ARM64 application boundary; full multi-platform publication is due after the second successful cadence delivery."
+}

@@ -84,3 +84,18 @@
 - Verification:
   - `kbd-apply archive afc-release-cadence-optimization` → exit 0: Archive complete; seven main-spec requirements exactly preserved.
   - `kbd-child-exit and canonical status` → exit 0: Child complete; parent D01.1 selected; paused for feedback; no product tests/builds.
+
+<!-- karpathy-progress-event:kpm-afc-c09-1-delivery-20260928 -->
+## Progress boundary — 2026-09-28T19:47:16.071Z
+
+- Event: `kpm-afc-c09-1-delivery-20260928`
+- Boundary: `task` / `complete`
+- Position: `agent-fabric-convergence` / `afc-c09-bounded-teams-and-shared-task-board` / `C09.1`
+- Class and elapsed time: `product` / `1.1229802777777778` hours
+- Commit: `uncommitted`
+- Files: `openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-1-evidence.md`, `openspec/changes/afc-c09-bounded-teams-and-shared-task-board/tasks.md`, `.prometheus/cadence/artifacts/c09-team-planning-run.json`
+- Blocker: none
+- Exact next work: C09.2 atomic task claims, fenced reassignment, narrowed child authority and mailbox grants, with a completed Mac ARM64 application boundary; full multi-platform publication is due after the second successful cadence delivery.
+- Verification:
+  - `pnpm build:mac:arm64` → exit 0: Completed exact Mac ARM64 application build; DMG SHA-256 10c2c652fa15fe16d56bfe3cc6b3a494b7aa645f9c3bb4a4033d75e23b7f434e. Native UAR sidecar build used one Cargo writer. Two observed app contract mismatches required rebuilds.
+  - `node delivery-cadence/scripts/boss-launch.mjs --scenario uar-team-planning-scenario.mjs --require-scenario` → exit 0: Packaged application saved supervisor, map/reduce and peer boards, recovered after UAR restart, isolated a second workspace, and displayed the board in Teams settings. No unit or partial suites were run.

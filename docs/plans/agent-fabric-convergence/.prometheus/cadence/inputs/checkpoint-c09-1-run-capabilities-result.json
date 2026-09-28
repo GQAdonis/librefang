@@ -1,0 +1,47 @@
+{
+  "id": "mac-functional-launch",
+  "attemptId": "ae6f3a9d-5471-4258-b6ae-a7dcc1614ed5",
+  "commandId": "c09-1-mac-launch-capabilities-repair-20260928",
+  "kind": "run",
+  "status": "success",
+  "startedAt": "2026-09-28T19:40:35.313Z",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "ae4db11869efd125dce7f9a2a488d876af0b7b98",
+      "fingerprint": "7ed965bca6822876b90e473f794cc031c4ae3c37cb3fc6afba2b1e8e6fe7c021"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "c51c039cdec0b610d2298071003b3ad52af79b13",
+      "fingerprint": "4b18b51b4667986e34bc464d266666271d6289464fd0b85a0c3dba02aab9d759"
+    }
+  ],
+  "command": "/Users/gqadonis/.nvm/versions/node/v22.20.0/bin/node",
+  "args": [
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+    "--repository",
+    "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+    "--scenario",
+    "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+    "--require-scenario",
+    "--receipt",
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/mac-functional-launch.json"
+  ],
+  "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "hostname": "Traviss-MacBook-Pro-4.local",
+  "pid": 63993,
+  "exitCode": 0,
+  "signal": null,
+  "finishedAt": "2026-09-28T19:40:39.931Z",
+  "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/logs/ae6f3a9d-5471-4258-b6ae-a7dcc1614ed5.log",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.6-mac-arm64.dmg",
+      "sha256": "10c2c652fa15fe16d56bfe3cc6b3a494b7aa645f9c3bb4a4033d75e23b7f434e",
+      "size": 611265302,
+      "platform": "darwin-arm64",
+      "signingStatus": "developer-id-signed-not-notarized"
+    }
+  ]
+}

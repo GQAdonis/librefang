@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-09-28T19:45:26.821Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-09-28T19:37:31.021Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/uar-team-planning-scenario.mjs",
+  "scenarioDigest": "f62bb67d70a97d6ecd25c6e8350139c4384d829736086d61b08aaae4c9e09db0",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-R9Htdt",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "Packaged Boss installed planning-only UAR teams e4d71da3-7d34-458d-9040-e9aeda69f13f and d0c2deca-911a-43ef-87a2-2cb480aa6c0a, saved supervisor, bounded map/reduce and independent peer task graphs, restarted its sidecar, kept workspace a9e99208-67bc-4d27-a245-0bba4fa3a298 isolated, and displayed the recovered board in Teams settings.",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-09-28T19:45:53.653Z"
+}

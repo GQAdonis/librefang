@@ -2,26 +2,26 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 310,
-  "derivedRevision": 310,
+  "sourceRevision": 333,
+  "derivedRevision": 333,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 71
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 94
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T08:23:06.614926Z",
+  "updatedAt": "2026-09-28T19:46:23.098922Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-d01-local-mac-durable-agent-delivery",
-    "D01.1"
+    "afc-c08-bossfang-and-fabric-observer-routing",
+    "C08.2"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
-    "status": "paused",
+    "status": "running",
     "progress": {
-      "done": 10,
+      "done": 11,
       "total": 22
     },
     "children": [
@@ -31,7 +31,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 7,
+          "done": 8,
           "total": 19
         },
         "children": [
@@ -104,9 +104,9 @@
           {
             "type": "change",
             "id": "afc-d01-local-mac-durable-agent-delivery",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 4,
               "total": 4
             }
           },
@@ -187,7 +187,7 @@
             "id": "afc-c09-bounded-teams-and-shared-task-board",
             "status": "PENDING",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },

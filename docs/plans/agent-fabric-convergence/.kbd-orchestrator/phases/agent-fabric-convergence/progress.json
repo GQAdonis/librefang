@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 308,
-  "derivedRevision": 308,
+  "sourceRevision": 333,
+  "derivedRevision": 333,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 69
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 94
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T08:22:12.539500Z",
+  "last_updated": "2026-09-28T19:46:23.098922Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 19,
-  "changes_completed": 7,
+  "changes_completed": 8,
   "implementation_total": 19,
-  "implementation_completed": 7,
+  "implementation_completed": 8,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 7,
+      "completed": 8,
       "total": 19,
       "status": "IN_PROGRESS"
     },
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 10,
+      "completed": 11,
       "total": 22,
       "status": "IN_PROGRESS"
     },
@@ -75,12 +75,12 @@
     {
       "id": "afc-d01-local-mac-durable-agent-delivery",
       "title": "Local Mac durable-agent delivery",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 4,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Freeze source and repair packaged UAR profile",
+      "tasks_done": 4,
+      "last_task_completed": "Resolve publication choice including live website installer pointers",
+      "next_task_pending": null,
       "blockers": []
     },
     {
@@ -177,9 +177,9 @@
       "status": "PENDING",
       "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+      "tasks_done": 1,
+      "last_task_completed": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+      "next_task_pending": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
       "blockers": []
     },
     {

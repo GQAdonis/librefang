@@ -1,0 +1,10 @@
+{
+  "id": "mac-functional-launch",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.6-mac-arm64.dmg",
+      "platform": "darwin-arm64",
+      "signingStatus": "developer-id-signed-not-notarized"
+    }
+  ]
+}
