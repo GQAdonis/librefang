@@ -995,6 +995,55 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
         }
     }
 
+    async fn authorize_channel_handler_execution(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        payload: &[u8],
+    ) -> Result<(), String> {
+        // A host without Gate configuration remains a local-only route
+        // profile. Once configured, a missing grant or unavailable Gate
+        // withholds the Discord-guild handler effect.
+        if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+            return Ok(());
+        }
+        let grant_issuer = std::env::var("LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER")
+            .map_err(|_| "handler execution grant issuer is not configured".to_string())?;
+        let grant_id = std::env::var("LIBREFANG_CHANNEL_HANDLER_GRANT_ID")
+            .map_err(|_| "handler execution grant ID is not configured".to_string())?;
+        let route_revision = admission.route_revision
+            .ok_or_else(|| "durable handler route revision is absent".to_string())?
+            .to_string();
+        let action_id = admission.action_id.as_deref()
+            .ok_or_else(|| "durable handler action ID is absent".to_string())?;
+        let effect_key = format!("channel-handler-execution-v1:{}:{action_id}", admission.occurrence_id);
+        let route_identity = format!("{}:{handler}", admission.occurrence_id);
+        crate::channel_authority::release_channel_effect(
+            &crate::channel_authority::ChannelEffectInput {
+                effect_key: &effect_key,
+                occurrence_id: &admission.occurrence_id,
+                action: crate::channel_authority::ChannelEffectAction::HandlerExecution,
+                scope: &source.scope,
+                recipient: handler,
+                handler,
+                route_revision: &route_revision,
+                payload,
+                classification: "handler_payload",
+                root_occurrence_id: &admission.occurrence_id,
+                parent_action_id: None,
+                route_identity: &route_identity,
+                visited_routes: &[],
+                remaining_depth: 1,
+                remaining_fanout: 1,
+                grant_issuer: &grant_issuer,
+                grant_id: &grant_id,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String> {
         let result = self
             .kernel

@@ -183,6 +183,19 @@ pub trait ChannelBridgeHandle: Send + Sync {
         Err("durable channel dispatch is unsupported".to_string())
     }
 
+    /// Authorize the selected handler effect after a durable claim and before
+    /// invoking the agent loop. The local-only default does not imply that
+    /// cross-host observer delivery is enabled.
+    async fn authorize_channel_handler_execution(
+        &self,
+        _source: &SourceOccurrence,
+        _admission: &RouteAdmission,
+        _handler: &str,
+        _payload: &[u8],
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     /// Send a message to an agent and get the text response.
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String>;
 
@@ -4183,6 +4196,43 @@ async fn claim_durable_dispatch(
     }
 }
 
+async fn authorize_durable_handler_execution(
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    dispatch: Option<&DurableDispatch>,
+    message: &ChannelMessage,
+) -> bool {
+    let Some(dispatch) = dispatch else { return true };
+    // C08 governed source profile is Discord guild only. DMs and other
+    // adapters retain their local route behavior without claiming Gate support.
+    if dispatch.source.scope.provider != "discord"
+        || !message.is_group
+        || message.metadata.get("guild_id").and_then(serde_json::Value::as_str).is_none()
+    {
+        return true;
+    }
+    let payload = match serde_json::to_vec(&message.content) {
+        Ok(payload) => payload,
+        Err(_) => return false,
+    };
+    match handle
+        .authorize_channel_handler_execution(
+            &dispatch.source,
+            &dispatch.admission,
+            &dispatch.handler_name,
+            &payload,
+        )
+        .await
+    {
+        Ok(()) => true,
+        Err(error) => {
+            error!(occurrence_id = %dispatch.admission.occurrence_id, %error,
+                "Channel handler authority denied; agent execution withheld");
+            finish_durable_dispatch(handle, Some(dispatch), false).await;
+            false
+        }
+    }
+}
+
 async fn finish_durable_dispatch(
     handle: &Arc<dyn ChannelBridgeHandle>,
     dispatch: Option<&DurableDispatch>,
@@ -5662,6 +5712,10 @@ async fn dispatch_message(
     }
 
     if !claim_durable_dispatch(handle, durable.as_ref()).await {
+        return;
+    }
+
+    if !authorize_durable_handler_execution(handle, durable.as_ref(), message).await {
         return;
     }
 
@@ -7657,6 +7711,9 @@ async fn dispatch_with_blocks(
     }
 
     if !claim_durable_dispatch(handle, durable.as_ref()).await {
+        return;
+    }
+    if !authorize_durable_handler_execution(handle, durable.as_ref(), message).await {
         return;
     }
     let journal_id = durable

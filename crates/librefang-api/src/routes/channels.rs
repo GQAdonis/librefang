@@ -23,6 +23,10 @@ pub fn router() -> axum::Router<std::sync::Arc<super::AppState>> {
             "/channels/route-capability",
             axum::routing::get(channel_route_capability),
         )
+        .route(
+            "/channels/routes/reassign",
+            axum::routing::post(reassign_channel_route),
+        )
         .route("/channels/reload", axum::routing::post(reload_channels))
         // Single read-only QR endpoint that replaces the four removed
         // pre-migration ones (`/{wechat,whatsapp}/qr/{start,status}`).
@@ -98,6 +102,13 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             "operational": operational,
             "native_source_required": true,
             "cross_host_observers": false,
+            "gate_effects_configured": crate::channel_authority::configured_for_effects(),
+            "governed_handler_profile": if operational && crate::channel_authority::configured_for_effects() {
+                "discord_guild"
+            } else {
+                "unavailable"
+            },
+            "legacy_local_profiles": ["discord_dm", "other_adapters", "batches", "incomplete_native_identity"],
             "reason": if operational {
                 serde_json::Value::Null
             } else {
@@ -113,8 +124,137 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             "operational": false,
             "native_source_required": true,
             "cross_host_observers": false,
+            "gate_effects_configured": crate::channel_authority::configured_for_effects(),
+            "governed_handler_profile": "unavailable",
+            "legacy_local_profiles": ["sqlite", "discord_dm", "other_adapters", "batches", "incomplete_native_identity"],
             "reason": "This build does not include SurrealDB route storage.",
         }))
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct ReassignChannelRouteRequest {
+    scope: librefang_channels::channel_route::ChannelScope,
+    expected_revision: u64,
+    handler: String,
+    grant_issuer: String,
+    grant_id: String,
+}
+
+/// Owner action: Gate must release the exact reassignment effect before the
+/// durable affinity revision can change. Mentions never call this endpoint.
+pub async fn reassign_channel_route(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ReassignChannelRouteRequest>,
+) -> impl IntoResponse {
+    #[cfg(feature = "surreal-backend")]
+    {
+        use sha2::{Digest, Sha256};
+        if request.handler.trim().is_empty() || request.expected_revision == 0 {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error":"handler and existing revision are required"})),
+            );
+        }
+        let config = state.kernel.config_ref().storage.clone();
+        let session = match librefang_storage::shared_pool().open(&config).await {
+            Ok(session) => session,
+            Err(_) => return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"channel route storage unavailable"})),
+            ),
+        };
+        let store = match librefang_storage::ChannelRouteStore::open(&session).await {
+            Ok(store) => store,
+            Err(_) => return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"channel route store unavailable"})),
+            ),
+        };
+        let scope = librefang_storage::ChannelScope {
+            provider: request.scope.provider.clone(),
+            account: request.scope.account.clone(),
+            account_kind: match request.scope.account_kind {
+                librefang_channels::channel_route::AccountKind::Native => "native",
+                librefang_channels::channel_route::AccountKind::ConfiguredInstance => "configured_instance",
+            }.to_string(),
+            workspace: request.scope.workspace.clone(),
+            room: request.scope.room.clone(),
+            thread: request.scope.thread.clone(),
+            sender: request.scope.sender.clone(),
+        };
+        let current = match store.affinity(&scope).await {
+            Ok(Some(current)) if current.revision == request.expected_revision => current,
+            Ok(_) => return (
+                StatusCode::CONFLICT,
+                Json(serde_json::json!({"error":"channel route revision changed"})),
+            ),
+            Err(_) => return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"error":"channel route affinity unavailable"})),
+            ),
+        };
+        let payload = serde_json::json!({
+            "scope": &scope,
+            "from": &current.handler,
+            "to": &request.handler,
+            "expected_revision": request.expected_revision,
+        });
+        let bytes = match serde_json::to_vec(&payload) {
+            Ok(bytes) => bytes,
+            Err(_) => return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error":"cannot encode reassignment"})),
+            ),
+        };
+        let identity = hex::encode(Sha256::digest(&bytes));
+        let route_revision = request.expected_revision.to_string();
+        let effect_key = format!("channel-reassignment-v1:{identity}");
+        let gate = crate::channel_authority::ChannelEffectInput {
+            effect_key: &effect_key,
+            occurrence_id: &identity,
+            action: crate::channel_authority::ChannelEffectAction::RouteReassignment,
+            scope: &request.scope,
+            recipient: &request.handler,
+            handler: &request.handler,
+            route_revision: &route_revision,
+            payload: &bytes,
+            classification: "metadata_only",
+            root_occurrence_id: &identity,
+            parent_action_id: None,
+            route_identity: &identity,
+            visited_routes: &[],
+            remaining_depth: 1,
+            remaining_fanout: 1,
+            grant_issuer: &request.grant_issuer,
+            grant_id: &request.grant_id,
+        };
+        if let Err(error) = crate::channel_authority::release_channel_effect(&gate).await {
+            return (StatusCode::FORBIDDEN, Json(serde_json::json!({"error": error})));
+        }
+        let decision = librefang_storage::RouteDecision {
+            outcome: librefang_storage::RouteOutcome::Selected {
+                handler: request.handler,
+            },
+            reason: "gate_authorized_operator_reassignment".into(),
+            binding_revision: None,
+        };
+        match store.reassign(&scope, request.expected_revision, &decision).await {
+            Ok(next) => (StatusCode::OK, Json(serde_json::json!({
+                "handler": next.handler,
+                "revision": next.revision,
+            }))),
+            Err(_) => (StatusCode::CONFLICT, Json(serde_json::json!({
+                "error": "channel route revision changed after authorization; inspect the current affinity before retrying",
+            }))),
+        }
+    }
+    #[cfg(not(feature = "surreal-backend"))]
+    {
+        let _ = (state, request);
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({
+            "error": "durable channel route storage is unsupported",
+        })))
     }
 }
 

@@ -301,6 +301,7 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
     if matches!(
         path,
         "/api/config"
+            | "/api/channels/routes/reassign"
             | "/api/config/set"
             | "/api/config/reload"
             | "/api/uar/start"

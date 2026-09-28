@@ -237,6 +237,7 @@ pub mod acp_pipe;
 pub mod acp_uds;
 pub mod approval;
 pub mod channel_bridge;
+pub mod channel_authority;
 pub mod client_ip;
 /// Database config-store overlay at daemon boot (phase 9 / C-004).
 #[cfg(feature = "surreal-backend")]
