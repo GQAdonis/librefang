@@ -117,6 +117,8 @@ impl UarSidecarSupervisor {
                     "UAR_PERSISTENCE__DATABASE_URL".to_string(),
                     default_data_url,
                 ),
+                ("UAR_PERSISTENCE__SURREAL_NS".to_string(), "uar".to_string()),
+                ("UAR_PERSISTENCE__SURREAL_DB".to_string(), "uar".to_string()),
             ],
             endpoint_callback: None,
             probe_bearer: None,

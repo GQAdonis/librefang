@@ -130,6 +130,7 @@ async function run() {
   const bossBase = `http://127.0.0.1:${bossPort}`;
   const secret = randomBytes(32).toString('hex');
   const bossKey = randomBytes(32).toString('hex');
+  const gateToken = randomBytes(32).toString('hex');
   const seedToken = jwt(secret, principal);
   const skills = join(root, 'builtin-skills');
   const skillPath = join(skills, 'sample-skill', 'SKILL.md');
@@ -144,6 +145,7 @@ async function run() {
   const detachCommand = `printf 'C05_DETACH_EFFECT\\n' >> ${shellQuote(detachMarker)}`;
   const childEnv = {
     UAR_BUILTIN_SKILLS_DIR: skills,
+    UAR_RESILIENCE__RATE_LIMIT_ENABLED: 'false',
     UAR_NATIVE_TOOLS__TERMINAL_EXEC_ENABLED: 'true',
     UAR_NATIVE_TOOLS__TERMINAL_USE_SANDBOX: 'false',
   };
@@ -165,7 +167,7 @@ async function run() {
   await until('stub listener', async () => { try { await fetch(stubBase, { signal: AbortSignal.timeout(1000) }); return true; } catch { return false; } });
 
   const seedConfig = join(root, 'seed-uar.yaml');
-  await writeFile(seedConfig, `security:\n  jwt_required: false\n  jwt_secret: "${secret}"\n  settings_admin_key: "${randomBytes(24).toString('hex')}"\nresilience:\n  rate_limit_enabled: false\npersistence:\n  provider: "surreal"\n  database_url: "surrealkv://${db}"\nllm:\n  model: "gpt-5.4-mini"\n  base_url: "${stubBase}"\nserver:\n  host: "127.0.0.1"\n  port: ${seedPort}\n  grpc_port: ${grpcPort}\n  shutdown_timeout_secs: 30\n`, { mode: 0o600 });
+  await writeFile(seedConfig, `security:\n  jwt_required: false\n  jwt_secret: "${secret}"\n  settings_admin_key: "${randomBytes(24).toString('hex')}"\nresilience:\n  rate_limit_enabled: false\npersistence:\n  provider: "surreal"\n  database_url: "surrealkv://${db}"\nservice_instance:\n  instance_id: "${instanceId}"\n  ownership: "managed"\n  workspace_location: "local"\nllm:\n  model: "gpt-5.4-mini"\n  base_url: "${stubBase}"\nserver:\n  host: "127.0.0.1"\n  port: ${seedPort}\n  grpc_port: ${grpcPort}\n  shutdown_timeout_secs: 30\n`, { mode: 0o600 });
   const seed = launch('seed-uar', bins.uar, ['--config', seedConfig], uarRoot, childEnv);
   await until('standalone UAR readiness', async () => (await request(seedBase, '/readyz')).status === 200, 90000);
   const seedAuth = { token: seedToken, workspace: workspaceId };
@@ -173,6 +175,9 @@ async function run() {
   const ownerId = capabilities.bindingOwnerId;
   check(typeof ownerId === 'string' && ownerId.includes(principal), 'C03 owner is not the authenticated BossFang principal');
   const agent = JSON.parse(await fixture('agent-definition.json'));
+  // The C03 catalog fixture intentionally allows one message. A C05 tool
+  // round-trip needs the call, result, and following model turn intact.
+  agent.contextStrategy.value.max_messages = 20;
   for (const ref of [agent.skills[0], agent.sourceDescriptor.skills[0]]) {
     ref.digest = skillDigest;
     ref.requiredTools.push('terminal_exec');
@@ -211,25 +216,48 @@ async function run() {
   const installed = await expected(seedBase, '/api/v1/collaboration/deployment-bindings', {
     ...seedAuth, method: 'POST', body: { commandId: 'c05-binding', expectedRevision: 0, binding },
   }, [201]);
-  check(installed.preflight?.activationSupported === true, 'C03 binding activation not supported');
+  check(installed.preflight?.activationSupported === true,
+    `C03 binding activation not supported: ${JSON.stringify(installed.preflight?.diagnostics)}`);
   await stop(seed); // SurrealKV has one writer; the supervisor opens this exact database next.
 
   const configPath = join(root, 'boss.toml');
   const toml = value => JSON.stringify(value);
-  await writeFile(configPath, `home_dir = ${toml(bossHome)}\ndata_dir = ${toml(join(bossHome, 'data'))}\napi_key = ${toml(bossKey)}\n[uar]\nenabled = true\nmodel = "gpt-5.4-mini"\nbase_url = ${toml(stubBase)}\nsurreal_data_dir = ${toml(db)}\nselected_instance_id = ${toml(instanceId)}\n[[uar.instances]]\nid = ${toml(instanceId)}\nownership = "managed"\nworkspace_locality = "local"\nworkspace = ${toml(db)}\nprofile = "uar.service-instance/1"\ncapabilities = ["full_harness_delegation_v1", "service_instance_placement_v1"]\nrequired_capabilities = ["full_harness_delegation_v1"]\n[uar.instances.sidecar]\nenabled = true\ncommand = ${toml(join(bossRoot, 'scripts/integration/afc-c05-sidecar-proxy.mjs'))}\n`, { mode: 0o600 });
+  await writeFile(configPath, `home_dir = ${toml(bossHome)}\ndata_dir = ${toml(join(bossHome, 'data'))}\napi_key = ${toml(bossKey)}\n[uar]\nenabled = true\nmodel = "gpt-5.4-mini"\nbase_url = ${toml(stubBase)}\nsurreal_data_dir = ${toml(db)}\nselected_instance_id = ${toml(instanceId)}\n[[uar.instances]]\nid = ${toml(instanceId)}\nownership = "managed"\nworkspace_locality = "local"\nworkspace = ${toml(db)}\nprofile = "uar.service-instance/1"\ncapabilities = ["full_harness_delegation_v1", "service_instance_placement_v1"]\nrequired_capabilities = ["full_harness_delegation_v1"]\n[uar.instances.sidecar]\nenabled = true\nrestart = false\ncommand = ${toml(join(bossRoot, 'scripts/integration/afc-c05-sidecar-proxy.mjs'))}\n`, { mode: 0o600 });
   const boss = launch('boss', bins.boss, ['--config', configPath, 'start', '--foreground', '--bind', `127.0.0.1:${bossPort}`], uarRoot,
     { ...childEnv, LIBREFANG_HOME: bossHome, LIBREFANG_API_KEY: bossKey,
       C05_REAL_SIDECAR_BIN: bins.sidecar, C05_DROP_FIRST_ADMISSION: '1',
-      C05_PROXY_DROP_MARKER: join(root, 'dropped-admission.json') });
+      C05_GATE_TOKEN: gateToken, C05_PRINCIPAL: principal,
+      C05_PROXY_DROP_MARKER: join(root, 'dropped-admission.json'),
+      C05_PROXY_ERROR_MARKER: join(root, 'proxy-error.log'),
+      C05_PROXY_ENV_MARKER: join(root, 'sidecar-storage.txt'),
+      C05_SIDECAR_LOG: join(root, 'managed-sidecar.log') });
   await until('BossFang health', async () => (await request(bossBase, '/api/health')).status === 200, 90000);
   const bossAuth = { token: bossKey };
+  let lastBindingState = '';
   const status = await until('managed sidecar binding', async () => {
     const value = await expected(bossBase, '/api/uar/status', bossAuth, [200]);
+    const bindingState = JSON.stringify({ state: value.state, compatibility: value.compatibility });
+    if (bindingState !== lastBindingState) {
+      console.error(`C05 binding status: ${bindingState}`);
+      lastBindingState = bindingState;
+    }
+    if (value.state !== 'healthy' && value.last_error) throw new Error(`sidecar ${value.state}: ${value.last_error}`);
     return value.state === 'healthy' && value.effective_binding ? value : null;
   }, 90000);
   check(status.selected_instance_id === instanceId, 'wrong selected managed instance');
   check(status.effective_binding.ownership === 'managed', 'selected UAR is not managed');
   check(status.effective_binding.capabilities.includes('full_harness_delegation_v1'), 'full-run capability absent');
+  const sidecarBase = status.endpoint;
+  const sidecarAuth = { token: gateToken, workspace: workspaceId };
+  const sidecarCapabilities = await expected(sidecarBase, '/__c05/api/v1/collaboration/capabilities', sidecarAuth, [200]);
+  const sidecarBinding = await request(sidecarBase,
+    `/__c05/api/v1/collaboration/deployment-bindings/${encodeURIComponent(binding.id)}`, sidecarAuth);
+  console.error(`C05 catalog handoff: ${JSON.stringify({
+    seedOwner: ownerId, sidecarOwner: sidecarCapabilities.bindingOwnerId,
+    bindingStatus: sidecarBinding.status,
+  })}`);
+  check(sidecarCapabilities.bindingOwnerId === ownerId, 'managed sidecar changed the authenticated owner');
+  check(sidecarBinding.status === 200, 'managed sidecar did not load the installed binding from persistent storage');
   const effective = status.effective_binding;
   const admission = {
     bossTaskId: 'c05-managed-bound-task', delegationId: 'new', admissionKey: 'new',
@@ -283,6 +311,24 @@ async function run() {
     const value = await expected(bossBase, `${path}/${admission.bossTaskId}`, bossAuth, [200]);
     return ['completed', 'failed', 'cancelled', 'done', 'error'].includes(value.executionState) ? value : null;
   }, 90000);
+  if (completed.executionState === 'failed') {
+    const failedEvents = await expected(bossBase,
+      `${path}/${admission.bossTaskId}/events?after=0`, bossAuth, [200]);
+    console.error(`C05 failed run events: ${JSON.stringify(failedEvents.events.map(event => ({
+      type: event.type,
+      error: event.data?.error ?? event.data?.message ?? event.data?.reason,
+    })))}`);
+    const failedStubRequests = await expected(`http://127.0.0.1:${stubPort}`,
+      '/_stub/requests', {}, [200]);
+    console.error(`C05 stub request count: ${failedStubRequests.requests.length}`);
+    const nativeRun = await request(sidecarBase,
+      `/__c05/api/uar/runs/${completed.uarRunId}`, sidecarAuth);
+    console.error(`C05 native run: ${JSON.stringify({ httpStatus: nativeRun.status,
+      status: nativeRun.body?.status, effectiveModel: nativeRun.body?.effective_model })}`);
+    const nativeStream = await request(sidecarBase,
+      `/__c05/api/uar/runs/${completed.uarRunId}/stream`, { ...sidecarAuth, timeoutMs: 15000 });
+    console.error(`C05 native errors: ${String(nativeStream.body).split('\n').filter(line => line.startsWith('event: agui.error') || (line.startsWith('data:') && line.includes('"kind":"error"'))).join('\n')}`);
+  }
   check(['completed', 'done'].includes(completed.executionState), `bound run did not complete: ${JSON.stringify(completed)}`);
   const events = await eventsUntil(bossBase, admission.bossTaskId, bossAuth,
     observed => JSON.stringify(observed).includes(completion) && JSON.stringify(observed).includes('C05_EFFECT_OK'));

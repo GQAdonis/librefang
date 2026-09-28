@@ -342,14 +342,15 @@ impl UarRunClient {
         approval_id: &str,
         approved: bool,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let task_id = require_task_id(projection)?;
+        let current = self.lookup(projection).await?;
+        let task_id = require_task_id(&current)?;
         let body = serde_json::json!({
-            "expected_revision": projection.revision,
+            "expected_revision": current.revision,
             "approval_id": approval_id,
             "approved": approved
         });
         self.receipt_request(
-            projection,
+            &current,
             Method::POST,
             &format!("tasks/{task_id}/tool-approval"),
             Some(&body),
@@ -418,12 +419,13 @@ impl UarRunClient {
         mut body: Value,
         operation: &'static str,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let task_id = require_task_id(projection)?;
+        let current = self.lookup(projection).await?;
+        let task_id = require_task_id(&current)?;
         body.as_object_mut()
             .expect("mutation body is always an object")
-            .insert("expected_revision".into(), Value::from(projection.revision));
+            .insert("expected_revision".into(), Value::from(current.revision));
         self.receipt_request(
-            projection,
+            &current,
             Method::POST,
             &format!("tasks/{task_id}/{operation_path}"),
             Some(&body),
