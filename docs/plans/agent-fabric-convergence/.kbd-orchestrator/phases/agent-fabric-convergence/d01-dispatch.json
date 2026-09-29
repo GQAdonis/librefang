@@ -1,0 +1,19 @@
+{
+  "dispatchedAt": "2026-09-28T08:40:19.475Z",
+  "phase": "agent-fabric-convergence",
+  "change": "afc-d01-local-mac-durable-agent-delivery",
+  "activeTask": "D01.1",
+  "backend": "openspec",
+  "bossChange": "uar-d01-local-delivery",
+  "bossBranch": "codex/d01-local-mac-durable-agent-delivery",
+  "uarSourceCommit": "d4e5413c",
+  "owners": {
+    "packaging": "boss-desktop",
+    "hostAndIpc": "boss-runtime and boss-desktop",
+    "rendererAndLocales": "boss-renderer",
+    "sourceAndGate": "kbd-lead"
+  },
+  "pendingWork": ["D01.1", "D01.2", "D01.3", "D01.4"],
+  "integrationGate": "one exact pnpm build:mac:arm64 plus packaged UAR journey after complete production code",
+  "publication": "await explicit now or wait selection after local success"
+}

@@ -1,0 +1,39 @@
+{
+  "allowedWritePaths": [
+    ".kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/**",
+    ".prometheus/session-log.md",
+    ".prometheus/progress-memory-receipts/**",
+    ".prometheus/progress-memory-outbox/**",
+    "openspec/changes/afc-release-cadence-optimization/**",
+    "work-packages.json",
+    "dependencies.md",
+    "recommendations.json",
+    "openspec/changes/afc-c*/**",
+    "openspec/changes/afc-d01-local-mac-durable-agent-delivery/**"
+  ],
+  "deniedPaths": [
+    "product source and manifests outside a later approved execution plan"
+  ],
+  "inheritsConstraints": true,
+  "__note": "Edit allowedWritePaths to widen the child loop's write surface. .kbd-orchestrator/** and SCRATCHPAD.md are always allowed. Enforced advisorily by check-child-scope.mjs.",
+  "externalDerivedOutputPaths": [
+    "/Users/gqadonis/.claude/worktrees/afc-c08-uar/compass-out/**"
+  ],
+  "stageFeedbackRequired": [
+    "assess",
+    "analyze",
+    "plan",
+    "execute",
+    "reflect"
+  ],
+  "planningScopeNote": "Execute authorized for authored process/team/roadmap changes. Product changes are scheduled for D1 after child Reflect and parent restoration.",
+  "externalAuthoredWritePaths": [
+    "../../../.agent-team/bossfang-stewards/**",
+    "../../../.codex/agents/**",
+    "../../../.claude/agents/**",
+    "../../../AGENTS.md",
+    "../../../CLAUDE.md",
+    "../../../.agent-team/project-routing.json"
+  ],
+  "executionAuthorization": "Operator approved Execute and full-build website-pointer requirements. Authored roadmap/team/process files only; no product code/builds/publication. Reflect/archive/parent restoration await feedback."
+}

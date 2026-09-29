@@ -1,0 +1,12 @@
+{
+  "scope": {
+    "tasks": ["C09.2"],
+    "changes": ["afc-c09-bounded-teams-and-shared-task-board"],
+    "phases": [],
+    "outcomes": ["From The Boss, claim and reassign a durable UAR team task with fenced ownership, inspect assignment and message receipts, and recover the board after a sidecar restart without granting team execution before aggregate-budget admission is complete"]
+  },
+  "sourceRefs": [
+    {"repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar"},
+    {"repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build"}
+  ]
+}

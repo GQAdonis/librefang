@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "eventId": "kpm-afc-c09-2-delivery-20260928",
+  "observedAt": "2026-09-28T20:53:00Z",
+  "runId": "project-20260924T180329Z",
+  "boundary": "task",
+  "status": "complete",
+  "phaseId": "agent-fabric-convergence",
+  "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+  "taskId": "C09.2",
+  "taskClass": "product",
+  "elapsedHours": 0.9140680555555556,
+  "verification": [
+    {
+      "command": "pnpm build:mac:arm64",
+      "exitCode": 0,
+      "summary": "Source-pinned Mac ARM64 installer built and validated; DMG SHA-256 1d79b566be07230f88b6add30d3aefba24277cca82230acf62effc7f8efd34a8."
+    },
+    {
+      "command": "node delivery-cadence/scripts/boss-launch.mjs --scenario uar-team-ownership-scenario.mjs --require-scenario",
+      "exitCode": 0,
+      "summary": "Packaged app performed a fenced task claim and reassignment, rejected a stale revision, saved a reviewer and one idempotent accepted message, recovered after UAR restart, and displayed the board in Teams settings. No unit or partial suites were run."
+    }
+  ],
+  "observedFailures": [
+    "The first packaged launch found Axum rejecting a route segment that combined {task_id} and :claim. Changed task action routes to separate path segments and rebuilt only the failed app boundary."
+  ],
+  "optimization": [
+    "Freeze source commits and payload revision before invoking the cadence checkpoint to avoid a second installer build after documentation-only commits.",
+    "Pass THE_BOSS_LOCAL_UAR_SOURCE_DIR into the cadence checkpoint environment; its first attempt failed immediately without that required variable.",
+    "Give each iteration a unique launch receipt path; the shared mac-functional-launch.json path was overwritten, requiring archival copies to preserve both results."
+  ],
+  "blocker": null,
+  "exactNextWork": "Publish the second successful delivery to Mac ARM64/x64 and Windows x64/ARM64 with matching UAR source records, GitHub release metadata and current website links; then begin C09.3 aggregate admission."
+}

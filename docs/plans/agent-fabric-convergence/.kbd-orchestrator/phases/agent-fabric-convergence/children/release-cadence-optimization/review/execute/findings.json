@@ -1,0 +1,31 @@
+{
+  "mode": "diff",
+  "verdict": "PASS",
+  "producer_model": "gpt-6-astra",
+  "judge_model": "gpt-6-sol",
+  "isolation_mode": "harness-native",
+  "cross_model_check": "unverified-canonical-identities",
+  "findings": [
+    {
+      "severity": "WARNING",
+      "file": "docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/canonical-registration.json",
+      "claim": "The registration request says executed:false although its receipt records completion at revisions289–293.",
+      "evidence": "Request executed:false versus canonical-registration-receipt.json registrationRevisions.",
+      "suggested_fix": "Mark fulfilled and link receipt; parent activation remains pending Reflect."
+    }
+  ],
+  "checked_classes": [],
+  "dispositions": [
+    {
+      "finding": 0,
+      "status": "fixed",
+      "resolution": "Request now executed:true and links receipt; handoff says registered-pending; no canonical mutation or product change."
+    }
+  ],
+  "gatewayFallback": "dispatch-judge exit4 JUDGE_MODEL_COLLISION; isolated native reviewer used.",
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

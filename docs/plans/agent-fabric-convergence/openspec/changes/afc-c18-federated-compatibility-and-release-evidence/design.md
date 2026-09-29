@@ -34,3 +34,7 @@ Reconcile current source and existing product specs; record accepted dependency 
 Each advertised mode passes real boundary scenarios on named hosts/platforms; unsupported features remain disabled; immutable pins and rollback constraints are auditable.
 
 Use repository-required checks and observable real-boundary scenarios; source inspection and planned checkboxes are not execution evidence. Recommendation coverage: REC-057, REC-058, REC-060, REC-061.
+
+## D01 and later full publication boundary
+
+An early local `pnpm build:mac:arm64` D01 result establishes only its exact packaged Boss/UAR journey. It does not certify this change's federation or mode matrix. After every functioning local delivery, the operator chooses full macOS/Windows publication now or wait. A now choice means UAR-enabled darwin-arm64, darwin-x64, win32-x64 and win32-arm64, with no Linux; missing Intel/ARM payload/profile support remains a blocker. Each GitHub Release artifact row binds exact source, version, architecture, size, SHA-256, signing status and download URL. The Boss `RELEASES.md` and manifest are committed/pushed from actual artifacts; `Know-Me-Tools/boss-landing-spot` generated data is synced, committed/pushed, and its connected Lovable project is deployed at the-boss.know-me.tools. Verify live URL and downloaded bytes before replacing a prior working platform link. One publisher prevents stale job metadata regression. These per-delivery publication receipts contribute to C18 evidence but cannot close C18.1–C18.3 without their original supported-profile acceptance.

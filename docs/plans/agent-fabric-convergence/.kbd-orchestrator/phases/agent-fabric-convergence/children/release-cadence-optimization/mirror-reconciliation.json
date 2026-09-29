@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-28T08:03:47.678Z",
+  "sourceAuditRevision": 286,
+  "operation": "kbd-apply mark-done; OpenSpec mirror only",
+  "canonicalTransitionsCreated": false,
+  "historicalEvents": [
+    {
+      "schemaVersion": "2",
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+      "runId": "project-20260924T180329Z",
+      "eventId": "24dec5a7-99d9-448b-8911-0ab5787017b9",
+      "commandId": "afc-c06-1-implementation-20260928",
+      "revision": 241,
+      "expectedRevision": 240,
+      "lamport": 2,
+      "frontier": {
+        "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+        "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+        "c67ff135-541a-40dd-9600-b528d8bccbc2": 1
+      },
+      "causalParent": "ec1c04d0-0c2f-4c3b-9bda-4dfc022ed478",
+      "actor": {
+        "kind": "harness",
+        "id": "gqadonis",
+        "device": "unknown-device",
+        "harness": "codex",
+        "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+      },
+      "actorId": "gqadonis",
+      "timestamp": "2026-09-28T03:34:16.620385Z",
+      "kind": {
+        "type": "task_transitioned",
+        "payload": {
+          "phase_id": "agent-fabric-convergence",
+          "change_id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+          "task_id": "C06.1",
+          "from": "in_progress",
+          "to": "complete",
+          "summary": "Owner-scoped SurrealKV logical-instance records, request/on-demand/resident profiles, and fresh root per turn implemented; C06 live gate observed two workspaces and distinct roots."
+        }
+      },
+      "previousHash": "6473e5303646d60ea3dd12809b02639a9bf685496eb1a31ba0dc28ac655a247c",
+      "integrityHash": "222549305c9335743b38cb57e49b492d355b630b4b691db6d7bdc837f19be05f",
+      "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+      "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+      "signature": "bEJPlUlQ2e6Yg8tGzSKbnO41HEGnm6dwedqivBwVkL7LXe6KYdqKxWBoKVDzZn8mvwmuZzwLDczVle92pn/gDQ=="
+    },
+    {
+      "schemaVersion": "2",
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+      "runId": "project-20260924T180329Z",
+      "eventId": "c91b60e3-ee43-4136-95cc-82defe47b7e2",
+      "commandId": "afc-c06-2-complete-20260927",
+      "revision": 243,
+      "expectedRevision": 242,
+      "lamport": 4,
+      "frontier": {
+        "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+        "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+        "c67ff135-541a-40dd-9600-b528d8bccbc2": 3
+      },
+      "causalParent": "1bd2ac6a-3e1c-4737-b3b8-e3624cf0810a",
+      "actor": {
+        "kind": "harness",
+        "id": "gqadonis",
+        "device": "unknown-device",
+        "harness": "codex",
+        "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+      },
+      "actorId": "gqadonis",
+      "timestamp": "2026-09-28T04:22:54.606006Z",
+      "kind": {
+        "type": "task_transitioned",
+        "payload": {
+          "phase_id": "agent-fabric-convergence",
+          "change_id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+          "task_id": "C06.2",
+          "from": "in_progress",
+          "to": "complete",
+          "summary": "SurrealKV-backed bounded inbox, serialized turns, monotonic epochs, post-claim uncertainty hold and cancellation proved by C06 gate receipt."
+        }
+      },
+      "previousHash": "5b46ae64d87cb89bc815ac7f6867eccf01aa101a92fdb0b270d211767e61ed61",
+      "integrityHash": "ab743f3ab98cc18f2572359608defcd71318257d9f7457d2095733b19232fdbb",
+      "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+      "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+      "signature": "xGOKlOVxQv29By00MglCoZdbzcKd6SBqdFiW3L7uF3+bSaYrK15hr1FtHJyS8neVIRCs3/6h0J5vvLlrCOVsBA=="
+    },
+    {
+      "schemaVersion": "2",
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+      "runId": "project-20260924T180329Z",
+      "eventId": "8aa9c0a7-d381-445b-a968-7c495493c417",
+      "commandId": "afc-c06-3-complete-20260927",
+      "revision": 245,
+      "expectedRevision": 244,
+      "lamport": 6,
+      "frontier": {
+        "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+        "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+        "c67ff135-541a-40dd-9600-b528d8bccbc2": 5
+      },
+      "causalParent": "9a01730b-6043-407b-a8d5-85c1252e7820",
+      "actor": {
+        "kind": "harness",
+        "id": "gqadonis",
+        "device": "unknown-device",
+        "harness": "codex",
+        "session": "01a0cb90-3993-7592-9779-f80c3f53be07"
+      },
+      "actorId": "gqadonis",
+      "timestamp": "2026-09-28T04:23:10.165227Z",
+      "kind": {
+        "type": "task_transitioned",
+        "payload": {
+          "phase_id": "agent-fabric-convergence",
+          "change_id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+          "task_id": "C06.3",
+          "from": "in_progress",
+          "to": "complete",
+          "summary": "Revisioned lifecycle, bounded retries, authenticated event stream, cold backup/restore and full local C06 integration gate recorded; installed release acceptance remains separate."
+        }
+      },
+      "previousHash": "1eda33f6bd0b4756f95c434a0f4871ccf05936ccb4becc89856a97f14eb15944",
+      "integrityHash": "d23a42995bc07541275543b700c0da4f969f9aecdb246e1b19811536363c3946",
+      "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+      "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+      "signature": "Z6EhWBbf3pLkpt8rKmNMeD3m1g2zTX8n/6vvRzLLotozzb8xDVFlvNImqW3IlP6j6lY81NOCJd49rAfQzYVuBA=="
+    },
+    {
+      "schemaVersion": "2",
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+      "runId": "project-20260924T180329Z",
+      "eventId": "8a6d956d-b132-4f37-a92d-fbf9249e058d",
+      "commandId": "afc-c08-1-static-source-b75886ad3-20260928",
+      "revision": 253,
+      "expectedRevision": 252,
+      "lamport": 14,
+      "frontier": {
+        "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+        "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+        "c67ff135-541a-40dd-9600-b528d8bccbc2": 13
+      },
+      "causalParent": "c49f93ca-9d43-4d8e-91cb-347e74ab9234",
+      "actor": {
+        "kind": "harness",
+        "id": "gqadonis",
+        "device": "unknown-device",
+        "harness": "codex",
+        "session": "01a0e6a7-87fc-79b1-bb4b-d7cacee3c710"
+      },
+      "actorId": "gqadonis",
+      "timestamp": "2026-09-28T06:20:51.299112Z",
+      "kind": {
+        "type": "task_transitioned",
+        "payload": {
+          "phase_id": "agent-fabric-convergence",
+          "change_id": "afc-c08-bossfang-and-fabric-observer-routing",
+          "task_id": "C08.1",
+          "from": "in_progress",
+          "to": "complete",
+          "summary": "C08.1 source complete by static trace at BossFang b75886ad3: normalized Discord guild occurrence, durable route and conflict, Gate-authorized operator reassignment, truthful local capability; composed C08 gate and provider acceptance pending."
+        }
+      },
+      "previousHash": "9ddae92fad3201971028fc0f6409ce39c0e17caad84f2822dc04cfd0d8ff9b16",
+      "integrityHash": "d7a21d47355c388c330e131332ea09d16ef0345192d1662bf3451c998c8f1a42",
+      "signerKeyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+      "signerPublicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+      "signature": "PNMRxadYX6sbB6lIVfbkSEDbbM0JORVe3UizqtF+zHvtKStwCyR6Sx6h9SsqnzYVn6MBZvYiP1dYrMy6qLfADQ=="
+    }
+  ],
+  "evidence": [
+    {
+      "path": ".kbd-orchestrator/phases/agent-fabric-convergence/c06/implementation-receipt-2026-09-27.json",
+      "sha256": "837f8f69e2902449dcc64dc1c237444e4befe92115ab8bd5788ceb1284702d74"
+    },
+    {
+      "path": ".kbd-orchestrator/phases/agent-fabric-convergence/c08/c08-1-static-reconciliation-2026-09-28.md",
+      "sha256": "cbcd94cd234a61be822584edb114388c9733f282113391d6a2da1eb3875c0b9d"
+    }
+  ],
+  "mappings": [
+    {
+      "canonicalTask": "C06.1",
+      "openSpecTask": "1.1"
+    },
+    {
+      "canonicalTask": "C06.2",
+      "openSpecTask": "1.2"
+    },
+    {
+      "canonicalTask": "C06.3",
+      "openSpecTask": "1.3"
+    },
+    {
+      "canonicalTask": "C08.1",
+      "openSpecTask": "1.1"
+    }
+  ],
+  "limitations": [
+    "Historical signed event envelopes preserved; no new cryptographic verifier or runtime gate run.",
+    "C06 receipt covers local integration, not installed release acceptance.",
+    "C08.1 source only; C08.2/C08.3 and composed gate remain pending; Discord acceptance deferred by operator."
+  ]
+}

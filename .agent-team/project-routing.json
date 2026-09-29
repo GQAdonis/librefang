@@ -8,7 +8,8 @@
     ".claude/agents/upstream-merge-manager.md",
     ".claude/agents/surrealdb-schema-engineer.md",
     ".claude/agents/bossfang-feature-steward.md",
-    ".claude/agents/merge-reviewer.md"
+    ".claude/agents/merge-reviewer.md",
+    ".claude/agents/delivery-optimizer.md"
   ],
   "instructionFiles": [
     "AGENTS.md",

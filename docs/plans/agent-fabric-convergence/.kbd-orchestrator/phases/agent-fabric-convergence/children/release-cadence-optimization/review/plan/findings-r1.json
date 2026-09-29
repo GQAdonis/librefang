@@ -1,0 +1,26 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "producer_model": "gpt-6-astra",
+  "judge_model": "gpt-6-sol",
+  "isolation_mode": "harness-native",
+  "cross_model_check": "unverified-canonical-identities",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "line": 34,
+      "claim": "Elapsed delivery time has incompatible local-ready and publication-complete endpoints.",
+      "evidence": "Publication work included after local-ready despite local critical path ending at functioning build.",
+      "suggested_fix": "Separate local-delivery and publication clocks."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "line": 58,
+      "claim": "Recurring Compass refresh lacks an executable owner.",
+      "evidence": "Read-only observer cannot execute required graph operations.",
+      "suggested_fix": "Assign graph update/query to named owner."
+    }
+  ]
+}

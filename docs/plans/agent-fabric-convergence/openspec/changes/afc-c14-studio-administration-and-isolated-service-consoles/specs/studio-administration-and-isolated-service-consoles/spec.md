@@ -10,6 +10,8 @@ Define the cross-product behavior for studio administration and isolated service
 
 The Boss MUST expose effective runtime binding, ownership, policy posture, lifecycle, budget, approvals and subscription state across local and remote instances.
 
+The D01 delivery MAY expose C06 lifecycle and C07 local observer state sooner through the existing Boss UAR settings, but SHALL NOT claim this complete requirement until team/workflow, budget, approval and remote-instance obligations are met. The early UI SHALL reflect provider capabilities and preserve two-workspace isolation.
+
 #### Scenario: 1 — Common studio administration
 
 - **WHEN** An operator connects two runtimes and an externally managed BossFang service

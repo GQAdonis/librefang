@@ -314,6 +314,10 @@ update `librefang-uar-spec/src/types.rs` if `AgentManifest` shape changes.
 - The `AgentLoopResult` response field is `.response`, not `.response_text`.
 - The CLI daemon command is `start` (not `daemon`).
 
+### Agent Fabric Convergence phase gate
+
+For `agent-fabric-convergence` and its `release-cadence-optimization` child, follow the approved [delivery contract](docs/plans/agent-fabric-convergence/.kbd-orchestrator/phases/agent-fabric-convergence/children/release-cadence-optimization/delivery-contract.md): finish the complete production increment, then run one real integration gate and the required local package build. Test-first, per-edit, per-route and scoped cargo-check/test examples elsewhere in project or role instructions are deferred to that completed-phase boundary for this initiative. The single shared heavy build writer and KBD lead coordinate the boundary; observer roles cannot authorize it. This scoped precedence leaves other projects and phases unchanged.
+
 <!-- prometheus-team-routing:start v1 -->
 For every code task, read `.agent-team/project-routing.json`, then its active team manifest and the relevant role instructions. Default to that team, selecting only roles whose responsibilities and ownership match the work. Preserve native permissions, models, concurrency limits and existing project instructions.
 For UI work, load the role-bound `prometheus-ui-ux` or `prometheus-ui-review` skill. Prefer `.agents/UI_UX_PROTOCOL.md` when present; otherwise use the installed `prometheus-ui-ux/references/UI_UX_PROTOCOL.md`. Backend work must not load UI guidance.

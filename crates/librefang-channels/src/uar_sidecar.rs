@@ -12,7 +12,7 @@ use crate::sidecar::{
     SupervisionContract, SupervisionOutcome,
 };
 use async_trait::async_trait;
-use librefang_types::config::{UarConfig, UarServiceInstanceConfig, UarSidecarConfig};
+use librefang_types::config::{RemoteSurrealConfig, UarConfig, UarServiceInstanceConfig, UarSidecarConfig};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -93,6 +93,7 @@ pub struct UarSidecarSupervisor {
     environment: Vec<(String, String)>,
     endpoint_callback: Option<EndpointCallback>,
     probe_bearer: Option<String>,
+    startup_error: Option<String>,
     lifecycle: Mutex<()>,
     control_tx: Mutex<Option<mpsc::Sender<Control>>>,
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -122,6 +123,7 @@ impl UarSidecarSupervisor {
             ],
             endpoint_callback: None,
             probe_bearer: None,
+            startup_error: None,
             lifecycle: Mutex::new(()),
             control_tx: Mutex::new(None),
             task: Mutex::new(None),
@@ -216,6 +218,69 @@ impl UarSidecarSupervisor {
         self
     }
 
+    /// Apply the selected remote UAR database after instance overrides so an
+    /// older embedded workspace path cannot silently replace `[uar.remote]`.
+    #[must_use]
+    pub fn with_remote_storage(
+        mut self,
+        remote: &RemoteSurrealConfig,
+        password: Option<String>,
+        auth_level: Option<&str>,
+        durability_attested: bool,
+    ) -> Self {
+        let Some(password) = password.filter(|value| !value.is_empty()) else {
+            self.startup_error = Some(format!(
+                "UAR remote SurrealDB credential '{}' could not be resolved",
+                remote.password_env
+            ));
+            return self;
+        };
+        let auth_level = auth_level.unwrap_or("namespace");
+        if !matches!(auth_level, "root" | "namespace" | "database") {
+            self.startup_error = Some(format!(
+                "UAR remote SurrealDB auth level '{auth_level}' is unsupported"
+            ));
+            return self;
+        }
+        self.environment.extend([
+            ("UAR_PERSISTENCE__PROVIDER".to_string(), "surreal".to_string()),
+            ("UAR_PERSISTENCE__DATABASE_URL".to_string(), remote.url.clone()),
+            ("UAR_PERSISTENCE__SURREAL_NS".to_string(), remote.namespace.clone()),
+            ("UAR_PERSISTENCE__SURREAL_DB".to_string(), remote.database.clone()),
+            ("UAR_PERSISTENCE__SURREAL_USER".to_string(), remote.username.clone()),
+            ("UAR_PERSISTENCE__SURREAL_PASS".to_string(), password),
+            ("UAR_PERSISTENCE__SURREAL_AUTH_LEVEL".to_string(), auth_level.to_string()),
+            (
+                "UAR_REMOTE_SURREAL_DURABILITY_ATTESTED".to_string(),
+                if durability_attested { "1" } else { "0" }.to_string(),
+            ),
+        ]);
+        self
+    }
+
+    /// Give the managed UAR process its own effect-only Gate credential. The
+    /// administrative grant writer credential is never forwarded to UAR.
+    #[must_use]
+    pub fn with_channel_gate_from_host(mut self) -> Self {
+        let url = std::env::var("LIBREFANG_CHANNEL_GATE_URL").ok();
+        let token = std::env::var("LIBREFANG_UAR_CHANNEL_GATE_EFFECT_TOKEN").ok();
+        if let (Some(url), Some(token)) = (url, token) {
+            if !url.trim().is_empty() && !token.trim().is_empty() {
+                self.environment.extend([
+                    ("UAR_CHANNEL_GATE_URL".to_string(), url),
+                    ("UAR_CHANNEL_GATE_BEARER_TOKEN".to_string(), token),
+                ]);
+            }
+        }
+        self
+    }
+
+    #[must_use]
+    pub fn with_startup_error(mut self, error: String) -> Self {
+        self.startup_error = Some(error);
+        self
+    }
+
     /// Publish endpoint changes to the driver layer after every successful
     /// spawn, including background restarts that select a new ephemeral port.
     #[must_use]
@@ -247,6 +312,10 @@ impl UarSidecarSupervisor {
     }
 
     async fn begin_start(&self) -> Result<StartWait, String> {
+        if let Some(error) = self.startup_error.as_ref() {
+            self.set_failure(UarSupervisorState::Degraded, error.clone()).await;
+            return Err(error.clone());
+        }
         let current = self.status.read().await.clone();
         if current.state == UarSupervisorState::Healthy {
             return Ok(StartWait::Ready(current));

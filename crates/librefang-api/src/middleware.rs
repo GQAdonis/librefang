@@ -294,6 +294,11 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
     if *method == axum::http::Method::GET {
         return false;
     }
+    if path.starts_with("/api/channels/observers/")
+        && (path.ends_with("/pause") || path.ends_with("/revoke"))
+    {
+        return true;
+    }
     // Exact-match list. These are the only routes the current codebase
     // exposes that cross the "Owner action" line; add here rather than
     // matching a prefix so a new Admin-write endpoint doesn't silently
@@ -301,6 +306,8 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
     if matches!(
         path,
         "/api/config"
+            | "/api/channels/routes/reassign"
+            | "/api/channels/observers"
             | "/api/config/set"
             | "/api/config/reload"
             | "/api/uar/start"
@@ -484,6 +491,11 @@ fn plugin_route_executes_plugin_code(path: &str) -> bool {
 /// slash); the id/window segments are concrete here (this runs on the request
 /// URI, not the route template), so agent WS is matched by prefix + suffix.
 fn min_role_for_privileged_get(path: &str) -> Option<UserRole> {
+    if path == "/api/channels/observers"
+        || (path.starts_with("/api/channels/observers/") && path.ends_with("/unresolved"))
+    {
+        return Some(UserRole::Owner);
+    }
     if path == "/api/terminal/ws" || path.starts_with("/api/terminal/windows") {
         return Some(UserRole::Admin);
     }

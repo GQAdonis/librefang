@@ -508,6 +508,35 @@ impl AgentRouter {
         None
     }
 
+    /// Return every distinct handler at the highest matching binding
+    /// specificity. A durable route must report an equal-rank conflict
+    /// instead of inheriting the vector's configuration order.
+    pub fn top_binding_names(&self, ctx: &BindingContext<'_>, specific_only: bool) -> Vec<String> {
+        let bindings = self.lock_bindings();
+        let mut top_specificity = None;
+        let mut names = Vec::new();
+        for (binding, _) in bindings.iter() {
+            if specific_only && binding.match_rule.peer_id.is_none() {
+                continue;
+            }
+            if !self.binding_matches(binding, ctx) {
+                continue;
+            }
+            let specificity = binding.match_rule.specificity();
+            if top_specificity.is_some_and(|top| specificity < top) {
+                break;
+            }
+            if self.agent_name_cache.contains_key(&binding.agent) {
+                top_specificity = Some(specificity);
+                if !names.contains(&binding.agent) {
+                    names.push(binding.agent.clone());
+                }
+            }
+        }
+        names.sort();
+        names
+    }
+
     /// Check if a single binding's match_rule matches the context.
     ///
     /// Delegates to [`BindingMatchRule::matches`] in `librefang-types` — the

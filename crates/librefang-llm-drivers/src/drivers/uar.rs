@@ -277,6 +277,15 @@ pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Opt
     guard.generation = guard.generation.wrapping_add(1);
 }
 
+/// Private server-side channel delivery binding. Never serialize or log the
+/// credential; it changes when the supervised sidecar restarts.
+pub fn supervised_channel_binding() -> Option<(String, zeroize::Zeroizing<String>)> {
+    let guard = binding_cell()
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    Some((guard.endpoint.clone()?, guard.credentials.runtime.clone()?))
+}
+
 fn role_credential(role: EndpointRole) -> Option<Zeroizing<String>> {
     let guard = binding_cell()
         .read()

@@ -1,0 +1,9 @@
+{
+  "id": "mac-arm64-build",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+      "platform": "darwin-arm64"
+    }
+  ]
+}

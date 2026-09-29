@@ -6,7 +6,8 @@
 
 use crate::types::{
     AgentPhase, ChannelAdapter, ChannelContent, ChannelMessage, ChannelStatus, ChannelType,
-    ChannelUser, GroupMember, InteractiveMessage, LifecycleReaction, ParticipantRef, TypingEvent,
+    ChannelUser, GroupMember, InteractiveMessage, LifecycleReaction, NativeSendReceipt,
+    ParticipantRef, TypingEvent,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -23,6 +24,10 @@ use tokio::io::BufReader;
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
 use tracing::{debug, error, info, warn};
+
+/// Set by the host reader from the configured adapter name, never accepted
+/// from a sidecar message's provider-controlled metadata.
+pub(crate) const CONFIGURED_INSTANCE_KEY: &str = "__configured_instance__";
 
 fn lock_std_recover<'a, T>(
     mutex: &'a std::sync::Mutex<T>,
@@ -107,6 +112,9 @@ pub enum SidecarEvent {
     /// serde and field access (incl. partial moves) are transparent.
     #[serde(rename = "message")]
     Message { params: Box<SidecarMessageParams> },
+    /// Native send outcome for a durable action. Legacy sends emit no result.
+    #[serde(rename = "send_result")]
+    SendResult { params: SidecarSendResultParams },
     /// Adapter is ready to receive commands. Carries the declared
     /// capability set + identity metadata. Both the bare legacy form
     /// `{"method":"ready"}` (field omitted) and the JSON-RPC
@@ -139,6 +147,14 @@ pub enum SidecarEvent {
     /// the dashboard used pre-sidecar.
     #[serde(rename = "qr_status")]
     QrStatus { params: SidecarQrStatusParams },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SidecarSendResultParams {
+    pub action_id: String,
+    #[serde(default)]
+    pub native_message_ids: Vec<String>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -357,6 +373,9 @@ pub struct SidecarSendParams {
     pub thread_id: Option<String>,
     /// Full sender identity (`channel_id` is `user.platform_id`).
     pub user: ChannelUser,
+    /// Correlates an opt-in native send receipt to the durable action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action_id: Option<String>,
 }
 
 /// `typing` command params (P0 skeleton — wired in P2).
@@ -774,6 +793,7 @@ struct SpawnCtx {
     caps: Arc<RwLock<Caps>>,
     account_id_cell: Arc<OnceLock<Option<String>>>,
     typing_tx: mpsc::Sender<TypingEvent>,
+    pending_sends: Arc<Mutex<HashMap<String, oneshot::Sender<NativeSendReceipt>>>>,
     tx: mpsc::Sender<ChannelMessage>,
     shutdown_rx: watch::Receiver<bool>,
     sup: SupCfg,
@@ -1456,6 +1476,7 @@ async fn spawn_once(
     let account_id_cell = ctx.account_id_cell.clone();
     let reader_stdin = ctx.stdin_tx.clone();
     let typing_tx = ctx.typing_tx.clone();
+    let pending_sends = ctx.pending_sends.clone();
     let tx = ctx.tx.clone();
     let overflow = ctx.sup.overflow;
     let mut shutdown_rx = ctx.shutdown_rx.clone();
@@ -1552,6 +1573,14 @@ async fn spawn_once(
                                         is_typing: params.is_typing,
                                     });
                                 }
+                                Ok(SidecarEvent::SendResult { params }) => {
+                                    if let Some(waiter) = pending_sends.lock().await.remove(&params.action_id) {
+                                        let _ = waiter.send(NativeSendReceipt {
+                                            native_message_ids: params.native_message_ids,
+                                            error: params.error,
+                                        });
+                                    }
+                                }
                                 Ok(SidecarEvent::Message { params }) => {
                                     let params = *params;
                                     debug!(
@@ -1560,6 +1589,34 @@ async fn spawn_once(
                                         "Received message from sidecar"
                                     );
                                     let mut metadata = params.metadata;
+                                    // The sidecar transport alone knows whether this ID came
+                                    // from the provider. Do not let adapter metadata assert the
+                                    // replay-safe profile for a generated legacy UUID.
+                                    let native_message_id = params
+                                        .message_id
+                                        .as_deref()
+                                        .is_some_and(|id| !id.trim().is_empty());
+                                    metadata.insert(
+                                        crate::channel_route::NATIVE_MESSAGE_ID_KEY.to_string(),
+                                        serde_json::Value::Bool(native_message_id),
+                                    );
+                                    metadata.insert(
+                                        CONFIGURED_INSTANCE_KEY.to_string(),
+                                        serde_json::Value::String(adapter_name.clone()),
+                                    );
+                                    let account_kind = if metadata
+                                        .get("account_id")
+                                        .and_then(serde_json::Value::as_str)
+                                        .is_some_and(|id| !id.trim().is_empty())
+                                    {
+                                        "native"
+                                    } else {
+                                        "configured_instance"
+                                    };
+                                    metadata.insert(
+                                        crate::channel_route::ACCOUNT_KIND_KEY.to_string(),
+                                        serde_json::Value::String(account_kind.to_string()),
+                                    );
                                     // #5227 follow-up — sidecar protocol
                                     // splits `user_id` (the human sender)
                                     // and `channel_id` (the chat the
@@ -1948,6 +2005,7 @@ pub struct SidecarAdapter {
     /// Sender half feeding `typing_events()`. The reader pushes inbound
     /// `Typing` events here best-effort.
     typing_tx: mpsc::Sender<TypingEvent>,
+    pending_sends: Arc<Mutex<HashMap<String, oneshot::Sender<NativeSendReceipt>>>>,
     /// Receiver half, handed out once by `typing_events()` (sync — uses
     /// a std Mutex, never held across `.await`).
     typing_rx: Arc<std::sync::Mutex<Option<mpsc::Receiver<TypingEvent>>>>,
@@ -2082,6 +2140,7 @@ impl SidecarAdapter {
             caps: Arc::new(RwLock::new(Caps::default())),
             account_id_cell: Arc::new(OnceLock::new()),
             typing_tx,
+            pending_sends: Arc::new(Mutex::new(HashMap::new())),
             typing_rx: Arc::new(std::sync::Mutex::new(Some(typing_rx))),
             sup: SupCfg::from_config(config),
             overrides: overrides_from_sidecar_config(config),
@@ -2142,6 +2201,7 @@ impl ChannelAdapter for SidecarAdapter {
             caps: self.caps.clone(),
             account_id_cell: self.account_id_cell.clone(),
             typing_tx: self.typing_tx.clone(),
+            pending_sends: self.pending_sends.clone(),
             tx: tx.clone(),
             shutdown_rx: self.shutdown_rx.clone(),
             sup: self.sup,
@@ -2181,6 +2241,7 @@ impl ChannelAdapter for SidecarAdapter {
                 content: Some(content),
                 thread_id: None,
                 user: user.clone(),
+                action_id: None,
             },
         };
         self.send_command(&cmd).await?;
@@ -2392,9 +2453,68 @@ impl ChannelAdapter for SidecarAdapter {
                 content: Some(content),
                 thread_id: Some(thread_id.to_string()),
                 user: user.clone(),
+                action_id: None,
             },
         })
         .await
+    }
+
+    async fn send_with_native_receipt(
+        &self,
+        user: &ChannelUser,
+        content: ChannelContent,
+        thread_id: Option<&str>,
+        action_id: &str,
+    ) -> Result<NativeSendReceipt, Box<dyn std::error::Error + Send + Sync>> {
+        if !self.has_cap("native_send_receipt") {
+            return Err(
+                std::io::Error::other("sidecar lacks native_send_receipt capability").into(),
+            );
+        }
+        let text = match &content {
+            ChannelContent::Text(text) => text.clone(),
+            other => serde_json::to_string(other)?,
+        };
+        let (tx, rx) = oneshot::channel();
+        let mut pending = self.pending_sends.lock().await;
+        if pending.contains_key(action_id) {
+            return Err(
+                std::io::Error::other("durable action already awaits a send result").into(),
+            );
+        }
+        pending.insert(action_id.to_owned(), tx);
+        drop(pending);
+        let send = self
+            .send_command(&SidecarCommand::Send {
+                params: SidecarSendParams {
+                    channel_id: user.platform_id.clone(),
+                    text,
+                    content: Some(content),
+                    thread_id: thread_id.map(str::to_owned),
+                    user: user.clone(),
+                    action_id: Some(action_id.to_owned()),
+                },
+            })
+            .await;
+        if let Err(error) = send {
+            self.pending_sends.lock().await.remove(action_id);
+            return Err(error);
+        }
+        let result = tokio::time::timeout(std::time::Duration::from_secs(30), rx).await;
+        self.pending_sends.lock().await.remove(action_id);
+        match result {
+            Ok(Ok(receipt)) => {
+                let mut status = lock_std_recover(&self.status, "status");
+                status.messages_sent += receipt.native_message_ids.len() as u64;
+                Ok(receipt)
+            }
+            Ok(Err(_)) => {
+                Err(std::io::Error::other("sidecar stopped before native send receipt").into())
+            }
+            Err(_) => {
+                Err(std::io::Error::other("timed out waiting for native send receipt").into())
+            }
+        }
     }
 
     fn owns_formatting(&self) -> bool {
@@ -3354,6 +3474,7 @@ mod tests {
                     display_name: "Tester".to_string(),
                     librefang_user: None,
                 },
+                action_id: None,
             },
         };
         let json = serde_json::to_string(&cmd).unwrap();
@@ -3382,6 +3503,7 @@ mod tests {
                     display_name: "Tester".to_string(),
                     librefang_user: None,
                 },
+                action_id: None,
             },
         };
         let json = serde_json::to_string(&cmd).unwrap();
@@ -3708,6 +3830,7 @@ mod tests {
             }),
             thread_id: None,
             user: user.clone(),
+            action_id: None,
         };
         let v = serde_json::to_value(&p).unwrap();
         assert_eq!(v["channel_id"], "chan-1");
@@ -4159,6 +4282,7 @@ mod tests {
                     display_name: "U".to_string(),
                     librefang_user: None,
                 },
+                action_id: None,
             },
         };
 

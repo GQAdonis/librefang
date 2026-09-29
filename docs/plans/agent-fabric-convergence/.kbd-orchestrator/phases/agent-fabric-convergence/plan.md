@@ -1,25 +1,25 @@
 # Plan: Agent Fabric Convergence
 
-Date: 2026-09-24. Scope: implement the report recommendations through coordinated, dependency-gated delivery. This turn creates worktrees and planning artifacts only. OpenSpec backend: YES. Proposed changes: 18. Pending delivery groups: 53; C01.1 complete at canonical revision 91. Product implementation completed by this initiative: 0.
+Date: 2026-09-24. Scope: implement the report recommendations through coordinated, dependency-gated delivery. The opening counts and “this turn” below record the **original planning baseline**, not current execution status. OpenSpec backend: YES. Original portfolio: C01–C18. As of the 2026-09-28 cadence revision, add one separately tracked **D01 delivery change** without renumbering those 18 changes or treating a delivery wrapper as a new recommendation cluster. Canonical KBD progress and signed receipts, not these historic opening counts, report current completion.
 
 OpenSpec artifact completeness is not permission to apply this cross-repository roadmap directly. The initiative root permits planning edits only. Product work requires repository-scoped child changes with single-session tasks and explicit file ownership. The 54 parent groups remain pending until their children pass; C01 is the first coordination step.
 
 ## First action and execution contract
 
-Start with C01 source/ownership reconciliation, using this independent initiative KBD identity. No other slice is execution-ready solely because it is listed. For each slice, satisfy its named dependency checkpoints, refresh the source disposition, accept the contract and assign exact modules/files before dispatch. Split a multi-session task into child tasks through typed KBD changes before implementation; never claim these broad estimates guarantee a one-session change. Size is relative scope, not a calendar promise.
+C01 source/ownership reconciliation was the original first action. The next **delivery** selector after the cadence child reflects is pending D01, registered canonically as `afc-d01-local-mac-durable-agent-delivery` with ordering before pending C08. `exactNextWork` prose alone cannot select it. For every slice, satisfy named dependency checkpoints, refresh source disposition, accept the contract and assign exact modules/files before dispatch. Split a multi-session task into child tasks through typed KBD changes before implementation; broad size estimates are not a one-session or one-hour promise.
 
 The active UAR Working Agent task owns current P1 runtime/host/approval/history/release work. Convergence consumes its committed contract and accepted work. Do not change its phase or write into its worktrees. The existing integration-administration child is part of that reservation.
 
 ## Delivery sequence
 
 1. C01 establishes source and contract checkpoints; C02 closes governed action boundaries; C03 preserves definitions; C04 binds replaceable instances.
-2. C05 demonstrates full BossFang delegation; C06 adds durable logical instances; C07 adds local observers; C08 bridges authorized channels/events.
-3. C09 adds bounded teams. C10 delivers the first business slice: feedback → authorized issue → product/design review. Its direct and BossFang paths are both required.
+2. C05 demonstrates full BossFang delegation; C06 adds durable logical instances; C07 adds local observers. **D01** first packages a functioning local Boss with these accepted C06/C07 capabilities and asks for the platform release decision. C08 separately bridges authorized channels/events and retains its observed compiler/gate blockers; it does not block independent D01 or C09 source work.
+3. C09 adds bounded teams under its C02/C03/C04/C06 prerequisites, including a reachable Boss experience in its whole first operational journey. C10 later delivers feedback → authorized issue → product/design review; its direct and BossFang paths are both required unless a separately approved amendment changes ordering without dropping scope.
 4. C11 business command/read replication and C12 personal peer sovereignty are independent data tracks after their prerequisites. C13 proves embedded/mobile/home profiles, adding C11/C12 only for modes that need them.
-5. C14 provides studio/console administration. C15 extends the existing eight-harness skill and plugin contracts; C16 supplies specialist/product/marketing/design teams.
+5. D01 draws a bounded early C14.1 UAR lifecycle/observer surface into its own complete delivery; **C14.1 and C14 stay open** for definition/team/workflow distinction, task graph, budgets, approvals and isolated BossFang console. C15 extends the existing eight-harness skill and plugin contracts; C16 supplies specialist/product/marketing/design teams.
 6. C17 adds consented executive representation. C18 validates federation, compatibility, upgrades and quality across supported profiles.
 
-Default execution is sequential. Parallel work is permitted only after explicit nonoverlapping file claims and isolated runtime resources. Dependency edges alone do not prove file independence. Do not run concurrent local Rust builds while the active integration needs the host.
+Default execution is dependency-ordered. D01 and C09 may use separate owned worktrees and frozen contracts in parallel because C09 does not depend on C08; neither may edit the other's frozen snapshot. Parallel work requires explicit nonoverlapping file claims and isolated runtime resources. Dependency edges alone do not prove file independence. Reserve one heavy local Rust/Electron build writer; queue competing builds and Compass refresh behind it.
 
 ## Common acceptance and release rules
 
@@ -29,10 +29,27 @@ Default execution is sequential. Parallel work is permitted only after explicit 
 - Durable intent and uncertain-outcome reconciliation at actual effect boundaries. No exactly-once marketing claim.
 - Product histories, checkpoints, workflow state, domain data and shared memory retain explicit owners.
 - Implementation, evidence, certification and publication remain separate. A planned spec or source inspection cannot mark operational acceptance complete.
-- Finish coherent production behavior before running its real integration boundary. Run applicable repository checks at that boundary and the broader supported-mode suite at release. No builds were run during this planning turn.
+- Finish **all planned production behavior for an independently shipping increment**, including Boss UI, typed IPC, persisted settings and locales, before its one real integration/build gate. Run applicable repository checks at that boundary and the broader supported-mode suite at release; a partial product task is not a phase-end test authorization.
+- Every completed local delivery uses exact `pnpm build:mac:arm64` and launches a functioning packaged UAR/Boss journey. Ask afterward whether to publish **all macOS and Windows targets now or wait**; absent answer leaves publication pending. The hourly local target measures elapsed start-to-working-app time including waits/build. Track publication and aggregate agent effort separately. A missed hour is an overrun, not a completed delivery.
+- Full publication means UAR-enabled darwin-arm64, darwin-x64, win32-x64 and win32-arm64 installers (no Linux), exact GitHub Release source/version/architecture/size/SHA-256/signing/URL rows, `RELEASES.md` and manifest committed/pushed, `Know-Me-Tools/boss-landing-spot` data committed/pushed, connected Lovable deployment at the-boss.know-me.tools, and live URL/download-byte evidence. One publisher prevents stale job regression; retain each prior working platform link until its replacement is valid. Installed acceptance remains a separate status.
 - Merge small provider/consumer slices with a documented compatibility window and immutable dependency pins. Migrate data append-only; rollback must account for already-migrated schemas and irreversible external effects.
 
 ## Ordered change specifications
+
+### D01 — Local Mac durable-agent delivery (new delivery wrapper; C01–C18 unchanged)
+
+The first customer-visible delivery after accepted C06/C07 local UAR integration is a functioning Apple Silicon The Boss app. **Canonical change ID:** `afc-d01-local-mac-durable-agent-delivery`; its [OpenSpec proposal](../../../openspec/changes/afc-d01-local-mac-durable-agent-delivery/proposal.md), design, tasks and spec define the exact product boundary. Register this as a pending parent change **before** resuming C08's pending task; do not treat this paragraph or `exactNextWork` as the selector. D01 is a release wrapper, not a replacement for original C14/C18 work.
+
+- Repositories/owners: The Boss packaging owner for the exact Mac script/local-only checksummed UAR overlay and CI refusal; selected clean UAR binary producer for the native helper; Boss UI/IPC/settings/locale owner for durable-agent and local-observer controls; native release owner and single metadata/site publisher for a publish-now decision. Record exact file claims and separate Boss/UAR commits before dispatch.
+- Depends on accepted C02, C03, C04, C06, C07 and D-UAR-P1/D-MEMORY. **C08 is not a D01 or C09 dependency.** Preserve C08's own compiler repair and composed gate with its current owner. Original C14/C18 dependencies remain for full completion; D01 uses only the bounded C14.1 surface and release traceability identified in its spec.
+- D01.1: From clean committed Boss/UAR source, make exact `pnpm build:mac:arm64` UAR-enabled with a local-only arm64 payload record bound to source/architecture/checksums and installed outside ASAR. Public CI rejects the overlay and keeps its canonical same-UAR-SHA win32-x64/darwin-arm64 inputs. No runtime path override counts as package proof.
+- D01.2: Expose real C06 instance lifecycle and C07 local observer backlog/recovery in the existing Boss UAR settings, through typed IPC/trusted adapter, persisted configuration and all locales. Demonstrate two isolated workspaces and current governed authority. Do not mark C14.1 complete from this bounded subset.
+- D01.3: After the whole production slice is written, run **one** real path integration gate and exact local Mac build. Open the new app with helper override cleared; record bundled UAR source/version/port, UI operation, restart persistence, hashes and elapsed time. A build that opens without working UAR remains failed. Ask the now-or-wait all-four-platform question immediately after success.
+- D01.4: Record the operator choice. Wait keeps publication pending and prior links intact. Publish-now requires missing Mac Intel/Windows ARM64 UAR payload/profile work and all four native installers plus the complete GitHub/`RELEASES.md`/landing/Lovable/live-byte chain above. A non-UAR substitute or partial target set cannot be called the requested full publication.
+
+**Acceptance:** One usable local Mac app with a source-bound packaged helper and real durable-agent UI, plus a truthful publication decision. Publication and installed platform acceptance are independently evidenced. D01 may close after a recorded wait only with publication explicitly pending; C14/C18 and any open C08 requirements remain open.
+
+**Next customer priority:** C09's complete bounded team with Boss UI, IPC, persisted task/member state, locales and C02 authority is the next meaningful D2 journey. C09's original dependencies remain C02/C03/C04/C06. C08 can continue with a separate owner and remains required before C10's BossFang/channel path. The parent must select C09 through supported KBD change selection after D01 if C08 is still pending; prose priority does not change canonical ordering. No separate catalog-only release is scheduled by default.
 
 ### C01 — Baseline reconciliation and shared contracts
 

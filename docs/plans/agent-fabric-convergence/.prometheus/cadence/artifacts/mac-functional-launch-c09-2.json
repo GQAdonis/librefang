@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-09-28T20:50:45.163Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-09-28T20:47:01.637Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+  "scenarioDigest": "fb9d16c97ac9ea2798a110ac1d0fd7f10ee444ed6bdd5a5c5f97755d676ac9e8",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-ZOONtz",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "Clicked Set up LLM Providers in fresh English onboarding; Choose a Provider opened with actionable provider administration controls. No provider connection or inference was performed.",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-09-28T20:50:47.635Z"
+}
