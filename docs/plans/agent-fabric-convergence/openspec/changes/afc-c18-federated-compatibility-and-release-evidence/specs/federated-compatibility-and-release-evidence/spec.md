@@ -10,6 +10,8 @@ Define the cross-product behavior for federated compatibility and release eviden
 
 A release MUST advertise only deployment/protocol/schema/policy combinations that passed the operational-mode scenarios on identified builds and hosts.
 
+For a selected early full macOS/Windows publication, each advertised installer MUST have a matching GitHub Release row with source commit, version, architecture, size, SHA-256, signing status and URL; The Boss `RELEASES.md` and release manifest MUST be committed/pushed from those rows. The landing repository's generated data MUST be committed/pushed, its connected Lovable site deployed at the-boss.know-me.tools, and live URL/download bytes verified before replacing the prior working link. The four requested UAR-enabled targets are Apple Silicon and Intel macOS plus x64 and ARM64 Windows; Linux is outside this cadence. A local-only app or deferred publication cannot be advertised as a four-target release.
+
 #### Scenario: 1 — Evidence-bound compatibility
 
 - **WHEN** A new combination is requested without interoperability or recovery evidence

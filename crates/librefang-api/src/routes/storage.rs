@@ -127,6 +127,8 @@ pub struct PostLinkUarBody {
     pub app_pass_ref: String,
     #[serde(default)]
     pub also_link_memory: bool,
+    #[serde(default)]
+    pub remote_durability_attested: bool,
 }
 
 fn uar_namespace_default() -> String {
@@ -581,6 +583,10 @@ pub async fn post_link_uar(
         "share_librefang_storage",
         toml_edit::Item::Value(true.into()),
     );
+    uar_tbl.insert(
+        "remote_durability_attested",
+        toml_edit::Item::Value(body.remote_durability_attested.into()),
+    );
 
     if let Err(e) = std::fs::write(&config_path, doc.to_string()) {
         warn!(error = %e, "failed to write uar link config");
@@ -624,6 +630,7 @@ pub async fn post_unlink_uar(
     if let Some(uar_tbl) = doc.get_mut("uar").and_then(|i| i.as_table_mut()) {
         uar_tbl.remove("remote");
         uar_tbl.remove("share_librefang_storage");
+        uar_tbl.remove("remote_durability_attested");
     }
 
     if let Err(e) = std::fs::write(&config_path, doc.to_string()) {

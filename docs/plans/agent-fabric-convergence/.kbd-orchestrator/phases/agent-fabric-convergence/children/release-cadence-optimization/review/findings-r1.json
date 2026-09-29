@@ -1,0 +1,13 @@
+{
+  "mode":"artifact",
+  "verdict":"BLOCK",
+  "judge_model":"gpt-6-sol",
+  "producer_model":"gpt-6-astra",
+  "isolation_mode":"harness-native",
+  "cross_model_check":"unverified-native-identity",
+  "findings":[
+    {"severity":"CRITICAL","file":"assessment.md","claim":"Internal C06/C07 gates do not establish independently shipping boundaries.","evidence":"Shipping-boundary goal rated PARTIAL on internal integration receipts that exclude installed release acceptance.","suggested_fix":"Separate historical internal gate evidence from the new shipping-boundary delivery policy."},
+    {"severity":"WARNING","file":"assessment.md","claim":"Compass status contradicts completed-update evidence.","evidence":"Goal table says update underway while body records completed135sec update.","suggested_fix":"Record completed bounded refresh and preserve recurring cadence/coverage limitations."},
+    {"severity":"WARNING","file":"assessment.md","claim":"Parent return-point goal not explicitly assessed.","evidence":"Assessment preserves C08 open but omits exact return point.","suggested_fix":"Link the recorded parent checkpoint and assess restoration status."}
+  ]
+}

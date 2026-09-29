@@ -632,6 +632,14 @@ pub struct DeliveryReceipt {
     pub error: Option<String>,
 }
 
+/// Actual native IDs returned for an opt-in durable send. An error may coexist
+/// with IDs when a provider accepted an earlier chunk before a later failure.
+#[derive(Debug, Clone)]
+pub struct NativeSendReceipt {
+    pub native_message_ids: Vec<String>,
+    pub error: Option<String>,
+}
+
 /// Health status for a channel adapter.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChannelStatus {
@@ -955,6 +963,19 @@ pub trait ChannelAdapter: Send + Sync {
         _thread_id: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.send(user, content).await
+    }
+
+    /// Send a durable channel effect and return every provider-native ID.
+    /// Adapters without an explicit receipt capability must refuse the
+    /// durable profile instead of inventing a message ID.
+    async fn send_with_native_receipt(
+        &self,
+        _user: &ChannelUser,
+        _content: ChannelContent,
+        _thread_id: Option<&str>,
+        _action_id: &str,
+    ) -> Result<NativeSendReceipt, Box<dyn std::error::Error + Send + Sync>> {
+        Err(std::io::Error::other("native send receipts are unsupported").into())
     }
 
     /// Whether this adapter owns message formatting (Markdown → platform-native).

@@ -1,7 +1,78 @@
 {
   "schemaVersion": 1,
-  "executionPolicy": "Cross-repository execution requires repository-scoped OpenSpec/KBD changes, exact file claims and accepted dependency checkpoints. C01 is documentation-only; C01.1 and C01.2 are complete, and C01.3 remains in progress until its final documentation gate and review pass. Later product statuses remain planned.",
+  "executionPolicy": "Cross-repository execution requires repository-scoped OpenSpec/KBD changes, exact file claims and accepted dependency checkpoints. D01 is the first pending customer delivery after the cadence child reflects; it is a separate wrapper around original C04/C06/C07/C14/C18 obligations, not a replacement for them. All production wiring precedes one complete shipping gate and exact functioning local Mac build. C08 stays open with its owner; C09 can proceed under its independent original dependencies. This authored inventory does not itself register a canonical KBD change.",
   "changes": [
+    {
+      "id": "D01",
+      "slug": "afc-d01-local-mac-durable-agent-delivery",
+      "title": "Local Mac durable-agent delivery",
+      "kind": "delivery-wrapper",
+      "repositories": [
+        "the-boss",
+        "universal-agent-runtime"
+      ],
+      "dependsOn": [
+        "C02",
+        "C03",
+        "C04",
+        "C06",
+        "C07"
+      ],
+      "externalDependencies": [
+        "D-UAR-P1",
+        "D-MEMORY"
+      ],
+      "scope": "Exact local Mac UAR payload/profile; Boss durable-agent/observer UI, typed IPC, persistence and locales; one complete local gate; explicit four-target GitHub and website publication decision",
+      "outcome": "A functioning locally built Apple Silicon The Boss exposes C06/C07 durable-agent operations, then the operator chooses whether to publish all macOS and Windows targets now or wait.",
+      "tasks": [
+        {
+          "id": "D01.1",
+          "text": "Freeze clean Boss/UAR source and repair exact pnpm build:mac:arm64 to package a checksummed local-only arm64 UAR helper outside ASAR; reject overlay in CI and preserve canonical same-UAR-source public payloads.",
+          "status": "pending",
+          "openSpecTaskId": "1.1",
+          "kind": "delivery-task"
+        },
+        {
+          "id": "D01.2",
+          "text": "Expose durable instance lifecycle and local observer recovery in existing Boss UAR settings with typed IPC, persistence, all locales, current governance and two-workspace isolation.",
+          "status": "pending",
+          "openSpecTaskId": "1.2",
+          "kind": "delivery-task"
+        },
+        {
+          "id": "D01.3",
+          "text": "After all production code, run one real integration gate and exact local Mac build; launch bundled UAR without developer override, demonstrate the full journey, record hashes/timing and ask the four-platform now-or-wait question.",
+          "status": "pending",
+          "openSpecTaskId": "1.3",
+          "kind": "delivery-task"
+        },
+        {
+          "id": "D01.4",
+          "text": "Record wait as pending publication, or on publish-now build all four UAR-enabled native targets and complete GitHub Releases, RELEASES.md, landing repository, Lovable deployment and live download-byte evidence without Linux or stale-link regression.",
+          "status": "pending",
+          "openSpecTaskId": "1.4",
+          "kind": "delivery-task"
+        }
+      ],
+      "acceptance": "Working packaged UAR and durable-agent/observer UI in a fresh local Apple Silicon Boss after restart and across two workspaces; honest now-or-wait choice. A now choice additionally requires four valid native artifacts, release/site updates and live-link evidence. Original C14/C18 and open C08 remain independent.",
+      "limits": "Local-only payload cannot enter public CI; no runtime helper override as package evidence; Mac Intel and Windows ARM64 UAR support remains missing until implemented; no Linux.",
+      "size": "L",
+      "complexity": "High",
+      "modelClass": "frontier",
+      "recommendedHarness": "Codex with separate Boss packaging, Boss UI and UAR binary owners; release metadata has one publisher",
+      "sequence": 0,
+      "recommendations": [],
+      "coverageRefs": [
+        "C04",
+        "C06",
+        "C07",
+        "C14.1",
+        "C18"
+      ],
+      "status": "planned",
+      "executionReady": false,
+      "kbdChangeId": "afc-d01-local-mac-durable-agent-delivery"
+    },
     {
       "id": "C01",
       "slug": "afc-c01-baseline-reconciliation-and-shared-contracts",
@@ -844,6 +915,7 @@
       ],
       "scope": "Existing Boss connection/run/approval views and site-view host; BossFang console API",
       "outcome": "Operators can understand ownership, placement, grants and observer behavior from one studio.",
+      "earlyDeliveryRef": "D01 uses only C06 instance lifecycle and C07 local observer controls in existing Boss UAR settings. This does not complete C14.1 or change C14's original dependencies and acceptance.",
       "tasks": [
         {
           "id": "C14.1",
@@ -1109,6 +1181,7 @@
       ],
       "scope": "Cross-repository manifests, conformance runners, scoped federation adapters and release documentation",
       "outcome": "Supported profiles have reproducible interoperability, recovery and quality evidence.",
+      "deliveryPublicationRef": "D01 local/publication receipts must distinguish each of four macOS/Windows UAR-enabled targets, GitHub Release source/version/architecture/size/SHA-256/signing/URL, RELEASES.md and manifest commit/push, boss-landing-spot data commit/push, connected Lovable deployment and live URL/download-byte evidence. D01 does not complete C18 federation or supported-mode matrix.",
       "tasks": [
         {
           "id": "C18.1",
@@ -1154,6 +1227,6 @@
     "canonicalRevision": 203,
     "activeChange": "afc-c02-governed-action-and-approval-boundary",
     "activeTask": "C02.1",
-    "note": "Canonical KBD is authoritative. C01 completed and archived; C02 is the next pending change. Product work still requires repository-scoped changes and accepted dependencies."
+    "note": "Historical canonical snapshot from revision 203, not current selector. Canonical KBD is authoritative. The cadence child will request registration of pending D01 at sequence 0 after reflection so it is selectable before pending C08; this authored inventory alone does not register or activate it. Product work still requires repository-scoped changes and accepted dependencies."
   }
 }

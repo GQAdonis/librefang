@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-28T08:19:57.943Z",
+  "change": "afc-release-cadence-optimization",
+  "archive": "openspec/changes/archive/2026-09-28-afc-release-cadence-optimization",
+  "command": "node scripts/kbd-apply.mjs archive afc-release-cadence-optimization",
+  "exitCode": 0,
+  "mainSpec": "openspec/specs/release-cadence-governance/spec.md",
+  "requirementCount": 7,
+  "requirementsExactlyPreserved": true,
+  "priorVerification": "review/execute/consistency.json",
+  "reflectEntryRevision": 305
+}

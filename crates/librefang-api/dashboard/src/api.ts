@@ -6184,6 +6184,7 @@ export interface LinkUarBody {
   app_user?: string;
   app_pass_ref: string;
   also_link_memory?: boolean;
+  remote_durability_attested?: boolean;
 }
 
 export interface LinkUarResult {

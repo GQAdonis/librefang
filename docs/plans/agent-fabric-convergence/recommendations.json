@@ -1,6 +1,17 @@
 {
   "schemaVersion": 1,
   "coverageClaim": "Actionable recommendation clusters from R1-R6; source findings are revalidated by C01 before affected implementation. Merged primitives are reuse, not full recommendation completion.",
+  "deliveryCoverage": {
+    "D01": {
+      "changeId": "afc-d01-local-mac-durable-agent-delivery",
+      "kind": "delivery-wrapper",
+      "originalChangesRetained": ["C04", "C06", "C07", "C14", "C18"],
+      "reusedFoundationRecommendations": ["REC-002", "REC-003", "REC-004", "REC-006", "REC-026", "REC-027", "REC-028", "REC-035", "REC-029", "REC-030", "REC-034"],
+      "partialConsumerRecommendations": ["REC-009", "REC-023"],
+      "releaseTraceabilityRecommendation": "REC-061",
+      "disposition": "D01 provides a working local Boss consumer and conditional four-platform publication. It does not change any recommendation's original owner/change, mark original C14/C18 tasks complete, or certify C08/federation."
+    }
+  },
   "recommendations": [
     {
       "id": "REC-001",

@@ -12,6 +12,7 @@
 // Core infrastructure — always compiled
 pub mod attachment_enrich;
 pub mod bridge;
+pub mod channel_route;
 pub mod commands;
 pub mod embedded_sdk;
 pub mod formatter;

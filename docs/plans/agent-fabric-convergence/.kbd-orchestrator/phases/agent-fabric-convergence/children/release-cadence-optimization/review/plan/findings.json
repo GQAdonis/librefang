@@ -1,0 +1,18 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "producer_model": "gpt-6-astra",
+  "judge_model": "gpt-6-sol",
+  "isolation_mode": "harness-native",
+  "cross_model_check": "unverified-canonical-identities",
+  "findings": [],
+  "checked_classes": [
+    "Local hourly clock ends at functioning app, later publication measured separately.",
+    "KBD lead owns Compass update/query; observer stays read-only."
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

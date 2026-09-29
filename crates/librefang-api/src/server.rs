@@ -214,6 +214,21 @@ fn resolve_uar_credentials(
     )
 }
 
+/// Resolve only the reference named by `[uar.remote]`; the value stays in the
+/// main process and supervised child environment, never in config or status.
+fn resolve_uar_remote_password(kernel: &dyn KernelApi, reference: &str) -> Option<String> {
+    let value = if let Some(key) = reference
+        .strip_prefix("vault://")
+        .or_else(|| reference.strip_prefix("vault:"))
+    {
+        kernel.vault_get(key)
+    } else {
+        let name = reference.strip_prefix("env://").unwrap_or(reference);
+        std::env::var(name).ok()
+    };
+    value.filter(|value| !value.is_empty())
+}
+
 /// Env var that overrides `KernelConfig.api_key`. Also read at boot by
 /// `librefang_kernel::kernel::boot` so the #3572 bind-safety guard and the
 /// outbound MCP bridge see the same value; resolving it here as well is what
@@ -1885,13 +1900,44 @@ pub async fn build_router(
     #[cfg(not(feature = "uar-driver"))]
     let uar_probe_bearer = None;
     let should_start_uar = uar_sidecar_config.enabled || uar_sidecar_config.endpoint.is_some();
-    let uar_supervisor = librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+    let managed_uar = uar_sidecar_config.endpoint.is_none();
+    let mut uar_supervisor = librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
         uar_sidecar_config,
         kernel.home_dir().to_path_buf(),
     )
     .with_runtime_config(uar_config.as_ref())
     .with_instance_config(selected_uar_instance.as_ref().ok())
-    .with_probe_bearer(uar_probe_bearer);
+    .with_probe_bearer(uar_probe_bearer)
+    .with_channel_gate_from_host();
+    if managed_uar {
+        if let Some(config) = uar_config.as_ref() {
+            let remote = config.remote.clone().or_else(|| {
+                if !config.share_librefang_storage {
+                    return None;
+                }
+                match &kernel.config_ref().storage.backend {
+                    librefang_types::config::StorageBackendKind::Remote(remote) => {
+                        Some(remote.clone())
+                    }
+                    _ => None,
+                }
+            });
+            if let Some(remote) = remote.as_ref() {
+                let password = resolve_uar_remote_password(kernel.as_ref(), &remote.password_env);
+                uar_supervisor = uar_supervisor.with_remote_storage(
+                    remote,
+                    password,
+                    config.remote_auth_level.as_deref(),
+                    config.remote_durability_attested,
+                );
+            } else if config.share_librefang_storage {
+                uar_supervisor = uar_supervisor.with_startup_error(
+                    "UAR requested shared remote SurrealDB, but The Boss storage is not remote"
+                        .to_string(),
+                );
+            }
+        }
+    }
     #[cfg(feature = "uar-driver")]
     let uar_supervisor = {
         librefang_llm_drivers::drivers::uar::configure_supervised_instance(

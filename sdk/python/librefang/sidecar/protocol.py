@@ -343,6 +343,8 @@ class Send:
     content: Optional[Dict[str, Any]]
     thread_id: Optional[str]
     user: Dict[str, Any]
+    # Present only for durable effects. Legacy sends keep their fire-and-forget wire shape.
+    action_id: Optional[str] = None
 
 
 @dataclass
@@ -454,7 +456,7 @@ def parse_command(line: str) -> Command:
     if method == "send":
         return Send(p.get("channel_id", ""), p.get("text", ""),
                     p.get("content"), p.get("thread_id"),
-                    p.get("user", {}))
+                    p.get("user", {}), p.get("action_id"))
     if method == "ready_ack":
         return ReadyAck()
     if method == "shutdown":

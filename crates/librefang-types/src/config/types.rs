@@ -3638,6 +3638,17 @@ pub struct UarConfig {
     #[serde(default)]
     pub share_librefang_storage: bool,
 
+    /// Assert that the configured remote SurrealDB server uses persistent
+    /// storage. Required before UAR admits durable cross-host work; merely
+    /// reaching a ws:// endpoint does not establish server durability.
+    #[serde(default)]
+    pub remote_durability_attested: bool,
+
+    /// Authentication scope for `[uar.remote]`: `root`, `namespace`, or
+    /// `database`. UAR namespace users provisioned by The Boss use the default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_auth_level: Option<String>,
+
     /// Direct sidecar enable flag (`[uar] enabled = true`).
     ///
     /// `None` preserves the nested `[uar.sidecar]` value for compatibility.

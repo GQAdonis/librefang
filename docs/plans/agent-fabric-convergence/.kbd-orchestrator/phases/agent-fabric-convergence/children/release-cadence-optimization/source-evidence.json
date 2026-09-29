@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stage": "assess",
+  "observedDate": "2026-09-28",
+  "parentEntry": {"revision":253,"planRevision":3,"nextTask":"C08.2","packagesComplete":7,"packagesTotal":18,"groupsComplete":22,"groupsTotal":54},
+  "sources": [
+    {"repository":"BossFang coordination","path":"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang","revision":"d7c5f1de9762928f9d5e110e0a760c50fc7cd8b2","evidence":"parent plan/progress, session log, team manifest, C06/C07 receipts, C08 source reconciliation"},
+    {"repository":"UAR C08","path":"/Users/gqadonis/.claude/worktrees/afc-c08-uar","revision":"b18397a3b23eb97a9e0da2618bc1747f99e7cc04","evidence":"team_instance false; existing catalog/durable agent controller; absent team runtime/store"},
+    {"repository":"The Boss","path":"/Users/gqadonis/Projects/prometheus/the-boss","revision":"1fe9acff","access":"read-only","evidence":"UAR administration, IPC, locale/settings and release pipeline"}
+  ],
+  "resources": {"ramBytes":68719476736,"logicalCpus":10,"diskAvailableGiBApprox":112,"vmStatSwapouts":0,"interpretation":"snapshot only; no OOM or sustainable concurrency claim"},
+  "carriedBuild": {
+    "sessionId":59473,
+    "startedBeforeChild":true,
+    "sourceRevision":"bcdb61764fefed1ebae724f84f7e56af9c4355c0",
+    "command":"RUSTC_WRAPPER=/opt/homebrew/bin/sccache CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_BUILD_JOBS=4 cargo build --locked -p librefang-cli --bin bossfang --features telemetry,surreal-backend,uar-driver",
+    "exitCode":101,
+    "error":"E0382: projection_sha256 moved in a previous loop iteration",
+    "source":"crates/librefang-storage/src/channel_actions/surreal_impl/observers.rs:234",
+    "fixedInAssessment":false
+  },
+  "compass": {
+    "worktree":"/Users/gqadonis/.claude/worktrees/afc-c08-uar",
+    "command":"RAYON_NUM_THREADS=2 compass update . --no-cluster --no-viz --timing",
+    "exitCode":0,
+    "wallSeconds":134.98,
+    "cold":true,
+    "files":8184,
+    "nodes":447259,
+    "edges":495392,
+    "bytesWritten":880925944,
+    "coverage":"partial",
+    "omittedNodes":51,
+    "omittedEdges":74,
+    "identityCollisions":43,
+    "query":"compass search AgentInstanceController --format agent-json --brief --max-candidates 3 --timeout-ms 10000",
+    "queryExitCode":0,
+    "queryResult":"exact match src/uar/runtime/instance/controller.rs:62; incomplete coverage warning retained",
+    "hourlyScheduleInstalled":false,
+    "scope":"navigation evidence; not production verification or an incremental-cost benchmark"
+  },
+  "newProductionTestsOrBuilds":[],
+  "unknowns":["historical active agent runtime","hourly incremental graph cost","native packaging critical-path duration","sustained safe heavy-job concurrency","complete historical premature-verification audit"]
+}
