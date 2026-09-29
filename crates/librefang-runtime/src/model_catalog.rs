@@ -541,7 +541,9 @@ impl ModelCatalog {
                 media_capabilities: Vec::new(),
                 available_models: Vec::new(),
                 is_custom: false,
+                cli_managed: false,
                 proxy_url: None,
+                discover_models: false,
             });
         }
 

@@ -2102,6 +2102,10 @@ mod hash_only_terminal_auth_tests {
                 home_dir.clone(),
             )),
             kernel,
+            #[cfg(feature = "uar-driver")]
+            uar_run_control: Arc::new(
+                librefang_llm_drivers::drivers::uar_run::UarRunClient::default(),
+            ),
             started_at: std::time::Instant::now(),
             readiness_requires_embedding: false,
             bridge_manager: arc_swap::ArcSwap::new(Arc::new(None)),

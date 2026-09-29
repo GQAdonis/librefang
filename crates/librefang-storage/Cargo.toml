@@ -4,12 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Storage backend abstractions for librefang (SurrealDB 3.0 + optional SQLite)."
+description = "Storage backend abstractions for librefang (SurrealDB 3.3 + optional SQLite)."
 
 [features]
 default = ["surreal-backend"]
 
-# Embedded or remote SurrealDB 3.0 backend (default).
+# Embedded or remote SurrealDB 3.3 backend (default).
 surreal-backend = ["dep:surrealdb", "dep:surrealdb-core", "dep:surrealdb-types"]
 
 # Legacy SQLite backend (opt-in, mirrors the pre-3.0 storage layout).

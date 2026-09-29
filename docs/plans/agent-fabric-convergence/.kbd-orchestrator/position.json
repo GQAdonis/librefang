@@ -2,24 +2,25 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 233,
-  "derivedRevision": 233,
+  "sourceRevision": 239,
+  "derivedRevision": 239,
   "frontier": {
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 233
+    "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-27T12:47:49.368144Z",
+  "updatedAt": "2026-09-28T01:57:16.993329Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c05-bossfang-full-run-delegation",
-    "C05.1"
+    "afc-c06-durable-addressable-instances-and-bounded-turns",
+    "C06.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "ready",
     "progress": {
-      "done": 6,
+      "done": 7,
       "total": 20
     },
     "children": [
@@ -29,7 +30,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 4,
+          "done": 5,
           "total": 18
         },
         "children": [
@@ -116,9 +117,9 @@
           {
             "type": "change",
             "id": "afc-c05-bossfang-full-run-delegation",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },

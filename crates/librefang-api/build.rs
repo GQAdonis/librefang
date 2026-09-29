@@ -71,7 +71,9 @@ fn main() {
         // Set CI=true so pnpm never prompts for TTY confirmation when it needs
         // to purge the node_modules directory (e.g. after a lockfile change).
         // The build script always runs in a non-interactive subprocess.
+        // Corepack selects the pinned pnpm version from cwd, not from --dir.
         let install = Command::new("pnpm")
+            .current_dir(&dashboard_src)
             .args([
                 "--dir",
                 dashboard_src.to_str().unwrap(),
@@ -95,6 +97,7 @@ fn main() {
         }
 
         let build = Command::new("pnpm")
+            .current_dir(&dashboard_src)
             .args(["--dir", dashboard_src.to_str().unwrap(), "run", "build"])
             .status()
             .expect("`pnpm run build` failed to spawn");

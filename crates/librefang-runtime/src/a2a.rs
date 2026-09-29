@@ -256,6 +256,9 @@ const DB_TASK_RETENTION_SECS: i64 = 7 * 24 * 60 * 60;
 #[derive(Debug)]
 pub struct A2aTaskStore {
     tasks: Mutex<HashMap<String, TrackedTask>>,
+    /// Correlation-only projections for UAR-owned full-harness runs. The
+    /// native UAR task remains authoritative for execution.
+    uar_delegations: Mutex<HashMap<String, librefang_types::uar_run::UarDelegatedRunProjection>>,
     /// Serializes mutations through their best-effort persistence write.
     mutation_order: Mutex<()>,
     /// Maximum number of tasks to retain.
@@ -271,6 +274,7 @@ impl A2aTaskStore {
     pub fn new(max_tasks: usize) -> Self {
         Self {
             tasks: Mutex::new(HashMap::new()),
+            uar_delegations: Mutex::new(HashMap::new()),
             mutation_order: Mutex::new(()),
             max_tasks,
             task_ttl: DEFAULT_TASK_TTL,
@@ -282,6 +286,7 @@ impl A2aTaskStore {
     pub fn with_ttl(max_tasks: usize, task_ttl: Duration) -> Self {
         Self {
             tasks: Mutex::new(HashMap::new()),
+            uar_delegations: Mutex::new(HashMap::new()),
             mutation_order: Mutex::new(()),
             max_tasks,
             task_ttl,
@@ -327,6 +332,11 @@ impl A2aTaskStore {
                         caller_a2a_agent_id TEXT,
                         created_at          INTEGER NOT NULL,
                         updated_at          INTEGER NOT NULL
+                     );
+                     CREATE TABLE IF NOT EXISTS uar_delegations_v1 (
+                        boss_task_id       TEXT PRIMARY KEY,
+                        projection_json    TEXT NOT NULL,
+                        updated_at         INTEGER NOT NULL
                      );",
                 ) {
                     warn!("a2a_tasks: failed to create schema: {e}");
@@ -335,6 +345,7 @@ impl A2aTaskStore {
                 let db = Arc::new(Mutex::new(conn));
                 let mut store = Self {
                     tasks: Mutex::new(HashMap::new()),
+                    uar_delegations: Mutex::new(HashMap::new()),
                     mutation_order: Mutex::new(()),
                     max_tasks,
                     task_ttl: DEFAULT_TASK_TTL,
@@ -344,6 +355,7 @@ impl A2aTaskStore {
                 // Prune rows older than 7 days, then load survivors into memory.
                 store.db_prune_old_tasks();
                 store.db_load_into_memory();
+                store.db_load_uar_delegations();
                 store
             }
             Err(e) => {
@@ -502,6 +514,67 @@ impl A2aTaskStore {
         }
     }
 
+    fn db_load_uar_delegations(&self) {
+        let Some(db_arc) = &self.db else {
+            return;
+        };
+        let conn = lock_a2a_recover(db_arc, "database");
+        let mut statement = match conn.prepare(
+            "SELECT projection_json FROM uar_delegations_v1 ORDER BY updated_at DESC LIMIT ?1",
+        ) {
+            Ok(statement) => statement,
+            Err(error) => {
+                warn!("a2a_tasks: failed to prepare UAR delegation load: {error}");
+                return;
+            }
+        };
+        let projections = match statement
+            .query_map(rusqlite::params![self.max_tasks as i64], |row| {
+                row.get::<_, String>(0)
+            }) {
+            Ok(rows) => rows
+                .filter_map(Result::ok)
+                .filter_map(|json| serde_json::from_str(&json).ok())
+                .collect::<Vec<librefang_types::uar_run::UarDelegatedRunProjection>>(),
+            Err(error) => {
+                warn!("a2a_tasks: failed to load UAR delegations: {error}");
+                return;
+            }
+        };
+        drop(statement);
+        let mut stored = lock_a2a_recover(&self.uar_delegations, "UAR delegations");
+        for projection in projections {
+            stored.insert(projection.boss_task_id.clone(), projection);
+        }
+    }
+
+    fn db_upsert_uar_delegation(
+        &self,
+        projection: &librefang_types::uar_run::UarDelegatedRunProjection,
+    ) -> Result<librefang_types::uar_run::UarProjectionRetention, String> {
+        let Some(db_arc) = &self.db else {
+            return Ok(librefang_types::uar_run::UarProjectionRetention::ProcessEphemeral);
+        };
+        let projection_json = serde_json::to_string(projection)
+            .map_err(|error| format!("failed to encode UAR delegation: {error}"))?;
+        let conn = lock_a2a_recover(db_arc, "database");
+        conn.execute(
+            "INSERT INTO uar_delegations_v1 (boss_task_id, projection_json, updated_at)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(boss_task_id) DO UPDATE SET
+               projection_json = excluded.projection_json,
+               updated_at = excluded.updated_at",
+            rusqlite::params![projection.boss_task_id, projection_json, now_unix_secs()],
+        )
+        .map_err(|error| {
+            format!(
+                "failed to persist UAR delegation {}: {error}",
+                projection.boss_task_id
+            )
+        })?;
+        Ok(librefang_types::uar_run::UarProjectionRetention::Durable)
+    }
+
     // ------------------------------------------------------------------
     // In-memory helpers
     // ------------------------------------------------------------------
@@ -518,7 +591,10 @@ impl A2aTaskStore {
         let _mutation_order = lock_a2a_recover(&self.mutation_order, "mutation order");
         // Persist first so we never miss a task even if eviction removes it.
         self.db_upsert(&task);
+        self.insert_memory_task(task);
+    }
 
+    fn insert_memory_task(&self, task: A2aTask) {
         let mut tasks = lock_a2a_recover(&self.tasks, "tasks");
 
         // Lazy TTL sweep — remove all expired tasks regardless of state.
@@ -674,6 +750,156 @@ impl A2aTaskStore {
         self.update_status(task_id, A2aTaskStatus::Cancelled)
     }
 
+    /// Persist a correlation-only projection for one UAR-owned run.
+    pub fn put_uar_delegation(
+        &self,
+        mut projection: librefang_types::uar_run::UarDelegatedRunProjection,
+    ) -> Result<librefang_types::uar_run::UarProjectionRetention, String> {
+        let _mutation_order = lock_a2a_recover(&self.mutation_order, "mutation order");
+        let retention = if self.db.is_some() {
+            librefang_types::uar_run::UarProjectionRetention::Durable
+        } else {
+            librefang_types::uar_run::UarProjectionRetention::ProcessEphemeral
+        };
+        projection.boss_projection_retention = retention;
+        if let Some(stored) = self.get_uar_delegation(&projection.boss_task_id) {
+            // Concurrent remote observations may finish out of order. Keep the
+            // newer UAR state while still advancing an independently observed
+            // event cursor from a stale response.
+            let stale = projection.revision < stored.revision
+                || (projection.revision == stored.revision && projection.cursor < stored.cursor);
+            let mut selected = if stale { stored.clone() } else { projection.clone() };
+            selected.cursor = selected.cursor.max(stored.cursor).max(projection.cursor);
+            // BossFang's uncertain effect is local evidence, not part of the
+            // UAR revision. A concurrent receipt cannot settle it by omission.
+            if stored.effect_state == "effect_unconfirmed"
+                || projection.effect_state == "effect_unconfirmed"
+            {
+                selected.effect_state = "effect_unconfirmed".to_string();
+                for diagnostic in stored
+                    .remote_diagnostics
+                    .iter()
+                    .chain(projection.remote_diagnostics.iter())
+                {
+                    let code = diagnostic.get("code").and_then(serde_json::Value::as_str);
+                    if matches!(
+                        code,
+                        Some("operation_outcome_unresolved" | "admission_outcome_unresolved")
+                    ) && !selected.remote_diagnostics.contains(diagnostic)
+                    {
+                        selected.remote_diagnostics.push(diagnostic.clone());
+                    }
+                }
+            }
+            projection = selected;
+        }
+        let committed = self.db_upsert_uar_delegation(&projection)?;
+        lock_a2a_recover(&self.uar_delegations, "UAR delegations")
+            .insert(projection.boss_task_id.clone(), projection.clone());
+        if let Some(mut task) = self.get(&projection.boss_task_id) {
+            task.status = uar_projection_task_status(&projection).into();
+            self.db_upsert(&task);
+            if let Some(tracked) = lock_a2a_recover(&self.tasks, "tasks").get_mut(&task.id) {
+                tracked.task.status = task.status;
+                tracked.updated_at = Instant::now();
+            }
+        }
+        Ok(committed)
+    }
+
+    /// Atomically establish the local task and its UAR correlation before the
+    /// remote admission effect. Durable stores commit both rows in one SQLite
+    /// transaction; process-ephemeral stores publish both under mutation order.
+    pub fn put_uar_delegated_task(
+        &self,
+        task: A2aTask,
+        mut projection: librefang_types::uar_run::UarDelegatedRunProjection,
+    ) -> Result<librefang_types::uar_run::UarProjectionRetention, String> {
+        if task.id != projection.boss_task_id {
+            return Err("UAR delegation task and projection identities differ".to_string());
+        }
+        let _mutation_order = lock_a2a_recover(&self.mutation_order, "mutation order");
+        if self.get(&task.id).is_some() || self.get_uar_delegation(&task.id).is_some() {
+            return Err(format!(
+                "UAR delegation identity {} is already committed",
+                task.id
+            ));
+        }
+        let retention = if self.db.is_some() {
+            librefang_types::uar_run::UarProjectionRetention::Durable
+        } else {
+            librefang_types::uar_run::UarProjectionRetention::ProcessEphemeral
+        };
+        projection.boss_projection_retention = retention;
+        if let Some(db_arc) = &self.db {
+            let status_json = serde_json::to_string(&task.status)
+                .map_err(|error| format!("failed to encode delegated task status: {error}"))?;
+            let messages_json = serde_json::to_string(&task.messages)
+                .map_err(|error| format!("failed to encode delegated task messages: {error}"))?;
+            let artifacts_json = serde_json::to_string(&task.artifacts)
+                .map_err(|error| format!("failed to encode delegated task artifacts: {error}"))?;
+            let projection_json = serde_json::to_string(&projection)
+                .map_err(|error| format!("failed to encode UAR delegation: {error}"))?;
+            let now = now_unix_secs();
+            let mut conn = lock_a2a_recover(db_arc, "database");
+            let transaction = conn
+                .transaction()
+                .map_err(|error| format!("failed to begin UAR delegation transaction: {error}"))?;
+            transaction
+                .execute(
+                    "INSERT INTO a2a_tasks_v2 (id, status, session_id, messages_json, artifacts_json, agent_id, caller_a2a_agent_id, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+                    rusqlite::params![
+                        task.id,
+                        status_json,
+                        task.session_id,
+                        messages_json,
+                        artifacts_json,
+                        task.agent_id,
+                        task.caller_a2a_agent_id,
+                        now,
+                    ],
+                )
+                .map_err(|error| format!("failed to persist delegated A2A task: {error}"))?;
+            transaction
+                .execute(
+                    "INSERT INTO uar_delegations_v1 (boss_task_id, projection_json, updated_at)
+                     VALUES (?1, ?2, ?3)",
+                    rusqlite::params![projection.boss_task_id, projection_json, now],
+                )
+                .map_err(|error| format!("failed to persist UAR delegation: {error}"))?;
+            transaction
+                .commit()
+                .map_err(|error| format!("failed to commit UAR delegation: {error}"))?;
+        }
+        self.insert_memory_task(task);
+        lock_a2a_recover(&self.uar_delegations, "UAR delegations")
+            .insert(projection.boss_task_id.clone(), projection);
+        Ok(retention)
+    }
+
+    /// Read a UAR delegation by BossFang task ID, falling back to SQLite after
+    /// in-memory eviction or process restart.
+    pub fn get_uar_delegation(
+        &self,
+        boss_task_id: &str,
+    ) -> Option<librefang_types::uar_run::UarDelegatedRunProjection> {
+        if let Some(projection) =
+            lock_a2a_recover(&self.uar_delegations, "UAR delegations").get(boss_task_id)
+        {
+            return Some(projection.clone());
+        }
+        let db_arc = self.db.as_ref()?;
+        let conn = lock_a2a_recover(db_arc, "database");
+        conn.query_row(
+            "SELECT projection_json FROM uar_delegations_v1 WHERE boss_task_id = ?1",
+            rusqlite::params![boss_task_id],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|json| serde_json::from_str(&json).ok())
+    }
+
     /// Count of tracked tasks.
     pub fn len(&self) -> usize {
         lock_a2a_recover(&self.tasks, "tasks").len()
@@ -682,6 +908,21 @@ impl A2aTaskStore {
     /// Whether the store is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+fn uar_projection_task_status(
+    projection: &librefang_types::uar_run::UarDelegatedRunProjection,
+) -> A2aTaskStatus {
+    match projection.execution_state.as_str() {
+        "submitted" => A2aTaskStatus::Submitted,
+        "approval_required" | "approval-required" | "input_required" => {
+            A2aTaskStatus::InputRequired
+        }
+        "completed" => A2aTaskStatus::Completed,
+        "failed" | "rejected" => A2aTaskStatus::Failed,
+        "cancelled" => A2aTaskStatus::Cancelled,
+        _ => A2aTaskStatus::Working,
     }
 }
 

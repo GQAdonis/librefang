@@ -2717,6 +2717,10 @@ mod tests {
                 Default::default(),
                 home_dir.clone(),
             )),
+            #[cfg(feature = "uar-driver")]
+            uar_run_control: Arc::new(
+                librefang_llm_drivers::drivers::uar_run::UarRunClient::default(),
+            ),
             kernel,
             started_at: std::time::Instant::now(),
             readiness_requires_embedding: false,

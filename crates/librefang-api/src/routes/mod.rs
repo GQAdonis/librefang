@@ -51,6 +51,7 @@ pub mod task_queue;
 pub mod terminal;
 pub mod tools_sessions;
 pub mod uar;
+pub mod uar_delegation;
 pub mod uar_supervisor;
 pub mod users;
 pub mod vault;
@@ -250,6 +251,10 @@ pub struct AppState {
     /// UAR child-process lifecycle owner. The API and LLM driver share the
     /// ephemeral endpoint selected here.
     pub uar_supervisor: Arc<librefang_channels::uar_sidecar::UarSidecarSupervisor>,
+    /// Single BossFang authority for a UAR-owned complete run. Both the
+    /// delegation API and the existing A2A surface use this client.
+    #[cfg(feature = "uar-driver")]
+    pub uar_run_control: Arc<librefang_llm_drivers::drivers::uar_run::UarRunControl>,
     pub started_at: Instant,
     /// Whether a working embedding driver was a *requirement* of the config
     /// this process booted with — snapshotted at boot, deliberately not read

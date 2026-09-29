@@ -7,19 +7,22 @@
 //! - `GET  /api/uar/discovery/agents`— list all librefang agents as UAR AgentArtifacts
 //!
 //! The A2A handler dispatches `message/send`, `tasks/get`, and `tasks/cancel`
-//! methods. A lightweight in-process task store maps A2A task IDs to agent
-//! sessions so external clients can track long-running agent interactions.
+//! methods. The kernel-owned A2A task store maps task IDs to agent sessions so
+//! external clients use the same task authority as the other A2A routes.
 
 use super::AppState;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
+    Extension, Json,
 };
+use librefang_kernel::a2a::{A2aArtifact, A2aMessage, A2aPart, A2aTask, A2aTaskStatus};
 use librefang_types::agent::AgentId;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+pub(crate) mod delegated_tasks;
 
 /// Build the **root-level** A2A JSON-RPC route.
 ///
@@ -116,36 +119,7 @@ mod rpc_error {
     pub const METHOD_NOT_FOUND: i32 = -32601;
     pub const INVALID_PARAMS: i32 = -32602;
     pub const TASK_NOT_FOUND: i32 = -32001;
-}
-
-/// A2A task states per RC v1.0 §4.2.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-enum TaskState {
-    Submitted,
-    Working,
-    InputRequired,
-    Completed,
-    Canceled,
-    Failed,
-}
-
-/// Lightweight A2A task — maps to a librefang agent session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct A2ATask {
-    id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    context_id: Option<String>,
-    status: A2ATaskStatus,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    artifacts: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct A2ATaskStatus {
-    state: TaskState,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<serde_json::Value>,
+    pub const TASK_CONTROL_FAILED: i32 = -32002;
 }
 
 /// Params for `message/send`.
@@ -207,19 +181,6 @@ struct AgentSkill {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// In-process task store (DashMap, ephemeral)
-// ─────────────────────────────────────────────────────────────────────────────
-
-use dashmap::DashMap;
-use std::sync::LazyLock;
-
-/// Ephemeral in-memory A2A task store.
-///
-/// Tasks are keyed by UUID string. Lost on restart — callers that need
-/// durability should implement their own task persistence on top.
-static TASK_STORE: LazyLock<DashMap<String, A2ATask>> = LazyLock::new(DashMap::new);
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -250,6 +211,7 @@ fn a2a_base_url(state: &AppState) -> String {
 /// `POST /a2a` — JSON-RPC 2.0 A2A dispatcher.
 async fn handle_a2a_rpc(
     State(state): State<Arc<AppState>>,
+    api_user: Option<Extension<crate::middleware::AuthenticatedApiUser>>,
     Json(req): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     if req.jsonrpc != "2.0" {
@@ -261,9 +223,27 @@ async fn handle_a2a_rpc(
     }
 
     let resp = match req.method.as_str() {
-        "message/send" => dispatch_message_send(&state, req.id.clone(), req.params).await,
-        "tasks/get" => dispatch_tasks_get(req.id.clone(), req.params),
-        "tasks/cancel" => dispatch_tasks_cancel(req.id.clone(), req.params),
+        "message/send" => {
+            dispatch_message_send(&state, api_user.as_ref(), req.id.clone(), req.params).await
+        }
+        "tasks/get" => {
+            delegated_tasks::dispatch_tasks_get(
+                &state,
+                api_user.as_ref(),
+                req.id.clone(),
+                req.params,
+            )
+            .await
+        }
+        "tasks/cancel" => {
+            delegated_tasks::dispatch_tasks_cancel(
+                &state,
+                api_user.as_ref(),
+                req.id.clone(),
+                req.params,
+            )
+            .await
+        }
         other => {
             tracing::warn!(method = other, "unknown A2A method");
             JsonRpcResponse::err(
@@ -345,6 +325,7 @@ async fn get_agent_card(
 
 async fn dispatch_message_send(
     state: &AppState,
+    api_user: Option<&Extension<crate::middleware::AuthenticatedApiUser>>,
     id: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
 ) -> JsonRpcResponse {
@@ -387,96 +368,72 @@ async fn dispatch_message_send(
         .task_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    // Build submitted task.
-    let task = A2ATask {
-        id: task_id.clone(),
-        context_id: Some(agent_id.to_string()),
-        status: A2ATaskStatus {
-            state: TaskState::Working,
-            message: None,
-        },
-        artifacts: vec![],
+    let user_message = A2aMessage {
+        role: "user".to_string(),
+        parts: vec![A2aPart::Text {
+            text: user_text.clone(),
+        }],
     };
-    TASK_STORE.insert(task_id.clone(), task.clone());
+    let task = A2aTask {
+        id: task_id.clone(),
+        session_id: Some(agent_id.to_string()),
+        status: A2aTaskStatus::Working.into(),
+        messages: vec![user_message],
+        artifacts: vec![],
+        agent_id: Some(agent_id.to_string()),
+        caller_a2a_agent_id: delegated_tasks::caller_scope(api_user.map(|user| &user.0)),
+    };
+    state.kernel.a2a_tasks().insert(task);
 
     // Send message to the librefang agent via kernel.
     match state.kernel.send_message(agent_id, &user_text).await {
         Ok(result) => {
             let response_text = result.response;
-            let completed_task = A2ATask {
-                id: task_id.clone(),
-                context_id: Some(agent_id.to_string()),
-                status: A2ATaskStatus {
-                    state: TaskState::Completed,
-                    message: Some(serde_json::json!({
-                        "role": "agent",
-                        "parts": [{"type": "text", "text": response_text}]
-                    })),
+            state.kernel.a2a_tasks().complete(
+                &task_id,
+                A2aMessage {
+                    role: "agent".to_string(),
+                    parts: vec![A2aPart::Text {
+                        text: response_text.clone(),
+                    }],
                 },
-                artifacts: vec![serde_json::json!({
-                    "artifact_id": uuid::Uuid::new_v4().to_string(),
-                    "name": "response",
-                    "parts": [{"type": "text", "text": response_text}]
-                })],
-            };
-            TASK_STORE.insert(task_id, completed_task.clone());
-            JsonRpcResponse::ok(id, completed_task)
+                vec![A2aArtifact {
+                    name: Some("response".to_string()),
+                    description: None,
+                    metadata: None,
+                    index: None,
+                    last_chunk: Some(true),
+                    parts: vec![A2aPart::Text {
+                        text: response_text,
+                    }],
+                }],
+            );
+            delegated_tasks::dispatch_tasks_get(
+                state,
+                api_user,
+                id,
+                Some(serde_json::json!({ "id": task_id })),
+            )
+            .await
         }
         Err(e) => {
-            let failed_task = A2ATask {
-                id: task_id.clone(),
-                status: A2ATaskStatus {
-                    state: TaskState::Failed,
-                    message: Some(serde_json::json!({
-                        "role": "agent",
-                        "parts": [{"type": "text", "text": e.to_string()}]
-                    })),
+            state.kernel.a2a_tasks().fail(
+                &task_id,
+                A2aMessage {
+                    role: "agent".to_string(),
+                    parts: vec![A2aPart::Text {
+                        text: e.to_string(),
+                    }],
                 },
-                context_id: Some(agent_id.to_string()),
-                artifacts: vec![],
-            };
-            TASK_STORE.insert(task_id, failed_task.clone());
-            JsonRpcResponse::ok(id, failed_task)
+            );
+            delegated_tasks::dispatch_tasks_get(
+                state,
+                api_user,
+                id,
+                Some(serde_json::json!({ "id": task_id })),
+            )
+            .await
         }
-    }
-}
-
-fn dispatch_tasks_get(
-    id: Option<serde_json::Value>,
-    params: Option<serde_json::Value>,
-) -> JsonRpcResponse {
-    let params: TaskRefParams = match params
-        .ok_or_else(|| "params required".to_string())
-        .and_then(|p| serde_json::from_value(p).map_err(|e| e.to_string()))
-    {
-        Ok(p) => p,
-        Err(e) => return JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, e),
-    };
-
-    match TASK_STORE.get(&params.id) {
-        Some(task) => JsonRpcResponse::ok(id, task.clone()),
-        None => JsonRpcResponse::err(id, rpc_error::TASK_NOT_FOUND, "task not found"),
-    }
-}
-
-fn dispatch_tasks_cancel(
-    id: Option<serde_json::Value>,
-    params: Option<serde_json::Value>,
-) -> JsonRpcResponse {
-    let params: TaskRefParams = match params
-        .ok_or_else(|| "params required".to_string())
-        .and_then(|p| serde_json::from_value(p).map_err(|e| e.to_string()))
-    {
-        Ok(p) => p,
-        Err(e) => return JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, e),
-    };
-
-    match TASK_STORE.get_mut(&params.id) {
-        Some(mut entry) => {
-            entry.status.state = TaskState::Canceled;
-            JsonRpcResponse::ok(id, entry.clone())
-        }
-        None => JsonRpcResponse::err(id, rpc_error::TASK_NOT_FOUND, "task not found"),
     }
 }
 

@@ -541,16 +541,24 @@ pub async fn a2a_send_task(
 )]
 pub async fn a2a_get_task(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(task_id): Path<String>,
 ) -> impl IntoResponse {
-    match state.kernel.a2a_tasks().get(&task_id) {
-        Some(task) => (
+    match super::uar::delegated_tasks::refresh_task(
+        &state,
+        &task_id,
+        api_user.as_ref().map(|user| &user.0),
+    )
+    .await
+    {
+        Ok(Some(task)) => (
             StatusCode::OK,
             Json(serde_json::to_value(&task).unwrap_or_default()),
         ),
-        None => {
+        Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
+        Err(error) => ApiErrorResponse::internal(error).into_json_tuple(),
     }
 }
 
@@ -568,20 +576,24 @@ pub async fn a2a_get_task(
 )]
 pub async fn a2a_cancel_task(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(task_id): Path<String>,
 ) -> impl IntoResponse {
-    if state.kernel.a2a_tasks().cancel(&task_id) {
-        match state.kernel.a2a_tasks().get(&task_id) {
-            Some(task) => (
-                StatusCode::OK,
-                Json(serde_json::to_value(&task).unwrap_or_default()),
-            ),
-            None => {
-                ApiErrorResponse::internal("Task disappeared after cancellation").into_json_tuple()
-            }
+    match super::uar::delegated_tasks::cancel_task(
+        &state,
+        &task_id,
+        api_user.as_ref().map(|user| &user.0),
+    )
+    .await
+    {
+        Ok(Some(task)) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(&task).unwrap_or_default()),
+        ),
+        Ok(None) => {
+            ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
-    } else {
-        ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
+        Err(error) => ApiErrorResponse::internal(error).into_json_tuple(),
     }
 }
 
@@ -2361,6 +2373,10 @@ mod tests {
                 Default::default(),
                 home_dir.clone(),
             )),
+            #[cfg(feature = "uar-driver")]
+            uar_run_control: Arc::new(
+                librefang_llm_drivers::drivers::uar_run::UarRunClient::default(),
+            ),
             kernel: kernel.clone(),
             started_at: std::time::Instant::now(),
             readiness_requires_embedding: false,

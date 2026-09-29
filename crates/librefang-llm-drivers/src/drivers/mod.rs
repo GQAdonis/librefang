@@ -24,6 +24,8 @@ pub mod token_rotation;
 pub(crate) mod trace_headers;
 #[cfg(feature = "uar-driver")]
 pub mod uar;
+#[cfg(feature = "uar-driver")]
+pub mod uar_run;
 pub mod vertex_ai;
 
 use crate::llm_driver::{DriverConfig, LlmDriver, LlmError};

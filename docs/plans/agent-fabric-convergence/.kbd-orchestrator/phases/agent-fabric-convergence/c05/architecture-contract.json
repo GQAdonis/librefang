@@ -1,0 +1,373 @@
+{
+  "schemaVersion": "afc.bossfang-full-run-delegation/1",
+  "contractVersion": "1.0.0",
+  "status": "frozen-c05-architecture-contract-conformance-pending",
+  "recordedOn": "2026-09-27",
+  "initiativeChange": "afc-c05-bossfang-full-run-delegation",
+  "sourceBaselines": {
+    "universalAgentRuntime": {
+      "revision": "3d6bf0568595816ac8da4095028bb991f7d17375",
+      "ref": "origin/main",
+      "role": "C04 service placement and UAR public run/A2A surfaces"
+    },
+    "librefang": {
+      "revision": "2c5b91b5f3d8bb3aeb3d3a3ff2f062c277891627",
+      "role": "C04 BossFang base and current UAR provider/A2A/task surfaces"
+    }
+  },
+  "consumes": [
+    "afc.convergence-contract.v1",
+    "afc.governed-effect/1",
+    "afc-c03-lossless-definitions-and-collaboration-document-profile",
+    "afc-c04-replaceable-service-instances-and-placement"
+  ],
+  "contracts": [
+    {
+      "id": "one-execution-loop-owner",
+      "authority": "universal-agent-runtime",
+      "rules": [
+        "Full-run delegation is distinct from native BossFang execution and UAR model-provider access.",
+        "UAR exclusively owns the delegated token, model and tool loop.",
+        "BossFang owns the parent workflow, delegation control and correlation receipt without replaying delegated tools.",
+        "Every delegated trace identifies universal-agent-runtime as executor.",
+        "Initial full-run admission is limited to the BossFang-managed loopback UAR sidecar under ADR 0001 placement S1; external-local and remote instances remain model gateways until S2a."
+      ]
+    },
+    {
+      "id": "idempotent-admission-and-control-identity",
+      "authority": "universal-agent-runtime",
+      "admissionKey": [
+        "verifiedOwner",
+        "normalizedWorkspace",
+        "admissionKey",
+        "canonicalRequestDigest"
+      ],
+      "rules": [
+        "The qualified admission tuple is reserved before execution begins.",
+        "The same key and digest return the same native receipt without another run.",
+        "The same qualified key with a different digest is refused with admission_digest_conflict.",
+        "A lost response becomes admission-unresolved and is reconciled without replay.",
+        "Identity and placement derive from the authenticated C04 service binding, never payload claims.",
+        "BossFang retains the original authenticated user principal and asserts it on every full-run request only through the launch-token-authenticated managed sidecar."
+      ]
+    },
+    {
+      "id": "one-task-and-effect-authority",
+      "authority": "universal-agent-runtime-native-task-thread-run",
+      "rules": [
+        "BossFang retains a durable correlation receipt and projects UAR state without becoming a second executor or task authority.",
+        "Lookup and control require authenticated owner, selected UAR instance and target binding in addition to native identity.",
+        "UAR approval identities and tool-admission evidence remain authoritative.",
+        "Unknown effects remain effect-unconfirmed and are never automatically replayed.",
+        "Steering continues the same governed active task and never creates an implicit replacement run."
+      ]
+    },
+    {
+      "id": "detach-cancel-and-retention-truth",
+      "authority": "universal-agent-runtime",
+      "rules": [
+        "Detach changes observation and does not request cancellation.",
+        "Cancellation requested, acknowledged and terminal states remain distinct.",
+        "Cleanup and effect uncertainty remain explicit until proven settled.",
+        "Every receipt advertises retention mode and expiry.",
+        "Unsupported recovery is explicit and never represented as success, ordinary not-found or automatic replay."
+      ]
+    }
+  ],
+  "receipt": {
+    "requiredFields": [
+      "delegationId",
+      "admissionKey",
+      "requestDigest",
+      "ownerScope",
+      "targetBinding",
+      "instanceId",
+      "instanceProfile",
+      "effectiveServiceBinding",
+      "uarTaskId",
+      "uarThreadId",
+      "uarRootRunId",
+      "uarRunId",
+      "state",
+      "revision",
+      "cursor",
+      "retentionProfile",
+      "expiresAt",
+      "uncertainty"
+    ],
+    "prohibitedFields": [
+      "rawCredential",
+      "credentialSecret",
+      "rawProtectedPrompt"
+    ]
+  },
+  "stateMachines": {
+    "admission": [
+      "pending",
+      "admitted",
+      "unresolved",
+      "refused"
+    ],
+    "execution": [
+      "submitted",
+      "working",
+      "approval-required",
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "cancellation": [
+      "none",
+      "requested",
+      "acknowledged",
+      "terminal",
+      "cleanup-unconfirmed"
+    ],
+    "effect": [
+      "not-dispatched",
+      "dispatching",
+      "settled",
+      "effect-unconfirmed"
+    ],
+    "recovery": [
+      "available",
+      "expired",
+      "recovery-unsupported"
+    ]
+  },
+  "profiles": {
+    "process-ephemeral": {
+      "initial": true,
+      "scope": "one UAR process lifetime and its advertised in-process retention window",
+      "supports": [
+        "qualified idempotent admission while the process remains alive",
+        "native task observation and control while retained",
+        "detach and reconnect without cancellation",
+        "explicit retention expiry"
+      ],
+      "doesNotSupport": [
+        "restart reconstruction",
+        "cross-process recovery",
+        "automatic resubmission after restart"
+      ],
+      "restartResult": "recovery-unsupported",
+      "requiredRestartDurabilityDisposition": "refuse-admission",
+      "dependency": "afc-c06-durable-addressable-instances-and-bounded-turns"
+    }
+  },
+  "unsupportedSemantics": {
+    "required": "refuse admission with a stable reason",
+    "optional": "return explicitly unsupported in the receipt and never label enabled or enforced"
+  },
+  "wire": {
+    "version": "full-harness-v1",
+    "basePath": "/api/uar/full-harness/v1",
+    "capability": "full_harness_delegation_v1",
+    "encoding": "snake_case JSON on the UAR wire; camelCase on BossFang's public API",
+    "authentication": {
+      "credential": "selected C04 runtime-role bearer credential",
+      "workspaceHeader": "x-uar-workspace-id",
+      "workspaceHeaderRequired": "all admission, reconciliation, task, stream and control routes; capability descriptor is workspace-independent",
+      "identitySource": "verified token principal and source-instance claims",
+      "payloadIdentityAuthoritative": false
+    },
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/capabilities",
+        "operation": "runtime-epoch-and-recovery-posture"
+      },
+      {
+        "method": "POST",
+        "path": "/tasks",
+        "operation": "admit-or-return-existing"
+      },
+      {
+        "method": "GET",
+        "path": "/admissions/{admission_id}",
+        "operation": "reconcile-without-execution"
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}",
+        "operation": "authoritative-projection"
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/stream?last_event_id={cursor}",
+        "operation": "ordered-observation"
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/{task_id}/tool-approval",
+        "operation": "decide-exact-approval"
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/{task_id}/cancel",
+        "operation": "request-cancellation"
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/{task_id}/detach",
+        "operation": "detach-observer-without-cancel"
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/{task_id}/steer",
+        "operation": "typed-unsupported-for-process-ephemeral-profile"
+      }
+    ],
+    "admissionRequest": {
+      "requiredFields": [
+        "admission_id",
+        "native_task_id",
+        "deployment_binding_id",
+        "input"
+      ],
+      "optionalFields": [
+        "artifact",
+        "agent_id",
+        "service_placement",
+        "session_id",
+        "working_directory",
+        "reasoning_effort",
+        "history",
+        "skill_attachments",
+        "presentation negotiation fields",
+        "run_credentials",
+        "mcp_servers",
+        "tool_admission"
+      ],
+      "targetSelectorRule": "deployment_binding_id selects the admitted C04 binding",
+      "digestRule": "UAR computes sha256 over canonical JSON containing the run body and normalized x-uar-workspace-id",
+      "credentialRule": "opaque references and existing run-API host input shapes only; resolved secrets are forbidden"
+    },
+    "mutations": {
+      "approval": [
+        "approval_id",
+        "approved"
+      ],
+      "detach": [
+        "observer_id"
+      ],
+      "cancel": [],
+      "steer": "capability_unsupported"
+    },
+    "reconciliation": "capture runtime_epoch before admission, then GET by admission_id with the same authenticated owner and required workspace header; an epoch change maps to recovery-unsupported and performs no replay",
+    "responseEnvelopeAdds": [
+      "admission_id",
+      "task_id",
+      "native_task_id",
+      "run_id",
+      "workspace_id",
+      "runtime_epoch",
+      "revision",
+      "cursor",
+      "state",
+      "retention",
+      "effective_service_binding",
+      "diagnostics",
+      "cancellation",
+      "detached",
+      "timestamps",
+      "unsupported_semantics",
+      "links"
+    ],
+    "eventEnvelope": [
+      "id",
+      "event",
+      "data"
+    ],
+    "eventRules": [
+      "cursor is monotonic within one task",
+      "data is redacted",
+      "disconnect detaches without cancellation",
+      "cursor gaps and expiry return typed postures"
+    ]
+  },
+  "acceptanceScenarios": [
+    {
+      "id": "one-executor",
+      "expected": "UAR alone owns the delegated loop and each admitted effect occurs once"
+    },
+    {
+      "id": "lost-admission-response",
+      "expected": "same key and digest recover the original task/run with no duplicate execution"
+    },
+    {
+      "id": "conflicting-admission-replay",
+      "expected": "changed digest under the same qualified key is refused with admission_digest_conflict and without another run"
+    },
+    {
+      "id": "detach-and-reconnect",
+      "expected": "observation disconnect does not cancel; reconnect resumes from the advertised cursor"
+    },
+    {
+      "id": "cancellation-settlement",
+      "expected": "cancellation reaches the exact UAR run and acknowledgement remains distinct from terminal settlement"
+    },
+    {
+      "id": "approval-round-trip",
+      "expected": "one UAR approval identity is decided once and the same native task continues"
+    },
+    {
+      "id": "unknown-effect-outcome",
+      "expected": "both products expose effect-unconfirmed and perform no automatic replay"
+    },
+    {
+      "id": "qualified-lookup-isolation",
+      "expected": "wrong owner, workspace, target or instance cannot observe or control the task"
+    },
+    {
+      "id": "service-placement",
+      "expected": "C04 identity, profile, capabilities, endpoint roles and opaque credential references are admitted before execution"
+    },
+    {
+      "id": "process-restart",
+      "profile": "process-ephemeral",
+      "expected": "explicit recovery-unsupported with no success claim or resubmission"
+    },
+    {
+      "id": "retention-expiry",
+      "expected": "explicit expired posture preserves qualified correlation identity"
+    },
+    {
+      "id": "native-compatibility",
+      "expected": "native BossFang and model-provider execution retain their existing executor ownership"
+    }
+  ],
+  "dependencies": {
+    "c02": "protected-effect admission and uncertain external outcomes",
+    "c03": "lossless definitions and enforced runtime semantics",
+    "c04": "service identity, placement, endpoint roles and credential references",
+    "c06": {
+      "status": "required-for-restart-durable-profile",
+      "change": "afc-c06-durable-addressable-instances-and-bounded-turns"
+    }
+  },
+  "installedBaseline": {
+    "reportedOn": "2026-09-27",
+    "source": "operator-report",
+    "platform": "windows",
+    "observed": [
+      "installation worked",
+      "UAR was active on port 1906"
+    ],
+    "claimBoundary": "pre-C05 installed baseline only",
+    "certifiesC05": false,
+    "unobserved": [
+      "full-run delegation",
+      "idempotent admission",
+      "task reconciliation",
+      "detach and cancellation semantics",
+      "approval forwarding",
+      "restart recovery"
+    ]
+  },
+  "conformance": {
+    "status": "pending-product-implementation-and-cross-repository-acceptance",
+    "documentationAloneIsSufficient": false,
+    "windowsBaselineIsSufficient": false
+  }
+}

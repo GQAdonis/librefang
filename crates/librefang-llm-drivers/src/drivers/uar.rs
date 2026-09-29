@@ -288,6 +288,26 @@ fn role_credential(role: EndpointRole) -> Option<Zeroizing<String>> {
     }
 }
 
+/// Verified runtime endpoint and credential for the full-harness control
+/// client. Calling this never issues a model completion.
+pub(super) async fn full_run_transport(
+) -> Result<(String, Option<Zeroizing<String>>, UarEffectiveBinding), LlmError> {
+    let binding = admit_supervised_binding().await?;
+    if !binding
+        .capabilities
+        .iter()
+        .any(|item| item == "full_harness_delegation_v1")
+    {
+        return Err(LlmError::Http(
+            "selected UAR instance does not advertise full_harness_delegation_v1".to_string(),
+        ));
+    }
+    let endpoint = binding.endpoints.runtime.clone().ok_or_else(|| {
+        LlmError::Http("selected UAR binding has no runtime endpoint".to_string())
+    })?;
+    Ok((endpoint, role_credential(EndpointRole::Runtime), binding))
+}
+
 fn supervised_candidate() -> Result<(UarServiceInstanceConfig, String, u64), LlmError> {
     let published = binding_cell()
         .read()
