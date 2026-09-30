@@ -1,0 +1,21 @@
+{
+  "hooks": [
+    {
+      "id": "delivery-cadence-kbd-reconcile",
+      "event": "child:*",
+      "mode": "augment",
+      "enabled": true,
+      "action": {
+        "command": "node",
+        "args": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-kbd-adapter.mjs",
+          "reconcile",
+          "--project",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+        ],
+        "timeout": 30,
+        "on_failure": "warn"
+      }
+    }
+  ]
+}

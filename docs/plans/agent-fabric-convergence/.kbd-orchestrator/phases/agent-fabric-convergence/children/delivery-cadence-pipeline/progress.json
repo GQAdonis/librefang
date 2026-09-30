@@ -2,29 +2,29 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 416,
-  "derivedRevision": 416,
+  "sourceRevision": 471,
+  "derivedRevision": 471,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 177
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 232
   },
   "conflictCount": 0,
   "phase": "delivery-cadence-pipeline",
   "phaseId": "agent-fabric-convergence::delivery-cadence-pipeline",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-09-30T20:02:22.809529Z",
+  "last_updated": "2026-09-30T20:47:48.665067Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 1,
-  "changes_completed": 0,
+  "changes_completed": 1,
   "implementation_total": 1,
-  "implementation_completed": 0,
+  "implementation_completed": 1,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 0,
+      "completed": 1,
       "total": 1,
-      "status": "PENDING"
+      "status": "COMPLETE"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 14,
+      "completed": 15,
       "total": 25,
       "status": "IN_PROGRESS"
     },
@@ -75,12 +75,12 @@
     {
       "id": "afc-delivery-cadence-pipeline",
       "title": "Bounded Delivery Cadence pipeline",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 13,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Freeze v3 request/state/receipt schemas and shared module boundaries from draft-contracts; inventory authoritative source deltas, preserved dirty copies, installed routes and existing live jobs",
+      "tasks_done": 13,
+      "last_task_completed": "Cut over the actual project after eligible boundary evidence: explicitly migrate its state with backup, preserve 120-minute/every-two policy, reconcile real owed publication and external jobs, update configured paths, record one learning/handoff and exact payload revisions",
+      "next_task_pending": null,
       "blockers": []
     }
   ],

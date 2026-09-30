@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "scope": "Final review corrections: six-way payload parity and existing schema correction only; no runtime repetitions",
+  "files": 52,
+  "roots": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/claude/prometheus-skill-pack/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/codex/prometheus-skill-pack/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/dist/plugins/claude/prometheus-skills-mini/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/dist/plugins/codex/prometheus-skills-mini/skills/delivery-cadence"
+  ],
+  "payloadDigest": "8fda63d5726490aa828a7d1317682343d7b474ad77f07489563c96870f211e91",
+  "sourceRevision": "61018964e19b99a53fe7406642a7d0db5833bd78",
+  "provenance": "Payload hashes identify working bytes; source HEAD is not claimed to contain uncommitted corrections",
+  "observedAt": "2026-09-30T20:44:03.559Z"
+}

@@ -2,27 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 392,
-  "derivedRevision": 392,
+  "sourceRevision": 471,
+  "derivedRevision": 471,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 232
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-30T17:21:23.779657Z",
+  "updatedAt": "2026-09-30T20:47:48.665067Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c08-bossfang-and-fabric-observer-routing",
-    "C08.2"
+    "delivery-cadence-pipeline",
+    "execute"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 14,
-      "total": 24
+      "done": 15,
+      "total": 25
     },
     "children": [
       {
@@ -35,6 +35,28 @@
           "total": 20
         },
         "children": [
+          {
+            "type": "phase",
+            "id": "delivery-cadence-pipeline",
+            "canonicalId": "agent-fabric-convergence::delivery-cadence-pipeline",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-delivery-cadence-pipeline",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 13,
+                  "total": 13
+                }
+              }
+            ],
+            "annotations": []
+          },
           {
             "type": "phase",
             "id": "release-cadence-optimization",

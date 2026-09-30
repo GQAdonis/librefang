@@ -1,0 +1,159 @@
+[
+  {
+    "name": "lead-state",
+    "runId": "e593de60-68a9-49e2-bd82-b10697452498",
+    "sha256": "6eb947f9c83ef11c46a7d838affc3d04fb0a6e366ce07baa73dbbff1a359083b",
+    "successfulDeliveries": 2,
+    "workAhead": [
+      {
+        "id": "next",
+        "state": "promoted",
+        "firstWorkAt": "2026-09-30T20:28:20.561Z",
+        "promotedAt": "2026-09-30T20:28:24.941Z",
+        "repairedBaseRef": null
+      }
+    ],
+    "iterations": [
+      {
+        "id": "746539d5-8956-471c-84f8-5a14ce57c363",
+        "startedAt": "2026-09-30T20:28:18.598Z",
+        "workOutcome": "success",
+        "checkpoints": [
+          {
+            "id": "build",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:20.382Z",
+            "finishedAt": "2026-09-30T20:28:22.235Z"
+          },
+          {
+            "id": "launch",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:22.849Z",
+            "finishedAt": "2026-09-30T20:28:22.919Z"
+          },
+          {
+            "id": "feature",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:23.588Z",
+            "finishedAt": "2026-09-30T20:28:23.660Z"
+          }
+        ]
+      },
+      {
+        "id": "ee9e33f7-064f-4fa7-aa91-a34be490cbac",
+        "startedAt": "2026-09-30T20:28:20.561Z",
+        "firstWorkAt": "2026-09-30T20:28:20.561Z",
+        "workOutcome": "success",
+        "checkpoints": [
+          {
+            "id": "build",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:27.276Z",
+            "finishedAt": "2026-09-30T20:28:27.366Z"
+          },
+          {
+            "id": "launch",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:28.667Z",
+            "finishedAt": "2026-09-30T20:28:28.769Z"
+          },
+          {
+            "id": "feature",
+            "status": "success",
+            "startedAt": "2026-09-30T20:28:29.921Z",
+            "finishedAt": "2026-09-30T20:28:30.000Z"
+          }
+        ]
+      }
+    ],
+    "obligations": [
+      {
+        "id": "6f3e593c-1a5b-41c5-ab08-b59a0d039189",
+        "disposition": "pending"
+      }
+    ]
+  },
+  {
+    "name": "repair-state",
+    "runId": "cfde23ae-1b0d-4018-ae40-f7524d52b8d3",
+    "sha256": "63b00592dfcaed6d5b8e3f8cb157f5ef81f0d2254b10f217632584542aa5b845",
+    "successfulDeliveries": 1,
+    "workAhead": [
+      {
+        "id": "dependent",
+        "state": "promoted",
+        "firstWorkAt": "2026-09-30T20:30:15.131Z",
+        "promotedAt": "2026-09-30T20:30:15.506Z",
+        "repairedBaseRef": {
+          "candidateId": "0b8ac14f-297b-4d66-9756-5b786cc8c96d",
+          "contentManifestDigest": "13d7eb04c59792ea41b7fa3a919d782c3ba3604ac031ba853846480d34173f09",
+          "baseSourceRefs": [
+            {
+              "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-b"
+            }
+          ],
+          "evidenceRef": "fixture:actual-repaired-operation",
+          "authorityRefs": [
+            "operator:repair"
+          ],
+          "recordedAt": "2026-09-30T20:30:15.011Z"
+        }
+      }
+    ],
+    "iterations": [
+      {
+        "id": "f53ace79-8273-4ec5-97af-077ce771e04f",
+        "startedAt": "2026-09-30T20:29:12.921Z",
+        "workOutcome": "success",
+        "checkpoints": [
+          {
+            "id": "build",
+            "status": "success",
+            "invalidatedAt": "2026-09-30T20:29:17.597Z",
+            "startedAt": "2026-09-30T20:29:15.139Z",
+            "finishedAt": "2026-09-30T20:29:15.202Z"
+          },
+          {
+            "id": "launch",
+            "status": "success",
+            "invalidatedAt": "2026-09-30T20:29:17.597Z",
+            "startedAt": "2026-09-30T20:29:15.981Z",
+            "finishedAt": "2026-09-30T20:29:16.038Z"
+          },
+          {
+            "id": "feature",
+            "status": "failed",
+            "invalidatedAt": "2026-09-30T20:29:17.597Z",
+            "startedAt": "2026-09-30T20:29:16.773Z",
+            "finishedAt": "2026-09-30T20:29:16.831Z"
+          },
+          {
+            "id": "build",
+            "status": "success",
+            "startedAt": "2026-09-30T20:29:45.413Z",
+            "finishedAt": "2026-09-30T20:29:45.468Z"
+          },
+          {
+            "id": "launch",
+            "status": "success",
+            "startedAt": "2026-09-30T20:29:46.054Z",
+            "finishedAt": "2026-09-30T20:29:46.120Z"
+          },
+          {
+            "id": "feature",
+            "status": "success",
+            "startedAt": "2026-09-30T20:29:46.719Z",
+            "finishedAt": "2026-09-30T20:29:46.768Z"
+          }
+        ]
+      },
+      {
+        "id": "8804f1a1-d083-4acf-ab12-8e652ac746a8",
+        "startedAt": "2026-09-30T20:30:15.131Z",
+        "firstWorkAt": "2026-09-30T20:30:15.131Z",
+        "checkpoints": []
+      }
+    ],
+    "obligations": []
+  }
+]

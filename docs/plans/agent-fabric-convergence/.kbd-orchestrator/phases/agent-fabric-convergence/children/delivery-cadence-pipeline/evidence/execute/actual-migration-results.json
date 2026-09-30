@@ -1,0 +1,122 @@
+{
+  "status": "passed",
+  "method": "Copy of actual live v2 journal; original unchanged",
+  "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+  "result": {
+    "schemaVersion": 3,
+    "migrated": true,
+    "backup": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/actual-run-migration-copy/backups/v2-609-3d54c3cc-0aa4-4cd3-8ee1-259b2d4fe787",
+    "legacyEvidence": "preserved; missing observations remain unknown",
+    "commandId": "09083737-ce80-4559-a973-d8bf54ef464e"
+  },
+  "preserved": {
+    "successfulDeliveries": 5,
+    "iterationMinutes": 120,
+    "publicationEvery": 2,
+    "publicationDue": true,
+    "nextCount": 7
+  },
+  "legacyCandidate": {
+    "id": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7",
+    "candidateId": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7",
+    "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+    "sourceRefs": [
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+        "revision": "afeb528b794961483862436edac6b7063065d66e",
+        "fingerprint": "a0a3c36b143c0ac2cfebcb1c8f64455d01d44bf4f20973d6ff3b9239edfa9b2c"
+      },
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+        "revision": "102d7df70dbf5b2975b0fd1290b66f0e4b25c0b2",
+        "fingerprint": "eabc859caf82059749a564d382c62f5f9baba5680743fb53b8f09be302b09ce3"
+      }
+    ],
+    "createdAt": null,
+    "legacy": true,
+    "contentManifestDigest": null,
+    "provenance": "v2 path-bound receipts; portable source equality unknown"
+  },
+  "obligation": {
+    "id": "27c5d7cd-4036-4187-8c7e-7f09cec69d9d",
+    "candidateId": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7",
+    "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+    "dueAt": null,
+    "createdAt": "2026-09-30T20:38:25.913Z",
+    "dueOrdinal": 5,
+    "reasons": [
+      "legacy-publication-debt"
+    ],
+    "policy": {
+      "mode": "every",
+      "every": 2,
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "win32-x64",
+        "win32-arm64"
+      ],
+      "websiteUrl": "https://the-boss.know-me.tools",
+      "procedure": {
+        "repository": "Prometheus-AGS/the-boss",
+        "workflow": "the-boss-release.yml",
+        "profile": "uar-enabled",
+        "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+        "requiredInputs": [
+          "release_version",
+          "release_profile",
+          "platforms",
+          "uar_win32_x64_record_url",
+          "uar_win32_arm64_record_url",
+          "uar_darwin_arm64_record_url",
+          "uar_darwin_x64_record_url"
+        ],
+        "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+        "landingRepository": "Know-Me-Tools/boss-landing-spot",
+        "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+      },
+      "requireMetadata": true,
+      "acceptancePlatforms": []
+    },
+    "policyDigest": "565c809a2bf04be8d8ac4a490c36da5ac9dd1c54a7f298a160f5aefd7cbd2ef0",
+    "opportunityId": null,
+    "requiredEffects": [
+      "artifact:darwin-arm64",
+      "artifact:darwin-x64",
+      "artifact:win32-x64",
+      "artifact:win32-arm64",
+      "metadata",
+      "website"
+    ],
+    "coveredScopes": {
+      "tasks": [
+        "C09.4"
+      ],
+      "changes": [
+        "afc-c09-bounded-teams-and-shared-task-board"
+      ],
+      "phases": [],
+      "outcomes": [
+        "A coordinator delegates to a worker at capacity one, yields safely, and resumes exactly once with the worker result in The Boss"
+      ],
+      "deliveryClass": "cooperating-team-runtime-and-settings",
+      "owners": [
+        "boss-runtime",
+        "boss-desktop",
+        "boss-provider",
+        "boss-lead"
+      ]
+    },
+    "attemptIds": [],
+    "receiptIds": [],
+    "disposition": "pending",
+    "provenance": {
+      "type": "legacy-publication-debt",
+      "sourceVersion": 2,
+      "previousSeq": 609
+    },
+    "missing": [
+      "reconcile-legacy-publication-evidence"
+    ]
+  }
+}

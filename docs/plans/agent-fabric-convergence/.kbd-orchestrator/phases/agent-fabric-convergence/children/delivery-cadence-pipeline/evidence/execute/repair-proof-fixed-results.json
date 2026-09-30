@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "originalReproduced": true,
+  "observedAt": "2026-09-30T20:39:10.056Z",
+  "refusals": {
+    "stringEvidence": "Repaired-base reconciliation requires an absolute JSON evidence file",
+    "wrongRoot": "Future source refs must identify every admitted checkout root exactly; predecessor or unrelated roots cannot replace them",
+    "unrelatedHistory": "Future checkout does not descend from the repaired predecessor commit; reconcile its base before promotion",
+    "postProofDrift": "Provided future source refs differ from independently captured checkout revisions/fingerprints"
+  },
+  "proof": {
+    "candidateId": "571acd67-40bc-4634-86dc-dc16c6103659",
+    "contentManifestDigest": "5cc981d66273449c3bd12949786358fb5dbaf7f48b414faebf35770581ab824c",
+    "baseSourceRefs": [
+      {
+        "repository": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-b",
+        "revision": "1a4fbf302420f289ed83a953acf000b7b6bb4a55",
+        "fingerprint": "0d767357703536a2dba3f785c669bbfa9958b84a4a58101388e5bc9f45ec1285"
+      }
+    ],
+    "evidence": {
+      "path": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-evidence.json",
+      "sha256": "c5a7bc1a7952a7d7f796140eb9eb41ab2bb70b8e5a3a69ea0dd89787dc9ab716"
+    },
+    "predecessorSourceRefs": [
+      {
+        "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-a",
+        "revision": "c6425a44a2cbbd5782d383868d41a1d86cd070ee",
+        "fingerprint": "967a6b631253a54dfe51312c7eb7012d12477f9628a192e39d97ba8bb96a5f16"
+      }
+    ],
+    "mappings": [
+      {
+        "repository": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-b",
+        "predecessorRepository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-a",
+        "strategy": "ancestor",
+        "repairedRevision": "c6425a44a2cbbd5782d383868d41a1d86cd070ee",
+        "futureRevision": "1a4fbf302420f289ed83a953acf000b7b6bb4a55"
+      }
+    ],
+    "evidenceRef": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-evidence.json",
+    "authorityRefs": [
+      "fixture"
+    ],
+    "recordedAt": "2026-09-30T20:39:09.389Z"
+  },
+  "promotedIterationId": "6c1c9caf-0ba4-47cd-991e-634fdf3e2a5d",
+  "firstWorkAt": "2026-09-30T20:37:38.136Z",
+  "limitations": "Actual local Git/source capture and generated Cadence CLI. No external publication or Windows execution."
+}
