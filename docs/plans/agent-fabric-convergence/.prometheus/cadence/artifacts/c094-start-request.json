@@ -1,0 +1,71 @@
+{
+  "phaseId": "agent-fabric-convergence",
+  "scope": {
+    "tasks": [
+      "C09.4"
+    ],
+    "changes": [
+      "afc-c09-bounded-teams-and-shared-task-board"
+    ],
+    "phases": [],
+    "outcomes": [
+      "A coordinator delegates to a worker at capacity one, yields safely, and resumes exactly once with the worker result in The Boss"
+    ],
+    "deliveryClass": "cooperating-team-runtime-and-settings",
+    "owners": [
+      "boss-runtime",
+      "boss-desktop",
+      "boss-provider",
+      "boss-lead"
+    ]
+  },
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build"
+    }
+  ],
+  "featureOperation": {
+    "id": "c094-cooperating-pair",
+    "outcome": "A coordinator delegates to a worker at capacity one, yields safely, and resumes exactly once with the worker result in The Boss",
+    "procedure": "Operate packaged Boss with real gateway: coordinator delegate→durable wait/yield→worker→single continuation, then isolated/recovery/denied-edge/failed-target cases after all production wiring is finished.",
+    "checkpointId": "c094-cooperating-pair-operation"
+  },
+  "checkpoints": [
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "command": "/Users/gqadonis/.nvm/versions/node/v22.20.0/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--repository",
+        "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+        "--scenario",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+        "--require-scenario",
+        "--receipt",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-mac-functional-launch.json"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "required": true,
+      "timeoutMs": 120000,
+      "purpose": "launch"
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "command": "node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/operate-c094-cooperating-pair.mjs",
+        "--boss",
+        "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "required": true,
+      "timeoutMs": 600000,
+      "purpose": "feature"
+    }
+  ]
+}

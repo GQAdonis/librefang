@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-30T11:13:56.665Z",
+  "sourceCommit": "dcae7293b10c31c6d20fc28b0f874490c1900195",
+  "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+  "command": "cargo",
+  "args": [
+    "build",
+    "--release",
+    "--locked",
+    "--no-default-features",
+    "--features",
+    "server-full",
+    "--bin",
+    "uar-sidecar",
+    "--target",
+    "aarch64-apple-darwin"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "2"
+  },
+  "kind": "build",
+  "purpose": "actual native payload for the completed C09.4 delivery",
+  "systemMemoryAvailablePercent": 49,
+  "reason": "Repair the one observed missing json! import; rebuild the actual completed native payload."
+}

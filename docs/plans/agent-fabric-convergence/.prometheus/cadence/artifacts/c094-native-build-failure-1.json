@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-30T11:08:17.380Z",
+  "sourceCommit": "0db89a46db5bd590e5d9a9732389f41e3785bdb1",
+  "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+  "command": "cargo",
+  "args": [
+    "build",
+    "--release",
+    "--locked",
+    "--no-default-features",
+    "--features",
+    "server-full",
+    "--bin",
+    "uar-sidecar",
+    "--target",
+    "aarch64-apple-darwin"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "2"
+  },
+  "kind": "build",
+  "purpose": "actual native payload for the completed C09.4 delivery",
+  "systemMemoryAvailablePercent": 49,
+  "finishedAt": "2026-09-30T11:10:26.423Z",
+  "status": "failed",
+  "exitCode": 101,
+  "diagnostics": [
+    {
+      "path": "src/uar/compiler/collaboration/team_execution/scope.rs",
+      "line": 112,
+      "code": "missing-json-macro-import"
+    }
+  ]
+}

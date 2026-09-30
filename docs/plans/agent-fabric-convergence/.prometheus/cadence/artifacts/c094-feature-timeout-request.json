@@ -1,0 +1,5 @@
+{
+  "id": "c094-cooperating-pair-operation",
+  "timeoutMs": 1860000,
+  "reason": "Completed C09.4 real-model cooperation, all-terminal waits and restart cases require a 30-minute operation window; retain frozen scope, two-hour iteration clock and hard budgets."
+}
