@@ -67,6 +67,8 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
       success = await fixture(model, 'success', { workers: 2 })
       const capabilities = await ipc(evaluate, route('snapshot'), { workspaceId: success.workspaceId })
       if (!capabilities.capabilities.cooperation) throw new Error('C094_ACTUAL_COOPERATION_CAPABILITY_MISSING')
+      if (process.env.BOSS_C094_PUBLIC_QUALIFICATION === '1' && capabilities.executionProfileStage !== 'qualified')
+        throw new Error('C094_PUBLIC_QUALIFIED_PROFILE_NOT_ACTIVE')
       const successPlan = await planFor(success, ['succeeded', 'succeeded'], { duplicate: true })
       const successfulFlow = await startFlow(evaluate, success, successPlan, 'Two workers then one fresh continuation')
       let observedWaitingForRemainingTarget = false
@@ -399,7 +401,7 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
         feature: 'C09.4 packaged local cooperating teams',
         runtimeInstanceId: host.instanceId,
         configuredTeamCapacity: 1,
-        profileStage: 'operation',
+        profileStage: process.env.BOSS_C094_PUBLIC_QUALIFICATION === '1' ? 'qualified' : 'operation',
         gatewayAlias: model.modelId,
         completedCases: receipts.map((receipt) => receipt.case),
         crashRecovery: 'safe refusal demonstrated; no unsupported automatic recovery claimed',

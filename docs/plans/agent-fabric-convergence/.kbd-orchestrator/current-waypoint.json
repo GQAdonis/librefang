@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 387,
-  "derivedRevision": 387,
+  "sourceRevision": 392,
+  "derivedRevision": 392,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 148
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,19 +23,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c09-bounded-teams-and-shared-task-board",
-  "currentTask": "C09.4",
+  "change": "afc-c08-bossfang-and-fabric-observer-routing",
+  "currentTask": "C08.2",
   "status": "running",
   "lifecycle": "running",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 13,
+  "implementationCompleted": 14,
   "implementationTotal": 24,
   "planRevision": 6,
-  "revision": 387,
+  "revision": 392,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c09-bounded-teams-and-shared-task-board",
-  "nextTask": "C09.4",
-  "updatedAt": "2026-09-30T09:52:26.933372Z"
+  "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
+  "nextTask": "C08.2",
+  "updatedAt": "2026-09-30T17:21:23.779657Z"
 }

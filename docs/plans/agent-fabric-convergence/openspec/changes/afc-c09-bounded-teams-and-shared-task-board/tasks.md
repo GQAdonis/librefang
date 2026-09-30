@@ -12,4 +12,4 @@ These are delivery groups for the initiative, not ready-to-dispatch product assi
 
 The [architecture recovery amendment](architecture-recovery-amendment.md) governs the remaining implementation. C09.3 now includes delivery A's exact endpoint/profile/settings, exclusive executor and recovery, complete Boss UI/locales and packaged operation. Earlier checked tasks remain historical source-pinned evidence; this amendment does not certify new behavior.
 
-- [ ] 1.4 Deliver the bounded cooperating pair: shared team instructions/roster, directed-edge authorized roster/send/delegate/wait tools, durable yielding and one continuation, exact skills, Boss controls and complete packaged operation at capacity one. Depends on delivery A/C09.3; acceptance is the linked handoff's Gate B. Initiative task: C09.4.
+- [x] 1.4 Deliver the bounded cooperating pair: shared team instructions/roster, directed-edge authorized roster/send/delegate/wait tools, durable yielding and one continuation, exact skills, Boss controls and complete packaged operation at capacity one. Depends on delivery A/C09.3; acceptance is the linked handoff's Gate B. Initiative task: C09.4.

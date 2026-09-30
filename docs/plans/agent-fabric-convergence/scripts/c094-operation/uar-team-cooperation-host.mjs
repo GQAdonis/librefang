@@ -144,7 +144,7 @@ export async function startCooperationHost({ evaluate, signal, repository }) {
   await writeFile(path.join(cwd, '.env'), '', { mode: 0o600 })
   const env = {
     ...process.env,
-    UAR_TEAM_EXECUTION_PROFILE_STAGE: 'operation',
+    UAR_TEAM_EXECUTION_PROFILE_STAGE: process.env.BOSS_C094_PUBLIC_QUALIFICATION === '1' ? 'qualified' : 'operation',
     UAR_TEAM_EXECUTION_MAX_ACTIVE: '1',
     UAR_SERVICE_INSTANCE__INSTANCE_ID: instanceId,
     UAR_SERVICE_INSTANCE__OWNERSHIP: 'external',

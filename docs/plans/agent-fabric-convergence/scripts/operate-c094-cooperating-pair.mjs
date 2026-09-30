@@ -19,7 +19,8 @@ export async function operate(values = process.argv.slice(2)) {
   const boss = path.resolve(options.boss ?? cadence.profile.binding.bossRepository)
   const launchCheckpoint = iteration.profile.checkpoints.find((item) => item.id === 'mac-functional-launch')
   const launcher = path.resolve(options.launcher ?? launchCheckpoint.args[0])
-  const receiptFile = path.join(root, 'artifacts', 'c094-team-runtime-operation.json')
+  const publicQualification = process.env.BOSS_C094_PUBLIC_QUALIFICATION === '1'
+  const receiptFile = path.join(root, 'artifacts', publicQualification ? 'c094-qualified-runtime-operation.json' : 'c094-team-runtime-operation.json')
   if (fs.existsSync(receiptFile)) {
     if (process.env.BOSS_C094_RECONCILE_RECEIPT !== '1')
       throw new Error('The immutable C09.4 operation receipt already exists')
@@ -34,7 +35,7 @@ export async function operate(values = process.argv.slice(2)) {
       observed.complete !== true || evidence.complete !== true ||
       digest(evidenceBytes) !== observed.evidenceSha256 ||
       JSON.stringify(evidence.sourceRefs) !== JSON.stringify(sourceRefs) ||
-      evidence.caseReceipts?.length !== 14 ||
+      evidence.caseReceipts?.length !== (publicQualification ? 2 : 14) ||
       !evidence.caseReceipts.every((item) => {
         const bytes = fs.readFileSync(item.path)
         const caseReceipt = JSON.parse(bytes)
@@ -50,7 +51,7 @@ export async function operate(values = process.argv.slice(2)) {
     capacity: process.env.UAR_TEAM_EXECUTION_MAX_ACTIVE,
     boss: process.env.BOSS_C094_REPOSITORY
   }
-  process.env.UAR_TEAM_EXECUTION_PROFILE_STAGE = 'operation'
+  process.env.UAR_TEAM_EXECUTION_PROFILE_STAGE = publicQualification ? 'qualified' : 'operation'
   process.env.UAR_TEAM_EXECUTION_MAX_ACTIVE = '1'
   process.env.BOSS_C094_REPOSITORY = boss
   try {

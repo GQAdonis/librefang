@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 387,
-  "derivedRevision": 387,
+  "sourceRevision": 392,
+  "derivedRevision": 392,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 148
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-30T09:52:26.933372Z",
+  "last_updated": "2026-09-30T17:21:23.779657Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
-  "changes_completed": 9,
+  "changes_completed": 10,
   "implementation_total": 20,
-  "implementation_completed": 9,
+  "implementation_completed": 10,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 9,
+      "completed": 10,
       "total": 20,
       "status": "IN_PROGRESS"
     },
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 13,
+      "completed": 14,
       "total": 24,
       "status": "IN_PROGRESS"
     },
@@ -185,12 +185,12 @@
     {
       "id": "afc-c09-bounded-teams-and-shared-task-board",
       "title": "C09 — Bounded teams and shared task board",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 4,
-      "tasks_done": 3,
-      "last_task_completed": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
-      "next_task_pending": "Deliver governed cooperating teams with durable yield and continuation",
+      "tasks_done": 4,
+      "last_task_completed": "Deliver governed cooperating teams with durable yield and continuation",
+      "next_task_pending": null,
       "blockers": []
     },
     {

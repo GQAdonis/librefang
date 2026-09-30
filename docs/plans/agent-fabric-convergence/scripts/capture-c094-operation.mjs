@@ -116,8 +116,18 @@ export default async function capture(context) {
     if (!label || (prior.get(label)?.observedAt ?? '') >= item.observedAt) continue
     prior.set(label, { observedAt: item.observedAt, path: filename, sha256: createHash('sha256').update(bytes).digest('hex') })
   }
-  const requiredLabels = cooperationCases.flatMap((name) => cooperationReceiptNames[name])
-  const complete = requiredLabels.every((name) => prior.has(name))
+  const publicQualification = process.env.BOSS_C094_PUBLIC_QUALIFICATION === '1'
+  const requiredLabels = publicQualification
+    ? cooperationReceiptNames.success
+    : cooperationCases.flatMap((name) => cooperationReceiptNames[name])
+  const gateBPath = path.join(initiative, 'openspec', 'changes', 'afc-c09-bounded-teams-and-shared-task-board', 'c09-4-gate-b-receipt.json')
+  const gateBBytes = publicQualification ? fs.readFileSync(gateBPath) : null
+  const gateB = gateBBytes ? JSON.parse(gateBBytes) : null
+  const priorGateB = gateB && gateB.outcome === 'passed-staged-operation' && gateB.cases?.length === 14 &&
+    createHash('sha256').update(fs.readFileSync(path.join(root, 'artifacts', 'c094-team-runtime-operation.json'))).digest('hex') === gateB.aggregateOperation?.sha256
+    ? { path: gateBPath, sha256: createHash('sha256').update(gateBBytes).digest('hex'), sourceRefs: gateB.sourceRefs }
+    : null
+  const complete = requiredLabels.every((name) => prior.has(name)) && (!publicQualification || priorGateB !== null)
   const caseReceipts = requiredLabels.filter((name) => prior.has(name)).map((name) => ({ case: name, ...prior.get(name) }))
   const evidence = {
     schemaVersion: 1, iterationId: iteration.id, sourceRefs: iteration.sourceRefs,
@@ -125,8 +135,8 @@ export default async function capture(context) {
     scenarioSha256: createHash('sha256').update(fs.readFileSync(source)).digest('hex'),
     operationModules,
     startedAt, finishedAt: new Date().toISOString(), passed: result.passed,
-    complete, observations, caseReceipts,
-    qualification: 'local staged operation; public capability promotion recorded separately',
+    complete, observations, caseReceipts, priorGateB,
+    qualification: publicQualification ? 'public-qualified source operated with prior complete Gate B evidence' : 'local staged operation; public capability promotion recorded separately',
     teamExecutionCapacity: 1,
     operations: { ...JSON.parse(result.observedBehavior), completedCases: caseReceipts.map((receipt) => receipt.case) }
   }

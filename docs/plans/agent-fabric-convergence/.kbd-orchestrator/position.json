@@ -2,26 +2,26 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 387,
-  "derivedRevision": 387,
+  "sourceRevision": 392,
+  "derivedRevision": 392,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 148
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-30T09:52:26.933372Z",
+  "updatedAt": "2026-09-30T17:21:23.779657Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c09-bounded-teams-and-shared-task-board",
-    "C09.4"
+    "afc-c08-bossfang-and-fabric-observer-routing",
+    "C08.2"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 13,
+      "done": 14,
       "total": 24
     },
     "children": [
@@ -31,7 +31,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 9,
+          "done": 10,
           "total": 20
         },
         "children": [
@@ -216,9 +216,9 @@
           {
             "type": "change",
             "id": "afc-c09-bounded-teams-and-shared-task-board",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 3,
+              "done": 4,
               "total": 4
             }
           },

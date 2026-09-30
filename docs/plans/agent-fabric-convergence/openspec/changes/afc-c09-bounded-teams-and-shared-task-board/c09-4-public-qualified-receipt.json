@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "gate": "C09.4-public-qualified-packaged-operation",
+  "outcome": "passed-local-packaged-operation",
+  "recordedAt": "2026-09-30T17:15:44.744Z",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "afeb528b794961483862436edac6b7063065d66e",
+      "fingerprint": "a0a3c36b143c0ac2cfebcb1c8f64455d01d44bf4f20973d6ff3b9239edfa9b2c"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "102d7df70dbf5b2975b0fd1290b66f0e4b25c0b2",
+      "fingerprint": "eabc859caf82059749a564d382c62f5f9baba5680743fb53b8f09be302b09ce3"
+    }
+  ],
+  "priorGateB": {
+    "path": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-4-gate-b-receipt.json",
+    "sha256": "2c39718f13f20900b80665cf08a2f3d45423716139204689456622f7276a08d6"
+  },
+  "publicOperation": {
+    "path": ".prometheus/cadence/artifacts/c094-qualified-runtime-operation.json",
+    "sha256": "c464675c400fd77b8329580cba49854d4261fbdb565b0b456da5ea9221be60df",
+    "evidencePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-complete-operation-3d404565-8ec5-4c6b-ae8c-aeaf56a4078b.json",
+    "evidenceSha256": "4a2fb953735afe27f693795352cebbf0f1a398670d6a593c378a6874da907b33",
+    "cases": [
+      {
+        "case": "success-all-terminal-and-replay",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-scenario-e37e4f54-dd63-4bdb-8ee1-76d57359f7b3-1.json",
+        "sha256": "7cdbccbcda37cb57b724db4d5bf540316271927324bb152b3487a5f00c36e9c5"
+      },
+      {
+        "case": "Boss context/messages/waits",
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-scenario-e37e4f54-dd63-4bdb-8ee1-76d57359f7b3-2.json",
+        "sha256": "06dfb5862f3a485682003cafb3ec6e05b0489a3486b82a6dd121734901229155"
+      }
+    ]
+  },
+  "packagedMacArm64": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.9-mac-arm64.dmg",
+    "sha256": "9430686ea1cf0ab2541bf1deee09a62b9c102c00397fa363551c977cb604f73a",
+    "size": 613508327,
+    "platform": "darwin-arm64"
+  },
+  "limits": {
+    "publicCapabilityAtOperatedSource": true,
+    "customerPlatformInstallers": "pending",
+    "websitePublication": "pending",
+    "installedWindowsAcceptance": "pending",
+    "installedMacAcceptance": "pending"
+  }
+}
