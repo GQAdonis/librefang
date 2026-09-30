@@ -1,0 +1,19 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "RebindModelRequest",
+  "data": {
+    "commandId": "rebind-1",
+    "bindingId": "binding-example",
+    "expectedBindingRevision": 2,
+    "route": {
+      "providerId": "gateway-example",
+      "modelId": "gateway-example/model-route"
+    },
+    "profile": {
+      "id": "fixture-explicit-high",
+      "revision": 1
+    },
+    "settingsRevision": 3
+  }
+}

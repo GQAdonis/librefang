@@ -1,0 +1,18 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "SendRequest",
+  "data": {
+    "commandId": "send-1",
+    "recipient": {
+      "memberId": "member-worker",
+      "taskId": "task-worker"
+    },
+    "payload": {
+      "text": "Review the selected artifact and return a concise finding.",
+      "artifactIds": [
+        "artifact-input"
+      ]
+    }
+  }
+}

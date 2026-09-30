@@ -1,0 +1,29 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ModelSettingsResult",
+  "data": {
+    "disposition": "refused",
+    "requested": {
+      "route": {
+        "providerId": "gateway-example",
+        "modelId": "gateway-example/model-route"
+      },
+      "profile": {
+        "id": "fixture-chat-settings",
+        "revision": 1
+      },
+      "expectedSettingsRevision": 2,
+      "reasoning": {
+        "mode": "explicit",
+        "effort": "high"
+      }
+    },
+    "diagnostic": {
+      "code": "TEAM_REASONING_UNSUPPORTED",
+      "field": "/reasoning",
+      "retryable": false,
+      "action": "change-settings"
+    }
+  }
+}

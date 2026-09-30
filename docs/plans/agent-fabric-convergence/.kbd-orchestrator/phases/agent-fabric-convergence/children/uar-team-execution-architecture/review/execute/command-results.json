@@ -1,0 +1,68 @@
+[
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "documents",
+      "chunk_id": "140817",
+      "wall_time_seconds": 0.000020125,
+      "exit_code": 1,
+      "original_token_count": 426,
+      "output": "{\n  \"passed\": 57,\n  \"failed\": [\n    {\n      \"name\": \"links:execution-profile-contract.md\",\n      \"ok\": false,\n      \"details\": {\n        \"missing\": [\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/config.rs:1793\"\n        ]\n      }\n    },\n    {\n      \"name\": \"links:legacy-migration.md\",\n      \"ok\": false,\n      \"details\": {\n        \"missing\": [\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/common.schema.json:91\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/agent-definition.schema.json:79\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/deployment-binding.schema.json:196\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:17\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/team_execution/resolution.rs:147\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/team_execution/scope.rs:46\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:337\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:370\",\n          \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/migration.rs:141\"\n        ]\n      }\n    }\n  ]\n}\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "child-openspec",
+      "chunk_id": "d40a14",
+      "wall_time_seconds": 0.000019625,
+      "exit_code": 0,
+      "original_token_count": 16,
+      "output": "Change 'afc-uar-team-execution-architecture-contract' is valid\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "parent-openspec",
+      "chunk_id": "e75e06",
+      "wall_time_seconds": 0.000005792,
+      "exit_code": 0,
+      "original_token_count": 16,
+      "output": "Change 'afc-c09-bounded-teams-and-shared-task-board' is valid\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "uar-openspec",
+      "chunk_id": "f73862",
+      "wall_time_seconds": 0.000006208,
+      "exit_code": 0,
+      "original_token_count": 13,
+      "output": "Change 'afc-c09-team-admission-runtime' is valid\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "boss-openspec",
+      "chunk_id": "8969bc",
+      "wall_time_seconds": 0.000005625,
+      "exit_code": 0,
+      "original_token_count": 12,
+      "output": "Change 'uar-c09-team-execution-admin' is valid\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "name": "boss-docs",
+      "chunk_id": "064fad",
+      "wall_time_seconds": 0.0000085,
+      "exit_code": 1,
+      "original_token_count": 273,
+      "output": "$ pnpm docs:check-links && pnpm docs:check-structure && pnpm docs:check-frontmatter && pnpm docs:check-index\n$ tsx scripts/check-doc-links.ts\nChecking 376 markdown files for broken links...\n\nFound 4 broken link(s):\n\n  docs/contrib/ui-ux-routing.md:99\n    Link: ../../resources/prometheus-skills-mini/docs/research/ui-ux-routing/DELIVERY.md\n    Resolved to: resources/prometheus-skills-mini/docs/research/ui-ux-routing/DELIVERY.md\n\n  .agents/skills/vercel-react-best-practices/AGENTS.md:116\n    Link: ./async-defer-await.md\n    Resolved to: .agents/skills/vercel-react-best-practices/async-defer-await.md\n\n  .agents/skills/vercel-react-best-practices/AGENTS.md:219\n    Link: ./async-cheap-condition-before-await.md\n    Resolved to: .agents/skills/vercel-react-best-practices/async-cheap-condition-before-await.md\n\n  .agents/skills/vercel-react-best-practices/AGENTS.md:892\n    Link: ./server-hoist-static-io.md\n    Resolved to: .agents/skills/vercel-react-best-practices/server-hoist-static-io.md\n\n[ELIFECYCLE] Command failed with exit code 1.\n[ELIFECYCLE] Command failed with exit code 1.\n"
+    }
+  }
+]

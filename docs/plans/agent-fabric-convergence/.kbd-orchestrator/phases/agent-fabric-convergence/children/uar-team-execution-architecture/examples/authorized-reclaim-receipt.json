@@ -1,0 +1,31 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ReclaimReceipt",
+  "data": {
+    "commandId": "reclaim-1",
+    "requestDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "authenticatedActorId": "operator-example",
+    "previousFence": {
+      "catalogId": "catalog-example",
+      "serviceInstanceId": "uar-designated",
+      "incarnationId": "boot-example-1",
+      "epoch": 4
+    },
+    "replacementFence": {
+      "catalogId": "catalog-example",
+      "serviceInstanceId": "uar-designated",
+      "incarnationId": "boot-example-2",
+      "epoch": 5
+    },
+    "authorizationDecisionRef": "admin-decision-example",
+    "fencingEvidenceRef": "fencing-evidence-example",
+    "transferredQueuedAttemptIds": [
+      "attempt-worker-1"
+    ],
+    "uncertainAttemptIds": [
+      "attempt-coordinate-1"
+    ],
+    "committedAt": "2026-09-30T05:01:00Z"
+  }
+}

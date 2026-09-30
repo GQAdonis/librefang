@@ -1,0 +1,53 @@
+{
+  "artifact_type": "content",
+  "constraints": [
+    {
+      "id": "scope",
+      "description": "Documentation only; preserved captured UAR source bytes and no runtime conformance claim",
+      "severity": "blocking",
+      "type": "structural",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "Source hashes and example markers"
+      }
+    },
+    {
+      "id": "schemas",
+      "description": "Every DTO example validates against proposed closed schema",
+      "severity": "blocking",
+      "type": "technical",
+      "validation": {
+        "requires_code_execution": true,
+        "validation_method": "Ajv draft 2020-12"
+      }
+    },
+    {
+      "id": "ownership",
+      "description": "D1-D5 authorization, exact model configuration, context, atomic messaging and durable continuation are coherent and trace to pending A/B work",
+      "severity": "blocking",
+      "type": "semantic",
+      "validation": {
+        "requires_code_execution": false,
+        "validation_method": "Independent cumulative review"
+      }
+    },
+    {
+      "id": "history",
+      "description": "Earlier completion history is preserved; C09.3 remains in progress and C09.4 pending; child completion is not product delivery",
+      "severity": "blocking",
+      "type": "semantic",
+      "validation": {
+        "requires_code_execution": false,
+        "validation_method": "Canonical revision receipt and scoped OpenSpec diff"
+      }
+    }
+  ],
+  "global_rules": [
+    "No production code, application builds or runtime tests.",
+    "One complete document gate; rerun failed scenarios only."
+  ],
+  "termination_conditions": [
+    "Complete document checks and independent review with all critical findings resolved.",
+    "Stop at Execute handoff for operator Reflect feedback."
+  ]
+}

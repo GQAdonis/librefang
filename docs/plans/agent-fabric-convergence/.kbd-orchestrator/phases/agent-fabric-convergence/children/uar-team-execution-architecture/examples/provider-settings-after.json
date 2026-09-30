@@ -1,0 +1,25 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ProviderModelSettingsRecord",
+  "data": {
+    "route": {
+      "providerId": "gateway-example",
+      "modelId": "gateway-example/model-route"
+    },
+    "pricingIdentity": {
+      "providerId": "price-catalog-example",
+      "modelId": "model-price-identity",
+      "catalogRevision": "fixture-1"
+    },
+    "profile": {
+      "id": "fixture-explicit-high",
+      "revision": 1
+    },
+    "settingsRevision": 3,
+    "reasoning": {
+      "mode": "explicit",
+      "effort": "high"
+    }
+  }
+}

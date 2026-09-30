@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T05:21:16.563Z",
+  "scope": "completed documentation only",
+  "runtimeConformance": false,
+  "checks": [
+    {
+      "name": "example:authorized-reclaim-receipt.json",
+      "ok": true,
+      "details": {
+        "kind": "ReclaimReceipt",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:context-receipt.json",
+      "ok": true,
+      "details": {
+        "kind": "TeamContextReceipt",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:continuation-receipt.json",
+      "ok": true,
+      "details": {
+        "kind": "ContinuationReceipt",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:delegate-request.json",
+      "ok": true,
+      "details": {
+        "kind": "DelegateRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:delegate-result.json",
+      "ok": true,
+      "details": {
+        "kind": "DelegateResult",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:direct-send.json",
+      "ok": true,
+      "details": {
+        "kind": "SendRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:execution-claim.json",
+      "ok": true,
+      "details": {
+        "kind": "ExecutionClaim",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:forbidden-edge-diagnostic.json",
+      "ok": true,
+      "details": {
+        "kind": "Diagnostic",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:kernel-yield.json",
+      "ok": true,
+      "details": {
+        "kind": "KernelTeamYield",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:model-default-off-request.json",
+      "ok": true,
+      "details": {
+        "kind": "ModelSettingsRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:model-default-off-result.json",
+      "ok": true,
+      "details": {
+        "kind": "ModelSettingsResult",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:model-rebind.json",
+      "ok": true,
+      "details": {
+        "kind": "RebindModelRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:model-supported-explicit-fixture.json",
+      "ok": true,
+      "details": {
+        "kind": "ModelSettingsResult",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:model-unsupported-reasoning.json",
+      "ok": true,
+      "details": {
+        "kind": "ModelSettingsResult",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:provider-settings-after.json",
+      "ok": true,
+      "details": {
+        "kind": "ProviderModelSettingsRecord",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:provider-settings-before.json",
+      "ok": true,
+      "details": {
+        "kind": "ProviderModelSettingsRecord",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:reclaim-request.json",
+      "ok": true,
+      "details": {
+        "kind": "ReclaimRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:wait-request.json",
+      "ok": true,
+      "details": {
+        "kind": "WaitRequest",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "example:waiting-record.json",
+      "ok": true,
+      "details": {
+        "kind": "TeamWait",
+        "runtimeConformance": false
+      }
+    },
+    {
+      "name": "source-preserved:src/llm/prompt_dialect.rs",
+      "ok": true,
+      "details": {
+        "expected": "578c8e0a652137280dc11ea4a357877eaeb5b795bb7674f6f74fcf699ad52c49",
+        "actual": "578c8e0a652137280dc11ea4a357877eaeb5b795bb7674f6f74fcf699ad52c49"
+      }
+    },
+    {
+      "name": "source-preserved:src/llm/provider_error.rs",
+      "ok": true,
+      "details": {
+        "expected": "57bd006736e0a28fa63f0fb56171c982d40d18d01a1b7f9c9538f57daa3ae14d",
+        "actual": "57bd006736e0a28fa63f0fb56171c982d40d18d01a1b7f9c9538f57daa3ae14d"
+      }
+    },
+    {
+      "name": "source-preserved:src/llm/orchestrator.rs",
+      "ok": true,
+      "details": {
+        "expected": "7fb616b144524bdd6f87724af7c60106ec2187a745c8a8c24d9f105fab18e865",
+        "actual": "7fb616b144524bdd6f87724af7c60106ec2187a745c8a8c24d9f105fab18e865"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/runtime/team_execution/controller.rs",
+      "ok": true,
+      "details": {
+        "expected": "910123f74a4f45743b07e13d44ee3569d2d3fa8759ceb8fc25d7cf31a7aee914",
+        "actual": "910123f74a4f45743b07e13d44ee3569d2d3fa8759ceb8fc25d7cf31a7aee914"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/runtime/team_execution/execution.rs",
+      "ok": true,
+      "details": {
+        "expected": "dc8568ddeeac0ce6ab978c930732929ca926feaab12a8a9e7d310f7d107cb001",
+        "actual": "dc8568ddeeac0ce6ab978c930732929ca926feaab12a8a9e7d310f7d107cb001"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/compiler/collaboration/team_execution/resolution.rs",
+      "ok": true,
+      "details": {
+        "expected": "95078ed1a8e06170610f9d515f15ccc9ec23491900cb8ef32a9486a6b6b49689",
+        "actual": "95078ed1a8e06170610f9d515f15ccc9ec23491900cb8ef32a9486a6b6b49689"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/compiler/collaboration/team_execution/admission.rs",
+      "ok": true,
+      "details": {
+        "expected": "80182702d6664887835888022d9e59deca7bb815f9075b6b84fe5f76c92d1536",
+        "actual": "80182702d6664887835888022d9e59deca7bb815f9075b6b84fe5f76c92d1536"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/compiler/collaboration/team_execution/settlement.rs",
+      "ok": true,
+      "details": {
+        "expected": "12c90c18d0912fb4946e58c881f2f3a9e59f42217113c82617d19ee0cf3962f7",
+        "actual": "12c90c18d0912fb4946e58c881f2f3a9e59f42217113c82617d19ee0cf3962f7"
+      }
+    },
+    {
+      "name": "source-preserved:src/uar/compiler/collaboration/team_execution/recovery.rs",
+      "ok": true,
+      "details": {
+        "expected": "e7013c83100039a8781fcb548342685a25495a9d6cbbbe229b7980338f718ff9",
+        "actual": "e7013c83100039a8781fcb548342685a25495a9d6cbbbe229b7980338f718ff9"
+      }
+    },
+    {
+      "name": "source-preserved:docs/agents/collaboration/v0.1.0-draft.1/runtime.md",
+      "ok": true,
+      "details": {
+        "expected": "a4b3e716942fcadca389a9ab395b0e174f3071d1ae03afa21f56e21a3cc6239b",
+        "actual": "a4b3e716942fcadca389a9ab395b0e174f3071d1ae03afa21f56e21a3cc6239b"
+      }
+    },
+    {
+      "name": "source-preserved:docs/agents/collaboration/v0.1.0-draft.2/README.md",
+      "ok": true,
+      "details": {
+        "expected": "1da5259efaba1d306f99c5208cb2139e252f53bae2ccefe7cba7d50a51a39baf",
+        "actual": "1da5259efaba1d306f99c5208cb2139e252f53bae2ccefe7cba7d50a51a39baf"
+      }
+    },
+    {
+      "name": "links:execution-profile-contract.md",
+      "ok": false,
+      "details": {
+        "missing": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/config.rs:1793"
+        ]
+      }
+    },
+    {
+      "name": "links:legacy-migration.md",
+      "ok": false,
+      "details": {
+        "missing": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/common.schema.json:91",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/agent-definition.schema.json:79",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/docs/agents/collaboration/v0.1.0-draft.2/schemas/deployment-binding.schema.json:196",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:17",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/team_execution/resolution.rs:147",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/team_execution/scope.rs:46",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:337",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/runtime_semantics.rs:370",
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/migration.rs:141"
+        ]
+      }
+    },
+    {
+      "name": "links:parent-repair-handoff.md",
+      "ok": true,
+      "details": {
+        "missing": []
+      }
+    },
+    {
+      "name": "schema:artifact_manifest.json",
+      "ok": true,
+      "details": "valid"
+    },
+    {
+      "name": "schema:constraints.json",
+      "ok": true,
+      "details": "valid"
+    },
+    {
+      "name": "manifest-file:execution-profile-contract.md",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:legacy-migration.md",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:parent-repair-handoff.md",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/authorized-reclaim-receipt.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/context-receipt.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/continuation-receipt.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/delegate-request.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/delegate-result.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/direct-send.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/execution-claim.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/execution-profile.schema.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/forbidden-edge-diagnostic.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/kernel-yield.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/model-default-off-request.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/model-default-off-result.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/model-rebind.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/model-supported-explicit-fixture.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/model-unsupported-reasoning.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/provider-settings-after.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/provider-settings-before.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/reclaim-request.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/wait-request.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "manifest-file:examples/waiting-record.json",
+      "ok": true,
+      "details": "nonempty document payload"
+    },
+    {
+      "name": "provider-roundtrip-pricing",
+      "ok": true,
+      "details": {
+        "note": "Example equality only; independent reviewer checks named fields and semantics."
+      }
+    }
+  ],
+  "passed": 57,
+  "failed": 2
+}

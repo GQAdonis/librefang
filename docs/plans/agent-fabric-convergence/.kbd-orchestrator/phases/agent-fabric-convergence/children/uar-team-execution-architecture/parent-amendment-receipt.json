@@ -1,0 +1,52 @@
+{
+  "recordedAt": "2026-09-30T05:17:05.018Z",
+  "note": "Revision command succeeded at revision 369; textual output could not be JSON-decoded. Recovered read-only canonical status without repeating mutation.",
+  "registerCommandId": "team-arch-c094-register-20260930",
+  "canonicalStatus": {
+    "revision": 369,
+    "planRevision": 6,
+    "activePath": {
+      "phasePath": [
+        "agent-fabric-convergence",
+        "agent-fabric-convergence::uar-team-execution-architecture"
+      ],
+      "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+      "stageId": "execute",
+      "changeId": "afc-uar-team-execution-architecture-contract",
+      "taskId": "1.2",
+      "commit": "432cd237480d82d16bb62e218d3ba00656099976"
+    },
+    "exactNextWork": "Finish uar-team-execution-architecture documentation and final gate; await Reflect, then return to parent C09.3 delivery A.",
+    "parentTasks": {
+      "C09.1": {
+        "id": "C09.1",
+        "title": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+        "sequence": 1,
+        "status": "complete",
+        "summary": "Durable planning board delivered in packaged Mac ARM64 Boss: two teams, supervisor/worker, bounded map/reduce and peer DAGs, restart recovery, two-workspace isolation and Teams settings; exact receipt c09-1-evidence.md. Execution remains C09.2/C09.3."
+      },
+      "C09.2": {
+        "id": "C09.2",
+        "title": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+        "sequence": 2,
+        "status": "complete",
+        "summary": "Durable task claims, fenced reassignment, reviewer and mailbox administration confirmed in the source-pinned packaged Mac app; see c09-2-evidence.md. Public platform release remains pending."
+      },
+      "C09.3": {
+        "id": "C09.3",
+        "title": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+        "sequence": 3,
+        "status": "in_progress",
+        "summary": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication."
+      },
+      "C09.4": {
+        "id": "C09.4",
+        "title": "Deliver governed cooperating teams with durable yield and continuation",
+        "sequence": 4,
+        "status": "pending",
+        "summary": null
+      }
+    }
+  },
+  "productionChanged": false
+}

@@ -1,0 +1,14 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ExecutionClaim",
+  "data": {
+    "catalogId": "catalog-example",
+    "serviceInstanceId": "uar-designated",
+    "incarnationId": "boot-example-1",
+    "epoch": 4,
+    "state": "held",
+    "acquiredAt": "2026-09-30T05:00:00Z",
+    "auditReceiptId": "claim-receipt-4"
+  }
+}

@@ -418,3 +418,7 @@ C13 implementation/profile acceptance is distinct from release eligibility. Ever
 ## Review disposition
 
 Plan review PASS with one warning: UAR dependency prose and the actual gitlink differ. An explicit immutable git ls-tree receipt verifies e627af981bcb06c7fc5da027731c182b044e25d1 at baseline c29af47be3439c69e1a3c124fdcf09ce4cbb5cba; the prose table still says c5c6caac617eb931cd5009146a70831422ec236c (1.18.2). This is documentation drift, not two selected dependencies. C01 must record both and assign reconciliation; C15 still waits for the accepted D-UAR-P1 receipt. No dependency was upgraded.
+
+## Approved team execution architecture amendment — 2026-09-30
+
+The child `uar-team-execution-architecture` supplies the controlling [execution profile](children/uar-team-execution-architecture/execution-profile-contract.md), [migration](children/uar-team-execution-architecture/legacy-migration.md) and [repair handoff](children/uar-team-execution-architecture/parent-repair-handoff.md). Canonical C09.1/C09.2 completion history is preserved. Finish corrective C09.3 delivery A before additive C09.4 delivery B (governed cooperating pair). Both require complete UI/locales/payload and their named build-and-operate boundary. The child must reflect and return before parent execution; no runtime conformance or successful delivery is credited by this documentation. See the parent OpenSpec architecture-recovery-amendment.md for scope and deferred owners.

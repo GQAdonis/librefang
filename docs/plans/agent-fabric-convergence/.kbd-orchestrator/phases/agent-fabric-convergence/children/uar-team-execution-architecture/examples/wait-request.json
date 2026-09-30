@@ -1,0 +1,21 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "WaitRequest",
+  "data": {
+    "commandId": "wait-1",
+    "targetTaskIds": [
+      "task-worker"
+    ],
+    "predicate": "all-terminal",
+    "continuationInput": {
+      "text": "Use the worker result to complete the original request.",
+      "artifactIds": []
+    },
+    "continuationReservation": {
+      "tokens": 1000,
+      "costMicrounits": 100000,
+      "elapsedSeconds": 60
+    }
+  }
+}

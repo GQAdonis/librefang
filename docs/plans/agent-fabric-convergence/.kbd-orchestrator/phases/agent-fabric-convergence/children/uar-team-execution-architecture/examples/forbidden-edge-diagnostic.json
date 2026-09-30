@@ -1,0 +1,11 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "Diagnostic",
+  "data": {
+    "code": "TEAM_EDGE_DENIED",
+    "retryable": false,
+    "action": "contact-operator",
+    "protectedDiagnosticRef": "edge-denial-example"
+  }
+}

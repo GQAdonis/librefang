@@ -1,0 +1,42 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ModelSettingsResult",
+  "data": {
+    "disposition": "accepted",
+    "effective": {
+      "route": {
+        "providerId": "gateway-example",
+        "modelId": "gateway-example/model-route"
+      },
+      "wireModelAlias": "served-model-example",
+      "pricingIdentity": {
+        "providerId": "price-catalog-example",
+        "modelId": "model-price-identity",
+        "catalogRevision": "fixture-1"
+      },
+      "endpointKind": "fixture-openai-chat",
+      "profile": {
+        "id": "fixture-chat-settings",
+        "revision": 1
+      },
+      "settingsRevision": 2,
+      "requestedReasoning": {
+        "mode": "off"
+      },
+      "effectiveReasoning": {
+        "mode": "off"
+      },
+      "support": "validated",
+      "supportEvidenceRef": "fixture-profile-review",
+      "limits": {
+        "source": "unknown"
+      },
+      "fit": {
+        "mode": "settings-only",
+        "guaranteedFit": false,
+        "reason": "count-or-framing-unqualified"
+      }
+    }
+  }
+}

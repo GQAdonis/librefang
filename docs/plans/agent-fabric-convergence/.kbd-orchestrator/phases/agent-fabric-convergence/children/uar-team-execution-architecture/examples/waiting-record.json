@@ -1,0 +1,44 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "TeamWait",
+  "data": {
+    "waitId": "wait-1",
+    "authority": {
+      "ownerId": "owner-example",
+      "workspaceId": "workspace-example",
+      "teamId": "team-example",
+      "taskId": "task-coordinate",
+      "memberId": "member-coordinator",
+      "attemptId": "attempt-coordinate-1",
+      "runId": "run-coordinate-1",
+      "taskOwnershipEpoch": 1,
+      "memberRevision": 1,
+      "binding": {
+        "id": "binding-example",
+        "revision": 2
+      },
+      "executionFence": {
+        "catalogId": "catalog-example",
+        "serviceInstanceId": "uar-designated",
+        "incarnationId": "boot-example-1",
+        "epoch": 4
+      }
+    },
+    "targetTaskIds": [
+      "task-worker"
+    ],
+    "predicate": "all-terminal",
+    "continuationInput": {
+      "text": "Use the worker result to complete the original request.",
+      "artifactIds": []
+    },
+    "continuationReservation": {
+      "tokens": 1000,
+      "costMicrounits": 100000,
+      "elapsedSeconds": 60
+    },
+    "state": "waiting",
+    "wakeOutcomes": []
+  }
+}

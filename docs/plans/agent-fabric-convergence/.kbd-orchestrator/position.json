@@ -2,27 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 335,
-  "derivedRevision": 335,
+  "sourceRevision": 377,
+  "derivedRevision": 377,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 96
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 138
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T20:52:03.970230Z",
+  "updatedAt": "2026-09-30T05:29:55.116711Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c08-bossfang-and-fabric-observer-routing",
-    "C08.2"
+    "uar-team-execution-architecture",
+    "execute"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 11,
-      "total": 22
+      "done": 13,
+      "total": 24
     },
     "children": [
       {
@@ -31,8 +31,8 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 8,
-          "total": 19
+          "done": 9,
+          "total": 20
         },
         "children": [
           {
@@ -52,6 +52,28 @@
                 "progress": {
                   "done": 4,
                   "total": 4
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "uar-team-execution-architecture",
+            "canonicalId": "agent-fabric-convergence::uar-team-execution-architecture",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-uar-team-execution-architecture-contract",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 3,
+                  "total": 3
                 }
               }
             ],
@@ -100,6 +122,15 @@
               }
             ],
             "annotations": []
+          },
+          {
+            "type": "change",
+            "id": "afc-c09-team-task-admission-context-and-membership",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            }
           },
           {
             "type": "change",
@@ -185,10 +216,10 @@
           {
             "type": "change",
             "id": "afc-c09-bounded-teams-and-shared-task-board",
-            "status": "PENDING",
+            "status": "IN_PROGRESS",
             "progress": {
               "done": 2,
-              "total": 3
+              "total": 4
             }
           },
           {

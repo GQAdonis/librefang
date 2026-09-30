@@ -1,0 +1,44 @@
+{
+  "artifact_type": "content",
+  "generated_at": "2026-09-30T05:19:26.817Z",
+  "variants": [
+    {
+      "name": "approved-team-execution-profile",
+      "files": [
+        "execution-profile-contract.md",
+        "legacy-migration.md",
+        "parent-repair-handoff.md",
+        "examples/authorized-reclaim-receipt.json",
+        "examples/context-receipt.json",
+        "examples/continuation-receipt.json",
+        "examples/delegate-request.json",
+        "examples/delegate-result.json",
+        "examples/direct-send.json",
+        "examples/execution-claim.json",
+        "examples/execution-profile.schema.json",
+        "examples/forbidden-edge-diagnostic.json",
+        "examples/kernel-yield.json",
+        "examples/model-default-off-request.json",
+        "examples/model-default-off-result.json",
+        "examples/model-rebind.json",
+        "examples/model-supported-explicit-fixture.json",
+        "examples/model-unsupported-reasoning.json",
+        "examples/provider-settings-after.json",
+        "examples/provider-settings-before.json",
+        "examples/reclaim-request.json",
+        "examples/wait-request.json",
+        "examples/waiting-record.json",
+        "examples/failed-continuation-receipt.json",
+        "examples/failed-context-receipt.json",
+        "examples/cancelled-continuation-receipt.json",
+        "examples/cancelled-context-receipt.json"
+      ],
+      "format": "markdown-and-json",
+      "description": "Documentation-only proposed execution contract, migrations and parent handoff; not runtime conformance."
+    }
+  ],
+  "preview": {
+    "required": false,
+    "runs": []
+  }
+}

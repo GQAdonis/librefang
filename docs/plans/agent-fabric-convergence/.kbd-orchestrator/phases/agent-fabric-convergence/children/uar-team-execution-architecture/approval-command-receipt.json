@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "command": [
+    "kbd",
+    "--path",
+    ".",
+    "decision",
+    "record",
+    "--command-id",
+    "team-arch-execution-approval-20260930",
+    "--id",
+    "team-architecture-d1-d5-approved-20260930",
+    "--summary",
+    "Operator /kbd-execute uar-team-execution-architecture approves plan 3022b9d3d D1-D5, documentation tasks 1.1-1.3 and additive C09 parent planning. No product code dispatch or runtime conformance. Reflect remains next human stage boundary."
+  ],
+  "revision": 363,
+  "success": true
+}

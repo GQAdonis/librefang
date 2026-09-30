@@ -1,0 +1,30 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "DelegateResult",
+  "data": {
+    "receipt": {
+      "commandId": "delegate-1",
+      "requestDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "scope": {
+        "ownerId": "owner-example",
+        "workspaceId": "workspace-example",
+        "teamId": "team-example"
+      },
+      "operation": "team_delegate",
+      "senderMemberId": "member-coordinator",
+      "senderAttemptId": "attempt-coordinate-1",
+      "acceptedAt": "2026-09-30T05:00:10Z",
+      "messageId": "message-delegate-1",
+      "taskId": "task-worker",
+      "attemptId": "attempt-worker-1"
+    },
+    "delivery": {
+      "messageId": "message-delegate-1",
+      "recipientMemberId": "member-worker",
+      "recipientTaskId": "task-worker",
+      "status": "accepted"
+    },
+    "queuedAttemptId": "attempt-worker-1"
+  }
+}
