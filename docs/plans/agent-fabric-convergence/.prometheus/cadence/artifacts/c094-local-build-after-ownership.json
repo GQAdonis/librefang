@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T12:29:07.089Z",
+  "build": {
+    "id": "mac-arm64-build",
+    "attemptId": "6071f4da-3801-4d54-bcd4-5af333a13f85",
+    "commandId": "c094-mac-build-ownership-correction-20260930",
+    "kind": "build",
+    "purpose": "build",
+    "status": "success",
+    "startedAt": "2026-09-30T12:10:01.980Z",
+    "reason": "Actual feature operation failed at initial instance negotiation because sidecar forced managed ownership; package the corrected native source853fb6d and preserve the upgraded pinned mini/liter payload.",
+    "configuredTimeoutMs": 14400000,
+    "requestedTimeoutMs": 14400000,
+    "sourceRefs": [
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+        "revision": "853fb6dae6ee5237185f9b4d4d41fbe2d2e583b9",
+        "fingerprint": "a5e54b35d1073accb163102501e88eca9efbd70c3149d3938cbb59a4e6b13ff7"
+      },
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+        "revision": "789f47222579cb8f9febd22107030e81ab5d1315",
+        "fingerprint": "f2175a819972b8cd3fd1e52766aa62bce3280fb4be39f97ab41aabf6170a23c4"
+      }
+    ],
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+    "hostname": "Traviss-MacBook-Pro-4.local",
+    "pid": 97399,
+    "exitCode": 0,
+    "signal": null,
+    "finishedAt": "2026-09-30T12:17:36.803Z",
+    "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/logs/6071f4da-3801-4d54-bcd4-5af333a13f85.log",
+    "artifacts": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c094-local-payload/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+        "sha256": "f6ffe73df251d4e66ac1292463f8865930052876d90e49c413cb4b186c3b8f27",
+        "size": 125253226,
+        "platform": "darwin-arm64"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.9-mac-arm64.dmg",
+        "sha256": "b29b1b47afbb3b77d002caebb12bd1cca415124b67dc7b4a30a2f4835aa5ce62",
+        "size": 613435952,
+        "platform": "darwin-arm64"
+      }
+    ]
+  },
+  "launch": {
+    "id": "mac-functional-launch",
+    "attemptId": "2a70eff9-3ee0-4fa9-bdc6-b2561603b870",
+    "commandId": "c094-launch-ownership-correction-20260930",
+    "kind": "run",
+    "purpose": "launch",
+    "status": "success",
+    "startedAt": "2026-09-30T12:19:13.075Z",
+    "reason": "Unspecified legacy retry",
+    "configuredTimeoutMs": 120000,
+    "requestedTimeoutMs": 120000,
+    "sourceRefs": [
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+        "revision": "853fb6dae6ee5237185f9b4d4d41fbe2d2e583b9",
+        "fingerprint": "a5e54b35d1073accb163102501e88eca9efbd70c3149d3938cbb59a4e6b13ff7"
+      },
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+        "revision": "789f47222579cb8f9febd22107030e81ab5d1315",
+        "fingerprint": "f2175a819972b8cd3fd1e52766aa62bce3280fb4be39f97ab41aabf6170a23c4"
+      }
+    ],
+    "command": "/Users/gqadonis/.nvm/versions/node/v22.20.0/bin/node",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+      "--repository",
+      "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "--scenario",
+      "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+      "--require-scenario",
+      "--receipt",
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-mac-functional-launch.json"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+    "hostname": "Traviss-MacBook-Pro-4.local",
+    "pid": 4580,
+    "exitCode": 0,
+    "signal": null,
+    "finishedAt": "2026-09-30T12:19:17.969Z",
+    "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/logs/2a70eff9-3ee0-4fa9-bdc6-b2561603b870.log",
+    "artifacts": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-mac-functional-launch.json",
+        "sha256": "7cd1cb7ccc2b7bfd08b406892711b8c1c55725ef5c1ff2d73985d0583fb961c8",
+        "size": 1543
+      }
+    ]
+  },
+  "status": "built-and-launched-team-setup-operation-failed",
+  "publicQualification": false,
+  "notarized": false
+}

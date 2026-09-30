@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "activityId": "b2d03062-186d-4e28-b6e5-9cea963a50e9",
+  "recordedAt": "2026-09-30T12:19:25.915Z",
+  "precision": "approximate",
+  "eligibleForAutomaticOptimization": false,
+  "reason": "The rework start is bounded by the observed current-time call; the stop is an approximate tool-boundary time rather than a captured clock reading. Do not use this span for exact active-time or velocity claims. Native and Mac build timestamps remain separately observed."
+}

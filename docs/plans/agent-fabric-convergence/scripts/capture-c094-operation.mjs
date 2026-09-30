@@ -16,6 +16,13 @@ export default async function capture(context) {
   const attempts = new Map()
   const denials = []
   const observations = []
+  // The failed starter IPC returned only INTERNAL in the original receipt.
+  // Persist only exact messages authored in these adapters, never remote text.
+  const knownMessages = new Set()
+  for (const name of ['UarStarterAdministrationAdapter.ts', 'uarTeamModelSetup.ts', 'UarSidecarService.ts']) {
+    const text = fs.readFileSync(path.join(process.env.BOSS_C094_REPOSITORY, 'src', 'main', 'ai', 'runtime', 'uar', name), 'utf8')
+    for (const match of text.matchAll(/throw new Error\('([^'\n]+)'\)/g)) knownMessages.add(match[1])
+  }
   let result
   try {
     result = await operate({
@@ -46,7 +53,18 @@ export default async function capture(context) {
         if (reply?.ok === false && expression.includes('prometheus.uar.teams.')) denials.push({
           operation: expression.match(/prometheus\.uar\.teams\.[a-z_]+/)?.[0],
           code: reply.error?.code,
-          knownCodes: JSON.stringify(reply.error ?? {}).match(/TEAM_[A-Z_]+|UAR_[A-Z_]+/g) ?? []
+          knownCodes: JSON.stringify(reply.error ?? {}).match(/TEAM_[A-Z_]+|UAR_[A-Z_]+/g) ?? [],
+          authoredMessage: knownMessages.has(reply.error?.message) ? reply.error.message : null,
+          httpStatuses: reply.error?.message?.match(/HTTP [1-5][0-9]{2}/g) ?? [],
+          validationIssues: (() => {
+            try {
+              const issues = JSON.parse(reply.error?.message ?? '')
+              return Array.isArray(issues) ? issues.map((issue) => ({
+                code: /^[a-z_]+$/.test(issue.code ?? '') ? issue.code : 'unknown',
+                path: Array.isArray(issue.path) ? issue.path.filter((item) => typeof item === 'number' || (typeof item === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(item))) : []
+              })) : []
+            } catch { return [] }
+          })()
         })
         return reply
       }

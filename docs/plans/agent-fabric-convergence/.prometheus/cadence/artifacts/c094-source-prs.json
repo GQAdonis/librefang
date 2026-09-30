@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T12:14:28.858Z",
+  "status": "draft-source-published-operation-pending",
+  "pullRequests": [
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/pull/317",
+      "source": "853fb6dae6ee5237185f9b4d4d41fbe2d2e583b9"
+    },
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "url": "https://github.com/Prometheus-AGS/the-boss/pull/30",
+      "source": "789f47222579cb8f9febd22107030e81ab5d1315"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "url": "https://github.com/Prometheus-AGS/prometheus-skill-system/pull/111",
+      "source": "1ddcc8b21b05f26aa89aa5e19776c86e5b854c96"
+    }
+  ]
+}
