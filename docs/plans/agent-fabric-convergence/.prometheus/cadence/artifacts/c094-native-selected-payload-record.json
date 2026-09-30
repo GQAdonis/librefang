@@ -1,0 +1,26 @@
+{
+  "name": "uar-sidecar",
+  "version": "1.0.0",
+  "platform": "darwin-arm64",
+  "source": "56d87b5ab088c69a41faa761753edd253049d775",
+  "features": [
+    "server-full"
+  ],
+  "asset": "uar-sidecar-darwin-arm64.tar.gz",
+  "sha256": "b5312caac7d7b86add8cf1ee3f29229355f0cbe1f2251a00619b2fda54a8e930",
+  "archive": "tar.gz",
+  "binaries": [
+    "LICENSE",
+    "policies/default.cedar",
+    "policies/skill-mutation.cedar",
+    "policies/tool-approval.cedar",
+    "uar-models/bg-small-en-v1.5.onnx",
+    "uar-models/config.json",
+    "uar-models/MODEL-NOTICE.txt",
+    "uar-models/special_tokens_map.json",
+    "uar-models/tokenizer_config.json",
+    "uar-models/tokenizer.json",
+    "uar-sidecar",
+    "payload-manifest.json"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T13:34:10.325Z",
+  "bossRevision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
+  "mini": {
+    "pinned": "3d54f210dd87c9e25d300079d973c12b046e80aa",
+    "remoteMain": "ac99730e2b7b5cb22079d984abc0fb92fb911aff",
+    "remoteMainIsAncestor": true,
+    "missingRemoteMainCommits": 0
+  },
+  "liter": {
+    "pinned": "0617979022aea621dd13541dee07ad84ffcf7d21",
+    "forkMain": "12a2fae9675e34b88e9373caa2bca9959f416493",
+    "forkMainIsAncestor": true,
+    "missingForkMainCommits": 0
+  },
+  "authority": "Fetched-ref ancestry audit by assigned dependency implementer and root exact rev-parse/rev-list: both HEAD..origin/main counts zero"
+}

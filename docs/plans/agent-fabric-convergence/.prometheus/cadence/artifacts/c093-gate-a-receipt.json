@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "gate": "C09.3 Gate A",
+  "status": "passed",
+  "recordedAt": "2026-09-30T09:51:42.482Z",
+  "iterationId": "28847cae-d6e9-45e4-880d-091bbef217c6",
+  "canonicalRevision": 385,
+  "completion": {
+    "tasks": [
+      "C09.3"
+    ],
+    "changes": [],
+    "phases": []
+  },
+  "sources": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "49765c56a9c60d3ecdac5a3f1227eeba25b7cf2c",
+      "fingerprint": "156d5ff4ead1d031664312f690d56bd8add8fa6a0d847a2872471099d6df09e9"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "b83e128ba1f94d720a5562aa4414707c02defbf4",
+      "fingerprint": "f4d9cb29769f5f60c804129a32d5fc2ba82fcf848cccbbb6a75c9fabf8cb3bf1"
+    }
+  ],
+  "build": {
+    "attemptId": "6d1f7447-c55e-4af5-a50e-3941dc28824b",
+    "startedAt": "2026-09-30T09:22:39.241Z",
+    "finishedAt": "2026-09-30T09:29:20.166Z",
+    "artifacts": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.9-mac-arm64.dmg",
+        "sha256": "7f8d2c5e7ceeee8a603a4cb1ff70809bcfce7e2e446d3bdff11a5041cae4e9f1",
+        "size": 612601079,
+        "platform": "darwin-arm64"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+        "sha256": "2061d8110caf47871b96f24ab30f5acaf860df9094351f374319a4198652dae2",
+        "size": 124516392,
+        "platform": "darwin-arm64"
+      }
+    ]
+  },
+  "operation": {
+    "receiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-team-runtime-operation.json",
+    "startedAt": "2026-09-30T09:35:49.399Z",
+    "finishedAt": "2026-09-30T09:37:30.893Z",
+    "proofPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c093-complete-operation-c3248587-b4e8-436b-8858-a482a855d0ca.json",
+    "proofSha256": "d5303a4c863927f12e5466491046b1bf7adb929dde42abd5b420b6f295ce0686"
+  },
+  "scope": [
+    "real gateway inference and selected scoped artifact",
+    "exact route, alias, canonical pricing, endpoint/profile/settings receipt",
+    "restart/readback, explicit rebind and unsupported reasoning refusal",
+    "isolated workspaces, aggregate reservations, duplicate admission",
+    "accessible controls, cancellation and membership revocation",
+    "SurrealDB 3.3.0 single executor, privileged evidenced replacement, stale epoch refusals, queued transfer, crash refusal"
+  ],
+  "limitations": [
+    "No Windows installed acceptance for this artifact",
+    "Developer ID signed, not notarized",
+    "No independently observed physical upstream model identity",
+    "Unknown context limits and settings-only fit remain explicit",
+    "No unsupported crash takeover without physical fencing proof",
+    "C09.4 cooperating-pair tools and continuations remain pending",
+    "Latest Liter native CLI and service image remain release work"
+  ],
+  "operationProcedureProvenance": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c093-operation/provenance.json",
+  "learning": {
+    "sessionLog": "recorded",
+    "externalMemory": "degraded: pk timeout",
+    "report": ".prometheus/cadence-learning-reports/4e3260c107151f3771484e1f8168e9786e8b19c951b7f115befe907852395517.json"
+  }
+}

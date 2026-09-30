@@ -1,0 +1,32 @@
+[
+  {
+    "status": "fulfilled",
+    "value": {
+      "chunk_id": "36553a",
+      "wall_time_seconds": 0.000004375,
+      "exit_code": 0,
+      "original_token_count": 62,
+      "output": "$ tsx scripts/verify-doc-structure.ts\nDocs structure OK.\n(node:56677) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "chunk_id": "e38a8a",
+      "wall_time_seconds": 0.000003583,
+      "exit_code": 0,
+      "original_token_count": 63,
+      "output": "$ tsx scripts/verify-doc-frontmatter.ts\nDoc frontmatter OK.\n(node:56662) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    }
+  },
+  {
+    "status": "fulfilled",
+    "value": {
+      "chunk_id": "c2806a",
+      "wall_time_seconds": 0.000008167,
+      "exit_code": 0,
+      "original_token_count": 62,
+      "output": "$ tsx scripts/gen-doc-index.ts --check\nDocs index OK.\n(node:56668) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n"
+    }
+  }
+]

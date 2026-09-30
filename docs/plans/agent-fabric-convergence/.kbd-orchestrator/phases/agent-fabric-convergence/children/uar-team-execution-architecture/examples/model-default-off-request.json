@@ -1,0 +1,16 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ModelSettingsRequest",
+  "data": {
+    "route": {
+      "providerId": "gateway-example",
+      "modelId": "gateway-example/model-route"
+    },
+    "profile": {
+      "id": "fixture-chat-settings",
+      "revision": 1
+    },
+    "expectedSettingsRevision": 1
+  }
+}

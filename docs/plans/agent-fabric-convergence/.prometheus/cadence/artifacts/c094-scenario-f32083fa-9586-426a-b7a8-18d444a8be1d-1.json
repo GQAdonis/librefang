@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "operationId": "f32083fa-9586-426a-b7a8-18d444a8be1d",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "1369259924cfb3bd6a31cd4a200fb9fafa851ca8",
+      "fingerprint": "ca7d15cb2261dde8b653bef66a927087ddf74497ee054ca06b67970806509cee"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "cd86aa2ca0765bdd488dfab2dfc0f602e2f4e32e",
+      "fingerprint": "95dd0a5bf017f0c22a97029a45296582403e346d22fca1a4155fe8c038a7f1de"
+    }
+  ],
+  "observedAt": "2026-09-30T16:00:04.515Z",
+  "operationModules": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-authority.mjs",
+      "sha256": "a7ca8de3f6736000c1cb8cbbdd3a7436ea1ce7bca3ff1249c703ab57c06d4c63"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-controls.mjs",
+      "sha256": "eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-driver.mjs",
+      "sha256": "c533c428c9c1913908a9960ba60501ba3b6883281edf31a6decd9a8d6926981a"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-fixtures.mjs",
+      "sha256": "4a61a2d476684ce801bdc5a85ff87ad486ffb627333072c6b7bfd0b227ad3046"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-flows.mjs",
+      "sha256": "808f2460693d94a9ae5ca2519bbded0151bd418738b5d1d9135456ac979af304"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-prompts.mjs",
+      "sha256": "4f6f7192a7843e8d75443bac51b2504088e0cd9a916af7c71af00eb7dcd44435"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-host.mjs",
+      "sha256": "4ca6c828f5aba45907e9e927ed4585c9eebe49e29be55d1970e11bbb25ed75b3"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-scenario.mjs",
+      "sha256": "26ea84b27a92fdae729788164ee29aa311921689a9c028bb8ebd7b475378b56f"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-operation-tools.mjs",
+      "sha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+    }
+  ],
+  "receipt": {
+    "stage": "same-team-current-directed-authority",
+    "case": "same-team-directed-read-send-roster-inbox-revocation",
+    "teamId": "1290d6cf-fd41-435b-a41f-332ff8ee1f4f",
+    "workspaceId": "75047659-07e4-4154-8600-696bd2141481",
+    "sender": {
+      "attemptId": "e04e8448-2aab-440b-babc-f6cdbf8a9aaa",
+      "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+      "taskId": "cf10a093-eea9-4f98-9c11-530ed277e377",
+      "memberId": "a64762c7-2a49-4cda-bb2d-06fb6af7c362",
+      "rootId": "bef6b710-f80c-4481-aa19-589ca7842fe7",
+      "approvalScopeId": "bef6b710-f80c-4481-aa19-589ca7842fe7",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "forbiddenReader": {
+      "attemptId": "599e7ca5-c087-480f-a809-6345835b727a",
+      "runId": "2b6aa402-b4e6-49a1-b214-fb64cc48d10f",
+      "taskId": "0db15d7b-55dc-4575-8934-e8f91bdbf7d0",
+      "memberId": "9b58dfa4-d257-444a-bdd6-1e5e0d6ab8a2",
+      "rootId": "b13bb45f-f8a6-47f2-b131-c9cc48fd3caa",
+      "approvalScopeId": "b13bb45f-f8a6-47f2-b131-c9cc48fd3caa",
+      "status": "failed",
+      "executionOutcome": "failed",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "forbiddenSend": {
+      "attemptId": "05454544-e80f-48f3-9ca7-0e0b39651a88",
+      "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+      "taskId": "76f9163d-4ca5-4e8f-bc21-71aca6c06b74",
+      "memberId": "9b58dfa4-d257-444a-bdd6-1e5e0d6ab8a2",
+      "rootId": "17f08216-488b-4d86-a938-dc3ac42e5aa3",
+      "approvalScopeId": "17f08216-488b-4d86-a938-dc3ac42e5aa3",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "coordinator": {
+      "attemptId": "2fe25309-d6c0-400a-b494-cedb02026fcf",
+      "runId": "00b60627-ef42-41e4-b216-097848ca8cb6",
+      "taskId": "325c86ca-7d9c-4f84-936f-b24142dc4ad7",
+      "memberId": "39427ddd-abc3-4e26-8826-ed3d87697be6",
+      "rootId": "b7b765b1-3881-453f-a314-75fa45aacc8a",
+      "approvalScopeId": "b7b765b1-3881-453f-a314-75fa45aacc8a",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "artifactId": "artifact-e04e8448-2aab-440b-babc-f6cdbf8a9aaa",
+    "queuedMessageId": "319a60d7-c207-4b45-a671-c2bc51c4eca4",
+    "oldContextRefused": {
+      "status": 409,
+      "code": "TEAM_CONTEXT_REQUIRED_UNSUPPORTED"
+    },
+    "queueOnlyDidNotActivate": true,
+    "revokedMessageExcluded": true,
+    "revokedMemberExcluded": true,
+    "nativeToolEvidence": [
+      {
+        "evidenceId": "8f6f14c2-afe6-41dc-a97a-5b74e296f17a",
+        "invocationId": "ad9d5f2d-7a7b-497d-8f82-7544125f37b7",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_roster",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T15:59:13.760812Z"
+      },
+      {
+        "evidenceId": "78dca845-cda1-41fa-8202-b02473ce1715",
+        "invocationId": "ad9d5f2d-7a7b-497d-8f82-7544125f37b7",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_roster",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T15:59:13.785192Z"
+      },
+      {
+        "evidenceId": "0ff1104b-eca1-4836-9945-b7b0a0f9a55a",
+        "invocationId": "ad9d5f2d-7a7b-497d-8f82-7544125f37b7",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_roster",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T15:59:13.791280Z"
+      },
+      {
+        "evidenceId": "34cb8b24-8e87-447c-86c3-ae11b104f4b5",
+        "invocationId": "13484a9f-06e9-4c65-b35b-267045b5de02",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_send",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T15:59:18.289987Z"
+      },
+      {
+        "evidenceId": "11d7005e-0795-44c8-8b60-f8fde430a428",
+        "invocationId": "13484a9f-06e9-4c65-b35b-267045b5de02",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_send",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T15:59:19.240484Z"
+      },
+      {
+        "evidenceId": "6c453527-3960-4dac-8917-973682993284",
+        "invocationId": "13484a9f-06e9-4c65-b35b-267045b5de02",
+        "runId": "79f0067c-6279-40b8-8a75-22ca0c597ddb",
+        "toolName": "team_send",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T15:59:19.289552Z"
+      },
+      {
+        "evidenceId": "c5e40b2a-510d-4593-9a54-041ab0f0026d",
+        "invocationId": "12e71ece-0dd9-49da-bbbf-28830155e825",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_roster",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T15:59:39.257713Z"
+      },
+      {
+        "evidenceId": "74714699-ce54-43fb-bc05-416b026d9bf5",
+        "invocationId": "12e71ece-0dd9-49da-bbbf-28830155e825",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_roster",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T15:59:39.292062Z"
+      },
+      {
+        "evidenceId": "a82b4fac-37cf-4d9a-81be-9c4188373358",
+        "invocationId": "12e71ece-0dd9-49da-bbbf-28830155e825",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_roster",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T15:59:39.303722Z"
+      },
+      {
+        "evidenceId": "2cb65b12-ea61-4fca-b3f9-cc8fab551aeb",
+        "invocationId": "949e35f4-9229-4aa3-96e5-02ac42ca39ce",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_send",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T15:59:44.671777Z"
+      },
+      {
+        "evidenceId": "5763d587-f850-4b07-9acc-286c4119e860",
+        "invocationId": "949e35f4-9229-4aa3-96e5-02ac42ca39ce",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_send",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T15:59:45.743481Z"
+      },
+      {
+        "evidenceId": "c08b9627-bd3d-496b-9c85-d6ce5de251a9",
+        "invocationId": "949e35f4-9229-4aa3-96e5-02ac42ca39ce",
+        "runId": "cd0e1de8-069e-49ce-a219-95febbc14b69",
+        "toolName": "team_send",
+        "state": "failed",
+        "occurredAt": "2026-09-30T15:59:45.749610Z"
+      },
+      {
+        "evidenceId": "3b2639de-8f6f-4659-aa2c-09accf43acbb",
+        "invocationId": "10ae5a06-f563-4e74-af3d-245e45ad35c4",
+        "runId": "00b60627-ef42-41e4-b216-097848ca8cb6",
+        "toolName": "team_roster",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T15:59:59.651201Z"
+      },
+      {
+        "evidenceId": "598d5d86-a850-4e7d-9055-ed6de5109f62",
+        "invocationId": "10ae5a06-f563-4e74-af3d-245e45ad35c4",
+        "runId": "00b60627-ef42-41e4-b216-097848ca8cb6",
+        "toolName": "team_roster",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T15:59:59.674383Z"
+      },
+      {
+        "evidenceId": "12c8287d-678f-4999-b9d5-4ef1a38b0035",
+        "invocationId": "10ae5a06-f563-4e74-af3d-245e45ad35c4",
+        "runId": "00b60627-ef42-41e4-b216-097848ca8cb6",
+        "toolName": "team_roster",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T15:59:59.680380Z"
+      }
+    ]
+  }
+}

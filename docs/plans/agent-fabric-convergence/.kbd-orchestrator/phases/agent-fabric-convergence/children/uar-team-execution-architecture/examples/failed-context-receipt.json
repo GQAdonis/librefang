@@ -1,0 +1,85 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "TeamContextReceipt",
+  "data": {
+    "authority": {
+      "ownerId": "owner-example",
+      "workspaceId": "workspace-example",
+      "teamId": "team-example",
+      "taskId": "task-coordinate",
+      "memberId": "member-coordinator",
+      "attemptId": "attempt-coordinate-2",
+      "runId": "run-coordinate-2",
+      "taskOwnershipEpoch": 1,
+      "memberRevision": 1,
+      "binding": {
+        "id": "binding-example",
+        "revision": 2
+      },
+      "executionFence": {
+        "catalogId": "catalog-example",
+        "serviceInstanceId": "uar-designated",
+        "incarnationId": "boot-example-1",
+        "epoch": 4
+      }
+    },
+    "teamInstructions": {
+      "revision": 1,
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "text": "Complete the assigned request using attributed evidence and authorized tools."
+    },
+    "instructionOrder": [
+      "host-policy",
+      "team-instructions",
+      "member-instructions",
+      "task-instructions"
+    ],
+    "self": {
+      "memberId": "member-coordinator",
+      "role": "coordinator",
+      "label": "Coordinator",
+      "safeCapabilities": [
+        "team_delegate",
+        "team_wait"
+      ]
+    },
+    "coordinatorMemberId": "member-coordinator",
+    "roster": [
+      {
+        "memberId": "member-coordinator",
+        "role": "coordinator",
+        "label": "Coordinator",
+        "safeCapabilities": [
+          "team_delegate",
+          "team_wait"
+        ]
+      },
+      {
+        "memberId": "member-worker",
+        "role": "worker",
+        "label": "Worker",
+        "safeCapabilities": [
+          "team_send"
+        ]
+      }
+    ],
+    "authorizationRevision": 5,
+    "selections": [],
+    "contextBudgetTokens": 1000,
+    "countQuality": "unknown",
+    "rootId": "root-coordinate-2",
+    "approvalScopeId": "approval-coordinate-2",
+    "targetOutcomes": [
+      {
+        "taskId": "task-worker",
+        "memberId": "member-worker",
+        "attemptId": "attempt-worker-1",
+        "executionOutcome": "failed",
+        "effectDisposition": "confirmed",
+        "artifactIds": []
+      }
+    ],
+    "targetOutcomeDataTrust": "untrusted-attributed-data"
+  }
+}

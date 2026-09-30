@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "isolation_mode": "harness-native",
+  "judge_model": "gpt-5.6-sol",
+  "producer_model": "unknown",
+  "cross_model_check": "unverified-producer-unknown",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "claim": "Atomic message and activation mechanism undecided",
+      "disposition": "Resolved: existing admission catalog CAS commits envelope, queued attempt, reservation and command receipt; controller claims queued intents; no second outbox"
+    },
+    {
+      "severity": "WARNING",
+      "claim": "Missing mailbox/outbox candidate category",
+      "disposition": "Resolved: existing queued-attempt CAS plus primary transactional-outbox pattern evaluation"
+    },
+    {
+      "severity": "WARNING",
+      "claim": "Single-instance mechanism and backend qualification not established",
+      "disposition": "Carried: source inspection added; no backend is claimed qualified; remote catalog exclusivity enforcement remains a Plan dependency"
+    },
+    {
+      "severity": "CRITICAL",
+      "claim": "Context migration and accounting dependency rules unresolved",
+      "disposition": "Resolved: legacy nonempty unsupported requests required by default; known successful effect-confirmed output can unlock dependency while unknown usage reservation remains charged"
+    }
+  ]
+}

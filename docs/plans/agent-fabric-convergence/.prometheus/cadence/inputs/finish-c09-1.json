@@ -1,0 +1,19 @@
+{
+  "outcome": "success",
+  "completion": {
+    "tasks": ["C09.1"],
+    "changes": [],
+    "phases": []
+  },
+  "canonicalEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-canonical-completion.json",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.6-mac-arm64.dmg",
+      "platform": "darwin-arm64",
+      "signingStatus": "developer-id-signed-not-notarized"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-team-planning-run.json"
+    }
+  ]
+}

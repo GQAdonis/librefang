@@ -2,26 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 239,
-  "derivedRevision": 239,
+  "sourceRevision": 392,
+  "derivedRevision": 392,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-28T01:57:16.993329Z",
+  "updatedAt": "2026-09-30T17:21:23.779657Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c06-durable-addressable-instances-and-bounded-turns",
-    "C06.1"
+    "afc-c08-bossfang-and-fabric-observer-routing",
+    "C08.2"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
-    "status": "ready",
+    "status": "running",
     "progress": {
-      "done": 7,
-      "total": 20
+      "done": 14,
+      "total": 24
     },
     "children": [
       {
@@ -30,10 +31,54 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 5,
-          "total": 18
+          "done": 10,
+          "total": 20
         },
         "children": [
+          {
+            "type": "phase",
+            "id": "release-cadence-optimization",
+            "canonicalId": "agent-fabric-convergence::release-cadence-optimization",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-release-cadence-optimization",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 4,
+                  "total": 4
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "uar-team-execution-architecture",
+            "canonicalId": "agent-fabric-convergence::uar-team-execution-architecture",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-uar-team-execution-architecture-contract",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 3,
+                  "total": 3
+                }
+              }
+            ],
+            "annotations": []
+          },
           {
             "type": "phase",
             "id": "uar-team-specification",
@@ -77,6 +122,24 @@
               }
             ],
             "annotations": []
+          },
+          {
+            "type": "change",
+            "id": "afc-c09-team-task-admission-context-and-membership",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            }
+          },
+          {
+            "type": "change",
+            "id": "afc-d01-local-mac-durable-agent-delivery",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 4,
+              "total": 4
+            }
           },
           {
             "type": "change",
@@ -126,18 +189,18 @@
           {
             "type": "change",
             "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c07-local-scoped-observers-with-durable-delivery",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
+              "done": 3,
               "total": 3
             }
           },
@@ -146,17 +209,17 @@
             "id": "afc-c08-bossfang-and-fabric-observer-routing",
             "status": "PENDING",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c09-bounded-teams-and-shared-task-board",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 0,
-              "total": 3
+              "done": 4,
+              "total": 4
             }
           },
           {

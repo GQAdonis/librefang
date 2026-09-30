@@ -1,0 +1,43 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "isolation_mode": "harness-native",
+  "producer_model": "unknown",
+  "judge_model": "gpt-5.6-sol",
+  "cross_model_check": "unverified-producer-unknown",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "claim": "Authenticated operator replacement has no assigned authorization enforcement acceptance.",
+      "evidence": "D1 requires authenticated replacement; A3 and A6 omit explicit unauthorized/stale rejection.",
+      "suggested_fix": "A3 enforces authenticated authorized expected-epoch reclaim; A6 operates rejected unauthorized/stale and permitted replacement."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "A accepted is undefined.",
+      "evidence": "B1 dependency alternates with independently usable and A6 receipts.",
+      "suggested_fix": "Define named receipt-based gate and owner."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "Wait semantics lack explicit acceptance coverage.",
+      "evidence": "D5 all-target/failed-target/cycle/reassignment absent in B5 summary.",
+      "suggested_fix": "Require those outcomes at complete B operation."
+    },
+    {
+      "severity": "WARNING",
+      "file": "plan.md",
+      "claim": "Legacy refusal migration guidance has no output owner.",
+      "evidence": "D3 requires publishing guidance without named artifact.",
+      "suggested_fix": "Assign file-level migration table and owner."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

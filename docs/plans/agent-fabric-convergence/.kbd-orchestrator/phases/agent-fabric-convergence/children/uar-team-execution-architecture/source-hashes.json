@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T00:13:33.858Z",
+  "note": "Current source bytes including the preserved unbuilt provider repair; this is not runtime evidence.",
+  "files": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/prompt_dialect.rs",
+      "bytes": 22743,
+      "sha256": "578c8e0a652137280dc11ea4a357877eaeb5b795bb7674f6f74fcf699ad52c49"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/provider_error.rs",
+      "bytes": 6119,
+      "sha256": "57bd006736e0a28fa63f0fb56171c982d40d18d01a1b7f9c9538f57daa3ae14d"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/orchestrator.rs",
+      "bytes": 138849,
+      "sha256": "7fb616b144524bdd6f87724af7c60106ec2187a745c8a8c24d9f105fab18e865"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/runtime/team_execution/controller.rs",
+      "bytes": 8532,
+      "sha256": "910123f74a4f45743b07e13d44ee3569d2d3fa8759ceb8fc25d7cf31a7aee914"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/runtime/team_execution/execution.rs",
+      "bytes": 9791,
+      "sha256": "dc8568ddeeac0ce6ab978c930732929ca926feaab12a8a9e7d310f7d107cb001"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/resolution.rs",
+      "bytes": 7470,
+      "sha256": "95078ed1a8e06170610f9d515f15ccc9ec23491900cb8ef32a9486a6b6b49689"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/admission.rs",
+      "bytes": 12038,
+      "sha256": "80182702d6664887835888022d9e59deca7bb815f9075b6b84fe5f76c92d1536"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/settlement.rs",
+      "bytes": 11776,
+      "sha256": "12c90c18d0912fb4946e58c881f2f3a9e59f42217113c82617d19ee0cf3962f7"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/recovery.rs",
+      "bytes": 6543,
+      "sha256": "e7013c83100039a8781fcb548342685a25495a9d6cbbbe229b7980338f718ff9"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "docs/agents/collaboration/v0.1.0-draft.1/runtime.md",
+      "bytes": 7132,
+      "sha256": "a4b3e716942fcadca389a9ab395b0e174f3071d1ae03afa21f56e21a3cc6239b"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "docs/agents/collaboration/v0.1.0-draft.2/README.md",
+      "bytes": 10320,
+      "sha256": "1da5259efaba1d306f99c5208cb2139e252f53bae2ccefe7cba7d50a51a39baf"
+    }
+  ]
+}

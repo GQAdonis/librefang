@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T13:39:05.277Z",
+  "failedOperationReceipt": "c094-operation-failure-2527779b-8149-4879-98a3-ecc33b88a274.json",
+  "runtimeRevision": "56d87b5ab088c69a41faa761753edd253049d775",
+  "bossRevision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
+  "actualCoordinatorAdmitted": true,
+  "nativeTeamCallsCompleted": false,
+  "diagnosticCode": "TEAM_PROVIDER_STREAM_FAILED",
+  "protectedDiagnosticRef": "0b43fe3a-54dc-45fc-bf7c-20b60c76085e",
+  "underlyingProviderClass": "unknown",
+  "referenceBacking": "Safe UUID-correlated runtime log, no lookup store/API",
+  "evidenceLoss": "Disposable host discarded stderr before cleanup",
+  "nextAction": "Capture only source-authored safe provider class/reference from both owned child outputs during repeat of same failed operation; preserve no raw provider body or credentials"
+}

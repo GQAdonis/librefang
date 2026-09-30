@@ -1,0 +1,32 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "DelegateRequest",
+  "data": {
+    "commandId": "delegate-1",
+    "recipientMemberId": "member-worker",
+    "expectedTeamRevision": 5,
+    "task": {
+      "taskId": "task-worker",
+      "role": "worker",
+      "input": {
+        "question": "What is the supplied marker?"
+      },
+      "outputContract": {
+        "type": "string"
+      },
+      "dependsOn": []
+    },
+    "payload": {
+      "text": "Review the selected artifact and return a concise finding.",
+      "artifactIds": [
+        "artifact-input"
+      ]
+    },
+    "reservation": {
+      "tokens": 1000,
+      "costMicrounits": 100000,
+      "elapsedSeconds": 60
+    }
+  }
+}

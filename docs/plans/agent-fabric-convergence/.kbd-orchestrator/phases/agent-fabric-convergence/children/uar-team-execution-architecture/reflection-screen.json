@@ -1,0 +1,15 @@
+{
+  "executedAt": "2026-09-30T05:51:29.782163Z",
+  "tool": "sycophancy-correction.detect_sycophancy",
+  "strictness": "strict",
+  "score": 0.01785714365541935,
+  "correctionMandatory": false,
+  "findings": [
+    {
+      "pattern": "S-07",
+      "severity": "low",
+      "reason": "1067-word reflection; length warning",
+      "disposition": "Retained goal/receipt/quality/lesson/cadence details required for durable phase handoff. User-facing summary remains concise."
+    }
+  ]
+}

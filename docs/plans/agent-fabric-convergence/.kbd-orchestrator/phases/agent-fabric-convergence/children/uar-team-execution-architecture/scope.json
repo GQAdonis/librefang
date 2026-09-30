@@ -1,0 +1,22 @@
+{
+  "allowedWritePaths": [
+    ".kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-execution-architecture/**",
+    ".prometheus/cadence/artifacts/uar-team-execution-architecture-*",
+    ".prometheus/session-log.md",
+    "openspec/changes/afc-uar-team-execution-architecture-contract/**",
+    "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/**"
+  ],
+  "deniedPaths": [],
+  "inheritsConstraints": true,
+  "__note": "Edit allowedWritePaths to widen the child loop's write surface. .kbd-orchestrator/** and SCRATCHPAD.md are always allowed. Enforced advisorily by check-child-scope.mjs.",
+  "phaseBoundary": "Assessment and design artifacts only until operator-approved production ownership.",
+  "scopeAmendment": {
+    "reason": "Approved task 1.2 records parent/product planning amendments only",
+    "authority": "Operator /kbd-execute uar-team-execution-architecture; approval.json",
+    "productionScopeChanged": false
+  },
+  "externalDocumentationRoots": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/openspec/changes/afc-c09-team-admission-runtime",
+    "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/openspec/changes/uar-c09-team-execution-admin"
+  ]
+}

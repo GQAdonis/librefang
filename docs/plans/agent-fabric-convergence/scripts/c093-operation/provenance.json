@@ -1,0 +1,9 @@
+{
+  "sourceRevision": "b83e128ba1f94d720a5562aa4414707c02defbf4",
+  "ownerSource": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-owner-operation.mjs",
+  "ownerSourceSha256": "14177c71211c0a520eb729f51177360c4c8d4f1afd6911896f8febe93029e899",
+  "ownerTarget": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c093-operation/uar-team-owner-operation.mjs",
+  "ownerTargetSha256": "b3575ee9ad24f38b15ce0fdb77de03affa573ee4eaaa451e3b09187a6a97e7ea",
+  "reason": "Correct external operator procedure pricing JSON snake-case fields; packaged application and frozen release inputs unchanged",
+  "usesRealServices": true
+}

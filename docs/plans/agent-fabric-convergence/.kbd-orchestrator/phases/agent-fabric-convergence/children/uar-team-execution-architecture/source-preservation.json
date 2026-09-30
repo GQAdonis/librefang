@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T00:22:48.140Z",
+  "purpose": "Assessment provenance and preservation check only; no application test or build",
+  "repositories": [
+    {
+      "id": "uar",
+      "revisionUnchanged": true,
+      "statusUnchanged": true
+    },
+    {
+      "id": "boss",
+      "revisionUnchanged": true,
+      "statusUnchanged": false
+    },
+    {
+      "id": "mini",
+      "revisionUnchanged": true,
+      "statusUnchanged": true
+    },
+    {
+      "id": "full",
+      "revisionUnchanged": true,
+      "statusUnchanged": false
+    },
+    {
+      "id": "codex",
+      "revisionUnchanged": true,
+      "statusUnchanged": true
+    }
+  ],
+  "files": [
+    {
+      "path": "src/llm/prompt_dialect.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/llm/provider_error.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/llm/orchestrator.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/runtime/team_execution/controller.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/runtime/team_execution/execution.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/compiler/collaboration/team_execution/resolution.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/compiler/collaboration/team_execution/admission.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/compiler/collaboration/team_execution/settlement.rs",
+      "unchanged": true
+    },
+    {
+      "path": "src/uar/compiler/collaboration/team_execution/recovery.rs",
+      "unchanged": true
+    },
+    {
+      "path": "docs/agents/collaboration/v0.1.0-draft.1/runtime.md",
+      "unchanged": true
+    },
+    {
+      "path": "docs/agents/collaboration/v0.1.0-draft.2/README.md",
+      "unchanged": true
+    }
+  ],
+  "concurrentStatusDifferences": [
+    {
+      "id": "boss",
+      "added": [
+        "M resources/prometheus-skills-mini"
+      ],
+      "removed": [
+        "m resources/prometheus-skills-mini"
+      ]
+    },
+    {
+      "id": "full",
+      "added": [
+        "M tools/surreal-memory-server"
+      ],
+      "removed": [
+        "m tools/surreal-memory-server"
+      ]
+    }
+  ],
+  "note": "All recorded UAR file hashes and revisions unchanged. Other repository status changes were observed during assessment; no attribution or global unchanged claim is made."
+}

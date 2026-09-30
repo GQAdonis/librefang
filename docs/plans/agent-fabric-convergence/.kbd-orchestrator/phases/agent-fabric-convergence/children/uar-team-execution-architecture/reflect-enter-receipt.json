@@ -1,0 +1,31 @@
+{
+  "command": [
+    "kbd",
+    "--path",
+    ".",
+    "stage",
+    "enter",
+    "--command-id",
+    "team-arch-reflect-enter-20260930",
+    "--phase",
+    "agent-fabric-convergence::uar-team-execution-architecture",
+    "--id",
+    "reflect",
+    "--title",
+    "Reflect and restore parent team execution delivery",
+    "--sequence",
+    "5"
+  ],
+  "revision": 378,
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence",
+      "agent-fabric-convergence::uar-team-execution-architecture"
+    ],
+    "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+    "stageId": "reflect",
+    "changeId": null,
+    "taskId": null,
+    "commit": "432cd237480d82d16bb62e218d3ba00656099976"
+  }
+}

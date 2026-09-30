@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-09-30T05:27:19.828Z",
+  "scope": "Only corrected/new continuation and context shapes",
+  "checks": [
+    {
+      "file": "continuation-receipt.json",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "context-receipt.json",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "failed-continuation-receipt.json",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "failed-context-receipt.json",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "cancelled-continuation-receipt.json",
+      "ok": true,
+      "errors": []
+    },
+    {
+      "file": "cancelled-context-receipt.json",
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "runtimeConformance": false
+}

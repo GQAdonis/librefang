@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T12:54:22.157Z",
+  "failureReceipt": "c094-operation-failure-e5f92632-1bf1-4895-93da-871fb1995c44.json",
+  "observed": {
+    "healthFirst": "TimeoutError after 5000ms",
+    "authenticatedModels": {
+      "status": 200,
+      "selectedAliasListed": true
+    },
+    "healthAfter": {
+      "status": 200,
+      "elapsedMs": 53
+    }
+  },
+  "conclusion": "Endpoint responds now; transient cause remains undetermined",
+  "applicationSourcesChanged": false,
+  "gateBPassedCases": 0
+}

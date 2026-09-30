@@ -64,7 +64,9 @@ pub fn parse_defer_marker(err: &str) -> Option<u64> {
 /// A single journal entry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct JournalEntry {
-    /// Platform-specific unique message ID.
+    /// Recovery key. Legacy entries use the platform message ID; durable
+    /// channel entries use the scoped source occurrence ID returned by the
+    /// route store. Keep this field name for old JSONL compatibility.
     pub message_id: String,
     /// Channel type (e.g. "telegram", "whatsapp").
     pub channel: String,
@@ -189,6 +191,14 @@ impl MessageJournal {
             }
         };
         let mut inner = self.inner.lock().await;
+        // A repeated durable source occurrence must not replace a pending
+        // recovery receipt with newly received content or a different route.
+        // Legacy platform-ID entries retain their historical behavior.
+        if entry.metadata.contains_key("source_occurrence")
+            && inner.pending.contains_key(&entry.message_id)
+        {
+            return true;
+        }
         let path = inner.path.clone();
         let write_result =
             tokio::task::spawn_blocking(move || Self::write_line_to_path(&path, &line)).await;

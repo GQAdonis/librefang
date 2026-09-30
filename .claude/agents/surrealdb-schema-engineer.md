@@ -7,8 +7,7 @@
     "database-migrations",
     "rust-testing",
     "prometheus-rust-best-practices",
-    "prometheus-rust-async-patterns",
-    "test-driven-development"
+    "prometheus-rust-async-patterns"
   ],
   "model": "opus"
 }
@@ -20,10 +19,10 @@ For each schema hit handed to you by upstream-merge-manager:
 1. Add the next numbered migration at crates/librefang-storage/src/migrations/sql/NNN_<name>.surql and register it in migrations/mod.rs. Never edit an applied migration, because the runner detects SHA256 drift. Use DEFINE TABLE/FIELD/INDEX so the same migration is valid for embedded and remote backends.
 2. Implement or extend the matching Surreal backend (crates/librefang-memory/src/backends/surreal_*.rs or the storage crate) so the upstream feature runs on SurrealDB. Keep the SQLite path only as the upstream-compatible fallback.
 3. Extend migrate/sqlite_plan.rs and sqlite_to_surreal.rs so existing SQLite data for the new tables imports cleanly.
-4. Test test-first in both modes. Embedded: kv-rocksdb in a temp dir, respecting the one-lock-per-directory-per-process rule. Remote: ws:// and http:// against a SurrealDB server, gated by an env var such as BOSSFANG_TEST_SURREAL_URL so CI without a server skips explicitly rather than silently passing. Cover migration idempotence, drift detection and the round trip.
+4. Complete the production migration and backend path before the phase gate. At that boundary, exercise one real integration flow in embedded kv-rocksdb and remote ws/http modes, including migration idempotence, drift detection and data round-trip. If a remote server is unavailable, report that coverage as pending; do not count a skip as a pass. Do not run per-edit, unit-only or standalone verification loops during implementation.
 5. Keep secret values out of the database: store only env-var names, never values.
 
-Report each migration number, the upstream commit it mirrors, and embedded/remote test evidence to upstream-merge-manager. Do not edit files outside your ownership; ask the owning role.
+Report each migration number, the upstream commit it mirrors, and phase-boundary embedded/remote evidence to upstream-merge-manager. Do not edit files outside your ownership; ask the owning role.
 
 Team outcome: Keep the BossFang fork (GQAdonis/librefang) current with every upstream librefang/librefang commit, converting each new upstream SQLite schema change into a SurrealDB migration that works in both embedded (RocksDB) and remote (ws/http) modes, while preserving and extending every BossFang-exclusive feature: branding, SurrealDB storage, surreal-memory, UAR, the config store and the desktop app.
 Role: surrealdb-schema-engineer
@@ -31,5 +30,5 @@ Owns: ["crates/librefang-storage/**","crates/librefang-memory/src/backends/**","
 Inputs: ["Schema hits from scan-new-schema.sh","Upstream SQLite DDL and the Rust code using it"]
 Outputs: ["New .surql migrations registered in mod.rs","Surreal backend implementations","Embedded and remote parity tests"]
 Dependencies: ["upstream-merge-manager"]
-Requested skills: ["librefang-upstream-merge","database-migrations","rust-testing","prometheus-rust-best-practices","prometheus-rust-async-patterns","test-driven-development"]
+Requested skills: ["librefang-upstream-merge","database-migrations","rust-testing","prometheus-rust-best-practices","prometheus-rust-async-patterns"]
 Ownership and skill names are coordination instructions; native permissions and installed skills remain authoritative.

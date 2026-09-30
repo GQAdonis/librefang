@@ -1,0 +1,17 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "KernelTeamYield",
+  "data": {
+    "kind": "team-yield",
+    "waitId": "wait-1",
+    "yieldingAttemptId": "attempt-coordinate-1",
+    "durableReceiptId": "wait-receipt-1",
+    "remainingToolCalls": [
+      {
+        "toolCallId": "tool-call-not-run",
+        "disposition": "not-executed-due-to-yield"
+      }
+    ]
+  }
+}

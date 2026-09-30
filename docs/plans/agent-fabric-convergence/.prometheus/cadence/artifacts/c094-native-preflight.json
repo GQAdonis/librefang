@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-30T11:03:47.435Z",
+  "operation": "C09.4 actual native packaging build",
+  "diskAvailableGiB": 230.19932556152344,
+  "memoryTotalGiB": 64,
+  "memoryFreeGiB": 0.3665313720703125,
+  "cargoBuildJobs": 2,
+  "requiredDiskGiB": 10
+}

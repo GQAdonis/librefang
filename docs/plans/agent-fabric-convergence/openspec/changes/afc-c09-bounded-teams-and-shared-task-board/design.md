@@ -34,3 +34,7 @@ Reconcile current source and existing product specs; record accepted dependency 
 Competing workers cannot own one revision; stale worker/removal cannot cause new protected effect; parent cancel and independent peer lifetime remain distinct; team cap holds under concurrency.
 
 Use repository-required checks and observable real-boundary scenarios; source inspection and planned checkboxes are not execution evidence. Recommendation coverage: REC-008, REC-043, REC-044, REC-045.
+
+## Approved architecture recovery — 2026-09-30
+
+The [architecture recovery amendment](architecture-recovery-amendment.md) controls remaining C09.3 delivery A and additive C09.4 delivery B. Preserve completed receipts; both new runtime outcomes remain pending.

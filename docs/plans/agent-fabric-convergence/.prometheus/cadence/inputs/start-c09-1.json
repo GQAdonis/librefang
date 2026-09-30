@@ -1,0 +1,12 @@
+{
+  "scope": {
+    "tasks": ["C09.1"],
+    "changes": ["afc-c09-bounded-teams-and-shared-task-board"],
+    "phases": [],
+    "outcomes": ["Create and inspect a durable UAR team planning board from The Boss; member revisions and task dependencies survive restart in a local workspace"]
+  },
+  "sourceRefs": [
+    {"repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar"},
+    {"repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build"}
+  ]
+}

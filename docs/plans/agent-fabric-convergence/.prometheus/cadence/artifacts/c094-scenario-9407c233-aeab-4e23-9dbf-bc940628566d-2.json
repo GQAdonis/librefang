@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "operationId": "9407c233-aeab-4e23-9dbf-bc940628566d",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "1369259924cfb3bd6a31cd4a200fb9fafa851ca8",
+      "fingerprint": "ca7d15cb2261dde8b653bef66a927087ddf74497ee054ca06b67970806509cee"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "cd86aa2ca0765bdd488dfab2dfc0f602e2f4e32e",
+      "fingerprint": "95dd0a5bf017f0c22a97029a45296582403e346d22fca1a4155fe8c038a7f1de"
+    }
+  ],
+  "observedAt": "2026-09-30T16:15:29.231Z",
+  "operationModules": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-authority.mjs",
+      "sha256": "c5992830e3945906a4c4f32df974f908875ccc70e2857a79f845d7279e9974c6"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-controls.mjs",
+      "sha256": "eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-driver.mjs",
+      "sha256": "c533c428c9c1913908a9960ba60501ba3b6883281edf31a6decd9a8d6926981a"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-fixtures.mjs",
+      "sha256": "4a61a2d476684ce801bdc5a85ff87ad486ffb627333072c6b7bfd0b227ad3046"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-flows.mjs",
+      "sha256": "cf58bae0abf323aecde71766c304ae285e64ee8e60aae86b8711bc96f325a9f5"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-prompts.mjs",
+      "sha256": "8a1d0d197da4b2b7613a7a14c3e423163aea1060563981e1f51b79a6b55f0b7a"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-host.mjs",
+      "sha256": "4ca6c828f5aba45907e9e927ed4585c9eebe49e29be55d1970e11bbb25ed75b3"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-scenario.mjs",
+      "sha256": "26ea84b27a92fdae729788164ee29aa311921689a9c028bb8ebd7b475378b56f"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-operation-tools.mjs",
+      "sha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+    }
+  ],
+  "receipt": {
+    "stage": "crash-before-join-preserves-uncertainty",
+    "case": "crash-before-join-preserves-uncertainty",
+    "teamId": "f980e0ba-8c6d-488a-b97f-85a5551647ab",
+    "workspaceId": "a1c7a1b1-5067-4141-81f7-23fd63e9a682",
+    "initial": {
+      "attemptId": "b6ec78a9-3657-4f32-a95d-ad697ba32998",
+      "runId": "327737a0-a04a-4f23-895f-77e6e8267b71",
+      "taskId": "be6668f6-acf0-45b0-b240-6f8eafbd6ee3",
+      "memberId": "f46a0469-32ac-4fc0-abe7-fae4a8ca32b9",
+      "rootId": "382cd3ac-3ce6-48ed-922b-255e4bb8ceb2",
+      "approvalScopeId": "382cd3ac-3ce6-48ed-922b-255e4bb8ceb2",
+      "status": "yielded",
+      "executionOutcome": "yielded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "waitId": "69687b63-2cd2-47cc-85d3-503e4f98b6bc",
+    "originalAttempts": [
+      {
+        "attemptId": "b6ec78a9-3657-4f32-a95d-ad697ba32998",
+        "runId": "327737a0-a04a-4f23-895f-77e6e8267b71",
+        "taskId": "be6668f6-acf0-45b0-b240-6f8eafbd6ee3",
+        "memberId": "f46a0469-32ac-4fc0-abe7-fae4a8ca32b9",
+        "rootId": "382cd3ac-3ce6-48ed-922b-255e4bb8ceb2",
+        "approvalScopeId": "382cd3ac-3ce6-48ed-922b-255e4bb8ceb2",
+        "status": "yielded",
+        "executionOutcome": "yielded",
+        "effectDisposition": "confirmed",
+        "accountingState": "settled",
+        "diagnostic": null
+      },
+      {
+        "attemptId": "3fbe7c7d-12b3-4e5d-87ae-95e52e73d09c",
+        "runId": "0f004af7-bbbb-47ae-88e4-261c6effdb1b",
+        "taskId": "115d50b0-9591-4842-970e-9e9393734d13",
+        "memberId": "be0bf119-942f-42b7-80bc-d450a9f977ef",
+        "rootId": "db96b857-563b-43d4-9d51-944e869ba44a",
+        "approvalScopeId": "db96b857-563b-43d4-9d51-944e869ba44a",
+        "status": "running",
+        "executionOutcome": null,
+        "effectDisposition": "confirmed",
+        "accountingState": "reserved-unknown",
+        "diagnostic": null
+      }
+    ],
+    "recoveryRefusal": {
+      "status": 409,
+      "code": "TEAM_EXECUTION_OWNER_CONFLICT"
+    },
+    "automaticRecovery": "blocked pending authentic original effect/owner fencing evidence"
+  }
+}

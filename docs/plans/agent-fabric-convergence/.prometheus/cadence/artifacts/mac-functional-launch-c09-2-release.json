@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-09-28T22:26:45.670Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-09-28T22:23:18.730Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/uar-team-ownership-scenario.mjs",
+  "scenarioDigest": "12c84fb96b0b42131fe18200d03a9f141dab6692da5671dbf512cbf784df040d",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-vVGGPU",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "Packaged Boss claimed and reassigned task 2d3a0f96-4959-43a2-b03a-1cad3d943150 (epoch 1→2), rejected stale revision, saved reviewer and one accepted mailbox message, restarted UAR, then displayed the recovered team board and mailbox. Stale error: {\"code\":\"INTERNAL\",\"message\":\"UAR request POST /api/v1/collaboration/team-instances/f4a49af4-8a94-461c-b288-81a049ed9295/tasks/2d3a0f96-4959-43a2-b03a-1cad3d943150/reassign failed with HTTP 409 (collaboration_revision_conflict)\"}.",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-09-28T22:27:21.326Z"
+}

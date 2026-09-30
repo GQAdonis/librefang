@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "iterationId": "28847cae-d6e9-45e4-880d-091bbef217c6",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "49765c56a9c60d3ecdac5a3f1227eeba25b7cf2c",
+      "fingerprint": "156d5ff4ead1d031664312f690d56bd8add8fa6a0d847a2872471099d6df09e9"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "b83e128ba1f94d720a5562aa4414707c02defbf4",
+      "fingerprint": "f4d9cb29769f5f60c804129a32d5fc2ba82fcf848cccbbb6a75c9fabf8cb3bf1"
+    }
+  ],
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c093-operation/uar-team-profile-scenario.mjs",
+  "scenarioSha256": "b7024e75ac4b4757d8485ac401efd244394b29579a41ffa2d9f8f6d611f45d3a",
+  "startedAt": "2026-09-30T09:35:51.707Z",
+  "finishedAt": "2026-09-30T09:37:30.590Z",
+  "passed": true,
+  "operations": {
+    "runtime": {
+      "feature": "C09.3 packaged bounded team runtime",
+      "uarVersion": "1.0.0",
+      "selectedGatewayAlias": "kimi-for-coding",
+      "marker": "C09_TEAM_509C9111367B",
+      "attemptId": "bc1f36c9-893a-4666-93d4-7ac3a9983df1",
+      "runId": "e66bb151-8d06-47c3-8e52-23ffc866b622",
+      "artifactId": "artifact-bc1f36c9-893a-4666-93d4-7ac3a9983df1",
+      "executionOutcome": "succeeded",
+      "accountingStatus": "succeeded",
+      "reservationHeld": false,
+      "selectedContextAttemptId": "254d694d-8850-4863-bb76-cf4c31133e97",
+      "selectedContext": "only explicit artifact reproduced its unrepeated marker",
+      "duplicateAdmission": "one original attempt",
+      "exhaustedReservation": "refused without ledger mutation",
+      "artifactIsolation": "two real workspaces; foreign context and artifact lookup refused",
+      "controls": "labelled admission, budgets, cancel, recover and revoke displayed in packaged Teams UI",
+      "cancelledAttemptId": "c6d94b49-aa95-43a4-8d52-77336f6a8359",
+      "recoveredStatus": "cancelled",
+      "cancellationUsageUnknown": true,
+      "restart": "original epochs, output and scoped artifacts retained; duplicate recovery created no attempt",
+      "modelEvidence": "explicit typed starter binding selection and real actor turn; model identity is not independently exposed by team receipts"
+    },
+    "effectiveModel": {
+      "route": {
+        "providerId": "boss-team-gateway-2e4c57bf203fcaea",
+        "modelId": "kimi-for-coding"
+      },
+      "wireModelAlias": "kimi-for-coding",
+      "pricingIdentity": {
+        "providerId": "kimi-code-plan-cn",
+        "modelId": "kimi-for-coding",
+        "catalogRevision": "sha256:3bf77d676613454e115a3e5b281e91d3909c8061416b6b94f607f9f32d5f2e1e"
+      },
+      "endpointKind": "openai-compatible-chat",
+      "profile": {
+        "id": "uar.openai-compatible-chat.settings-v1",
+        "revision": 1
+      },
+      "settingsRevision": 1,
+      "requestedReasoning": {
+        "mode": "off"
+      },
+      "effectiveReasoning": {
+        "mode": "off"
+      },
+      "support": "validated",
+      "supportEvidenceRef": "team-profile-7d0f2c74424068986191d6eed25a58728cd8b6ecf3b5b5c9043ca8f764048dd3",
+      "limits": {
+        "source": "unknown"
+      },
+      "fit": {
+        "mode": "settings-only",
+        "guaranteedFit": false,
+        "reason": "count-or-framing-unqualified"
+      }
+    },
+    "restartedEffectiveModel": {
+      "route": {
+        "providerId": "boss-team-gateway-2e4c57bf203fcaea",
+        "modelId": "kimi-for-coding"
+      },
+      "wireModelAlias": "kimi-for-coding",
+      "pricingIdentity": {
+        "providerId": "kimi-code-plan-cn",
+        "modelId": "kimi-for-coding",
+        "catalogRevision": "sha256:3bf77d676613454e115a3e5b281e91d3909c8061416b6b94f607f9f32d5f2e1e"
+      },
+      "endpointKind": "openai-compatible-chat",
+      "profile": {
+        "id": "uar.openai-compatible-chat.settings-v1",
+        "revision": 1
+      },
+      "settingsRevision": 1,
+      "requestedReasoning": {
+        "mode": "off"
+      },
+      "effectiveReasoning": {
+        "mode": "off"
+      },
+      "support": "validated",
+      "supportEvidenceRef": "team-profile-7d0f2c74424068986191d6eed25a58728cd8b6ecf3b5b5c9043ca8f764048dd3",
+      "limits": {
+        "source": "unknown"
+      },
+      "fit": {
+        "mode": "settings-only",
+        "guaranteedFit": false,
+        "reason": "count-or-framing-unqualified"
+      }
+    },
+    "unsupportedReasoning": "refused before route installation/dispatch",
+    "bindingRebind": {
+      "bindingId": "urn:boss:starter:team-binding:v3:db2426aa-6186-497d-b849-33e9f72eb5a5:1b34f7b15f2b798e",
+      "oldRevision": 1,
+      "revision": 2,
+      "staleRevision": "refused; historical attempts unchanged"
+    },
+    "providerFailure": {
+      "attemptId": "eede4890-2fc7-4a3e-9dd0-142248f47d38",
+      "code": "TEAM_PROVIDER_REQUEST_REJECTED",
+      "protectedDiagnosticRef": "6ea8bc3f-903a-4b64-9c1e-c4c2c480892d"
+    },
+    "ownership": {
+      "source": "49765c56a9c60d3ecdac5a3f1227eeba25b7cf2c",
+      "platform": "darwin-arm64",
+      "surrealVersion": "surrealdb-3.3.0",
+      "catalogIsolation": "cadence-owner-e556642e-5adf-4bc4-8fc9-d81b70fd752f",
+      "singleWinner": {
+        "catalogId": "uar-collaboration-catalog",
+        "serviceInstanceId": "cadence-c093-shared-runtime",
+        "incarnationId": "4d3b224d-57b3-4b61-9abe-b6a7371777a2",
+        "epoch": 1
+      },
+      "excludedAdmission": {
+        "status": 409,
+        "code": "TEAM_EXECUTION_OWNER_CONFLICT"
+      },
+      "excludedRecovery": {
+        "status": 409,
+        "code": "TEAM_EXECUTION_OWNER_CONFLICT"
+      },
+      "unauthorized": {
+        "status": 403,
+        "code": "TEAM_RECLAIM_UNAUTHORIZED"
+      },
+      "unauthenticated": {
+        "status": 401,
+        "code": null
+      },
+      "arbitraryEvidence": {
+        "status": 409,
+        "code": "TEAM_RECLAIM_EVIDENCE_REQUIRED"
+      },
+      "staleEpoch": {
+        "status": 409,
+        "code": "TEAM_EXECUTION_EPOCH_STALE"
+      },
+      "reclaim": {
+        "commandId": "f316d1b0-d6c9-4926-b8ac-cad1252d58b6",
+        "requestDigest": "sha256:e3d7d4d8cb3bd340a31d93de38c4893bd4f201c282b75041837007b38e8c8af7",
+        "authenticatedActorId": "v1:s:18:cadence-c093-owner",
+        "reason": "Replace a mechanically quiesced disposable executor",
+        "previousFence": {
+          "catalogId": "uar-collaboration-catalog",
+          "serviceInstanceId": "cadence-c093-shared-runtime",
+          "incarnationId": "4d3b224d-57b3-4b61-9abe-b6a7371777a2",
+          "epoch": 1
+        },
+        "replacementFence": {
+          "catalogId": "uar-collaboration-catalog",
+          "serviceInstanceId": "cadence-c093-shared-runtime",
+          "incarnationId": "a5785bbd-430e-4bc7-b3ce-5ee896759cc4",
+          "epoch": 2
+        },
+        "authorizationDecisionRef": "admin-key-56fe45d0-11c0-4339-aa39-06d9883d8ccd",
+        "fencingEvidenceRef": "dece7474-168c-4342-9dda-ef004744a94e",
+        "transferredQueuedAttemptIds": [
+          "581fcc20-00f8-4f58-b47f-28237c223123"
+        ],
+        "uncertainAttemptIds": [],
+        "committedAt": "2026-09-30T09:36:49.327119Z"
+      },
+      "transferredAttempt": {
+        "id": "581fcc20-00f8-4f58-b47f-28237c223123",
+        "runId": "a3fc1ea8-1345-4330-86fd-3a86ff8cd732",
+        "executionOutcome": "succeeded",
+        "accountingState": "settled"
+      },
+      "cleanReleaseEpoch": 3,
+      "crashHoldEpoch": 3,
+      "storageLoss": "ownership lookup refused; no execution initiated",
+      "unsupported": [
+        "external crash takeover without a host-verified process-tree exclusion receipt"
+      ],
+      "effectBoundaryEvidence": "The old incarnation refused dispatch before creating a root; reclaim consumed the runtime-owned joined-root receipt.",
+      "settlementEvidence": "Joined-root replacement and original output/accounting preservation operated; no raw external settlement injection endpoint exists."
+    }
+  }
+}

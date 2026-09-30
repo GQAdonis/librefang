@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "receipt": "c07-local-scoped-observers-with-durable-delivery",
+  "recordedAt": "2026-09-28T05:08:55Z",
+  "result": "pass",
+  "source": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "c06BaseCommit": "10677e1c7b38e30aace010851057ba4b2a1fb0d6",
+    "implementationCommit": "d4e5413c53c379b43f48e423a751c87702753ee3",
+    "branch": "codex/agent-fabric-convergence-c07",
+    "provider": "SurrealKV through surrealdb Rust SDK =3.3.0",
+    "selectedCapability": "local scoped observers of C06 logical agent instances and their stable conversations",
+    "excludedSource": "ordinary RunManager token SSE is in-memory and is not a durable source occurrence",
+    "productChange": "openspec/changes/archive/2026-09-28-afc-c07-local-observers"
+  },
+  "authorityFixtures": {
+    "workspace": "workspace:c03",
+    "excludedWorkspace": "workspace:c07-other",
+    "bindingId": "urn:uar:c03:binding",
+    "serviceInstanceId": "agent-instance:c03",
+    "restartEndpoint": "same reserved HTTP port as the pinned deployment binding",
+    "sourceInstanceCount": 3,
+    "observerInstanceCount": 2
+  },
+  "integrationGate": {
+    "command": "cargo test --test agent_fabric_c07_gate --features afc-c07-gate -- --test-threads=1",
+    "exitCode": 0,
+    "result": "2 passed; 0 failed; outer gate finished in 127.87 seconds",
+    "log": "/tmp/afc-c07-gate.log",
+    "logSha256": "c1a08aa37cf46f5c89efc397c4828f5e384f5db381259df3c6f86fa2f73360cd",
+    "sourceProvenance": "The gate compiled the production code later captured in implementationCommit. Only rustfmt formatting and OpenSpec archive bookkeeping followed the passing gate.",
+    "observed": [
+      "real authenticated UAR child process with persistent SurrealKV 3.3.0 state",
+      "two independent observers with source and conversation exclusions",
+      "metadata-only projection and C06 monitor command receipts",
+      "pause, visible backlog and restart catch-up at a stable endpoint",
+      "revocation of admitted but not yet dispatched observer work",
+      "multiple committed lifecycle occurrences in the outbox despite a one-event C06 UI ring",
+      "1,026 actual C06 source cancellations across the 1,024-occurrence retention boundary",
+      "exact persisted retention gap and operator-only gap acknowledgement"
+    ]
+  },
+  "scopeLimitations": [
+    "The gate did not inject dead-letter failure or uncertain external effects; finite retry and dead-letter state are implemented but not certified by this gate.",
+    "The C06 gate, not this C07 gate, exercised ordinary-run compatibility.",
+    "The final passing gate followed two failed gate-fixture outcomes: an endpoint mismatch on restart and an assertion racing the second committed occurrence. One diagnostic rerun was interrupted after narrowing the conflict.",
+    "This receipt proves a local macOS arm64 real-host SurrealKV path; it does not certify installed Windows or Mac packages, remote SurrealDB, or distributed observers."
+  ],
+  "scope": {
+    "host": "macOS arm64 local real-host SurrealKV integration",
+    "installedWindowsAcceptanceClaimed": false,
+    "installedMacAcceptanceClaimed": false,
+    "releaseArtifactClaimed": false
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T12:27:31.965Z",
+  "observedBoundary": "c094-operate-ownership-correction-20260930",
+  "sourceCommit": "789f47222579cb8f9febd22107030e81ab5d1315",
+  "failure": "prometheus.uar.teams.setup_starter",
+  "sourceThrow": "UAR sidecar restarted during starter team setup",
+  "selectedInstance": "external disposable operation host",
+  "observedManagedLaunch": [
+    {
+      "timestamp": "2026-09-30 07:20:26",
+      "module": "UarSidecarService",
+      "message": "UAR sidecar ready",
+      "generation": 2,
+      "effectivePort": 1907,
+      "storageBackend": "embedded",
+      "version": "1.0.0"
+    }
+  ],
+  "cause": "setupUarStarterTeam calls ensureReady despite selected external instance; observed managed generation2 replaces selected generation1.",
+  "repairStatus": "complete source repair in progress, no new operation performed"
+}

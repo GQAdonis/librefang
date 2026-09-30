@@ -1,0 +1,13 @@
+{
+  "runtimeConformance": false,
+  "profile": "urn:prometheus:uar:team-execution:0.1.0",
+  "kind": "ReclaimRequest",
+  "data": {
+    "commandId": "reclaim-1",
+    "catalogId": "catalog-example",
+    "expectedEpoch": 4,
+    "replacementServiceInstanceId": "uar-designated",
+    "reason": "Controlled example: previous executor and owned child processes stopped.",
+    "fencingEvidenceRef": "fencing-evidence-example"
+  }
+}

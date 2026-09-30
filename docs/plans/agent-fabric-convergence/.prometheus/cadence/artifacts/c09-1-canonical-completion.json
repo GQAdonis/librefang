@@ -1,0 +1,21 @@
+{
+  "source": "prometheus kbd status --json",
+  "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+  "runId": "project-20260924T180329Z",
+  "revision": 333,
+  "lastEventId": "30f4ab74-1d59-4f50-bfca-c5c49ba637b3",
+  "task": {
+    "id": "C09.1",
+    "title": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+    "sequence": 1,
+    "status": "complete",
+    "summary": "Durable planning board delivered in packaged Mac ARM64 Boss: two teams, supervisor/worker, bounded map/reduce and peer DAGs, restart recovery, two-workspace isolation and Teams settings; exact receipt c09-1-evidence.md. Execution remains C09.2/C09.3."
+  },
+  "completion": {
+    "tasks": [
+      "C09.1"
+    ],
+    "changes": [],
+    "phases": []
+  }
+}

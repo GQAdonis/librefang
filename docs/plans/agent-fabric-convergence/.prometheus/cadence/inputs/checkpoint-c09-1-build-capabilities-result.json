@@ -1,0 +1,39 @@
+{
+  "id": "mac-arm64-build",
+  "attemptId": "9770806b-2952-48ab-adf0-be95ea54aa68",
+  "commandId": "c09-1-mac-build-capabilities-repair-20260928",
+  "kind": "build",
+  "status": "success",
+  "startedAt": "2026-09-28T19:35:03.367Z",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "ae4db11869efd125dce7f9a2a488d876af0b7b98",
+      "fingerprint": "7ed965bca6822876b90e473f794cc031c4ae3c37cb3fc6afba2b1e8e6fe7c021"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "c51c039cdec0b610d2298071003b3ad52af79b13",
+      "fingerprint": "4b18b51b4667986e34bc464d266666271d6289464fd0b85a0c3dba02aab9d759"
+    }
+  ],
+  "command": "pnpm",
+  "args": [
+    "build:mac:arm64"
+  ],
+  "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "hostname": "Traviss-MacBook-Pro-4.local",
+  "pid": 49506,
+  "exitCode": 0,
+  "signal": null,
+  "finishedAt": "2026-09-28T19:40:18.904Z",
+  "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/logs/9770806b-2952-48ab-adf0-be95ea54aa68.log",
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+      "sha256": "332d005ae1fa6b6d308fc6a684a766411491100afb782d383e85eb85168b97fc",
+      "size": 123358780,
+      "platform": "darwin-arm64"
+    }
+  ]
+}

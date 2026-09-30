@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T01:04:42.228Z",
+  "stage": "analyze",
+  "status": "proposed-learning",
+  "lesson": "Durable roster, message acceptance, activation and model wire compatibility are separate contracts; neither shared prompt text nor a new executor supplies them automatically.",
+  "reviewImprovements": [
+    "One atomic catalog admission contract selected",
+    "Legacy context requirements and accounting-only uncertainty given explicit proposed semantics",
+    "Remote exclusivity and backend proof remain visible limitations"
+  ],
+  "productionCodeChanged": false,
+  "applicationBuildsRun": false,
+  "productTasksCompleted": 0,
+  "cadenceClockReset": false,
+  "velocityImprovementDemonstrated": false
+}

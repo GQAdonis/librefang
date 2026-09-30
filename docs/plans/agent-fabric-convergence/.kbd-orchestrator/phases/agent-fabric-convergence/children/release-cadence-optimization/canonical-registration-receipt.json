@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-28T08:06:33.557Z",
+  "sourceRevision": 294,
+  "planRevision": 4,
+  "registrationRevisions": [
+    289,
+    290,
+    291,
+    292,
+    293
+  ],
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence",
+      "agent-fabric-convergence::release-cadence-optimization"
+    ],
+    "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+    "stageId": "execute",
+    "changeId": "afc-release-cadence-optimization",
+    "taskId": "1.2",
+    "commit": "d7c5f1de9762928f9d5e110e0a760c50fc7cd8b2"
+  },
+  "parentChange": {
+    "id": "afc-d01-local-mac-durable-agent-delivery",
+    "title": "Local Mac durable-agent delivery",
+    "sequence": 0,
+    "status": "pending",
+    "implementationStatus": "pending",
+    "tasks": {
+      "D01.1": {
+        "id": "D01.1",
+        "title": "Freeze source and repair packaged UAR profile",
+        "sequence": 1,
+        "status": "pending",
+        "summary": null
+      },
+      "D01.2": {
+        "id": "D01.2",
+        "title": "Deliver durable-agent and observer UI through The Boss",
+        "sequence": 2,
+        "status": "pending",
+        "summary": null
+      },
+      "D01.3": {
+        "id": "D01.3",
+        "title": "Run complete local gate and deliver built app",
+        "sequence": 3,
+        "status": "pending",
+        "summary": null
+      },
+      "D01.4": {
+        "id": "D01.4",
+        "title": "Resolve publication choice including live website installer pointers",
+        "sequence": 4,
+        "status": "pending",
+        "summary": null
+      }
+    }
+  },
+  "parentOrderedPending": [
+    {
+      "id": "afc-d01-local-mac-durable-agent-delivery",
+      "sequence": 0
+    },
+    {
+      "id": "afc-c08-bossfang-and-fabric-observer-routing",
+      "sequence": 8
+    },
+    {
+      "id": "afc-c09-bounded-teams-and-shared-task-board",
+      "sequence": 9
+    },
+    {
+      "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "sequence": 10
+    },
+    {
+      "id": "afc-c11-authoritative-business-data-and-offline-commands",
+      "sequence": 11
+    },
+    {
+      "id": "afc-c12-personal-peer-sovereignty-and-consent",
+      "sequence": 12
+    },
+    {
+      "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "sequence": 13
+    },
+    {
+      "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "sequence": 14
+    },
+    {
+      "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "sequence": 15
+    },
+    {
+      "id": "afc-c16-specialist-marketing-product-and-design-teams",
+      "sequence": 16
+    },
+    {
+      "id": "afc-c17-executive-assistants-and-consented-human-representation",
+      "sequence": 17
+    },
+    {
+      "id": "afc-c18-federated-compatibility-and-release-evidence",
+      "sequence": 18
+    }
+  ],
+  "selectorEvidence": "Generated parent progress lists sequence-zero D01 first; active selector correctly remains child1.2. Actual restored parent selector must be confirmed during Reflect, not falsely claimed activated now.",
+  "conflicts": {},
+  "originalPortfolio": {
+    "changes": 18,
+    "completed": 7,
+    "completedTaskGroups": 22,
+    "totalTaskGroups": 54
+  },
+  "newDeliveryControl": {
+    "changes": 1,
+    "taskGroups": 4,
+    "pending": true
+  }
+}

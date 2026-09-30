@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-09-30T09:35:49.399Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-09-30T09:26:33.552Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/capture-c09-operation.mjs",
+  "scenarioDigest": "8081938d507b46c48dc64d6dbabd1611603f39cafd7b75b69c23062db91f8e8f",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-JuU7V6",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "{\"evidencePath\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c093-complete-operation-c3248587-b4e8-436b-8858-a482a855d0ca.json\",\"evidenceSha256\":\"d5303a4c863927f12e5466491046b1bf7adb929dde42abd5b420b6f295ce0686\",\"scope\":\"C09.3 model/profile, rebind, real gateway failure, workspace/budget/restart and remote ownership operations\"}",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-09-30T09:37:30.893Z"
+}

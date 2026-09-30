@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "56d87b5ab088c69a41faa761753edd253049d775",
+      "fingerprint": "62ee1d8ce77f106a5cc3920d249b4238f7b83a6114c87fcb330e8a561dfe6078"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
+      "fingerprint": "0d8682c321966c9d9120c102de7ae72e4c05f17da638bcc229b5965930188df2"
+    }
+  ],
+  "startedAt": "2026-09-30T13:31:00.791Z",
+  "finishedAt": "2026-09-30T13:31:09.309Z",
+  "passed": false,
+  "operationModules": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-authority.mjs",
+      "sha256": "3b77059373e7b3c40e2b7df5aec316bf0812dbbabe44ea7d315649c5e4d063bf"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-controls.mjs",
+      "sha256": "eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-driver.mjs",
+      "sha256": "aba181a62d8454ea62b797f4ecc557572bcc9d92413ab14234c48b724a0a3d0b"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-fixtures.mjs",
+      "sha256": "d80eaaf4797e5cc1789e7417d3bdfeaed6d761893d954dc0015370b6ad8411f4"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-flows.mjs",
+      "sha256": "9b3865d0afa73db581488a05bcab2f8fd55a9eb48887d56962bf5cf30f08a1c2"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-prompts.mjs",
+      "sha256": "3900b0eea664e3240284a27f0c0b4364cc412b18794bcd7418043854fbf16f70"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-host.mjs",
+      "sha256": "be6cae868ed6caf5f2ca1f4691418cc8ee7a04786f84817655515642b31b6528"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-scenario.mjs",
+      "sha256": "8394cfbb83b1c49985b1aded1bd9f9fdc5b81aa3c63309023acc2258dd3adf3a"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-operation-tools.mjs",
+      "sha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+    }
+  ],
+  "attempts": [],
+  "denials": [],
+  "observations": [],
+  "failureCode": "protected-operation-failure"
+}

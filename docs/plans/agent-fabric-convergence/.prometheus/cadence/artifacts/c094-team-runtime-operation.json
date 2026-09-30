@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-09-30T16:46:24.413Z",
+  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-09-30T14:35:33.644Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/capture-c094-operation.mjs",
+  "scenarioDigest": "01020a250f59ceec6e3657b73e32e741bc86259ca40cc371a2298f993d51d232",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-OtO5wZ",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "{\"evidencePath\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c094-complete-operation-709f4a52-d551-4bd8-9cdb-8e9b64c4c641.json\",\"evidenceSha256\":\"03e54a9552ba166e93843ccedfa940367bdf9aff4738cb17d61702a4bf44f49a\",\"complete\":true,\"scope\":\"C09.4 governed peer communication, capacity-one yield/resume, ordered target outcomes and durable recovery\"}",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-09-30T16:46:55.769Z"
+}

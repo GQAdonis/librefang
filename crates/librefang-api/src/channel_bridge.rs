@@ -4,7 +4,13 @@
 //! `start_channel_bridge()` entry point called by the daemon.
 
 use crate::workflow::WorkflowId;
-use librefang_channels::bridge::{BridgeManager, ChannelBridgeHandle};
+use librefang_channels::bridge::{
+    BridgeManager, ChannelBridgeHandle, ChannelEchoLineage, ChannelReplyOutcome,
+};
+use librefang_channels::channel_route::{
+    ChannelScope, DispatchClaim, DispatchState, RouteAdmission, RouteAffinity, RouteDecision,
+    RouteOutcome, SourceOccurrence,
+};
 use librefang_channels::router::AgentRouter;
 use librefang_channels::sidecar::SidecarAdapter;
 use librefang_channels::types::{ChannelAdapter, ConversationScope, SenderContext};
@@ -642,6 +648,35 @@ impl KernelBridgeAdapter {
         }
     }
 
+    #[cfg(feature = "surreal-backend")]
+    async fn channel_route_store(&self) -> Result<librefang_storage::ChannelRouteStore, String> {
+        let cfg = self.kernel.config_ref().storage.clone();
+        let session = librefang_storage::shared_pool()
+            .open(&cfg)
+            .await
+            .map_err(|error| format!("open channel route storage: {error}"))?;
+        // Boot provisioning applies operational migrations once. An inbound
+        // message must never run the whole migration set on its hot path;
+        // absent schema remains a storage error and therefore fails closed.
+        librefang_storage::ChannelRouteStore::open(&session)
+            .await
+            .map_err(|error| format!("open channel route store: {error}"))
+    }
+
+    #[cfg(feature = "surreal-backend")]
+    async fn channel_action_store(
+        &self,
+    ) -> Result<librefang_storage::channel_actions::ChannelActionStore, String> {
+        let cfg = self.kernel.config_ref().storage.clone();
+        let session = librefang_storage::shared_pool()
+            .open(&cfg)
+            .await
+            .map_err(|error| format!("open channel action storage: {error}"))?;
+        librefang_storage::channel_actions::ChannelActionStore::open(&session)
+            .await
+            .map_err(|error| format!("open channel action store: {error}"))
+    }
+
     /// The per-turn thinking override to apply to a message from `sender`.
     ///
     /// `None` — no `/think` was issued in this conversation, so the agent manifest / global `[thinking]` default stands untouched. This is the read half of `set_thinking`; both sides derive the key the same way, so a preference set in one chat is invisible to every other chat and to every other agent.
@@ -666,6 +701,53 @@ impl KernelBridgeAdapter {
             .find_model_for_manifest(entry.manifest.model.provider.as_str(), model)
             .map(|m| !catalog.effective_capabilities(m).supports_thinking)
             .unwrap_or(false)
+    }
+}
+
+#[cfg(feature = "surreal-backend")]
+fn stored_channel_scope(scope: &ChannelScope) -> librefang_storage::ChannelScope {
+    librefang_storage::ChannelScope {
+        provider: scope.provider.clone(),
+        account: scope.account.clone(),
+        account_kind: match scope.account_kind {
+            librefang_channels::channel_route::AccountKind::Native => "native",
+            librefang_channels::channel_route::AccountKind::ConfiguredInstance => {
+                "configured_instance"
+            }
+        }
+        .to_string(),
+        workspace: scope.workspace.clone(),
+        room: scope.room.clone(),
+        thread: scope.thread.clone(),
+        sender: scope.sender.clone(),
+    }
+}
+
+#[cfg(feature = "surreal-backend")]
+fn stored_route_outcome(outcome: &RouteOutcome) -> librefang_storage::RouteOutcome {
+    match outcome {
+        RouteOutcome::Selected { handler } => librefang_storage::RouteOutcome::Selected {
+            handler: handler.clone(),
+        },
+        RouteOutcome::Conflict { handlers } => librefang_storage::RouteOutcome::Conflict {
+            handlers: handlers.clone(),
+        },
+        RouteOutcome::Unavailable { reason } => librefang_storage::RouteOutcome::Unavailable {
+            reason: reason.clone(),
+        },
+    }
+}
+
+#[cfg(feature = "surreal-backend")]
+fn channel_route_outcome(outcome: librefang_storage::RouteOutcome) -> RouteOutcome {
+    match outcome {
+        librefang_storage::RouteOutcome::Selected { handler } => RouteOutcome::Selected { handler },
+        librefang_storage::RouteOutcome::Conflict { handlers } => {
+            RouteOutcome::Conflict { handlers }
+        }
+        librefang_storage::RouteOutcome::Unavailable { reason } => {
+            RouteOutcome::Unavailable { reason }
+        }
     }
 }
 
@@ -782,6 +864,597 @@ impl KernelBridgeAdapter {
 
 #[async_trait]
 impl ChannelBridgeHandle for KernelBridgeAdapter {
+    async fn channel_route_affinity(
+        &self,
+        scope: &ChannelScope,
+    ) -> Result<Option<RouteAffinity>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let route = self
+                .channel_route_store()
+                .await?
+                .affinity(&stored_channel_scope(scope))
+                .await
+                .map_err(|error| format!("read channel route affinity: {error}"))?;
+            return Ok(route.map(|route| RouteAffinity {
+                handler: route.handler,
+                revision: route.revision,
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = scope;
+            Ok(None)
+        }
+    }
+
+    async fn admit_channel_route(
+        &self,
+        occurrence: &SourceOccurrence,
+        decision: &RouteDecision,
+    ) -> Result<Option<RouteAdmission>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let source = librefang_storage::SourceOccurrence {
+                scope: stored_channel_scope(&occurrence.scope),
+                native_message_id: occurrence.native_message_id.clone(),
+            };
+            let proposed = librefang_storage::RouteDecision {
+                outcome: stored_route_outcome(&decision.outcome),
+                reason: decision.reason.clone(),
+                binding_revision: decision.binding_revision.clone(),
+            };
+            let admitted = self
+                .channel_route_store()
+                .await?
+                .admit(&source, &proposed)
+                .await
+                .map_err(|error| format!("admit channel route: {error}"))?;
+            let dispatch = match admitted.dispatch {
+                Some(librefang_storage::DispatchState::Pending) => DispatchState::Ready,
+                Some(librefang_storage::DispatchState::Claimed) => DispatchState::Claimed,
+                Some(librefang_storage::DispatchState::Completed) => DispatchState::Completed,
+                Some(librefang_storage::DispatchState::Uncertain) => DispatchState::Uncertain,
+                None if matches!(
+                    &admitted.outcome,
+                    librefang_storage::RouteOutcome::Selected { .. }
+                ) =>
+                {
+                    return Err("selected channel route has no dispatch receipt".into());
+                }
+                None => DispatchState::Ready,
+            };
+            return Ok(Some(RouteAdmission {
+                occurrence_id: admitted.occurrence_id,
+                route_revision: admitted.route_revision,
+                is_new: admitted.is_new,
+                outcome: channel_route_outcome(admitted.outcome),
+                action_id: admitted.action_id,
+                dispatch,
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (occurrence, decision);
+            Ok(None)
+        }
+    }
+
+    async fn claim_channel_dispatch(
+        &self,
+        occurrence_id: &str,
+        claimant: &str,
+    ) -> Result<DispatchClaim, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let claim = self
+                .channel_route_store()
+                .await?
+                .claim_dispatch(occurrence_id, claimant)
+                .await
+                .map_err(|error| format!("claim channel dispatch: {error}"))?;
+            return Ok(match claim {
+                librefang_storage::DispatchClaim::Acquired(_) => DispatchClaim::Acquired,
+                librefang_storage::DispatchClaim::NotClaimable(receipt) => match receipt.state {
+                    librefang_storage::DispatchState::Pending => DispatchClaim::NotDispatchable,
+                    librefang_storage::DispatchState::Claimed => DispatchClaim::AlreadyClaimed,
+                    librefang_storage::DispatchState::Completed => DispatchClaim::Completed,
+                    librefang_storage::DispatchState::Uncertain => DispatchClaim::Uncertain,
+                },
+                librefang_storage::DispatchClaim::NotDispatchable => DispatchClaim::NotDispatchable,
+            });
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (occurrence_id, claimant);
+            Err("durable channel dispatch is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn complete_channel_dispatch(
+        &self,
+        occurrence_id: &str,
+        claimant: &str,
+        success: bool,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            if !success {
+                return Err("failed channel effects must be marked uncertain".into());
+            }
+            self.channel_route_store()
+                .await?
+                .complete_dispatch(occurrence_id, claimant)
+                .await
+                .map_err(|error| format!("complete channel dispatch: {error}"))?;
+            return Ok(());
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (occurrence_id, claimant, success);
+            Err("durable channel dispatch is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn mark_channel_dispatch_uncertain(
+        &self,
+        occurrence_id: &str,
+        claimant: &str,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            self.channel_route_store()
+                .await?
+                .mark_uncertain(occurrence_id, claimant)
+                .await
+                .map_err(|error| format!("mark channel dispatch uncertain: {error}"))?;
+            return Ok(());
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (occurrence_id, claimant);
+            Err("durable channel dispatch is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn admit_channel_handler_action(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        referenced_native_id: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            use librefang_storage::channel_actions::{
+                ActionAdmission, ActionKind, ActionState, CausalActionRequest, CausalPolicy,
+                ReplyTargetScope,
+            };
+            if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+                return Ok(None);
+            }
+            let store = self.channel_action_store().await?;
+            let target = ReplyTargetScope::from(&stored_channel_scope(&source.scope));
+            let parent = if let Some(native_id) = referenced_native_id {
+                let action_id = store
+                    .lookup_provider_echo(&target, native_id)
+                    .await
+                    .map_err(|error| format!("resolve referenced Discord message: {error}"))?
+                    .ok_or_else(|| {
+                        "referenced Discord message has no same-scope outbound action".to_string()
+                    })?;
+                let receipt = store
+                    .action_receipt(&action_id)
+                    .await
+                    .map_err(|error| format!("read referenced Discord action: {error}"))?
+                    .ok_or_else(|| "referenced Discord action is absent".to_string())?;
+                if receipt.kind != ActionKind::Reply
+                    || receipt.state != ActionState::Completed
+                    || receipt.reply_target.as_ref() != Some(&target)
+                {
+                    return Err(
+                        "referenced Discord action is not a completed same-scope reply".into(),
+                    );
+                }
+                Some(receipt)
+            } else {
+                None
+            };
+            let root_occurrence_id = parent.as_ref().map_or_else(
+                || admission.occurrence_id.clone(),
+                |receipt| receipt.root_occurrence_id.clone(),
+            );
+            let request = CausalActionRequest {
+                root_occurrence_id,
+                source_occurrence_id: admission.occurrence_id.clone(),
+                parent_action_id: parent.as_ref().map(|receipt| receipt.action_id.clone()),
+                action_key: format!("handler-forward-v1:{handler}"),
+                route_identity: format!("handler:{handler}"),
+                kind: ActionKind::Forward,
+                reply_target: None,
+                reply_grant: None,
+                policy: CausalPolicy::default(),
+                original_principal: parent.as_ref().map_or_else(
+                    || source.scope.sender.clone(),
+                    |receipt| receipt.original_principal.clone(),
+                ),
+                actor_id: handler.to_owned(),
+            };
+            let result = store
+                .admit_action(&request)
+                .await
+                .map_err(|error| format!("admit causal handler: {error}"))?;
+            return match result {
+                ActionAdmission::New(receipt) | ActionAdmission::Replay(receipt) => {
+                    Ok(Some(receipt.action_id))
+                }
+                ActionAdmission::Suppressed(receipt) => Err(format!(
+                    "causal handler suppressed before execution: {}",
+                    receipt.suppression_reason.unwrap_or_default()
+                )),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, referenced_native_id);
+            Ok(None)
+        }
+    }
+
+    async fn admit_channel_reply(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        parent_action_id: Option<&str>,
+        _payload: &[u8],
+    ) -> Result<Option<String>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+                return Ok(None);
+            }
+            let grant_id = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_ID")
+                .map_err(|_| "scoped reply grant ID is not configured".to_string())?;
+            let grant_revision = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_REVISION")
+                .map_err(|_| "scoped reply grant revision is not configured".to_string())?;
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            let store = self.channel_action_store().await?;
+            let parent = if let Some(action_id) = parent_action_id {
+                let receipt = store
+                    .action_receipt(action_id)
+                    .await
+                    .map_err(|error| format!("read causal handler: {error}"))?
+                    .ok_or_else(|| "causal handler action is absent".to_string())?;
+                if receipt.kind != librefang_storage::channel_actions::ActionKind::Forward
+                    || receipt.source_occurrence_id != admission.occurrence_id
+                    || receipt.actor_id != handler
+                    || receipt.state != librefang_storage::channel_actions::ActionState::Claimed
+                {
+                    return Err(
+                        "causal handler is not the claimed predecessor of this reply".into(),
+                    );
+                }
+                Some(receipt)
+            } else {
+                None
+            };
+            let request = librefang_storage::channel_actions::CausalActionRequest {
+                root_occurrence_id: parent.as_ref().map_or_else(
+                    || admission.occurrence_id.clone(),
+                    |receipt| receipt.root_occurrence_id.clone(),
+                ),
+                source_occurrence_id: admission.occurrence_id.clone(),
+                parent_action_id: parent.as_ref().map(|receipt| receipt.action_id.clone()),
+                action_key: format!("handler-reply-v1:{handler}"),
+                route_identity: format!(
+                    "reply:{handler}:{}:{}:{}:{}:{}",
+                    source.scope.provider,
+                    source.scope.account,
+                    source.scope.workspace,
+                    source.scope.room,
+                    source.scope.thread.as_deref().unwrap_or("")
+                ),
+                kind: librefang_storage::channel_actions::ActionKind::Reply,
+                reply_target: Some(target.clone()),
+                reply_grant: Some(librefang_storage::channel_actions::ReplyGrantReceipt {
+                    grant_id,
+                    grant_revision,
+                    scope: librefang_storage::channel_actions::ReplyGrantScope::SourceOnly,
+                    allowed_target: target,
+                }),
+                policy: librefang_storage::channel_actions::CausalPolicy::default(),
+                original_principal: parent.as_ref().map_or_else(
+                    || source.scope.sender.clone(),
+                    |receipt| receipt.original_principal.clone(),
+                ),
+                actor_id: handler.to_owned(),
+            };
+            let result = store
+                .admit_action(&request)
+                .await
+                .map_err(|error| format!("admit scoped channel reply: {error}"))?;
+            return Ok(Some(match result {
+                librefang_storage::channel_actions::ActionAdmission::New(receipt)
+                | librefang_storage::channel_actions::ActionAdmission::Replay(receipt) => {
+                    receipt.action_id
+                }
+                librefang_storage::channel_actions::ActionAdmission::Suppressed(receipt) => {
+                    return Err(format!(
+                        "scoped reply suppressed: {}",
+                        receipt.suppression_reason.unwrap_or_default()
+                    ));
+                }
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, parent_action_id);
+            Ok(None)
+        }
+    }
+
+    async fn claim_channel_reply(&self, action_id: &str, claimant: &str) -> Result<bool, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            return match self
+                .channel_action_store()
+                .await?
+                .claim_effect(action_id, claimant)
+                .await
+                .map_err(|error| format!("claim scoped reply: {error}"))?
+            {
+                librefang_storage::channel_actions::ActionClaim::Acquired(_) => Ok(true),
+                librefang_storage::channel_actions::ActionClaim::NotClaimable(_)
+                | librefang_storage::channel_actions::ActionClaim::Missing => Ok(false),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, claimant);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn release_channel_reply(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        action_id: &str,
+        payload: &[u8],
+    ) -> Result<bool, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let receipt = self
+                .channel_action_store()
+                .await?
+                .action_receipt(action_id)
+                .await
+                .map_err(|error| format!("read scoped reply: {error}"))?
+                .ok_or_else(|| "scoped reply action is absent".to_string())?;
+            let grant_issuer = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER")
+                .map_err(|_| "scoped reply grant issuer is not configured".to_string())?;
+            let grant_id = receipt
+                .reply_grant_id
+                .as_deref()
+                .ok_or_else(|| "scoped reply grant is absent".to_string())?;
+            let route_revision = admission
+                .route_revision
+                .ok_or_else(|| "scoped reply route revision is absent".to_string())?
+                .to_string();
+            let effect_key = format!("channel-scoped-reply-v1:{action_id}");
+            let released = crate::channel_authority::release_channel_effect(
+                &crate::channel_authority::ChannelEffectInput {
+                    effect_key: &effect_key,
+                    occurrence_id: &admission.occurrence_id,
+                    action: crate::channel_authority::ChannelEffectAction::ScopedReply,
+                    scope: &source.scope,
+                    recipient: &source.scope.room,
+                    handler,
+                    route_revision: &route_revision,
+                    payload,
+                    payload_sha256: None,
+                    classification: "scoped_reply",
+                    root_occurrence_id: &receipt.root_occurrence_id,
+                    parent_action_id: receipt.parent_action_id.as_deref(),
+                    route_identity: &receipt.route_identity,
+                    visited_routes: &receipt.visited_routes,
+                    remaining_depth: receipt.remaining_depth,
+                    remaining_fanout: receipt.remaining_fanout,
+                    grant_issuer: &grant_issuer,
+                    grant_id,
+                },
+            )
+            .await;
+            return match released {
+                Ok(released) => Ok(receipt.reply_grant_revision.as_deref()
+                    == Some(released.grant_revision.to_string().as_str())),
+                Err(error) if error.contains("refused the effect (4") => Ok(false),
+                Err(error) => Err(error),
+            };
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, action_id, payload);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn settle_channel_reply(
+        &self,
+        action_id: &str,
+        claimant: &str,
+        outcome: ChannelReplyOutcome,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let store = self.channel_action_store().await?;
+            let state = match outcome {
+                ChannelReplyOutcome::Completed => store.complete_effect(action_id, claimant).await,
+                ChannelReplyOutcome::Withheld => store.withhold_effect(action_id, claimant).await,
+                ChannelReplyOutcome::Uncertain => {
+                    store.mark_effect_uncertain(action_id, claimant).await
+                }
+            };
+            return state
+                .map(|_| ())
+                .map_err(|error| format!("settle scoped reply: {error}"));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, claimant, outcome);
+            Err("scoped channel reply is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn bind_channel_provider_echo(
+        &self,
+        action_id: &str,
+        source: &SourceOccurrence,
+        native_message_id: &str,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            return self
+                .channel_action_store()
+                .await?
+                .bind_provider_echo(action_id, &target, native_message_id)
+                .await
+                .map(|_| ())
+                .map_err(|error| format!("bind channel provider echo: {error}"));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (action_id, source, native_message_id);
+            Err("provider echo binding is unsupported by this storage profile".into())
+        }
+    }
+
+    async fn channel_provider_echo(
+        &self,
+        source: &SourceOccurrence,
+    ) -> Result<Option<ChannelEchoLineage>, String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            let target = librefang_storage::channel_actions::ReplyTargetScope::from(
+                &stored_channel_scope(&source.scope),
+            );
+            let store = self.channel_action_store().await?;
+            let action_id = store
+                .lookup_provider_echo(&target, &source.native_message_id)
+                .await
+                .map_err(|error| format!("lookup channel provider echo: {error}"))?;
+            let Some(action_id) = action_id else {
+                return Ok(None);
+            };
+            let receipt = store
+                .action_receipt(&action_id)
+                .await
+                .map_err(|error| format!("read channel echo lineage: {error}"))?
+                .ok_or_else(|| "provider echo references an absent causal action".to_string())?;
+            return Ok(Some(ChannelEchoLineage {
+                action_id: receipt.action_id,
+                root_occurrence_id: receipt.root_occurrence_id,
+                parent_action_id: receipt.parent_action_id,
+                visited_routes: receipt.visited_routes,
+                remaining_depth: receipt.remaining_depth,
+                remaining_fanout: receipt.remaining_fanout,
+            }));
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = source;
+            Ok(None)
+        }
+    }
+
+    async fn authorize_channel_handler_execution(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        payload: &[u8],
+    ) -> Result<(), String> {
+        // A host without Gate configuration remains a local-only route
+        // profile. Once configured, a missing grant or unavailable Gate
+        // withholds the Discord-guild handler effect.
+        if std::env::var("LIBREFANG_CHANNEL_GATE_URL").is_err() {
+            return Ok(());
+        }
+        let grant_issuer = std::env::var("LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER")
+            .map_err(|_| "handler execution grant issuer is not configured".to_string())?;
+        let grant_id = std::env::var("LIBREFANG_CHANNEL_HANDLER_GRANT_ID")
+            .map_err(|_| "handler execution grant ID is not configured".to_string())?;
+        let route_revision = admission
+            .route_revision
+            .ok_or_else(|| "durable handler route revision is absent".to_string())?
+            .to_string();
+        let action_id = admission
+            .action_id
+            .as_deref()
+            .ok_or_else(|| "durable handler action ID is absent".to_string())?;
+        let effect_key = format!(
+            "channel-handler-execution-v1:{}:{action_id}",
+            admission.occurrence_id
+        );
+        let route_identity = format!("{}:{handler}", admission.occurrence_id);
+        crate::channel_authority::release_channel_effect(
+            &crate::channel_authority::ChannelEffectInput {
+                effect_key: &effect_key,
+                occurrence_id: &admission.occurrence_id,
+                action: crate::channel_authority::ChannelEffectAction::HandlerExecution,
+                scope: &source.scope,
+                recipient: handler,
+                handler,
+                route_revision: &route_revision,
+                payload,
+                payload_sha256: None,
+                classification: "handler_payload",
+                root_occurrence_id: &admission.occurrence_id,
+                parent_action_id: None,
+                route_identity: &route_identity,
+                visited_routes: &[],
+                remaining_depth: 1,
+                remaining_fanout: 1,
+                grant_issuer: &grant_issuer,
+                grant_id: &grant_id,
+            },
+        )
+        .await?;
+        Ok(())
+    }
+
+    async fn publish_channel_observers(
+        &self,
+        source: &SourceOccurrence,
+        admission: &RouteAdmission,
+        handler: &str,
+        message: &librefang_channels::types::ChannelMessage,
+    ) -> Result<(), String> {
+        #[cfg(feature = "surreal-backend")]
+        {
+            return crate::channel_observers::queue_observers(
+                &self.kernel.config_ref().storage,
+                source,
+                admission,
+                handler,
+                message,
+            )
+            .await;
+        }
+        #[cfg(not(feature = "surreal-backend"))]
+        {
+            let _ = (source, admission, handler, message);
+            Ok(())
+        }
+    }
+
     async fn send_message(&self, agent_id: AgentId, message: &str) -> Result<String, String> {
         let result = self
             .kernel
@@ -2705,15 +3378,248 @@ pub async fn start_channel_bridge(
 /// Start channels from an explicit `ChannelsConfig` (used by hot-reload).
 ///
 /// Returns `(Option<BridgeManager>, Vec<started_channel_names>, webhook_router)`.
-/// Re-dispatch a single journaled message after crash-recovery or after a
-/// rate-limit / overload window has elapsed.
-///
-/// Routes through `handle.send_message`, then delivers any response back to
-/// the originating channel adapter, and updates the journal status with
-/// [`MessageJournal::record_outcome`] (which itself routes the entry to
-/// `Completed` / `Deferred` / `Failed`). Re-dispatch failures that hit a
-/// fresh rate-limit get re-deferred — they do NOT count against the retry
-/// budget. Hard failures DO count (3-strike cap).
+/// Recover only a never-claimed durable handler action, with exact source,
+/// handler, and adapter identity verified against the stored receipt.
+#[cfg(feature = "surreal-backend")]
+async fn redispatch_durable_journal_entry(
+    entry: &librefang_channels::message_journal::JournalEntry,
+    handle: &Arc<dyn ChannelBridgeHandle>,
+    kernel: &Arc<dyn KernelApi>,
+    journal: Option<&librefang_channels::message_journal::MessageJournal>,
+) {
+    use librefang_channels::channel_route::{AccountKind, SourceOccurrence};
+    use librefang_channels::message_journal::JournalStatus;
+    use librefang_storage::{DispatchClaim as StoredClaim, DispatchState as StoredState};
+
+    let Some(journal) = journal else {
+        warn!(id = %entry.message_id, "Durable channel recovery requires the local journal");
+        return;
+    };
+    let Some(source) = entry
+        .metadata
+        .get("source_occurrence")
+        .and_then(|value| serde_json::from_value::<SourceOccurrence>(value.clone()).ok())
+    else {
+        warn!(id = %entry.message_id, "Durable channel journal has malformed source identity");
+        return;
+    };
+    let bridge = KernelBridgeAdapter::new(kernel.clone());
+    let store = match bridge.channel_route_store().await {
+        Ok(store) => store,
+        Err(error) => {
+            warn!(id = %entry.message_id, %error, "Durable channel route store unavailable");
+            return;
+        }
+    };
+    let receipt = match store.dispatch_receipt(&entry.message_id).await {
+        Ok(Some(receipt)) => receipt,
+        Ok(None) => {
+            warn!(id = %entry.message_id, "Durable journal has no persisted dispatch receipt");
+            return;
+        }
+        Err(error) => {
+            warn!(id = %entry.message_id, %error, "Durable dispatch receipt lookup failed");
+            return;
+        }
+    };
+    let same_source = receipt.scope == stored_channel_scope(&source.scope)
+        && receipt.native_message_id == source.native_message_id
+        && receipt.scope.provider == entry.channel
+        && receipt.scope.room == entry.sender_id
+        && receipt.scope.thread == entry.thread_id
+        && entry.agent_name.as_deref() == Some(receipt.handler.as_str())
+        && entry
+            .metadata
+            .get("action_id")
+            .and_then(serde_json::Value::as_str)
+            == Some(receipt.action_id.as_str())
+        && entry
+            .metadata
+            .get("route_revision")
+            .and_then(serde_json::Value::as_u64)
+            == Some(receipt.route_revision);
+    if !same_source {
+        warn!(id = %entry.message_id, "Durable journal and dispatch receipt disagree; refusing replay");
+        return;
+    }
+    if receipt.state != StoredState::Pending {
+        warn!(id = %entry.message_id, state = ?receipt.state,
+            "Durable dispatch is no longer pending; operator reconciliation required");
+        if matches!(receipt.state, StoredState::Claimed | StoredState::Uncertain) {
+            journal
+                .update_status(
+                    &entry.message_id,
+                    JournalStatus::Failed,
+                    Some("Durable handler effect is uncertain; inspect dispatch receipt".into()),
+                )
+                .await;
+        } else if receipt.state == StoredState::Completed {
+            journal
+                .update_status(
+                    &entry.message_id,
+                    JournalStatus::Failed,
+                    Some("Handler completed; reply delivery cannot be inferred safely".into()),
+                )
+                .await;
+        }
+        return;
+    }
+    let Some(agent_id) = handle
+        .find_agent_by_name(&receipt.handler)
+        .await
+        .ok()
+        .flatten()
+    else {
+        warn!(id = %entry.message_id, handler = %receipt.handler,
+            "Retained channel handler is unavailable; refusing replay");
+        return;
+    };
+    let allowlist = handle.agent_channel_allowlist(agent_id).await;
+    if !allowlist.is_empty() && !allowlist.iter().any(|name| name == &receipt.scope.provider) {
+        warn!(id = %entry.message_id, handler = %receipt.handler,
+            "Retained channel handler is no longer authorized for this channel");
+        return;
+    }
+    // A native account may differ from the configured sidecar instance, and
+    // adapter registration keys use the adapter's own name. Recover only
+    // from the key stamped by the trusted bridge at original admission.
+    let Some(instance) = entry
+        .metadata
+        .get("configured_instance")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+    else {
+        warn!(id = %entry.message_id, "Durable journal lacks exact configured sidecar instance");
+        return;
+    };
+    if source.scope.account_kind == AccountKind::ConfiguredInstance
+        && instance != source.scope.account
+    {
+        warn!(id = %entry.message_id, "Configured instance disagrees with persisted route scope");
+        return;
+    }
+    let Some(registry_key) = entry
+        .metadata
+        .get("adapter_registry_key")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+    else {
+        warn!(id = %entry.message_id, "Durable journal lacks exact adapter registry key");
+        return;
+    };
+    let Some(adapter) = kernel
+        .channel_adapters_ref()
+        .get(registry_key)
+        .map(|entry| Arc::clone(entry.value()))
+    else {
+        warn!(id = %entry.message_id, adapter = registry_key,
+            "Exact channel adapter is unavailable; refusing replay");
+        return;
+    };
+    if format!("{}:{instance}", adapter.name()) != registry_key
+        || librefang_channels::router::channel_type_to_str(&adapter.channel_type())
+            != receipt.scope.provider
+    {
+        warn!(id = %entry.message_id, adapter = registry_key,
+            "Channel adapter identity disagrees with persisted source");
+        return;
+    }
+    if source.scope.account_kind == AccountKind::Native
+        && adapter.account_id() != Some(source.scope.account.as_str())
+    {
+        warn!(id = %entry.message_id, adapter = registry_key,
+            "Native channel account is no longer the persisted source account");
+        return;
+    }
+    // The shared receipt is the cross-host CAS. The local JSONL claim only
+    // arbitrates Deferred entries against this process's periodic ticker.
+    // Processing entries left by a crash cannot be claimed again locally,
+    // but a still-pending shared receipt proves no handler began executing.
+    if entry.status == JournalStatus::Deferred && !journal.claim(&entry.message_id).await {
+        return;
+    }
+    let claimant = uuid::Uuid::new_v4().to_string();
+    match store.claim_dispatch(&entry.message_id, &claimant).await {
+        Ok(StoredClaim::Acquired(_)) => {}
+        Ok(StoredClaim::NotClaimable(receipt)) => {
+            warn!(id = %entry.message_id, state = ?receipt.state,
+                "Another owner claimed durable channel dispatch");
+            return;
+        }
+        Ok(StoredClaim::NotDispatchable) => {
+            warn!(id = %entry.message_id, "Durable channel dispatch is not claimable");
+            return;
+        }
+        Err(error) => {
+            warn!(id = %entry.message_id, %error, "Durable channel dispatch claim failed");
+            return;
+        }
+    }
+    let sender = SenderContext {
+        channel: librefang_channels::types::sanitize_channel_name(&receipt.scope.provider),
+        user_id: receipt.scope.sender.clone(),
+        chat_id: Some(receipt.scope.room.clone()),
+        display_name: entry.sender_name.clone(),
+        is_group: entry.is_group,
+        thread_id: receipt.scope.thread.clone(),
+        account_id: Some(receipt.scope.account.clone()),
+        ..SenderContext::default()
+    };
+    let result = handle
+        .send_message_with_sender(agent_id, &entry.content, &sender)
+        .await;
+    let delivered = match result {
+        Ok(response) if response.is_empty() => Ok(()),
+        Ok(response) => {
+            let user = librefang_channels::types::ChannelUser {
+                platform_id: receipt.scope.room.clone(),
+                display_name: entry.sender_name.clone(),
+                librefang_user: None,
+            };
+            let content = librefang_channels::types::ChannelContent::Text(response);
+            if let Some(thread) = receipt.scope.thread.as_deref() {
+                adapter.send_in_thread(&user, content, thread).await
+            } else {
+                adapter.send(&user, content).await
+            }
+            .map_err(|error| error.to_string())
+        }
+        Err(error) => Err(error),
+    };
+    if let Err(error) = delivered {
+        warn!(id = %entry.message_id, %error,
+            "Durable channel effect is uncertain; automatic retry is disabled");
+        if let Err(store_error) = store.mark_uncertain(&entry.message_id, &claimant).await {
+            error!(id = %entry.message_id, %store_error,
+                "Could not persist uncertain channel dispatch state");
+        }
+        journal
+            .update_status(
+                &entry.message_id,
+                JournalStatus::Failed,
+                Some("Durable handler or reply effect is uncertain".into()),
+            )
+            .await;
+        return;
+    }
+    if let Err(error) = store.complete_dispatch(&entry.message_id, &claimant).await {
+        warn!(id = %entry.message_id, %error,
+            "Channel effect completed but durable completion could not be recorded");
+        journal
+            .update_status(
+                &entry.message_id,
+                JournalStatus::Failed,
+                Some("Channel effect completed with an unconfirmed dispatch receipt".into()),
+            )
+            .await;
+        return;
+    }
+    journal.record_outcome(&entry.message_id, true, None).await;
+}
+
+/// Re-dispatch a journaled message after restart or a deferred quota window.
+/// Durable entries use their receipt above; legacy entries require a named
+/// handler and retain the historical retry behavior.
 async fn redispatch_journal_entry(
     entry: &librefang_channels::message_journal::JournalEntry,
     handle: &Arc<dyn ChannelBridgeHandle>,
@@ -2721,6 +3627,14 @@ async fn redispatch_journal_entry(
     journal: Option<&librefang_channels::message_journal::MessageJournal>,
 ) {
     use librefang_channels::message_journal::JournalStatus;
+
+    if entry.metadata.contains_key("source_occurrence") {
+        #[cfg(feature = "surreal-backend")]
+        redispatch_durable_journal_entry(entry, handle, kernel, journal).await;
+        #[cfg(not(feature = "surreal-backend"))]
+        warn!(id = %entry.message_id, "Durable journal recovery is unsupported without SurrealDB");
+        return;
+    }
 
     let age_secs = (chrono::Utc::now() - entry.received_at).num_seconds();
     let was_in_flight = entry.status == JournalStatus::Processing;
@@ -2735,24 +3649,19 @@ async fn redispatch_journal_entry(
         "Re-dispatching journaled message"
     );
 
-    // Resolve target agent: prefer the journaled name, fall back to the
-    // first registered agent (preserves the pre-existing crash-recovery
-    // contract — better to deliver to the wrong agent than to lose the
-    // message entirely).
-    let agent_id = if let Some(ref name) = entry.agent_name {
-        handle.find_agent_by_name(name).await.ok().flatten()
-    } else {
-        None
+    // Legacy records without a selected handler have no sound route. Never
+    // turn a restart into dispatch to an arbitrary first registered agent.
+    let Some(agent_name) = entry.agent_name.as_deref() else {
+        warn!(id = %entry.message_id, "Legacy journal has no selected handler; refusing replay");
+        return;
     };
-    let agent_id = match agent_id {
-        Some(id) => id,
-        None => match kernel.agent_registry().list().first().map(|e| e.id) {
-            Some(id) => id,
-            None => {
-                warn!(id = %entry.message_id, "No agents available for re-dispatch");
-                return;
-            }
-        },
+    let agent_id = match handle.find_agent_by_name(agent_name).await {
+        Ok(Some(id)) => id,
+        _ => {
+            warn!(id = %entry.message_id, handler = agent_name,
+                "Journaled handler is unavailable; refusing replay");
+            return;
+        }
     };
 
     // Atomically claim the entry by flipping it to Processing before the
@@ -3180,6 +4089,53 @@ pub async fn start_channel_bridge_with_config(
     if started_names.is_empty() {
         (None, Vec::new(), webhook_router)
     } else {
+        #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
+        match crate::channel_observers::ObserverTransportConfig::from_host() {
+            Ok(Some(config))
+                if matches!(
+                    &kernel.config_ref().storage.backend,
+                    librefang_storage::StorageBackendKind::Remote(_)
+                ) =>
+            {
+                let storage = kernel.config_ref().storage.clone();
+                let flush_config = config.clone();
+                let mut flush_shutdown = manager.shutdown_signal();
+                manager.track_task(tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                    loop {
+                        tokio::select! {
+                            _ = interval.tick() => {
+                                if let Err(error) = crate::channel_observers::flush_pending_observers(&storage, &flush_config).await {
+                                    warn!(%error, "Observer outbox flush needs attention");
+                                }
+                            }
+                            _ = flush_shutdown.changed() => break,
+                        }
+                    }
+                }));
+                let storage = kernel.config_ref().storage.clone();
+                let mut consume_shutdown = manager.shutdown_signal();
+                manager.track_task(tokio::spawn(async move {
+                    loop {
+                        tokio::select! {
+                            result = crate::channel_observers::consume_fabric_to_uar(&config, &storage) => {
+                                if let Err(error) = result {
+                                    warn!(%error, "Observer Fabric subscription needs attention");
+                                }
+                            }
+                            _ = consume_shutdown.changed() => break,
+                        }
+                        tokio::select! {
+                            _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
+                            _ = consume_shutdown.changed() => break,
+                        }
+                    }
+                }));
+            }
+            Ok(None) => {}
+            Ok(Some(_)) => warn!("Cross-host observer transport requires remote shared SurrealDB"),
+            Err(error) => warn!(%error, "Observer transport host configuration is incomplete"),
+        }
         // Forward `ApprovalRequested` kernel events to channel adapters so
         // human approvers see a prompt in their configured chat instead of
         // having to poll the dashboard (#4875). Started after the adapter

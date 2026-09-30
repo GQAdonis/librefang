@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "2",
+  "generatedBy": "kbd-runtime",
+  "projectionContractVersion": 2,
+  "sourceRevision": 389,
+  "derivedRevision": 389,
+  "frontier": {
+    "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 150
+  },
+  "conflictCount": 0,
+  "phase": "release-cadence-optimization",
+  "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+  "parentPhase": "agent-fabric-convergence",
+  "last_updated": "2026-09-30T17:17:42.937989Z",
+  "last_updated_by": "kbd-runtime",
+  "changes_total": 1,
+  "changes_completed": 1,
+  "implementation_total": 1,
+  "implementation_completed": 1,
+  "completion": {
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 1,
+      "total": 1,
+      "status": "COMPLETE"
+    },
+    "evidence": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "NOT_TRACKED",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "completionScopes": {
+    "completion": "phase",
+    "runCompletion": "run"
+  },
+  "runCompletion": {
+    "scope": "run",
+    "runId": "project-20260924T180329Z",
+    "primaryCounter": "implementation",
+    "implementation": {
+      "completed": 13,
+      "total": 24,
+      "status": "IN_PROGRESS"
+    },
+    "evidence": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "status": "PENDING",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "changes": [
+    {
+      "id": "afc-release-cadence-optimization",
+      "title": "Apply usable local release cadence and team operation",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
+      "tasks_total": 4,
+      "tasks_done": 4,
+      "last_task_completed": "Run one process-artifact consistency gate and hand off",
+      "next_task_pending": null,
+      "blockers": []
+    }
+  ],
+  "children": {},
+  "migrationStatus": null
+}

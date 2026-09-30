@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-09-30T00:21:19.689Z",
+  "exitCode": 4,
+  "stdout": "",
+  "stderr": "[judge] WARN: JUDGE_MODEL_COLLISION — no-distinct-backup; no distinct available backup is configured.\n[judge]       Review remains pending until critic, judge, backup and producer resolve to canonical identities.\n"
+}

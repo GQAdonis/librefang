@@ -1,0 +1,17 @@
+{
+  "source": "prometheus kbd task transition",
+  "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+  "runId": "project-20260924T180329Z",
+  "revision": 335,
+  "lastEventId": "7fb19d52-9e64-4790-a962-772198827d2e",
+  "task": {
+    "id": "C09.2",
+    "status": "complete",
+    "summary": "Durable task claims, fenced reassignment, reviewer and mailbox administration confirmed in the source-pinned packaged Mac app; see c09-2-evidence.md. Public platform release remains pending."
+  },
+  "completion": {
+    "tasks": ["C09.2"],
+    "changes": [],
+    "phases": []
+  }
+}

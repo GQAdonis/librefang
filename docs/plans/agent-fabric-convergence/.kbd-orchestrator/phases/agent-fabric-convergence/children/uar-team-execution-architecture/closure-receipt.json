@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-30T05:57:22.627Z",
+  "scope": "documentation-only",
+  "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+  "status": "complete",
+  "canonicalRevision": 382,
+  "parentPhaseId": "agent-fabric-convergence",
+  "nextTask": "C09.3",
+  "followingTask": "C09.4",
+  "conflictCount": 0,
+  "archive": "openspec/changes/archive/2026-09-30-afc-uar-team-execution-architecture-contract",
+  "mainSpec": "openspec/specs/uar-team-execution-profile-contract/spec.md",
+  "cadence": {
+    "iterationId": "28847cae-d6e9-45e4-880d-091bbef217c6",
+    "startedAt": "2026-09-29T20:57:21.333Z",
+    "status": "implementing",
+    "childStack": [],
+    "reconciliation": {
+      "blocked": false,
+      "reason": null
+    },
+    "successfulDeliveries": 3,
+    "nextPublicationDelivery": 5,
+    "publicationDue": false,
+    "iterationMinutes": 120,
+    "publicationEvery": 2
+  },
+  "productDeliveryCreated": false,
+  "runtimeConformance": false,
+  "nextCommand": "/kbd-execute agent-fabric-convergence"
+}

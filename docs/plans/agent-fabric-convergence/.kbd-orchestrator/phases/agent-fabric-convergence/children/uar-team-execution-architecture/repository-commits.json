@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T05:33:04.666Z",
+  "uar": "9a74e2ae598f772a95b3393c9ea2121c408e31b4",
+  "boss": "e4228810a66eb4f5b3d22267edceb84845f140b6",
+  "remotePublication": "not performed in documentation Execute",
+  "lockfileCleanup": {
+    "reason": "First documentation commit hook ran pnpm install and modified an initially clean, unstaged lockfile. Restored exact HEAD bytes; unrelated three-file candidate retained.",
+    "backup": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-team-architecture-commit-hook-lockfile-1790746384664.yaml",
+    "discardedWorkingHash": "6671f9b795e9940c1f552780ef8d977dc617da50fcb7aae9755b0e94453990e7",
+    "restoredHash": "2c835619e74a6592892a5448e00d303ee2b5b996edc28d4618da3e6611898f1f"
+  },
+  "commitHooks": {
+    "uar": "GitHub Actions policy and commitlint passed; no frontend files so checks skipped. Initial body-length rejection repaired.",
+    "boss": "No matching source files; formatting/lint hooks skipped."
+  },
+  "karpathy": {
+    "local": "appended",
+    "optionalMemory": "pk timed out; degraded; no retry"
+  }
+}

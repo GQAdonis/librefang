@@ -1,0 +1,2341 @@
+{
+  "schemaVersion": 1,
+  "source": "prometheus-kbd-status",
+  "recordedAt": "2026-09-30T09:40:43.686Z",
+  "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+  "runId": "project-20260924T180329Z",
+  "revision": 385,
+  "completion": {
+    "tasks": [
+      "C01.1",
+      "C01.2",
+      "C01.3",
+      "C02.1",
+      "C02.2",
+      "C02.3",
+      "C03.1",
+      "C03.2",
+      "C03.3",
+      "C04.1",
+      "C04.2",
+      "C04.3",
+      "C05.1",
+      "C05.2",
+      "C05.3",
+      "C06.1",
+      "C06.2",
+      "C06.3",
+      "C07.1",
+      "C07.2",
+      "C07.3",
+      "C08.1",
+      "C09.1",
+      "C09.2",
+      "C09.3",
+      "D01.1",
+      "D01.2",
+      "D01.3",
+      "D01.4"
+    ],
+    "changes": [
+      "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "afc-c02-governed-action-and-approval-boundary",
+      "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "afc-c04-replaceable-service-instances-and-placement",
+      "afc-c05-bossfang-full-run-delegation",
+      "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "afc-c07-local-scoped-observers-with-durable-delivery",
+      "afc-c09-team-task-admission-context-and-membership",
+      "afc-d01-local-mac-durable-agent-delivery"
+    ],
+    "phases": [
+      "agent-fabric-convergence::release-cadence-optimization",
+      "agent-fabric-convergence::uar-team-execution-architecture",
+      "agent-fabric-convergence::uar-team-specification",
+      "uar-team-definitions-deployment"
+    ]
+  },
+  "canonicalState": {
+    "schemaVersion": "2",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "runId": "project-20260924T180329Z",
+    "revision": 385,
+    "frontier": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
+      "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": 146
+    },
+    "replicaHeads": {
+      "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": {
+        "eventId": "fb7f3ce5-cd6c-4b5b-a5fe-112a9965ea57",
+        "integrityHash": "dd7a13015b3604514db17c9e5c474b8f17dbf41828b29fef6964b39d39fcd677",
+        "lamport": 5
+      },
+      "a23247c7-e278-4036-90b2-9536fe03e75f": {
+        "eventId": "82820755-31d3-4a75-82ea-9b7fb71f0224",
+        "integrityHash": "50162bc200740957ef480565d6fe7a639a00e9a3a70837457b2e17df237a9f46",
+        "lamport": 234
+      },
+      "c67ff135-541a-40dd-9600-b528d8bccbc2": {
+        "eventId": "964aeaf2-1d03-475c-98de-8712a04292e4",
+        "integrityHash": "e9e42e17b69d7073b2e3c29f0ce1aa5790d7beda32322f332a249e342c507f01",
+        "lamport": 146
+      }
+    },
+    "lastEventId": "964aeaf2-1d03-475c-98de-8712a04292e4",
+    "lastEventHash": "e9e42e17b69d7073b2e3c29f0ce1aa5790d7beda32322f332a249e342c507f01",
+    "lastEventAt": "2026-09-30T09:39:33.316744Z",
+    "phaseDefinitionOrder": [
+      "agent-fabric-convergence",
+      "agent-fabric-convergence::uar-team-specification",
+      "uar-team-definitions-deployment",
+      "agent-fabric-convergence::release-cadence-optimization",
+      "agent-fabric-convergence::uar-team-execution-architecture"
+    ],
+    "lifecycle": "running",
+    "planRevision": 6,
+    "checkpoint": {
+      "reason": "Cadence child reflected, archived and complete; parent Execute restored with D01.1 derived next. Await operator feedback before beginning product delivery, as required after every stage.",
+      "previousState": "running",
+      "lastCompleted": null,
+      "exactNextWork": "/kbd-status",
+      "decisions": [],
+      "blockers": [],
+      "dirtyWorkSummary": "26 changed paths",
+      "planRevision": 4
+    },
+    "exactNextWork": "/kbd-status",
+    "activePath": {
+      "phasePath": [
+        "agent-fabric-convergence"
+      ],
+      "phaseId": "agent-fabric-convergence",
+      "stageId": null,
+      "changeId": "afc-c08-bossfang-and-fabric-observer-routing",
+      "taskId": "C08.2",
+      "commit": "a2f4aa51afe730e8429203ff5e444790951a42c0"
+    },
+    "phases": {
+      "agent-fabric-convergence": {
+        "id": "agent-fabric-convergence",
+        "slug": "agent-fabric-convergence",
+        "title": "Agent Fabric Convergence",
+        "parentPhaseId": null,
+        "status": "in_progress",
+        "stages": {
+          "analyze": {
+            "id": "analyze",
+            "title": "Reuse and cross-project design analysis",
+            "sequence": 1,
+            "status": "complete"
+          },
+          "assess": {
+            "id": "assess",
+            "title": "Reconcile reports and current baselines",
+            "sequence": 0,
+            "status": "complete"
+          },
+          "execute": {
+            "id": "execute",
+            "title": "Execution",
+            "sequence": 5,
+            "status": "in_progress"
+          },
+          "plan": {
+            "id": "plan",
+            "title": "Plan",
+            "sequence": 4,
+            "status": "complete"
+          },
+          "spec": {
+            "id": "spec",
+            "title": "Specification",
+            "sequence": 3,
+            "status": "complete"
+          }
+        },
+        "changes": {
+          "afc-c01-baseline-reconciliation-and-shared-contracts": {
+            "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
+            "title": "C01 — Baseline reconciliation and shared contracts",
+            "sequence": 1,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C01.1": {
+                "id": "C01.1",
+                "title": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Refresh source and lockfile/feature evidence; deliver the eleven-repository baseline ledger and recommendation dispositions."
+              },
+              "C01.2": {
+                "id": "C01.2",
+                "title": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement."
+              },
+              "C01.3": {
+                "id": "C01.3",
+                "title": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Published accepted Agent Fabric Convergence contract v1: versioned identity/state/action vocabulary, exact eleven-repository compatibility matrix, and dependency-ordered adoption/rollback checkpoints; final documentation gate and independent review passed."
+              }
+            }
+          },
+          "afc-c02-governed-action-and-approval-boundary": {
+            "id": "afc-c02-governed-action-and-approval-boundary",
+            "title": "C02 — Governed action and approval boundary",
+            "sequence": 2,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C02.1": {
+                "id": "C02.1",
+                "title": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Converged real effect entry points and made governed policy and authority failures deny visibly."
+              },
+              "C02.2": {
+                "id": "C02.2",
+                "title": "Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Bound exact action, resource, payload, active Gate policy, lease and budget facts through claim."
+              },
+              "C02.3": {
+                "id": "C02.3",
+                "title": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Integrated durable issuer-scoped approval, authenticated principal binding, actor approval and post-wait revalidation."
+              }
+            }
+          },
+          "afc-c03-lossless-definitions-and-collaboration-document-profile": {
+            "id": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+            "title": "C03 — Lossless definitions and collaboration document profile",
+            "sequence": 3,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C03.1": {
+                "id": "C03.1",
+                "title": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant."
+              },
+              "C03.2": {
+                "id": "C03.2",
+                "title": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks."
+              },
+              "C03.3": {
+                "id": "C03.3",
+                "title": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages."
+              }
+            }
+          },
+          "afc-c04-replaceable-service-instances-and-placement": {
+            "id": "afc-c04-replaceable-service-instances-and-placement",
+            "title": "C04 — Replaceable service instances and placement",
+            "sequence": 4,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C04.1": {
+                "id": "C04.1",
+                "title": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Stable instance identity, profile, workspace locality, endpoint roles, capabilities, and credential references implemented across UAR, The Boss, and Librefang."
+              },
+              "C04.2": {
+                "id": "C04.2",
+                "title": "Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Managed and external lifecycle, new placement, exact-instance reattachment, and explicit migration refusal completed."
+              },
+              "C04.3": {
+                "id": "C04.3",
+                "title": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Effective binding, compatibility diagnostics, one-supervisor ownership, and separate endpoint roles completed and accepted."
+              }
+            }
+          },
+          "afc-c05-bossfang-full-run-delegation": {
+            "id": "afc-c05-bossfang-full-run-delegation",
+            "title": "C05 — BossFang full-run delegation",
+            "sequence": 5,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C05.1": {
+                "id": "C05.1",
+                "title": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Full-harness route and native UAR execution passed the C05 managed-sidecar gate at Librefang 03946030 and UAR fcfce6d2; exact definition identity and diagnostics retained."
+              },
+              "C05.2": {
+                "id": "C05.2",
+                "title": "Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Admission, observation, approval, cancellation, detach, native IDs, cursor, epoch and truthful process-ephemeral retention passed the C05 gate receipt."
+              },
+              "C05.3": {
+                "id": "C05.3",
+                "title": "Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Dropped-admission reconciliation, stable replay, exactly one approved UAR tool effect and root A2A task lookup passed the C05 gate receipt."
+              }
+            }
+          },
+          "afc-c06-durable-addressable-instances-and-bounded-turns": {
+            "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
+            "title": "C06 — Durable addressable instances and bounded turns",
+            "sequence": 6,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C06.1": {
+                "id": "C06.1",
+                "title": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Owner-scoped SurrealKV logical-instance records, request/on-demand/resident profiles, and fresh root per turn implemented; C06 live gate observed two workspaces and distinct roots."
+              },
+              "C06.2": {
+                "id": "C06.2",
+                "title": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "SurrealKV-backed bounded inbox, serialized turns, monotonic epochs, post-claim uncertainty hold and cancellation proved by C06 gate receipt."
+              },
+              "C06.3": {
+                "id": "C06.3",
+                "title": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Revisioned lifecycle, bounded retries, authenticated event stream, cold backup/restore and full local C06 integration gate recorded; installed release acceptance remains separate."
+              }
+            }
+          },
+          "afc-c07-local-scoped-observers-with-durable-delivery": {
+            "id": "afc-c07-local-scoped-observers-with-durable-delivery",
+            "title": "C07 — Local scoped observers with durable delivery",
+            "sequence": 7,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C07.1": {
+                "id": "C07.1",
+                "title": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "SurrealDB 3.3.0 source CAS atomically publishes stable C06 lifecycle occurrences; C07 real-host gate passed."
+              },
+              "C07.2": {
+                "id": "C07.2",
+                "title": "Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Independent revisions, source and conversation grants, cursors, inbox acknowledgement, gaps, and authenticated controls passed the C07 gate."
+              },
+              "C07.3": {
+                "id": "C07.3",
+                "title": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "C06 monitor turns, pause/backlog/revocation, retention gaps and operator acknowledgement passed real-host C07 gate; dead-letter injection remains unverified."
+              }
+            }
+          },
+          "afc-c08-bossfang-and-fabric-observer-routing": {
+            "id": "afc-c08-bossfang-and-fabric-observer-routing",
+            "title": "C08 — BossFang and Fabric observer routing",
+            "sequence": 8,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C08.1": {
+                "id": "C08.1",
+                "title": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "C08.1 source complete by static trace at BossFang b75886ad3: normalized Discord guild occurrence, durable route and conflict, Gate-authorized operator reassignment, truthful local capability; composed C08 gate and provider acceptance pending."
+              },
+              "C08.2": {
+                "id": "C08.2",
+                "title": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C08.3": {
+                "id": "C08.3",
+                "title": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c09-bounded-teams-and-shared-task-board": {
+            "id": "afc-c09-bounded-teams-and-shared-task-board",
+            "title": "C09 — Bounded teams and shared task board",
+            "sequence": 9,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C09.1": {
+                "id": "C09.1",
+                "title": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Durable planning board delivered in packaged Mac ARM64 Boss: two teams, supervisor/worker, bounded map/reduce and peer DAGs, restart recovery, two-workspace isolation and Teams settings; exact receipt c09-1-evidence.md. Execution remains C09.2/C09.3."
+              },
+              "C09.2": {
+                "id": "C09.2",
+                "title": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Durable task claims, fenced reassignment, reviewer and mailbox administration confirmed in the source-pinned packaged Mac app; see c09-2-evidence.md. Public platform release remains pending."
+              },
+              "C09.3": {
+                "id": "C09.3",
+                "title": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication."
+              },
+              "C09.4": {
+                "id": "C09.4",
+                "title": "Deliver governed cooperating teams with durable yield and continuation",
+                "sequence": 4,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c09-team-task-admission-context-and-membership": {
+            "id": "afc-c09-team-task-admission-context-and-membership",
+            "title": "afc-c09-team-task-admission-context-and-membership",
+            "sequence": 0,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "C09.3": {
+                "id": "C09.3",
+                "title": "Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage",
+                "sequence": 3,
+                "status": "cancelled",
+                "summary": "Registration typo: superseded by existing afc-c09-bounded-teams-and-shared-task-board C09.3; no scope added"
+              }
+            }
+          },
+          "afc-c10-feedback-workflow-and-governed-connector-effects": {
+            "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+            "title": "C10 — Feedback workflow and governed connector effects",
+            "sequence": 10,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C10.1": {
+                "id": "C10.1",
+                "title": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C10.2": {
+                "id": "C10.2",
+                "title": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C10.3": {
+                "id": "C10.3",
+                "title": "Wire observe/classify/deduplicate/draft/standing-policy intake and product/design/reviewer outputs with durable approvals and explicit implementation admission.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c11-authoritative-business-data-and-offline-commands": {
+            "id": "afc-c11-authoritative-business-data-and-offline-commands",
+            "title": "C11 — Authoritative business data and offline commands",
+            "sequence": 11,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C11.1": {
+                "id": "C11.1",
+                "title": "Adopt accepted production-readiness changes; document route-specific auth/RLS and cursor/tombstone semantics.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C11.2": {
+                "id": "C11.2",
+                "title": "Persist pending command atomically with local state; preserve idempotency through Forge transaction and authoritative result lookup.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C11.3": {
+                "id": "C11.3",
+                "title": "Publish committed outbox/CDC facts and rebuild scoped read models with deletion/revocation and explicit retention-gap resnapshot.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c12-personal-peer-sovereignty-and-consent": {
+            "id": "afc-c12-personal-peer-sovereignty-and-consent",
+            "title": "C12 — Personal peer sovereignty and consent",
+            "sequence": 12,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C12.1": {
+                "id": "C12.1",
+                "title": "Define eligible personal data classes, peer identity/membership, key rotation/recovery and explicit offline grant validity; keep organization/runtime authority outside CRDT writes.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C12.2": {
+                "id": "C12.2",
+                "title": "Compose durable authenticated peer transport and CRDT storage from existing modules; project personal context through consented scopes.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C12.3": {
+                "id": "C12.3",
+                "title": "Implement removal/revocation/tombstone behavior, reconnection and inspectable consent history without claiming deletion of previously disclosed plaintext.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c13-embedded-mobile-and-home-cloud-execution-profiles": {
+            "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+            "title": "C13 — Embedded mobile and home/cloud execution profiles",
+            "sequence": 13,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C13.1": {
+                "id": "C13.1",
+                "title": "Reconcile local model/tool loop with embedded UAR route; pin SDK/features and preserve each product layer contract.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C13.2": {
+                "id": "C13.2",
+                "title": "Specify offline/local, home, personal-cloud and enterprise profiles with required/optional services, inference availability and approved context placement.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C13.3": {
+                "id": "C13.3",
+                "title": "Wire suspend/resume, pending/offline authority and persistent remote job observation; consume C11/C12 when enabling their data profiles.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c14-studio-administration-and-isolated-service-consoles": {
+            "id": "afc-c14-studio-administration-and-isolated-service-consoles",
+            "title": "C14 — Studio administration and isolated service consoles",
+            "sequence": 14,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C14.1": {
+                "id": "C14.1",
+                "title": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C14.2": {
+                "id": "C14.2",
+                "title": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C14.3": {
+                "id": "C14.3",
+                "title": "Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff": {
+            "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
+            "sequence": 15,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C15.1": {
+                "id": "C15.1",
+                "title": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C15.2": {
+                "id": "C15.2",
+                "title": "Validate all eight harness adapters against pinned CLI schemas; preserve native options/extensions and report unsupported agent/plugin/marketplace features; use Node.js/TypeScript 7 for authored shared hooks/scripts. Before authoring helpers, pin the exact Node.js and TypeScript 7 distribution and prove full/mini and harness adapter compatibility at D-MINI; if unavailable, record a blocker rather than substituting another language/version.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C15.3": {
+                "id": "C15.3",
+                "title": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c16-specialist-marketing-product-and-design-teams": {
+            "id": "afc-c16-specialist-marketing-product-and-design-teams",
+            "title": "C16 — Specialist, marketing, product and design teams",
+            "sequence": 16,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C16.1": {
+                "id": "C16.1",
+                "title": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C16.2": {
+                "id": "C16.2",
+                "title": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C16.3": {
+                "id": "C16.3",
+                "title": "Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c17-executive-assistants-and-consented-human-representation": {
+            "id": "afc-c17-executive-assistants-and-consented-human-representation",
+            "title": "C17 — Executive assistants and consented human representation",
+            "sequence": 17,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C17.1": {
+                "id": "C17.1",
+                "title": "Define CEO/CFO/CIO/Chief Intelligence/Security/Marketing/Product and configurable office roles separately from human profiles; identify trusted grant issuers.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C17.2": {
+                "id": "C17.2",
+                "title": "Implement consent, organizational assignment, data-use/communication/action scopes, expiry/revocation, offboarding and disclosure with pinned evidence.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C17.3": {
+                "id": "C17.3",
+                "title": "Evaluate person-specific behavior on approved held-out scenarios; enforce separation of duties and real-human approval requirements.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-c18-federated-compatibility-and-release-evidence": {
+            "id": "afc-c18-federated-compatibility-and-release-evidence",
+            "title": "C18 — Federated compatibility and release evidence",
+            "sequence": 18,
+            "status": "pending",
+            "implementationStatus": "pending",
+            "tasks": {
+              "C18.1": {
+                "id": "C18.1",
+                "title": "Implement only required remaining federation/trust adapters with independent resource-side enforcement and capability refusal; prove state/effect fencing before optional takeover.",
+                "sequence": 1,
+                "status": "pending",
+                "summary": null
+              },
+              "C18.2": {
+                "id": "C18.2",
+                "title": "Run operational-mode matrix on exact source/payload/policy combinations; test upgrade, rollback, outage, retention gaps, restart and revoked authority.",
+                "sequence": 2,
+                "status": "pending",
+                "summary": null
+              },
+              "C18.3": {
+                "id": "C18.3",
+                "title": "Benchmark task quality, human correction, cost/latency, duplicate/unknown effects and administration effort against controlled baselines; publish supported/unsupported matrix and release evidence after authorization.",
+                "sequence": 3,
+                "status": "pending",
+                "summary": null
+              }
+            }
+          },
+          "afc-d01-local-mac-durable-agent-delivery": {
+            "id": "afc-d01-local-mac-durable-agent-delivery",
+            "title": "Local Mac durable-agent delivery",
+            "sequence": 0,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "D01.1": {
+                "id": "D01.1",
+                "title": "Freeze source and repair packaged UAR profile",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Freeze source and repair packaged UAR profile"
+              },
+              "D01.2": {
+                "id": "D01.2",
+                "title": "Deliver durable-agent and observer UI through The Boss",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Deliver durable-agent/observer UI through The Boss"
+              },
+              "D01.3": {
+                "id": "D01.3",
+                "title": "Run complete local gate and deliver built app",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Run complete local gate and deliver built app"
+              },
+              "D01.4": {
+                "id": "D01.4",
+                "title": "Resolve publication choice including live website installer pointers",
+                "sequence": 4,
+                "status": "complete",
+                "summary": "Publication selection wait under every-second-successful-delivery policy; release remains pending"
+              }
+            }
+          }
+        },
+        "legacyReadOnly": false
+      },
+      "agent-fabric-convergence::release-cadence-optimization": {
+        "id": "agent-fabric-convergence::release-cadence-optimization",
+        "slug": "release-cadence-optimization",
+        "title": "release-cadence-optimization",
+        "parentPhaseId": "agent-fabric-convergence",
+        "status": "complete",
+        "stages": {
+          "analyze": {
+            "id": "analyze",
+            "title": "Analyze hourly local Mac delivery and publication choices",
+            "sequence": 1,
+            "status": "complete"
+          },
+          "assess": {
+            "id": "assess",
+            "title": "Assess release cadence and resource-aware delivery",
+            "sequence": 0,
+            "status": "complete"
+          },
+          "execute": {
+            "id": "execute",
+            "title": "Apply release cadence, roadmap and team policy",
+            "sequence": 3,
+            "status": "complete"
+          },
+          "plan": {
+            "id": "plan",
+            "title": "Plan usable hourly Mac deliveries and governed publication",
+            "sequence": 2,
+            "status": "complete"
+          },
+          "reflect": {
+            "id": "reflect",
+            "title": "Reflect and restore parent delivery waypoint",
+            "sequence": 4,
+            "status": "complete"
+          }
+        },
+        "changes": {
+          "afc-release-cadence-optimization": {
+            "id": "afc-release-cadence-optimization",
+            "title": "Apply usable local release cadence and team operation",
+            "sequence": 0,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "1.1": {
+                "id": "1.1",
+                "title": "Freeze a truthful local-delivery and publication contract",
+                "sequence": 0,
+                "status": "complete",
+                "summary": "Freeze a truthful local-delivery and publication contract"
+              },
+              "1.2": {
+                "id": "1.2",
+                "title": "Apply a lossless parent roadmap and dependency revision",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Apply lossless parent roadmap and dependency revision"
+              },
+              "1.3": {
+                "id": "1.3",
+                "title": "Repair active team instructions and attach bounded learning",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Repair active team instructions and attach bounded learning"
+              },
+              "1.4": {
+                "id": "1.4",
+                "title": "Run one process-artifact consistency gate and hand off",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Complete process artifact gate and execution handoff"
+              }
+            }
+          }
+        },
+        "legacyReadOnly": false
+      },
+      "agent-fabric-convergence::uar-team-execution-architecture": {
+        "id": "agent-fabric-convergence::uar-team-execution-architecture",
+        "slug": "uar-team-execution-architecture",
+        "title": "uar-team-execution-architecture",
+        "parentPhaseId": "agent-fabric-convergence",
+        "status": "complete",
+        "stages": {
+          "analyze": {
+            "id": "analyze",
+            "title": "Evaluate team execution architecture alternatives",
+            "sequence": 2,
+            "status": "complete"
+          },
+          "assess": {
+            "id": "assess",
+            "title": "Assess team execution architecture",
+            "sequence": 1,
+            "status": "complete"
+          },
+          "execute": {
+            "id": "execute",
+            "title": "Finalize approved execution architecture and parent handoff",
+            "sequence": 4,
+            "status": "complete"
+          },
+          "plan": {
+            "id": "plan",
+            "title": "Plan bounded reliable team execution",
+            "sequence": 3,
+            "status": "complete"
+          },
+          "reflect": {
+            "id": "reflect",
+            "title": "Reflect and restore parent team execution delivery",
+            "sequence": 5,
+            "status": "complete"
+          }
+        },
+        "changes": {
+          "afc-uar-team-execution-architecture-contract": {
+            "id": "afc-uar-team-execution-architecture-contract",
+            "title": "Approved team architecture contract and parent handoff",
+            "sequence": 1,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "1.1": {
+                "id": "1.1",
+                "title": "Approved execution profile and migration artifacts",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Publish execution profile, DTO examples, and legacy migration contract"
+              },
+              "1.2": {
+                "id": "1.2",
+                "title": "Parent repair ownership and operation handoff",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Amend parent repair plan and preserve canonical history"
+              },
+              "1.3": {
+                "id": "1.3",
+                "title": "Completed document evidence and reflection handoff",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Validate complete documentation and prepare Execute handoff"
+              }
+            }
+          }
+        },
+        "legacyReadOnly": false
+      },
+      "agent-fabric-convergence::uar-team-specification": {
+        "id": "agent-fabric-convergence::uar-team-specification",
+        "slug": "uar-team-specification",
+        "title": "uar-team-specification",
+        "parentPhaseId": "agent-fabric-convergence",
+        "status": "complete",
+        "stages": {
+          "analyze": {
+            "id": "analyze",
+            "title": "Architecture and ownership analysis",
+            "sequence": 1,
+            "status": "complete"
+          },
+          "assess": {
+            "id": "assess",
+            "title": "Source-grounded team architecture assessment",
+            "sequence": 0,
+            "status": "complete"
+          },
+          "execute": {
+            "id": "execute",
+            "title": "Publish documentation-only collaboration specification",
+            "sequence": 4,
+            "status": "complete"
+          },
+          "plan": {
+            "id": "plan",
+            "title": "Architecture approval and documentation delivery plan",
+            "sequence": 3,
+            "status": "complete"
+          },
+          "reflect": {
+            "id": "reflect",
+            "title": "Documentation reflection and archival",
+            "sequence": 5,
+            "status": "complete"
+          },
+          "spec": {
+            "id": "spec",
+            "title": "Proposed specification outline",
+            "sequence": 2,
+            "status": "complete"
+          }
+        },
+        "changes": {
+          "uar-team-specification": {
+            "id": "uar-team-specification",
+            "title": "Official draft collaboration specification and implementation handoff",
+            "sequence": 0,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "1.1": {
+                "id": "1.1",
+                "title": "Record operator architecture decision and freeze required contracts, not unmeasured backend conformance.",
+                "sequence": 0,
+                "status": "complete",
+                "summary": "Record operator architecture decision and freeze required contracts, not unmeasured backend conformance."
+              },
+              "1.2": {
+                "id": "1.2",
+                "title": "Author official UAR draft, documentation-only schemas, examples and protocol traces; link existing RFC.",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Author official UAR draft, documentation-only schemas, examples and protocol traces; link existing RFC."
+              },
+              "1.3": {
+                "id": "1.3",
+                "title": "Finalize compatibility, harness declarations, convergence dependency mapping and implementation ownership.",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Finalize compatibility, harness declarations, convergence dependency mapping and implementation ownership."
+              },
+              "1.4": {
+                "id": "1.4",
+                "title": "Validate the complete document set once for schema/example agreement, consistency and traceability.",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Validate the complete document set once for schema/example agreement, consistency and traceability."
+              },
+              "1.5": {
+                "id": "1.5",
+                "title": "Commit and publish approved documentation with immutable revisions and honest conformance labels.",
+                "sequence": 4,
+                "status": "complete",
+                "summary": "Commit and publish approved documentation with immutable revisions and honest conformance labels."
+              },
+              "1.6": {
+                "id": "1.6",
+                "title": "Reflect, verify/archive the documentation change, hand off and restore parent waypoint.",
+                "sequence": 5,
+                "status": "complete",
+                "summary": "Reflect, verify/archive the documentation change, hand off and restore parent waypoint."
+              }
+            }
+          }
+        },
+        "legacyReadOnly": false
+      },
+      "uar-team-definitions-deployment": {
+        "id": "uar-team-definitions-deployment",
+        "slug": "uar-team-definitions-deployment",
+        "title": "UAR team definitions, maintenance, and deployment",
+        "parentPhaseId": "agent-fabric-convergence",
+        "status": "complete",
+        "stages": {
+          "analyze": {
+            "id": "analyze",
+            "title": "Set package, catalog, binding, and maintenance architecture",
+            "sequence": 1,
+            "status": "complete"
+          },
+          "assess": {
+            "id": "assess",
+            "title": "Assess live compiler, catalog, and skill deployment gaps",
+            "sequence": 0,
+            "status": "complete"
+          },
+          "execute": {
+            "id": "execute",
+            "title": "Implement collaboration packages and deployable team skills",
+            "sequence": 3,
+            "status": "complete"
+          },
+          "plan": {
+            "id": "plan",
+            "title": "Plan repository-scoped UAR and skill-pack changes",
+            "sequence": 2,
+            "status": "complete"
+          },
+          "reflect": {
+            "id": "reflect",
+            "title": "Reflect and hand off I1 definitions and catalog",
+            "sequence": 4,
+            "status": "complete"
+          }
+        },
+        "changes": {
+          "uar-team-definitions-deployment": {
+            "id": "uar-team-definitions-deployment",
+            "title": "UAR collaboration packages and team deployment",
+            "sequence": 1,
+            "status": "complete",
+            "implementationStatus": "complete",
+            "tasks": {
+              "1.1": {
+                "id": "1.1",
+                "title": "Implement canonical collaboration definitions, package validation, and legacy projections",
+                "sequence": 1,
+                "status": "complete",
+                "summary": "Canonical collaboration definitions, exact-byte package validation, lossless legacy projections, and five v2 compiler fields implemented."
+              },
+              "1.2": {
+                "id": "1.2",
+                "title": "Implement atomic immutable catalog and command receipt persistence",
+                "sequence": 2,
+                "status": "complete",
+                "summary": "Atomic immutable catalog, idempotent receipts, revisions, and memory SurrealDB PostgreSQL persistence implemented."
+              },
+              "1.3": {
+                "id": "1.3",
+                "title": "Implement deployment bindings plus REST and MCP administration",
+                "sequence": 3,
+                "status": "complete",
+                "summary": "Owner workspace scoped bindings and exact seven-route REST plus MCP administration implemented."
+              },
+              "1.4": {
+                "id": "1.4",
+                "title": "Implement creator questions, versioned maintenance, canonical export, and UAR deployment",
+                "sequence": 4,
+                "status": "complete",
+                "summary": "Guided team creation, immutable version maintenance, canonical export, UAR deployment and catalog-only refusal implemented in full and mini source."
+              },
+              "1.5": {
+                "id": "1.5",
+                "title": "Synchronize full and mini source and generate packaged Node payloads",
+                "sequence": 5,
+                "status": "complete",
+                "summary": "Full and mini authored sources are byte aligned; TypeScript runtimes and 97-skill mini plus 215-skill full distributions generated from source."
+              },
+              "1.6": {
+                "id": "1.6",
+                "title": "Run the complete creator-to-UAR integration gate, publish changes, and reflect",
+                "sequence": 6,
+                "status": "complete",
+                "summary": "Final creator-to-UAR integration gate passed and repository changes were published."
+              }
+            }
+          }
+        },
+        "legacyReadOnly": false
+      }
+    },
+    "completion": {
+      "implementation": {
+        "completed": 13,
+        "total": 24,
+        "status": "in_progress",
+        "summary": null,
+        "blockers": []
+      },
+      "evidence": {
+        "completed": 0,
+        "total": 0,
+        "status": "pending",
+        "summary": null,
+        "blockers": []
+      },
+      "certification": {
+        "completed": 0,
+        "total": 0,
+        "status": "pending",
+        "summary": null,
+        "blockers": []
+      },
+      "publication": {
+        "completed": 0,
+        "total": 0,
+        "status": "pending",
+        "summary": null,
+        "blockers": []
+      }
+    },
+    "decisions": {
+      "D-AFC-I1-PARALLEL": {
+        "id": "D-AFC-I1-PARALLEL",
+        "summary": "Permit the nonoverlapping I1 definitions/catalog/skill deployment child to proceed while C01.2 installed Windows acceptance remains pending; D-UAR-P1 is not accepted and its owned sidecar/Boss paths remain excluded.",
+        "planRevision": 2,
+        "supersedes": null
+      },
+      "D-AFC-TEAM-PACKAGE-I1": {
+        "id": "D-AFC-TEAM-PACKAGE-I1",
+        "summary": "I1 deploys exact-byte immutable collaboration packages atomically, maintains teams by new version plus binding CAS, and exposes catalog-only capability; durable TeamInstance activation remains I2.",
+        "planRevision": 2,
+        "supersedes": null
+      },
+      "D-UAR-I1-CATALOG": {
+        "id": "D-UAR-I1-CATALOG",
+        "summary": "Accept the completed uar-team-definitions-deployment child as the pinned I1 collaboration-package and deployment-binding input to C01/C03. UAR remains the sole execution-loop owner; team activation is unsupported until I2. This decision does not accept D-UAR-P1, whose Windows installed UAR launch and effective-port observation remains pending.",
+        "planRevision": 3,
+        "supersedes": null
+      },
+      "D-UAR-P1-WINDOWS-ACCEPTED": {
+        "id": "D-UAR-P1-WINDOWS-ACCEPTED",
+        "summary": "Operator confirmed the Windows installer works and the packaged UAR sidecar is active on port 1906. This accepts Windows x64 installed launch for D-UAR-P1; occupied-port fallback on Windows remains unobserved.",
+        "planRevision": 3,
+        "supersedes": null
+      },
+      "D-UAR-P1-contract-frozen-acceptance-pending": {
+        "id": "D-UAR-P1-contract-frozen-acceptance-pending",
+        "summary": "the-boss.uar.sidecar/1 ownership contract is frozen; merged documentation establishes source baselines, while published Windows x64 2.2.3 installed acceptance remains pending, so C01.2 and overlapping product execution remain open.",
+        "planRevision": 1,
+        "supersedes": null
+      },
+      "d01-publication-cadence-20260928": {
+        "id": "d01-publication-cadence-20260928",
+        "summary": "Operator selected full Mac/Windows publication through the website every second successful two-hour delivery. D01.4 records wait now; published release remains pending until cadence delivery 2 and exact artifacts/site are verified.",
+        "planRevision": 4,
+        "supersedes": null
+      },
+      "release-cadence-feedback-stops": {
+        "id": "release-cadence-feedback-stops",
+        "summary": "Operator-directed optimization child: assess, analyze, plan, execute and reflect are all mandatory, with explicit operator feedback before each successor. Assess only is authorized now. Preserve parent C08.2 and all completion evidence; no production work or revised delivery order is authorized by assessment. Reuse Node adapters; operator complete-phase integration rule overrides test-first role text. Record learning and truthful build/graph outcomes; do not infer acceptance from silence.",
+        "planRevision": 3,
+        "supersedes": null
+      },
+      "release-cadence-local-mac-contract": {
+        "id": "release-cadence-local-mac-contract",
+        "summary": "Operator accepted Assess and authorized Analyze only. Each hourly delivery must end with a functioning local pnpm build:mac:arm64 application; ask after each delivery whether to update all macOS and Windows platforms now or wait, never Linux. Plan and product changes remain pending feedback.",
+        "planRevision": 3,
+        "supersedes": null
+      },
+      "team-architecture-d1-d5-approved-20260930": {
+        "id": "team-architecture-d1-d5-approved-20260930",
+        "summary": "Operator /kbd-execute uar-team-execution-architecture approves plan 3022b9d3d D1-D5, documentation tasks 1.1-1.3 and additive C09 parent planning. No product code dispatch or runtime conformance. Reflect remains next human stage boundary.",
+        "planRevision": 5,
+        "supersedes": null
+      },
+      "uts-architecture-approval-pending": {
+        "id": "uts-architecture-approval-pending",
+        "summary": "Documentation child assessment, analysis and proposed specification are prepared; one independent GPT-5.5 proposal review completed with two accepted warnings. Operator architecture approval required by approved plan before freeze/publication. Plan stage blocked on that decision; documentation execution tasks remain pending. Prior integration-administration stays35/37 tasks and0/1 changes; D-UAR-P1 installed acceptance remains unresolved. No production implementation authorized here.",
+        "planRevision": 1,
+        "supersedes": null
+      },
+      "uts-architecture-approved": {
+        "id": "uts-architecture-approved",
+        "summary": "Operator explicitly approved architecture proposal, outline and roadmap and authorized documentation publication, validation, reflection/archive and parent restoration. No production code. D-UAR-P1 installed acceptance remains external and unresolved. Approved hashes in approval-packet.json.",
+        "planRevision": 1,
+        "supersedes": "uts-architecture-approval-pending"
+      }
+    },
+    "blockers": {
+      "bottleneck-07e1789f5968b8de0b583d7f0536a0371d5c737e48a17de38287c76850978f51": {
+        "id": "bottleneck-07e1789f5968b8de0b583d7f0536a0371d5c737e48a17de38287c76850978f51",
+        "summary": "Phase After boundary uar-team-definitions-deployment blocked: boundary uar-team-definitions-deployment has no matching start receipt",
+        "resolved": true,
+        "resolution": "boundary uar-team-definitions-deployment passed at source revision 191"
+      },
+      "bottleneck-1281c0ec4bdac88b281271f4d5fcd5eff0886f013b2c838e2e64c52048a61115": {
+        "id": "bottleneck-1281c0ec4bdac88b281271f4d5fcd5eff0886f013b2c838e2e64c52048a61115",
+        "summary": "Task After boundary afc-d01-local-mac-durable-agent-delivery/3 blocked: Task subject afc-d01-local-mac-durable-agent-delivery/3 is not a unique canonical work item; boundary afc-d01-local-mac-durable-agent-delivery/3 has no matching start receipt",
+        "resolved": false,
+        "resolution": null
+      },
+      "bottleneck-69c39770564127e6fb005037a4bdc6a092a16ce6262254d3dc9a003370bda26c": {
+        "id": "bottleneck-69c39770564127e6fb005037a4bdc6a092a16ce6262254d3dc9a003370bda26c",
+        "summary": "Task After boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 blocked: boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 has no matching start receipt",
+        "resolved": true,
+        "resolution": "boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 passed at source revision 218"
+      },
+      "bottleneck-7028b14c1671eb7a186290e7b4bde647a0d67d945656caf06d39eb80578e27c9": {
+        "id": "bottleneck-7028b14c1671eb7a186290e7b4bde647a0d67d945656caf06d39eb80578e27c9",
+        "summary": "Task After boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 blocked: boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 has no matching start receipt",
+        "resolved": true,
+        "resolution": "boundary afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1 passed at source revision 218"
+      },
+      "bottleneck-bc39f18978eed4893ad0fe664fe73a814599fbc772be9a2d72048dcb5a8fc7a3": {
+        "id": "bottleneck-bc39f18978eed4893ad0fe664fe73a814599fbc772be9a2d72048dcb5a8fc7a3",
+        "summary": "Phase After boundary uar-team-definitions-deployment blocked: boundary uar-team-definitions-deployment has no matching start receipt",
+        "resolved": true,
+        "resolution": "boundary uar-team-definitions-deployment passed at source revision 191"
+      },
+      "bottleneck-e0514359bb256ee4fec3934147488e29cb299a7c694b95f881fe582d376b43ab": {
+        "id": "bottleneck-e0514359bb256ee4fec3934147488e29cb299a7c694b95f881fe582d376b43ab",
+        "summary": "Task Before boundary afc-c09-bounded-teams-and-shared-task-board/C09.3 blocked: boundary afc-c09-bounded-teams-and-shared-task-board/C09.3 already has an outstanding start receipt",
+        "resolved": false,
+        "resolution": null
+      },
+      "bottleneck-e1629f02408b0df1d241f7bf89f3f3e01b559d75cc5bb86b11ea9348e71fa6d0": {
+        "id": "bottleneck-e1629f02408b0df1d241f7bf89f3f3e01b559d75cc5bb86b11ea9348e71fa6d0",
+        "summary": "Task After boundary afc-d01-local-mac-durable-agent-delivery/3 blocked: Task subject afc-d01-local-mac-durable-agent-delivery/3 is not a unique canonical work item; boundary afc-d01-local-mac-durable-agent-delivery/3 has no matching start receipt",
+        "resolved": false,
+        "resolution": null
+      }
+    },
+    "boundaryObligations": {
+      "change:afc-c02-governed-action-and-approval-boundary": {
+        "key": "change:afc-c02-governed-action-and-approval-boundary",
+        "receiptId": "08b7b63fab8cbb3b68398671e70d0048bb72451fa5b6af3d68135afdc53c6994",
+        "boundary": "change",
+        "subject": "afc-c02-governed-action-and-approval-boundary",
+        "sourceRevision": 204,
+        "exactSignal": "Starting change 2 out of 18: C02 — Governed action and approval boundary"
+      },
+      "change:afc-c03-lossless-definitions-and-collaboration-document-profile": {
+        "key": "change:afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "receiptId": "35cfaaaff3c6fe47939756cb116e233a0660890604ce466ea02f557216a7fc96",
+        "boundary": "change",
+        "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "sourceRevision": 222,
+        "exactSignal": "Starting change 3 out of 18: C03 — Lossless definitions and collaboration document profile"
+      },
+      "change:afc-c09-bounded-teams-and-shared-task-board": {
+        "key": "change:afc-c09-bounded-teams-and-shared-task-board",
+        "receiptId": "bcb5dc98df07711d76b54dde9a36b5fd47255d312968a37b64a361b57e8c52c0",
+        "boundary": "change",
+        "subject": "afc-c09-bounded-teams-and-shared-task-board",
+        "sourceRevision": 342,
+        "exactSignal": "Starting change 11 out of 20: C09 — Bounded teams and shared task board"
+      },
+      "change:afc-c09-team-task-admission-context-and-membership": {
+        "key": "change:afc-c09-team-task-admission-context-and-membership",
+        "receiptId": "f11f696c5db99a0a07c8be99c4a1d55fdb053354d0eb5c615a8546598e2e46ae",
+        "boundary": "change",
+        "subject": "afc-c09-team-task-admission-context-and-membership",
+        "sourceRevision": 338,
+        "exactSignal": "Starting change 1 out of 20: afc-c09-team-task-admission-context-and-membership"
+      },
+      "change:afc-d01-local-mac-durable-agent-delivery": {
+        "key": "change:afc-d01-local-mac-durable-agent-delivery",
+        "receiptId": "c926b3408b169c3c73a368e802c3b40ccf529de002dc0bdd26d2f11db24b550e",
+        "boundary": "change",
+        "subject": "afc-d01-local-mac-durable-agent-delivery",
+        "sourceRevision": 312,
+        "exactSignal": "Starting change 1 out of 19: Local Mac durable-agent delivery"
+      },
+      "task:afc-c02-governed-action-and-approval-boundary/c02.1": {
+        "key": "task:afc-c02-governed-action-and-approval-boundary/c02.1",
+        "receiptId": "1a56be3471e7536c63ffa01fa77882926e7707660b4364bc29754eed3a6e5ba4",
+        "boundary": "task",
+        "subject": "afc-c02-governed-action-and-approval-boundary/C02.1",
+        "sourceRevision": 205,
+        "exactSignal": "Starting task 1 out of 3: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture."
+      },
+      "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2": {
+        "key": "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2",
+        "receiptId": "1836b9b60f0b3fa4be0e03735394e79b0eb81d25be57c98ec86f38b28e121464",
+        "boundary": "task",
+        "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile/C03.2",
+        "sourceRevision": 223,
+        "exactSignal": "Starting task 2 out of 3: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks."
+      },
+      "task:afc-c09-team-task-admission-context-and-membership/c09.3": {
+        "key": "task:afc-c09-team-task-admission-context-and-membership/c09.3",
+        "receiptId": "a764fd6e179cf180b0b44285f96f34926b3f884113b4c9c37020c88b5fd4bd50",
+        "boundary": "task",
+        "subject": "afc-c09-team-task-admission-context-and-membership/C09.3",
+        "sourceRevision": 339,
+        "exactSignal": "Starting task 1 out of 1: Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage"
+      },
+      "task:afc-d01-local-mac-durable-agent-delivery/d01.4": {
+        "key": "task:afc-d01-local-mac-durable-agent-delivery/d01.4",
+        "receiptId": "a22b21e408ff34b47bf47ce4e690970bfa3e1e812ca75c3401cc901dbe602ff3",
+        "boundary": "task",
+        "subject": "afc-d01-local-mac-durable-agent-delivery/D01.4",
+        "sourceRevision": 327,
+        "exactSignal": "Starting task 4 out of 4: Resolve publication choice including live website installer pointers"
+      }
+    },
+    "latestBoundaryReceipts": {
+      "change:afc-c01-baseline-reconciliation-and-shared-contracts": {
+        "id": "bd1c9c8ed174fc2048315db44ace9054ed0a2d5c8eac599611824d24b5aa0b07",
+        "boundary": "change",
+        "edge": "after",
+        "subject": "afc-c01-baseline-reconciliation-and-shared-contracts",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+        "taskId": null,
+        "sourceRevision": 202,
+        "position": "agent-fabric-convergence › afc-c01-baseline-reconciliation-and-shared-contracts",
+        "exactSignal": "Completed change 1 out of 18: C01 — Baseline reconciliation and shared contracts",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T03:54:41.351200Z"
+      },
+      "change:afc-c02-governed-action-and-approval-boundary": {
+        "id": "08b7b63fab8cbb3b68398671e70d0048bb72451fa5b6af3d68135afdc53c6994",
+        "boundary": "change",
+        "edge": "before",
+        "subject": "afc-c02-governed-action-and-approval-boundary",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c02-governed-action-and-approval-boundary",
+        "taskId": null,
+        "sourceRevision": 204,
+        "position": "agent-fabric-convergence › afc-c02-governed-action-and-approval-boundary",
+        "exactSignal": "Starting change 2 out of 18: C02 — Governed action and approval boundary",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T03:57:35.315134Z"
+      },
+      "change:afc-c03-lossless-definitions-and-collaboration-document-profile": {
+        "id": "35cfaaaff3c6fe47939756cb116e233a0660890604ce466ea02f557216a7fc96",
+        "boundary": "change",
+        "edge": "before",
+        "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "taskId": null,
+        "sourceRevision": 222,
+        "position": "agent-fabric-convergence › afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "exactSignal": "Starting change 3 out of 18: C03 — Lossless definitions and collaboration document profile",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T06:35:58.432135Z"
+      },
+      "change:afc-c09-bounded-teams-and-shared-task-board": {
+        "id": "bcb5dc98df07711d76b54dde9a36b5fd47255d312968a37b64a361b57e8c52c0",
+        "boundary": "change",
+        "edge": "before",
+        "subject": "afc-c09-bounded-teams-and-shared-task-board",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+        "taskId": null,
+        "sourceRevision": 342,
+        "position": "agent-fabric-convergence › afc-c09-bounded-teams-and-shared-task-board",
+        "exactSignal": "Starting change 11 out of 20: C09 — Bounded teams and shared task board",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-29T20:56:18.814419Z"
+      },
+      "change:afc-c09-team-task-admission-context-and-membership": {
+        "id": "f11f696c5db99a0a07c8be99c4a1d55fdb053354d0eb5c615a8546598e2e46ae",
+        "boundary": "change",
+        "edge": "before",
+        "subject": "afc-c09-team-task-admission-context-and-membership",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c09-team-task-admission-context-and-membership",
+        "taskId": null,
+        "sourceRevision": 338,
+        "position": "agent-fabric-convergence › afc-c09-team-task-admission-context-and-membership",
+        "exactSignal": "Starting change 1 out of 20: afc-c09-team-task-admission-context-and-membership",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-29T20:55:39.238310Z"
+      },
+      "change:afc-d01-local-mac-durable-agent-delivery": {
+        "id": "c926b3408b169c3c73a368e802c3b40ccf529de002dc0bdd26d2f11db24b550e",
+        "boundary": "change",
+        "edge": "before",
+        "subject": "afc-d01-local-mac-durable-agent-delivery",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-d01-local-mac-durable-agent-delivery",
+        "taskId": null,
+        "sourceRevision": 312,
+        "position": "agent-fabric-convergence › afc-d01-local-mac-durable-agent-delivery",
+        "exactSignal": "Starting change 1 out of 19: Local Mac durable-agent delivery",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:40:32.350352Z"
+      },
+      "change:afc-release-cadence-optimization": {
+        "id": "ee11a5a1e5e0b0641fb5649343e3ab09306deb9e0c797397261c74e20bceecef",
+        "boundary": "change",
+        "edge": "after",
+        "subject": "afc-release-cadence-optimization",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": "afc-release-cadence-optimization",
+        "taskId": null,
+        "sourceRevision": 300,
+        "position": "agent-fabric-convergence › release-cadence-optimization › afc-release-cadence-optimization",
+        "exactSignal": "Completed change 1 out of 1: Apply usable local release cadence and team operation",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:11:23.344125Z"
+      },
+      "change:afc-uar-team-execution-architecture-contract": {
+        "id": "e4c5a080d8179667985d3ec54b339b92b3fea6b6b465f81cc39a36aa99f4b98f",
+        "boundary": "change",
+        "edge": "after",
+        "subject": "afc-uar-team-execution-architecture-contract",
+        "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+        "changeId": "afc-uar-team-execution-architecture-contract",
+        "taskId": null,
+        "sourceRevision": 375,
+        "position": "agent-fabric-convergence › uar-team-execution-architecture › afc-uar-team-execution-architecture-contract",
+        "exactSignal": "Completed change 1 out of 1: Approved team architecture contract and parent handoff",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T05:29:24.213625Z"
+      },
+      "change:uar-team-specification": {
+        "id": "4780e157afa2690ae2682ce0dd4342f15e93e1b3c45dbf6d5ab464f15bb4632f",
+        "boundary": "change",
+        "edge": "after",
+        "subject": "uar-team-specification",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": null,
+        "sourceRevision": 142,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification",
+        "exactSignal": "Completed change 1 out of 1: Official draft collaboration specification and implementation handoff",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:11:38.506779Z"
+      },
+      "phase:agent-fabric-convergence::release-cadence-optimization": {
+        "id": "797bc43768bbadfb16289e02ef51b071481ffb3b500fa218bce5e9454fba066b",
+        "boundary": "phase",
+        "edge": "after",
+        "subject": "agent-fabric-convergence::release-cadence-optimization",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": null,
+        "taskId": null,
+        "sourceRevision": 307,
+        "position": "agent-fabric-convergence › release-cadence-optimization",
+        "exactSignal": "Completed phase 3 out of 3: release-cadence-optimization",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:22:12.371140Z"
+      },
+      "phase:agent-fabric-convergence::uar-team-execution-architecture": {
+        "id": "9ae91a0f60d1e9b04da7dbea89a7236696529e69ab6ba440c9984f5c5b8ea636",
+        "boundary": "phase",
+        "edge": "after",
+        "subject": "agent-fabric-convergence::uar-team-execution-architecture",
+        "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+        "changeId": null,
+        "taskId": null,
+        "sourceRevision": 380,
+        "position": "agent-fabric-convergence › uar-team-execution-architecture",
+        "exactSignal": "Completed phase 4 out of 4: uar-team-execution-architecture",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T05:52:53.352921Z"
+      },
+      "phase:agent-fabric-convergence::uar-team-specification": {
+        "id": "375d8df3c307a8ed51cf0a5e73efe71f7f02e3b72722b75e1d3d8489eb498b6e",
+        "boundary": "phase",
+        "edge": "after",
+        "subject": "agent-fabric-convergence::uar-team-specification",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": null,
+        "taskId": null,
+        "sourceRevision": 145,
+        "position": "agent-fabric-convergence › uar-team-specification",
+        "exactSignal": "Completed phase 1 out of 1: uar-team-specification",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:12:54.428014Z"
+      },
+      "phase:uar-team-definitions-deployment": {
+        "id": "0283af81f6111cf9f0d0ed166fe6cdcbfd2ab9eb895d110e6e21aaa01430b9b1",
+        "boundary": "phase",
+        "edge": "after",
+        "subject": "uar-team-definitions-deployment",
+        "phaseId": "uar-team-definitions-deployment",
+        "changeId": null,
+        "taskId": null,
+        "sourceRevision": 191,
+        "position": "agent-fabric-convergence › uar-team-definitions-deployment",
+        "exactSignal": "Completed phase 2 out of 2: UAR team definitions, maintenance, and deployment",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T21:43:49.801580Z"
+      },
+      "task:afc-c01-baseline-reconciliation-and-shared-contracts/c01.1": {
+        "id": "d658d4cc1cde68d2a327ef9720f3229c68594be8548cdeb3785f2b762b99a1e2",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-c01-baseline-reconciliation-and-shared-contracts/C01.1",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+        "taskId": "C01.1",
+        "sourceRevision": 90,
+        "position": "agent-fabric-convergence › afc-c01-baseline-reconciliation-and-shared-contracts › C01.1",
+        "exactSignal": "Completed task 1 out of 3: Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-24T19:00:24.480363Z"
+      },
+      "task:afc-c01-baseline-reconciliation-and-shared-contracts/c01.2": {
+        "id": "53c49563746a2f52619d20459f516b5e6435416b244cff63a785bf5d65e3b600",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-c01-baseline-reconciliation-and-shared-contracts/C01.2",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+        "taskId": "C01.2",
+        "sourceRevision": 197,
+        "position": "agent-fabric-convergence › afc-c01-baseline-reconciliation-and-shared-contracts › C01.2",
+        "exactSignal": "Completed task 2 out of 3: Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T03:26:35.136114Z"
+      },
+      "task:afc-c01-baseline-reconciliation-and-shared-contracts/c01.3": {
+        "id": "93a99f160cb6c01094a0c0afb59591edd1311d940a069cd8ff392c1315baa60d",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-c01-baseline-reconciliation-and-shared-contracts/C01.3",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+        "taskId": "C01.3",
+        "sourceRevision": 201,
+        "position": "agent-fabric-convergence › afc-c01-baseline-reconciliation-and-shared-contracts › C01.3",
+        "exactSignal": "Completed task 3 out of 3: Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T03:54:40.847248Z"
+      },
+      "task:afc-c02-governed-action-and-approval-boundary/c02.1": {
+        "id": "1a56be3471e7536c63ffa01fa77882926e7707660b4364bc29754eed3a6e5ba4",
+        "boundary": "task",
+        "edge": "before",
+        "subject": "afc-c02-governed-action-and-approval-boundary/C02.1",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c02-governed-action-and-approval-boundary",
+        "taskId": "C02.1",
+        "sourceRevision": 205,
+        "position": "agent-fabric-convergence › afc-c02-governed-action-and-approval-boundary › C02.1",
+        "exactSignal": "Starting task 1 out of 3: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T03:57:35.831245Z"
+      },
+      "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.1": {
+        "id": "535c9e143dfa2852a7a3fea278c5833971061811b18b376650ff50e19d6104f0",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile/C03.1",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "taskId": "C03.1",
+        "sourceRevision": 218,
+        "position": "agent-fabric-convergence › afc-c03-lossless-definitions-and-collaboration-document-profile › C03.1",
+        "exactSignal": "Completed task 1 out of 3: Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T06:35:53.207891Z"
+      },
+      "task:afc-c03-lossless-definitions-and-collaboration-document-profile/c03.2": {
+        "id": "1836b9b60f0b3fa4be0e03735394e79b0eb81d25be57c98ec86f38b28e121464",
+        "boundary": "task",
+        "edge": "before",
+        "subject": "afc-c03-lossless-definitions-and-collaboration-document-profile/C03.2",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+        "taskId": "C03.2",
+        "sourceRevision": 223,
+        "position": "agent-fabric-convergence › afc-c03-lossless-definitions-and-collaboration-document-profile › C03.2",
+        "exactSignal": "Starting task 2 out of 3: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-27T06:35:58.915114Z"
+      },
+      "task:afc-c09-bounded-teams-and-shared-task-board/c09.3": {
+        "id": "271243627f50316b54aca7deaf590d88eb193be2b783d2b9cdaee6fa9a19e380",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-c09-bounded-teams-and-shared-task-board/C09.3",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+        "taskId": "C09.3",
+        "sourceRevision": 384,
+        "position": "agent-fabric-convergence › afc-c09-bounded-teams-and-shared-task-board › C09.3",
+        "exactSignal": "Completed task 3 out of 4: Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T09:39:33.187625Z"
+      },
+      "task:afc-c09-team-task-admission-context-and-membership/c09.3": {
+        "id": "a764fd6e179cf180b0b44285f96f34926b3f884113b4c9c37020c88b5fd4bd50",
+        "boundary": "task",
+        "edge": "before",
+        "subject": "afc-c09-team-task-admission-context-and-membership/C09.3",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-c09-team-task-admission-context-and-membership",
+        "taskId": "C09.3",
+        "sourceRevision": 339,
+        "position": "agent-fabric-convergence › afc-c09-team-task-admission-context-and-membership › C09.3",
+        "exactSignal": "Starting task 1 out of 1: Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-29T20:55:39.840461Z"
+      },
+      "task:afc-d01-local-mac-durable-agent-delivery/d01.1": {
+        "id": "9ed25b4045c3c194d6ba4c0ba20a98b8cf65b816212c212847741f05e0d74869",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-d01-local-mac-durable-agent-delivery/D01.1",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-d01-local-mac-durable-agent-delivery",
+        "taskId": "D01.1",
+        "sourceRevision": 315,
+        "position": "agent-fabric-convergence › afc-d01-local-mac-durable-agent-delivery › D01.1",
+        "exactSignal": "Completed task 1 out of 4: Freeze source and repair packaged UAR profile",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T09:02:43.848043Z"
+      },
+      "task:afc-d01-local-mac-durable-agent-delivery/d01.2": {
+        "id": "0cbdfc608757be971f69e17076c324de9036a98ee3c2effc063889314a062cfe",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-d01-local-mac-durable-agent-delivery/D01.2",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-d01-local-mac-durable-agent-delivery",
+        "taskId": "D01.2",
+        "sourceRevision": 319,
+        "position": "agent-fabric-convergence › afc-d01-local-mac-durable-agent-delivery › D01.2",
+        "exactSignal": "Completed task 2 out of 4: Deliver durable-agent and observer UI through The Boss",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T09:04:43.707578Z"
+      },
+      "task:afc-d01-local-mac-durable-agent-delivery/d01.3": {
+        "id": "b17594af4881f62d57bf2d30abc10f0c4f7e7f4e2be799ec572f51fc77c11552",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-d01-local-mac-durable-agent-delivery/D01.3",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-d01-local-mac-durable-agent-delivery",
+        "taskId": "D01.3",
+        "sourceRevision": 325,
+        "position": "agent-fabric-convergence › afc-d01-local-mac-durable-agent-delivery › D01.3",
+        "exactSignal": "Completed task 3 out of 4: Run complete local gate and deliver built app",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T10:51:04.768661Z"
+      },
+      "task:afc-d01-local-mac-durable-agent-delivery/d01.4": {
+        "id": "a22b21e408ff34b47bf47ce4e690970bfa3e1e812ca75c3401cc901dbe602ff3",
+        "boundary": "task",
+        "edge": "before",
+        "subject": "afc-d01-local-mac-durable-agent-delivery/D01.4",
+        "phaseId": "agent-fabric-convergence",
+        "changeId": "afc-d01-local-mac-durable-agent-delivery",
+        "taskId": "D01.4",
+        "sourceRevision": 327,
+        "position": "agent-fabric-convergence › afc-d01-local-mac-durable-agent-delivery › D01.4",
+        "exactSignal": "Starting task 4 out of 4: Resolve publication choice including live website installer pointers",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T10:51:14.580933Z"
+      },
+      "task:afc-release-cadence-optimization/1.1": {
+        "id": "4300097f2fb5992d693e658014880a155992312dcbcac2cf28bb92a862380f47",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-release-cadence-optimization/1.1",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": "afc-release-cadence-optimization",
+        "taskId": "1.1",
+        "sourceRevision": 281,
+        "position": "agent-fabric-convergence › release-cadence-optimization › afc-release-cadence-optimization › 1.1",
+        "exactSignal": "Completed task 1 out of 4: Freeze a truthful local-delivery and publication contract",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T07:58:37.784892Z"
+      },
+      "task:afc-release-cadence-optimization/1.2": {
+        "id": "32fc76597d8dd9c7746776375bb92b1d0057737d6279b472411cbbf6e97cadc1",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-release-cadence-optimization/1.2",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": "afc-release-cadence-optimization",
+        "taskId": "1.2",
+        "sourceRevision": 295,
+        "position": "agent-fabric-convergence › release-cadence-optimization › afc-release-cadence-optimization › 1.2",
+        "exactSignal": "Completed task 2 out of 4: Apply a lossless parent roadmap and dependency revision",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:06:38.331674Z"
+      },
+      "task:afc-release-cadence-optimization/1.3": {
+        "id": "aa2ec12484d4a48f9670df52a44e46505c0a68f2434e9ffff6980855f179160b",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-release-cadence-optimization/1.3",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": "afc-release-cadence-optimization",
+        "taskId": "1.3",
+        "sourceRevision": 287,
+        "position": "agent-fabric-convergence › release-cadence-optimization › afc-release-cadence-optimization › 1.3",
+        "exactSignal": "Completed task 3 out of 4: Repair active team instructions and attach bounded learning",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:04:32.517204Z"
+      },
+      "task:afc-release-cadence-optimization/1.4": {
+        "id": "28cd0d38209bbafd0de2e92dd8736c28917b4c871dbfa05f879d2b77742c48c6",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-release-cadence-optimization/1.4",
+        "phaseId": "agent-fabric-convergence::release-cadence-optimization",
+        "changeId": "afc-release-cadence-optimization",
+        "taskId": "1.4",
+        "sourceRevision": 299,
+        "position": "agent-fabric-convergence › release-cadence-optimization › afc-release-cadence-optimization › 1.4",
+        "exactSignal": "Completed task 4 out of 4: Run one process-artifact consistency gate and hand off",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-28T08:11:22.578463Z"
+      },
+      "task:afc-uar-team-execution-architecture-contract/1.1": {
+        "id": "168abe5376fdc41a2715bc70140f4d71daeb815cbb5d273c0a40680137796eb6",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-uar-team-execution-architecture-contract/1.1",
+        "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+        "changeId": "afc-uar-team-execution-architecture-contract",
+        "taskId": "1.1",
+        "sourceRevision": 364,
+        "position": "agent-fabric-convergence › uar-team-execution-architecture › afc-uar-team-execution-architecture-contract › 1.1",
+        "exactSignal": "Completed task 1 out of 3: Approved execution profile and migration artifacts",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T05:15:30.618747Z"
+      },
+      "task:afc-uar-team-execution-architecture-contract/1.2": {
+        "id": "9a3e95c0e61a2f372043b1a4c3b43704340fb424326f6e9a4c5ed5b7a83df7b5",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-uar-team-execution-architecture-contract/1.2",
+        "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+        "changeId": "afc-uar-team-execution-architecture-contract",
+        "taskId": "1.2",
+        "sourceRevision": 370,
+        "position": "agent-fabric-convergence › uar-team-execution-architecture › afc-uar-team-execution-architecture-contract › 1.2",
+        "exactSignal": "Completed task 2 out of 3: Parent repair ownership and operation handoff",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T05:20:55.150758Z"
+      },
+      "task:afc-uar-team-execution-architecture-contract/1.3": {
+        "id": "21a0858cf427c850a2257042f4202a04e31ff64965ed9e122d8e0e200db6a2e6",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "afc-uar-team-execution-architecture-contract/1.3",
+        "phaseId": "agent-fabric-convergence::uar-team-execution-architecture",
+        "changeId": "afc-uar-team-execution-architecture-contract",
+        "taskId": "1.3",
+        "sourceRevision": 374,
+        "position": "agent-fabric-convergence › uar-team-execution-architecture › afc-uar-team-execution-architecture-contract › 1.3",
+        "exactSignal": "Completed task 3 out of 3: Completed document evidence and reflection handoff",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-30T05:29:23.502048Z"
+      },
+      "task:uar-team-specification/1.1": {
+        "id": "ce25d2fa64b6f099fec77c173c35c92043b34fe48a16926260aec2c5d07cc76c",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.1",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.1",
+        "sourceRevision": 125,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.1",
+        "exactSignal": "Completed task 1 out of 6: Record operator architecture decision and freeze required contracts, not unmeasured backend conformance.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:06:29.254590Z"
+      },
+      "task:uar-team-specification/1.2": {
+        "id": "cf398ae295dc9451b8ccfbd3a8360ca79c01a36eb76f06754970acbe32917bee",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.2",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.2",
+        "sourceRevision": 127,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.2",
+        "exactSignal": "Completed task 2 out of 6: Author official UAR draft, documentation-only schemas, examples and protocol traces; link existing RFC.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:06:32.188656Z"
+      },
+      "task:uar-team-specification/1.3": {
+        "id": "c3a20482e49b33422e5ccd53ef82fd623ce62d7452d4c6c3e876ed7fff3cb23e",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.3",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.3",
+        "sourceRevision": 129,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.3",
+        "exactSignal": "Completed task 3 out of 6: Finalize compatibility, harness declarations, convergence dependency mapping and implementation ownership.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:06:35.132702Z"
+      },
+      "task:uar-team-specification/1.4": {
+        "id": "7a6a298a3794283d70d91c591b0e5c4b12c158db57996adf1b8a4c98e676945a",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.4",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.4",
+        "sourceRevision": 131,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.4",
+        "exactSignal": "Completed task 4 out of 6: Validate the complete document set once for schema/example agreement, consistency and traceability.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:06:38.068807Z"
+      },
+      "task:uar-team-specification/1.5": {
+        "id": "7dee132abb05250e4c8bc03720e195f30646283b9ab1052b17ead0e57ff42162",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.5",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.5",
+        "sourceRevision": 135,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.5",
+        "exactSignal": "Completed task 5 out of 6: Commit and publish approved documentation with immutable revisions and honest conformance labels.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:11:11.926856Z"
+      },
+      "task:uar-team-specification/1.6": {
+        "id": "121e42438ea5629feb54c5c179876478a03f44bb37a115c12b4b4914dad0405e",
+        "boundary": "task",
+        "edge": "after",
+        "subject": "uar-team-specification/1.6",
+        "phaseId": "agent-fabric-convergence::uar-team-specification",
+        "changeId": "uar-team-specification",
+        "taskId": "1.6",
+        "sourceRevision": 141,
+        "position": "agent-fabric-convergence › uar-team-specification › uar-team-specification › 1.6",
+        "exactSignal": "Completed task 6 out of 6: Reflect, verify/archive the documentation change, hand off and restore parent waypoint.",
+        "outcome": "pass",
+        "findings": [],
+        "repairedProjections": [],
+        "observedAt": "2026-09-26T16:11:38.041429Z"
+      }
+    },
+    "claims": {},
+    "submodulePins": {},
+    "replicaView": {
+      "replicaId": "c67ff135-541a-40dd-9600-b528d8bccbc2",
+      "localHead": "aa25ef8365c2c2ce6377903bd60b5d5410492a3a",
+      "activePathStatus": "current",
+      "submodules": {}
+    },
+    "conflicts": {},
+    "devices": {
+      "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349": {
+        "deviceId": "unknown-device",
+        "keyId": "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349",
+        "publicKey": "871iU0Bs/8a3DP+tqTdJ4mW+QH5tyT7Qu8BA7zzadzc=",
+        "status": "active",
+        "enrolledAtRevision": 1,
+        "revokedAtRevision": null
+      }
+    },
+    "operatorKeyIds": [
+      "ed25519:2c27c749aebaedf4ffa5dfe5b5021f360eb1356153f34a2f490883cfa7c32349"
+    ],
+    "commandRevisions": {
+      "05663ac1-9504-4a6f-adf9-05a26054249e": 340,
+      "08630822-d789-4c73-b95b-0c865afdb779": 224,
+      "095629df-a35b-4567-a9b5-86d544faf79a": 383,
+      "099ac9ab-e0e0-497f-91cf-31908173870a": 91,
+      "0ca64015-ad04-4fb0-a4b0-d72b2ed91a86": 280,
+      "0dd5e675-0690-498c-a240-81c6c501bbb0": 190,
+      "0e51b163-60cd-46ad-a4ca-70ed3fffeb51": 323,
+      "0f951266-69e3-499a-b140-769214e5cbb8": 373,
+      "1054cb7f-240a-41ea-90f8-839bf0b94964": 303,
+      "10bb6742-d8d0-4e7b-bb5f-5d881b11bb1b": 130,
+      "1a0b0528-a362-4e4a-bedf-d30c813dd836": 296,
+      "1b6577ac-def7-4587-86fe-c6037087ed57": 217,
+      "200f309c-f191-48e4-8dcd-38d5fb663c2a": 215,
+      "208f6ea3-f2af-4840-89e6-2ed1d15350cd": 286,
+      "21209fee-e045-43e4-9cf8-80bba98f50dd": 149,
+      "2691adef-6392-4ce6-9b74-b4df1a8b3495": 320,
+      "279cb19e-086a-4283-a452-28c9a3302074": 339,
+      "27b6356e-59ae-4810-9859-ea32871560f1": 300,
+      "28e706a5-f6ba-44af-b958-77b48dfb2ccc": 348,
+      "2b6be01f-8b2e-47ac-ab42-746e67068b19": 95,
+      "2db2fdd8-9192-4fa6-9334-78554c2358cc": 194,
+      "2e9ac4c9-c944-4ba7-bf7c-730cfd1587c0": 288,
+      "2ea78cc6-0868-43fb-b079-34b2f0b705b9": 310,
+      "30621504-3617-4746-90d6-3523d2a73b65": 344,
+      "31b49fc9-5e71-4428-b856-276f83744faa": 132,
+      "329aafdc-6473-49e7-864d-5e023386656c": 367,
+      "37cfc1aa-cd37-4bd8-ad0b-3ee1eb28c259": 143,
+      "38576daa-c036-4505-9ca9-31e938d85095": 275,
+      "385fa277-5181-41c3-bb2b-510e52dbcd91": 369,
+      "3cac7787-caa2-4e63-8890-62ac99273e33": 267,
+      "3e1d58ed-9623-47c9-be38-5bfab359a221": 301,
+      "43139846-bb20-4fb4-9722-56867a2c308a": 198,
+      "4388c770-f912-4f7f-b47b-c4681769c0c6": 311,
+      "4701d7ac-9345-4139-974b-e0ec98a961bf": 206,
+      "478c0d43-f428-46ba-913f-07588699203f": 343,
+      "4bd700cd-ce82-42e0-b4d6-b137de1dae71": 365,
+      "50ebf8d9-7626-43a1-9b96-0182e0e0dd4a": 385,
+      "51d037a5-9cdd-49a1-9f74-1966c517e418": 276,
+      "53666bf6-5eaa-496f-a6f2-34827de1339b": 362,
+      "55875ab9-df04-4022-bfe8-98e325942dc9": 331,
+      "569e1e3f-5060-4ee2-be49-04f6709ac4f2": 203,
+      "588e297a-0aab-4497-a8eb-783e9128e0e9": 192,
+      "589dbd1e-ee53-4d12-b6e8-168ba0c9cb77": 142,
+      "5bbeff77-2ce7-44da-95a8-6b8055ef4977": 220,
+      "5ca85e33-fd82-4185-98f8-699dd289beaf": 223,
+      "5f5d8e1e-7d54-4b04-ab43-45149a201b6a": 361,
+      "5ff4edcf-808a-47aa-a94e-3cab298a8763": 316,
+      "65439fb6-1c50-4f2c-8d5c-424748686d25": 88,
+      "714487d0-42ae-4bde-94c9-f91e4aaedbec": 375,
+      "717ca9d6-d985-4f34-86ac-63c9cac05762": 128,
+      "73708f23-95d7-45b0-8221-db4176b699d4": 205,
+      "74b57614-a0a5-48ff-a043-1326ce6fc0d1": 257,
+      "77c68533-7eb3-44b9-9adc-b20fc8cb049e": 134,
+      "7d752a89-4ebb-4291-841c-27d6f0d9da11": 314,
+      "7e816c9a-36bb-443f-9129-3c0c3c727f9d": 193,
+      "82f37411-cc6d-4b75-974a-547f0a6b46d4": 151,
+      "84c3ad86-15ff-4084-a7f6-9c7c80be3e10": 318,
+      "8606b73c-ebe1-4d24-88b4-7cdd58537f93": 326,
+      "8ffd97bd-f26d-4800-a9c2-ad432a6369d1": 266,
+      "939fd2fe-de7b-405b-b8ec-791ef65c527d": 282,
+      "9404117c-84e7-4e7f-9f86-25c833f4df4d": 261,
+      "97013e6a-1a66-4b04-8954-bb2f214dd2d7": 308,
+      "98e986d2-7408-479d-b0f5-866847ff7707": 118,
+      "9fe016a8-ea63-48ed-a4c5-a4cad07a3373": 126,
+      "a13b04b6-ca0b-4d83-b5c5-f5e37f04365a": 371,
+      "a2add1fa-e54b-4f3a-a1b6-7b4f57c8cdae": 146,
+      "a546670f-7f40-4a92-b73b-3550374778f0": 381,
+      "a67d1a09-c291-4da8-a601-7479019c7005": 294,
+      "aa371e9d-2e9c-425d-bf21-d5db99adf9a3": 324,
+      "aca94a80-87d8-4dea-bcb9-4625a30c7da3": 304,
+      "afc-activate-uar-team-definitions-deployment-v1": 154,
+      "afc-analyze-complete": 8,
+      "afc-c01-i1-contract-input-20260926": 196,
+      "afc-c01-p1-contract-pending-20260926": 150,
+      "afc-c02-duar-p1-windows-acceptance-20260927": 207,
+      "afc-c02-task-1-complete-20260927": 208,
+      "afc-c02-task-2-complete-20260927": 210,
+      "afc-c02-task-2-start-20260927": 209,
+      "afc-c02-task-3-complete-20260927": 212,
+      "afc-c02-task-3-start-20260927": 211,
+      "afc-c03-2-complete-20260927": 225,
+      "afc-c03-3-complete-20260927": 227,
+      "afc-c03-3-start-20260927": 226,
+      "afc-c03-change-start-20260927": 213,
+      "afc-c03-task-1-start-20260927": 214,
+      "afc-c06-1-implementation-20260928": 241,
+      "afc-c06-1-start-20260927": 240,
+      "afc-c06-2-complete-20260927": 243,
+      "afc-c06-2-start-20260928": 242,
+      "afc-c06-3-complete-20260927": 245,
+      "afc-c06-3-start-20260927": 244,
+      "afc-c07-1-complete-20260928": 247,
+      "afc-c07-1-start-20260927": 246,
+      "afc-c07-2-complete-20260928": 249,
+      "afc-c07-2-start-20260928": 248,
+      "afc-c07-3-complete-20260928": 251,
+      "afc-c07-3-start-20260928": 250,
+      "afc-c08-1-start-20260928": 252,
+      "afc-c08-1-static-source-b75886ad3-20260928": 253,
+      "afc-create-uar-team-definitions-deployment-v1": 153,
+      "afc-execute-enter": 86,
+      "afc-plan-complete": 84,
+      "afc-plan-enter": 11,
+      "afc-planned-next-c01": 85,
+      "afc-register-C01": 12,
+      "afc-register-C01.1": 13,
+      "afc-register-C01.2": 14,
+      "afc-register-C01.3": 15,
+      "afc-register-C02": 16,
+      "afc-register-C02.1": 17,
+      "afc-register-C02.2": 18,
+      "afc-register-C02.3": 19,
+      "afc-register-C03": 20,
+      "afc-register-C03.1": 21,
+      "afc-register-C03.2": 22,
+      "afc-register-C03.3": 23,
+      "afc-register-C04": 24,
+      "afc-register-C04.1": 25,
+      "afc-register-C04.2": 26,
+      "afc-register-C04.3": 27,
+      "afc-register-C05": 28,
+      "afc-register-C05.1": 29,
+      "afc-register-C05.2": 30,
+      "afc-register-C05.3": 31,
+      "afc-register-C06": 32,
+      "afc-register-C06.1": 33,
+      "afc-register-C06.2": 34,
+      "afc-register-C06.3": 35,
+      "afc-register-C07": 36,
+      "afc-register-C07.1": 37,
+      "afc-register-C07.2": 38,
+      "afc-register-C07.3": 39,
+      "afc-register-C08": 40,
+      "afc-register-C08.1": 41,
+      "afc-register-C08.2": 42,
+      "afc-register-C08.3": 43,
+      "afc-register-C09": 44,
+      "afc-register-C09.1": 45,
+      "afc-register-C09.2": 46,
+      "afc-register-C09.3": 47,
+      "afc-register-C10": 48,
+      "afc-register-C10.1": 49,
+      "afc-register-C10.2": 50,
+      "afc-register-C10.3": 51,
+      "afc-register-C11": 52,
+      "afc-register-C11.1": 53,
+      "afc-register-C11.2": 54,
+      "afc-register-C11.3": 55,
+      "afc-register-C12": 56,
+      "afc-register-C12.1": 57,
+      "afc-register-C12.2": 58,
+      "afc-register-C12.3": 59,
+      "afc-register-C13": 60,
+      "afc-register-C13.1": 61,
+      "afc-register-C13.2": 62,
+      "afc-register-C13.3": 63,
+      "afc-register-C14": 64,
+      "afc-register-C14.1": 65,
+      "afc-register-C14.2": 66,
+      "afc-register-C14.3": 67,
+      "afc-register-C15": 68,
+      "afc-register-C15.1": 69,
+      "afc-register-C15.2": 70,
+      "afc-register-C15.3": 71,
+      "afc-register-C16": 72,
+      "afc-register-C16.1": 73,
+      "afc-register-C16.2": 74,
+      "afc-register-C16.3": 75,
+      "afc-register-C17": 76,
+      "afc-register-C17.1": 77,
+      "afc-register-C17.2": 78,
+      "afc-register-C17.3": 79,
+      "afc-register-C18": 80,
+      "afc-register-C18.1": 81,
+      "afc-register-C18.2": 82,
+      "afc-register-C18.3": 83,
+      "afc-spec-complete": 10,
+      "afc-spec-enter": 9,
+      "afc-team-definitions-deployment-decision-v1": 152,
+      "apply:change-register:agent-fabric-convergence:afc-c09-team-task-admission-context-and-membership": 336,
+      "apply:task-complete:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.1": 281,
+      "apply:task-complete:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.2": 295,
+      "apply:task-complete:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.3": 287,
+      "apply:task-complete:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.4": 299,
+      "apply:task-complete:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.1": 364,
+      "apply:task-complete:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.2": 370,
+      "apply:task-complete:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.3": 374,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.1": 125,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.2": 127,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.3": 129,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.4": 131,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.5": 135,
+      "apply:task-complete:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.6": 141,
+      "apply:task-complete:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.1": 90,
+      "apply:task-complete:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.2": 197,
+      "apply:task-complete:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.3": 201,
+      "apply:task-complete:agent-fabric-convergence:afc-c03-lossless-definitions-and-collaboration-document-profile:C03.1": 218,
+      "apply:task-complete:agent-fabric-convergence:afc-c09-bounded-teams-and-shared-task-board:C09.3": 384,
+      "apply:task-complete:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.1": 315,
+      "apply:task-complete:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.2": 319,
+      "apply:task-complete:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.3": 325,
+      "apply:task-in-progress:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.1": 278,
+      "apply:task-in-progress:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.2": 283,
+      "apply:task-in-progress:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.3": 285,
+      "apply:task-in-progress:agent-fabric-convergence::release-cadence-optimization:afc-release-cadence-optimization:1.4": 297,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.1": 360,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.2": 366,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-execution-architecture:afc-uar-team-execution-architecture-contract:1.3": 372,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.1": 116,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.2": 119,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.3": 121,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.4": 123,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.5": 133,
+      "apply:task-in-progress:agent-fabric-convergence::uar-team-specification:uar-team-specification:1.6": 137,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.1": 87,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.2": 148,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c01-baseline-reconciliation-and-shared-contracts:C01.3": 199,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c02-governed-action-and-approval-boundary:C02.1": 204,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c03-lossless-definitions-and-collaboration-document-profile:C03.2": 222,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c09-bounded-teams-and-shared-task-board:C09.3": 342,
+      "apply:task-in-progress:agent-fabric-convergence:afc-c09-team-task-admission-context-and-membership:C09.3": 338,
+      "apply:task-in-progress:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.1": 312,
+      "apply:task-in-progress:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.2": 317,
+      "apply:task-in-progress:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.3": 321,
+      "apply:task-in-progress:agent-fabric-convergence:afc-d01-local-mac-durable-agent-delivery:D01.4": 327,
+      "apply:task-register:agent-fabric-convergence:afc-c09-team-task-admission-context-and-membership:C09.3": 337,
+      "b47b56ab-e6be-453b-a5d7-c9a821d2b210": 219,
+      "b4e5eb53-0099-45f5-b00e-3a2dbb480c11": 1,
+      "b61652e2-a26c-48b3-8c40-b4ca4ff5474d": 279,
+      "b723f102-73d8-41ed-af57-6f416c67c118": 298,
+      "b783ed41-7180-4a2e-b24f-7e650c481635": 216,
+      "b895956b-31d4-4f78-9457-5b2dbc19977d": 376,
+      "c04-1-complete-20260927": 229,
+      "c04-1-start-20260927b": 228,
+      "c04-2-complete-20260927": 231,
+      "c04-2-start-20260927": 230,
+      "c04-3-complete-20260927": 233,
+      "c04-3-start-20260927": 232,
+      "c05-1-complete-20260927": 235,
+      "c05-1-start-20260927": 234,
+      "c05-2-complete-20260927": 237,
+      "c05-2-start-20260927": 236,
+      "c05-3-complete-20260927": 239,
+      "c05-3-start-20260927": 238,
+      "c09-1-complete-local-gate-20260928": 333,
+      "c09-1-start-20260928": 332,
+      "c09-2-local-delivery-complete": 335,
+      "c09-2-start-20260928": 334,
+      "c09-selector-correction-task-20260929": 341,
+      "c35712a5-b9b8-43ce-80d5-dd997aa05ae8": 138,
+      "cadence-d01-4-complete-20260928": 330,
+      "cadence-d01-publication-every-two-20260928": 329,
+      "cadence-execute-complete-20260928": 302,
+      "cadence-execute-enter-20260928": 277,
+      "cadence-plan-complete-20260928": 274,
+      "cadence-plan-register-1.1-20260928": 270,
+      "cadence-plan-register-1.2-20260928": 271,
+      "cadence-plan-register-1.3-20260928": 272,
+      "cadence-plan-register-1.4-20260928": 273,
+      "cadence-plan-register-change-20260928": 269,
+      "cadence-reflect-complete-20260928": 306,
+      "cadence-reflect-enter-20260928": 305,
+      "cadence-register-d01-1-20260928": 290,
+      "cadence-register-d01-2-20260928": 291,
+      "cadence-register-d01-20260928": 289,
+      "cadence-register-d01-3-20260928": 292,
+      "cadence-register-d01-4-20260928": 293,
+      "cd1a3d40-9e4d-422e-83f6-3f5d862c9451": 262,
+      "convergence-analyze-enter": 7,
+      "convergence-assess-complete": 6,
+      "convergence-assess-enter": 5,
+      "convergence-phase-activate": 3,
+      "convergence-phase-create": 2,
+      "convergence-phase-start": 4,
+      "d2fa2a05-f9a2-4f96-9179-e76073509c66": 188,
+      "dc7a3aa9-db2d-4214-99ca-19197b1a770c": 202,
+      "de4e39b7-029f-49c5-a600-8b77981b1419": 322,
+      "dea62de9-4b1c-46a1-98ef-6750ea33c974": 122,
+      "e213c3a4-07a8-4b0a-b387-d4859d1610b3": 200,
+      "e30291a0-3df4-41a7-9327-82dd4009b848": 284,
+      "e42a8952-1cf8-4874-853a-94654f603d7f": 120,
+      "e7841ee0-5e4a-4cb9-8c85-064f3db1a004": 328,
+      "ee365f2f-ec1c-4347-a897-088b2cf74e86": 182,
+      "f05501f2-c5b4-4736-a874-a21bd890a449": 89,
+      "f20ec19d-789d-4351-b86e-e70091e3a13d": 313,
+      "f683e9e0-448c-4251-b861-cadfc20569ce": 124,
+      "f7d699fa-b6fc-4fcf-99b0-9e8910eed8e3": 189,
+      "f835f53f-2c08-4dbb-94e0-1dfd859b4e1b": 221,
+      "fa452afc-c0e9-4267-beb7-7eac334377aa": 136,
+      "fa9ff6d0-3bf1-4b6f-bd1d-57af1ac339b2": 117,
+      "i1-closeout:execute:complete": 184,
+      "i1-closeout:phase:normalize-in-progress": 187,
+      "i1-closeout:reflect:complete": 186,
+      "i1-closeout:reflect:enter": 185,
+      "i1-closeout:task-1.6:complete": 183,
+      "phase-activate:agent-fabric-convergence::release-cadence-optimization": 255,
+      "phase-activate:agent-fabric-convergence::uar-team-execution-architecture": 346,
+      "phase-activate:agent-fabric-convergence::uar-team-specification": 93,
+      "phase-complete:agent-fabric-convergence::release-cadence-optimization": 307,
+      "phase-complete:agent-fabric-convergence::uar-team-execution-architecture": 380,
+      "phase-complete:agent-fabric-convergence::uar-team-specification": 145,
+      "phase-complete:uar-team-definitions-deployment": 191,
+      "phase-create:agent-fabric-convergence::release-cadence-optimization": 254,
+      "phase-create:agent-fabric-convergence::uar-team-execution-architecture": 345,
+      "phase-create:agent-fabric-convergence::uar-team-specification": 92,
+      "phase-exit:release-cadence-optimization": 309,
+      "phase-exit:uar-team-definitions-deployment": 195,
+      "phase-exit:uar-team-execution-architecture": 382,
+      "phase-exit:uar-team-specification": 147,
+      "phase-start:agent-fabric-convergence::release-cadence-optimization": 256,
+      "phase-start:agent-fabric-convergence::uar-team-execution-architecture": 347,
+      "phase-start:agent-fabric-convergence::uar-team-specification": 94,
+      "release-cadence-analyze-complete-20260928": 265,
+      "release-cadence-analyze-enter-20260928": 263,
+      "release-cadence-assess-complete-20260928": 260,
+      "release-cadence-assess-enter-20260928": 258,
+      "release-cadence-feedback-stops-20260928": 259,
+      "release-cadence-local-mac-contract-20260928": 264,
+      "release-cadence-plan-enter-20260928": 268,
+      "team-arch-c094-register-20260930": 368,
+      "team-arch-execute-complete-20260930": 377,
+      "team-arch-execute-enter-20260930": 359,
+      "team-arch-execution-approval-20260930": 363,
+      "team-arch-plan-change-20260930": 354,
+      "team-arch-plan-task-1-20260930": 355,
+      "team-arch-plan-task-2-20260930": 356,
+      "team-arch-plan-task-3-20260930": 357,
+      "team-arch-reflect-complete-20260930": 379,
+      "team-arch-reflect-enter-20260930": 378,
+      "team-architecture-plan-complete-20260930": 358,
+      "uar-team-architecture-analyze-complete-20260930": 352,
+      "uar-team-architecture-analyze-enter-20260930": 351,
+      "uar-team-architecture-assess-complete": 350,
+      "uar-team-architecture-assess-enter": 349,
+      "uar-team-architecture-plan-enter-20260930": 353,
+      "utd-analyze-complete-v1": 158,
+      "utd-analyze-enter-v1": 157,
+      "utd-assess-complete-v1": 156,
+      "utd-assess-enter-v1": 155,
+      "utd-change-register-v1": 163,
+      "utd-change-start-v1": 164,
+      "utd-execute-enter-v1": 162,
+      "utd-package-boundary-decision-v1": 161,
+      "utd-plan-complete-v1": 160,
+      "utd-plan-enter-v1": 159,
+      "utd-task-1-complete-v1": 172,
+      "utd-task-1-register-v1": 165,
+      "utd-task-1-start-v1": 171,
+      "utd-task-2-complete-v1": 174,
+      "utd-task-2-register-v1": 166,
+      "utd-task-2-start-v1": 173,
+      "utd-task-3-complete-v1": 176,
+      "utd-task-3-register-v1": 167,
+      "utd-task-3-start-v1": 175,
+      "utd-task-4-complete-v1": 178,
+      "utd-task-4-register-v1": 168,
+      "utd-task-4-start-v1": 177,
+      "utd-task-5-complete-v1": 180,
+      "utd-task-5-register-v1": 169,
+      "utd-task-5-start-v1": 179,
+      "utd-task-6-register-v1": 170,
+      "utd-task-6-start-v1": 181,
+      "uts-analyze-complete-20260926": 99,
+      "uts-analyze-enter-20260926": 98,
+      "uts-approved-execute-20260926": 112,
+      "uts-architecture-checkpoint-20260926": 110,
+      "uts-assess-complete-20260926": 97,
+      "uts-assess-enter-20260926": 96,
+      "uts-doc-change-register-20260926": 103,
+      "uts-doc-task-1.1-register-20260926": 104,
+      "uts-doc-task-1.2-register-20260926": 105,
+      "uts-doc-task-1.3-register-20260926": 106,
+      "uts-doc-task-1.4-register-20260926": 107,
+      "uts-doc-task-1.5-register-20260926": 108,
+      "uts-doc-task-1.6-register-20260926": 109,
+      "uts-execute-docs-complete": 139,
+      "uts-execute-enter": 115,
+      "uts-plan-approved-complete-v2": 114,
+      "uts-plan-await-approval-20260926": 111,
+      "uts-plan-enter-20260926": 102,
+      "uts-plan-resume-approved": 113,
+      "uts-reflect-complete": 144,
+      "uts-reflect-enter": 140,
+      "uts-spec-complete-20260926": 101,
+      "uts-spec-enter-20260926": 100
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "gpt-5.6-sol",
+  "isolation_mode": "harness-native",
+  "producer_model": "unknown",
+  "cross_model_check": "unverified-producer-unknown",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "child/execution-profile-contract.md",
+      "claim": "The frozen continuation DTO cannot prove that a resumed turn uses current task, member, binding, and approval authority after reassignment or revocation.",
+      "evidence": "ContinuationReceipt lacks the complete AttemptAuthority, root and approval-scope identity required by D5 and section 7. The schema and example preserve this omission.",
+      "suggested_fix": "Include complete fresh authority plus root/approval identity and require equality with the continuation-admission CAS."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "child/execution-profile-contract.md",
+      "claim": "The frozen DTO set does not carry failed or cancelled target outcomes into the continuation even though acceptance requires actual outcomes to reach the resumed coordinator.",
+      "evidence": "TargetOutcome appears only in TeamWait.wakeOutcomes; ContinuationReceipt only has artifact IDs, and TeamContextReceipt has no structured wait outcomes. Failed/cancelled targets can have no artifact.",
+      "suggested_fix": "Carry complete ordered outcomes or an immutable authorized outcome receipt into continuation and model-facing context; add failure/cancellation examples."
+    }
+  ],
+  "checked_classes": [],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

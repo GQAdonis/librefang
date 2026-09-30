@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "stage": "analyze",
+  "phase": "agent-fabric-convergence::uar-team-execution-architecture",
+  "status": "proposed",
+  "researchedAt": "2026-09-30T00:58:33.511Z",
+  "stack": "Existing Rust UAR with TypeScript Electron host",
+  "dependenciesChanged": false,
+  "codexRevision": "986ff1cc7ced0081ec5014b700a376333d87f869",
+  "candidates": [
+    {
+      "id": "uar-existing-kernel",
+      "disposition": "adopt",
+      "name": "Existing catalog CAS, attempt fences, actor kernel",
+      "rationale": "Repair joins without introducing another execution owner",
+      "sources": [
+        "assessment-runtime.md"
+      ],
+      "approved": false
+    },
+    {
+      "id": "codex-control-patterns",
+      "disposition": "adapt",
+      "name": "Pinned Codex registry and queue/trigger control",
+      "rationale": "Adapt explicit routing and activation; root-local threads are not durable teams",
+      "sources": [
+        "assessment-context.md"
+      ],
+      "approved": false
+    },
+    {
+      "id": "explicit-team-tools",
+      "disposition": "build",
+      "name": "Durable-team tools bound to current attempt",
+      "rationale": "Typed targets and governed mailbox/admission; schemas require Plan approval",
+      "sources": [
+        "analysis.md#3-connect-durable-communication-to-existing-admission"
+      ],
+      "approved": false
+    },
+    {
+      "id": "overloaded-child-tools",
+      "disposition": "reject",
+      "name": "Overload existing child tools",
+      "rationale": "Changes root-local meaning and target resolution; defer any tagged-selector compatibility design",
+      "sources": [
+        "assessment-context.md"
+      ],
+      "approved": false
+    },
+    {
+      "id": "one-long-lived-root",
+      "disposition": "reject",
+      "name": "One root for entire team",
+      "rationale": "Conflates durable membership and captured execution authority",
+      "sources": [
+        "assessment-runtime.md"
+      ],
+      "approved": false
+    },
+    {
+      "id": "tokio",
+      "disposition": "retain",
+      "name": "Existing asynchronous primitives",
+      "rationale": "FIFO permits do not supply cross-team fairness or persistence",
+      "sources": [
+        "https://docs.rs/tokio/latest/tokio/sync/struct.Semaphore.html"
+      ],
+      "approved": false
+    },
+    {
+      "id": "restate",
+      "disposition": "defer",
+      "name": "External durable execution platform",
+      "rationale": "Requires C10 ownership and deployment qualification; not the observed provider fix",
+      "sources": [
+        "https://github.com/restatedev/restate"
+      ],
+      "approved": false
+    },
+    {
+      "id": "temporal-rust",
+      "disposition": "defer",
+      "name": "External workflow SDK/platform",
+      "rationale": "No deep API qualification in this bounded analysis; C10 candidate only",
+      "sources": [
+        "https://github.com/temporalio/sdk-rust"
+      ],
+      "approved": false
+    },
+    {
+      "id": "transactional-outbox-pattern",
+      "disposition": "adapt",
+      "name": "Atomic intent and idempotent drain within existing catalog",
+      "rationale": "Extend existing queued attempt and command-receipt CAS; no second broker/store. Controller drains only committed queued attempts; running uncertainty is not replayed.",
+      "sources": [
+        "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html",
+        "assessment-runtime.md"
+      ],
+      "approved": false
+    }
+  ],
+  "openDecisions": [
+    "Operator approval of proposed architecture",
+    "Exact single-executor remote registration enforcement and backend qualification",
+    "Typed tool and context schema details"
+  ],
+  "researchLimits": {
+    "tier1Queries": 4,
+    "tier2Queries": 2,
+    "tier3Queries": 1,
+    "tier4Queries": 0,
+    "maxQueriesPerTier": 8,
+    "maximumMinutes": 20,
+    "exhaustive": false,
+    "primaryDocumentationFollowups": 1
+  }
+}

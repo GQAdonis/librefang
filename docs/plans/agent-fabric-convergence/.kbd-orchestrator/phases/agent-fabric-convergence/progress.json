@@ -2,27 +2,28 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 239,
-  "derivedRevision": 239,
+  "sourceRevision": 392,
+  "derivedRevision": 392,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
-    "a23247c7-e278-4036-90b2-9536fe03e75f": 234
+    "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-28T01:57:16.993329Z",
+  "last_updated": "2026-09-30T17:21:23.779657Z",
   "last_updated_by": "kbd-runtime",
-  "changes_total": 18,
-  "changes_completed": 5,
-  "implementation_total": 18,
-  "implementation_completed": 5,
+  "changes_total": 20,
+  "changes_completed": 10,
+  "implementation_total": 20,
+  "implementation_completed": 10,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 5,
-      "total": 18,
+      "completed": 10,
+      "total": 20,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -50,8 +51,8 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 7,
-      "total": 20,
+      "completed": 14,
+      "total": 24,
       "status": "IN_PROGRESS"
     },
     "evidence": {
@@ -71,6 +72,28 @@
     }
   },
   "changes": [
+    {
+      "id": "afc-c09-team-task-admission-context-and-membership",
+      "title": "afc-c09-team-task-admission-context-and-membership",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
+      "tasks_total": 1,
+      "tasks_done": 1,
+      "last_task_completed": null,
+      "next_task_pending": null,
+      "blockers": []
+    },
+    {
+      "id": "afc-d01-local-mac-durable-agent-delivery",
+      "title": "Local Mac durable-agent delivery",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
+      "tasks_total": 4,
+      "tasks_done": 4,
+      "last_task_completed": "Resolve publication choice including live website installer pointers",
+      "next_task_pending": null,
+      "blockers": []
+    },
     {
       "id": "afc-c01-baseline-reconciliation-and-shared-contracts",
       "title": "C01 — Baseline reconciliation and shared contracts",
@@ -129,23 +152,23 @@
     {
       "id": "afc-c06-durable-addressable-instances-and-bounded-turns",
       "title": "C06 — Durable addressable instances and bounded turns",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+      "tasks_done": 3,
+      "last_task_completed": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-c07-local-scoped-observers-with-durable-delivery",
       "title": "C07 — Local scoped observers with durable delivery",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+      "tasks_done": 3,
+      "last_task_completed": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
@@ -154,20 +177,20 @@
       "status": "PENDING",
       "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "tasks_done": 1,
+      "last_task_completed": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "next_task_pending": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
       "blockers": []
     },
     {
       "id": "afc-c09-bounded-teams-and-shared-task-board",
       "title": "C09 — Bounded teams and shared task board",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
-      "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
+      "tasks_total": 4,
+      "tasks_done": 4,
+      "last_task_completed": "Deliver governed cooperating teams with durable yield and continuation",
+      "next_task_pending": null,
       "blockers": []
     },
     {
@@ -271,7 +294,27 @@
     }
   ],
   "children": {
+    "release-cadence-optimization": {
+      "status": "DONE",
+      "changes_completed": 1,
+      "changes_total": 1,
+      "implementation_completed": 1,
+      "implementation_total": 1,
+      "certification_status": "NOT_TRACKED",
+      "handoff": null,
+      "completed_at": null
+    },
     "uar-team-definitions-deployment": {
+      "status": "DONE",
+      "changes_completed": 1,
+      "changes_total": 1,
+      "implementation_completed": 1,
+      "implementation_total": 1,
+      "certification_status": "NOT_TRACKED",
+      "handoff": null,
+      "completed_at": null
+    },
+    "uar-team-execution-architecture": {
       "status": "DONE",
       "changes_completed": 1,
       "changes_total": 1,

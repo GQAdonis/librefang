@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-cadence-release-build",
+  "completedAt": "2026-09-28T22:27:21.326Z",
+  "version": "2.2.7",
+  "bossSource": "cd6cb45c6ce29c918587f38de805ba60321dec3f",
+  "uarSource": "d3d768636b46bd7b7cea29fba4987aa1754f8352",
+  "localUarArchiveSha256": "86fc5e8ac791b93bc9deab3e1a6a22d87730cb388603c730e9279dd4911539ac",
+  "command": "pnpm build:mac:arm64",
+  "result": "success",
+  "artifact": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.7-mac-arm64.dmg",
+    "sha256": "fe750f8a52c7fac2e27fc039675c3010f5b497fb2221f6501da6fdd4001ba056",
+    "size": 611382609,
+    "integrity": "hdiutil checksum valid; application satisfies Developer ID designated requirement",
+    "notarized": false
+  },
+  "functionalReceipt": "artifacts/mac-functional-launch-c09-2-release.json",
+  "claim": "Packaged local app exercised C09.2 task ownership, mailbox, restart and recovered Teams UI. Public release installers are a separate artifact set."
+}

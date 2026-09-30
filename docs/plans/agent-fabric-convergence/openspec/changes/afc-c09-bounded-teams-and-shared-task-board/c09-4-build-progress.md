@@ -1,0 +1,37 @@
+# C09.4 completed production wiring; delivery operation pending
+
+Observed 2026-09-30T12:11:28.874Z. This record is not a task-completion or conformance receipt.
+
+The UAR runtime/compiler implementation and a narrow observed sidecar ownership repair are committed at 853fb6dae6ee5237185f9b4d4d41fbe2d2e583b9. The original native build passed after a missing JSON macro import repair. The ownership correction also built successfully (Cargo reported 70 seconds). Archive provenance is in c094-native-ownership-payload-record.json. Public team-cooperation qualification remains false until the completed real operation succeeds.
+
+The Boss at 789f47222579cb8f9febd22107030e81ab5d1315 includes the completed UI/IPC, all 13 locales, shared instructions/context provenance, permitted roster, attributed inbox, waits, continuation identity and cancellation. Mini source 3d54f210dd87c9e25d300079d973c12b046e80aa contains all 100 skills and the complete creator/runtime and Cadence payloads. Full source 1ddcc8b21b05f26aa89aa5e19776c86e5b854c96 and mini have matching authoring payloads. Global installed Cadence 1.1.2 is not claimed; the active source CLI is 1.1.2.
+
+The first Mac packaging attempt refused stale mini provenance. Its repaired build passed, produced the 613438244-byte DMG with SHA-256 c81a6ef8e9911761c55d019e0e2197efc74eff76fa1dac8e7bb2197a0baa520b, and the packaged application opened to actionable provider setup. This local build is signed but not notarized. These receipts refer to the pre-ownership-repair source and are retained as historical attempts, not applicable evidence for the corrected release inputs.
+
+The first real Gate B operation then stopped at initial instances.test, before any inference or completed scenario: packaged sidecar bootstrap overwrote explicitly configured external ownership with managed. The existing Boss compatibility rejection was correct. The repair preserves explicit trusted ownership and defaults to managed when absent; loopback, token, local workspace and EOF security/lifecycle remain unchanged. The corrected actual Mac packaging build is running, after which the failed completed operation resumes.
+
+The upgraded liter-llm source 0617979022aea621dd13541dee07ad84ffcf7d21 is pinned. All four native assets were published to the immutable internal dependency release boss-tools-2.2.9-c094-liter-native-1, and downloaded bytes match recorded size and SHA-256. The multi-architecture service image sha256:9e04e66097c6161e3b699b485b2708d9378de772125bfd7020373eefc75cace3 was produced from that source and is anonymously pullable. These are dependency artifacts, not customer installers. A fresh memory image was produced separately and is not yet substituted into the frozen operation inputs.
+
+No unit, per-edit or partial test suites and no standalone verification builds ran. Compiler checks belong to actual builds; mandatory commit hooks are not functional evidence. Production operation coverage is complete, including the approved directed authority, wait invalidation, changed command payload and workspace isolation cases. No Gate B pass, C09.4 completion, customer publication or installed acceptance is claimed. The 120-minute clock continues across observed repairs; overrun must remain visible.
+
+## Current inputs and operation recovery — 2026-09-30T13:36:07.608Z
+
+UAR56d87b5a and Boss7c189fc9 are committed and pushed. The actual Mac ARM64 packaging build finished successfully at 13:14:10.960Z; DMG613412117bytes SHA256fa4a36b685e5a2084a85593ed10ee0055b08b8061ee131351f1dda63d6abb4f9. The application launched and provider setup opened; this is launch evidence, not team inference. Local signing is valid; notarization is not claimed.
+
+Fetched remote refs confirm mini3d54f210 includes all origin/main ac99730e2b7b5cb22079d984abc0fb92fb911aff and liter061797902 includes all forkmain12a2fae9675e34b88e9373caa2bca9959f416493. Both HEAD..origin/main counts are zero. Their produced native/image dependencies remain pinned.
+
+The completed B operation exposed GETcapabilities429; Boss now uses its existing bounded six-attempt policy for that discovery path. A later disposable driver wrongly read the private starter owner field; its principal now derives from actual app.get_info.appDataPath exactly as production does. Fixture requests also observed429beforehandler and now use the same bounded policy. These external driver corrections do not change packaged application inputs, so no unnecessary application rebuild was performed. The complete operation is running against the same built bytes. No B case, task completion or customer publication is claimed yet.
+
+## Gate B staged operation — 2026-09-30T16:49Z
+
+The complete packaged Mac ARM64 operation passed at UAR1369259924cfb3bd6a31cd4a200fb9fafa851ca8 and Bosscd86aa2ca0765bdd488dfab2dfc0f602e2f4e32e. The current build receipt is eeffaffe-3c32-4579-a058-eaeeeb5a155a; the DMG checksum is b57a15a26862c5845702bbad6bcc798431c08d0696a09c211a3f64e7a09c443c. The packaged app launched, and fourteen immutable case receipts cover the twelve planned primary scenarios. The complete operation SHA-256 is 5a96786980812effbd79661290e51dee2ec1cde524854566d588eab934d1a058; `c09-4-gate-b-receipt.json` identifies each case and its source.
+
+The operation used a private, rate-limited sidecar at capacity one and a live liter-llm gateway. Native tool evidence proved roster, delegate, send and wait; the first case showed two workers, ordered terminal outcomes and one continuation. Other receipts show failed and cancelled targets, directed-edge and cross-workspace refusals, changed-command refusal, stale wait invalidation, membership revocation, cycle refusal, clean restart and crash uncertainty. Driver-only corrections separated model text compliance from native effect evidence and avoided rerunning completed cases. For one revoked-edge denial, the native tool was refused with no accepted effect while the provider turn failed afterward; the receipt records both outcomes.
+
+This is a **staged Gate B pass**. The operated UAR binary still reports public team cooperation as unqualified; a source promotion, fresh final native/application builds, customer-platform publication, site update and installed acceptance remain. Do not count the staged receipt as a public release or installed acceptance.
+
+## Public-qualified packaged operation — 2026-09-30T17:13Z
+
+UAR `afeb528b794961483862436edac6b7063065d66e` promotes the completed Gate B capability, and The Boss `102d7df70dbf5b2975b0fd1290b66f0e4b25c0b2` pins it. The final local `pnpm build:mac:arm64` produced `The-Boss-2.2.9-mac-arm64.dmg` with SHA-256 `9430686ea1cf0ab2541bf1deee09a62b9c102c00397fa363551c977cb604f73a`. The packaged application launched and operated the public-qualified coordinator/worker completion, replay, Boss context, messages and waits. The two new case receipts retain the exact final source, while `c09-4-public-qualified-receipt.json` links the fourteen-case staged Gate B result by checksum. Its SHA-256 is `b122bef1dca33127a9ef0e8ee7ecc86f4fcebb40f457b3a206cd60743065aadc`.
+
+This establishes local packaged operation of the public-qualified source. Native sidecar CI, customer installers, website publication and installed Windows/Mac acceptance are separate pending results. No unit or per-edit test suite was run.

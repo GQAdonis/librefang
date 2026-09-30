@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "56d87b5ab088c69a41faa761753edd253049d775",
+      "fingerprint": "62ee1d8ce77f106a5cc3920d249b4238f7b83a6114c87fcb330e8a561dfe6078"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "9a3b4ac3383d450550c86f0b44cbdb9e31294e35",
+      "fingerprint": "f2a88346a613fae10ac0523df4d00a4ab46410f20eeac7bfa09272ae0174156c"
+    }
+  ],
+  "startedAt": "2026-09-30T13:00:14.924Z",
+  "finishedAt": "2026-09-30T13:00:30.273Z",
+  "passed": false,
+  "attempts": [],
+  "denials": [
+    {
+      "operation": "prometheus.uar.teams.setup_starter",
+      "code": "INTERNAL",
+      "knownCodes": [],
+      "authoredMessage": null,
+      "requestFailure": {
+        "method": "GET",
+        "path": "/api/uar/capabilities",
+        "status": 429
+      },
+      "httpStatuses": [
+        "HTTP 429"
+      ],
+      "validationIssues": []
+    }
+  ],
+  "observations": [],
+  "failureCode": "protected-operation-failure"
+}

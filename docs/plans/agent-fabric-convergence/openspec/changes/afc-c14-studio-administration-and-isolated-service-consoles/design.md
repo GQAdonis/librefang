@@ -35,3 +35,7 @@ Reconcile current source and existing product specs; record accepted dependency 
 Two clients decide one challenge consistently; console account isolation/navigation and no generic privileged bridge are verified; unsupported controls and private data stay hidden.
 
 Use repository-required checks and observable real-boundary scenarios; source inspection and planned checkboxes are not execution evidence. Recommendation coverage: REC-009, REC-023.
+
+## D01 early consumer boundary
+
+The separate `afc-d01-local-mac-durable-agent-delivery` change may expose the already accepted C06 instance lifecycle and C07 local observer backlog/recovery in the existing Boss UAR settings **before** this full C14 change is ready. It must use the same trusted host adapter, typed IPC, persistence and locales, keep two workspaces isolated, and display only supported operations. This is a bounded C14.1 contribution, not completion of C14.1: the definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and broader subscription failures remain in this change. C14.2 approval/challenge semantics and C14.3 isolated BossFang console remain unchanged with their original dependencies and acceptance. The D01 app gate is a local consumer receipt, not full C14 verification.

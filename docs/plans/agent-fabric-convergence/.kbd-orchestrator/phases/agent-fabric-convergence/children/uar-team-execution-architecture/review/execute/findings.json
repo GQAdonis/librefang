@@ -1,0 +1,18 @@
+{
+  "mode": "diff",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.6-sol",
+  "isolation_mode": "harness-native",
+  "producer_model": "unknown",
+  "cross_model_check": "unverified-producer-unknown",
+  "findings": [],
+  "checked_classes": [
+    "Fresh continuation authority — resolved: ContinuationReceipt and TeamContextReceipt now carry complete AttemptAuthority, rootId, approvalScopeId, and authorizationRevision; the contract requires CAS equality for duplicated task, attempt, run, and fence identities and revalidation at dispatch and model handoff.",
+    "Model-visible terminal outcomes — resolved: ContinuationReceipt and TeamContextReceipt now carry ordered TargetOutcome records, the contract requires the complete set as attributed model input, and validated success, failure, and cancellation examples preserve outcomes even when artifactIds is empty."
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}
