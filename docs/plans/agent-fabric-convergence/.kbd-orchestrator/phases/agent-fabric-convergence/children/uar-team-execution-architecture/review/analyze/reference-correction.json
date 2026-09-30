@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T01:05:12.906Z",
+  "references": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/compiler/collaboration/team_execution/admission.rs",
+      "exists": true
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar/src/uar/runtime/team_execution/controller.rs",
+      "exists": true
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/src/main/core/preboot/singleInstance.ts",
+      "exists": true
+    }
+  ],
+  "independentRereview": false
+}

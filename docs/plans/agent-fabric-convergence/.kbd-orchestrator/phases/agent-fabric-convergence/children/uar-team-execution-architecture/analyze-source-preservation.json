@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T01:00:37.199Z",
+  "stage": "analyze",
+  "files": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/prompt_dialect.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/provider_error.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/llm/orchestrator.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/runtime/team_execution/controller.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/runtime/team_execution/execution.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/resolution.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/admission.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/settlement.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "src/uar/compiler/collaboration/team_execution/recovery.rs",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "docs/agents/collaboration/v0.1.0-draft.1/runtime.md",
+      "unchanged": true
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "path": "docs/agents/collaboration/v0.1.0-draft.2/README.md",
+      "unchanged": true
+    }
+  ]
+}

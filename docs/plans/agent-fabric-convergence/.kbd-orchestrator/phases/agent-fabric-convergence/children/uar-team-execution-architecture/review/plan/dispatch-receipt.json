@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "restDispatchExit": 4,
+  "restReason": "JUDGE_MODEL_COLLISION: no-distinct-backup",
+  "fallback": "harness-native fresh-context gpt-5.6-sol",
+  "producerModel": "unknown",
+  "crossModelCheck": "unverified-producer-unknown",
+  "reviewLimit": 2,
+  "productionChecksRun": false
+}

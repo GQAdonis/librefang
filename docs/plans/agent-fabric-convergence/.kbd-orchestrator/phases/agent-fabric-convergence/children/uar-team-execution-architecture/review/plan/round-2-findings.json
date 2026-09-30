@@ -1,0 +1,22 @@
+{
+  "mode": "artifact",
+  "verdict": "BLOCK",
+  "isolation_mode": "harness-native",
+  "producer_model": "unknown",
+  "judge_model": "gpt-5.6-sol",
+  "cross_model_check": "unverified-producer-unknown",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "plan.md",
+      "claim": "B2/B5 lack explicit directed-edge and current-scope authorization enforcement/operation.",
+      "evidence": "D4 requires communication/delegation authorization before inbox visibility/admission; B2 authentication and B5 team isolation do not explicitly cover forbidden same-team edges.",
+      "suggested_fix": "Name allowed/forbidden/revoked edge checks in B2 and completed B5 operation."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

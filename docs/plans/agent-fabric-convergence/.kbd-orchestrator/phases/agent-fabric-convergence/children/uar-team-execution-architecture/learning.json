@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "kind": "assessment-stage-learning",
+  "at": "2026-09-30T00:23:54.278Z",
+  "phase": "agent-fabric-convergence::uar-team-execution-architecture",
+  "parentWork": "C09.3",
+  "cadenceIterationId": "28847cae-d6e9-45e4-880d-091bbef217c6",
+  "completedProductTasks": 0,
+  "completedProductChanges": 0,
+  "completedProductPhases": 0,
+  "observation": "Planning and ownership/mailbox operations passed previously; member inference has not passed. Root-local agent tools do not address durable teammates.",
+  "rootCauseAssessment": "Definition, effective binding, context, transport and durable-member joins need explicit contracts. Source inspection supports reuse of existing executor.",
+  "counterevidence": [
+    "Catalog CAS and current-authority fences exist",
+    "Exact skill references and restricted child policy survive compilation",
+    "Required RAG is explicitly refused",
+    "Descendant usage/effect evidence remains root-scoped"
+  ],
+  "recommendation": "Freeze a bounded executable-team profile and its identity/context/transport/recovery contracts before adding workflow progression.",
+  "measurement": "Assessment time is planning inside the original continuously running iteration; it is not product completion or velocity gain.",
+  "promotion": "Local lesson candidate only; no rules automatically promoted",
+  "evidence": [
+    "assessment.md",
+    "assessment-runtime.md",
+    "assessment-context.md",
+    "assessment-provider-boss.md",
+    "review/assessment.findings.json"
+  ]
+}
