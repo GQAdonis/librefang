@@ -21,3 +21,7 @@ Open at Plan: exact command/schema contracts, publisher adapter capability, rele
 ## 2026-09-30 — Plan input: operation contract lost by change split
 
 Read-only inspection of Obsidian .ipfs-sync at KBD revision 616 confirms six finished Cadence iterations, no active increment, and 07a pending 0/32. The split moved real Obsidian acceptance to 07b without naming a replacement 07a feature operation. Proposed decision: preserve capability/operation/authority contracts through planning and scope splits; require an existing source procedure or approved creation task at admission, resolve source work before freeze, and check generated entrypoints only after build. A custom wrapper and a shared production node are not universally required. No change to Obsidian or its node is authorized by this planning evidence.
+
+## 2026-09-30 — Operator skips Windows validation and authorizes local distribution
+
+The operator explicitly instructed skipping native Windows validation, committing and pushing both skill packs, and redistributing the full pack on this machine. Canonical decision: `dcp-windows-validation-skipped` (revision 472). This permits closeout with native Windows marked skipped/unverified; it is not Windows success and does not waive parent publication, installed product acceptance or Boss consumer compatibility. The operator also invoked `/kbd-reflect delivery-cadence-pipeline`.

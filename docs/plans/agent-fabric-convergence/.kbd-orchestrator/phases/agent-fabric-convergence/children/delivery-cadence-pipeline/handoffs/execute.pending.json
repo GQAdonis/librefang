@@ -30,5 +30,8 @@
   "skipReason": null,
   "implementationCompletedAt": "2026-09-30T20:47:28.254Z",
   "stageStatus": "in_progress",
-  "nextAction": "Operator feedback and native Windows evidence or explicit acceptance disposition before Execute certification; reflect/archive/parent restore remain separate"
+  "nextAction": "Operator feedback and native Windows evidence or explicit acceptance disposition before Execute certification; reflect/archive/parent restore remain separate",
+  "resolvedAt": "2026-09-30T21:18:40.867Z",
+  "resolution": "Native Windows validation explicitly skipped by operator; completed Execute handoff now recorded in execute.handoff.json. Historical pending fields retained.",
+  "supersededBy": "execute.handoff.json"
 }

@@ -2,42 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 471,
-  "derivedRevision": 471,
+  "sourceRevision": 478,
+  "derivedRevision": 478,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 232
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 239
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence",
-    "delivery-cadence-pipeline"
+    "agent-fabric-convergence"
   ],
   "phaseIds": [
-    "agent-fabric-convergence",
-    "agent-fabric-convergence::delivery-cadence-pipeline"
+    "agent-fabric-convergence"
   ],
-  "activePhaseId": "agent-fabric-convergence::delivery-cadence-pipeline",
-  "activePhase": "delivery-cadence-pipeline",
+  "activePhaseId": "agent-fabric-convergence",
+  "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
-  "childPointer": "delivery-cadence-pipeline",
-  "change": null,
-  "currentTask": null,
+  "parentPhase": null,
+  "childPointer": null,
+  "change": "afc-c08-bossfang-and-fabric-observer-routing",
+  "currentTask": "C08.2",
   "status": "running",
   "lifecycle": "running",
-  "stageId": "execute",
-  "stageStatus": "IN_PROGRESS",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
   "implementationCompleted": 15,
   "implementationTotal": 25,
   "planRevision": 6,
-  "revision": 471,
-  "exactNextCommand": "/kbd-assess agent-fabric-convergence > delivery-cadence-pipeline",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-09-30T20:47:48.665067Z"
+  "revision": 478,
+  "exactNextCommand": "/kbd-status",
+  "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
+  "nextTask": "C08.2",
+  "updatedAt": "2026-09-30T21:25:37.338845Z"
 }

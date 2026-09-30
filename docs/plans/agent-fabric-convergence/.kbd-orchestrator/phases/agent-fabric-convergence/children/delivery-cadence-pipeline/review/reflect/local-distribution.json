@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 1,
+  "completedAt": "2026-09-30T21:24:46.071Z",
+  "sourceRoot": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full",
+  "sourceCommit": "057a774c9e2787a7bcb6785fbb80b386aa88549c",
+  "packageVersion": "1.10.0",
+  "cadenceVersion": "1.2.0",
+  "generation": "bdad67dcc943ca2112b2b9f0c030f8c983dcdb8ca2ed08d0f97b0bb34ab0751f",
+  "bundleId": "85323c9d480550d0a17b17b9a753ed0c12f2f93acfe639ffe02b10b76aa2c0fd",
+  "cadenceFileCount": 52,
+  "cadencePayloadDigest": "8fda63d5726490aa828a7d1317682343d7b474ad77f07489563c96870f211e91",
+  "targets": [
+    {
+      "id": "claude",
+      "path": "/Users/gqadonis/.claude/skills",
+      "physicalPath": "/Users/gqadonis/.TOOLS/skills/claude",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "opencode",
+      "path": "/Users/gqadonis/.opencode/skills",
+      "physicalPath": "/Users/gqadonis/.TOOLS/skills/opencode",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "kimi-code",
+      "path": "/Users/gqadonis/.kimi-code/skills",
+      "physicalPath": "/Users/gqadonis/.kimi-code/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "minimax",
+      "path": "/Users/gqadonis/.minimax/skills",
+      "physicalPath": "/Users/gqadonis/.minimax/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "cursor",
+      "path": "/Users/gqadonis/.cursor/skills",
+      "physicalPath": "/Users/gqadonis/.TOOLS/skills/cursor",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "codex",
+      "path": "/Users/gqadonis/.codex/skills",
+      "physicalPath": "/Users/gqadonis/.codex/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "gemini",
+      "path": "/Users/gqadonis/.gemini/skills",
+      "physicalPath": "/Users/gqadonis/.gemini/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "roo",
+      "path": "/Users/gqadonis/.roo/skills",
+      "physicalPath": "/Users/gqadonis/.roo/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "devin",
+      "path": "/Users/gqadonis/.devin/skills",
+      "physicalPath": "/Users/gqadonis/.devin/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "codeium-windsurf",
+      "path": "/Users/gqadonis/.codeium/windsurf/skills",
+      "physicalPath": "/Users/gqadonis/.codeium/windsurf/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "agents",
+      "path": "/Users/gqadonis/.agents/skills",
+      "physicalPath": "/Users/gqadonis/.TOOLS/skills/agents",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "zed-config",
+      "path": "/Users/gqadonis/.config/zed/skills",
+      "physicalPath": "/Users/gqadonis/.config/zed/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "zed",
+      "path": "/Users/gqadonis/.zed/skills",
+      "physicalPath": "/Users/gqadonis/.zed/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "id": "cline",
+      "path": "/Users/gqadonis/.cline/skills",
+      "physicalPath": "/Users/gqadonis/.cline/skills",
+      "skillCount": 217,
+      "verifiedPayloadFiles": 1932,
+      "cadenceVersion": "1.2.0"
+    }
+  ],
+  "native": [
+    {
+      "client": "claude",
+      "plugin": "prometheus-skill-pack",
+      "version": "1.10.0",
+      "path": "/Users/gqadonis/.claude/plugins/cache/prometheus-skill-pack/prometheus-skill-pack/1.10.0",
+      "verifiedPayloadFiles": 2074,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "client": "claude",
+      "plugin": "prometheus-process-skills",
+      "version": "1.6.0",
+      "path": "/Users/gqadonis/.claude/plugins/cache/prometheus-skill-pack/prometheus-process-skills/1.6.0",
+      "verifiedPayloadFiles": 620,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "client": "codex",
+      "plugin": "prometheus-skill-pack",
+      "version": "1.10.0",
+      "path": "/Users/gqadonis/.codex/plugins/cache/prometheus-skill-pack/prometheus-skill-pack/1.10.0",
+      "verifiedPayloadFiles": 1942,
+      "cadenceVersion": "1.2.0"
+    },
+    {
+      "client": "codex",
+      "plugin": "prometheus-process-skills",
+      "version": "1.6.0",
+      "path": "/Users/gqadonis/.codex/plugins/cache/prometheus-skill-pack/prometheus-process-skills/1.6.0",
+      "verifiedPayloadFiles": 620,
+      "cadenceVersion": "1.2.0"
+    }
+  ],
+  "kimiDesktop": {
+    "schemaVersion": 1,
+    "source": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full",
+    "destination": "/Users/gqadonis/Library/Application Support/kimi-desktop/daimon-share/daimon/plugin-packages/prometheus-skill-pack",
+    "backup": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/kimi-desktop",
+    "skillCount": 217,
+    "cadenceVersion": "1.2.0",
+    "preserved": "Existing Kimi plugin metadata and MCP configuration; all prior215 skill payloads matched previous native Claude package before replacement",
+    "reload": "Restart Kimi Desktop to discover refreshed package; no hot reload claimed",
+    "verifiedPayloadFiles": 1932
+  },
+  "additionalDistribution": {
+    "schemaVersion": 1,
+    "dryRun": false,
+    "source": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence",
+    "version": "1.2.0",
+    "targets": [
+      {
+        "id": "opencode",
+        "destination": "/Users/gqadonis/.config/opencode/skills/delivery-cadence",
+        "action": "update",
+        "fileCount": 52,
+        "backup": "/Users/gqadonis/.prometheus/delivery-cadence/backups/1790803215180-bd751a7e-36d4-4a32-b085-ff2d966a2af5/opencode",
+        "verifiedPayloadFiles": 52
+      },
+      {
+        "id": "support",
+        "destination": "/Users/gqadonis/.prometheus/delivery-cadence/support",
+        "action": "update",
+        "fileCount": 5,
+        "backup": "/Users/gqadonis/.prometheus/delivery-cadence/backups/1790803215180-bd751a7e-36d4-4a32-b085-ff2d966a2af5/support",
+        "verifiedPayloadFiles": 5
+      }
+    ],
+    "adapters": {
+      "cadence-kbd-adapter": "/Users/gqadonis/.prometheus/delivery-cadence/support/shared/scripts/cadence-kbd-adapter.mjs",
+      "cadence-karpathy-adapter": "/Users/gqadonis/.prometheus/delivery-cadence/support/shared/scripts/cadence-karpathy-adapter.mjs"
+    },
+    "note": "Reload native sessions to discover installed skills. File installation does not prove native harness execution; adapters require explicit configuration."
+  },
+  "retiredDiscovery": [
+    {
+      "from": "/Users/gqadonis/.codex/skills/delivery-cadence.foreign-20260930",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/0/delivery-cadence.foreign-20260930",
+      "owner": "prometheus-delivery-cadence",
+      "files": 31
+    },
+    {
+      "from": "/Users/gqadonis/.claude/skills/delivery-cadence.foreign-20260930",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/1/delivery-cadence.foreign-20260930",
+      "owner": "prometheus-delivery-cadence",
+      "files": 31
+    },
+    {
+      "from": "/Users/gqadonis/.kimi-code/skills/delivery-cadence.foreign-20260930",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/2/delivery-cadence.foreign-20260930",
+      "owner": "prometheus-delivery-cadence",
+      "files": 31
+    },
+    {
+      "from": "/Users/gqadonis/.agents/skills/delivery-cadence.foreign-20260930",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/3/delivery-cadence.foreign-20260930",
+      "owner": "prometheus-delivery-cadence",
+      "files": 31
+    },
+    {
+      "from": "/Users/gqadonis/.codex/skills/prometheus-delivery-cadence",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/4/prometheus-delivery-cadence",
+      "owner": "prometheus-generation",
+      "reason": "canonical delivery-cadence already installed"
+    },
+    {
+      "from": "/Users/gqadonis/.claude/skills/prometheus-delivery-cadence",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/5/prometheus-delivery-cadence",
+      "owner": "prometheus-generation",
+      "reason": "canonical delivery-cadence already installed"
+    },
+    {
+      "from": "/Users/gqadonis/.kimi-code/skills/prometheus-delivery-cadence",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/6/prometheus-delivery-cadence",
+      "owner": "prometheus-generation",
+      "reason": "canonical delivery-cadence already installed"
+    },
+    {
+      "from": "/Users/gqadonis/.agents/skills/prometheus-delivery-cadence",
+      "to": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545/retired-discovery/7/prometheus-delivery-cadence",
+      "owner": "prometheus-generation",
+      "reason": "canonical delivery-cadence already installed"
+    }
+  ],
+  "backup": {
+    "backup": "/Users/gqadonis/.prometheus/backups/cadence-full-redistribution-1790803070545",
+    "entries": 3038,
+    "source": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full"
+  },
+  "nativeRegistries": [
+    {
+      "client": "claude",
+      "plugins": [
+        {
+          "id": "prometheus-process-skills@prometheus-skill-pack",
+          "version": "1.6.0",
+          "enabled": true,
+          "installPath": "/Users/gqadonis/.claude/plugins/cache/prometheus-skill-pack/prometheus-process-skills/1.6.0"
+        },
+        {
+          "id": "prometheus-skill-pack@prometheus-skill-pack",
+          "version": "1.10.0",
+          "enabled": true,
+          "installPath": "/Users/gqadonis/.claude/plugins/cache/prometheus-skill-pack/prometheus-skill-pack/1.10.0"
+        }
+      ]
+    },
+    {
+      "client": "codex",
+      "plugins": [
+        {
+          "id": "prometheus-skill-pack@prometheus-skill-pack",
+          "version": "1.10.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/codex/prometheus-skill-pack"
+          }
+        },
+        {
+          "id": "prometheus-react-skills@prometheus-skill-pack",
+          "version": "1.5.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/react/prometheus-entity-skills"
+          }
+        },
+        {
+          "id": "prometheus-process-skills@prometheus-skill-pack",
+          "version": "1.6.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process"
+          }
+        },
+        {
+          "id": "prometheus-devops-skills@prometheus-skill-pack",
+          "version": "1.5.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/devops"
+          }
+        },
+        {
+          "id": "prometheus-testing-skills@prometheus-skill-pack",
+          "version": "1.5.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/testing"
+          }
+        },
+        {
+          "id": "learn@prometheus-skill-pack",
+          "version": "1.6.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/learn"
+          }
+        },
+        {
+          "id": "prometheus-librefang-skills@prometheus-skill-pack",
+          "version": "1.5.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/rust/librefang-wasm-skill"
+          }
+        },
+        {
+          "id": "cowork-management@prometheus-skill-pack",
+          "version": "1.0.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/cowork-management"
+          }
+        },
+        {
+          "id": "disk-space-guardian@prometheus-skill-pack",
+          "version": "1.0.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/devops/disk-space-guardian"
+          }
+        },
+        {
+          "id": "prometheus-research-skills@prometheus-skill-pack",
+          "version": "1.1.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/research"
+          }
+        },
+        {
+          "id": "prometheus-research-server@prometheus-skill-pack",
+          "version": "1.7.0",
+          "enabled": true,
+          "installed": true,
+          "source": {
+            "source": "local",
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/substrate/prometheus-research"
+          }
+        }
+      ]
+    }
+  ],
+  "scope": "Local full skill package redistribution only. No services, dependency upgrades, Rust builds, or Windows validation.",
+  "reload": "Installed filesystem payloads and native registries verified. Restart/reload native sessions and Kimi Desktop for discovery. No in-session hot reload or native execution claimed."
+}

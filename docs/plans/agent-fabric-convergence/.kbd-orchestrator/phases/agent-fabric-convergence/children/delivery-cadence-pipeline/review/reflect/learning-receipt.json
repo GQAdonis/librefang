@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "eventId": "delivery-cadence-pipeline-reflect-learning-20260930",
+  "eventSha256": "f17e564f620c3add37358b97dac8d89979a4f66eaa7bee43774f9de0449e127d",
+  "eventIdentitySha256": "ea079cfb36b4588bd562ab7bf0030a96e90f33bbcdc255a0916912203640977c",
+  "event": {
+    "schemaVersion": 1,
+    "eventId": "delivery-cadence-pipeline-reflect-learning-20260930",
+    "observedAt": "2026-09-30T21:26:15.677Z",
+    "runId": "project-20260924T180329Z",
+    "boundary": "phase",
+    "status": "complete",
+    "phaseId": "agent-fabric-convergence::delivery-cadence-pipeline",
+    "changeId": null,
+    "taskId": null,
+    "taskClass": "evidence",
+    "elapsedHours": 0,
+    "touchedFiles": [
+      "reflection.md",
+      "review/reflect/local-distribution.json"
+    ],
+    "verification": [
+      {
+        "command": "Existing full-pack installation and signed generation byte verification",
+        "exitCode": 0,
+        "summary": "217 skills/14 targets installed with Cadence1.2.0. Observed stale generated checksum repaired by generator, not runtime edits. Lesson: source commit, signed generation, native cache and discovery roots need coherent provenance; preserve backups outside discovery. ElapsedHours0 is recorder placeholder, no measured timing/velocity claim. Native Windows skipped by operator; no runtime operations repeated."
+      }
+    ],
+    "commitSha": null,
+    "blocker": null,
+    "exactNextWork": "Parent phase restored; existing publication debt and Boss consumer follow-up retained."
+  },
+  "sessionLogAppended": true,
+  "memory": {
+    "transport": "pk",
+    "status": "degraded",
+    "reason": "pk timed out"
+  },
+  "complete": false,
+  "canonicalState": "cli",
+  "recordedAt": "2026-09-30T21:26:23.080Z"
+}

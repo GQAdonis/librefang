@@ -1,0 +1,13 @@
+{
+  "observedAt": "2026-09-30T21:17:34.314Z",
+  "verify": {
+    "command": "kbd-apply verify afc-delivery-cadence-pipeline",
+    "exitCode": 0
+  },
+  "archive": {
+    "command": "kbd-apply archive afc-delivery-cadence-pipeline",
+    "exitCode": 0
+  },
+  "windows": "skipped-by-operator",
+  "runtimeOperationsRepeated": false
+}
