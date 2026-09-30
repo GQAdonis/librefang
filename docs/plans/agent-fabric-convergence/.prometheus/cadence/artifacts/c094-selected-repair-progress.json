@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T12:48:16.088Z",
+  "task": "C09.4",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "status": "build-running",
+  "observedFailure": "Selected external starter-team setup launched a different managed runtime before inference",
+  "uarSource": "56d87b5ab088c69a41faa761753edd253049d775",
+  "bossSource": "9a3b4ac3383d450550c86f0b44cbdb9e31294e35",
+  "miniSource": "3d54f210dd87c9e25d300079d973c12b046e80aa",
+  "literSource": "0617979022aea621dd13541dee07ad84ffcf7d21",
+  "nativeBuild": {
+    "exitCode": 0,
+    "compilerDurationSeconds": 438,
+    "payloadRecord": "c094-native-selected-payload-record.json"
+  },
+  "productionRepair": "Team setup resolves selected runtime and uses its scoped catalog backend; ordinary managed starter path remains unchanged",
+  "intermediateTestSuitesRun": 0,
+  "featureOperation": "pending rebuilt package",
+  "publication": "pending qualified source and completed operation"
+}

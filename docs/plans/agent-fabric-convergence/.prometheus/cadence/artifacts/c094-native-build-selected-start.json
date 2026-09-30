@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-09-30T12:32:20.335Z",
+  "sourceCommit": "56d87b5ab088c69a41faa761753edd253049d775",
+  "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+  "command": "cargo",
+  "args": [
+    "build",
+    "--release",
+    "--locked",
+    "--no-default-features",
+    "--features",
+    "server-full",
+    "--bin",
+    "uar-sidecar",
+    "--target",
+    "aarch64-apple-darwin"
+  ],
+  "environment": {
+    "CARGO_BUILD_JOBS": "2"
+  },
+  "kind": "build",
+  "reason": "Actual external starter setup launched wrong managed runtime. Build completed repair exposing selected catalog backend for matched Boss bindings."
+}

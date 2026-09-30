@@ -55,6 +55,16 @@ export default async function capture(context) {
           code: reply.error?.code,
           knownCodes: JSON.stringify(reply.error ?? {}).match(/TEAM_[A-Z_]+|UAR_[A-Z_]+/g) ?? [],
           authoredMessage: knownMessages.has(reply.error?.message) ? reply.error.message : null,
+          requestFailure: (() => {
+            const message = reply.error?.message ?? ''
+            const capability = message.match(/UAR sidecar capability check failed with HTTP ([1-5][0-9]{2})/)
+            if (capability) return { method: 'GET', path: '/api/uar/capabilities', status: Number(capability[1]) }
+            const scoped = message.match(/UAR request (GET|POST|PUT|DELETE) (\/api\/[A-Za-z0-9_/:.-]+) failed with HTTP ([1-5][0-9]{2})/)
+            if (scoped) return { method: scoped[1], path: scoped[2], status: Number(scoped[3]) }
+            const provider = message.match(/UAR team gateway provider setup failed \(HTTP ([1-5][0-9]{2})\)/)
+            if (provider) return { method: 'POST', path: '/api/uar/providers', status: Number(provider[1]) }
+            return null
+          })(),
           httpStatuses: reply.error?.message?.match(/HTTP [1-5][0-9]{2}/g) ?? [],
           validationIssues: (() => {
             try {
