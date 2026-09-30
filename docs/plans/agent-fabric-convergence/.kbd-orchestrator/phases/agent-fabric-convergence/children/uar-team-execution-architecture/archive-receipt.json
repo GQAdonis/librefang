@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-09-30T05:52:47.688Z",
+  "change": "afc-uar-team-execution-architecture-contract",
+  "archivePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/archive/2026-09-30-afc-uar-team-execution-architecture-contract",
+  "command": "openspec archive afc-uar-team-execution-architecture-contract --yes --skip-specs --json",
+  "specsSyncedBeforeArchive": true,
+  "specSyncReceipt": "spec-sync-receipt.json",
+  "mainSpecValidationExit": 0,
+  "archiveExit": 0,
+  "note": "skip-specs avoided repeating the completed manual sync; archived design link adjusted for its new depth."
+}

@@ -1,10 +1,10 @@
 {
-  "totalRuns": 32,
+  "totalRuns": 33,
   "failedRuns": 0,
   "lastRun": {
-    "ts": "2026-09-29T23:46:59.362Z",
+    "ts": "2026-09-30T05:52:54.317Z",
     "kind": "child",
-    "edge": "before",
+    "edge": "after",
     "name": "uar-team-execution-architecture",
     "hookId": "delivery-cadence-kbd-reconcile",
     "layer": "project",

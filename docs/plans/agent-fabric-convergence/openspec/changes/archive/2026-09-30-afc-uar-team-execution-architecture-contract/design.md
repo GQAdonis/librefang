@@ -1,6 +1,6 @@
 ## Context
 
-See proposal.md. The controlling [plan](../../../.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-execution-architecture/plan.md) contains the baseline, D1–D5 approval decisions, source-grounded A/B file assignments and operation criteria. Its two consultation documents supply exact source paths. This change completes documentation only.
+See proposal.md. The controlling [plan](../../../../.kbd-orchestrator/phases/agent-fabric-convergence/children/uar-team-execution-architecture/plan.md) contains the baseline, D1–D5 approval decisions, source-grounded A/B file assignments and operation criteria. Its two consultation documents supply exact source paths. This change completes documentation only.
 
 ## Goals / Non-Goals
 

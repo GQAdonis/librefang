@@ -2,42 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 377,
-  "derivedRevision": 377,
+  "sourceRevision": 382,
+  "derivedRevision": 382,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 138
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 143
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence",
-    "uar-team-execution-architecture"
+    "agent-fabric-convergence"
   ],
   "phaseIds": [
-    "agent-fabric-convergence",
-    "agent-fabric-convergence::uar-team-execution-architecture"
+    "agent-fabric-convergence"
   ],
-  "activePhaseId": "agent-fabric-convergence::uar-team-execution-architecture",
-  "activePhase": "uar-team-execution-architecture",
+  "activePhaseId": "agent-fabric-convergence",
+  "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
-  "childPointer": "uar-team-execution-architecture",
-  "change": null,
-  "currentTask": null,
+  "parentPhase": null,
+  "childPointer": null,
+  "change": "afc-c09-bounded-teams-and-shared-task-board",
+  "currentTask": "C09.3",
   "status": "running",
   "lifecycle": "running",
-  "stageId": "execute",
-  "stageStatus": "COMPLETE",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
   "implementationCompleted": 13,
   "implementationTotal": 24,
   "planRevision": 6,
-  "revision": 377,
-  "exactNextCommand": "Finish uar-team-execution-architecture documentation and final gate; await Reflect, then return to parent C09.3 delivery A.",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-09-30T05:29:55.116711Z"
+  "revision": 382,
+  "exactNextCommand": "/kbd-status",
+  "nextChange": "afc-c09-bounded-teams-and-shared-task-board",
+  "nextTask": "C09.3",
+  "updatedAt": "2026-09-30T05:52:54.280228Z"
 }

@@ -1,0 +1,9 @@
+{
+  "recordedAt": "2026-09-30T05:52:04.992Z",
+  "source": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/changes/afc-uar-team-execution-architecture-contract/specs/uar-team-execution-profile-contract/spec.md",
+  "destination": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/openspec/specs/uar-team-execution-profile-contract/spec.md",
+  "addedRequirements": 4,
+  "allRequirementBodiesIdentical": true,
+  "removedRequirements": 0,
+  "note": "Additive documentation capability only; runtime conformance remains pending."
+}
