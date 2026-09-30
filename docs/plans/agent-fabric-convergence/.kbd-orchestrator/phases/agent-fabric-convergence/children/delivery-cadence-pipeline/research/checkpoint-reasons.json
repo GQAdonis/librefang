@@ -1,0 +1,262 @@
+{
+  "source": ".prometheus/cadence/state.json",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "records": [
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "failed",
+      "startedAt": "2026-09-30T11:29:34.517Z",
+      "finishedAt": "2026-09-30T11:30:31.075Z",
+      "reason": "Initial delivery checkpoint"
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T11:45:19.760Z",
+      "finishedAt": "2026-09-30T11:51:49.294Z",
+      "reason": "Actual packaging attempt b2be3b1a failed because its mini source record was stale; corrected it and replaced liter-llm with published native source061797902 on all four customer platforms. Include completed required operation procedure."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T11:52:12.624Z",
+      "finishedAt": "2026-09-30T11:52:17.394Z",
+      "reason": "Initial delivery checkpoint"
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T11:52:40.983Z",
+      "finishedAt": "2026-09-30T11:52:53.654Z",
+      "reason": "Completed C09.4 real-model cooperation, all-terminal waits and restart cases require a 30-minute operation window; retain frozen scope, two-hour iteration clock and hard budgets."
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T12:10:01.980Z",
+      "finishedAt": "2026-09-30T12:17:36.803Z",
+      "reason": "Actual feature operation failed at initial instance negotiation because sidecar forced managed ownership; package the corrected native source853fb6d and preserve the upgraded pinned mini/liter payload."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T12:19:13.075Z",
+      "finishedAt": "2026-09-30T12:19:17.969Z",
+      "reason": "Unspecified legacy retry"
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T12:19:47.613Z",
+      "finishedAt": "2026-09-30T12:20:26.590Z",
+      "reason": "Repeat the failed completed Gate B after repairing initial packaged sidecar ownership negotiation. No scenario passed before that refusal; preserve full declared scope and continuous delivery clock."
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T12:41:40.695Z",
+      "finishedAt": "2026-09-30T12:49:43.821Z",
+      "reason": "Rebuild after the observed selected external starter-team setup launched the wrong managed runtime; package matched UAR56d87b5a and Boss9a3b4ac338 repairs."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T12:50:24.166Z",
+      "finishedAt": "2026-09-30T12:50:30.122Z",
+      "reason": "Launch the rebuilt packaged Mac application containing the matched selected-runtime correction before operating its complete team function."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T12:51:04.470Z",
+      "finishedAt": "2026-09-30T12:51:51.482Z",
+      "reason": "Repeat the failed complete Gate B after selected external runtime/catalog backend correction. Previous attempt passed setup negotiation only; no B scenario or inference passed."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T12:54:26.142Z",
+      "finishedAt": "2026-09-30T12:54:40.503Z",
+      "reason": "Previous completed-boundary attempt stopped before team setup because live gateway discovery was unavailable. Direct authenticated models and health now return HTTP200; repeat failed operation against unchanged built sources, without another build."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:00:10.664Z",
+      "finishedAt": "2026-09-30T13:00:30.618Z",
+      "reason": "Reproduce the observed startup HTTP429 with safe endpoint/status classification. No application inputs changed; retain the exact built payload, limiter and declared failed Gate B scope."
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T13:04:31.109Z",
+      "finishedAt": "2026-09-30T13:14:10.960Z",
+      "reason": "Rebuild completed source repair for the observed GET /api/uar/capabilities HTTP429 during starter setup. NativeUAR56d87b5a and upgradedmini/liter inputs are unchanged; no Cargo rebuild."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T13:15:00.480Z",
+      "finishedAt": "2026-09-30T13:15:05.735Z",
+      "reason": "Launch the complete Mac build with bounded capability-discovery backpressure before operating team cooperation."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:15:30.930Z",
+      "finishedAt": "2026-09-30T13:15:43.962Z",
+      "reason": "Repeat complete failed B operation after applying existing bounded HTTP429 handling to capability negotiation. Exact rejectedGET recorded; no Bcase or inference had passed."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:30:56.645Z",
+      "finishedAt": "2026-09-30T13:31:09.618Z",
+      "reason": "Repeat the completed failed B operation using a corrected external driver. Derive the private principal through actual app.get_info.appDataPath as production does; frozen Boss7c189/UAR56d87 and passed build/launch remain unchanged. No B case or inference previously passed."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:34:14.814Z",
+      "finishedAt": "2026-09-30T13:35:22.527Z",
+      "reason": "Repeat failed complete B operation after observed fixture HTTP429, applying existing six-attempt250ms handling before handler admission. Product source/build/launch unchanged; no previous B case passed."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:42:28.959Z",
+      "finishedAt": "2026-09-30T13:43:17.150Z",
+      "reason": "Repeat the failed complete operation capturing only the exact source-authored safe provider error category and UUID before disposable cleanup. Actual coordinator failure observed; no case passed. Frozen packaged sources/build unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:51:42.750Z",
+      "finishedAt": "2026-09-30T13:52:54.760Z",
+      "reason": "Repeat completed failed cooperation operation to capture observed provider_budget_exceeded exact source-known numeric grant counters before disposable cleanup. No B case passed and built product inputs unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:55:29.952Z",
+      "finishedAt": "2026-09-30T13:56:33.403Z",
+      "reason": "Repeat complete failed B operation with corrected explicit private fixture grants based on observed 4603+4804=9407 token usage against 6000 coordinator limit. Production budget defaults and built application bytes unchanged; no case previously passed."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T13:59:32.521Z",
+      "finishedAt": "2026-09-30T14:00:09.144Z",
+      "reason": "Resume complete failed B operation after correcting fixture approval handler to respect owner-facing display projection. Actual bound runtime enforces exact role/edge/reservation/CAS; no B case passed and product build unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T14:02:01.775Z",
+      "finishedAt": "2026-09-30T14:02:57.685Z",
+      "reason": "Repeat failed complete B operation to retain owner-scoped native tool admission names/states before cleanup. Coordinator previously finished without yield; no B case passed. Product build unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T14:04:42.994Z",
+      "finishedAt": "2026-09-30T14:05:28.141Z",
+      "reason": "Resume failed complete B operation with bounded grant sized for observed roster, three successful delegations, then wait/worker/continuation. Fifth model request projected25472 against24000. Private fixture total96000, initial40000, two workers16000each, continuation20000; product build unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T14:10:14.411Z",
+      "finishedAt": "2026-09-30T14:12:49.697Z",
+      "reason": "Resume failed B operation with clarified first-turn prompt after observed failed coordinator with no native calls under sufficient grant. Preserve full bounded budget and capture known stateReason. No B case passed; product build unchanged."
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T14:33:01.491Z",
+      "finishedAt": "2026-09-30T14:38:21.638Z",
+      "reason": "Record frozen source UAR1369259 and Bosscd86aa2 after corrected team tool catalog; prior direct package build passed but Cadence requires its own checkpoint receipt."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T14:38:58.388Z",
+      "finishedAt": "2026-09-30T14:39:03.188Z",
+      "reason": "Unspecified legacy retry"
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T14:39:36.825Z",
+      "finishedAt": "2026-09-30T14:41:31.786Z",
+      "reason": "Operate the corrected packaged UAR1369259 team-specific tool catalog after the observed generic list_agents call invalidated the coordinator output. No B case has passed; run the completed real gateway and Boss operation."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "failed",
+      "startedAt": "2026-09-30T14:45:23.338Z",
+      "finishedAt": "2026-09-30T14:47:21.036Z",
+      "reason": "Repeat only failed B feature operation after observed one worker produced its contracted artifact without optional team_send while another sent and coordinator resumed. Require a real authorized worker message and ordered outcomes, not tool obedience from every worker. Frozen app build unchanged."
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T16:49:36.450Z",
+      "finishedAt": "2026-09-30T16:49:36.584Z",
+      "reason": "Reconcile the complete real packaged-app C09.4 operation assembled from immutable per-case receipts for the frozen UAR1369259 and Bosscd86aa2 sources; avoid rerunning successful cases."
+    },
+    {
+      "id": "mac-arm64-build",
+      "kind": "build",
+      "status": "success",
+      "startedAt": "2026-09-30T17:04:57.117Z",
+      "finishedAt": "2026-09-30T17:10:19.865Z",
+      "reason": "Build final qualified UARafeb528 and Boss102d7df after the complete staged Gate B operation and public capability promotion; prior staged DMG does not advertise the qualified team profile."
+    },
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T17:11:21.184Z",
+      "finishedAt": "2026-09-30T17:11:25.699Z",
+      "reason": "Unspecified legacy retry"
+    },
+    {
+      "id": "c094-cooperating-pair-operation",
+      "kind": "run",
+      "status": "success",
+      "startedAt": "2026-09-30T17:12:16.227Z",
+      "finishedAt": "2026-09-30T17:13:43.864Z",
+      "reason": "Operate the final public-qualified UAR afeb528b and Boss 102d7df packaged pair on the completed success path; retain the prior complete Gate B operation as separate evidence."
+    }
+  ]
+}

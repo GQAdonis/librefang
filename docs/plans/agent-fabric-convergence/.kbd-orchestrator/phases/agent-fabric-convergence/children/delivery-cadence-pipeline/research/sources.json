@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "assessedOn": "2026-09-30",
+  "scope": "delivery-cadence-pipeline assessment; research only",
+  "method": {
+    "discovery": "Firecrawl MCP web search",
+    "retrieval": "Firecrawl MCP scrape with maxAge:0",
+    "documentationCrossCheck": [
+      {
+        "libraryId": "/websites/github_en_actions",
+        "topic": "Concurrency queue ordering and replacement"
+      },
+      {
+        "libraryId": "/websites/gitlab",
+        "topic": "Resource group process modes"
+      }
+    ]
+  },
+  "evidenceBoundary": "Primary-source guidance and product documentation; no local pipeline implementation, benchmark, test, build, deployment or performance claim.",
+  "sources": [
+    {
+      "id": "S1",
+      "title": "What is Continuous Delivery?",
+      "publisher": "Jez Humble / Continuous Delivery",
+      "url": "https://continuousdelivery.com/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Continuous delivery means maintaining software that can be delivered safely, quickly and sustainably on demand.",
+      "proposedAdaptation": "Keep releasability distinct from publication timing.",
+      "limitation": "Does not prescribe this project's cadence or prove its performance."
+    },
+    {
+      "id": "S2",
+      "title": "Patterns: The Deployment Pipeline",
+      "publisher": "Jez Humble / Continuous Delivery",
+      "url": "https://continuousdelivery.com/implementing/patterns/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Build packages once, deploy the tested packages, and separate technical deployment from feature release.",
+      "proposedAdaptation": "Freeze each complete candidate and promote its identified platform artifacts.",
+      "limitation": "Its every-commit unit-test pattern conflicts with the initiative's complete-delivery gate; do not import that testing schedule."
+    },
+    {
+      "id": "S3",
+      "title": "Control the concurrency of workflows and jobs",
+      "publisher": "GitHub Docs",
+      "url": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "One run executes per concurrency group. Default pending capacity is one with replacement; queue:max allows up to 100. FIFO follows waiting time, not dispatch time. queue:max cannot combine with cancel-in-progress:true.",
+      "proposedAdaptation": "Use explicit release sequence and freshness checks instead of assuming CI order is release order.",
+      "limitation": "Documentation capability is not proof of availability or correct configuration in the local workflows."
+    },
+    {
+      "id": "S4",
+      "title": "Resource group",
+      "publisher": "GitLab Docs",
+      "url": "https://docs.gitlab.com/ci/resource_groups/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Resource groups serialize sensitive jobs while independent build jobs can overlap. Modes include unordered, oldest_first, newest_first and newest_ready_first; newest modes require idempotent jobs. Nested dependencies can deadlock.",
+      "proposedAdaptation": "Model resource-specific exclusion separately from build execution and release selection.",
+      "limitation": "A process mode is neither an immutable artifact store nor a complete stale-publication policy."
+    },
+    {
+      "id": "S5",
+      "title": "Deployment safety",
+      "publisher": "GitLab Docs",
+      "url": "https://docs.gitlab.com/ci/environments/deployment_safety/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "An older deployment can overwrite a newer one. GitLab offers outdated-job protection; its age uses job start time rather than commit time.",
+      "proposedAdaptation": "Check candidate sequence under the publication lock; make rollback an explicit separate action.",
+      "limitation": "GitLab's age rule is not a suitable substitute for a project-owned release order."
+    },
+    {
+      "id": "S6",
+      "title": "Work in process limits",
+      "publisher": "DORA",
+      "url": "https://dora.dev/capabilities/wip-limits/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Visualize the whole value stream, set WIP limits from capacity and measure lead time and variability.",
+      "proposedAdaptation": "Include unverified candidates, queued builds, failures and publication debt in WIP.",
+      "limitation": "No optimal numeric WIP limit or local velocity improvement is established."
+    },
+    {
+      "id": "S7",
+      "title": "Working in small batches",
+      "publisher": "DORA",
+      "url": "https://dora.dev/capabilities/working-in-small-batches/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Small batches shorten feedback loops and support learning; delivering independent valuable increments requires deliberate scope.",
+      "proposedAdaptation": "Define each delivery as a complete meaningful increment with explicit acceptance.",
+      "limitation": "Does not authorize partial-code testing or establish a two-hour target."
+    },
+    {
+      "id": "S8",
+      "title": "Monthly releases",
+      "publisher": "GitLab Handbook",
+      "url": "https://handbook.gitlab.com/handbook/engineering/releases/monthly-releases/",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "GitLab separates frequent deployments from scheduled customer releases, using release candidates and a final included commit.",
+      "proposedAdaptation": "Adopt predictable eligibility windows and freeze release content.",
+      "limitation": "Its monthly deadlines and multi-environment process are not a template to copy; skipping empty windows is a local adaptation."
+    },
+    {
+      "id": "S9",
+      "title": "DL.CD.7: Remove manual approvals to practice continuous deployment",
+      "publisher": "AWS Well-Architected DevOps Guidance",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/devops-guidance/dl.cd.7-remove-manual-approvals-to-practice-continuous-deployment.html",
+      "accessedOn": "2026-09-30",
+      "sourceType": "primary",
+      "retrieval": "live-requested scrape; current response inspected",
+      "documentedEvidence": "Continuous deployment automates production delivery without manual approval; AWS labels this an optional capability.",
+      "proposedAdaptation": "Retain the project's human publication authority while automating preparation.",
+      "limitation": "Does not require removing this project's approval gates."
+    }
+  ]
+}
