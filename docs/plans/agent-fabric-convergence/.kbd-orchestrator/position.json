@@ -2,19 +2,19 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 382,
-  "derivedRevision": 382,
+  "sourceRevision": 387,
+  "derivedRevision": 387,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 143
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 148
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-30T05:52:54.280228Z",
+  "updatedAt": "2026-09-30T09:52:26.933372Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c09-bounded-teams-and-shared-task-board",
-    "C09.3"
+    "C09.4"
   ],
   "root": {
     "type": "phase",
@@ -218,7 +218,7 @@
             "id": "afc-c09-bounded-teams-and-shared-task-board",
             "status": "IN_PROGRESS",
             "progress": {
-              "done": 2,
+              "done": 3,
               "total": 4
             }
           },

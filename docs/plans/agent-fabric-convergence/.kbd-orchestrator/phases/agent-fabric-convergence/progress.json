@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 381,
-  "derivedRevision": 381,
+  "sourceRevision": 387,
+  "derivedRevision": 387,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 142
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 148
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-30T05:52:53.569945Z",
+  "last_updated": "2026-09-30T09:52:26.933372Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
   "changes_completed": 9,
@@ -188,9 +188,9 @@
       "status": "IN_PROGRESS",
       "implementation_status": "IN_PROGRESS",
       "tasks_total": 4,
-      "tasks_done": 2,
-      "last_task_completed": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
-      "next_task_pending": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+      "tasks_done": 3,
+      "last_task_completed": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+      "next_task_pending": "Deliver governed cooperating teams with durable yield and continuation",
       "blockers": []
     },
     {
