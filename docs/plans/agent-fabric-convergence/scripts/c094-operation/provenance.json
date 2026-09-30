@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-30T13:23:27.610Z",
+  "entrypoint": "uar-team-cooperation-scenario.mjs",
+  "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+  "sourceRevision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
+  "runtimeRevision": "56d87b5ab088c69a41faa761753edd253049d775",
+  "scope": "External completed-boundary operation procedure; no packaged production sources changed",
+  "observedFailure": "c094-operation-failure-115282ca-5131-4223-9fbe-a26668d2521f.json",
+  "corrections": [
+    {
+      "file": "uar-team-cooperation-host.mjs",
+      "description": "Derive principal from app.get_info.appDataPath using boss.+SHA256, exactly matching production uarPrincipalForSession; remove binding-owner decode/setOwner seam; invoke app.get_info without an input value, matching its z.void() request contract"
+    },
+    {
+      "file": "c094-cooperation-fixtures.mjs",
+      "description": "Do not read ownerId from setup_starter response: rawBinding projection intentionally exposes no ownerId"
+    },
+    {
+      "file": "uar-team-cooperation-host.mjs",
+      "observedFailure": "c094-operation-failure-fed94767-37e3-44d4-b58a-5a1fb808a3c7.json",
+      "description": "Mirror existing Boss six-attempt/250ms handling only for HTTP429, preserving identical method/path/body/headers and one12sAbortSignal across all attempts; UAR limiter returns429before invokinghandler; retain authoritative finalresponse and expose only method/path/status in error.requestFailure",
+      "source": "src/main/ai/runtime/uar/UarSidecarService.ts authenticatedFetch",
+      "changedAt": "2026-09-30T13:33:23.032Z",
+      "replacedBlockSha256": "sha256:e9b9d298fe7145d0660917121f9df52370443943d3312d78db6b97d967d204bb"
+    },
+    {
+      "files": [
+        "uar-team-cooperation-host.mjs",
+        "uar-team-cooperation-scenario.mjs"
+      ],
+      "observedFailure": "c094-operation-failure-2527779b-8149-4879-98a3-ecc33b88a274.json",
+      "description": "Extract only source-authored Captured safe team provider failure UUID, finite provider error kind and finite team code from bounded transient stdout/stderr fragments; retain no raw log history; expose providerDiagnostics and attach before finalstop; parse structuredJSON fields only when fields.message exactly equals the source-authored record, never arbitrary matching lines",
+      "changedAt": "2026-09-30T13:40:09.835Z",
+      "source": "src/llm/orchestrator.rs provider_failure + src/llm/provider_error.rs ProviderError::code",
+      "replacedLaunchSha256": "sha256:e7044637635ac486ef3982654a78f98dce12fe3f91d57bd26bb0c3bfda19df3d"
+    }
+  ],
+  "sourceContracts": [
+    {
+      "file": "src/main/ipc/handlers/app.ts",
+      "sha256": "sha256:9986f1ac46c9e8da8a1504613e8f06d5af90022b01022d60656d46d0d353a23a"
+    },
+    {
+      "file": "src/main/ai/runtime/uar/uarPrincipal.ts",
+      "sha256": "sha256:4e48b83e84269c3430284b548769931597a39d719ab383913c6b4ad81ad9cc1e"
+    },
+    {
+      "file": "src/main/ai/runtime/uar/UarDurableAdministrationAdapter.ts",
+      "sha256": "sha256:7a2e9c205c393bcd065f227b9be10c56a5d6d6c945d3dfb5246f36433bbc41af"
+    },
+    {
+      "file": "src/shared/ipc/schemas/app.ts",
+      "sha256": "sha256:4cc24e2be8e1d43458955ea4863da21a62edf262587d3a23640b73fa1d1581de"
+    }
+  ],
+  "modules": [
+    {
+      "file": "uar-team-cooperation-scenario.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-cooperation-scenario.mjs",
+      "sourceSha256": "sha256:8394cfbb83b1c49985b1aded1bd9f9fdc5b81aa3c63309023acc2258dd3adf3a",
+      "closureSha256": "sha256:c61f8eaac695de9d951193a89f6698671ab25b804bc06292cf1beffc7ef6bc95",
+      "changed": true
+    },
+    {
+      "file": "c094-cooperation-authority.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-authority.mjs",
+      "sourceSha256": "sha256:3b77059373e7b3c40e2b7df5aec316bf0812dbbabe44ea7d315649c5e4d063bf",
+      "closureSha256": "sha256:3b77059373e7b3c40e2b7df5aec316bf0812dbbabe44ea7d315649c5e4d063bf",
+      "changed": false
+    },
+    {
+      "file": "c094-cooperation-controls.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-controls.mjs",
+      "sourceSha256": "sha256:eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0",
+      "closureSha256": "sha256:eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0",
+      "changed": false
+    },
+    {
+      "file": "c094-cooperation-driver.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-driver.mjs",
+      "sourceSha256": "sha256:aba181a62d8454ea62b797f4ecc557572bcc9d92413ab14234c48b724a0a3d0b",
+      "closureSha256": "sha256:aba181a62d8454ea62b797f4ecc557572bcc9d92413ab14234c48b724a0a3d0b",
+      "changed": false
+    },
+    {
+      "file": "c094-cooperation-fixtures.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-fixtures.mjs",
+      "sourceSha256": "sha256:6012edf92bbca138e956006366903062cd387595a164d16037ba9f189877fee9",
+      "closureSha256": "sha256:d80eaaf4797e5cc1789e7417d3bdfeaed6d761893d954dc0015370b6ad8411f4",
+      "changed": true
+    },
+    {
+      "file": "c094-cooperation-flows.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-flows.mjs",
+      "sourceSha256": "sha256:9b3865d0afa73db581488a05bcab2f8fd55a9eb48887d56962bf5cf30f08a1c2",
+      "closureSha256": "sha256:9b3865d0afa73db581488a05bcab2f8fd55a9eb48887d56962bf5cf30f08a1c2",
+      "changed": false
+    },
+    {
+      "file": "c094-cooperation-prompts.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-prompts.mjs",
+      "sourceSha256": "sha256:3900b0eea664e3240284a27f0c0b4364cc412b18794bcd7418043854fbf16f70",
+      "closureSha256": "sha256:3900b0eea664e3240284a27f0c0b4364cc412b18794bcd7418043854fbf16f70",
+      "changed": false
+    },
+    {
+      "file": "uar-team-cooperation-host.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-cooperation-host.mjs",
+      "sourceSha256": "sha256:11485ac26e9a16c70c7a5986d7e31fdde93a37764348fe5a8305506713a86a29",
+      "closureSha256": "sha256:ba65fba4a63bba12d8ea807c6980dd14e92e461228dbca62c022c562ec587414",
+      "changed": true
+    },
+    {
+      "file": "uar-team-operation-tools.mjs",
+      "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-operation-tools.mjs",
+      "sourceSha256": "sha256:c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb",
+      "closureSha256": "sha256:c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb",
+      "changed": false
+    }
+  ],
+  "operationStatus": "not run",
+  "dynamicDependencies": [
+    {
+      "file": "scripts/uar-payload-integrity.cjs",
+      "resolution": "Explicit BOSS_C094_REPOSITORY root; production payload path unchanged"
+    }
+  ]
+}

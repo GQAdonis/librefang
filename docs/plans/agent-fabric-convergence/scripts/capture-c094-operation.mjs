@@ -9,7 +9,11 @@ export default async function capture(context) {
   const root = path.join(initiative, '.prometheus', 'cadence')
   const state = JSON.parse(fs.readFileSync(path.join(root, 'state.json'), 'utf8'))
   const iteration = state.iterations.at(-1)
-  const source = path.join(process.env.BOSS_C094_REPOSITORY, 'scripts', 'cadence', 'uar-team-cooperation-scenario.mjs')
+  const source = path.join(initiative, 'scripts', 'c094-operation', 'uar-team-cooperation-scenario.mjs')
+  const operationModules = fs.readdirSync(path.dirname(source)).filter((name) => name.endsWith('.mjs')).sort().map((name) => ({
+    path: path.join(path.dirname(source), name),
+    sha256: createHash('sha256').update(fs.readFileSync(path.join(path.dirname(source), name))).digest('hex')
+  }))
   const { default: operate } = await import(pathToFileURL(source).href)
   const startedAt = new Date().toISOString()
   const operationId = randomUUID()
@@ -31,7 +35,7 @@ export default async function capture(context) {
         const filename = path.join(root, 'artifacts', `c094-scenario-${operationId}-${observations.length + 1}.json`)
         const bytes = JSON.stringify({
           schemaVersion: 1, operationId, iterationId: iteration.id, sourceRefs: iteration.sourceRefs,
-          observedAt: new Date().toISOString(), receipt
+          observedAt: new Date().toISOString(), operationModules, receipt
         }, null, 2) + '\n'
         fs.writeFileSync(filename, bytes, { flag: 'wx', mode: 0o600 })
         observations.push({ path: filename, sha256: createHash('sha256').update(bytes).digest('hex'), case: receipt.case })
@@ -83,8 +87,11 @@ export default async function capture(context) {
     const filename = path.join(root, 'artifacts', `c094-operation-failure-${randomUUID()}.json`)
     fs.writeFileSync(filename, JSON.stringify({
       schemaVersion: 1, iterationId: iteration.id, sourceRefs: iteration.sourceRefs,
-      startedAt, finishedAt: new Date().toISOString(), passed: false,
+      startedAt, finishedAt: new Date().toISOString(), passed: false, operationModules,
       attempts: [...attempts.values()], denials, observations,
+      operationStage: /^[a-z0-9-]+$/.test(error.operationEvidence?.stage ?? '') ? error.operationEvidence.stage : null,
+      requestFailure: error.requestFailure ?? null,
+      providerDiagnostics: error.providerDiagnostics ?? [],
       failureCode: error.message?.match(/C094_[A-Z_]+/)?.[0] ?? 'protected-operation-failure'
     }, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
     process.stderr.write('Preserved C09.4 operation observations: ' + filename + '\n')
@@ -94,6 +101,7 @@ export default async function capture(context) {
     schemaVersion: 1, iterationId: iteration.id, sourceRefs: iteration.sourceRefs,
     scenario: source,
     scenarioSha256: createHash('sha256').update(fs.readFileSync(source)).digest('hex'),
+    operationModules,
     startedAt, finishedAt: new Date().toISOString(), passed: result.passed,
     complete: result.scope?.complete === true, observations,
     qualification: 'local staged operation; public capability promotion recorded separately',

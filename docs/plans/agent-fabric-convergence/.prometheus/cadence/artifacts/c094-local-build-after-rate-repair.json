@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T13:15:16.708Z",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "build": {
+    "id": "mac-arm64-build",
+    "attemptId": "a47fbe14-c9c6-4462-a7c2-976c60052f20",
+    "commandId": "c094-build-rate-repair-20260930",
+    "kind": "build",
+    "purpose": "build",
+    "status": "success",
+    "startedAt": "2026-09-30T13:04:31.109Z",
+    "reason": "Rebuild completed source repair for the observed GET /api/uar/capabilities HTTP429 during starter setup. NativeUAR56d87b5a and upgradedmini/liter inputs are unchanged; no Cargo rebuild.",
+    "configuredTimeoutMs": 14400000,
+    "requestedTimeoutMs": 14400000,
+    "sourceRefs": [
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+        "revision": "56d87b5ab088c69a41faa761753edd253049d775",
+        "fingerprint": "62ee1d8ce77f106a5cc3920d249b4238f7b83a6114c87fcb330e8a561dfe6078"
+      },
+      {
+        "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+        "revision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
+        "fingerprint": "0d8682c321966c9d9120c102de7ae72e4c05f17da638bcc229b5965930188df2"
+      }
+    ],
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+    "hostname": "Traviss-MacBook-Pro-4.local",
+    "pid": 58210,
+    "exitCode": 0,
+    "signal": null,
+    "finishedAt": "2026-09-30T13:14:10.960Z",
+    "logPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/logs/a47fbe14-c9c6-4462-a7c2-976c60052f20.log",
+    "artifacts": [
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c094-local-payload/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+        "sha256": "b5312caac7d7b86add8cf1ee3f29229355f0cbe1f2251a00619b2fda54a8e930",
+        "size": 125240287,
+        "platform": "darwin-arm64"
+      },
+      {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist/The-Boss-2.2.9-mac-arm64.dmg",
+        "sha256": "fa4a36b685e5a2084a85593ed10ee0055b08b8061ee131351f1dda63d6abb4f9",
+        "size": 613412117,
+        "platform": "darwin-arm64"
+      }
+    ]
+  },
+  "operation": "pending",
+  "signing": {
+    "signed": true,
+    "notarized": false
+  }
+}
