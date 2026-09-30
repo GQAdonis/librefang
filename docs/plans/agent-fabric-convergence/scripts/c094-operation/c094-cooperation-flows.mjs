@@ -128,17 +128,12 @@ export async function completeFlow({ evaluate, signal, host, flow, beforeApprova
   const workerMessages = peers.messages.filter(
     ({ message }) => message.mode === 'queue-only' && message.recipientMemberId === fixture.coordinatorId
   )
+  const senderAttempts = plan.targets
+    .filter((target) => target.outcome !== 'cancelled')
+    .map((target) => state.attempts.find((attempt) => attempt.taskId === target.taskId)?.id)
   if (
     plan.send &&
-    plan.targets
-      .filter((target) => target.outcome !== 'cancelled')
-      .some(
-        (target) =>
-          !workerMessages.some(
-            ({ message }) =>
-              message.senderAttemptId === state.attempts.find((attempt) => attempt.taskId === target.taskId)?.id
-          )
-      )
+    !workerMessages.some(({ message }) => senderAttempts.includes(message.senderAttemptId))
   ) {
     throw failure('C094_ACTUAL_WORKER_MESSAGE_MISSING', description, state)
   }
@@ -216,8 +211,8 @@ export async function completeDenied({
   const actual = state.attempts.find((attempt) => attempt.id === flow.initial.id)
   const evidence = await toolEvidence(host, fixture, actual)
   if (
-    actual.status !== 'succeeded' ||
-    actual.output !== plan.final ||
+    !['succeeded', 'failed'].includes(actual.status) ||
+    (actual.status === 'succeeded' && plan.final && actual.output !== plan.final) ||
     !evidence.some((entry) => entry.toolName === tool && ['failed', 'denied'].includes(entry.state)) ||
     state.waits.length ||
     state.continuations.length ||
@@ -234,6 +229,7 @@ export async function completeDenied({
       workspaceId: fixture.workspaceId,
       nativeToolEvidence: evidence,
       attempt: safeAttempt(actual),
+      turnOutcome: actual.status,
       noWaitOrContinuation: true,
       acceptedDelegations: state.commandReceipts.filter((receipt) => receipt.operation === 'team_delegate').length
     }

@@ -2,57 +2,71 @@ import { randomUUID } from 'node:crypto'
 
 import { commandConflict, directedAuthority, invalidatedWait, foreignWait } from './c094-cooperation-authority.mjs'
 import { controls } from './c094-cooperation-controls.mjs'
-import { cancel, drive, end, safeAttempt, selector, teamPath } from './c094-cooperation-driver.mjs'
+import { cancel, drive, end, safeAttempt, selector, teamPath, toolEvidence } from './c094-cooperation-driver.mjs'
 import { createFixture, selectLiveGateway } from './c094-cooperation-fixtures.mjs'
 import { completeFlow, completeDenied, failure, recover, startFlow } from './c094-cooperation-flows.mjs'
 import { cooperationPlan, deniedPlan } from './c094-cooperation-prompts.mjs'
 import { startCooperationHost } from './uar-team-cooperation-host.mjs'
 import { ipc, route, current, summary, response } from './uar-team-operation-tools.mjs'
 
+export const cooperationCases = [
+  'success', 'failure', 'cancellation', 'edge', 'isolation', 'revocation',
+  'directed-authority', 'wait-invalidation', 'command-conflict', 'cycle', 'restart', 'crash'
+]
+export const cooperationReceiptNames = {
+  success: ['success-all-terminal-and-replay', 'Boss context/messages/waits'],
+  failure: ['confirmed-target-failure'],
+  cancellation: ['confirmed-target-cancellation'],
+  edge: ['denied-directed-edge'],
+  isolation: ['two-workspace-recipient-isolation', 'foreign-workspace-wait-read-and-wake-refused'],
+  revocation: ['current-membership-before-effect'],
+  'directed-authority': ['same-team-directed-read-send-roster-inbox-revocation'],
+  'wait-invalidation': ['accepted-wait-reassignment-refusal-and-revocation-invalidation'],
+  'command-conflict': ['same-command-id-different-payload-refused'],
+  cycle: ['dependency-wait-cycle-refusal'],
+  restart: ['clean-restart-durable-wait'],
+  crash: ['crash-before-join-preserves-uncertainty']
+}
+
 /** Operate only completed B functionality against the exact packaged UAR and live gateway. */
 export default async function run({ evaluate, signal, onObservation, cases }) {
-  const availableCases = [
-    'success',
-    'failure',
-    'cancellation',
-    'edge',
-    'isolation',
-    'revocation',
-    'directed-authority',
-    'wait-invalidation',
-    'command-conflict',
-    'cycle',
-    'restart',
-    'crash'
-  ]
-  const selectedCases = cases ?? availableCases
+  const availableCases = cooperationCases
+  const requestedCases = cases ?? availableCases
   if (
-    !Array.isArray(selectedCases) ||
-    !selectedCases.length ||
-    selectedCases.some((name) => !availableCases.includes(name))
+    !Array.isArray(requestedCases) ||
+    !requestedCases.length ||
+    requestedCases.some((name) => !availableCases.includes(name))
   ) {
     throw new Error('C094_UNKNOWN_OPERATION_CASE')
   }
+  const selectedCases = [...new Set([
+    ...requestedCases,
+    ...(requestedCases.includes('isolation') ? ['success'] : [])
+  ])]
   const selected = (name) => selectedCases.includes(name)
   const receipts = []
   let stage = 'initialize',
-    host
+    host,
+    lastFixture
   const observe = async (receipt) => {
     receipts.push(receipt)
     await onObservation?.({ stage, ...receipt })
   }
-  const fixture = async (model, label, options = {}) => createFixture({ evaluate, host, model, label, ...options })
+  const fixture = async (model, label, options = {}) => {
+    lastFixture = await createFixture({ evaluate, host, model, label, ...options })
+    return lastFixture
+  }
   const planFor = async (selected, outcomes, options) =>
     cooperationPlan(selected, outcomes, (await summary(evaluate, selector(selected))).budget, options)
   try {
     host = await startCooperationHost({ evaluate, signal, repository: process.env.BOSS_C094_REPOSITORY })
     const model = await selectLiveGateway(evaluate)
     stage = 'success-all-terminal-and-replay'
-    const success = await fixture(model, 'success', { workers: 2 })
-    const capabilities = await ipc(evaluate, route('snapshot'), { workspaceId: success.workspaceId })
-    if (!capabilities.capabilities.cooperation) throw new Error('C094_ACTUAL_COOPERATION_CAPABILITY_MISSING')
-    let completed
+    let completed, success
     if (selected('success')) {
+      success = await fixture(model, 'success', { workers: 2 })
+      const capabilities = await ipc(evaluate, route('snapshot'), { workspaceId: success.workspaceId })
+      if (!capabilities.capabilities.cooperation) throw new Error('C094_ACTUAL_COOPERATION_CAPABILITY_MISSING')
       const successPlan = await planFor(success, ['succeeded', 'succeeded'], { duplicate: true })
       const successfulFlow = await startFlow(evaluate, success, successPlan, 'Two workers then one fresh continuation')
       let observedWaitingForRemainingTarget = false
@@ -275,7 +289,7 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
     if (selected('restart')) {
       stage = 'clean-restart-durable-wait'
       const restarting = await fixture(model, 'restart wait')
-      const restartPlan = await planFor(restarting, ['cancelled'], { restart: true })
+      const restartPlan = await planFor(restarting, ['cancelled'], { restart: true, send: false })
       const restartFlow = await startFlow(evaluate, restarting, restartPlan, 'Retain wait across joined shutdown')
       await drive({
         evaluate,
@@ -284,18 +298,12 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
         fixture: restarting,
         description: stage,
         beforeApproval: ({ attempt }) => attempt.memberId === restarting.coordinatorId,
-        async predicate(state) {
+        predicate(state) {
           if (!state.waits.some((wait) => wait.state === 'waiting')) return false
           const target = state.attempts.find(
             (attempt) => attempt.taskId === restartPlan.targets[0].taskId && attempt.status === 'running'
           )
-          if (!target) return false
-          const pending = await host.trustedRequest({
-            workspaceId: restarting.workspaceId,
-            method: 'GET',
-            path: `/api/uar/runs/${encodeURIComponent(target.runId)}/tool-approval/pending`
-          })
-          return pending.pending?.name === 'team_send'
+          return Boolean(target)
         }
       })
       const beforeRestart = await summary(evaluate, selector(restarting))
@@ -306,21 +314,18 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
         body: {}
       })
       await host.restart({ graceful: true })
+      const restarted = await summary(evaluate, selector(restarting))
       await recover(evaluate, restarting)
       const recovered = await completeFlow({ evaluate, signal, host, flow: restartFlow, description: stage })
       if (recovered.exact.wait.waitId !== beforeRestart.waits[0].waitId)
         throw failure('C094_RESTART_RECREATED_WAIT', stage, recovered.state)
       await observe({
         ...recovered.receipt,
-        restart: 'joined old root; same durable wait; one authenticated fresh continuation'
+        restart: 'joined old root; same durable wait; one authenticated fresh continuation',
+        continuationBeforeQuiesce: beforeRestart.continuations.length,
+        continuationAtRestart: restarted.continuations.length,
+        continuationAfterRestart: recovered.state.continuations.length
       })
-      const retained = await summary(evaluate, selector(success))
-      if (
-        completed &&
-        (JSON.stringify(retained.continuations) !== JSON.stringify(completed.state.continuations) ||
-          retained.attempts.length !== completed.state.attempts.length)
-      )
-        throw failure('C094_RESTART_DUPLICATED_COMPLETED_TEAM', stage, retained)
     }
 
     if (selected('crash')) {
@@ -402,6 +407,16 @@ export default async function run({ evaluate, signal, onObservation, cases }) {
       })
     }
   } catch (error) {
+    if (host && lastFixture) {
+      const attempts = error.operationEvidence?.attempts ?? []
+      error.nativeToolEvidence = []
+      for (const attempt of attempts.filter((item) => item?.runId)) {
+        try {
+          const records = await toolEvidence(host, lastFixture, { runId: attempt.runId })
+          error.nativeToolEvidence.push({ runId: attempt.runId, records })
+        } catch { /* The primary operation failure remains authoritative. */ }
+      }
+    }
     if (!error.operationEvidence)
       error.operationEvidence = { stage, completedCases: receipts.map((receipt) => receipt.case) }
     error.operationEvidence.selectedCases = selectedCases

@@ -3,8 +3,8 @@
   "createdAt": "2026-09-30T13:23:27.610Z",
   "entrypoint": "uar-team-cooperation-scenario.mjs",
   "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
-  "sourceRevision": "7c189fc9ed1f3fe30b573ffaa5ff77449a11a855",
-  "runtimeRevision": "56d87b5ab088c69a41faa761753edd253049d775",
+  "sourceRevision": "cd86aa2ca0765bdd488dfab2dfc0f602e2f4e32e",
+  "runtimeRevision": "1369259924cfb3bd6a31cd4a200fb9fafa851ca8",
   "scope": "External completed-boundary operation procedure; no packaged production sources changed",
   "observedFailure": "c094-operation-failure-115282ca-5131-4223-9fbe-a26668d2521f.json",
   "corrections": [
@@ -34,6 +34,13 @@
       "changedAt": "2026-09-30T13:40:09.835Z",
       "source": "src/llm/orchestrator.rs provider_failure + src/llm/provider_error.rs ProviderError::code",
       "replacedLaunchSha256": "sha256:e7044637635ac486ef3982654a78f98dce12fe3f91d57bd26bb0c3bfda19df3d"
+    },
+    {
+      "file": "uar-team-cooperation-host.mjs",
+      "observedFailure": "c094-operation-failure-9f1872d6-7fcb-4b8d-81a2-4b33b254f5a6.json",
+      "description": "Add typed remote-grant-rejected diagnostics only for exact source-authored JSON message; retain finite nonnegative numeric source-known counters/limits and explicitly parsed Some(n)/None debug Options, no raw logs/messages",
+      "source": "src/uar/runtime/cost_budget.rs:462-477",
+      "changedAt": "2026-09-30T13:45:52.594Z"
     }
   ],
   "sourceContracts": [
@@ -59,14 +66,14 @@
       "file": "uar-team-cooperation-scenario.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-cooperation-scenario.mjs",
       "sourceSha256": "sha256:8394cfbb83b1c49985b1aded1bd9f9fdc5b81aa3c63309023acc2258dd3adf3a",
-      "closureSha256": "sha256:c61f8eaac695de9d951193a89f6698671ab25b804bc06292cf1beffc7ef6bc95",
+      "closureSha256": "sha256:2689d0fe7c9a781251b761d238ed16f079bfca94ef34094ea1ae3ca363fe4d81",
       "changed": true
     },
     {
       "file": "c094-cooperation-authority.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-authority.mjs",
       "sourceSha256": "sha256:3b77059373e7b3c40e2b7df5aec316bf0812dbbabe44ea7d315649c5e4d063bf",
-      "closureSha256": "sha256:3b77059373e7b3c40e2b7df5aec316bf0812dbbabe44ea7d315649c5e4d063bf",
+      "closureSha256": "sha256:c5992830e3945906a4c4f32df974f908875ccc70e2857a79f845d7279e9974c6",
       "changed": false
     },
     {
@@ -80,35 +87,35 @@
       "file": "c094-cooperation-driver.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-driver.mjs",
       "sourceSha256": "sha256:aba181a62d8454ea62b797f4ecc557572bcc9d92413ab14234c48b724a0a3d0b",
-      "closureSha256": "sha256:aba181a62d8454ea62b797f4ecc557572bcc9d92413ab14234c48b724a0a3d0b",
-      "changed": false
+      "closureSha256": "sha256:c533c428c9c1913908a9960ba60501ba3b6883281edf31a6decd9a8d6926981a",
+      "changed": true
     },
     {
       "file": "c094-cooperation-fixtures.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-fixtures.mjs",
       "sourceSha256": "sha256:6012edf92bbca138e956006366903062cd387595a164d16037ba9f189877fee9",
-      "closureSha256": "sha256:d80eaaf4797e5cc1789e7417d3bdfeaed6d761893d954dc0015370b6ad8411f4",
+      "closureSha256": "sha256:4a61a2d476684ce801bdc5a85ff87ad486ffb627333072c6b7bfd0b227ad3046",
       "changed": true
     },
     {
       "file": "c094-cooperation-flows.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-flows.mjs",
       "sourceSha256": "sha256:9b3865d0afa73db581488a05bcab2f8fd55a9eb48887d56962bf5cf30f08a1c2",
-      "closureSha256": "sha256:9b3865d0afa73db581488a05bcab2f8fd55a9eb48887d56962bf5cf30f08a1c2",
+      "closureSha256": "sha256:cf58bae0abf323aecde71766c304ae285e64ee8e60aae86b8711bc96f325a9f5",
       "changed": false
     },
     {
       "file": "c094-cooperation-prompts.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/c094-cooperation-prompts.mjs",
       "sourceSha256": "sha256:3900b0eea664e3240284a27f0c0b4364cc412b18794bcd7418043854fbf16f70",
-      "closureSha256": "sha256:3900b0eea664e3240284a27f0c0b4364cc412b18794bcd7418043854fbf16f70",
-      "changed": false
+      "closureSha256": "sha256:dd6e8596a764e7478d9f3649572a78a41dd1d37bd5e822b4121d80b0f0291aec",
+      "changed": true
     },
     {
       "file": "uar-team-cooperation-host.mjs",
       "sourcePath": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/scripts/cadence/uar-team-cooperation-host.mjs",
       "sourceSha256": "sha256:11485ac26e9a16c70c7a5986d7e31fdde93a37764348fe5a8305506713a86a29",
-      "closureSha256": "sha256:ba65fba4a63bba12d8ea807c6980dd14e92e461228dbca62c022c562ec587414",
+      "closureSha256": "sha256:9741e36a74f2c7172498df11c316b7e9fcb1916aea3264cf91831962c2c25fdb",
       "changed": true
     },
     {
@@ -119,11 +126,70 @@
       "changed": false
     }
   ],
-  "operationStatus": "not run",
+  "operationStatus": "complete staged Gate B: 14 immutable case receipts across 12 primary cases, UAR1369259 and Bosscd86aa2",
   "dynamicDependencies": [
     {
       "file": "scripts/uar-payload-integrity.cjs",
       "resolution": "Explicit BOSS_C094_REPOSITORY root; production payload path unchanged"
     }
-  ]
+  ],
+  "observedBudgetFailure": "c094-operation-failure-9da47dae-2166-4f14-ba39-20b4e769fb06.json",
+  "budgetCorrection": "Observed native roster and three delegated calls succeeded; fifth coordinator request projected25472tokens against24000 grant (receipt c094-operation-failure-6dbc88ce...). Private capacity-one fixture now bounded96000aggregate,40000initial,16000each worker,20000continuation,900reserved of960elapsed seconds. No production starter default changed.",
+  "approvalProjectionCorrection": {
+    "observedFailure": "c094-operation-failure-c9a80f8e-03ef-48a3-bd6d-be972c707b73.json",
+    "cause": "Pending approval argumentsJson is the host-safe action_display, not executable invocation arguments; fixture attempted to read absent reservation.tokens",
+    "effect": "Approve only allowlisted team tool names on the selected isolated team; bound runtime checks exact edge, member, task, reservation and current authority before effects"
+  },
+  "nativeEvidenceCorrection": {
+    "observedFailure": "c094-operation-failure-8bc27cb6-c6c8-4f25-9d88-beefe0d5b888.json",
+    "cause": "Coordinator succeeded without any durable wait or continuation after budget correction",
+    "effect": "Retain only projected owner-scoped native tool name/state/invocation evidence for failed attempts before disposable sidecar cleanup; inspect whether model skipped tools or tool effect was refused"
+  },
+  "firstTurnCorrection": {
+    "observedFailure": "c094-operation-failure-c144df25-5aea-4160-ae44-ccbeb203d3b4.json",
+    "cause": "Coordinator failed without a native tool invocation under sufficient grant; original prompt showed expected outcome array before clarifying actual selected context branch",
+    "effect": "Clarify only actual host-selected nonempty targetOutcomes permits final marker, empty first-turn requires roster/delegate/wait; safe stateReason capture discriminates output-contract refusal"
+  },
+  "peerMessageObservation": {
+    "observedFailure": "c094-operation-failure-5208af03-cd97-41e6-88f1-af49135d9949.json",
+    "cause": "One worker returned its required artifact without invoking team_send, while the other invoked team_send and the continuation completed; the driver incorrectly required every worker to message despite Gate B requiring a real worker-to-coordinator message and both task outcomes",
+    "effect": "Require at least one actual authorized worker message, then require every observed message to be consumed by the resumed coordinator; preserve two-worker all-terminal outcomes"
+  },
+  "approvalPollCorrection": {
+    "observedFailure": "c094-operation-failure-2ba9a445-39b6-4a9d-a083-c1c67206b58b.json",
+    "cause": "Driver polled pending approvals every200ms and exhausted six short retries against UAR global 10rps API limiter after first full case",
+    "effect": "Poll at1000ms and preserve completed-case receipts; select only unfinished cases against same frozen packaged source"
+  },
+  "denialGrantCorrection": {
+    "observedFailure": "c094-operation-failure-78e7acdb-af33-4067-8386-589759edbd0e.json",
+    "cause": "The denied-edge fixture allocated6000tokens despite observed native roster plus delegation needing more than9400; model returned final text without any tool invocation",
+    "effect": "Reserve20000 initial tokens in the private denial fixture, leaving production team defaults unchanged"
+  },
+  "authorityGrantCorrection": {
+    "observedFailure": "c094-operation-failure-40bb6fed-5d99-4f81-b40f-f7e84adf5c5c.json",
+    "cause": "Third native model request projected7835tokens against6500 initial authority-turn grant after successful roster and send",
+    "effect": "Reserve20000tokens for private multi-call authority scenarios; product defaults unchanged"
+  },
+  "commandConflictMarkerCorrection": {
+    "observedFailure": "c094-operation-failure-7ae71145-000e-44e9-b92f-96c297f14f7a.json",
+    "cause": "The actual team_send accepted first command and refused mutated replay, but unrelated exact text marker caused output-contract failure",
+    "effect": "Keep native tool admission and durable message assertions; use string output contract for this refusal exercise"
+  },
+  "restartFixtureCorrection": {
+    "observedFailures": [
+      "c094-operation-failure-5eb2b28b-fdc9-4de7-8589-f921a6f5de5e.json",
+      "c094-operation-failure-7b6460b3-843e-4357-b996-4bcdd3f7eac8.json"
+    ],
+    "cause": "Restart hold fixture worker returned before pending team_send in first run; revised fixture exposed app snapshot burst hitting default global10rps limiter with HTTP429",
+    "effect": "Remove exact marker from hold worker and set isolated operation sidecar to100rps/200burst while retaining rate limiting; production sidecar config unchanged"
+  },
+  "gateReceipt": "openspec/changes/afc-c09-bounded-teams-and-shared-task-board/c09-4-gate-b-receipt.json",
+  "commandConflictPromptCorrection": {
+    "observedFailure": "c094-operation-failure-3022d96f-9ae9-4266-810c-78cd20b516cb.json",
+    "effect": "Do not expose a final marker before the two native team_send calls; require both tool receipts and exactly one durable accepted message"
+  },
+  "revocationRefusalCorrection": {
+    "observedFailure": "c094-operation-failure-6ee9f84f-660f-4ef7-8896-55215cf30ce4.json",
+    "effect": "Record native revoked-edge refusal separately from provider turn result; permit failed turn only when the denied tool call and absence of accepted effects are proven"
+  }
 }

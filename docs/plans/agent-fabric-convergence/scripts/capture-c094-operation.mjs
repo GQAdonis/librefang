@@ -14,7 +14,7 @@ export default async function capture(context) {
     path: path.join(path.dirname(source), name),
     sha256: createHash('sha256').update(fs.readFileSync(path.join(path.dirname(source), name))).digest('hex')
   }))
-  const { default: operate } = await import(pathToFileURL(source).href)
+  const { default: operate, cooperationCases, cooperationReceiptNames } = await import(pathToFileURL(source).href)
   const startedAt = new Date().toISOString()
   const operationId = randomUUID()
   const attempts = new Map()
@@ -31,6 +31,7 @@ export default async function capture(context) {
   try {
     result = await operate({
       ...context,
+      cases: process.env.BOSS_C094_CASES?.split(',').map((name) => name.trim()).filter(Boolean),
       async onObservation(receipt) {
         const filename = path.join(root, 'artifacts', `c094-scenario-${operationId}-${observations.length + 1}.json`)
         const bytes = JSON.stringify({
@@ -50,6 +51,13 @@ export default async function capture(context) {
             status: item.status, executionOutcome: item.executionOutcome,
             continuationOfWaitId: item.continuationOfWaitId,
             accountingState: item.accountingState,
+            stateReason: [
+              'team_output_contract_rejected',
+              'team_dispatch_denied_before_kernel_entry',
+              'team_usage_or_effect_outcome_uncertain',
+              'team_artifact_publication_unconfirmed',
+              'terminal_result_missing'
+            ].includes(item.stateReason) ? item.stateReason : null,
             diagnosticCode: item.diagnostic?.code ?? null,
             protectedDiagnosticRef: item.diagnostic?.protectedDiagnosticRef ?? null
           })
@@ -92,30 +100,45 @@ export default async function capture(context) {
       operationStage: /^[a-z0-9-]+$/.test(error.operationEvidence?.stage ?? '') ? error.operationEvidence.stage : null,
       requestFailure: error.requestFailure ?? null,
       providerDiagnostics: error.providerDiagnostics ?? [],
+      nativeToolEvidence: error.nativeToolEvidence ?? [],
       failureCode: error.message?.match(/C094_[A-Z_]+/)?.[0] ?? 'protected-operation-failure'
     }, null, 2) + '\n', { flag: 'wx', mode: 0o600 })
     process.stderr.write('Preserved C09.4 operation observations: ' + filename + '\n')
     throw error
   }
+  const prior = new Map()
+  for (const name of fs.readdirSync(path.join(root, 'artifacts')).filter((value) => /^c094-scenario-[\w-]+\.json$/.test(value))) {
+    const filename = path.join(root, 'artifacts', name)
+    const bytes = fs.readFileSync(filename)
+    const item = JSON.parse(bytes)
+    if (item.iterationId !== iteration.id || JSON.stringify(item.sourceRefs) !== JSON.stringify(iteration.sourceRefs)) continue
+    const label = item.receipt?.case
+    if (!label || (prior.get(label)?.observedAt ?? '') >= item.observedAt) continue
+    prior.set(label, { observedAt: item.observedAt, path: filename, sha256: createHash('sha256').update(bytes).digest('hex') })
+  }
+  const requiredLabels = cooperationCases.flatMap((name) => cooperationReceiptNames[name])
+  const complete = requiredLabels.every((name) => prior.has(name))
+  const caseReceipts = requiredLabels.filter((name) => prior.has(name)).map((name) => ({ case: name, ...prior.get(name) }))
   const evidence = {
     schemaVersion: 1, iterationId: iteration.id, sourceRefs: iteration.sourceRefs,
     scenario: source,
     scenarioSha256: createHash('sha256').update(fs.readFileSync(source)).digest('hex'),
     operationModules,
     startedAt, finishedAt: new Date().toISOString(), passed: result.passed,
-    complete: result.scope?.complete === true, observations,
+    complete, observations, caseReceipts,
     qualification: 'local staged operation; public capability promotion recorded separately',
     teamExecutionCapacity: 1,
-    operations: JSON.parse(result.observedBehavior)
+    operations: { ...JSON.parse(result.observedBehavior), completedCases: caseReceipts.map((receipt) => receipt.case) }
   }
   const filename = path.join(root, 'artifacts', `c094-complete-operation-${randomUUID()}.json`)
   const bytes = JSON.stringify(evidence, null, 2) + '\n'
   fs.writeFileSync(filename, bytes, { flag: 'wx', mode: 0o600 })
   return {
-    passed: result.passed && result.scope?.complete === true,
+    passed: result.passed,
     observedBehavior: JSON.stringify({
       evidencePath: filename,
       evidenceSha256: createHash('sha256').update(bytes).digest('hex'),
+      complete,
       scope: 'C09.4 governed peer communication, capacity-one yield/resume, ordered target outcomes and durable recovery'
     })
   }

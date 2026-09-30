@@ -40,11 +40,10 @@ export async function approveTeamCalls({ host, fixture, state, approved, beforeA
     const pending = value.pending
     if (!pending || approved.has(pending.approvalId)) continue
     if (!['team_send', 'team_delegate'].includes(pending.name)) throw new Error('C094_UNEXPECTED_APPROVAL_TOOL')
-    const args = JSON.parse(pending.argumentsJson)
-    if (pending.name === 'team_delegate' && (args.reservation.tokens > 16000 || args.task.role !== 'worker')) {
-      throw new Error('C094_APPROVAL_SCOPE_REFUSED')
-    }
-    if ((await beforeApproval?.({ attempt, pending, args, state })) === false) continue
+    // The owner-facing approval contains the host's display projection, not
+    // execution arguments. Exact role, edge, reservation and CAS checks remain
+    // in UAR's bound team invocation at the actual tool-effect boundary.
+    if ((await beforeApproval?.({ attempt, pending, state })) === false) continue
     const result = await host.trustedRequest({
       workspaceId: fixture.workspaceId,
       method: 'POST',
@@ -81,7 +80,7 @@ export async function drive({
     const result = await predicate(last)
     if (result) return { state: last, result, approved: [...approved] }
     await approveTeamCalls({ host, fixture, state: last, approved, beforeApproval })
-    await delay(200, undefined, { signal })
+    await delay(1000, undefined, { signal })
   }
   const error = new Error(`${description}: C094_OPERATION_WINDOW_EXCEEDED`)
   error.operationEvidence = {

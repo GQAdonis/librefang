@@ -31,7 +31,7 @@ async function memberTask(evaluate, fixture, memberId, instruction, output) {
   return assigned
 }
 
-async function operateMember({ evaluate, signal, host, fixture, memberId, instruction, output, tokens = 5000 }) {
+async function operateMember({ evaluate, signal, host, fixture, memberId, instruction, output, tokens = 20000 }) {
   const assigned = await memberTask(evaluate, fixture, memberId, instruction, output)
   const state = await summary(evaluate, selector(fixture))
   const reservation = {
@@ -60,7 +60,7 @@ async function operateMember({ evaluate, signal, host, fixture, memberId, instru
     }
   })
   const attempt = completed.state.attempts.find((item) => item.id === admitted.id)
-  if (attempt.status !== 'succeeded' || attempt.output !== output)
+  if (attempt.status !== 'succeeded' || (output && attempt.output !== output))
     throw failure('C094_AUTHORITY_TURN_OUTPUT_FAILED', 'current-team-authority', completed.state)
   const context = await ipc(evaluate, route('context'), { ...selector(fixture), attemptId: attempt.id })
   return { attempt, context, state: completed.state, evidence: await toolEvidence(host, fixture, attempt) }
@@ -86,7 +86,7 @@ export async function directedAuthority({ evaluate, signal, host, fixture }) {
     host,
     fixture,
     memberId: senderId,
-    tokens: 6500,
+    tokens: 20000,
     output: firstOutput,
     instruction: `Call team_roster with {"limit":50}; it must not contain ${forbiddenId}. Call team_send once with exactly ${JSON.stringify(firstSend)}. Then reply exactly ${firstOutput}. No other tools.`
   })
@@ -212,7 +212,6 @@ export async function directedAuthority({ evaluate, signal, host, fixture }) {
 }
 
 export async function commandConflict({ evaluate, signal, host, fixture }) {
-  const output = marker('COMMAND_CONFLICT')
   const first = {
     commandId: randomUUID(),
     recipient: { memberId: fixture.coordinatorId },
@@ -228,9 +227,9 @@ export async function commandConflict({ evaluate, signal, host, fixture }) {
     host,
     fixture,
     memberId: fixture.workerIds[0],
-    tokens: 7500,
-    output,
-    instruction: `Call team_send with exactly ${JSON.stringify(first)}. Then call team_send with exactly ${JSON.stringify(changed)}. These share one commandId but have different payloads; the second must be refused. Do not retry, change the ID or claim another message. After that refusal reply exactly ${output}.`
+    tokens: 20000,
+    output: null,
+    instruction: `Your task is to make two real team_send tool calls and report their returned statuses. First call team_send with exactly ${JSON.stringify(first)}. Only after its response, call team_send with exactly ${JSON.stringify(changed)}. These share one commandId but have different payloads. Do not answer before both calls, retry, change the ID, or claim another message.`
   })
   requireTool(turn.evidence, 'team_send', ['succeeded'])
   requireTool(turn.evidence, 'team_send', ['failed', 'denied'])

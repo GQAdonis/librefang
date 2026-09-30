@@ -94,7 +94,7 @@ export async function selectLiveGateway(evaluate) {
   return { source: 'gateway', providerId: 'the-boss-gateway', modelId: alias }
 }
 
-/** New immutable fixtures plus a fresh private 16k grant; production starter stays unchanged. */
+/** New immutable fixtures plus a fresh private 96k grant; production starter stays unchanged. */
 export async function createFixture({ evaluate, host, model, label, trigger = true, workers = 1 }) {
   const workspaceId = await workspace(evaluate, `Cadence C094 ${label}`)
   const starter = await ipc(evaluate, route('setup_starter'), { workspaceId, model })
@@ -130,7 +130,7 @@ export async function createFixture({ evaluate, host, model, label, trigger = tr
       ...rewrite(original),
       id: newId('team'),
       version: '1.0.0',
-      budget: { ...original.budget, maxTokens: 16000 },
+      budget: { ...original.budget, maxTokens: 96000, maxElapsedSeconds: 960 },
       communication: [
         { fromRole: 'coordinator', toRole: 'worker', modes: trigger ? ['queue-only', 'trigger-turn'] : ['queue-only'] },
         { fromRole: 'worker', toRole: 'coordinator', modes: ['queue-only'] }
@@ -168,7 +168,7 @@ export async function createFixture({ evaluate, host, model, label, trigger = tr
     id: newId('binding'),
     revision: 1,
     package: ref(changedManifest),
-    effectiveBudget: { ...saved.document.effectiveBudget, maxTokens: 16000, maxElapsedSeconds: 300 },
+    effectiveBudget: { ...saved.document.effectiveBudget, maxTokens: 96000, maxElapsedSeconds: 960 },
     effectiveLimits: { ...saved.document.effectiveLimits, concurrentTurns: 1, maxMembers: 3, maxPendingTasks: 8 }
   })
   const bindingRequest = { commandId: randomUUID(), expectedRevision: 0, binding }

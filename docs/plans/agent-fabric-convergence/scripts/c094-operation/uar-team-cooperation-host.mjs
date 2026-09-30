@@ -39,6 +39,23 @@ function launch(binary, args, cwd, env, onDiagnostic = () => {}) {
     let record
     try { record = JSON.parse(line) } catch { return }
     const fields = record?.fields
+    if (fields?.message === 'Host cumulative usage grant rejected model usage') {
+      const numbers = {}
+      for (const key of [
+        'observed_tokens', 'additional_tokens', 'projected_tokens', 'max_total_tokens',
+        'observed_cost_usd', 'additional_cost_usd', 'projected_cost_usd', 'max_total_cost_usd',
+        'model_requests', 'max_total_model_requests', 'tool_calls', 'max_total_tool_calls',
+        'elapsed_seconds', 'expires_after_seconds'
+      ]) {
+        const value = fields[key]
+        if (value === 'None' || value === null) { numbers[key] = null; continue }
+        const option = typeof value === 'string' ? /^Some\(([0-9]+(?:\.[0-9]+)?)\)$/.exec(value) : null
+        const numeric = option ? Number(option[1]) : value
+        if (typeof numeric === 'number' && Number.isFinite(numeric) && numeric >= 0) numbers[key] = numeric
+      }
+      onDiagnostic({ kind: 'remote-grant-rejected', ...numbers })
+      return
+    }
     if (fields?.message !== 'Captured safe team provider failure') return
     const reference = fields.diagnostic_reference
     const kind = fields.provider_error_kind
@@ -47,7 +64,7 @@ function launch(binary, args, cwd, env, onDiagnostic = () => {}) {
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reference) ||
       !providerErrorKinds.has(kind) ||
       !['TEAM_PROVIDER_STREAM_FAILED', 'TEAM_PROVIDER_REQUEST_REJECTED'].includes(code)) return
-    onDiagnostic({ diagnosticReference: reference.toLowerCase(), providerErrorKind: kind, code })
+    onDiagnostic({ kind: 'provider-failure', diagnosticReference: reference.toLowerCase(), providerErrorKind: kind, code })
   }
   // Only transient bounded fragments exist; completed raw lines are discarded.
   for (const stream of [child.stdout, child.stderr]) {
@@ -118,8 +135,8 @@ export async function startCooperationHost({ evaluate, signal, repository }) {
     selected = false
   const diagnostics = new Map()
   const captureDiagnostic = (value) => {
-    if (diagnostics.size < 128 || diagnostics.has(value.diagnosticReference))
-      diagnostics.set(value.diagnosticReference, value)
+    const key = value.diagnosticReference ?? 'remote-grant-' + diagnostics.size
+    if (diagnostics.size < 128 || diagnostics.has(key)) diagnostics.set(key, value)
   }
   const cwd = path.join(root, 'runtime')
   await cp(path.join(payload, 'policies'), path.join(cwd, 'policies'), { recursive: true })
@@ -139,6 +156,8 @@ export async function startCooperationHost({ evaluate, signal, repository }) {
     UAR_SECURITY__JWT_REQUIRED: 'false',
     UAR_SECURITY__SETTINGS_MUTATION_AUTH_REQUIRED: 'true',
     UAR_SECURITY__SETTINGS_ADMIN_KEY: admin,
+    UAR_RESILIENCE__REQUESTS_PER_SECOND: '100',
+    UAR_RESILIENCE__BURST_SIZE: '200',
     CREDENTIAL_ENCRYPTION_KEY: encryptionKey,
     UAR_PERSISTENCE__PROVIDER: 'surreal',
     UAR_PERSISTENCE__DATABASE_URL: `ws://127.0.0.1:${databasePort}`,

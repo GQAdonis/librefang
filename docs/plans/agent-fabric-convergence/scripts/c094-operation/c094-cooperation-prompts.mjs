@@ -17,9 +17,9 @@ export function cooperationPlan(
     costMicrounits: Math.floor(budget.maxCostMicrounits / share),
     elapsedSeconds
   })
-  const workerTokens = count === 1 ? 4000 : 3000
-  const initial = reservation(count === 1 ? 8000 : 6000, count === 1 ? 100 : 90)
-  const continuation = reservation(count === 1 ? 4000 : 3000, count === 1 ? 100 : 90)
+  const workerTokens = 16000
+  const initial = reservation(40000, 300)
+  const continuation = reservation(20000, 240)
   const targets = outcomes.map((outcome, index) => {
     const output = marker('WORKER')
     const sendArgs = {
@@ -29,7 +29,7 @@ export function cooperationPlan(
     }
     const instruction =
       outcome === 'cancelled'
-        ? `${restart ? `First call team_send with exactly ${JSON.stringify(sendArgs)}. ` : ''}Write 300 detailed numbered paragraphs; do not use any other tools. The owner will cancel this bounded task.`
+        ? `${restart ? `Your first action must be the real team_send tool call with exactly ${JSON.stringify(sendArgs)}. Do not answer before that tool call returns. ` : ''}Write 300 detailed numbered paragraphs; do not use any other tools. The owner will cancel this bounded task.`
         : `${send ? `First call team_send with exactly ${JSON.stringify(sendArgs)}. ` : ''}Then reply with exactly ${output}, no quotes or markup, and do not call any other tool.`
     const taskId = randomUUID()
     return {
@@ -44,11 +44,11 @@ export function cooperationPlan(
           taskId,
           role: 'worker',
           input: { instruction },
-          outputContract: outcome === 'failed' ? { type: 'string', not: {} } : { type: 'string', const: output },
+          outputContract: outcome === 'failed' ? { type: 'string', not: {} } : outcome === 'cancelled' && restart ? { type: 'string' } : { type: 'string', const: output },
           dependsOn: cycle ? ['$CURRENT_TASK_ID'] : []
         },
         payload: { text: `Perform your explicitly assigned worker task ${index + 1}.`, artifactIds: [] },
-        reservation: reservation(workerTokens, count === 1 ? 75 : 60)
+        reservation: reservation(workerTokens, 180)
       }
     }
   })
@@ -63,8 +63,8 @@ export function cooperationPlan(
     continuationReservation: continuation
   }
   const instruction = [
-    `This is a bounded cooperation task. Read host-selected targetOutcomes first. If it is nonempty, require exactly these ordered outcomes: ${JSON.stringify(outcomes)}. Then reply with exactly ${final}; never delegate or wait again.`,
-    'If targetOutcomes is empty, call team_roster with {"limit":50}; use the authorized worker IDs, and do not invent sender or root identity.',
+    `Read the ACTUAL host-selected context field targetOutcomes. The expected outcome list in this instruction is not that field. If the field is nonempty, require exactly these ordered outcomes: ${JSON.stringify(outcomes)}. Only on that resumed branch reply with exactly ${final}; never delegate or wait again.`,
+    'If the ACTUAL host-selected targetOutcomes field is empty, this is the first turn. Do not send the final marker yet. Call team_roster with {"limit":50}; use the authorized worker IDs, and do not invent sender or root identity.',
     `Use the host-selected assignment.teamRevision as the first expectedTeamRevision. For each accepted delegate increase that revision by exactly one. Replace $CURRENT_TASK_ID with your host-selected assignment.taskId.`,
     ...targets.map(
       (target, index) =>
@@ -81,7 +81,6 @@ export function cooperationPlan(
 }
 
 export function deniedPlan(recipientMemberId, budget) {
-  const final = marker('DENIED')
   const args = {
     commandId: randomUUID(),
     recipientMemberId,
@@ -101,9 +100,9 @@ export function deniedPlan(recipientMemberId, budget) {
     }
   }
   return {
-    final,
+    final: null,
     args,
-    initial: { ...args.reservation, tokens: 6000 },
-    instruction: `Call team_roster with {"limit":50}. Then call team_delegate once with ${JSON.stringify(args)}, replacing $HOST_TEAM_REVISION with host assignment.teamRevision. This is an explicitly selected denial exercise: expect the runtime to refuse the edge/recipient. Never retry, use another recipient, or wait. After the refusal reply exactly ${final}, without quotes or markup.`
+    initial: { ...args.reservation, tokens: 20000 },
+    instruction: `Your task is to observe the actual runtime refusal. First call team_roster with {"limit":50}. Then call team_delegate once with ${JSON.stringify(args)}, replacing $HOST_TEAM_REVISION with host assignment.teamRevision. Do not answer before both tool calls. Never retry, use another recipient, or wait. After the refusal, briefly report the returned status.`
   }
 }

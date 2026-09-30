@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 1,
+  "operationId": "9c0b580b-77e1-4173-b034-6565487bb39d",
+  "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c09-uar",
+      "revision": "1369259924cfb3bd6a31cd4a200fb9fafa851ca8",
+      "fingerprint": "ca7d15cb2261dde8b653bef66a927087ddf74497ee054ca06b67970806509cee"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
+      "revision": "cd86aa2ca0765bdd488dfab2dfc0f602e2f4e32e",
+      "fingerprint": "95dd0a5bf017f0c22a97029a45296582403e346d22fca1a4155fe8c038a7f1de"
+    }
+  ],
+  "observedAt": "2026-09-30T16:41:34.231Z",
+  "operationModules": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-authority.mjs",
+      "sha256": "c5992830e3945906a4c4f32df974f908875ccc70e2857a79f845d7279e9974c6"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-controls.mjs",
+      "sha256": "eaedc44f5d428d4cbddf76200377568826a13adc2f9692ec1c6e74163a1cbad0"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-driver.mjs",
+      "sha256": "c533c428c9c1913908a9960ba60501ba3b6883281edf31a6decd9a8d6926981a"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-fixtures.mjs",
+      "sha256": "4a61a2d476684ce801bdc5a85ff87ad486ffb627333072c6b7bfd0b227ad3046"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-flows.mjs",
+      "sha256": "cf58bae0abf323aecde71766c304ae285e64ee8e60aae86b8711bc96f325a9f5"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/c094-cooperation-prompts.mjs",
+      "sha256": "dd6e8596a764e7478d9f3649572a78a41dd1d37bd5e822b4121d80b0f0291aec"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-host.mjs",
+      "sha256": "9741e36a74f2c7172498df11c316b7e9fcb1916aea3264cf91831962c2c25fdb"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-cooperation-scenario.mjs",
+      "sha256": "d464baa697af22452ea49ce1e88e835644d581b9616a82eaf94f3f963d6aab59"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c094-operation/uar-team-operation-tools.mjs",
+      "sha256": "c9ec7796ee8163d2617724fe516de1f8de5266f577c772139b76dcb1141abfeb"
+    }
+  ],
+  "receipt": {
+    "stage": "success-all-terminal-and-replay",
+    "case": "success-all-terminal-and-replay",
+    "workspaceId": "ecbd1ec7-d3cb-490f-8006-503296cd5368",
+    "teamId": "030ff752-dc37-45a9-858c-02c82ac2176b",
+    "bindingId": "c094-binding-fc85092c",
+    "fixtureBudget": {
+      "maxTokens": 96000,
+      "maxCostMicrounits": 100000,
+      "currency": "USD",
+      "maxElapsedSeconds": 960
+    },
+    "reservations": {
+      "initial": {
+        "tokens": 40000,
+        "costMicrounits": 25000,
+        "elapsedSeconds": 300
+      },
+      "targets": [
+        {
+          "tokens": 16000,
+          "costMicrounits": 25000,
+          "elapsedSeconds": 180
+        },
+        {
+          "tokens": 16000,
+          "costMicrounits": 25000,
+          "elapsedSeconds": 180
+        }
+      ],
+      "continuation": {
+        "tokens": 20000,
+        "costMicrounits": 25000,
+        "elapsedSeconds": 240
+      }
+    },
+    "initial": {
+      "attemptId": "c2d2921d-7c0c-4ef4-a689-36f32b734c84",
+      "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+      "taskId": "07808174-649b-4e20-b16f-9f40f230f3bc",
+      "memberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+      "rootId": "5ab4c134-c219-4095-ada7-d334eff181ba",
+      "approvalScopeId": "5ab4c134-c219-4095-ada7-d334eff181ba",
+      "status": "yielded",
+      "executionOutcome": "yielded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "targets": [
+      {
+        "attemptId": "014b7c28-78a5-4cb3-abcd-f49d5efb0f9f",
+        "runId": "669a2f4d-232f-4aad-a1cd-7425c945c8b4",
+        "taskId": "43da75a5-3bb3-4adc-b9dc-829647a11c29",
+        "memberId": "c76ea3c7-33ac-4a50-ab1e-f32de6b2cfe4",
+        "rootId": "89f4839e-56fe-43f4-8cb1-3b240df2f8d1",
+        "approvalScopeId": "89f4839e-56fe-43f4-8cb1-3b240df2f8d1",
+        "status": "succeeded",
+        "executionOutcome": "succeeded",
+        "effectDisposition": "confirmed",
+        "accountingState": "settled",
+        "diagnostic": null
+      },
+      {
+        "attemptId": "8602ea37-fd15-48bb-984f-f2a75a0ce38d",
+        "runId": "b57eff10-02b1-4638-9270-dfeca2617611",
+        "taskId": "4d065317-fa63-46ac-a5f9-f587f9440d94",
+        "memberId": "4a384dfd-29df-476c-921b-dd7a92a1cdb5",
+        "rootId": "70977bf9-998f-4c08-865f-cb7857dcc8cd",
+        "approvalScopeId": "70977bf9-998f-4c08-865f-cb7857dcc8cd",
+        "status": "succeeded",
+        "executionOutcome": "succeeded",
+        "effectDisposition": "confirmed",
+        "accountingState": "settled",
+        "diagnostic": null
+      }
+    ],
+    "resumed": {
+      "attemptId": "2655a48e-26aa-434c-aac0-23c77cb35ccc",
+      "runId": "0d580b5b-bbb4-42ea-b0c0-457745e5aa67",
+      "taskId": "07808174-649b-4e20-b16f-9f40f230f3bc",
+      "memberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+      "rootId": "ffa80642-a1f5-4247-96ec-8c13734e1978",
+      "approvalScopeId": "ffa80642-a1f5-4247-96ec-8c13734e1978",
+      "status": "succeeded",
+      "executionOutcome": "succeeded",
+      "effectDisposition": "confirmed",
+      "accountingState": "settled",
+      "diagnostic": null
+    },
+    "waitId": "998ca23b-2f73-46e4-b768-a1905cf712d6",
+    "continuationUniquenessKey": "team-wait:998ca23b-2f73-46e4-b768-a1905cf712d6:continuation:1",
+    "targetOutcomes": [
+      {
+        "taskId": "43da75a5-3bb3-4adc-b9dc-829647a11c29",
+        "memberId": "c76ea3c7-33ac-4a50-ab1e-f32de6b2cfe4",
+        "attemptId": "014b7c28-78a5-4cb3-abcd-f49d5efb0f9f",
+        "executionOutcome": "succeeded",
+        "effectDisposition": "confirmed",
+        "artifactIds": [
+          "artifact-014b7c28-78a5-4cb3-abcd-f49d5efb0f9f"
+        ]
+      },
+      {
+        "taskId": "4d065317-fa63-46ac-a5f9-f587f9440d94",
+        "memberId": "4a384dfd-29df-476c-921b-dd7a92a1cdb5",
+        "attemptId": "8602ea37-fd15-48bb-984f-f2a75a0ce38d",
+        "executionOutcome": "succeeded",
+        "effectDisposition": "confirmed",
+        "artifactIds": [
+          "artifact-8602ea37-fd15-48bb-984f-f2a75a0ce38d"
+        ]
+      }
+    ],
+    "contextInstructionsDigest": "sha256:b055a26b2ebab284c9f0429e2b9c936c78e760961a7c0a0e7e128d40bfc3cd67",
+    "contextCountQuality": "unknown",
+    "selectedArtifactIds": [
+      "artifact-014b7c28-78a5-4cb3-abcd-f49d5efb0f9f",
+      "artifact-8602ea37-fd15-48bb-984f-f2a75a0ce38d"
+    ],
+    "artifactId": "artifact-2655a48e-26aa-434c-aac0-23c77cb35ccc",
+    "nativeToolEvidence": [
+      {
+        "evidenceId": "dc3d57d0-e51f-442a-ba6a-82b0f3c37ebf",
+        "invocationId": "2e904950-6d5c-40e3-89ea-f44ce3ec6057",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_roster",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T16:40:34.075054Z"
+      },
+      {
+        "evidenceId": "4ee8f29c-dcd8-43cc-9612-7463a4947afe",
+        "invocationId": "2e904950-6d5c-40e3-89ea-f44ce3ec6057",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_roster",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T16:40:34.100692Z"
+      },
+      {
+        "evidenceId": "50f17cd2-ce0b-4260-a288-9e6e6a46725f",
+        "invocationId": "2e904950-6d5c-40e3-89ea-f44ce3ec6057",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_roster",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T16:40:34.107643Z"
+      },
+      {
+        "evidenceId": "061d81f0-a278-4751-86dd-1e780c2fec25",
+        "invocationId": "e18347f3-3ace-45d8-8d09-bcc5e9c043e7",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T16:40:47.774089Z"
+      },
+      {
+        "evidenceId": "7f4440ce-8709-41d7-9cda-0e98b2ab429d",
+        "invocationId": "e18347f3-3ace-45d8-8d09-bcc5e9c043e7",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T16:40:47.821050Z"
+      },
+      {
+        "evidenceId": "22d74bdf-cd82-4acf-9421-656586e05b18",
+        "invocationId": "e18347f3-3ace-45d8-8d09-bcc5e9c043e7",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T16:40:47.838198Z"
+      },
+      {
+        "evidenceId": "322916ff-6da6-4810-a440-acf66d75dd10",
+        "invocationId": "54e5979e-34c4-4b4d-909f-b912d01270ff",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T16:40:47.838924Z"
+      },
+      {
+        "evidenceId": "80690de5-8588-4e6b-b680-4e54472b6151",
+        "invocationId": "54e5979e-34c4-4b4d-909f-b912d01270ff",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T16:40:48.899170Z"
+      },
+      {
+        "evidenceId": "92bc1490-0bfc-4651-9094-51fe87290c7e",
+        "invocationId": "54e5979e-34c4-4b4d-909f-b912d01270ff",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T16:40:48.905228Z"
+      },
+      {
+        "evidenceId": "963d853b-4ce0-442e-bd0e-05e73c7fa81d",
+        "invocationId": "6fe86517-ed1c-486a-8571-96809d4ec719",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T16:40:56.871881Z"
+      },
+      {
+        "evidenceId": "c84f9171-73ef-4e1e-9c3b-ca9962282b9b",
+        "invocationId": "6fe86517-ed1c-486a-8571-96809d4ec719",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T16:40:57.522557Z"
+      },
+      {
+        "evidenceId": "aced3852-bff7-4c24-9734-45fc204f120d",
+        "invocationId": "6fe86517-ed1c-486a-8571-96809d4ec719",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_delegate",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T16:40:57.537937Z"
+      },
+      {
+        "evidenceId": "5370e3c6-7f98-4c03-8328-b5d2a84387f3",
+        "invocationId": "831d3123-f704-41e2-8247-a0816b3716bb",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_wait",
+        "state": "awaiting_approval",
+        "occurredAt": "2026-09-30T16:41:02.358233Z"
+      },
+      {
+        "evidenceId": "3299882c-d47f-4fdc-859b-614fff86cbef",
+        "invocationId": "831d3123-f704-41e2-8247-a0816b3716bb",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_wait",
+        "state": "claim_intent",
+        "occurredAt": "2026-09-30T16:41:02.400479Z"
+      },
+      {
+        "evidenceId": "08424593-f930-47ef-93fd-7301b26b3401",
+        "invocationId": "831d3123-f704-41e2-8247-a0816b3716bb",
+        "runId": "2b20591a-ecce-4209-bdf0-1e2075c7b1df",
+        "toolName": "team_wait",
+        "state": "succeeded",
+        "occurredAt": "2026-09-30T16:41:02.420124Z"
+      }
+    ],
+    "messageReceipts": [
+      {
+        "messageId": "63ef5852-9d14-43a5-88a6-28d314d8b2c4",
+        "senderMemberId": "4a384dfd-29df-476c-921b-dd7a92a1cdb5",
+        "recipientMemberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+        "mode": "queue-only",
+        "status": "consumed",
+        "selectedAttemptId": "2655a48e-26aa-434c-aac0-23c77cb35ccc",
+        "consumed": true
+      },
+      {
+        "messageId": "6951a0ed-5fb2-460c-9584-180dbce70f37",
+        "senderMemberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+        "recipientMemberId": "4a384dfd-29df-476c-921b-dd7a92a1cdb5",
+        "mode": "trigger-turn",
+        "status": "consumed",
+        "selectedAttemptId": "8602ea37-fd15-48bb-984f-f2a75a0ce38d",
+        "consumed": true
+      },
+      {
+        "messageId": "bc3c1f4a-0946-4008-8166-8e0573a3aa75",
+        "senderMemberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+        "recipientMemberId": "c76ea3c7-33ac-4a50-ab1e-f32de6b2cfe4",
+        "mode": "trigger-turn",
+        "status": "consumed",
+        "selectedAttemptId": "014b7c28-78a5-4cb3-abcd-f49d5efb0f9f",
+        "consumed": true
+      },
+      {
+        "messageId": "cf6e2aea-a1fb-4ec3-8f7a-7b7510e9ff2a",
+        "senderMemberId": "c76ea3c7-33ac-4a50-ab1e-f32de6b2cfe4",
+        "recipientMemberId": "47a5535d-0480-4dee-9e2d-e9d9a210aa99",
+        "mode": "queue-only",
+        "status": "consumed",
+        "selectedAttemptId": "2655a48e-26aa-434c-aac0-23c77cb35ccc",
+        "consumed": true
+      }
+    ],
+    "allTerminalHeldUntilBothTargets": true,
+    "duplicateDelegate": "one task/attempt per stable command"
+  }
+}

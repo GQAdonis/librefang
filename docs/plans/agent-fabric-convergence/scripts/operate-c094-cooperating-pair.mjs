@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const initiative = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -20,7 +20,30 @@ export async function operate(values = process.argv.slice(2)) {
   const launchCheckpoint = iteration.profile.checkpoints.find((item) => item.id === 'mac-functional-launch')
   const launcher = path.resolve(options.launcher ?? launchCheckpoint.args[0])
   const receiptFile = path.join(root, 'artifacts', 'c094-team-runtime-operation.json')
-  if (fs.existsSync(receiptFile)) throw new Error('The immutable C09.4 operation receipt already exists')
+  if (fs.existsSync(receiptFile)) {
+    if (process.env.BOSS_C094_RECONCILE_RECEIPT !== '1')
+      throw new Error('The immutable C09.4 operation receipt already exists')
+    const receipt = JSON.parse(fs.readFileSync(receiptFile))
+    const observed = JSON.parse(receipt.observedBehavior ?? '{}')
+    const evidenceBytes = fs.readFileSync(observed.evidencePath)
+    const evidence = JSON.parse(evidenceBytes)
+    const sourceRefs = iteration.sourceRefs
+    const digest = (bytes) => createHash('sha256').update(bytes).digest('hex')
+    if (
+      receipt.status !== 'success' || receipt.functionalAcceptance !== 'scenario-confirmed' ||
+      observed.complete !== true || evidence.complete !== true ||
+      digest(evidenceBytes) !== observed.evidenceSha256 ||
+      JSON.stringify(evidence.sourceRefs) !== JSON.stringify(sourceRefs) ||
+      evidence.caseReceipts?.length !== 14 ||
+      !evidence.caseReceipts.every((item) => {
+        const bytes = fs.readFileSync(item.path)
+        const caseReceipt = JSON.parse(bytes)
+        return digest(bytes) === item.sha256 && caseReceipt.receipt?.case === item.case &&
+          JSON.stringify(caseReceipt.sourceRefs) === JSON.stringify(sourceRefs)
+      })
+    ) throw new Error('The completed C09.4 receipt does not match its immutable case evidence and frozen sources')
+    return { status: 'success', functionalAcceptance: 'scenario-confirmed', complete: true, reconciled: true, receiptFile }
+  }
   const stagingReceipt = path.join(path.dirname(receiptFile), `c094-team-runtime-${randomUUID()}.json`)
   const previous = {
     stage: process.env.UAR_TEAM_EXECUTION_PROFILE_STAGE,
@@ -40,10 +63,11 @@ export async function operate(values = process.argv.slice(2)) {
       'timeout-ms': 1_800_000,
       receipt: stagingReceipt
     })
-    if (result.status === 'success' && result.functionalAcceptance === 'scenario-confirmed') {
+    const observed = result.observedBehavior ? JSON.parse(result.observedBehavior) : null
+    if (result.status === 'success' && result.functionalAcceptance === 'scenario-confirmed' && observed?.complete === true) {
       fs.copyFileSync(stagingReceipt, receiptFile, fs.constants.COPYFILE_EXCL)
     }
-    return { status: result.status, functionalAcceptance: result.functionalAcceptance, receiptFile: fs.existsSync(receiptFile) ? receiptFile : stagingReceipt }
+    return { status: result.status, functionalAcceptance: result.functionalAcceptance, complete: observed?.complete === true, receiptFile: fs.existsSync(receiptFile) ? receiptFile : stagingReceipt }
   } finally {
     for (const [key, value] of [
       ['UAR_TEAM_EXECUTION_PROFILE_STAGE', previous.stage],
