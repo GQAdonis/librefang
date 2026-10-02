@@ -1,0 +1,120 @@
+{
+  "schema": "c08-governance-startup-registration-observation/1",
+  "status": "blocked",
+  "functionalAcceptance": "unverified",
+  "operationCoverage": "incomplete",
+  "taskCredit": {
+    "C08.2": false,
+    "C08.3": false
+  },
+  "sourceHelperRevision": "828c583c9e06cae7f30ddfe561cc17b7cfbac562",
+  "evidence": {
+    "operationReceipt": {
+      "path": ".prometheus/cadence/artifacts/c08-routing-operation-governance-config-repair-287674dc.json",
+      "sha256": "653b310436d98abb1ac1263c569b8274cd58b00e60da042724569ffade3b3282"
+    },
+    "bootstrapReceipt": {
+      "path": ".prometheus/cadence/artifacts/c08-routing-operation-governance-config-repair-287674dc.json.bootstrap.json",
+      "sha256": "4814b6bd32f735016b0d52192946b85e5bbc2a5119368191ec0a3b207e771701"
+    }
+  },
+  "window": {
+    "startedAt": "2026-10-02T17:07:07.988Z",
+    "finishedAt": "2026-10-02T17:07:31.334Z"
+  },
+  "serviceProbes": [
+    {
+      "id": "probeGate",
+      "status": "observed"
+    },
+    {
+      "id": "probeFabric",
+      "status": "observed"
+    },
+    {
+      "id": "probeUar",
+      "status": "observed"
+    },
+    {
+      "id": "probeBossA",
+      "status": "observed"
+    },
+    {
+      "id": "probeBossB",
+      "status": "observed"
+    }
+  ],
+  "registrations": [
+    {
+      "id": "registerGatePolicy",
+      "status": "observed"
+    },
+    {
+      "id": "catalogIdentity",
+      "status": "observed"
+    },
+    {
+      "id": "registerPackage",
+      "status": "observed"
+    },
+    {
+      "id": "registerBindingA",
+      "status": "observed"
+    },
+    {
+      "id": "registerInstanceA",
+      "status": "blocked",
+      "code": "http_status:404",
+      "httpStatus": 404,
+      "errorCode": "api_route_not_found"
+    }
+  ],
+  "uarPolicyBundle": {
+    "sourceRepository": "/Users/gqadonis/.claude/worktrees/afc-c08-uar-delivery",
+    "sourceRevision": "c906c24fb8114f1a3b55dc83a12feec542ae8b8d",
+    "files": [
+      {
+        "relativePath": "policies/default.cedar",
+        "gitObject": "c906c24fb8114f1a3b55dc83a12feec542ae8b8d:policies/default.cedar",
+        "sha256": "533be695da370d80c039259788fff40b757be1b44e2b833a72ef3039e1a5b7d4"
+      },
+      {
+        "relativePath": "policies/tool-approval.cedar",
+        "gitObject": "c906c24fb8114f1a3b55dc83a12feec542ae8b8d:policies/tool-approval.cedar",
+        "sha256": "f6c7844b10c6cabd594f05e94af314eb176e23a7fce908a35ddb9382afbf80f6"
+      },
+      {
+        "relativePath": "policies/skill-mutation.cedar",
+        "gitObject": "c906c24fb8114f1a3b55dc83a12feec542ae8b8d:policies/skill-mutation.cedar",
+        "sha256": "6feacc9af1090ad2f1d6871e15e76d56c185d6302e329cc603ff40958346ae9e"
+      }
+    ]
+  },
+  "cleanup": {
+    "driverExitCode": 1,
+    "allOwnedContainersStopped": true,
+    "ownedProcessExitCodes": {
+      "bossB": 0,
+      "bossA": 0,
+      "fabric": 0,
+      "gate": 0,
+      "uar": 0
+    }
+  },
+  "repairBoundary": {
+    "productSourceChanged": false,
+    "productBinaryChanged": false,
+    "macBuildRepeated": false,
+    "sharedUarDesignIndependent": true
+  },
+  "scenarios": {
+    "handlerConflictAndRecipient": "blocked",
+    "observerIsolation": "blocked",
+    "revocationRestartReplay": "blocked",
+    "replyEchoAndScope": "blocked",
+    "boundedReaction": "blocked",
+    "detachAndOwnerCancel": "blocked"
+  },
+  "nextWork": "Resolve observed registerInstanceA route mismatch against pinned c906 REST contract; rerun failed feature operation only.",
+  "protectedEvidence": "Private configuration, secrets, raw logs and durable-volume paths retained outside this public record."
+}
