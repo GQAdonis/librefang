@@ -12,6 +12,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   const literUrl = `http://127.0.0.1:${literPort}/v1`;
   const modelId = input.model.modelId;
   const jwks = `${config.realm.issuer}/.well-known/jwks.json`;
+  const channelGrantIssuer = config.realm.issuer;
   await write('liter.toml', `[general]\nmaster_key = "\${C08_LITER_MASTER}"\n\n[[models]]\nname = ${quote(modelId)}\nprovider_model = ${quote(`${input.model.provider}/${modelId}`)}\napi_key = "\${OPENAI_API_KEY}"\nfallbacks = []\n`);
   await write('uar.json', JSON.stringify({
     server: { host: '127.0.0.1', grpc_port: 19516 }, service_instance: { instance_id: runtimeId, ownership: 'external' },
@@ -39,8 +40,8 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
       environment: { LIBREFANG_HOME: home, BOSSFANG_HOME: home,
         LIBREFANG_CHANNEL_GATE_URL: config.services.gate.url, LIBREFANG_CHANNEL_GATE_IDENTITY_ISSUER: config.realm.issuer,
         LIBREFANG_CHANNEL_GATE_IDENTITY_SUBJECT: 'c08-host', LIBREFANG_CHANNEL_GATE_IDENTITY_REVISION: '1',
-        LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER: 'c08', LIBREFANG_CHANNEL_HANDLER_GRANT_ID: name === 'bossA' ? 'handler-a' : 'handler-b',
-        LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER: 'c08', LIBREFANG_CHANNEL_REPLY_GRANT_ID: name === 'bossA' ? 'reply-a' : 'reply-b',
+        LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER: channelGrantIssuer, LIBREFANG_CHANNEL_HANDLER_GRANT_ID: name === 'bossA' ? 'handler-a' : 'handler-b',
+        LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER: channelGrantIssuer, LIBREFANG_CHANNEL_REPLY_GRANT_ID: name === 'bossA' ? 'reply-a' : 'reply-b',
         LIBREFANG_CHANNEL_REPLY_GRANT_REVISION: '1', LIBREFANG_CHANNEL_FABRIC_URL: config.services.fabric.url,
         LIBREFANG_CHANNEL_FABRIC_CHANNEL_ID: config.constants.fabricChannelId, LIBREFANG_CHANNEL_FABRIC_TENANT_ID: config.constants.fabricTenantId,
       } };

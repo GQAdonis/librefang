@@ -27,6 +27,7 @@ The launcher creates only three uniquely named, labeled, disposable containers f
 Loopback topology: Surreal 18000, Postgres 18459, Iggy TCP 18460, Liter 18457, Gate administration 4457/application 18458, Fabric 18880, UAR 1916, BossFang 18789/18790, webhook adapters 18453/18454, callback 18455 and ephemeral JWT/JWKS issuer 18456. Existing listeners are never terminated to free a port. A conflict blocks readiness and must be resolved by selecting isolated ports coherently in the private input/plan.
 
 Gate verifies realm RS256 JWTs and persists Cedar policies/grants through its own administration API. UAR receives the effect-only Gate token; grant-writing authority is not forwarded. Fabric verifies JWT issuer/audience and UUID tenant identity using its production `verified-identity` backend. Both BossFang processes use the same remote operational namespace and an external UAR with `env://` endpoint-role credentials. UAR uses its separate shared remote namespace and trusted-host `UAR_REMOTE_SURREAL_DURABILITY_ATTESTED=1`; this flag attests the actual private persistent server, never agent content.
+Channel grants and every downstream grant reference use the configured realm issuer, matching Gate's authenticated execution-owner issuer exactly.
 
 Both stable handler names are created independently on both hosts through the actual agent API, because the mention resolver reads each host’s local SQLite-backed registry. Shared remote channel storage does not populate that registry.
 

@@ -60,6 +60,12 @@ function replaceWorkspace(value) {
 }
 Object.assign(config, replaceWorkspace(config));
 config.surreal.namespace = workspace.replaceAll('-', '_'); config.surreal.database = 'main';
+const channelGrantIssuer = config.realm.issuer;
+for (const name of ['handlerGrantA', 'replyGrantA']) config.constants[name].issuer = channelGrantIssuer;
+for (const name of ['observerA', 'observerB', 'observerDenied']) {
+  config.constants[name].source_grant_issuer = channelGrantIssuer;
+  config.constants[name].recipient_grant_issuer = channelGrantIssuer;
+}
 config.realm.tokens = [
   { tokenEnv: 'C08_GATE_ADMIN_EFFECT', claims: { sub: 'c08-host', aud: 'c08-gate', scope: 'afc.channel.grants.write afc.channel.effects.execute', roles: ['admin'] } },
   { tokenEnv: 'C08_GATE_EFFECT', claims: { sub: 'c08-host', aud: 'c08-gate', scope: 'afc.channel.effects.execute', roles: ['service'] } },

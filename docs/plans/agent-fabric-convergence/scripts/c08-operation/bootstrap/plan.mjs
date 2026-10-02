@@ -11,11 +11,12 @@ export function buildPlan(config, input) {
   const source = config.constants.sourceScope;
   const handlerA = config.constants.handlerA;
   const handlerB = config.constants.handlerB;
+  const grantIssuer = config.realm.issuer;
   const first = config.plan.findIndex(step => step.id === 'conflict');
   const plan = first < 0 ? [...config.plan] : config.plan.slice(0, first);
   const add = (id, kind, values = {}) => plan.push({ id, kind, ...values });
   const grant = (id, grantId, action, scope, recipient, handler, classification, expectedRevision) => add(id, 'grant', {
-    specification: { issuer: 'c08', grant_id: grantId, action, scope, recipient, handler, classification,
+    specification: { issuer: grantIssuer, grant_id: grantId, action, scope, recipient, handler, classification,
       max_remaining_depth: 4, max_remaining_fanout: 8 }, ...(expectedRevision === undefined ? {} : { expectedRevision }),
   });
   const message = (room = base.room, mentions = [handlerA]) => ({ workspace_id: base.workspace,
@@ -57,7 +58,7 @@ export function buildPlan(config, input) {
   inventory('deliveryB', 'B'); list('revisionB', 'B'); acknowledge('ackInitialB', 'B', 'deliveryB', 'revisionB', 0);
   list('uarSubscriptions');
   add('sourceDenial', 'gate_evaluate', { input: native('selected'), action: 'source_disclosure', recipient: instance('Denied'),
-    handler: handlerA, classification: 'policy_filtered', grantIssuer: 'c08', grantId: 'source-observer-denied-missing' });
+    handler: handlerA, classification: 'policy_filtered', grantIssuer, grantId: 'source-observer-denied-missing' });
   ingress('secondSource'); wait('secondDelivered', 'secondSource', 'observers_delivered'); callback('secondCallback', 'secondSource');
   inventory('secondDeliveryA', 'A'); list('cursorBefore', 'A');
   acknowledge('ackSecondA', 'A', 'secondDeliveryA', 'cursorBefore', 1); list('cursorAfter'); snapshot('observerFinal');
@@ -67,11 +68,11 @@ export function buildPlan(config, input) {
   ingress('echoReplay', 'bossB', { input: native('selected') }); quiet('echoQuiet', 'selected');
 
   add('reassignB', 'reassign', { host: 'bossA', scope: source,
-    expectedRevision: ref(`${result('selectedObserved')}.occurrence.route_revision`), handler: handlerB, grantIssuer: 'c08', grantId: 'reassign-b' });
+    expectedRevision: ref(`${result('selectedObserved')}.occurrence.route_revision`), handler: handlerB, grantIssuer, grantId: 'reassign-b' });
   ingress('sourceB', 'bossB', { input: message(base.room, [handlerB]), referenceAction: ref(`${result('callbackA')}.action.action_id`) });
   callback('callbackB', 'sourceB');
   add('reassignA', 'reassign', { host: 'bossA', scope: source,
-    expectedRevision: ref(`${body('reassignB')}.revision`), handler: handlerA, grantIssuer: 'c08', grantId: 'reassign-a' });
+    expectedRevision: ref(`${body('reassignB')}.revision`), handler: handlerA, grantIssuer, grantId: 'reassign-a' });
   ingress('sourceBackA', 'bossA', { referenceAction: ref(`${result('callbackB')}.action.action_id`) });
   wait('backSuppressed', 'sourceBackA', 'suppressed'); snapshot('boundedFinal');
 
@@ -81,7 +82,7 @@ export function buildPlan(config, input) {
   ingress('crossScopeSource', 'bossA', { input: message(other.room) });
   wait('crossScopeTerminal', 'crossScopeSource', 'reply_terminal');
   add('scopeDenial', 'gate_evaluate', { input: native('crossScopeSource'), action: 'scoped_reply', recipient: other.room,
-    handler: handlerA, classification: 'scoped_reply', grantIssuer: 'c08', grantId: 'reply-a' });
+    handler: handlerA, classification: 'scoped_reply', grantIssuer, grantId: 'reply-a' });
   quiet('crossScopeQuiet', 'crossScopeSource');
   ingress('foreignReference', 'bossA', { input: message(other.room), referenceAction: ref(`${result('callbackA')}.action.action_id`) });
   wait('foreignAdmitted', 'foreignReference', 'source'); quiet('foreignQuiet', 'foreignReference'); snapshot('replyFinal');
@@ -128,7 +129,7 @@ export function buildPlan(config, input) {
     const binding = structuredClone(config.constants.registrationBindingA);
     binding.commandId += '-ui'; binding.binding.id += '-ui'; binding.binding.workspaceId = workspaceId;
     add('registerUiBinding', 'register', { service: 'uar', path: '/api/v1/collaboration/deployment-bindings', workspaceId, body: binding, resealBinding: true });
-    add('registerUiInstance', 'register', { service: 'uar', path: '/api/uar/agent-instances/v1/', workspaceId,
+    add('registerUiInstance', 'register', { service: 'uar', path: '/api/uar/agent-instances/v1', workspaceId,
       body: { deploymentBindingId: binding.binding.id, profile: 'resident' } });
     const uiScope = { ...base, workspace: workspaceId };
     grant('grantUiHandler', 'handler-a', 'handler_execution', uiScope, handlerA, handlerA, 'handler_payload', ref(`${body('restoreHandler')}.grant.revision`));
@@ -137,7 +138,7 @@ export function buildPlan(config, input) {
     grant('grantUiRecipient', 'ui-recipient', 'recipient_delivery', uiScope, observer, handlerA, 'policy_filtered');
     add('uiSubscribe', 'subscribe', { host: 'bossA', request: { observer_instance_id: observer,
       source: { ...source, workspace: workspaceId }, source_profile: 'signed_webhook_v1',
-      source_grant_issuer: 'c08', source_grant_id: 'ui-source', recipient_grant_issuer: 'c08', recipient_grant_id: 'ui-recipient',
+      source_grant_issuer: grantIssuer, source_grant_id: 'ui-source', recipient_grant_issuer: grantIssuer, recipient_grant_id: 'ui-recipient',
       recipient_grant_revision: textRef(`${body('grantUiRecipient')}.grant.revision`) } });
     ingress('uiSource', 'bossA', { input: { ...message(), workspace_id: workspaceId } });
     add('uiDelivered', 'wait', { input: native('uiSource'), condition: 'observers_delivered', count: 1 });
