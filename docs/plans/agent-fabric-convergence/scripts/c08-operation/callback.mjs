@@ -119,6 +119,10 @@ export async function receiver(config, directory, runId) {
         tunnel.once('error', () => { clearTimeout(timer); reject(new Blocked('tunnel_command_unavailable')); });
         tunnel.once('exit', () => { clearTimeout(timer); reject(new Blocked('public_tunnel_exited')); });
       });
+      const publicationGrace = 12000;
+      const remaining = dnsDeadline - Date.now();
+      if (remaining < publicationGrace) throw new Blocked('public_tunnel_unavailable');
+      await new Promise(resolve => setTimeout(resolve, publicationGrace));
     } else {
       if (!config.publicOrigin) throw new Blocked('public_callback_relay_required');
       origin = config.publicOrigin;
