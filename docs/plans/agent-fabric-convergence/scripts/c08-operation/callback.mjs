@@ -15,13 +15,23 @@ for (const [address, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe8
   ['ff00::', 8], ['fec0::', 10], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['2002::', 16]]) {
   privateAddresses.addSubnet(address, prefix, 'ipv6');
 }
-async function publicOrigin(value) {
+async function publicOrigin(value, dnsDeadline) {
   const url = new URL(value);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
     throw new Blocked('public_https_callback_required');
   }
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  let addresses;
+  for (;;) {
+    try {
+      addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+      break;
+    } catch (error) {
+      const remaining = dnsDeadline ? dnsDeadline - Date.now() : 0;
+      if (error.code !== 'ENOTFOUND' || remaining <= 0) throw error;
+      await new Promise(resolve => setTimeout(resolve, Math.min(250, remaining)));
+    }
+  }
   if (!addresses.length || addresses.some(({ address }) => privateAddresses.check(address, isIP(address) === 4 ? 'ipv4' : 'ipv6'))) {
     throw new Blocked('private_callback_refused');
   }
@@ -90,14 +100,17 @@ export async function receiver(config, directory, runId) {
   const port = server.address().port;
   try {
     let origin;
+    let dnsDeadline;
     if (config.tunnelCommand) {
+      dnsDeadline = Date.now() + 45000;
       const command = config.tunnelCommand;
       tunnel = spawn(command, ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('C08_'))), shell: false,
       });
       origin = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Blocked('public_tunnel_unavailable')), 45000);
+        const timer = setTimeout(() => reject(new Blocked('public_tunnel_unavailable')),
+          Math.max(1, dnsDeadline - Date.now()));
         const capture = chunk => {
           const match = String(chunk).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
           if (match) { clearTimeout(timer); resolve(match[0]); }
@@ -110,7 +123,7 @@ export async function receiver(config, directory, runId) {
       if (!config.publicOrigin) throw new Blocked('public_callback_relay_required');
       origin = config.publicOrigin;
     }
-    origin = await publicOrigin(origin);
+    origin = await publicOrigin(origin, dnsDeadline);
     return { url: `${origin}${path}`, posts, port,
       tunnelSha256: config.tunnelCommand ? await digestFile(config.tunnelCommand) : null,
       async close() {
