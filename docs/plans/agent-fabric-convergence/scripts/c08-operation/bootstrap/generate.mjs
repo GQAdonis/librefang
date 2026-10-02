@@ -1,12 +1,15 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { registrationDocuments, gatePolicy } from './documents.mjs';
 import { serviceConfiguration } from './services.mjs';
 import { buildPlan } from './plan.mjs';
 
 const args = process.argv.slice(2);
+const exec = promisify(execFile);
 const argument = name => args[args.indexOf(name) + 1];
 if (!args.includes('--input') || !args.includes('--out')) throw new Error('Use --input operator-input.json --out /absolute/new/private-directory');
 const input = JSON.parse(await readFile(resolve(argument('--input')), 'utf8'));
@@ -24,6 +27,22 @@ async function write(name, contents) {
   await writeFile(join(root, name), contents, { mode: 0o600, flag: 'wx' });
 }
 for (const name of ['uar', 'gate', 'fabric', 'liter', 'bossA/data', 'bossB/data', 'surreal', 'postgres', 'iggy']) await mkdir(join(root, name), { recursive: true, mode: 0o700 });
+const uarPolicyBundle = {
+  sourceRepository: input.binaries.uar.sourceRepository,
+  sourceRevision: input.binaries.uar.sourceRevision,
+  files: [],
+};
+for (const name of ['default.cedar', 'tool-approval.cedar', 'skill-mutation.cedar']) {
+  const relativePath = `policies/${name}`;
+  const sourcePath = join(uarPolicyBundle.sourceRepository, relativePath);
+  const runtimePath = join(root, 'uar', relativePath);
+  const gitObject = `${uarPolicyBundle.sourceRevision}:${relativePath}`;
+  const contents = (await exec('git', ['-C', uarPolicyBundle.sourceRepository, 'show', gitObject],
+    { encoding: 'buffer' })).stdout;
+  await write(join('uar', relativePath), contents);
+  uarPolicyBundle.files.push({ relativePath, sourcePath, gitObject, runtimePath,
+    sha256: createHash('sha256').update(contents).digest('hex') });
+}
 const config = JSON.parse(await readFile(resolve(input.plan ?? fileURLToPath(new URL('../config.example.json', import.meta.url))), 'utf8'));
 config.services.uar.url = `http://127.0.0.1:${input.ports?.uar ?? 1916}`;
 const workspace = `c08-${randomUUID()}`;
@@ -104,5 +123,5 @@ await write('operation.json', JSON.stringify(config, null, 2));
 await write('bootstrap.json', JSON.stringify({ schema: 'c08-service-bootstrap/1', privateRoot: root, docker: input.docker ?? '/usr/local/bin/docker',
   containers: { surreal: { image: 'surrealdb/surrealdb:v3.3.0', port: 18000 }, postgres: { image: 'postgres:15.2-alpine', port: 18459 },
     iggy: { image: 'iggyrs/iggy:latest', expectedRevision: '4018aa3612a246b848bf55f052d274f092f9bdbb', port: 18460 } },
-  liter: prepared.liter, model: input.model, literUrl: prepared.literUrl, input }, null, 2));
+  liter: prepared.liter, model: input.model, literUrl: prepared.literUrl, uarPolicyBundle, input }, null, 2));
 console.log(JSON.stringify({ schema: 'c08-bootstrap-prepared/1', privateRoot: root, workspace, configurationPrepared: true, servicesStarted: false, binaryProvenanceChecked: false }));

@@ -54,6 +54,29 @@ async function verifiedBinary(name, item) {
     evidence.binaries[name] = { sourceRevision: observed, binarySha256: metadata.binarySha256, buildMetadataSha256: hash(JSON.stringify(metadata)) };
   }
 }
+async function verifiedUarPolicyBundle() {
+  const bundle = bootstrap.uarPolicyBundle;
+  if (!bundle || bundle.sourceRepository !== config.processes.uar.sourceRepository
+      || bundle.sourceRevision !== config.processes.uar.sourceRevision) {
+    throw new Error('UAR governance policy bundle source mismatch');
+  }
+  const files = [];
+  for (const item of bundle.files ?? []) {
+    const source = (await exec('git', ['-C', bundle.sourceRepository, 'show', item.gitObject],
+      { encoding: 'buffer' })).stdout;
+    const runtime = await readFile(item.runtimePath);
+    if (hash(source) !== item.sha256 || hash(runtime) !== item.sha256 || !source.equals(runtime)) {
+      throw new Error(`UAR governance policy bundle mismatch: ${item.relativePath}`);
+    }
+    files.push({ relativePath: item.relativePath, gitObject: item.gitObject, sha256: item.sha256 });
+  }
+  if (files.length === 0) throw new Error('UAR governance policy bundle is empty');
+  evidence.uarPolicyBundle = {
+    sourceRepository: bundle.sourceRepository,
+    sourceRevision: bundle.sourceRevision,
+    files,
+  };
+}
 async function ready(check, name) {
   const deadline = Date.now() + 60000;
   do {
@@ -96,6 +119,7 @@ async function container(name, args, env) {
 try {
   for (const [name, item] of Object.entries(config.processes)) await verifiedBinary(name, item);
   await verifiedBinary('liter', bootstrap.liter);
+  await verifiedUarPolicyBundle();
   await container('surreal', ['--user', '0', '--publish', '127.0.0.1:18000:8000', '--mount', `type=bind,src=${join(root, 'surreal')},dst=/data`, '--env', 'SURREAL_USER', '--env', 'SURREAL_PASS'],
     { ...environment, SURREAL_USER: 'root', SURREAL_PASS: secrets.C08_SURREAL_PASSWORD });
   await ready(async () => (await fetch('http://127.0.0.1:18000/health', { signal: AbortSignal.timeout(1500) })).ok, 'surreal');
