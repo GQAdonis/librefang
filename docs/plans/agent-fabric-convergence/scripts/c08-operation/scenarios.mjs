@@ -85,10 +85,19 @@ function restartReplay(state, e) {
   const withheld = after.channel_observer_deliveries.find(row => row.delivery_id === queued.delivery_id);
   requireValue(withheld?.state === 'withheld', 'revoked_queue_not_withheld');
   for (const key of ['restartBossA', 'restartBossB', 'restartFabric', 'restartUar']) {
-    const restart = event(state, e, key, ['restart']);
-    const epoch = restart.result;
     const expectedProcess = { restartBossA: 'bossA', restartBossB: 'bossB', restartFabric: 'fabric', restartUar: 'uar' }[key];
-    requireValue(restart.process === expectedProcess, 'restart_wrong_execution_owner');
+    let epoch;
+    if (e[key] && typeof e[key] === 'object') {
+      const stopped = event(state, e[key], 'stop', ['stop_process']);
+      const started = event(state, e[key], 'start', ['start_process']);
+      requireValue(stopped.process === expectedProcess && started.process === expectedProcess
+        && stopped.finishedAt <= started.startedAt, 'restart_wrong_execution_owner_or_order');
+      epoch = { stopped: stopped.result, started: started.result, changedPid: stopped.result.pid !== started.result.pid };
+    } else {
+      const restart = event(state, e, key, ['restart']);
+      requireValue(restart.process === expectedProcess, 'restart_wrong_execution_owner');
+      epoch = restart.result;
+    }
     requireValue(epoch.changedPid && epoch.stopped.exited && epoch.started.pid, 'owned_process_restart_not_observed');
   }
   const admittedBefore = occurrence(state, e, 'source', before);

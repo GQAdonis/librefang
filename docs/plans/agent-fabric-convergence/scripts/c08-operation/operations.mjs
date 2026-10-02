@@ -159,7 +159,12 @@ async function waitSnapshot(step, state) {
       : step.condition === 'reply_completed' ? actions.some(row => row.kind === 'reply' && row.state === 'completed')
       : step.condition === 'reply_terminal' ? actions.some(row => row.kind === 'reply' && ['withheld', 'uncertain'].includes(row.state))
       : false;
-    if (ready) return { tables: last, occurrence, dispatch, actions, deliveries, observedAt: new Date().toISOString() };
+    if (ready) {
+      const selectedDelivery = deliveries.find(row => row.state === (step.condition === 'queued' ? 'pending' : step.condition));
+      const selectedSubscription = last.channel_observer_subscriptions.find(row => row.subscription_id === selectedDelivery?.subscription_id);
+      return { tables: last, occurrence, dispatch, actions, deliveries, selectedDelivery, selectedSubscription,
+        observedAt: new Date().toISOString() };
+    }
     await pause(250);
   } while (Date.now() < deadline);
   const error = new Blocked(`production_receipt_not_observed:${step.condition}`);
