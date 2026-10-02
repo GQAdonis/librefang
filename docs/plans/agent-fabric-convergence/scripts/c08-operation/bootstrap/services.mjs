@@ -15,7 +15,8 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   await write('liter.toml', `[general]\nmaster_key = "\${C08_LITER_MASTER}"\n\n[[models]]\nname = ${quote(modelId)}\nprovider_model = ${quote(`${input.model.provider}/${modelId}`)}\napi_key = "\${OPENAI_API_KEY}"\nfallbacks = []\n`);
   await write('uar.json', JSON.stringify({
     server: { host: '127.0.0.1' }, service_instance: { instance_id: runtimeId, ownership: 'external' },
-    security: { jwt_required: true, jwks_url: jwks, jwt_issuer: config.realm.issuer, jwt_audience: 'c08-uar', jwt_secret: secrets.C08_UAR_JWT_UNUSED },
+    security: { jwt_required: true, jwks_url: jwks, jwt_issuer: config.realm.issuer, jwt_audience: 'c08-uar',
+      jwt_secret: secrets.C08_UAR_JWT_UNUSED, settings_mutation_auth_required: true },
     persistence: { provider: 'surreal', database_url: surrealUrl, surreal_ns: `${namespace}_uar`, surreal_db: 'main',
       surreal_user: 'root', surreal_pass: secrets.C08_SURREAL_PASSWORD, surreal_auth_level: 'root', external_cache_enabled: false },
     providers: [{ id: 'c08-liter', display_name: 'C08 pinned Liter', base_url: literUrl, api_key: secrets.C08_LITER_MASTER,
@@ -30,7 +31,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   for (const [name, port] of [['bossA', 18789], ['bossB', 18790]]) {
     const home = join(root, name);
     const key = secrets[name === 'bossA' ? 'C08_BOSS_A_OWNER' : 'C08_BOSS_B_OWNER'];
-    const configText = `home_dir = ${quote(home)}\ndata_dir = ${quote(join(home, 'data'))}\napi_listen = ${quote(`127.0.0.1:${port}`)}\napi_key_hash = ${quote(`$sha256$${createHash('sha256').update(key).digest('hex')}`)}\n\n[storage.backend]\nkind = "remote"\nurl = ${quote(surrealUrl)}\nnamespace = ${quote(namespace)}\ndatabase = "main"\nusername = "root"\npassword_env = "C08_SURREAL_PASSWORD"\n\n[default_model]\nprovider = "uar"\nmodel = ${quote(`c08-liter/${modelId}`)}\n\n[uar]\nselected_instance_id = ${quote(runtimeId)}\n\n[[uar.instances]]\nid = ${quote(runtimeId)}\nownership = "external"\nprofile = "uar.service-instance/1"\n[uar.instances.endpoints]\nruntime = ${quote(uarUrl)}\nadministration = ${quote(uarUrl)}\nmodels = ${quote(uarUrl)}\n[uar.instances.credential_refs]\nruntime = "env://C08_UAR_OWNER"\nadministration = "env://C08_UAR_OWNER"\nmodels = "env://C08_UAR_OWNER"\n[uar.instances.sidecar]\nendpoint = ${quote(uarUrl)}\n`;
+    const configText = `home_dir = ${quote(home)}\ndata_dir = ${quote(join(home, 'data'))}\napi_listen = ${quote(`127.0.0.1:${port}`)}\napi_key_hash = ${quote(`$sha256$${createHash('sha256').update(key).digest('hex')}`)}\n\n[storage]\nnamespace = ${quote(namespace)}\ndatabase = "main"\n\n[storage.backend]\nkind = "remote"\nurl = ${quote(surrealUrl)}\nnamespace = ${quote(namespace)}\ndatabase = "main"\nusername = "root"\npassword_env = "C08_SURREAL_PASSWORD"\n\n[default_model]\nprovider = "uar"\nmodel = ${quote(`c08-liter/${modelId}`)}\n\n[uar]\nselected_instance_id = ${quote(runtimeId)}\n\n[[uar.instances]]\nid = ${quote(runtimeId)}\nownership = "external"\nprofile = "uar.service-instance/1"\n[uar.instances.endpoints]\nruntime = ${quote(uarUrl)}\nadministration = ${quote(uarUrl)}\nmodels = ${quote(uarUrl)}\n[uar.instances.credential_refs]\nruntime = "env://C08_UAR_OWNER"\nadministration = "env://C08_UAR_OWNER"\nmodels = "env://C08_UAR_OWNER"\n[uar.instances.sidecar]\nendpoint = ${quote(uarUrl)}\n`;
     await write(`${name}/config.toml`, configText);
     config.processes[name] = { ...input.binaries.bossfang, args: ['--config', join(home, 'config.toml'), 'start', '--foreground'], cwd: home,
       envRefs: { LIBREFANG_CHANNEL_GATE_TOKEN: 'C08_GATE_EFFECT', LIBREFANG_CHANNEL_FABRIC_BEARER: 'C08_FABRIC_TOKEN',
@@ -46,7 +47,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   }
   config.processes.uar = { ...input.binaries.uar, cwd: join(root, 'uar'), args: ['--config', join(root, 'uar.json'), '--port', new URL(uarUrl).port],
     envRefs: { UAR_CHANNEL_GATE_BEARER_TOKEN: 'C08_GATE_EFFECT',
-      UAR_SECURITY__JWT_SECRET: 'C08_UAR_JWT_UNUSED' },
+      UAR_SECURITY__JWT_SECRET: 'C08_UAR_JWT_UNUSED', UAR_SECURITY__SETTINGS_ADMIN_KEY: 'C08_UAR_SETTINGS_ADMIN_KEY' },
     environment: { UAR_SECURITY__JWT_REQUIRED: 'true', UAR_REMOTE_SURREAL_DURABILITY_ATTESTED: '1', UAR_CHANNEL_GATE_URL: config.services.gate.url } };
   config.processes.gate = { ...input.binaries.gate, cwd: join(root, 'gate'), args: ['--config', join(root, 'gate.yaml'), '--require-database'],
     envRefs: { DATABASE_URL: 'C08_GATE_DATABASE_URL', FLINT_GATE_JWT_SECRET: 'C08_GATE_JWT_SECRET' }, environment: {} };

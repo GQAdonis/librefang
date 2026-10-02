@@ -28,7 +28,8 @@ const config = JSON.parse(await readFile(resolve(input.plan ?? fileURLToPath(new
 config.services.uar.url = `http://127.0.0.1:${input.ports?.uar ?? 1916}`;
 const workspace = `c08-${randomUUID()}`;
 const secrets = Object.fromEntries(['C08_BOSS_A_OWNER', 'C08_BOSS_B_OWNER', 'C08_SURREAL_PASSWORD', 'C08_POSTGRES_PASSWORD',
-  'C08_IGGY_PASSWORD', 'C08_GATE_JWT_SECRET', 'C08_UAR_JWT_UNUSED', 'C08_LITER_MASTER'].map(name => [name, randomBytes(32).toString('hex')]));
+  'C08_IGGY_PASSWORD', 'C08_GATE_JWT_SECRET', 'C08_UAR_JWT_UNUSED', 'C08_UAR_SETTINGS_ADMIN_KEY',
+  'C08_LITER_MASTER'].map(name => [name, randomBytes(32).toString('hex')]));
 secrets.C08_SURREAL_USER = 'root';
 secrets.C08_GATE_DATABASE_URL = `postgres://c08:${secrets.C08_POSTGRES_PASSWORD}@127.0.0.1:18459/c08`;
 secrets.C08_IGGY_CONNECTION = `iggy://c08:${secrets.C08_IGGY_PASSWORD}@127.0.0.1:18460`;
