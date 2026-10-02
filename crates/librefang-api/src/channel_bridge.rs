@@ -1259,7 +1259,13 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     payload_sha256: None,
                     classification: "scoped_reply",
                     root_occurrence_id: &receipt.root_occurrence_id,
-                    parent_action_id: receipt.parent_action_id.as_deref(),
+                    parent_action_id: receipt.parent_action_id.as_ref().map(|parent_action_id| {
+                        let effect_key = format!(
+                            "channel-handler-execution-v1:{}:{parent_action_id}",
+                            admission.occurrence_id
+                        );
+                        uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, effect_key.as_bytes())
+                    }),
                     route_identity: &receipt.route_identity,
                     visited_routes: &receipt.visited_routes,
                     remaining_depth: receipt.remaining_depth,
