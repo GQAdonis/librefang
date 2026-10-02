@@ -93,7 +93,8 @@ export async function receiver(config, directory, runId) {
     if (config.tunnelCommand) {
       const command = config.tunnelCommand;
       tunnel = spawn(command, ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate'], {
-        stdio: ['ignore', 'pipe', 'pipe'], env: process.env, shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('C08_'))), shell: false,
       });
       origin = await new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Blocked('public_tunnel_unavailable')), 45000);

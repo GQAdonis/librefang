@@ -69,7 +69,8 @@ export async function operate(values = process.argv.slice(2)) {
         sourceBinding: 'operator_declared_file_hashed' });
     }
     for (const file of ['operate-c08-routing.mjs', 'c08-operation/io.mjs', 'c08-operation/callback.mjs',
-      'c08-operation/realm.mjs', 'c08-operation/operations.mjs', 'c08-operation/scenarios.mjs']) {
+      'c08-operation/realm.mjs', 'c08-operation/operations.mjs', 'c08-operation/scenarios.mjs',
+      'c08-operation/bootstrap/documents.mjs', 'c08-operation/bootstrap/plan.mjs']) {
       receipt.helperDigests[file] = await digestFile(join(dirname(fileURLToPath(import.meta.url)), file));
     }
     authority = await realm(config.realm);

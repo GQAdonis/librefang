@@ -4,16 +4,18 @@ import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { promisify } from 'node:util';
 import { api, Blocked, digestFile, hash, immutable, secret, snapshot, source } from './io.mjs';
+import { sealDocument } from './bootstrap/documents.mjs';
 
 const uar = '/api/uar/channel-observers/v1';
 export function resolveRefs(value, context) {
   if (Array.isArray(value)) return value.map(item => resolveRefs(item, context));
   if (!value || typeof value !== 'object') return value;
-  if (Object.keys(value).length === 1 && value.ref) {
+  if (value.ref && Object.keys(value).every(key => ['ref', 'format'].includes(key))) {
     let current = context;
     for (const key of value.ref.split('.')) current = current?.[key];
     if (current === undefined) throw new Blocked(`missing_operation_reference:${value.ref}`);
-    return current;
+    const resolved = value.ref.startsWith('constants.') ? resolveRefs(current, context) : current;
+    return value.format === 'string' ? String(resolved) : resolved;
   }
   if (Object.keys(value).length === 1 && value.env) return secret(value.env);
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveRefs(item, context)]));
@@ -56,7 +58,7 @@ async function startProcess(name, state) {
     }
     sourceMetadata = { mode: 'matching_build_receipt', receiptSha256: hash(raw), sourceRevision: item.sourceRevision };
   }
-  const environment = { ...process.env };
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('C08_')));
   for (const [name, envRef] of Object.entries(item.envRefs ?? {})) environment[name] = secret(envRef);
   for (const [name, value] of Object.entries(item.environment ?? {})) {
     if (/secret|token|password|bearer/i.test(name)) throw new Blocked('lifecycle_secrets_require_environment_refs');
@@ -228,7 +230,12 @@ export async function operation(raw, state) {
       if (!allowed || step.path.startsWith(`${uar}/`)) {
         throw new Blocked('registration_cannot_replace_channel_ingress_or_effect_owner');
       }
-      result = await api(service(state.config, step.service), step.path, step.body,
+      const target = { ...service(state.config, step.service), ...(step.workspaceId ? { workspace: step.workspaceId } : {}) };
+      if (step.resealBinding) {
+        if (!step.body?.binding) throw new Blocked('actual_deployment_binding_document_required');
+        step.body.binding = sealDocument(step.body.binding);
+      }
+      result = await api(target, step.path, step.body,
         step.acceptedStatuses ?? [200, 201, 202, 204], { method }); break;
     }
     case 'start_process': result = await startProcess(step.process, state); break;
@@ -306,9 +313,16 @@ export async function operation(raw, state) {
     case 'grant': result = await api(service(state.config, 'gate'), '/authority/channels/grants', {
       specification: step.specification, expected_revision: step.expectedRevision ?? null,
     }); break;
-    case 'revoke_grant': result = await api(service(state.config, 'gate'),
-      `/authority/channels/grants/${encodeURIComponent(step.issuer)}/${encodeURIComponent(step.grantId)}/revoke`,
-      { expected_revision: step.expectedRevision }); break;
+    case 'revoke_grant': {
+      const issued = Object.values(state.values.steps).filter(row => row.kind === 'grant'
+        && row.result.result.grant.specification.issuer === step.issuer
+        && row.result.result.grant.specification.grant_id === step.grantId).at(-1);
+      const revision = step.expectedRevision ?? issued?.result.result.grant.revision;
+      if (revision === undefined) throw new Blocked('actual_grant_revision_required_for_revocation');
+      result = await api(service(state.config, 'gate'),
+        `/authority/channels/grants/${encodeURIComponent(step.issuer)}/${encodeURIComponent(step.grantId)}/revoke`,
+        { expected_revision: revision }); break;
+    }
     case 'gate_evaluate': {
       let request = step.request;
       if (!request) {
@@ -350,8 +364,15 @@ export async function operation(raw, state) {
     case 'acknowledge': result = await api(service(state.config, 'uar'),
       `${uar}/subscriptions/${encodeURIComponent(step.subscriptionId)}/deliveries/${encodeURIComponent(step.deliveryId)}/acknowledge`,
       { expectedRevision: step.expectedRevision }); break;
-    case 'subscriptions': result = await api(service(state.config, step.service ?? 'uar'),
-      step.service === 'bossA' || step.service === 'bossB' ? '/api/channels/observers' : `${uar}/subscriptions`); break;
+    case 'subscriptions': {
+      result = await api({ ...service(state.config, step.service ?? 'uar'), ...(step.workspaceId ? { workspace: step.workspaceId } : {}) },
+        step.service === 'bossA' || step.service === 'bossB' ? '/api/channels/observers' : `${uar}/subscriptions`);
+      if (step.subscriptionId) {
+        result.selectedSubscription = result.result.find(row => (row.subscriptionId ?? row.subscription_id) === step.subscriptionId);
+        if (!result.selectedSubscription) throw new Blocked('actual_subscription_not_observed');
+      }
+      break;
+    }
     case 'deliveries': result = await api(service(state.config, 'uar'),
       `${uar}/subscriptions/${encodeURIComponent(step.subscriptionId)}/deliveries`); break;
     case 'wait': result = await waitSnapshot(step, state); break;

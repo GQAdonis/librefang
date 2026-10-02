@@ -76,6 +76,7 @@ function observers(state, e) {
 }
 function restartReplay(state, e) {
   const before = tables(state, e, 'queued');
+  const settled = e.beforeRestart ? tables(state, e, 'beforeRestart') : before;
   const after = tables(state, e);
   const queued = before.channel_observer_deliveries.find(row => row.delivery_id === e.deliveryId);
   if (!queued || queued.state !== 'pending') throw new Blocked('real_pending_delivery_before_revocation_required');
@@ -109,7 +110,7 @@ function restartReplay(state, e) {
   const affinityAfter = after.channel_route_affinity.find(row => row.scope_key === admittedBefore.scope_key);
   requireValue(same(affinityBefore, affinityAfter) && affinityBefore, 'restart_changed_route_affinity');
   const count = rows => rows.channel_causal_actions.filter(row => row.source_occurrence_id === admittedBefore.occurrence_id && row.kind !== 'observer_copy').length;
-  requireValue(count(before) === count(after), 'replay_created_another_handler_or_reply');
+  requireValue(count(settled) === count(after), 'replay_created_another_handler_or_reply');
   return { withheld, retainedAffinity: affinityAfter, source: admittedAfter.occurrence_id };
 }
 function replyEcho(state, e) {
