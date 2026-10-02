@@ -455,6 +455,9 @@ pub async fn flush_pending_observers(
 }
 
 
+mod control;
+pub use control::{cancel_channel_execution, control_capability, detach_channel_observation};
+
 mod transport;
 pub use transport::publish_to_fabric;
 #[cfg(feature = "uar-driver")]
