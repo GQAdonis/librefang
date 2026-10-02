@@ -21,7 +21,8 @@ export function buildPlan(config, input) {
   });
   const message = (room = base.room, mentions = [handlerA]) => ({ workspace_id: base.workspace,
     room_id: room, thread_id: base.thread, sender_id: base.sender,
-    message: 'C08 disposable operation. Reply briefly.', metadata: { mention_names: mentions } });
+    message: 'C08 disposable operation. Reply briefly.', is_group: true,
+    metadata: { mention_names: mentions } });
   const ingress = (id, host = 'bossA', values = {}) => add(id, 'ingress', { host, input: message(), ...values });
   const wait = (id, sourceId, condition = 'dispatch_completed') => add(id, 'wait', { input: native(sourceId), condition });
   const list = (id, name) => add(id, 'subscriptions', { service: 'uar', ...(name ? { subscriptionId: subscription(name) } : {}) });
