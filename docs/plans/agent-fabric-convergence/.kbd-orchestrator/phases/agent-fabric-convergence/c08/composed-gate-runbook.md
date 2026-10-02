@@ -1,55 +1,80 @@
-# C08 service-boundary gate — prepared, not executed
+# C08 composed operation — prepared, not executed
 
-The operator has deprioritized live Discord acceptance. Continue BossFang, Gate, Fabric, UAR and shared SurrealDB work without waiting for a disposable guild or bot credential. `scripts/integration/afc-c08-gate.mjs` prepares an honest service-boundary inspection. **No C08 gate has run, and no channel-source or cross-host acceptance is claimed.**
+`scripts/operate-c08-routing.mjs` is the real operation entrypoint, checkpoint `c08-routed-channel-operation`, creation task `C08.3`. It operates BossFang ×2, Gate, Fabric, UAR and shared SurrealDB through actual endpoints and owned production processes. **No driver, build, service start or composed gate has run during this authoring increment.** Live Discord interoperability remains outside the operator's current priority.
 
-## Plan reconciliation
+The [approved design](../../../../../../../openspec/changes/afc-c08-channel-routing/design.md) requires actual ingress, handler conflict, independent observers, queued revocation, restart/replay, native reply echo, bounded A→B→A and detach versus cancellation. The opt-in `signed_webhook_v1` profile supplies a non-Discord native source through the existing signed Python adapter. It requires stable caller-native IDs, complete account/workspace/room/thread/sender identity and action-bound callback receipts. Legacy incomplete webhooks cannot establish this profile. Direct storage mutation, fake services, direct Fabric publication and manufactured normalized occurrences do not substitute for native ingress.
 
-The [product design](../../../../../../../openspec/changes/afc-c08-channel-routing/design.md) describes one final gate containing provider ingress, conflict, observer fanout, grant revocation, restart/replay, reply echo, A→B→A, and detach/cancel. The source implements a qualified Discord-guild route but exposes no API that creates a normalized channel occurrence through the production channel bridge. Direct SurrealDB row insertion would bypass route admission, Gate, Fabric and UAR; it cannot establish an integration pass. No disposable Discord credential is available, and the operator does not want this dependency to hold up subsequent work.
+Source candidates supplied by the lead: BossFang `8c347f37f75f4720d885622a01d966f8e41d1094`, Gate `52ce545b1ed67adef3f8ff6bd9211e42065cc410`, Fabric `8966d6b1fef002a663d98f762955b2d273f8c07d`, UAR `6d3ccce07bbfbdf32b01d4db140192e39c1355d7`. These are source checkpoints only. Freeze all producer surfaces before the first build; record production executable hashes and any changed revisions at the completed boundary.
 
-Before calling the KBD phase complete, revise its accepted plan to separate **service-boundary integration** from **channel-source acceptance**. The former records exact binaries and source revisions, operational BossFang ×2, Gate, Fabric, UAR and SurrealDB 3.3.0, authenticated capabilities and durable observer state where an already-admitted source exists. The latter retains actual channel ingress, same-root causal reaction, grant timing, restart recovery, echo and runtime control as `UNSUPPORTED`/`UNVERIFIED` until observed. Live Discord network interoperability is outside the present customer priority and must not be presented as passed. `/api/channels/route-capability` currently advertises `cross_host_observers: false`; leave that unchanged.
+## Private configuration and owned lifecycle
 
-Candidate source revisions are BossFang `bcdb61764` (plus any later exact head), Gate `b153970518b0f3ce6c83f41e7b9ac59f6187c0b2`, Fabric `8966d6b1fef002a663d98f762955b2d273f8c07d`, and UAR `b18397a3b23eb97a9e0da2618bc1747f99e7cc04`. These are **not accepted provider checkpoints**. Record final commits and binary hashes at execution.
+Copy [the configuration scaffold](../../../../scripts/c08-operation/config.example.json) outside the repository and materialize private service configuration. It deliberately contains placeholder paths, unbound instance IDs, empty service environments, an unavailable buffer-controller placeholder and a partial operation plan. It is **not** an assertion that prerequisites exist. Missing scenarios remain blocked. Separately owned bootstrap preparation lives under `scripts/c08-operation/bootstrap/`.
 
-## Read-only collector at the completed phase boundary
+The driver accepts `schema:"c08-routing-operation/1"`, `disposable:true`, `services`, `surreal`, `ingress`, `callback`, optional `realm`, `processes`, `producerFiles`, `constants`, `gateIdentity`, `plan` and `scenarios`. Services are `bossA`, `bossB`, `gate`, `fabric`, `uar`, each with origin `url`, optional `tokenEnv`, and UAR's exact disposable `workspace`. Surreal specifies an isolated namespace/database and bearer `tokenEnv` or `userEnv`/`passwordEnv`. Private credential values belong only in environment variables; configuration and receipts carry environment names.
 
-The collector calls BossFang `/api/channels/route-capability` on both hosts, Gate `/authority/channels/capabilities`, Fabric `/readyz`, UAR `/api/uar/channel-observers/v1/capabilities` and UAR subscriptions. It reads seven C08 durable tables through SurrealDB 3.x `POST /sql` ([official HTTP contract](https://surrealdb.com/docs/surrealdb/reference-guide/http-protocol)) and hashes supplied binary bytes. It sends no provider message, mutates no grant, restarts no process and writes no storage row. Those effects require their real owners.
+Each process gives an absolute production `command`, explicit `args`, `cwd`, exact 40-character `sourceRevision`, optional `sourceRepository` and `sourceMetadataFile`, `envRefs` mapping product names to private credential environment names, and nonsecret `environment` values. Real build metadata is `{sourceRevision,binarySha256}`; the driver compares it with actual executable bytes. Checkout comparison is weaker than a build receipt and labeled accordingly; a declared revision alone stays self-reported. `producerFiles` fingerprints dependencies such as the actual Python adapter/runtime and SurrealDB executable, separately labeling declared revision/version. The driver fingerprints its own Node executable and helpers.
 
-Create a private config outside the repository. Credential **values** belong only in environment variables, not this file or a command line:
+`stdinEnv` sends one private environment value plus a newline through a pipe. An independently launched real `uar-sidecar` requires this for the 64-character launch token consumed by authenticated supervisor startup. Use the final binary's real CLI/configuration. Product output is hashed privately, never printed. BossFang may spawn its actual existing Python SDK and supervised UAR; these are production children, not replacements supplied by the driver. If execution uses host-supervised UAR, record and restart that actual owner; a separately restarted unused sidecar is insufficient.
 
-```json
-{
-  "services": {
-    "bossA": {"url":"http://127.0.0.1:18789","tokenEnv":"C08_BOSS_A_TOKEN"},
-    "bossB": {"url":"http://127.0.0.1:18790","tokenEnv":"C08_BOSS_B_TOKEN"},
-    "gate": {"url":"http://127.0.0.1:4457","tokenEnv":"C08_GATE_EFFECT_TOKEN"},
-    "fabric": {"url":"http://127.0.0.1:8080"},
-    "uar": {"url":"http://127.0.0.1:1906","tokenEnv":"C08_UAR_HOST_TOKEN","workspace":"gate-workspace"}
-  },
-  "surreal": {"url":"http://127.0.0.1:8000","namespace":"gate-ns","database":"gate-db","userEnv":"C08_SURREAL_USER","passwordEnv":"C08_SURREAL_PASSWORD"},
-  "binaries": {
-    "bossA": {"path":"/absolute/path/bossfang","sourceRevision":"exact-source-sha"},
-    "bossB": {"path":"/absolute/path/bossfang","sourceRevision":"exact-source-sha"},
-    "gate": {"path":"/absolute/path/flint-gate","sourceRevision":"exact-source-sha"},
-    "fabric": {"path":"/absolute/path/frf-gateway","sourceRevision":"exact-source-sha"},
-    "uar": {"path":"/absolute/path/uar-sidecar","sourceRevision":"exact-source-sha"}
-  },
-  "evidence": {}
-}
-```
+The driver owns only processes it launched. `restart` stops that PID, observes exit and starts the configured producer with a new PID. `lifecycle` invokes a declared actual owner command and requires exit zero. Buffer hold/release requires an existing owner operation that actually retains a **pending** observer copy before current Gate recheck. No such hook is implied by the scaffold. A missing hook or absent pending copy blocks queued revocation; edited rows or arbitrary delay do not satisfy it. Cleanup never targets unrelated running processes or containers.
 
-`surreal.tokenEnv` may replace user/password variables for bearer authentication. Optional `evidence` IDs correlate **already-admitted** sources and actions with live storage; the script never accepts them as outcomes. It emits only fingerprints and state. The verdict remains `unsupported` if the service probes succeed but mandatory channel outcomes are unproven; a contradictory live record returns `failed`.
+The optional `realm` gives issuer, loopback JWKS port and `tokens:[{tokenEnv,claims}]`. It generates an RSA keypair and real RS256 credentials for unchanged product authenticators; the public endpoint serves JWKS only. Token minting/private keys stay in memory. Generated credential names must begin `C08_` and cannot overwrite existing variables. Product configuration must trust the exact issuer, JWKS and audiences through real authentication/policy. The realm supplies no authorization decisions. Runtime refs expose `realm.jwksUrl` and `realm.issuer`.
+
+`callback` supplies `secretEnv`, receiver port, and actual `tunnelCommand` or existing public HTTPS `publicOrigin`. A driver-owned quick tunnel uses installed `/opt/homebrew/bin/cloudflared` with argv, publishing a tokenized callback path. That receiver accepts only actual HMAC-signed adapter posts, deduplicates action/chunk/content/target, commits a private immutable native receipt before responding, and returns `{action_id,message_id}`. Changed content under the same key is rejected. There is no public receipt-reading API. The callback must resolve publicly; existing private URL/DNS protections stay enabled. `urlEnv` optionally exposes its generated URL privately to launched products.
+
+## Exact production prerequisites
+
+Provision isolated Gate/Postgres, the actual Fabric broker/dependencies, and SurrealDB **3.3.0**, retaining unrelated stacks. Both BossFang hosts need shared remote route storage, actual Gate effects, authenticated Fabric channel/tenant, the same qualified webhook account and existing SDK. Use distinct API/webhook ports and configuration roots. UAR must expose actual durable subscriptions and selected-handler ingress from the bound host session. HTTP 200 is insufficient: probes require operational remote BossFang storage, configured Gate/Fabric, bound UAR, available Gate authority, ready Fabric and supported UAR channel storage. Qualified probes additionally require the real webhook configuration.
+
+Provide actual authenticated BossFang **Owner** credentials; synthetic loopback ownership cannot detach/cancel. Gate needs accepted administrator grant-write/effect-execute scopes and real policy. UAR credentials must match the disposable owner/workspace of real bound instances. Both hosts must resolve channel-eligible stable handler names A/B; observers A/B/denied are actual durable catalog-bound UAR instances. Use available real provider credentials through environment references (`LITER_LLM_BASE_URL`, `LITER_LLM_MASTER_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`) as applicable. The driver supplies no model implementation.
+
+BossFang effects read `LIBREFANG_CHANNEL_GATE_URL`, `_TOKEN`, `_IDENTITY_ISSUER`, `_IDENTITY_SUBJECT`, `_IDENTITY_REVISION`; handlers use `LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER`/`_ID`; replies use `LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER`/`_ID`/`_REVISION`. Observer transport reads `LIBREFANG_CHANNEL_FABRIC_URL`, `_BEARER`, `_CHANNEL_ID`, `_TENANT_ID`. Populate the actual configured/supervised UAR binding. These names come from production source.
+
+Scoped grants use real `POST /authority/channels/grants` with `{specification,expected_revision:null}`. Specifications include issuer/ID/action, full native scope **without** BossFang `account_kind`, exact recipient/handler/classification and maximum remaining depth/fanout. Use returned revisions for sealed subscriptions, host replies and later revocation. Bounds must cover the existing causal policy; never reset budgets downstream.
+
+| Effect | Recipient / handler | Classification | Resources |
+| --- | --- | --- | --- |
+| `handler_execution` | selected handler / same handler | `handler_payload` | A/B original-room scopes; A also second room |
+| `scoped_reply` | native room / selected handler | `scoped_reply` | A/B original room only |
+| `source_disclosure` | bound observer instance / selected handler | `policy_filtered` | independent A/B source grants; denied observer uses absent/nonmatching source grant |
+| `recipient_delivery` | bound observer instance / selected handler | `policy_filtered` | independent recipient grants and returned revisions |
+| `route_reassignment` | new handler / same new handler | `metadata_only` | target B and target A grants on retained source scope |
+
+`configure_webhook` submits the actual full form `/api/channels/sidecar/webhook/configure`; omitted values are not a partial patch. Values include env-referenced `WEBHOOK_SECRET`, `WEBHOOK_LISTEN_PORT`, `_LISTEN_PATH`, `_DURABLE_PROFILE:"1"`, `_ACCOUNT_ID`; the driver injects its actual public callback URL. `instanceName` equals configured account. Native inputs provide stable `message_id` (or the driver's recorded caller ID), workspace/room/separate sender IDs, explicit null or nonempty thread and disposable text. Signed `metadata.mention_names` resolves real stable handler names. Two valid equal-priority names exercise conflict. Caller causal parent metadata is never accepted as proof.
+
+## Real operation plan and evidence
+
+All evidence below names operation IDs from the same actual run. HTTP bodies live under `steps.<id>.result.result`; native input is `steps.<id>.result.input`. References are singleton `{ref:"steps.<id>.result.<field>"}` or `{ref:"constants.<name>"}`; HTTP secrets use `{env:"C08_NAME"}`. Missing refs block. Snapshot reads are fixed SELECT-only requests to seven C08 tables. Metadata-only UAR `deliveries` returns actual delivery IDs/cursors; acknowledgements require the current subscription revision, not Fabric offsets.
+
+| Scenario | Real sequence | Required evidence keys in `scenarios` |
+| --- | --- | --- |
+| `handlerConflictAndRecipient` | same-ID `race_ingress` on two hosts with two mentions; single-mention `ingress`; completed dispatch; snapshot | `conflict`, `selected`, `handler`, `final` |
+| `observerIsolation` | source/recipient grants; three `subscribe`; real source; two delivered copies; actual Gate disclosure denial; UAR lists/inventories; acknowledge both to establish cursors, then a later targeted acknowledgement with before/after lists | `observerA`, `observerB`, `observerDenied`, `source`, `denial`, `uarSubscriptions`, `cursorBefore`, `acknowledge`, `cursorAfter`, `final` |
+| `revocationRestartReplay` | actual buffer hold; real source/pending copy; revoke actual revision; release/withheld; restart actual Boss A/B, Fabric, UAR owners; exact prior native replay; snapshot | `source`, `queued`, `deliveryId`, `revoke`, `restartBossA`, `restartBossB`, `restartFabric`, `restartUar`, `replay`, `final` |
+| `replyEchoAndScope` | source/completed callback; before-echo snapshot; actual native `echoAction`; replay/quiet; authorized second-room source **without** foreign reference; `wait reply_terminal`; exact second-room Gate scope denial against original reply grant; bounded no-callback; snapshot | `source`, `callback`, `beforeEcho`, `echo`, `quiet`, `crossScopeSource`, `scopeDenial`, `crossScopeQuiet`, `final` |
+| `boundedReaction` | A source/callback; authorized revision-CAS reassign B; B source `referenceAction` A callback; B callback; reassign A; back source `referenceAction` B callback; suppressed/snapshot | `sourceA`, `callbackA`, `reassignB`, `sourceB`, `callbackB`, `reassignA`, `sourceBackA`, `final` |
+| `detachAndOwnerCancel` | settled before-detach snapshot; authenticated detach; real subsequent source/completed same handler; authenticated 501 cancel; snapshot | `beforeDetach`, `detach`, `afterDetachSource`, `handler`, `cancel`, `final` |
+
+Operation kinds are `register`, `start_process`, `stop_process`, `restart`, `lifecycle`, `probe`, `configure_webhook`, `grant`, `revoke_grant`, `gate_evaluate`, `subscribe`, `ingress`, `race_ingress`, `reassign`, `detach`, `cancel`, `acknowledge`, `subscriptions`, `deliveries`, `wait`, `wait_callback`, `snapshot`, `callback_receipts`, `observe_no_repost`. Wait conditions are `source`, `dispatch_completed`, `queued`, `withheld`, `suppressed`, `observers_delivered`, `reply_completed`, `reply_terminal`. Quiet intervals are explicit bounded 1–60 seconds.
+
+`register` supports actual method/path/body/service/acceptedStatuses for authenticated UAR provisioning under `/api/uar/` and actual `/api/v1/collaboration/`, Boss `/api/agents`, and Gate `/policies`. Existing real UAR startup APIs are collaboration package install/deployment-bindings and agent-instance create/activate; the bootstrap owner materializes their exact bodies from current source. Registration cannot post channel-observer deliveries or selected-handler turns, bypassing the existing producer. Subscribe requires full BossFang source scope, `source_profile:"signed_webhook_v1"`, source/recipient grant IDs and revision, and real observer instance ID. The returned `subscription.subscription_id` binds durable BossFang and UAR state.
+
+Actual A→B→A is A forward → A reply → B forward → B reply → attempted A forward under one root. Evaluation requires exact native parent linkage, retained root, distinct A/B routes, actual predecessor callbacks, nonreset budgets and `visited_route` suppression. Mentions alone, A→A echoes or arbitrary five rows are insufficient.
+
+A second-room native input **with** foreign `referenceAction` exercises same-scope outbound lookup refusal before handler-action admission, as additional evidence. Without that reference, authorized second-room execution reaches the real reply boundary and the original-room grant denies scope. Current production maps Gate's typed noneligible HTTP-200 decision to an **uncertain** reply terminal. Record that exact terminal and independently bind real Gate scope-mismatch evaluation to the same occurrence/scope/grant; bounded absence of a native callback shows no post was observed. Never rename uncertain to withheld or claim a persisted exact Gate decision absent from the action row. Reproduce at the completed boundary before any corrective product edit.
+
+Detach preserves cursor/queued receipts, leaves shared Fabric transport open and permits subsequent handler execution. Cancel returns HTTP **501** `execution_cancel_unsupported`, changing neither execution nor observation state. This certifies typed unsupported behavior, not successful runtime cancellation.
+
+For the separately owned real packaged Boss UI operation, private `ui` configuration gives `requestPath`, `responsePath` and `expectedRuntimeId`. Launch the actual packaged scenario as a driver-owned process with `C08_BOSS_UI_CONFIG` and `C08_BOSS_UI_RECEIPT` environment refs. `wait_ui_workspace` validates its immutable `c08-boss-ui-workspace/1` request against the configured UAR endpoint fingerprint, owner credential **name** and expected runtime identity. Use the returned `steps.<id>.result.workspaceId` for actual API-bound instances, native scopes, grants and subscriptions; an unrelated existing workspace cannot stand in. `export_ui_subscription` requires that `workspaceOperation` ID and an actual `subscriptionId`, reads the real UAR subscription in that workspace, then writes its exact source/subscription as private `c08-boss-ui-subscription/1` metadata for UI pause/resume. It never exports credentials or manufactures subscription state. `wait_process` keeps the driver alive until its actual owned launcher exits zero and optionally reads a private absolute `receiptPath` into the operation receipt; this handoff alone cannot certify UI operation.
+
+## Completed boundary and receipts
+
+After the complete production increment and private prerequisites are ready, the lead opens the composed operation/build boundary. From the initiative directory:
 
 ```text
-node scripts/integration/afc-c08-gate.mjs --config /private/c08.json --out /private/c08-receipt.json
+node scripts/operate-c08-routing.mjs --config /private/c08/operation.json --out /private/c08/receipts/operation-<unique-id>.json
 ```
 
-Keep the private receipt and service logs out of the repository if they contain user scope IDs or content. A listening port, HTTP capability response, Fabric offset, synthetic SQL row or manually entered Boolean cannot certify cross-host channel operation.
+Output and `.d` directory are immutable reservations. Never reuse a path to retry uncertain effects. Redacted receipts include actual steps, callbacks, source/build hashes, capabilities, durable state, owned process epochs, scenario findings and cleanup. Credential values, protected text and raw scope identities are not printed; unknown strings are fingerprinted and startup logs only hashed. Missing prerequisites, unavailable storage/policy, unsupported hooks, absent evidence and incomplete scenarios remain blocked/unverified. Contradictory actual evidence fails. `operationCoverage:observed` means all planned operations ran; functional acceptance additionally requires all six real scenario evaluators. Installed platform acceptance stays unverified and accepted provider checkpoint stays false.
 
-## Acceptance gaps retained
-
-- Source now resolves a native reply reference against a **same-scope completed outbound action** and derives parent lineage from BossFang storage rather than trusting sidecar parent metadata (`bcdb61764`). This source path has not been executed in the composed gate.
-- A real A→B→A requires Gate-authorized revision-CAS reassignment A→B and B→A. Its causal sequence is A forward → A reply → B forward → B reply → attempted A forward under one root. A plain mention of B, an A→A echo or direct row insertion does not count. Five action rows alone cannot attest the corresponding authorization/effect boundary.
-- Gate revocation-before-release, all three restart epochs, cross-scope refusal, injected provider echo, and Fabric detach versus owner cancellation have no complete combined receipt API in current source. The collector keeps them blocked even when nearby storage rows exist.
-- UAR observer copies are independent deliveries, not permission to execute or post. Fabric offsets are transport positions, not subscriber cursors or execution ownership.
-
-The source and service-boundary result can inform the next phase now. Do not mark the original C08 channel-source gate, provider acceptance, or installed Windows/Mac acceptance complete from this collector.
+The older `scripts/integration/afc-c08-gate.mjs` remains a read-only diagnostic collector. Its capabilities and already-admitted state cannot replace channel operation, provider acceptance or installed Windows/Mac certification.
