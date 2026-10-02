@@ -396,8 +396,10 @@ pub struct ObserverDeliveryReceipt {
     /// Current state.
     pub state: ObserverDeliveryState,
     /// Claimant that crossed the delivery boundary.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub claimant: Option<String>,
     /// Withheld reason, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub withheld_reason: Option<String>,
     /// RFC-3339 creation time.
     pub recorded_at: String,
