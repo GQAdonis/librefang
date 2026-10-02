@@ -51,8 +51,26 @@ export function registrationDocuments(workspace, runtimeId, modelId) {
 
 export function gatePolicy() {
   const actions = ['source-disclosure', 'recipient-delivery', 'handler-execution', 'scoped-reply', 'route-reassignment'].map(name => `afc.channel:${name}/1`);
+  const string = { type: 'String' };
+  const optionalString = { type: 'String', required: false };
+  const stringSet = { type: 'Set', element: string };
+  const channelContext = { type: 'Record', attributes: {
+    protocol: string, effect_id: string, occurrence_id: string, action: string,
+    scope: { type: 'Record', attributes: { provider: string, account: string, workspace: string,
+      room: string, thread: optionalString, sender: string } },
+    recipient: string, handler: string, route_revision: string,
+    payload: { type: 'Record', attributes: { algorithm: string, sha256: string } },
+    classification: string,
+    causality: { type: 'Record', attributes: { root_occurrence_id: string,
+      parent_action_id: optionalString, action_id: string, route_identity: string,
+      visited_routes: stringSet, remaining_depth: { type: 'Long' }, remaining_fanout: { type: 'Long' } } },
+    identity: { type: 'Record', attributes: { issuer: string, subject: string, subject_kind: string,
+      actor: optionalString, audience: { ...stringSet, required: false }, tenant: optionalString,
+      identity_revision: string, verified: { type: 'Boolean' }, revoked: { type: 'Boolean' } } },
+    grant_issuer: string, grant_id: string,
+  } };
   return { id: 'c08-disposable-channel-effects', enabled: true,
     policy_text: `permit(principal == Service::"c08-host", action in [${actions.map(name => `Action::"${name}"`).join(', ')}], resource);`,
     schema_json: { '': { entityTypes: { Service: {}, Route: {} }, actions: Object.fromEntries(actions.map(name => [name,
-      { appliesTo: { principalTypes: ['Service'], resourceTypes: ['Route'], context: { type: 'Record', attributes: {} } } }])) } } };
+      { appliesTo: { principalTypes: ['Service'], resourceTypes: ['Route'], context: channelContext } }])) } } };
 }
