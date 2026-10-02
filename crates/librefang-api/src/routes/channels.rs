@@ -2273,6 +2273,7 @@ pub async fn configure_sidecar_channel(
     };
     #[cfg(feature = "surreal-backend")]
     let surreal_config_path = config_path.clone();
+    let toml_agent = agent.clone();
     let shadowed_secrets = {
         let _config_guard = state.config_write_lock.lock().await;
         let write_instance_name = instance_name.clone();
@@ -2284,7 +2285,7 @@ pub async fn configure_sidecar_channel(
                 entry,
                 &schema,
                 &body.values,
-                agent.as_deref(),
+                toml_agent.as_deref(),
             )
         })
         .await
@@ -2357,6 +2358,7 @@ pub async fn configure_sidecar_channel(
             entry.args,
             &surreal_nonsecret_env,
             &managed_env_keys,
+            agent.as_deref(),
         )
         .map_err(|e| ApiErrorResponse::internal_scrub(e).into_json_tuple())?;
 

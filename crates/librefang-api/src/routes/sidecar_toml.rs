@@ -183,11 +183,12 @@ pub fn upsert_sidecar_block(
 /// store (C-005d.3). Upserts one `SidecarChannelConfig` by `name` in a `Vec`,
 /// mirroring the toml_edit semantics: on update, catalog `command`/`args`
 /// defaults are backfilled only when absent (preserving operator hand-edits);
-/// `name`/`channel_type` are set; within `env`, only the schema-managed keys are
-/// overwritten (non-empty) or removed (empty/absent) while every other env key
-/// and all supervision fields survive. On insert, a fresh entry is built via
-/// serde so each `#[serde(default)]` supervision field (restart/backoff/…) gets
-/// its canonical default.
+/// `name`/`channel_type` and the form-owned per-instance `agent` are set;
+/// within `env`, only the schema-managed keys are overwritten (non-empty) or
+/// removed (empty/absent) while every other env key and all supervision fields
+/// survive. On insert, a fresh entry is built via serde so each
+/// `#[serde(default)]` supervision field (restart/backoff/…) gets its canonical
+/// default.
 ///
 /// **Security:** the caller passes only the NON-secret schema fields here
 /// (`nonsecret_env` + `managed_env_keys`). Secret-typed fields are written to
@@ -202,6 +203,7 @@ pub fn upsert_sidecar_in_vec(
     args: &[&str],
     env: &BTreeMap<String, String>,
     managed_env_keys: &[&str],
+    agent: Option<&str>,
 ) -> Result<(), String> {
     let apply_managed = |env_map: &mut std::collections::HashMap<String, String>| {
         for key in managed_env_keys {
@@ -224,6 +226,7 @@ pub fn upsert_sidecar_in_vec(
         }
         existing.name = name.to_string();
         existing.channel_type = Some(channel_type.to_string());
+        existing.agent = agent.map(str::to_string);
         apply_managed(&mut existing.env);
     } else {
         // Build via serde so every `#[serde(default)]` supervision field is set.
@@ -234,6 +237,7 @@ pub fn upsert_sidecar_in_vec(
                 "command": command,
                 "args": args,
                 "env": {},
+                "agent": agent,
             }))
             .map_err(|e| format!("construct sidecar entry: {e}"))?;
         apply_managed(&mut block.env);
@@ -263,6 +267,7 @@ mod config_store_tests {
             &["-m", "adapter"],
             &env,
             &managed,
+            Some("coder"),
         )
         .unwrap();
 
@@ -272,6 +277,7 @@ mod config_store_tests {
         assert_eq!(s.channel_type.as_deref(), Some("telegram"));
         assert_eq!(s.command, "python3");
         assert_eq!(s.args, vec!["-m", "adapter"]);
+        assert_eq!(s.agent.as_deref(), Some("coder"));
         assert_eq!(
             s.env.get("TELEGRAM_API_BASE").map(String::as_str),
             Some("https://api")
@@ -299,6 +305,7 @@ mod config_store_tests {
             &["-m", "adapter"],
             &env2,
             &managed,
+            None,
         )
         .unwrap();
         assert_eq!(sidecars.len(), 1, "update must not append a duplicate");
@@ -313,6 +320,7 @@ mod config_store_tests {
             "hand-edit preserved"
         );
         assert!(s.restart, "supervision field preserved across update");
+        assert_eq!(s.agent, None, "empty form agent clears the binding");
     }
 }
 
