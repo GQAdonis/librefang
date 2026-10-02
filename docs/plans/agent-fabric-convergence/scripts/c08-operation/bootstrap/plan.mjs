@@ -121,7 +121,7 @@ export function buildPlan(config, input) {
   };
 
   if (input.ui) {
-    config.ui = { ...input.ui, expectedRuntimeId: config.constants.runtimeId };
+    config.ui = { ...input.ui, ...config.ui, expectedRuntimeId: config.constants.runtimeId };
     if (!config.processes.bossUi || !config.constants.registrationBindingA) throw new Error('Actual UI launcher and binding template required');
     add('startBossUi', 'start_process', { process: 'bossUi' }); add('uiWorkspace', 'wait_ui_workspace', { timeoutMs: 180000 });
     const workspaceId = ref(`${result('uiWorkspace')}.workspaceId`);
@@ -142,7 +142,7 @@ export function buildPlan(config, input) {
     ingress('uiSource', 'bossA', { input: { ...message(), workspace_id: workspaceId } });
     add('uiDelivered', 'wait', { input: native('uiSource'), condition: 'observers_delivered', count: 1 });
     add('uiExport', 'export_ui_subscription', { workspaceOperation: 'uiWorkspace', subscriptionId: ref(`${body('uiSubscribe')}.subscription.subscription_id`) });
-    add('uiComplete', 'wait_process', { process: 'bossUi', timeoutMs: 300000, receiptPath: input.ui.receiptPath });
+    add('uiComplete', 'wait_process', { process: 'bossUi', timeoutMs: 300000, receiptPath: config.ui.receiptPath });
   }
   config.plan = plan;
   return config;

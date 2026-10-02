@@ -1,0 +1,62 @@
+{
+  "model": {
+    "provider": "openai",
+    "modelId": "gpt-5.6-sol"
+  },
+  "docker": "/usr/local/bin/docker",
+  "binaries": {
+    "bossfang": {
+      "command": "/private/tmp/c08-native/librefang",
+      "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-delivery",
+      "sourceRevision": "8c347f37f75f4720d885622a01d966f8e41d1094",
+      "sourceMetadataFile": "/private/tmp/c08-native/bossfang-build.json"
+    },
+    "uar": {
+      "command": "/private/tmp/c08-native/universal-agent-runtime",
+      "sourceRepository": "/Users/gqadonis/.claude/worktrees/afc-c08-uar-delivery",
+      "sourceRevision": "6d3ccce07bbfbdf32b01d4db140192e39c1355d7",
+      "sourceMetadataFile": "/private/tmp/c08-native/uar-shared.json"
+    },
+    "gate": {
+      "command": "/private/tmp/c08-native/flint-gate",
+      "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-gate-delivery",
+      "sourceRevision": "52ce545b1ed67adef3f8ff6bd9211e42065cc410",
+      "sourceMetadataFile": "/private/tmp/c08-native/gate-build.json"
+    },
+    "fabric": {
+      "command": "/private/tmp/c08-native/frf-gateway",
+      "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-fabric-delivery",
+      "sourceRevision": "8966d6b1fef002a663d98f762955b2d273f8c07d",
+      "sourceMetadataFile": "/private/tmp/c08-native/fabric-build.json"
+    },
+    "liter": {
+      "command": "/private/tmp/c08-native/liter-llm",
+      "sourceRepository": "/Users/gqadonis/Projects/references/liter-llm",
+      "sourceRevision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+      "sourceMetadataFile": "/private/tmp/c08-native/liter-build.json"
+    }
+  },
+  "ports": {
+    "uar": 1916
+  },
+  "ui": {
+    "process": {
+      "provenance": "node-script",
+      "command": "/opt/homebrew/bin/node",
+      "scriptPath": "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility/resources/prometheus-skills-mini/skills/delivery-cadence/scripts/boss-launch.mjs",
+      "sourceRepository": "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility/resources/prometheus-skills-mini",
+      "sourceRevision": "f63617c24031960a99769d12c5f0b60065a95cee",
+      "sourceMetadataFile": "/private/tmp/c08-native/boss-ui-launch.json",
+      "args": [
+        "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility/resources/prometheus-skills-mini/skills/delivery-cadence/scripts/boss-launch.mjs",
+        "--repository",
+        "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility",
+        "--app",
+        "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility/dist/mac-arm64/The Boss.app",
+        "--scenario",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c08-operation/boss-ui-scenario.mjs",
+        "--require-scenario"
+      ]
+    }
+  }
+}
