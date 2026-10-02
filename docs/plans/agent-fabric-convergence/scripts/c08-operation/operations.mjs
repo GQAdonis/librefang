@@ -44,6 +44,10 @@ async function startProcess(name, state) {
   if (state.children.has(name)) throw new Blocked(`owned_process_already_running:${name}`);
   const item = command(state.config, name);
   const sha256 = await digestFile(item.command);
+  if (item.provenance === 'node-script' && (!item.sourceMetadataFile || !item.sourceRepository
+      || !isAbsolute(item.scriptPath ?? '') || item.args[0] !== item.scriptPath)) {
+    throw new Blocked('actual_launcher_script_and_application_provenance_required');
+  }
   let sourceMetadata = { mode: 'operator_declared_revision' };
   if (item.sourceRepository) {
     const { stdout } = await promisify(execFile)('git', ['-C', item.sourceRepository, 'rev-parse', 'HEAD']);
@@ -53,10 +57,31 @@ async function startProcess(name, state) {
   if (item.sourceMetadataFile) {
     const raw = await readFile(item.sourceMetadataFile, 'utf8');
     const metadata = JSON.parse(raw);
-    if (metadata.sourceRevision !== item.sourceRevision || metadata.binarySha256 !== sha256) {
+    if (metadata.sourceRevision !== item.sourceRevision) {
       throw new Blocked(`binary_build_receipt_mismatch:${name}`);
     }
-    sourceMetadata = { mode: 'matching_build_receipt', receiptSha256: hash(raw), sourceRevision: item.sourceRevision };
+    if (item.provenance === 'node-script') {
+      const scriptSha256 = await digestFile(item.scriptPath);
+      if (metadata.commandSha256 !== sha256 || metadata.scriptPath !== item.scriptPath
+          || metadata.scriptSha256 !== scriptSha256 || !isAbsolute(metadata.applicationExecutable ?? '')
+          || !isAbsolute(metadata.applicationSourceRepository ?? '')
+          || !/^[a-f0-9]{40}$/.test(metadata.applicationSourceRevision ?? '')) {
+        throw new Blocked(`launcher_application_receipt_mismatch:${name}`);
+      }
+      const applicationSha256 = await digestFile(metadata.applicationExecutable);
+      const { stdout } = await promisify(execFile)('git',
+        ['-C', metadata.applicationSourceRepository, 'rev-parse', 'HEAD']);
+      if (metadata.applicationSha256 !== applicationSha256 || stdout.trim() !== metadata.applicationSourceRevision) {
+        throw new Blocked(`application_source_or_bytes_mismatch:${name}`);
+      }
+      sourceMetadata = { mode: 'matching_node_script_and_application_receipt', receiptSha256: hash(raw),
+        command: { sha256, sourceDerived: false },
+        script: { sha256: scriptSha256, sourceRevision: item.sourceRevision },
+        application: { sha256: applicationSha256, sourceRevision: metadata.applicationSourceRevision } };
+    } else {
+      if (metadata.binarySha256 !== sha256) throw new Blocked(`binary_build_receipt_mismatch:${name}`);
+      sourceMetadata = { mode: 'matching_build_receipt', receiptSha256: hash(raw), sourceRevision: item.sourceRevision };
+    }
   }
   const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('C08_')));
   for (const [name, envRef] of Object.entries(item.envRefs ?? {})) environment[name] = secret(envRef);
