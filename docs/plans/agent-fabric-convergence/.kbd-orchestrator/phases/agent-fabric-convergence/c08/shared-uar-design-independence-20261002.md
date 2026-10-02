@@ -4,7 +4,7 @@ Status: documentation of an approved preparation boundary. This does not admit C
 
 ## Canonical decision
 
-Cadence decision `shared-uar-design-independent-of-boss-packaging`, revision 482, records:
+Canonical KBD decision `shared-uar-design-independent-of-boss-packaging`, revision 482, records:
 
 > Shared UAR architecture preparation is independent of Boss installers; runtime qualification and architecture approvals remain required.
 
