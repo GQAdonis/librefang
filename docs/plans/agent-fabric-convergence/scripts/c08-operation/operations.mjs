@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { api, Blocked, digestFile, hash, immutable, secret, snapshot, source } from './io.mjs';
 import { sealDocument } from './bootstrap/documents.mjs';
@@ -61,10 +61,16 @@ async function startProcess(name, state) {
       throw new Blocked(`binary_build_receipt_mismatch:${name}`);
     }
     if (item.provenance === 'node-script') {
+      const argumentsResolved = resolveRefs(item.args, state.values);
+      const appIndex = argumentsResolved.indexOf('--app');
+      const app = appIndex < 0 ? null : argumentsResolved[appIndex + 1];
+      if (typeof app !== 'string' || !isAbsolute(app)) throw new Blocked('actual_packaged_application_argument_required');
+      const launchedExecutable = app.endsWith('.app') ? join(app, 'Contents', 'MacOS', 'The Boss') : app;
       const scriptSha256 = await digestFile(item.scriptPath);
       if (metadata.commandSha256 !== sha256 || metadata.scriptPath !== item.scriptPath
           || metadata.scriptSha256 !== scriptSha256 || !isAbsolute(metadata.applicationExecutable ?? '')
           || !isAbsolute(metadata.applicationSourceRepository ?? '')
+          || resolve(metadata.applicationExecutable) !== resolve(launchedExecutable)
           || !/^[a-f0-9]{40}$/.test(metadata.applicationSourceRevision ?? '')) {
         throw new Blocked(`launcher_application_receipt_mismatch:${name}`);
       }
