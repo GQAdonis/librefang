@@ -240,6 +240,11 @@ export async function operation(raw, state) {
         if (!isAbsolute(step.receiptPath)) throw new Blocked('private_operation_receipt_path_required');
         const raw = await readFile(step.receiptPath, 'utf8');
         result.operationReceipt = JSON.parse(raw); result.operationReceiptSha256 = hash(raw);
+        if (result.operationReceipt.schema === 'c08-boss-ui-operation-receipt/1'
+            && result.operationReceipt.status !== 'observed') {
+          const error = new Blocked('packaged_ui_operation_not_observed');
+          error.response = result; throw error;
+        }
       }
       break;
     }
