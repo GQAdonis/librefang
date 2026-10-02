@@ -96,7 +96,7 @@ const registration = [register('registerGatePolicy', 'gate', '/policies', gatePo
   register('registerPackage', 'uar', '/api/v1/collaboration/packages:install', docs.packageRequest)];
 for (const name of ['A', 'B', 'Denied']) {
   registration.push(register(`registerBinding${name}`, 'uar', '/api/v1/collaboration/deployment-bindings', docs.bindings[name]));
-  registration.push(register(`registerInstance${name}`, 'uar', '/api/uar/agent-instances/v1/', { deploymentBindingId: docs.bindings[name].binding.id, profile: 'resident' }));
+  registration.push(register(`registerInstance${name}`, 'uar', '/api/uar/agent-instances/v1', { deploymentBindingId: docs.bindings[name].binding.id, profile: 'resident' }));
   config.constants[`observer${name}`].observer_instance_id = ref(`steps.registerInstance${name}.result.result.instanceId`);
 }
 for (const name of ['A', 'B']) {
