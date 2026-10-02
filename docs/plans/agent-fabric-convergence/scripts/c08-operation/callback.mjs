@@ -7,13 +7,14 @@ import { join } from 'node:path';
 import { once } from 'node:events';
 import { Blocked, digestFile, hash, immutable, secret } from './io.mjs';
 
-const privateAddresses = new BlockList();
+const privateIpv4Addresses = new BlockList();
 for (const [address, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['127.0.0.0', 8],
   ['100.64.0.0', 10], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16],
-  ['192.0.0.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]]) privateAddresses.addSubnet(address, prefix, 'ipv4');
+  ['192.0.0.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4]]) privateIpv4Addresses.addSubnet(address, prefix, 'ipv4');
+const privateIpv6Addresses = new BlockList();
 for (const [address, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10],
   ['ff00::', 8], ['fec0::', 10], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['2002::', 16]]) {
-  privateAddresses.addSubnet(address, prefix, 'ipv6');
+  privateIpv6Addresses.addSubnet(address, prefix, 'ipv6');
 }
 async function publicOrigin(value, dnsDeadline) {
   const url = new URL(value);
@@ -32,7 +33,10 @@ async function publicOrigin(value, dnsDeadline) {
       await new Promise(resolve => setTimeout(resolve, Math.min(250, remaining)));
     }
   }
-  if (!addresses.length || addresses.some(({ address }) => privateAddresses.check(address, isIP(address) === 4 ? 'ipv4' : 'ipv6'))) {
+  if (!addresses.length || addresses.some(({ address }) => {
+    const family = isIP(address) === 4 ? 'ipv4' : 'ipv6';
+    return (family === 'ipv4' ? privateIpv4Addresses : privateIpv6Addresses).check(address, family);
+  })) {
     throw new Blocked('private_callback_refused');
   }
   return url.origin;
