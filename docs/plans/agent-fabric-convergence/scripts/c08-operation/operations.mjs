@@ -1,6 +1,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { isAbsolute, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { api, Blocked, digestFile, hash, immutable, secret, snapshot, source } from './io.mjs';
@@ -21,6 +22,32 @@ export function resolveRefs(value, context) {
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveRefs(item, context)]));
 }
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+async function waitForWebhookListener(portValue, serviceName) {
+  const port = Number(portValue);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
+    throw new Blocked(`webhook_listener_port_required:${serviceName}`);
+  }
+  const deadline = Date.now() + 15000;
+  do {
+    const listening = await new Promise(resolveReady => {
+      const socket = createConnection({ host: '127.0.0.1', port });
+      let settled = false;
+      const finish = ready => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resolveReady(ready);
+      };
+      socket.setTimeout(500);
+      socket.once('connect', () => finish(true));
+      socket.once('error', () => finish(false));
+      socket.once('timeout', () => finish(false));
+    });
+    if (listening) return { host: '127.0.0.1', port, observedAt: new Date().toISOString() };
+    if (Date.now() >= deadline) throw new Blocked(`webhook_listener_not_ready:${serviceName}`);
+    await pause(100);
+  } while (true);
+}
 function service(config, name) {
   if (!config.services?.[name]) throw new Blocked(`missing_service:${name}`);
   return config.services[name];
@@ -336,10 +363,12 @@ export async function operation(raw, state) {
     }
     case 'configure_webhook': {
       if (!step.values?.WEBHOOK_DURABLE_PROFILE || !step.values?.WEBHOOK_ACCOUNT_ID) throw new Blocked('full_qualified_sidecar_form_required');
-      result = await api(service(state.config, step.host), '/api/channels/sidecar/webhook/configure', {
+      const configured = await api(service(state.config, step.host), '/api/channels/sidecar/webhook/configure', {
         values: { ...step.values, WEBHOOK_CALLBACK_URL: state.callback.url },
         instance_name: step.instanceName, agent: step.handler,
-      }); break;
+      });
+      const listener = await waitForWebhookListener(step.values.WEBHOOK_LISTEN_PORT, step.host);
+      result = { ...configured, listener }; break;
     }
     case 'grant': result = await api(service(state.config, 'gate'), '/authority/channels/grants', {
       specification: step.specification, expected_revision: step.expectedRevision ?? null,
