@@ -182,6 +182,7 @@ pub struct ActionReceipt {
     /// Immediate source occurrence.
     pub source_occurrence_id: String,
     /// Parent action, if this is a reaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_action_id: Option<String>,
     /// New route identity.
     pub route_identity: String,
@@ -196,10 +197,13 @@ pub struct ActionReceipt {
     /// Action kind.
     pub kind: ActionKind,
     /// Exact reply destination, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_target: Option<ReplyTargetScope>,
     /// Reply grant identity, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_grant_id: Option<String>,
     /// Reply grant revision, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reply_grant_revision: Option<String>,
     /// Original principal.
     pub original_principal: String,
@@ -208,8 +212,10 @@ pub struct ActionReceipt {
     /// Effect state.
     pub state: ActionState,
     /// Terminal suppression reason, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub suppression_reason: Option<String>,
     /// Current claimant, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub claimant: Option<String>,
     /// RFC-3339 timestamp.
     pub recorded_at: String,
