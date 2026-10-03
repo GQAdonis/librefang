@@ -53,6 +53,14 @@ fn api_v1_routes(webhook_body_limit: usize) -> Router<Arc<AppState>> {
         .merge(routes::audit::router())
         .merge(routes::authz::router())
         .merge(routes::channels::router())
+        .route(
+            "/channels/observers/{id}/detach",
+            axum::routing::post(crate::channel_observers::detach_channel_observation),
+        )
+        .route(
+            "/channels/occurrences/{id}/cancel",
+            axum::routing::post(crate::channel_observers::cancel_channel_execution),
+        )
         .merge(routes::system::router())
         .merge(routes::task_queue::router())
         .merge(routes::memory::router())

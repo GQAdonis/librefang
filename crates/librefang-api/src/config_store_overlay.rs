@@ -37,6 +37,59 @@ pub const DEFAULT_MODEL_KEY: &str = "default_model";
 /// on top of `config.toml`.
 pub const CONFIG_OVERRIDES_KEY: &str = "config_overrides";
 
+/// Primary operator-controlled scope for host-local config overrides.
+pub const CONFIG_STORE_SCOPE_ENV: &str = "BOSSFANG_CONFIG_STORE_SCOPE";
+
+/// Backwards-compatible environment alias for [`CONFIG_STORE_SCOPE_ENV`].
+pub const LEGACY_CONFIG_STORE_SCOPE_ENV: &str = "LIBREFANG_CONFIG_STORE_SCOPE";
+
+const CONFIG_STORE_SCOPE_MAX_LEN: usize = 64;
+
+/// Resolve the config-overrides store key for this host.
+///
+/// An unset scope preserves the legacy singleton key. When both environment
+/// variables are set, [`CONFIG_STORE_SCOPE_ENV`] wins. Scoped keys retain the
+/// operator-supplied identifier in the stored `key` column so host ownership
+/// remains inspectable rather than being represented only by a hash.
+///
+/// # Errors
+/// Returns an error when the selected scope is not valid Unicode, is empty or
+/// longer than 64 bytes, or contains characters outside ASCII letters, digits,
+/// `.`, `_`, and `-`.
+pub fn config_overrides_store_key() -> Result<String, String> {
+    let scope = match std::env::var(CONFIG_STORE_SCOPE_ENV) {
+        Ok(scope) => Some((CONFIG_STORE_SCOPE_ENV, scope)),
+        Err(std::env::VarError::NotPresent) => match std::env::var(LEGACY_CONFIG_STORE_SCOPE_ENV) {
+            Ok(scope) => Some((LEGACY_CONFIG_STORE_SCOPE_ENV, scope)),
+            Err(std::env::VarError::NotPresent) => None,
+            Err(std::env::VarError::NotUnicode(_)) => {
+                return Err(format!(
+                    "{LEGACY_CONFIG_STORE_SCOPE_ENV} must be valid Unicode"
+                ))
+            }
+        },
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(format!("{CONFIG_STORE_SCOPE_ENV} must be valid Unicode"))
+        }
+    };
+
+    let Some((env_name, scope)) = scope else {
+        return Ok(CONFIG_OVERRIDES_KEY.to_string());
+    };
+    if scope.is_empty()
+        || scope.len() > CONFIG_STORE_SCOPE_MAX_LEN
+        || !scope
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(format!(
+            "{env_name} must be 1-{CONFIG_STORE_SCOPE_MAX_LEN} ASCII letters, digits, '.', '_', or '-'"
+        ));
+    }
+
+    Ok(format!("{CONFIG_OVERRIDES_KEY}:{scope}"))
+}
+
 /// Whole-section override keys that a **dedicated typed handler** is allowed to
 /// persist to the store, even though the generic `config_set` endpoint may NOT
 /// write them (C-005d). Each entry is a top-level `KernelConfig` section the
@@ -491,9 +544,10 @@ pub async fn overlay_default_model(kernel: &dyn KernelApi) {
 pub async fn read_config_overrides(
     storage_cfg: &StorageConfig,
 ) -> Result<BTreeMap<String, serde_json::Value>, String> {
+    let key = config_overrides_store_key()?;
     let store = open_config_store(storage_cfg).await?;
     match store
-        .get(CONFIG_OVERRIDES_KEY)
+        .get(&key)
         .await
         .map_err(|e| format!("read config store: {e}"))?
     {
@@ -512,11 +566,12 @@ pub async fn write_config_overrides(
     storage_cfg: &StorageConfig,
     overrides: &BTreeMap<String, serde_json::Value>,
 ) -> Result<(), String> {
+    let key = config_overrides_store_key()?;
     let store = open_config_store(storage_cfg).await?;
     let value = serde_json::to_value(overrides).map_err(|e| e.to_string())?;
     let hash = content_hash(&value);
     store
-        .upsert(CONFIG_OVERRIDES_KEY, value, ConfigSource::Runtime, &hash, 0)
+        .upsert(&key, value, ConfigSource::Runtime, &hash, 0)
         .await
         .map(|_| ())
         .map_err(|e| format!("write config store: {e}"))

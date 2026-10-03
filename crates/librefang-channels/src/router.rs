@@ -259,6 +259,33 @@ impl AgentRouter {
         user_key: Option<&str>,
         ctx: &BindingContext<'_>,
     ) -> Option<AgentId> {
+        if let Some(agent) = self.resolve_before_defaults(channel_type, platform_user_id, user_key, ctx) {
+            return Some(agent);
+        }
+        let channel_key = channel_type_to_str(channel_type).to_string();
+        let channel_account_key = ctx.account_id.as_deref()
+            .map(|aid| format!("{channel_key}:{aid}"));
+        // Account-specific channel default takes priority over the generic channel default.
+        if let Some(ref account_key) = channel_account_key {
+            if let Some(agent) = self.channel_defaults.get(account_key) {
+                return Some(*agent);
+            }
+        }
+        if let Some(agent) = self.channel_defaults.get(&channel_key) {
+            return Some(*agent);
+        }
+        self.default_agent
+    }
+
+    /// Resolve bindings, direct routes and user defaults before a bridge's
+    /// configured channel-instance default is considered.
+    pub fn resolve_before_defaults(
+        &self,
+        channel_type: &ChannelType,
+        platform_user_id: &str,
+        user_key: Option<&str>,
+        ctx: &BindingContext<'_>,
+    ) -> Option<AgentId> {
         // 0. Check bindings first
         if let Some(agent_id) = self.resolve_binding(ctx) {
             return Some(agent_id);
@@ -305,17 +332,7 @@ impl AgentRouter {
         {
             return Some(*agent);
         }
-        // Account-specific channel default takes priority over the generic channel default.
-        // Keys are stored as "telegram:account_id" when account_id is known.
-        if let Some(ref account_key) = channel_account_key {
-            if let Some(agent) = self.channel_defaults.get(account_key) {
-                return Some(*agent);
-            }
-        }
-        if let Some(agent) = self.channel_defaults.get(&channel_key) {
-            return Some(*agent);
-        }
-        self.default_agent
+        None
     }
 
     /// Resolve broadcast: returns all agents that should receive a message for the given peer.

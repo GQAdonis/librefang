@@ -57,6 +57,7 @@ subtle = { workspace = true }
 base64 = { workspace = true }
 socket2 = { workspace = true }
 reqwest = { workspace = true }
+tokio-tungstenite = { workspace = true }
 flate2 = { workspace = true }
 tar = { workspace = true }
 url = { workspace = true }
@@ -101,7 +102,6 @@ wiremock = "0.6"
 # Storage-failure route tests (#6653 / #6654): the goals routes must answer a substrate read failure with a 500 rather than an empty 200, and the only way to make `structured_get` fail from outside `librefang-memory` is to write a non-JSON blob straight through the connection pool that `MemorySubstrate::pool()` already exposes.
 # Test-only; the same workspace version the memory crate compiles.
 rusqlite = { workspace = true }
-tokio-tungstenite = { workspace = true }
 # Manifest-parity route tests (#7742): the `manifest_toml` fixtures are serialized
 # from a real `AgentManifest` rather than hand-written, so a field rename cannot
 # leave the test asserting against a document the production parser no longer
