@@ -69,9 +69,13 @@ function observers(state, e) {
   const acknowledged = event(state, e, 'acknowledge', ['acknowledge']).result.result;
   const changed = before.find(row => row.subscriptionId === ids[0]);
   const unchanged = before.find(row => row.subscriptionId === ids[1]);
+  const changedAfter = after.find(row => row.subscriptionId === ids[0]);
+  const unchangedAfter = after.find(row => row.subscriptionId === ids[1]);
   requireValue(acknowledged.subscriptionId === ids[0]
-    && after.find(row => row.subscriptionId === ids[0])?.cursor !== changed?.cursor
-    && after.find(row => row.subscriptionId === ids[1])?.cursor === unchanged?.cursor, 'independent_acknowledgement_not_observed');
+    && changedAfter?.cursor === changed?.cursor
+    && changedAfter?.revision > changed?.revision
+    && unchangedAfter?.cursor === unchanged?.cursor
+    && unchangedAfter?.revision === unchanged?.revision, 'independent_acknowledgement_not_observed');
   return { source: admitted.occurrence_id, authorized, denied: denied.result, cursors };
 }
 function restartReplay(state, e) {
