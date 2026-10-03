@@ -22,7 +22,10 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
       instance_id: runtimeId,
       ownership: 'external',
       workspace_location: 'remote',
-      credential_ref: 'env://C08_UAR_OWNER',
+      // The Boss stores this disposable external instance under this protected
+      // credential reference and verifies that the runtime advertises the same
+      // identity. The token itself remains in C08_UAR_OWNER.
+      credential_ref: `uar-instance://${runtimeId}`,
     },
     security: { jwt_required: true, jwks_url: jwks, jwt_issuer: config.realm.issuer, jwt_audience: 'c08-uar',
       jwt_secret: secrets.C08_UAR_JWT_UNUSED, settings_mutation_auth_required: true },
