@@ -10,10 +10,17 @@ Define the cross-product behavior for replaceable service instances and placemen
 
 Clients MUST bind a run to a verified service instance and compatible capability profile, with credential references rather than embedded credentials.
 
+Credential references MUST remain opaque, host-local secret locators. Authentication MUST use the credential resolved by the calling host. A service MAY echo the caller-supplied reference in that caller's effective binding, but clients and services MUST NOT require reference-string equality across trusted hosts. Service identity, ownership, endpoints and capabilities MUST be verified independently of credential storage location.
+
 #### Scenario: 1 — Explicit replaceable binding
 
 - **WHEN** A user selects between two UAR instances or selects an instance missing a mandatory feature
 - **THEN** new work uses the selected compatible instance or refuses admission with a specific diagnostic.
+
+#### Scenario: 1a — Two trusted hosts use different credential stores
+
+- **WHEN** two trusted hosts authenticate to the same UAR instance using locally resolved credentials whose opaque references differ
+- **THEN** UAR admits each authenticated caller, echoes each caller's reference only in that caller's effective binding, and both hosts verify the same stable runtime identity without sharing private store locators.
 
 ### Requirement: Lifecycle ownership
 
