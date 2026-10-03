@@ -158,8 +158,10 @@ export default async function run({ evaluate, signal }) {
       if (await call('click', { text: 'Set up later' })) return true;
       return call('click', { text: 'Settings' });
     });
-    // Skip may leave the main shell; open the real Settings action when present.
-    await call('click', { text: 'Settings' });
+    // Skip transitions asynchronously into the main shell. Wait for its real
+    // Settings control instead of racing the first render and discarding a
+    // false click result.
+    await wait('SETTINGS_NOT_ACTIONABLE', () => call('click', { text: 'Settings' }));
     await wait('UAR_SETTINGS_NOT_VISIBLE', () => call('navigate'));
     const form = { group: 'Add an external UAR instance' };
     await wait('EXTERNAL_INSTANCE_FORM_NOT_VISIBLE', async () => {
