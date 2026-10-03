@@ -83,10 +83,19 @@ function dom(action, args) {
     return true;
   }
   if (action === 'option') {
-    const option = nodes('[role="option"]').find(node => usable(node) && text(node) === args.text);
+    const option = nodes('[role="option"]').find(node => usable(node)
+      && (text(node) === args.text || text(node)?.endsWith(` · ${args.text}`)));
     if (!option) return false;
     option.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse', button: 0 }));
     option.click(); return true;
+  }
+  if (action === 'surface') {
+    const button = nodes('nav button').find(node => usable(node) && text(node) === args.text);
+    if (button) { button.click(); return 'button'; }
+    const select = nodes('[role="combobox"]').find(node => usable(node)
+      && node.getAttribute('aria-label') === 'UAR administration section');
+    if (!select) return false;
+    select.click(); return 'select';
   }
   if (action === 'instance') return {
     selected: nodes('span,div', root).some(node => node.children.length === 0 && text(node) === 'Default'),
@@ -154,6 +163,11 @@ export default async function run({ evaluate, signal }) {
       await wait('CONTROL_NOT_ACTIONABLE', () => call('click', { text, ...scope }));
       receipt.actions.push({ action: text, boundary: 'packaged-renderer-dom', at: now() });
     }
+    async function selectSurface(text) {
+      const mode = await wait('ADMINISTRATION_SURFACE_NOT_ACTIONABLE', () => call('surface', { text }), Boolean, 90000);
+      if (mode === 'select') await wait('ADMINISTRATION_SURFACE_OPTION_NOT_ACTIONABLE', () => call('option', { text }));
+      receipt.actions.push({ action: `Open ${text}`, boundary: 'packaged-renderer-dom', at: now() });
+    }
     await wait('ONBOARDING_OR_SETTINGS_NOT_READY', async () => {
       if (await call('click', { text: 'Set up later' })) return true;
       return call('click', { text: 'Settings' });
@@ -164,10 +178,10 @@ export default async function run({ evaluate, signal }) {
     await wait('SETTINGS_NOT_ACTIONABLE', () => call('click', { text: 'Settings' }));
     await wait('UAR_SETTINGS_NOT_VISIBLE', () => call('navigate'));
     const form = { group: 'Add an external UAR instance' };
-    await wait('EXTERNAL_INSTANCE_FORM_NOT_VISIBLE', async () => {
-      if (await call('fill', { ...form, label: 'Instance ID', value: uar.instanceId })) return true;
-      await call('click', { text: 'Runtime instances' }); return false;
-    });
+    await selectSurface('Runtime instances');
+    await wait('EXTERNAL_INSTANCE_FORM_NOT_VISIBLE', () => call('fill', {
+      ...form, label: 'Instance ID', value: uar.instanceId
+    }));
     const fields = {
       Name: uar.name, 'Expected runtime identity': uar.expectedRuntimeId,
       'Execution profile': 'uar.service-instance/1', 'Minimum version': uar.minimumVersion ?? '',
@@ -243,7 +257,7 @@ export default async function run({ evaluate, signal }) {
     if (initial.paused || initial.revoked) failure('ACTIVE_SUBSCRIPTION_REQUIRED');
     await wait('SETTINGS_REFRESH_NAVIGATION_UNAVAILABLE', () => call('navigate', { away: true }));
     await wait('UAR_SETTINGS_NOT_VISIBLE', () => call('navigate'));
-    await click('Local observers');
+    await selectSurface('Local observers');
     await wait('WORKSPACE_SELECT_NOT_ACTIONABLE', () => call('workspace'));
     await wait('WORKSPACE_OPTION_NOT_ACTIONABLE', () => call('option', { text: workspace.name }));
     await click('Refresh', { group: 'Channel observations' });
