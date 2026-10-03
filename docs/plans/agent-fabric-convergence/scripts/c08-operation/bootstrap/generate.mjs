@@ -108,7 +108,7 @@ for (const name of ['A', 'B', 'Denied']) {
 for (const name of ['A', 'B']) {
   const agentName = `c08-${name.toLowerCase()}`;
   const manifest = { manifest_toml:
-    `name = ${JSON.stringify(agentName)}\nversion = "1.0.0"\ndescription = "Disposable C08 channel handler"\n[model]\nprovider = "uar"\nmodel = ${JSON.stringify(`c08-liter/${input.model.modelId}`)}\nsystem_prompt = "Reply briefly to the supplied message. Do not call tools or publish outside this reply."\n` };
+    `name = ${JSON.stringify(agentName)}\nversion = "1.0.0"\ndescription = "Disposable C08 channel handler"\n[model]\nprovider = "uar"\nmodel = ${JSON.stringify(`c08-liter/${input.model.modelId}`)}\ncontext_window = 1050000\nsystem_prompt = "Reply briefly to the supplied message. Do not call tools or publish outside this reply."\n` };
   registration.push(register(`registerAgent${name}`, `boss${name}`, '/api/agents', manifest));
   const other = name === 'A' ? 'B' : 'A';
   registration.push(register(`registerAgent${name}on${other}`, `boss${other}`, '/api/agents', manifest));

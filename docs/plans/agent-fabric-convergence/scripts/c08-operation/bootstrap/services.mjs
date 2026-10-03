@@ -27,7 +27,8 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
     persistence: { provider: 'surreal', database_url: surrealUrl, surreal_ns: `${namespace}_uar`, surreal_db: 'main',
       surreal_user: 'root', surreal_pass: secrets.C08_SURREAL_PASSWORD, surreal_auth_level: 'root', external_cache_enabled: false },
     providers: [{ id: 'c08-liter', display_name: 'C08 pinned Liter', base_url: literUrl, api_key: secrets.C08_LITER_MASTER,
-      protocol: 'chat', default_model: modelId, enabled: true, models: [{ id: modelId, enabled: true, supports_tools: true }] }],
+      protocol: 'chat', default_model: modelId, enabled: true,
+      models: [{ id: modelId, enabled: true, supports_tools: true, context_window: 1_050_000 }] }],
     llm: { model: `c08-liter/${modelId}`, base_url: literUrl, api_key: secrets.C08_LITER_MASTER, protocol: 'chat' },
   }, null, 2));
   await write('gate.yaml', JSON.stringify({
