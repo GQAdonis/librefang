@@ -20,6 +20,8 @@ The source adapter constructs a versioned `ChannelScope` from provider, account,
 
 The route and occurrence are committed before handler or observer dispatch. Source occurrence and route revision are immutable after admission; a later authorized reassignment creates a new route revision for subsequent occurrences, not a rewrite of history. Use a conditional write/unique key so concurrent host intake of the same native occurrence produces one durable result. Keep provider payload and secrets out of route identity rows; projection policy controls content separately. The in-memory thread registry can remain a hot-path optimization, but the persisted route revision wins after restart or competing host claims. Prefer the existing `librefang-storage` abstraction and a new forward-only SurrealQL migration over a second channel-specific database. The supported cross-host profile requires a shared remote SurrealDB 3.3.0 store; embedded/local storage remains one-host only. The upstream-compatible SQLite fallback retains legacy behavior and reports the new durable profile unsupported unless it gains equivalent storage.
 
+Shared route, occurrence, action, and observer state does not make daemon configuration global. Each BossFang process supplies a stable host-local config-store scope, using `BOSSFANG_CONFIG_STORE_SCOPE` with `LIBREFANG_CONFIG_STORE_SCOPE` as the compatibility fallback. Persisted `config_overrides` are resolved inside that scope, so two hosts sharing the route database retain their own sidecar endpoint and other daemon-local settings across restart. The C08 operation uses its stable `bossA` and `bossB` process names as those scopes.
+
 **Alternative rejected:** Reuse the current `ThreadOwnershipRegistry` as authority. Its `Instant` TTL and process-local map cannot survive restart or coordinate hosts. **Alternative rejected:** Derive idempotency from a generated UUID. The UUID changes on redelivery.
 
 ### 2. Define handler precedence and a durable conflict outcome
@@ -60,6 +62,7 @@ Each reaction preserves its root occurrence, parent action, action ID, visited r
 - **A host dies between source commit and dispatch** → Recover the committed route/occurrence and resume by the same action ID; never issue a second identity.
 - **An effect's outcome is uncertain** → Record the uncertainty and reconcile by action ID; do not infer success or blindly repost.
 - **Cross-host claim races or stale grants** → Conditional source/route revision writes, current grant recheck, and visible conflict/withheld states prevent first-writer or stale-reader privilege escalation.
+- **Shared storage leaks one daemon's configuration into another** → Scope config-store overrides by stable BossFang host identity while leaving route and channel state shared; restart must reload each host's own scoped sidecar configuration.
 - **Policy-filtered content may still be sensitive** → Keep secrets and raw credentials out of route rows and logs; disclose only under the source grant and retain the projection classification.
 
 ## Migration Plan

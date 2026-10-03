@@ -47,7 +47,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
     config.processes[name] = { ...input.binaries.bossfang, args: ['--config', join(home, 'config.toml'), 'start', '--foreground'], cwd: home,
       envRefs: { LIBREFANG_CHANNEL_GATE_TOKEN: 'C08_GATE_EFFECT', LIBREFANG_CHANNEL_FABRIC_BEARER: 'C08_FABRIC_TOKEN',
         C08_UAR_OWNER: 'C08_UAR_OWNER', C08_SURREAL_PASSWORD: 'C08_SURREAL_PASSWORD' },
-      environment: { LIBREFANG_HOME: home, BOSSFANG_HOME: home,
+      environment: { LIBREFANG_HOME: home, BOSSFANG_HOME: home, BOSSFANG_CONFIG_STORE_SCOPE: name,
         LIBREFANG_CHANNEL_GATE_URL: config.services.gate.url, LIBREFANG_CHANNEL_GATE_IDENTITY_ISSUER: config.realm.issuer,
         LIBREFANG_CHANNEL_GATE_IDENTITY_SUBJECT: 'c08-host', LIBREFANG_CHANNEL_GATE_IDENTITY_REVISION: '1',
         LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER: channelGrantIssuer, LIBREFANG_CHANNEL_HANDLER_GRANT_ID: name === 'bossA' ? 'handler-a' : 'handler-b',
