@@ -186,7 +186,10 @@ export default async function run({ evaluate, signal }) {
       Name: uar.name, 'Expected runtime identity': uar.expectedRuntimeId,
       'Execution profile': 'uar.service-instance/1', 'Minimum version': uar.minimumVersion ?? '',
       'Allowed workspace roots': '', 'Required capabilities': '',
-      'Runtime endpoint': uar.url, 'Administration endpoint': uar.url, 'Models endpoint': uar.url,
+      'Runtime endpoint': uar.url,
+      'Administration endpoint': new URL('/api/uar', endpoint).toString(),
+      'Models endpoint': new URL('/v1', endpoint).toString(),
+      'Console endpoint': new URL('/admin', endpoint).toString(),
       'Protected credential · Runtime endpoint': runtimeCredential,
       'Protected credential · Administration endpoint': adminCredential
     };
