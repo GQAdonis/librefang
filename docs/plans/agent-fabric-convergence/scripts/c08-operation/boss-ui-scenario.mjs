@@ -102,6 +102,12 @@ function dom(action, args) {
     operational: nodes('span,div', root).some(node => node.children.length === 0 && text(node) === 'Operational'),
     identityObserved: root.textContent.includes(`Observed ${args.expectedRuntimeId}, version `)
   };
+  if (action === 'diagnose-observers') {
+    const panel = group('Channel observations');
+    return { panelVisible: Boolean(panel), alerts: nodes('[role="alert"]', panel ?? document).map(text).slice(0, 4),
+      articleIds: nodes('article h3', panel ?? document).map(text).slice(0, 8),
+      panelText: text(panel)?.slice(0, 500) };
+  }
   if (action === 'subscription') {
     const fields = pairs(root);
     const top = root.firstElementChild;
@@ -267,14 +273,15 @@ export default async function run({ evaluate, signal }) {
     await click('Refresh', { group: 'Channel observations' });
     const scope = { subscriptionId: exported.subscriptionId };
     async function visibleRecord(record) {
-      return wait('REAL_SUBSCRIPTION_NOT_DISPLAYED', () => call('subscription', scope), value => value
+      try { return await wait('REAL_SUBSCRIPTION_NOT_DISPLAYED', () => call('subscription', scope), value => value
         && value.fields.Workspace === workspace.id && Number(value.fields.Revision) === record.revision
         && value.fields.Cursor === (record.cursor ?? '—')
         && value.fields.Provider === record.source.provider && value.fields.Account === record.source.account
         && value.fields['Source workspace'] === record.source.workspace && value.fields['Room / channel'] === record.source.room
         && value.fields.Thread === (record.source.thread ?? '—') && value.fields.Sender === record.source.sender
         && value.fields['Observer instance'] === record.observerInstanceId
-        && value.state === (record.revoked ? 'Revoked' : record.paused ? 'Paused' : 'Active'));
+        && value.state === (record.revoked ? 'Revoked' : record.paused ? 'Paused' : 'Active')); }
+      catch (error) { receipt.observerDiagnostic = await call('diagnose-observers'); throw error; }
     }
     await visibleRecord(initial);
     const inventory = await read(`${base}/${encodeURIComponent(exported.subscriptionId)}/deliveries`);
