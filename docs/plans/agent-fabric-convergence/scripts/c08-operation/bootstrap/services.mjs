@@ -30,6 +30,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
       protocol: 'chat', default_model: modelId, enabled: true,
       models: [{ id: modelId, enabled: true, supports_tools: true, context_window: 1_050_000 }] }],
     llm: { model: `c08-liter/${modelId}`, base_url: literUrl, api_key: secrets.C08_LITER_MASTER, protocol: 'chat' },
+    resilience: { stream_start_timeout_ms: 150_000, retry_max_attempts: 1 },
   }, null, 2));
   await write('gate.yaml', JSON.stringify({
     server: { listen: '127.0.0.1:18458', admin_listen: new URL(config.services.gate.url).host,
