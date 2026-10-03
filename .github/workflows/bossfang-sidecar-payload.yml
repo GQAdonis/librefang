@@ -1,6 +1,9 @@
 name: BossFang sidecar payload for The Boss
 
 on:
+  push:
+    branches:
+      - codex/afc-c14-bossfang-miniapp
   workflow_dispatch:
     inputs:
       source_sha:
@@ -12,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: bossfang-sidecar-${{ inputs.source_sha }}
+  group: bossfang-sidecar-${{ inputs.source_sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -29,7 +32,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 240
     env:
-      SOURCE_SHA: ${{ inputs.source_sha }}
+      SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
       TARGET: ${{ matrix.target }}
       CARGO_INCREMENTAL: "0"
       CARGO_BUILD_JOBS: "1"
@@ -41,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ inputs.source_sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
@@ -81,7 +84,7 @@ jobs:
         run: node scripts/package-bossfang-sidecar.mjs "$TARGET"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: bossfang-sidecar-${{ matrix.target }}-${{ inputs.source_sha }}
+          name: bossfang-sidecar-${{ matrix.target }}-${{ inputs.source_sha || github.sha }}
           path: dist/bossfang-sidecar/${{ matrix.target }}/
           if-no-files-found: error
           retention-days: 30
