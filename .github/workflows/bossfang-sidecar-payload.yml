@@ -78,7 +78,13 @@ jobs:
         shell: bash
         env:
           SKIP_DASHBOARD_BUILD: "1"
-        run: cargo build --release --locked --target "$TARGET" -p librefang-cli --bin bossfang --features telemetry,surreal-backend,uar-driver
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            # Git Bash's Perl lacks modules required by vendored OpenSSL.
+            export PATH="/c/Strawberry/perl/bin:$PATH"
+            perl -MLocale::Maketext::Simple -e 'exit 0'
+          fi
+          cargo build --release --locked --target "$TARGET" -p librefang-cli --bin bossfang --features telemetry,surreal-backend,uar-driver
       - name: Record pinned payload and checksums
         shell: bash
         run: node scripts/package-bossfang-sidecar.mjs "$TARGET"
