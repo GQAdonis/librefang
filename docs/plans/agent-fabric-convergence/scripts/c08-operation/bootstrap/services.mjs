@@ -16,7 +16,12 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   await write('liter.toml', `[general]\nmaster_key = "\${C08_LITER_MASTER}"\n\n[[models]]\nname = ${quote(modelId)}\nprovider_model = ${quote(`${input.model.provider}/${modelId}`)}\napi_key = "\${OPENAI_API_KEY}"\nfallbacks = []\n`);
   await write('uar.json', JSON.stringify({
     server: { host: '127.0.0.1', grpc_port: 19516 },
-    service_instance: { instance_id: runtimeId, ownership: 'external', workspace_location: 'remote' },
+    service_instance: {
+      instance_id: runtimeId,
+      ownership: 'external',
+      workspace_location: 'remote',
+      credential_ref: 'env://C08_UAR_OWNER',
+    },
     security: { jwt_required: true, jwks_url: jwks, jwt_issuer: config.realm.issuer, jwt_audience: 'c08-uar',
       jwt_secret: secrets.C08_UAR_JWT_UNUSED, settings_mutation_auth_required: true },
     persistence: { provider: 'surreal', database_url: surrealUrl, surreal_ns: `${namespace}_uar`, surreal_db: 'main',
