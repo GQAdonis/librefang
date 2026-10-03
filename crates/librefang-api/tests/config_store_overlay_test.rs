@@ -414,10 +414,75 @@ async fn default_model_seed_then_runtime_write_survives_and_is_protected() {
 // ── C-005c: generic config_set overrides (config.toml ⊕ store) ───────────────
 
 use librefang_api::config_store_overlay::{
-    overlay_config_overrides, read_config_overrides, resolve_config_with_overrides,
-    write_config_overrides,
+    config_overrides_store_key, overlay_config_overrides, read_config_overrides,
+    resolve_config_with_overrides, write_config_overrides, CONFIG_OVERRIDES_KEY,
+    CONFIG_STORE_SCOPE_ENV, LEGACY_CONFIG_STORE_SCOPE_ENV,
 };
 use std::collections::BTreeMap;
+
+static CONFIG_STORE_SCOPE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct ConfigStoreScopeEnvGuard {
+    bossfang: Option<std::ffi::OsString>,
+    librefang: Option<std::ffi::OsString>,
+}
+
+impl ConfigStoreScopeEnvGuard {
+    fn capture() -> Self {
+        Self {
+            bossfang: std::env::var_os(CONFIG_STORE_SCOPE_ENV),
+            librefang: std::env::var_os(LEGACY_CONFIG_STORE_SCOPE_ENV),
+        }
+    }
+}
+
+impl Drop for ConfigStoreScopeEnvGuard {
+    fn drop(&mut self) {
+        match &self.bossfang {
+            Some(value) => std::env::set_var(CONFIG_STORE_SCOPE_ENV, value),
+            None => std::env::remove_var(CONFIG_STORE_SCOPE_ENV),
+        }
+        match &self.librefang {
+            Some(value) => std::env::set_var(LEGACY_CONFIG_STORE_SCOPE_ENV, value),
+            None => std::env::remove_var(LEGACY_CONFIG_STORE_SCOPE_ENV),
+        }
+    }
+}
+
+#[test]
+fn config_overrides_key_preserves_legacy_and_prefers_bossfang_scope() {
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _env = ConfigStoreScopeEnvGuard::capture();
+    std::env::remove_var(CONFIG_STORE_SCOPE_ENV);
+    std::env::remove_var(LEGACY_CONFIG_STORE_SCOPE_ENV);
+    assert_eq!(config_overrides_store_key().unwrap(), CONFIG_OVERRIDES_KEY);
+
+    std::env::set_var(LEGACY_CONFIG_STORE_SCOPE_ENV, "legacy-host");
+    assert_eq!(
+        config_overrides_store_key().unwrap(),
+        "config_overrides:legacy-host"
+    );
+
+    std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss-a");
+    assert_eq!(
+        config_overrides_store_key().unwrap(),
+        "config_overrides:boss-a"
+    );
+}
+
+#[test]
+fn config_overrides_key_rejects_invalid_explicit_scope() {
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _env = ConfigStoreScopeEnvGuard::capture();
+    std::env::set_var(LEGACY_CONFIG_STORE_SCOPE_ENV, "valid-fallback");
+    std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss:a");
+
+    let error = config_overrides_store_key().unwrap_err();
+    assert!(
+        error.contains(CONFIG_STORE_SCOPE_ENV),
+        "the selected invalid scope must be identified: {error}"
+    );
+}
 
 #[test]
 fn config_overrides_resolve_applies_allowlisted_and_skips_blocked() {
@@ -466,6 +531,29 @@ async fn config_overrides_store_round_trip() {
     let read = read_config_overrides(&storage).await.unwrap();
     assert_eq!(read.get("log_level"), Some(&serde_json::json!("debug")));
     assert_eq!(read.get("ui.theme"), Some(&serde_json::json!("dark")));
+}
+
+#[tokio::test]
+async fn config_overrides_store_isolates_explicit_host_scopes() {
+    let _lock = CONFIG_STORE_SCOPE_ENV_LOCK.lock().unwrap();
+    let _env = ConfigStoreScopeEnvGuard::capture();
+    std::env::remove_var(LEGACY_CONFIG_STORE_SCOPE_ENV);
+    let tmp = tempfile::tempdir().unwrap();
+    let storage = StorageConfig::embedded_default(tmp.path().join("operational"));
+
+    let mut host_a = BTreeMap::new();
+    host_a.insert("log_level".to_string(), serde_json::json!("debug"));
+    std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss-a");
+    write_config_overrides(&storage, &host_a).await.unwrap();
+
+    let mut host_b = BTreeMap::new();
+    host_b.insert("log_level".to_string(), serde_json::json!("warn"));
+    std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss-b");
+    write_config_overrides(&storage, &host_b).await.unwrap();
+
+    assert_eq!(read_config_overrides(&storage).await.unwrap(), host_b);
+    std::env::set_var(CONFIG_STORE_SCOPE_ENV, "boss-a");
+    assert_eq!(read_config_overrides(&storage).await.unwrap(), host_a);
 }
 
 #[tokio::test(flavor = "multi_thread")]
