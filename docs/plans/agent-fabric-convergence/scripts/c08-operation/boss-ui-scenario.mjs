@@ -79,8 +79,8 @@ function dom(action, args) {
   if (action === 'workspace') {
     const input = nodes('[role="combobox"]').find(node => usable(node) && node.getAttribute('aria-label') === 'Workspace');
     if (!input) return false;
-    input.focus(); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    return true;
+    input.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse', button: 0 }));
+    return input.getAttribute('aria-expanded') === 'true';
   }
   if (action === 'option') {
     const option = nodes('[role="option"]').find(node => usable(node)
