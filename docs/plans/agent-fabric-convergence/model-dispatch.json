@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "authority": "Canonical KBD task state and the linked OpenSpec checkbox; this file selects execution models only",
+  "policy": {
+    "architecture": "gpt-6-astra",
+    "implementation": "gpt-6.1-sol",
+    "boundedDocumentation": "gpt-6-luna"
+  },
+  "harnesses": {
+    "codex": {
+      "architecture": "gpt-6-astra",
+      "implementation": "gpt-6.1-sol",
+      "boundedDocumentation": "gpt-6-luna"
+    },
+    "claude-code": {
+      "architecture": "opus",
+      "implementation": "sonnet",
+      "boundedDocumentation": "haiku"
+    },
+    "opencode": {
+      "architecture": "github-copilot/gpt-6-astra",
+      "implementation": "github-copilot/gpt-6.1-sol",
+      "boundedDocumentation": "github-copilot/gpt-6-luna"
+    },
+    "kimi-code": {
+      "architecture": null,
+      "implementation": "kimi-code/k3",
+      "boundedDocumentation": "kimi-code/k3"
+    },
+    "deepseek-harness": {
+      "architecture": null,
+      "implementation": null,
+      "boundedDocumentation": null
+    }
+  },
+  "tasks": {
+    "C08.2": "architecture",
+    "C08.3": "implementation",
+    "C10.1": "architecture",
+    "C10.2": "implementation",
+    "C10.3": "implementation",
+    "C11.1": "implementation",
+    "C11.2": "implementation",
+    "C11.3": "implementation",
+    "C12.1": "architecture",
+    "C12.2": "implementation",
+    "C12.3": "implementation",
+    "C13.1": "architecture",
+    "C13.2": "implementation",
+    "C13.3": "implementation",
+    "C14.1": "implementation",
+    "C14.2": "architecture",
+    "C14.3": "implementation",
+    "C15.1": "implementation",
+    "C15.2": "implementation",
+    "C15.3": "implementation",
+    "C16.1": "implementation",
+    "C16.2": "implementation",
+    "C16.3": "boundedDocumentation",
+    "C17.1": "architecture",
+    "C17.2": "implementation",
+    "C17.3": "implementation",
+    "C18.1": "architecture",
+    "C18.2": "implementation",
+    "C18.3": "architecture"
+  }
+}

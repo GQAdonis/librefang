@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "platform": "darwin",
+  "cases": [
+    {
+      "name": "ready refuses unresolved approved creation task",
+      "status": "passed"
+    },
+    {
+      "name": "implemented operation accepted after recorded creation completion",
+      "status": "passed"
+    },
+    {
+      "name": "baseline launch cannot substitute feature operation",
+      "status": "passed"
+    },
+    {
+      "name": "delivery succeeds after actual feature operation",
+      "status": "passed"
+    }
+  ],
+  "status": "passed"
+}

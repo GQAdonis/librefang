@@ -1,0 +1,10 @@
+import path from 'node:path';import fs from 'node:fs/promises';import {root,full,command,assert,receipt} from './cadence-pipeline-operations.mjs';
+const state=path.join(root,'repair-state'),read=()=>fs.readFile(path.join(state,'state.json'),'utf8').then(JSON.parse);let s=await read();const a=s.iterations[0];
+await command(full,state,'checkpoint',{id:'build',reason:'Repair observed invalid sum input after failed feature operation'});
+await command(full,state,'checkpoint',{id:'launch'});await command(full,state,'checkpoint',{id:'feature'});await command(full,state,'finish',{completion:{tasks:a.scope.tasks,changes:a.scope.changes,phases:[]}});
+await command(full,state,'work-ahead start',{id:'dependent'});await command(full,state,'work-ahead promote',{id:'dependent'},'unreconciled-promote',false);
+s=await read();const repaired=s.candidates.at(-1);assert(s.candidates[0].id!==repaired.id,'repair did not freeze new candidate');
+await command(full,state,'work-ahead reconcile',{id:'dependent',candidateId:repaired.id,baseSourceRefs:[{repository:path.join(root,'repair-b')}],authorityRefs:['operator:repair'],evidenceRef:'fixture:actual-repaired-operation'});
+await command(full,state,'work-ahead promote',{id:'dependent'});
+s=await read();assert(s.iterations[0].checkpoints.some(c=>c.status==='failed'&&c.invalidatedAt),'failed history lost');
+await receipt('repair-priority',{status:'passed',state,oldCandidate:s.candidates[0].id,repairedCandidate:repaired.id,detail:'Real failed operation, dependent start refused, changed-source repair, explicit base reconciliation before promotion; initial recovery invocation correctly refused missing build reason, resumed with reason'});

@@ -1,0 +1,66 @@
+{
+  "capturedAt": "2026-09-30T18:52:35.464Z",
+  "method": "Read existing JSON only; no runtime operation",
+  "cadence": {
+    "source": ".prometheus/cadence/state.json",
+    "sha256": "32c88839c476f7107f72e917632c27a6650e718293ec7f02b75735a246b29801",
+    "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+    "activeIterationId": null,
+    "successfulDeliveries": 5,
+    "publicationDue": true,
+    "nextPublicationDelivery": 5,
+    "profile": {
+      "iterationMinutes": 120,
+      "publication": {
+        "mode": "every",
+        "every": 2,
+        "platforms": [
+          "darwin-arm64",
+          "darwin-x64",
+          "win32-x64",
+          "win32-arm64"
+        ],
+        "websiteUrl": "https://the-boss.know-me.tools",
+        "procedure": {
+          "repository": "Prometheus-AGS/the-boss",
+          "workflow": "the-boss-release.yml",
+          "profile": "uar-enabled",
+          "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+          "requiredInputs": [
+            "release_version",
+            "release_profile",
+            "platforms",
+            "uar_win32_x64_record_url",
+            "uar_win32_arm64_record_url",
+            "uar_darwin_arm64_record_url",
+            "uar_darwin_x64_record_url"
+          ],
+          "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+          "landingRepository": "Know-Me-Tools/boss-landing-spot",
+          "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+        },
+        "requireMetadata": true,
+        "acceptancePlatforms": []
+      }
+    }
+  },
+  "kbd": {
+    "source": ".kbd-orchestrator/current-waypoint.json",
+    "sha256": "b7e9701957b058f909e19ec44a82b46c553316c9de2e948ce10b0278ec3aedd2",
+    "revision": 397,
+    "activePhase": "agent-fabric-convergence::delivery-cadence-pipeline",
+    "projectWideImplementationCompleted": 14,
+    "projectWideImplementationTotal": 24,
+    "conflicts": 0
+  },
+  "child": {
+    "source": ".kbd-orchestrator/phases/agent-fabric-convergence/children/delivery-cadence-pipeline/progress.json",
+    "sourceRevision": 397,
+    "completion": {
+      "completed": 0,
+      "total": 0,
+      "status": "PENDING"
+    },
+    "changesCount": 0
+  }
+}

@@ -31,7 +31,9 @@
       "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
       "landingRepository": "Know-Me-Tools/boss-landing-spot",
       "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
-    }
+    },
+    "requireMetadata": true,
+    "acceptancePlatforms": []
   },
   "budgets": {
     "maxIterations": null,
@@ -42,7 +44,19 @@
     "phase": "agent-fabric-convergence",
     "taskOwner": "kbd-apply",
     "bossRepository": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
-    "approval": "Operator requested 120-minute autonomous increments, local Mac build each and all Mac/Windows through website every second successful delivery on 2026-09-28."
+    "approval": "Operator requested 120-minute autonomous increments, local Mac build each and all Mac/Windows through website every second successful delivery on 2026-09-28.",
+    "canonicalCommand": {
+      "command": "node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-kbd-adapter.mjs",
+        "snapshot",
+        "--project",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+    },
+    "cadenceVersion": "1.2.0",
+    "publisherCapabilityAssessment": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/examples/boss-consumer-capabilities.json"
   },
   "checkpoints": [
     {
@@ -54,25 +68,29 @@
       ],
       "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
       "required": true,
-      "timeoutMs": 14400000
+      "timeoutMs": 14400000,
+      "outputRoots": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build/dist"
+      ]
     },
     {
       "id": "mac-functional-launch",
       "kind": "run",
       "command": "/Users/gqadonis/.nvm/versions/node/v22.20.0/bin/node",
       "args": [
-        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
         "--repository",
         "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
         "--scenario",
-        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
         "--require-scenario",
         "--receipt",
         "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/mac-functional-launch.json"
       ],
       "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/the-boss-d01-build",
       "required": true,
-      "timeoutMs": 120000
+      "timeoutMs": 120000,
+      "purpose": "launch"
     }
   ],
   "team": {
@@ -102,6 +120,27 @@
     "baselineFunction": "Fresh onboarding opens provider administration; this does not prove inference.",
     "perIncrementFunction": "The executing owner must also operate the newly completed feature and record its behavior in the delivery receipt before finish.",
     "compassMinutes": 60,
-    "publicationPublisherLimit": 1
+    "publicationPublisherLimit": 1,
+    "installedAcceptance": "Tracked separately from publication scheduling by operator approval 2026-09-29; Windows acceptance remains pending.",
+    "workAhead": "One explicitly authorized independent scope in isolated checkout/output roots after production freeze; preserve original work start and canonical KBD owner.",
+    "publisher": "Automatic Cadence adapter dispatch remains blocked by recorded Boss consumer capabilities. Existing manual publication must supply exact artifacts, metadata and site evidence."
+  },
+  "learning": {
+    "command": "node",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-karpathy-adapter.mjs",
+      "--project",
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "--input",
+      "{report}",
+      "--recorder",
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/record-progress.mjs"
+    ],
+    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+  },
+  "pipeline": {
+    "workAheadLimit": 1,
+    "maxInFlightReleases": 1,
+    "maxPendingReleases": 1
   }
 }

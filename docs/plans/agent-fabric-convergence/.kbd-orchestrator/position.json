@@ -2,27 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 392,
-  "derivedRevision": 392,
+  "sourceRevision": 491,
+  "derivedRevision": 491,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 153
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 252
   },
   "conflictCount": 0,
-  "updatedAt": "2026-09-30T17:21:23.779657Z",
+  "updatedAt": "2026-10-03T10:43:56.884984Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c08-bossfang-and-fabric-observer-routing",
-    "C08.2"
+    "afc-c10-feedback-workflow-and-governed-connector-effects",
+    "C10.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 14,
-      "total": 24
+      "done": 16,
+      "total": 25
     },
     "children": [
       {
@@ -31,10 +31,32 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 10,
+          "done": 11,
           "total": 20
         },
         "children": [
+          {
+            "type": "phase",
+            "id": "delivery-cadence-pipeline",
+            "canonicalId": "agent-fabric-convergence::delivery-cadence-pipeline",
+            "status": "COMPLETE",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-delivery-cadence-pipeline",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 13,
+                  "total": 13
+                }
+              }
+            ],
+            "annotations": []
+          },
           {
             "type": "phase",
             "id": "release-cadence-optimization",
@@ -207,9 +229,9 @@
           {
             "type": "change",
             "id": "afc-c08-bossfang-and-fabric-observer-routing",
-            "status": "PENDING",
+            "status": "COMPLETE",
             "progress": {
-              "done": 1,
+              "done": 3,
               "total": 3
             }
           },

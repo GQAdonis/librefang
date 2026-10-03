@@ -1,0 +1,17 @@
+{
+  "mode": "artifact",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.6-sol",
+  "isolation_mode": "harness-native",
+  "producer_model": "GPT-6 (exact variant unavailable)",
+  "cross_model_check": "producer-exact-identity-unverified",
+  "findings": [],
+  "checked_classes": [
+    "Build-vs-adopt blind spots — the analysis evaluates reuse of the existing Cadence engine and Boss workflow, references in-process queue and lock primitives, rejects the service-backed queue against the no-new-service constraint, and identifies the remaining domain-specific work.",
+    "Candidates listed but not evaluated — every candidate has a verdict, fit statement, maintenance evidence or bounded baseline, risks, and decision rationale.",
+    "Stale or unverifiable landscape claims — dated registry and repository observations are labeled as snapshots, source-only conclusions remain bounded, and runtime compatibility or workflow execution is explicitly left unverified.",
+    "Missing solution category — existing-system adaptation, in-process queueing, filesystem locking, and external durable workflow infrastructure are represented; the recommendation explains why no additional dependency or daemon fits the stated constraints.",
+    "Recommendation contradicts assessment or constraints — the recommendation directly addresses the handed-off admission, locking, debt-accounting, receipt-adoption, and full/mini divergence gaps while preserving one KBD owner, Node .mjs portability, no new daemon, local Mac operation, and serialized publication.",
+    "Scope expansion or publication/concurrency contradiction — proposed work-ahead remains one durably authorized future scope, publication ownership remains serialized, remote serialization limits are acknowledged, and detailed schemas and adapter conformance are correctly deferred to Plan."
+  ]
+}

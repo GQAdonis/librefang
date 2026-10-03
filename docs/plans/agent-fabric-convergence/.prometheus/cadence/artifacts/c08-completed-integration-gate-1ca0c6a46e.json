@@ -1,0 +1,103 @@
+{
+  "schema": "c08-completed-integration-gate/1",
+  "recordedAt": "2026-10-03T10:38:19.394Z",
+  "runId": "sha256:b86b0e815e0e9cb76153189679f5a17e2d81ecd95a84eece3e90f2d18cb97fa6",
+  "source": {
+    "operationRevision": "1ca0c6a46eed0f15c5047237763c9b1d60e033b5",
+    "bossFangRevision": "71a7e8c67b578a20d86e1c931356556ceb498b97",
+    "uarRevision": "53b063622b4ed8ce1f2ec30f9788c4d9d05cbfa5",
+    "bossRevision": "7bf92d7620359d93091b7ec990f1380ac2265c65"
+  },
+  "operation": {
+    "status": "success",
+    "coverage": "observed",
+    "functionalAcceptance": "passed",
+    "stepCount": 122,
+    "allStepsObserved": true,
+    "scenarios": {
+      "handlerConflictAndRecipient": "passed",
+      "observerIsolation": "passed",
+      "revocationRestartReplay": "passed",
+      "replyEchoAndScope": "passed",
+      "boundedReaction": "passed",
+      "detachAndOwnerCancel": "passed"
+    },
+    "startedAt": "2026-10-03T10:33:38.985Z",
+    "finishedAt": "2026-10-03T10:36:20.333Z",
+    "sha256": "2db92853686861e363759ee34c06684989e7939243e3a5f4176025d213246316",
+    "protectedPath": "/private/tmp/c08-operation-1ca0c6a46e-1791027000008/routing-receipt.json"
+  },
+  "packagedUi": {
+    "status": "observed",
+    "launchStatus": "success",
+    "functionalAcceptance": "scenario-confirmed",
+    "actions": [
+      "Open Runtime instances",
+      "Save",
+      "Make default",
+      "Check connection",
+      "Open Local observers",
+      "Refresh",
+      "Delivery details",
+      "Pause observation",
+      "Resume observation"
+    ],
+    "initialRevision": 1,
+    "pausedRevision": 2,
+    "resumedRevision": 3,
+    "cursorPreserved": true,
+    "receiptSha256": "4a041e7a18b5611748f43b0a1abcfcec7b5c3f4a4a4399ec3c886630a2a7cd70",
+    "launchSha256": "f7de6abc7c28f728851c34bc54231ff2b6a736fce3aa0b3979a1b53ee25e9ee5",
+    "protectedReceiptPath": "/private/tmp/c08-operation-1ca0c6a46e-1791027000008/ui-receipt.json"
+  },
+  "cleanup": {
+    "driverExitCode": 0,
+    "processes": [
+      {
+        "name": "bossUi",
+        "exited": true,
+        "exitCode": 0
+      },
+      {
+        "name": "fabric",
+        "exited": true,
+        "exitCode": 0
+      },
+      {
+        "name": "uar",
+        "exited": true,
+        "exitCode": 0
+      },
+      {
+        "name": "bossB",
+        "exited": true,
+        "exitCode": 0
+      },
+      {
+        "name": "bossA",
+        "exited": true,
+        "exitCode": 0
+      },
+      {
+        "name": "gate",
+        "exited": true,
+        "exitCode": 0
+      }
+    ],
+    "ownedContainersStopped": 3,
+    "allOwnedContainersStopped": true,
+    "bootstrapSha256": "e9cc79cc69e608b1431f815b6bd16975288efeeb3914c03ff550ed01742a6642",
+    "protectedReceiptPath": "/private/tmp/c08-operation-1ca0c6a46e-1791027000008/routing-receipt.json.bootstrap.json"
+  },
+  "build": {
+    "bossMacRevision": "7bf92d7620359d93091b7ec990f1380ac2265c65",
+    "installer": "/Users/gqadonis/.claude/worktrees/upstream-grok-compatibility/dist/The-Boss-2.2.11-mac-arm64.dmg",
+    "installerSha256": "12801a8a18255e5745d04610c9551e45174c02224d5031f1be0105e5d8aee16c",
+    "installerIntegrity": "validated by pnpm build:mac:arm64",
+    "notarized": false
+  },
+  "limits": [
+    "This is a disposable Mac ARM64 operation, not Windows installed acceptance or publication.",
+    "The model path was the explicitly configured Groq/Liter route; no alternative provider was silently substituted."
+  ]
+}

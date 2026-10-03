@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "platform": "darwin",
+  "architecture": "arm64",
+  "claims": "Actual generated Cadence CLI and local Node consumer; synthetic external URLs and manifests, not GitHub or website publication.",
+  "results": [
+    {
+      "name": "count threshold creates first candidate obligation",
+      "status": "passed",
+      "obligationId": "87058f9e-bc7a-4659-bd91-68a2e84afa6a",
+      "successfulDeliveries": 2,
+      "observedAt": "2026-09-30T20:29:19.218Z"
+    },
+    {
+      "name": "distinct debt survives later delivery; capacity blocks unrelated admission",
+      "status": "passed",
+      "obligationIds": [
+        "87058f9e-bc7a-4659-bd91-68a2e84afa6a",
+        "eb75cc12-ee8a-42d2-b651-f3c773f2b1d3"
+      ],
+      "refusal": "Publication pending capacity exceeded; reconcile owed candidates before unrelated admission",
+      "observedAt": "2026-09-30T20:29:31.230Z"
+    },
+    {
+      "name": "local dispatch idempotency, partial reconciliation, immutable receipts and acceptance separation",
+      "status": "passed",
+      "attemptId": "c8288e6c-c7f4-436d-9b90-4b9e682f573f",
+      "fulfilled": "87058f9e-bc7a-4659-bd91-68a2e84afa6a",
+      "remaining": "eb75cc12-ee8a-42d2-b651-f3c773f2b1d3",
+      "receiptDigest": "6a2822df0f9963f717fdea99cb7250ede2d0058fff4c7755081550bbe698a3a2",
+      "observedAt": "2026-09-30T20:29:32.949Z"
+    },
+    {
+      "name": "stale predecessor, started supersession and unsupported consumer refused",
+      "status": "passed",
+      "blockedCapabilities": [
+        "immutableSourceDispatch",
+        "externalCorrelation",
+        "artifactProvenance",
+        "targetSerialization",
+        "expectedPredecessorPromotion",
+        "siteReceipts"
+      ],
+      "observedAt": "2026-09-30T20:29:33.378Z"
+    },
+    {
+      "name": "unknown timing and distinct task/change/phase accounting",
+      "status": "passed",
+      "counts": {
+        "tasks": 4,
+        "changes": 4,
+        "phases": 0
+      },
+      "coverage": [
+        0.03670651624852669,
+        0.05545617173524149,
+        0.04193273733503619,
+        0.046067415730337076
+      ],
+      "wallMinutesUnion": 0.31666666666666665,
+      "observedAt": "2026-09-30T20:29:33.506Z"
+    },
+    {
+      "name": "manual authority, missed UTC intervals, no-change and configuration debt preservation",
+      "status": "passed",
+      "manualObligation": "23fca226-a37a-4928-b30f-bae72702f844",
+      "interval": {
+        "first": 0,
+        "last": 24,
+        "anchorUtc": "2026-01-01T00:00:00Z",
+        "intervalMinutes": 60
+      },
+      "observedAt": "2026-09-30T20:30:51.942Z"
+    },
+    {
+      "name": "either scheduling and held-not-ready windows",
+      "status": "passed",
+      "obligation": "6a179346-3576-48e3-bad7-cde50b03389a",
+      "reason": [
+        "interval"
+      ],
+      "observedAt": "2026-09-30T20:30:55.222Z"
+    },
+    {
+      "name": "explicit unstarted supersession preserves scope and original due",
+      "status": "passed",
+      "obligation": "eb75cc12-ee8a-42d2-b651-f3c773f2b1d3",
+      "originalDue": "2026-09-30T20:29:30.332Z",
+      "candidate": "dd74b119-d743-4204-a3b7-9e839a1b249f",
+      "observedAt": "2026-09-30T20:31:00.116Z"
+    },
+    {
+      "name": "unknown acknowledgement prevents replay and reconciles observed effect",
+      "status": "passed",
+      "attemptId": "615d4c63-b8b7-4196-a549-13e024e552cf",
+      "remaining": [
+        "artifact:darwin-arm64",
+        "artifact:win32-x64",
+        "website"
+      ],
+      "observedAt": "2026-09-30T20:31:01.355Z"
+    },
+    {
+      "name": "overlapping actual build observation and explicit reopening accounting",
+      "status": "passed",
+      "observedAt": "2026-09-30T20:31:42.256Z",
+      "overlapBeforeMinutes": 0.0036333333333333335,
+      "overlapAfterMinutes": 0.0036333333333333335,
+      "gross": {
+        "tasks": 5,
+        "changes": 5,
+        "phases": 0
+      },
+      "reopened": {
+        "tasks": 1,
+        "changes": 0,
+        "phases": 0
+      },
+      "net": {
+        "tasks": 4,
+        "changes": 5,
+        "phases": 0
+      }
+    }
+  ]
+}

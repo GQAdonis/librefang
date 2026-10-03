@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "platform": "darwin",
+  "cases": [
+    {
+      "name": "frozen mini and copied full mini payload parity before schema correction",
+      "status": "passed",
+      "files": 49,
+      "payloadDigest": "ea694c10708844f10152a857abe86dcc5d8bbe1a319b00c86bd3abbbc9678c10"
+    },
+    {
+      "name": "metadata reference closure and schema JSON documents",
+      "status": "passed",
+      "limitation": "Document/reference consistency only; no external general JSON Schema validator available"
+    },
+    {
+      "name": "published example creation task admitted and missing operation refuses ready",
+      "status": "passed"
+    },
+    {
+      "name": "copied adapter registration preserves hooks and repeats idempotently",
+      "status": "passed"
+    }
+  ],
+  "startedAt": "2026-09-30T20:30:32.816Z",
+  "status": "passed",
+  "finishedAt": "2026-09-30T20:30:34.520Z"
+}

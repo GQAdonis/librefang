@@ -1,0 +1,42 @@
+{
+  "observedAt": "2026-09-30T20:13:57.069Z",
+  "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+  "schemaVersion": 2,
+  "activeIterationId": null,
+  "successfulDeliveries": 5,
+  "publicationDue": true,
+  "iterationMinutes": 120,
+  "publication": {
+    "mode": "every",
+    "every": 2,
+    "platforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "websiteUrl": "https://the-boss.know-me.tools",
+    "procedure": {
+      "repository": "Prometheus-AGS/the-boss",
+      "workflow": "the-boss-release.yml",
+      "profile": "uar-enabled",
+      "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+      "requiredInputs": [
+        "release_version",
+        "release_profile",
+        "platforms",
+        "uar_win32_x64_record_url",
+        "uar_win32_arm64_record_url",
+        "uar_darwin_arm64_record_url",
+        "uar_darwin_x64_record_url"
+      ],
+      "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+      "landingRepository": "Know-Me-Tools/boss-landing-spot",
+      "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+    },
+    "requireMetadata": true,
+    "acceptancePlatforms": []
+  },
+  "historyPolicy": "Preserve; no migration before completed boundary",
+  "pendingCheckpointAttempts": []
+}

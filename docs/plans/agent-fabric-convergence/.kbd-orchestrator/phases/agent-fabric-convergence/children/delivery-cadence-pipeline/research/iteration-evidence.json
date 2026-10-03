@@ -1,0 +1,196 @@
+{
+  "source": ".prometheus/cadence/reports/34d31856-96c5-402f-a5d2-cada5b66c8e7-96525ac0-5ec1-46c4-ae9a-40dac1da23aa.json",
+  "capturedAt": "2026-09-30T18:45:07.716Z",
+  "rows": [
+    {
+      "index": 1,
+      "counts": {
+        "tasks": 1,
+        "changes": 0,
+        "phases": 0
+      },
+      "minutes": {
+        "elapsed": 67.37881666666667,
+        "active": null,
+        "observed": 21.278333333333332,
+        "observedWork": 21.278333333333332,
+        "observedWaiting": null,
+        "unattributed": 46.10048333333333,
+        "planning": null,
+        "implementation": null,
+        "build": 20.998066666666666,
+        "run": 0.28026666666666666,
+        "feature-operation": null,
+        "rework": null,
+        "coordination": null,
+        "resource-wait": null,
+        "publication": null,
+        "human-wait": null,
+        "hook": 0,
+        "publicationWithinIteration": null,
+        "childInterruptions": null
+      },
+      "timing": {
+        "coverage": 0.31580152911560483,
+        "requiredCoverage": 0.99,
+        "optimizationEligible": false,
+        "invalidSpans": 0,
+        "openActivities": []
+      },
+      "buildAttempts": 4,
+      "runAttempts": 4
+    },
+    {
+      "index": 2,
+      "counts": {
+        "tasks": 1,
+        "changes": 0,
+        "phases": 0
+      },
+      "minutes": {
+        "elapsed": 54.84408333333333,
+        "active": null,
+        "observed": 5.7012,
+        "observedWork": 5.7012,
+        "observedWaiting": null,
+        "unattributed": 49.14288333333333,
+        "planning": null,
+        "implementation": null,
+        "build": 5.657,
+        "run": 0.0442,
+        "feature-operation": null,
+        "rework": null,
+        "coordination": null,
+        "resource-wait": null,
+        "publication": null,
+        "human-wait": null,
+        "hook": 0,
+        "publicationWithinIteration": null,
+        "childInterruptions": null
+      },
+      "timing": {
+        "coverage": 0.10395287246117403,
+        "requiredCoverage": 0.99,
+        "optimizationEligible": false,
+        "invalidSpans": 0,
+        "openActivities": []
+      },
+      "buildAttempts": 2,
+      "runAttempts": 1
+    },
+    {
+      "index": 3,
+      "counts": {
+        "tasks": 0,
+        "changes": 0,
+        "phases": 0
+      },
+      "minutes": {
+        "elapsed": 109.581,
+        "active": null,
+        "observed": 11.817583333333333,
+        "observedWork": 11.817583333333333,
+        "observedWaiting": null,
+        "unattributed": 97.76341666666667,
+        "planning": null,
+        "implementation": null,
+        "build": 11.203166666666666,
+        "run": 0.6144166666666667,
+        "feature-operation": null,
+        "rework": null,
+        "coordination": null,
+        "resource-wait": null,
+        "publication": null,
+        "human-wait": null,
+        "hook": 0,
+        "publicationWithinIteration": null,
+        "childInterruptions": null
+      },
+      "timing": {
+        "coverage": 0.10784336092327441,
+        "requiredCoverage": 0.99,
+        "optimizationEligible": false,
+        "invalidSpans": 1,
+        "openActivities": []
+      },
+      "buildAttempts": 2,
+      "runAttempts": 2
+    },
+    {
+      "index": 4,
+      "counts": {
+        "tasks": 1,
+        "changes": 0,
+        "phases": 1
+      },
+      "minutes": {
+        "elapsed": 763.4374,
+        "active": null,
+        "observed": 381.4758,
+        "observedWork": 381.4758,
+        "observedWaiting": null,
+        "unattributed": 381.96160000000003,
+        "planning": 41.53491666666667,
+        "implementation": 98.47928333333333,
+        "build": 99.04508333333334,
+        "run": 11.77515,
+        "feature-operation": null,
+        "rework": 166.7338,
+        "coordination": null,
+        "resource-wait": null,
+        "publication": null,
+        "human-wait": null,
+        "hook": 0.000016666666666666667,
+        "publicationWithinIteration": null,
+        "childInterruptions": 369.35115
+      },
+      "timing": {
+        "coverage": 0.49968183376921277,
+        "requiredCoverage": 0.99,
+        "optimizationEligible": false,
+        "invalidSpans": 0,
+        "openActivities": []
+      },
+      "buildAttempts": 14,
+      "runAttempts": 24
+    },
+    {
+      "index": 5,
+      "counts": {
+        "tasks": 1,
+        "changes": 1,
+        "phases": 0
+      },
+      "minutes": {
+        "elapsed": 454.2339666666667,
+        "active": null,
+        "observed": 163.62796666666668,
+        "observedWork": 163.62796666666668,
+        "observedWaiting": null,
+        "unattributed": 290.606,
+        "planning": null,
+        "implementation": 94.716,
+        "build": 43.44645,
+        "run": 17.565516666666667,
+        "feature-operation": null,
+        "rework": 7.9,
+        "coordination": null,
+        "resource-wait": null,
+        "publication": null,
+        "human-wait": null,
+        "hook": 0,
+        "publicationWithinIteration": null,
+        "childInterruptions": null
+      },
+      "timing": {
+        "coverage": 0.36022838157046677,
+        "requiredCoverage": 0.99,
+        "optimizationEligible": false,
+        "invalidSpans": 0,
+        "openActivities": []
+      },
+      "buildAttempts": 7,
+      "runAttempts": 25
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-30T21:16:26.085Z",
+  "authority": "Direct operator instruction in this conversation",
+  "instruction": "Skip the windows validation and commit and push the mini and full skill packs and redistribute the full skill package on this machine with the cadence updates everywhere so it is immediately picked up",
+  "scope": "Native Windows validation for delivery-cadence-pipeline 1.2.0 only",
+  "disposition": "skipped-by-operator",
+  "evidenceClaim": "No native Windows operation success claimed",
+  "notWaived": [
+    "Boss publisher consumer capability follow-up",
+    "Existing parent publication obligations",
+    "Installed product acceptance tracked separately"
+  ]
+}
