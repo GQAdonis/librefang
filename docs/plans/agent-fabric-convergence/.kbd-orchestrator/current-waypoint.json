@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 478,
-  "derivedRevision": 478,
+  "sourceRevision": 491,
+  "derivedRevision": 491,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 239
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 252
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,19 +23,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c08-bossfang-and-fabric-observer-routing",
-  "currentTask": "C08.2",
+  "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+  "currentTask": "C10.1",
   "status": "running",
   "lifecycle": "running",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 15,
+  "implementationCompleted": 16,
   "implementationTotal": 25,
   "planRevision": 6,
-  "revision": 478,
+  "revision": 491,
   "exactNextCommand": "/kbd-status",
-  "nextChange": "afc-c08-bossfang-and-fabric-observer-routing",
-  "nextTask": "C08.2",
-  "updatedAt": "2026-09-30T21:25:37.338845Z"
+  "nextChange": "afc-c10-feedback-workflow-and-governed-connector-effects",
+  "nextTask": "C10.1",
+  "updatedAt": "2026-10-03T10:43:56.884984Z"
 }

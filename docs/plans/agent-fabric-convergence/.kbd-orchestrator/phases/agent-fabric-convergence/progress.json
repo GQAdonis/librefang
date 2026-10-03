@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 477,
-  "derivedRevision": 477,
+  "sourceRevision": 491,
+  "derivedRevision": 491,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 238
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 252
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-09-30T21:25:36.500163Z",
+  "last_updated": "2026-10-03T10:43:56.884984Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
-  "changes_completed": 10,
+  "changes_completed": 11,
   "implementation_total": 20,
-  "implementation_completed": 10,
+  "implementation_completed": 11,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 10,
+      "completed": 11,
       "total": 20,
       "status": "IN_PROGRESS"
     },
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 15,
+      "completed": 16,
       "total": 25,
       "status": "IN_PROGRESS"
     },
@@ -174,12 +174,12 @@
     {
       "id": "afc-c08-bossfang-and-fabric-observer-routing",
       "title": "C08 — BossFang and Fabric observer routing",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
-      "next_task_pending": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
+      "tasks_done": 3,
+      "last_task_completed": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
