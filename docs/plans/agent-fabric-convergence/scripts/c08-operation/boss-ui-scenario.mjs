@@ -108,6 +108,12 @@ function dom(action, args) {
       articleIds: nodes('article h3', panel ?? document).map(text).slice(0, 8),
       panelText: text(panel)?.slice(0, 500) };
   }
+  if (action === 'diagnose-surface') return {
+    route: location.hash || location.pathname,
+    headings: nodes('h1,h2,h3').filter(visible).map(text).slice(0, 12),
+    controls: nodes('nav button,a[href*="/settings/"]').filter(visible).map(text).slice(0, 24),
+    alerts: nodes('[role="alert"]').filter(visible).map(text).slice(0, 4)
+  };
   if (action === 'subscription') {
     const fields = pairs(root);
     const top = root.firstElementChild;
@@ -170,7 +176,9 @@ export default async function run({ evaluate, signal }) {
       receipt.actions.push({ action: text, boundary: 'packaged-renderer-dom', at: now() });
     }
     async function selectSurface(text) {
-      const mode = await wait('ADMINISTRATION_SURFACE_NOT_ACTIONABLE', () => call('surface', { text }), Boolean, 90000);
+      let mode;
+      try { mode = await wait('ADMINISTRATION_SURFACE_NOT_ACTIONABLE', () => call('surface', { text }), Boolean, 90000); }
+      catch (error) { receipt.surfaceDiagnostic = await call('diagnose-surface'); throw error; }
       if (mode === 'select') await wait('ADMINISTRATION_SURFACE_OPTION_NOT_ACTIONABLE', () => call('option', { text }));
       receipt.actions.push({ action: `Open ${text}`, boundary: 'packaged-renderer-dom', at: now() });
     }
