@@ -1259,7 +1259,10 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     payload_sha256: None,
                     classification: "scoped_reply",
                     root_occurrence_id: &receipt.root_occurrence_id,
-                    parent_action_id: receipt.parent_action_id.as_deref(),
+                    parent_action_id: receipt.parent_action_id.as_deref()
+                        .map(uuid::Uuid::parse_str)
+                        .transpose()
+                        .map_err(|_| "scoped reply parent action ID is invalid".to_string())?,
                     route_identity: &receipt.route_identity,
                     visited_routes: &receipt.visited_routes,
                     remaining_depth: receipt.remaining_depth,
