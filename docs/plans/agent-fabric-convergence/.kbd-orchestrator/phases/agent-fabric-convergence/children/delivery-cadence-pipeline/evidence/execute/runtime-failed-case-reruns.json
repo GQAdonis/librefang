@@ -44,7 +44,7 @@
       "signal": "SIGKILL",
       "finishedAt": "2026-09-30T20:30:05.205Z",
       "logPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-cancel-a/attempts/aba18912-1365-4e23-8456-0b970f8c2d2f/output.log",
-      "operationToken": "c47e8ca3-9f25-4302-80a6-85bd4c35364a"
+      "operationToken": "[REDACTED]"
     },
     "collision": {
       "id": "build",
@@ -74,7 +74,7 @@
       "hostname": "Traviss-MacBook-Pro-4.local",
       "finishedAt": "2026-09-30T20:30:04.837Z",
       "processStopped": true,
-      "operationToken": "9dd22b46-e67a-475e-babe-391503346973"
+      "operationToken": "[REDACTED]"
     },
     "resourceReleased": true,
     "observedAt": "2026-09-30T20:30:05.480Z"
@@ -88,7 +88,7 @@
       "candidateId": "6badadaa-e9c8-4d7c-b2a1-5a90f6fc7d75",
       "iterationId": "bbe57ee9-4e48-44e3-9cee-0f8732b0da71",
       "kind": "build",
-      "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+      "operationToken": "[REDACTED]",
       "state": "unknown",
       "claimedAt": "2026-09-30T20:29:10.287Z",
       "owner": {
@@ -126,11 +126,11 @@
       "resourceClaims": [
         {
           "schemaVersion": 1,
-          "key": "3e360de21957ed72c1d56f4377852f5951306a3a42e45f747cb1245f3ff08db0",
+          "key": "[REDACTED]",
           "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt",
           "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
           "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
-          "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+          "operationToken": "[REDACTED]",
           "owner": {
             "pid": 29849,
             "hostname": "Traviss-MacBook-Pro-4.local"
@@ -141,11 +141,11 @@
         },
         {
           "schemaVersion": 1,
-          "key": "b87d39f8b0609a2f17fd22c23002665627f5f74966380caaf48674ce0b839930",
+          "key": "[REDACTED]",
           "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt/dist",
           "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
           "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
-          "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+          "operationToken": "[REDACTED]",
           "owner": {
             "pid": 29849,
             "hostname": "Traviss-MacBook-Pro-4.local"
@@ -164,7 +164,7 @@
       "candidateId": "6badadaa-e9c8-4d7c-b2a1-5a90f6fc7d75",
       "iterationId": "bbe57ee9-4e48-44e3-9cee-0f8732b0da71",
       "kind": "build",
-      "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+      "operationToken": "[REDACTED]",
       "state": "failed",
       "claimedAt": "2026-09-30T20:29:10.287Z",
       "owner": {
@@ -202,11 +202,11 @@
       "resourceClaims": [
         {
           "schemaVersion": 1,
-          "key": "3e360de21957ed72c1d56f4377852f5951306a3a42e45f747cb1245f3ff08db0",
+          "key": "[REDACTED]",
           "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt",
           "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
           "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
-          "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+          "operationToken": "[REDACTED]",
           "owner": {
             "pid": 29849,
             "hostname": "Traviss-MacBook-Pro-4.local"
@@ -217,11 +217,11 @@
         },
         {
           "schemaVersion": 1,
-          "key": "b87d39f8b0609a2f17fd22c23002665627f5f74966380caaf48674ce0b839930",
+          "key": "[REDACTED]",
           "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt/dist",
           "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
           "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
-          "operationToken": "9ced905d-7827-4cdb-bd18-407c7aec1668",
+          "operationToken": "[REDACTED]",
           "owner": {
             "pid": 29849,
             "hostname": "Traviss-MacBook-Pro-4.local"
