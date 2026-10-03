@@ -24,7 +24,11 @@ export function buildPlan(config, input) {
     message: 'C08 disposable operation. Reply briefly.', is_group: true,
     metadata: { mention_names: mentions } });
   const ingress = (id, host = 'bossA', values = {}) => add(id, 'ingress', { host, input: message(), ...values });
-  const wait = (id, sourceId, condition = 'dispatch_completed') => add(id, 'wait', { input: native(sourceId), condition });
+  const wait = (id, sourceId, condition = 'dispatch_completed') => add(id, 'wait', {
+    input: native(sourceId),
+    condition,
+    ...(condition === 'dispatch_completed' ? { timeoutMs: 210000 } : {}),
+  });
   const list = (id, name) => add(id, 'subscriptions', { service: 'uar', ...(name ? { subscriptionId: subscription(name) } : {}) });
   const inventory = (id, name) => add(id, 'deliveries', { subscriptionId: subscription(name) });
   const acknowledge = (id, name, inventoryId, revisionId, index) => add(id, 'acknowledge', {
