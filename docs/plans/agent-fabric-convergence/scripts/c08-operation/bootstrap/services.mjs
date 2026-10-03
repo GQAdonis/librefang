@@ -11,6 +11,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   const literPort = input.ports?.liter ?? 18457;
   const literUrl = `http://127.0.0.1:${literPort}/v1`;
   const modelId = input.model.modelId;
+  const contextWindow = input.model.contextWindow;
   const credentialEnv = input.model.credentialEnv;
   const jwks = `${config.realm.issuer}/.well-known/jwks.json`;
   const channelGrantIssuer = config.realm.issuer;
@@ -29,7 +30,7 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
       surreal_user: 'root', surreal_pass: secrets.C08_SURREAL_PASSWORD, surreal_auth_level: 'root', external_cache_enabled: false },
     providers: [{ id: 'c08-liter', display_name: 'C08 pinned Liter', base_url: literUrl, api_key: secrets.C08_LITER_MASTER,
       protocol: 'chat', default_model: modelId, enabled: true,
-      models: [{ id: modelId, enabled: true, supports_tools: true, context_window: 1_050_000 }] }],
+      models: [{ id: modelId, enabled: true, supports_tools: true, context_window: contextWindow }] }],
     llm: { model: `c08-liter/${modelId}`, base_url: literUrl, api_key: secrets.C08_LITER_MASTER, protocol: 'chat' },
     resilience: { stream_start_timeout_ms: 150_000, retry_max_attempts: 1 },
   }, null, 2));

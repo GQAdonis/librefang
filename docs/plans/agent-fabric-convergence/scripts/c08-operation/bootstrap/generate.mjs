@@ -14,8 +14,9 @@ const argument = name => args[args.indexOf(name) + 1];
 if (!args.includes('--input') || !args.includes('--out')) throw new Error('Use --input operator-input.json --out /absolute/new/private-directory');
 const input = JSON.parse(await readFile(resolve(argument('--input')), 'utf8'));
 const root = resolve(argument('--out'));
-if (!input.model?.provider || !input.model?.modelId || !/^[A-Z][A-Z0-9_]*$/.test(input.model?.credentialEnv ?? '')) {
-  throw new Error('C08 requires an explicit provider, modelId, and credentialEnv environment-variable name');
+if (!input.model?.provider || !input.model?.modelId || !Number.isSafeInteger(input.model?.contextWindow) || input.model.contextWindow <= 0 ||
+    !/^[A-Z][A-Z0-9_]*$/.test(input.model?.credentialEnv ?? '')) {
+  throw new Error('C08 requires an explicit provider, modelId, positive integer contextWindow, and credentialEnv environment-variable name');
 }
 for (const name of ['bossfang', 'uar', 'gate', 'fabric', 'liter']) {
   const binary = input.binaries?.[name];
@@ -110,7 +111,7 @@ for (const name of ['A', 'B', 'Denied']) {
 for (const name of ['A', 'B']) {
   const agentName = `c08-${name.toLowerCase()}`;
   const manifest = { manifest_toml:
-    `name = ${JSON.stringify(agentName)}\nversion = "1.0.0"\ndescription = "Disposable C08 channel handler"\n[model]\nprovider = "uar"\nmodel = ${JSON.stringify(`c08-liter/${input.model.modelId}`)}\ncontext_window = 1050000\nsystem_prompt = "Reply briefly to the supplied message. Do not call tools or publish outside this reply."\n` };
+    `name = ${JSON.stringify(agentName)}\nversion = "1.0.0"\ndescription = "Disposable C08 channel handler"\n[model]\nprovider = "uar"\nmodel = ${JSON.stringify(`c08-liter/${input.model.modelId}`)}\ncontext_window = ${input.model.contextWindow}\nsystem_prompt = "Reply briefly to the supplied message. Do not call tools or publish outside this reply."\n` };
   registration.push(register(`registerAgent${name}`, `boss${name}`, '/api/agents', manifest));
   const other = name === 'A' ? 'B' : 'A';
   registration.push(register(`registerAgent${name}on${other}`, `boss${other}`, '/api/agents', manifest));

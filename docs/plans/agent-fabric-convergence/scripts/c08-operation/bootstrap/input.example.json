@@ -2,6 +2,7 @@
   "model": {
     "provider": "groq",
     "modelId": "qwen/qwen3.8-27b",
+    "contextWindow": 131072,
     "credentialEnv": "GROQ_API_KEY"
   },
   "docker": "/usr/local/bin/docker",
