@@ -355,7 +355,10 @@ export async function operation(raw, state) {
             : step.service === 'fabric' ? capability?.status === 'ready'
             : capability?.supported === true;
           if (!ready) throw new Blocked(`production_capability_not_ready:${step.service}`);
-          result = observed; break;
+          const listener = step.webhookPort === undefined
+            ? null
+            : await waitForWebhookListener(step.webhookPort, step.service);
+          result = listener ? { ...observed, listener } : observed; break;
         }
         catch (error) { if (Date.now() >= deadline) throw error; await pause(500); }
       } while (Date.now() < deadline);

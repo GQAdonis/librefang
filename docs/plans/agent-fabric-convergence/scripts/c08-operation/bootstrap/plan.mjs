@@ -109,7 +109,14 @@ export function buildPlan(config, input) {
   add('restartBossA', 'restart', { process: 'bossA' }); add('restartBossB', 'restart', { process: 'bossB' });
   add('restartUar', 'restart', { process: 'uar' });
   add('startFabricAgain', 'start_process', { process: 'fabric' });
-  for (const name of ['gate', 'fabric', 'uar', 'bossA', 'bossB']) add(`afterRestart${name}`, 'probe', { service: name });
+  for (const name of ['gate', 'fabric', 'uar']) add(`afterRestart${name}`, 'probe', { service: name });
+  for (const name of ['bossA', 'bossB']) {
+    add(`afterRestart${name}`, 'probe', {
+      service: name,
+      requireQualified: true,
+      webhookPort: Number(new URL(config.ingress[name].url).port),
+    });
+  }
   ingress('replay', 'bossA', { input: native('queuedSource') });
   wait('queuedWithheld', 'queuedSource', 'withheld'); quiet('replayQuiet', 'queuedSource'); snapshot('restartFinal');
 

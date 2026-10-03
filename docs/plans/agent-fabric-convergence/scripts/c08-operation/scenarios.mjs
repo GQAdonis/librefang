@@ -128,9 +128,9 @@ function replyEcho(state, e) {
   const echoed = input(state, e, 'echo');
   requireValue(posted.posts.some(row => row.native_message_id === echoed.message_id), 'ingress_did_not_echo_actual_post');
   requireValue(!source(after, echoed), 'provider_echo_readmitted');
-  const replies = rows => rows.channel_causal_actions.filter(row => row.root_occurrence_id === admitted.occurrence_id && row.kind === 'reply');
-  requireValue(same(replies(before), replies(after)), 'echo_or_replay_created_another_reply');
   const quiet = event(state, e, 'quiet', ['observe_no_repost']).result;
+  const replies = rows => rows.channel_causal_actions.filter(row => row.root_occurrence_id === admitted.occurrence_id && row.kind === 'reply');
+  requireValue(same(replies(before), replies(quiet.tables)), 'echo_or_replay_created_another_reply');
   requireValue(quiet.noAdditionalAction && quiet.noAdditionalCallback && quiet.observationMs >= 1000, 'bounded_echo_replay_observation_required');
   const denied = event(state, e, 'scopeDenial', ['gate_evaluate']).result;
   requireValue(denied.request.action === 'scoped_reply' && denied.result.disposition === 'withheld'
