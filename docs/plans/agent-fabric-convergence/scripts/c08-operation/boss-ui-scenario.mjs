@@ -243,11 +243,16 @@ export default async function run({ evaluate, signal }) {
     receipt.sourceSha256 = digest(JSON.stringify(exported.source));
     async function read(path) {
       let response;
-      try {
-        response = await fetch(new URL(path, endpoint), { redirect: 'error', headers: {
-          authorization: `Bearer ${runtimeCredential}`, 'x-uar-workspace-id': workspace.id
-        }, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
-      } catch { failure('UAR_READ_UNAVAILABLE'); }
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        try {
+          response = await fetch(new URL(path, endpoint), { redirect: 'error', headers: {
+            authorization: `Bearer ${runtimeCredential}`, 'x-uar-workspace-id': workspace.id
+          }, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+        } catch { failure('UAR_READ_UNAVAILABLE'); }
+        if (response.status !== 429 || attempt === 9) break;
+        await response.body?.cancel();
+        await delay(500, undefined, { signal });
+      }
       if (!response.ok) failure(`UAR_READ_STATUS_${response.status}`);
       try { return await response.json(); } catch { failure('UAR_READ_INVALID'); }
     }
