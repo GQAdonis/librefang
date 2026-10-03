@@ -59,7 +59,9 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   config.processes.uar = { ...input.binaries.uar, cwd: join(root, 'uar'), args: ['--config', join(root, 'uar.json'), '--port', new URL(uarUrl).port],
     envRefs: { UAR_CHANNEL_GATE_BEARER_TOKEN: 'C08_GATE_EFFECT',
       UAR_SECURITY__JWT_SECRET: 'C08_UAR_JWT_UNUSED', UAR_SECURITY__SETTINGS_ADMIN_KEY: 'C08_UAR_SETTINGS_ADMIN_KEY' },
-    environment: { UAR_SECURITY__JWT_REQUIRED: 'true', UAR_REMOTE_SURREAL_DURABILITY_ATTESTED: '1', UAR_CHANNEL_GATE_URL: config.services.gate.url } };
+    environment: { UAR_SECURITY__JWT_REQUIRED: 'true', UAR_REMOTE_SURREAL_DURABILITY_ATTESTED: '1', UAR_CHANNEL_GATE_URL: config.services.gate.url,
+      UAR_CHANNEL_GATE_IDENTITY_ISSUER: config.realm.issuer, UAR_CHANNEL_GATE_IDENTITY_SUBJECT: 'c08-host',
+      UAR_CHANNEL_GATE_IDENTITY_REVISION: '1' } };
   config.processes.gate = { ...input.binaries.gate, cwd: join(root, 'gate'), args: ['--config', join(root, 'gate.yaml'), '--require-database'],
     envRefs: { DATABASE_URL: 'C08_GATE_DATABASE_URL', FLINT_GATE_JWT_SECRET: 'C08_GATE_JWT_SECRET' }, environment: {} };
   config.processes.fabric = { ...input.binaries.fabric, cwd: join(root, 'fabric'), args: [],
