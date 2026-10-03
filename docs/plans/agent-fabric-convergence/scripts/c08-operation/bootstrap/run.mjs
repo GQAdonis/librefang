@@ -14,7 +14,8 @@ const bootstrap = JSON.parse(await readFile(join(root, 'bootstrap.json'), 'utf8'
 const config = JSON.parse(await readFile(join(root, 'operation.json'), 'utf8'));
 const secrets = JSON.parse(await readFile(join(root, 'secrets.json'), 'utf8'));
 const environment = { ...process.env, ...secrets };
-if (!environment.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is required for the explicitly approved model; no fallback');
+const credentialEnv = bootstrap.model?.credentialEnv;
+if (!credentialEnv || !environment[credentialEnv]) throw new Error(`${credentialEnv || 'Selected provider credential'} is required for the explicitly selected model; no fallback`);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const exec = promisify(execFile);
 const pause = ms => new Promise(resolveWait => setTimeout(resolveWait, ms));

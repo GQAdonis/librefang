@@ -11,9 +11,10 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
   const literPort = input.ports?.liter ?? 18457;
   const literUrl = `http://127.0.0.1:${literPort}/v1`;
   const modelId = input.model.modelId;
+  const credentialEnv = input.model.credentialEnv;
   const jwks = `${config.realm.issuer}/.well-known/jwks.json`;
   const channelGrantIssuer = config.realm.issuer;
-  await write('liter.toml', `[general]\nmaster_key = "\${C08_LITER_MASTER}"\n\n[[models]]\nname = ${quote(modelId)}\nprovider_model = ${quote(`${input.model.provider}/${modelId}`)}\napi_key = "\${OPENAI_API_KEY}"\nfallbacks = []\n`);
+  await write('liter.toml', `[general]\nmaster_key = "\${C08_LITER_MASTER}"\n\n[[models]]\nname = ${quote(modelId)}\nprovider_model = ${quote(`${input.model.provider}/${modelId}`)}\napi_key = "\${${credentialEnv}}"\nfallbacks = []\n`);
   await write('uar.json', JSON.stringify({
     server: { host: '127.0.0.1', grpc_port: 19516 },
     service_instance: {
@@ -65,5 +66,5 @@ export async function serviceConfiguration(config, input, root, secrets, write) 
       AUTHZ_BACKEND: 'verified-identity', GATEWAY_PROFILE: 'full', GATEWAY_JWKS_URL: jwks, JWT_AUDIENCE: 'c08-fabric',
       JWT_ISSUER: config.realm.issuer, GRPC_PORT: '0', SFU_MODE: 'sovereign', CDC_ENABLED: 'false', FEDERATION_ENABLED: 'false' } };
   return { runtimeId, liter: { ...input.binaries.liter, cwd: join(root, 'liter'), args: ['api', '--config', join(root, 'liter.toml'), '--host', '127.0.0.1', '--port', String(literPort)],
-    envRefs: { LITER_LLM_MASTER_KEY: 'C08_LITER_MASTER', OPENAI_API_KEY: 'OPENAI_API_KEY' }, environment: {} }, literUrl };
+    envRefs: { LITER_LLM_MASTER_KEY: 'C08_LITER_MASTER', [credentialEnv]: credentialEnv }, environment: {} }, literUrl };
 }

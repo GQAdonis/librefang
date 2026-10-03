@@ -14,7 +14,9 @@ const argument = name => args[args.indexOf(name) + 1];
 if (!args.includes('--input') || !args.includes('--out')) throw new Error('Use --input operator-input.json --out /absolute/new/private-directory');
 const input = JSON.parse(await readFile(resolve(argument('--input')), 'utf8'));
 const root = resolve(argument('--out'));
-if (input.model?.provider !== 'openai' || input.model?.modelId !== 'gpt-5.6-sol') throw new Error('C08 requires the explicit approved OpenAI/gpt-5.6-sol binding');
+if (!input.model?.provider || !input.model?.modelId || !/^[A-Z][A-Z0-9_]*$/.test(input.model?.credentialEnv ?? '')) {
+  throw new Error('C08 requires an explicit provider, modelId, and credentialEnv environment-variable name');
+}
 for (const name of ['bossfang', 'uar', 'gate', 'fabric', 'liter']) {
   const binary = input.binaries?.[name];
   if (!binary?.command?.startsWith('/') || !binary.sourceMetadataFile?.startsWith('/') || !binary.sourceRepository?.startsWith('/') || !/^[a-f0-9]{40}$/.test(binary.sourceRevision ?? '')) {
