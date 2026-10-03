@@ -436,8 +436,19 @@ export async function operation(raw, state) {
       }
       break;
     }
-    case 'deliveries': result = await api(service(state.config, 'uar'),
-      `${uar}/subscriptions/${encodeURIComponent(step.subscriptionId)}/deliveries`); break;
+    case 'deliveries': {
+      const deadline = Date.now() + 15000;
+      do {
+        result = await api(service(state.config, 'uar'),
+          `${uar}/subscriptions/${encodeURIComponent(step.subscriptionId)}/deliveries`);
+        if (!step.minimum || result.result.deliveries.length >= step.minimum) break;
+        await pause(250);
+      } while (Date.now() < deadline);
+      if (step.minimum && result.result.deliveries.length < step.minimum) {
+        throw new Blocked('observer_delivery_inventory_not_observed');
+      }
+      break;
+    }
     case 'wait': result = await waitSnapshot(step, state); break;
     case 'snapshot': result = { tables: await snapshot(state.config), observedAt: new Date().toISOString() }; break;
     case 'callback_receipts': result = { posts: structuredClone(state.callback.posts), observedAt: new Date().toISOString() }; break;

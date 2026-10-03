@@ -30,7 +30,7 @@ export function buildPlan(config, input) {
     ...(condition === 'dispatch_completed' ? { timeoutMs: 210000 } : {}),
   });
   const list = (id, name) => add(id, 'subscriptions', { service: 'uar', ...(name ? { subscriptionId: subscription(name) } : {}) });
-  const inventory = (id, name) => add(id, 'deliveries', { subscriptionId: subscription(name) });
+  const inventory = (id, name) => add(id, 'deliveries', { subscriptionId: subscription(name), minimum: 1 });
   const acknowledge = (id, name, inventoryId, revisionId, index) => add(id, 'acknowledge', {
     subscriptionId: subscription(name), deliveryId: ref(`${body(inventoryId)}.deliveries.${index}.deliveryId`),
     expectedRevision: ref(`${result(revisionId)}.selectedSubscription.revision`),
