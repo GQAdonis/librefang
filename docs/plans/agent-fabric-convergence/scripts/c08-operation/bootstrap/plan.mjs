@@ -37,7 +37,12 @@ export function buildPlan(config, input) {
   });
   const snapshot = id => add(id, 'snapshot');
   const quiet = (id, sourceId) => add(id, 'observe_no_repost', { input: native(sourceId), observationMs: 3000 });
-  const callback = (id, sourceId) => add(id, 'wait_callback', { input: native(sourceId) });
+  // A routed callback includes the bounded model turn before the native post.
+  // Observe it for the same declared window as dispatch completion instead of
+  // imposing an unrelated 60-second helper deadline.
+  const callback = (id, sourceId) => add(id, 'wait_callback', {
+    input: native(sourceId), timeoutMs: 210000,
+  });
 
   grant('grantHandlerB', 'handler-b', 'handler_execution', base, handlerB, handlerB, 'handler_payload');
   grant('grantReplyB', 'reply-b', 'scoped_reply', base, base.room, handlerB, 'scoped_reply');
