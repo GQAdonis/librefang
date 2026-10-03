@@ -209,7 +209,8 @@ export default async function run({ evaluate, signal }) {
     const workspace = await evaluate(`(async () => {
       const response = await window.api.dataApi.request({ id: ${JSON.stringify(`c08_${randomUUID()}`)},
         method: 'POST', path: '/agent-workspaces',
-        body: ${JSON.stringify(config.workspace)}, metadata: { timestamp: Date.now() } });
+        body: ${JSON.stringify({ name: config.workspace.name, path: config.workspace.path })},
+        metadata: { timestamp: Date.now() } });
       if (response.error || response.status < 200 || response.status >= 300
         || !response.data?.id || response.data.type !== 'user') throw new Error('C08_UI_WORKSPACE_SETUP_FAILED');
       return { id: response.data.id, name: response.data.name, type: response.data.type };
