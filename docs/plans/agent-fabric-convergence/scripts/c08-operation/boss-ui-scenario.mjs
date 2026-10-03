@@ -57,8 +57,11 @@ function dom(action, args) {
     const anchor = nodes('a[href]').find(node => visible(node) && (args.away
       ? node.getAttribute('href').includes('/settings/') && !node.getAttribute('href').includes('/settings/uar')
       : node.getAttribute('href').includes('/settings/uar')));
-    if (!anchor) return false;
-    anchor.click(); return true;
+    if (anchor) { anchor.click(); return true; }
+    const buttonText = args.away ? 'General' : 'Universal Agent Runtime';
+    const button = nodes('button').find(node => usable(node) && text(node) === buttonText);
+    if (!button) return false;
+    button.click(); return true;
   }
   if (action === 'fill' || action === 'choice') {
     const label = nodes('label', root).find(node => text(node) === args.label);

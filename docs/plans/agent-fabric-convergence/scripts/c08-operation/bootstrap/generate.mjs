@@ -81,7 +81,8 @@ const prepared = await serviceConfiguration(config, input, root, secrets, write)
 config.constants.runtimeId = prepared.runtimeId;
 if (input.ui?.process) {
   config.ui = { requestPath: join(root, 'ui-workspace-request.json'), responsePath: join(root, 'ui-subscription-response.json'),
-    receiptPath: join(root, 'ui-receipt.json'), expectedRuntimeId: prepared.runtimeId };
+    receiptPath: join(root, 'ui-receipt.json'), launchReceiptPath: join(root, 'ui-launch-receipt.json'),
+    expectedRuntimeId: prepared.runtimeId };
   await mkdir(join(root, 'ui-workspace'), { mode: 0o700 });
   await write('boss-ui.json', JSON.stringify({ schema: 'c08-boss-ui-operation/1', disposable: true,
     uar: { instanceId: prepared.runtimeId, expectedRuntimeId: prepared.runtimeId, name: `Disposable ${workspace}`, url: config.services.uar.url,
@@ -91,8 +92,8 @@ if (input.ui?.process) {
   secrets.C08_UI_CONFIG_PATH = join(root, 'boss-ui.json'); secrets.C08_UI_RECEIPT_PATH = config.ui.receiptPath;
   const uiArgs = [...input.ui.process.args];
   const receiptIndex = uiArgs.indexOf('--receipt');
-  if (receiptIndex < 0) uiArgs.push('--receipt', config.ui.receiptPath);
-  else uiArgs[receiptIndex + 1] = config.ui.receiptPath;
+  if (receiptIndex < 0) uiArgs.push('--receipt', config.ui.launchReceiptPath);
+  else uiArgs[receiptIndex + 1] = config.ui.launchReceiptPath;
   config.processes.bossUi = { ...input.ui.process, args: uiArgs, envRefs: { ...input.ui.process.envRefs,
     C08_BOSS_UI_CONFIG: 'C08_UI_CONFIG_PATH', C08_BOSS_UI_RECEIPT: 'C08_UI_RECEIPT_PATH', C08_UAR_OWNER: 'C08_UAR_OWNER' } };
 }
