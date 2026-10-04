@@ -2368,7 +2368,7 @@ const LOGIN_PAGE_HTML: &str = include_str!("login_page.html");
 // registration in `../dashboard/index.html`, which the SPA shell carries on every authenticated route.
 // If either script changes, recompute its SHA-256 here — `dashboard_inline_scripts_are_allowed_by_csp_hash`
 // walks both pages and fails with the missing hash spelled out.
-const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self' 'sha256-TDA4xCzDRyoMM+fopfpKCyivlfu44tSPBzidGFvUgNM=' 'sha256-8jDM2e2sBqXcphSeNv2mxx6q5chJipVyCys5IbylByY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'";
+const CONTENT_SECURITY_POLICY: &str = "default-src 'self'; script-src 'self' 'sha256-gfX0uFpq2mRjLA9qN31TgNshMNCuWx3ZDRTUsprxES8=' 'sha256-8jDM2e2sBqXcphSeNv2mxx6q5chJipVyCys5IbylByY='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'";
 
 /// Security headers middleware — applied to ALL API responses.
 pub async fn security_headers(request: Request<Body>, next: Next) -> Response<Body> {
@@ -5150,11 +5150,8 @@ mod tests {
         );
     }
 
-    /// Regression for #4860: the inline login page must redirect to `/`
-    /// (the SPA shell) when it was itself served at `/`, `/dashboard`, or
-    /// `/dashboard/`. The router only registers `/` and
-    /// `/dashboard/{*path}`, so redirecting back to `/dashboard` or
-    /// `/dashboard/` after a successful sign-in lands on a 404.
+    /// The dashboard session cookie is scoped to `/dashboard`, so a successful
+    /// login from `/`, `/dashboard`, or `/dashboard/` must enter that scope.
     #[test]
     fn login_page_redirects_dashboard_root_to_spa_shell() {
         let html = super::LOGIN_PAGE_HTML;
@@ -5164,11 +5161,11 @@ mod tests {
         // `path === '/dashboard/'` and let one half regress unnoticed.
         assert!(
             html.contains("path === '/dashboard' || path === '/dashboard/'"),
-            "login page must collapse both /dashboard and /dashboard/ to the SPA shell at /"
+            "login page must collapse both /dashboard and /dashboard/ to the authenticated SPA shell"
         );
         assert!(
-            !html.contains("target = '/dashboard/';"),
-            "login page must not redirect to /dashboard/ — that path 404s (#4860)"
+            html.contains("target = '/dashboard/';"),
+            "login page must redirect to /dashboard/ so the scoped session cookie is sent"
         );
     }
 
