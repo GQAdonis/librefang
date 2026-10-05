@@ -23,6 +23,7 @@ mod canonical;
 mod diagnostic;
 mod http;
 mod observation;
+mod retained;
 mod wire;
 
 use binding::{ensure_same_binding, require_task_id, validate_service_placement};
@@ -33,6 +34,8 @@ use wire::WireReceipt;
 pub enum UarRunClientError {
     #[error("{0}")]
     Binding(String),
+    #[error("original UAR connection requires private credential reattachment; run cannot move or replay")]
+    ConnectionReattachmentRequired,
     #[error("UAR full-run {operation} failed: {message}")]
     Remote {
         operation: &'static str,
@@ -99,6 +102,8 @@ struct Transport {
 pub struct UarRunClient {
     client: reqwest::Client,
     request_timeout: Duration,
+    retained_connections:
+        tokio::sync::RwLock<std::collections::HashMap<String, retained::RetainedConnection>>,
 }
 
 /// App-owned control authority shared by every BossFang surface that projects
@@ -122,6 +127,7 @@ impl UarRunClient {
         Self {
             client,
             request_timeout,
+            retained_connections: tokio::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 
@@ -236,6 +242,8 @@ impl UarRunClient {
             .runtime_descriptor(&transport, &admission.workspace_id)
             .await?;
         descriptor.validate()?;
+        self.retain_connection(admission, verified_principal, transport.clone())
+            .await;
         let unsupported_semantics = (!descriptor.steer_supported)
             .then(|| "steer".to_string())
             .into_iter()
@@ -284,7 +292,7 @@ impl UarRunClient {
         prepared: &PreparedAdmission,
         pending: &UarDelegatedRunProjection,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport(&pending.verified_principal).await?;
+        let transport = self.original_transport(pending).await?;
         ensure_same_binding(pending, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, pending).await?;
         let receipt: WireReceipt = self
@@ -311,7 +319,7 @@ impl UarRunClient {
         &self,
         projection: &UarDelegatedRunProjection,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport(&projection.verified_principal).await?;
+        let transport = self.original_transport(projection).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let receipt: WireReceipt = self
@@ -452,7 +460,7 @@ impl UarRunClient {
         operation: &'static str,
         uncertain_on_transport: bool,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport(&projection.verified_principal).await?;
+        let transport = self.original_transport(projection).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let receipt: WireReceipt = self

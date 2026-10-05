@@ -768,7 +768,11 @@ impl A2aTaskStore {
             // event cursor from a stale response.
             let stale = projection.revision < stored.revision
                 || (projection.revision == stored.revision && projection.cursor < stored.cursor);
-            let mut selected = if stale { stored.clone() } else { projection.clone() };
+            let mut selected = if stale {
+                stored.clone()
+            } else {
+                projection.clone()
+            };
             selected.cursor = selected.cursor.max(stored.cursor).max(projection.cursor);
             // BossFang's uncertain effect is local evidence, not part of the
             // UAR revision. A concurrent receipt cannot settle it by omission.
@@ -898,6 +902,15 @@ impl A2aTaskStore {
         )
         .ok()
         .and_then(|json| serde_json::from_str(&json).ok())
+    }
+
+    /// Loaded original run projections for protected connection recovery.
+    /// Credentials are never stored in these records.
+    pub fn list_uar_delegations(&self) -> Vec<librefang_types::uar_run::UarDelegatedRunProjection> {
+        lock_a2a_recover(&self.uar_delegations, "UAR delegations")
+            .values()
+            .cloned()
+            .collect()
     }
 
     /// Count of tracked tasks.

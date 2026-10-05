@@ -54,7 +54,7 @@ pub(super) fn ensure_same_binding(
     };
     if let Some(field) = mismatch {
         Err(UarRunClientError::Binding(format!(
-            "delegation's admitted UAR {field} no longer matches the selected binding"
+            "delegation's admitted UAR {field} no longer matches its original connection binding"
         )))
     } else {
         Ok(())

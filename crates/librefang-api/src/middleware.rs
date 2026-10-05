@@ -311,6 +311,8 @@ fn is_owner_only_write(method: &axum::http::Method, path: &str) -> bool {
             | "/api/config/set"
             | "/api/config/reload"
             | "/api/uar/diagnostics/delegation"
+            | "/api/uar/connections"
+            | "/api/uar/connections/refresh"
             | "/api/uar/connect"
             | "/api/uar/disconnect"
             | "/api/uar/reconnect"

@@ -492,6 +492,9 @@ use crate::types;
         // ── Universal Agent Runtime sidecar ──
         routes::uar_status,
         routes::uar_connect,
+        routes::uar_delegation::diagnostic_route,
+        routes::uar_delegation::connections,
+        routes::uar_delegation::refresh,
         routes::uar_disconnect,
         routes::uar_reconnect,
         routes::uar_start,

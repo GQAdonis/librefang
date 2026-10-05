@@ -15,7 +15,7 @@ impl UarRunClient {
         after: u64,
     ) -> Result<Vec<UarRunEvent>, UarRunClientError> {
         let task_id = require_task_id(projection)?;
-        let transport = self.transport(&projection.verified_principal).await?;
+        let transport = self.original_transport(projection).await?;
         ensure_same_binding(projection, &transport.binding)?;
         self.ensure_runtime_epoch(&transport, projection).await?;
         let suffix = format!("tasks/{task_id}/stream?last_event_id={after}");

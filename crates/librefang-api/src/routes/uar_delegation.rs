@@ -1,6 +1,7 @@
 //! BossFang correlation and control for UAR-owned complete runs.
 use super::AppState;
 use std::sync::Arc;
+mod connections;
 mod diagnostic;
 #[cfg(feature = "uar-driver")]
 mod errors;
@@ -34,6 +35,14 @@ mod enabled {
     pub fn router() -> axum::Router<Arc<AppState>> {
         axum::Router::new()
             .route("/uar/delegations", axum::routing::post(admit))
+            .route(
+                "/uar/connections",
+                axum::routing::get(super::connections::connections),
+            )
+            .route(
+                "/uar/connections/refresh",
+                axum::routing::post(super::connections::refresh),
+            )
             .route(
                 "/uar/diagnostics/delegation",
                 axum::routing::post(super::diagnostic_route),
@@ -417,7 +426,7 @@ mod enabled {
         }
         saved_view(state, projection, StatusCode::ACCEPTED)
     }
-    fn stored_delegation(
+    pub(super) fn stored_delegation(
         state: &Arc<AppState>,
         task_id: &str,
         api_user: Option<&Extension<AuthenticatedApiUser>>,
@@ -466,3 +475,5 @@ mod enabled {
 pub use enabled::router;
 
 pub(crate) use diagnostic::{__path_diagnostic_route, diagnostic_route};
+
+pub(crate) use connections::{__path_connections, __path_refresh, connections, refresh};

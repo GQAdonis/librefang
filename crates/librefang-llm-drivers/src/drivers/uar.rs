@@ -323,7 +323,18 @@ fn role_credential(role: EndpointRole) -> Option<Zeroizing<String>> {
 /// client. Calling this never issues a model completion.
 pub(super) async fn full_run_transport(
 ) -> Result<(String, Option<Zeroizing<String>>, UarEffectiveBinding), LlmError> {
-    let binding = admit_supervised_binding().await?;
+    admit_supervised_binding().await?;
+    // Binding and private credential must be captured from one publication.
+    // Selection changes cannot pair an old identity with the next credential.
+    let (binding, credential) = {
+        let guard = binding_cell()
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let binding = guard.admitted.clone().ok_or_else(|| {
+            LlmError::Http("UAR selection changed before admission transport was captured".into())
+        })?;
+        (binding, guard.credentials.runtime.clone())
+    };
     if !binding
         .capabilities
         .iter()
@@ -336,7 +347,7 @@ pub(super) async fn full_run_transport(
     let endpoint = binding.endpoints.runtime.clone().ok_or_else(|| {
         LlmError::Http("selected UAR binding has no runtime endpoint".to_string())
     })?;
-    Ok((endpoint, role_credential(EndpointRole::Runtime), binding))
+    Ok((endpoint, credential, binding))
 }
 
 fn supervised_candidate() -> Result<(UarServiceInstanceConfig, String, u64), LlmError> {

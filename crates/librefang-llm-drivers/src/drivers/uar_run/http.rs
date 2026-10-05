@@ -14,26 +14,7 @@ impl UarRunClient {
         let (base, credential, binding) = super::super::uar::full_run_transport()
             .await
             .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
-        let url = reqwest::Url::parse(&base)
-            .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
-        let loopback = url.host_str().is_some_and(|host| {
-            host == "localhost"
-                || host
-                    .trim_matches(['[', ']'])
-                    .parse::<std::net::IpAddr>()
-                    .is_ok_and(|ip| ip.is_loopback())
-        });
-        if !url.username().is_empty()
-            || url.password().is_some()
-            || url.query().is_some()
-            || url.fragment().is_some()
-            || !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
-        {
-            return Err(UarRunClientError::Binding(
-                "full-run endpoint requires loopback HTTP or HTTPS without URL credentials"
-                    .to_string(),
-            ));
-        }
+        validate_base(&base)?;
         if credential.is_none() {
             return Err(UarRunClientError::Binding(
                 "selected full-run endpoint has no authenticated runtime credential".to_string(),
@@ -258,4 +239,27 @@ pub(super) fn endpoint(base: &str, suffix: &str) -> String {
         base.trim_end_matches('/'),
         suffix.trim_start_matches('/')
     )
+}
+
+pub(super) fn validate_base(base: &str) -> Result<(), UarRunClientError> {
+    let url = reqwest::Url::parse(&base)
+        .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
+    let loopback = url.host_str().is_some_and(|host| {
+        host == "localhost"
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback())
+    });
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
+    {
+        return Err(UarRunClientError::Binding(
+            "full-run endpoint requires loopback HTTP or HTTPS without URL credentials".to_string(),
+        ));
+    }
+    Ok(())
 }
