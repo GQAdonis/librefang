@@ -424,7 +424,7 @@ pub(crate) async fn uar_test_completion(
         (status = 503, description = "UAR is not running")
     )
 )]
-pub(crate) async fn uar_models(State(state): State<Arc<AppState>>) -> Response {
+pub(crate) async fn uar_models(State(_state): State<Arc<AppState>>) -> Response {
     #[cfg(feature = "uar-driver")]
     match librefang_llm_drivers::drivers::uar::selected_model_catalog().await {
         Ok(models) => Json(models).into_response(),
@@ -432,7 +432,7 @@ pub(crate) async fn uar_models(State(state): State<Arc<AppState>>) -> Response {
     }
     #[cfg(not(feature = "uar-driver"))]
     {
-        let _ = state;
+        let _ = _state;
         operator_error(
             StatusCode::SERVICE_UNAVAILABLE,
             "BossFang was built without the uar-driver feature".to_string(),

@@ -1228,13 +1228,31 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
     ) -> Result<bool, String> {
         #[cfg(feature = "surreal-backend")]
         {
-            let receipt = self
-                .channel_action_store()
-                .await?
+            let store = self.channel_action_store().await?;
+            let receipt = store
                 .action_receipt(action_id)
                 .await
                 .map_err(|error| format!("read scoped reply: {error}"))?
                 .ok_or_else(|| "scoped reply action is absent".to_string())?;
+            let parent_effect_id = if let Some(parent_action_id) = &receipt.parent_action_id {
+                let parent = store
+                    .action_receipt(parent_action_id)
+                    .await
+                    .map_err(|error| format!("read causal handler: {error}"))?
+                    .ok_or_else(|| "causal handler action is absent".to_string())?;
+                // Storage action IDs are digests; Gate lineage uses the UUID of
+                // the existing handler execution effect, derived from its key.
+                let parent_effect_key = format!(
+                    "channel-handler-execution-v1:{}:{}",
+                    parent.source_occurrence_id, parent.action_id
+                );
+                Some(uuid::Uuid::new_v5(
+                    &uuid::Uuid::NAMESPACE_URL,
+                    parent_effect_key.as_bytes(),
+                ))
+            } else {
+                None
+            };
             let grant_issuer = std::env::var("LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER")
                 .map_err(|_| "scoped reply grant issuer is not configured".to_string())?;
             let grant_id = receipt
@@ -1259,7 +1277,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     payload_sha256: None,
                     classification: "scoped_reply",
                     root_occurrence_id: &receipt.root_occurrence_id,
-                    parent_action_id: receipt.parent_action_id.as_deref(),
+                    parent_action_id: parent_effect_id,
                     route_identity: &receipt.route_identity,
                     visited_routes: &receipt.visited_routes,
                     remaining_depth: receipt.remaining_depth,

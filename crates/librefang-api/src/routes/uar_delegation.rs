@@ -35,13 +35,10 @@ mod enabled {
     pub fn router() -> axum::Router<Arc<AppState>> {
         axum::Router::new()
             .route("/uar/delegations", axum::routing::post(admit))
-            .route(
-                "/uar/connections",
-                axum::routing::get(super::connections::connections),
-            )
+            .route("/uar/connections", axum::routing::get(super::connections))
             .route(
                 "/uar/connections/refresh",
-                axum::routing::post(super::connections::refresh),
+                axum::routing::post(super::refresh),
             )
             .route(
                 "/uar/diagnostics/delegation",
