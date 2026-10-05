@@ -114,8 +114,18 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       const finished = involved.filter((item) => item.status === 'succeeded' || item.executionOutcome === 'succeeded')
       const current = (await snapshot()).instances.find((item) => item.id === instance.id)
       const coordinatorFinished = current?.tasks.some((task) => task.role === 'coordinator' && task.status === 'succeeded')
-      return coordinatorFinished && !value.attempts.some((item) => ['queued', 'running', 'cancellation_requested'].includes(item.status)) &&
-        ['worker', 'reviewer'].every((role) => finished.some((item) => roles[item.memberId] === role)) ? value : false
+      const active = value.attempts.some((item) => ['queued', 'running', 'cancellation_requested'].includes(item.status))
+      const missingRoles = ['worker', 'reviewer'].filter((role) => !finished.some((item) => roles[item.memberId] === role))
+      const pendingWait = (value.waits ?? []).some((wait) => ['yield_requested', 'waiting', 'blocked'].includes(wait.state))
+      const futureContinuation = [...(value.waits ?? []), ...(value.continuations ?? [])].some((receipt) =>
+        receipt.continuationAttemptId && !value.attempts.some((attempt) => attempt.id === receipt.continuationAttemptId))
+      if (coordinatorFinished && !active && !pendingWait && !futureContinuation && missingRoles.length) {
+        evidence.handoffFailure = { reasonCode: 'coordinator_completed_without_required_handoff', missingRoles,
+          coordinatorAttemptIds: value.attempts.filter((item) => roles[item.memberId] === 'coordinator' &&
+            (item.status === 'succeeded' || item.executionOutcome === 'succeeded')).map((item) => item.id) }
+        throw new Unavailable('C14_COORDINATOR_COMPLETED_WITHOUT_REQUIRED_HANDOFF')
+      }
+      return coordinatorFinished && !active && !missingRoles.length ? value : false
     }, 'C14_REAL_CODING_OR_REQUIRED_OPERATOR_APPROVAL_UNAVAILABLE', 900000, 3000)
     const finishedAttempts = completed.attempts.filter((item) => ['worker', 'reviewer'].includes(roles[item.memberId]) &&
       (item.status === 'succeeded' || item.executionOutcome === 'succeeded'))
