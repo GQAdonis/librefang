@@ -11,13 +11,13 @@ export class Unavailable extends Error {
 export function requireFact(condition, code) {
   if (!condition) throw new Unavailable(code)
 }
-export async function waitFor(signal, read, code, timeoutMs = 30000) {
+export async function waitFor(signal, read, code, timeoutMs = 30000, intervalMs = 250) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     signal.throwIfAborted()
     const value = await read()
     if (value) return value
-    await delay(250, undefined, { signal })
+    await delay(intervalMs, undefined, { signal })
   }
   throw new Unavailable(code)
 }

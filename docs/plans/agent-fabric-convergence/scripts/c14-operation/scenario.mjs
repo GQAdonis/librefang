@@ -73,7 +73,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
         .every((role) => item.members.some((member) => member.role === role)))
       return definition && value.bindings.some((binding) => binding.activationSupported &&
         same(binding.package, definition.package)) ? definition : false
-    }, 'C14_REAL_CODING_PRESET_NOT_DEPLOYED', 60000)
+    }, 'C14_REAL_CODING_PRESET_NOT_DEPLOYED', 60000, 3000)
     const binding = (await snapshot()).bindings.find((item) => item.activationSupported && same(item.package, preset.package))
     await chooseCodingTeam(evaluate, signal, preset, binding)
     evidence.definition = { id: preset.id, version: preset.version, digest: preset.digest }
@@ -86,7 +86,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     await fill(evaluate, signal, '[data-ui~="teams-prompt"]', prompt, 'C14_WORK_NATURAL_LANGUAGE_INPUT_UNAVAILABLE')
     await click(evaluate, signal, '[data-ui~="teams-start"]', 'C14_WORK_START_UNAVAILABLE')
     const instance = await waitFor(signal, async () => (await snapshot()).instances.find((item) =>
-      !existingIds.has(item.id) && item.definition.digest === preset.digest), 'C14_WORK_DURABLE_TEAM_CREATION_UNAVAILABLE', 60000)
+      !existingIds.has(item.id) && item.definition.digest === preset.digest), 'C14_WORK_DURABLE_TEAM_CREATION_UNAVAILABLE', 60000, 3000)
     const selector = { workspaceId: selected.workspaceId, teamInstanceId: instance.id }
     const execution = () => ipc(evaluate, route('execution'), selector)
     const artifacts = () => ipc(evaluate, route('artifacts'), selector)
@@ -110,7 +110,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       const coordinatorFinished = current?.tasks.some((task) => task.role === 'coordinator' && task.status === 'succeeded')
       return coordinatorFinished && !value.attempts.some((item) => ['queued', 'running', 'cancellation_requested'].includes(item.status)) &&
         ['worker', 'reviewer'].every((role) => finished.some((item) => roles[item.memberId] === role)) ? value : false
-    }, 'C14_REAL_CODING_OR_REQUIRED_OPERATOR_APPROVAL_UNAVAILABLE', 900000)
+    }, 'C14_REAL_CODING_OR_REQUIRED_OPERATOR_APPROVAL_UNAVAILABLE', 900000, 3000)
     const finishedAttempts = completed.attempts.filter((item) => ['worker', 'reviewer'].includes(roles[item.memberId]) &&
       (item.status === 'succeeded' || item.executionOutcome === 'succeeded'))
     const page = await artifacts()
@@ -161,11 +161,11 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       'C14_WORK_CANCEL_TASK_INPUT_UNAVAILABLE')
     await click(evaluate, signal, '[data-ui~="teams-start"]', 'C14_WORK_CANCEL_RUN_START_UNAVAILABLE')
     const cancelInstance = await waitFor(signal, async () => (await snapshot()).instances.find((item) => !priorIds.has(item.id)),
-      'C14_WORK_CANCEL_INSTANCE_UNAVAILABLE', 60000)
+      'C14_WORK_CANCEL_INSTANCE_UNAVAILABLE', 60000, 3000)
     const cancelSelector = { workspaceId: selected.workspaceId, teamInstanceId: cancelInstance.id }
     const cancelRead = () => ipc(evaluate, route('execution'), cancelSelector)
     const active = await waitFor(signal, async () => (await cancelRead()).attempts.find((item) => ['queued', 'running', 'yielded'].includes(item.status)),
-      'C14_ACTIVE_CANCELLABLE_ATTEMPT_NOT_OBSERVED', 60000)
+      'C14_ACTIVE_CANCELLABLE_ATTEMPT_NOT_OBSERVED', 60000, 3000)
     await fill(evaluate, signal, '[data-ui~="teams-control-reason"]', 'Operator-requested bounded C14 cancellation',
       'C14_WORK_CANCEL_REASON_UNAVAILABLE')
     await click(evaluate, signal, `[data-ui~="teams-attempt"][data-attempt-id="${active.id}"] [data-ui~="teams-cancel"]`,
@@ -176,7 +176,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       if (attempt?.status === 'uncertain') throw new Unavailable('C14_CANCELLATION_OUTCOME_UNCERTAIN')
       if (attempt?.status === 'succeeded') throw new Unavailable('C14_CANCELLATION_RACED_COMPLETION')
       return attempt?.status === 'cancelled' ? { value, attempt } : false
-    }, 'C14_CANCELLATION_TERMINAL_STATE_UNAVAILABLE', 120000)
+    }, 'C14_CANCELLATION_TERMINAL_STATE_UNAVAILABLE', 120000, 3000)
     evidence.cancellation = { teamId: cancelInstance.id, attemptId: active.id, runId: active.runId,
       status: cancelled.attempt.status, usage: cancelled.attempt.usage, accountingState: cancelled.attempt.accountingState,
       effectDisposition: cancelled.attempt.effectDisposition }
