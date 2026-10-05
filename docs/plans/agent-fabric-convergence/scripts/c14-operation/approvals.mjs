@@ -5,7 +5,7 @@ import { digest, requireFact, waitFor } from './io.mjs'
 
 /** Inspect the actual trust-boundary request before approving the exact bounded fixture effect. */
 export async function approveFixtureRequests(evaluate, signal, configuration, summary, roles, receipts) {
-  const requests = await evaluate(`(() => [...document.querySelectorAll('[data-ui="teams-approvals"] li[data-approval-id]')]
+  const requests = await evaluate(`(() => [...document.querySelectorAll('[data-ui~="teams-approvals"] li[data-approval-id]')]
     .map(node=>({id:node.getAttribute('data-approval-id'),attemptId:node.getAttribute('data-attempt-id'),
       runId:node.getAttribute('data-run-id'),tool:node.getAttribute('data-tool-name'),
       argumentsJson:node.querySelector('pre')?.textContent})))()`)
@@ -37,8 +37,8 @@ export async function approveFixtureRequests(evaluate, signal, configuration, su
       }
     }
     requireFact(allowed, 'C14_APPROVAL_OUTSIDE_AUTHORIZED_FIXTURE_EFFECT')
-    const selector = `[data-ui="teams-approvals"] li[data-approval-id="${request.id}"][data-attempt-id="${attempt.id}"]`
-    await click(evaluate, signal, selector + ' [data-ui="teams-approve"]', 'C14_WORK_EXACT_APPROVAL_CONTROL_UNAVAILABLE')
+    const selector = `[data-ui~="teams-approvals"] li[data-approval-id="${request.id}"][data-attempt-id="${attempt.id}"]`
+    await click(evaluate, signal, selector + ' [data-ui~="teams-approve"]', 'C14_WORK_EXACT_APPROVAL_CONTROL_UNAVAILABLE')
     await waitFor(signal, () => evaluate(`!document.querySelector(${JSON.stringify(selector)})`),
       'C14_WORK_APPROVAL_DECISION_NOT_ACKNOWLEDGED')
     receipts.push({ id: request.id, attemptId: attempt.id, runId: attempt.runId, tool: request.tool,

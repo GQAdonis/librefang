@@ -25,10 +25,10 @@ function modelProvenance(attempts, alias) {
 
 async function visibleInstance(evaluate, signal, instance, summary) {
   await waitFor(signal, () => evaluate(`(() => {
-    const root=document.querySelector('[data-ui="teams-work"]');
-    const members=document.querySelector('[data-ui="teams-members"]');
-    const rows=[...document.querySelectorAll('[data-ui="teams-attempt"]')];
-    return document.querySelector('[data-ui="teams-run"]')?.getAttribute('data-team-id')===${JSON.stringify(instance.id)} &&
+    const root=document.querySelector('[data-ui~="teams-work"]');
+    const members=document.querySelector('[data-ui~="teams-members"]');
+    const rows=[...document.querySelectorAll('[data-ui~="teams-attempt"]')];
+    return document.querySelector('[data-ui~="teams-run"]')?.getAttribute('data-team-id')===${JSON.stringify(instance.id)} &&
       root?.getAttribute('data-workspace-id')===${JSON.stringify(instance.workspaceId)} &&
       members?.innerText.includes('worker') && members.innerText.includes('reviewer') &&
       ${JSON.stringify(summary.attempts.map((item) => item.id))}.every(id=>rows.some(row=>row.getAttribute('data-attempt-id')===id));
@@ -63,10 +63,10 @@ export default async function scenario({ evaluate, signal, targets }, configurat
 
     stage = 'coding-preset-through-work'
     await openCodingSetup(evaluate, signal)
-    await selectOption(evaluate, signal, '[data-ui="teams-model"]',
+    await selectOption(evaluate, signal, '[data-ui~="teams-model"]',
       `document.querySelector('[role="option"][data-model-source="gateway"][data-provider-id="' + ${JSON.stringify(selected.model.providerId)} + '"][data-model-id="' + ${JSON.stringify(selected.model.modelId)} + '"]')`,
       'C14_WORK_SELECTED_MODEL_UNAVAILABLE')
-    await click(evaluate, signal, '[data-ui="teams-coding-preset"]', 'C14_WORK_CODING_PRESET_UNAVAILABLE')
+    await click(evaluate, signal, '[data-ui~="teams-coding-preset"]', 'C14_WORK_CODING_PRESET_UNAVAILABLE')
     const preset = await waitFor(signal, async () => {
       const value = await snapshot()
       const definition = value.definitions.find((item) => ['coordinator', 'worker', 'reviewer']
@@ -83,8 +83,8 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     stage = 'bounded-natural-language-change'
     const prompt = `In this selected isolated repository, change only README.md: replace the exact text pending-${configuration.marker} with ${configuration.marker}. Preserve every other byte and file. Have the worker perform the edit using repository tools, then have the reviewer independently read the file and review the exact change. Both must report the exact delivery marker. Do not commit, push, publish, install dependencies, run tests, or write outside this workspace.`
     const existingIds = new Set((await snapshot()).instances.map((item) => item.id))
-    await fill(evaluate, signal, '[data-ui="teams-prompt"]', prompt, 'C14_WORK_NATURAL_LANGUAGE_INPUT_UNAVAILABLE')
-    await click(evaluate, signal, '[data-ui="teams-start"]', 'C14_WORK_START_UNAVAILABLE')
+    await fill(evaluate, signal, '[data-ui~="teams-prompt"]', prompt, 'C14_WORK_NATURAL_LANGUAGE_INPUT_UNAVAILABLE')
+    await click(evaluate, signal, '[data-ui~="teams-start"]', 'C14_WORK_START_UNAVAILABLE')
     const instance = await waitFor(signal, async () => (await snapshot()).instances.find((item) =>
       !existingIds.has(item.id) && item.definition.digest === preset.digest), 'C14_WORK_DURABLE_TEAM_CREATION_UNAVAILABLE', 60000)
     const selector = { workspaceId: selected.workspaceId, teamInstanceId: instance.id }
@@ -130,8 +130,8 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     evidence.repository.beforeSha256 = configuration.repository.beforeSha256
     await visibleInstance(evaluate, signal, instance, completed)
     await waitFor(signal, () => evaluate(`(() => {
-      const rows=[...document.querySelectorAll('[data-ui="teams-artifacts"] li[data-artifact-id]')];
-      return Boolean(document.querySelector('[data-ui="teams-approvals"]')) &&
+      const rows=[...document.querySelectorAll('[data-ui~="teams-artifacts"] li[data-artifact-id]')];
+      return Boolean(document.querySelector('[data-ui~="teams-approvals"]')) &&
         ${JSON.stringify(evidence.artifacts)}.every(item=>rows.some(row=>row.getAttribute('data-artifact-id')===item.id &&
           row.getAttribute('data-attempt-id')===item.attemptId && row.innerText.includes(${JSON.stringify(configuration.marker)})));
     })()`), 'C14_WORK_ARTIFACTS_OR_APPROVAL_STATE_NOT_VISIBLE')
@@ -156,19 +156,19 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     stage = 'cancellation-through-work'
     await chooseCodingTeam(evaluate, signal, preset, binding)
     const priorIds = new Set((await snapshot()).instances.map((item) => item.id))
-    await fill(evaluate, signal, '[data-ui="teams-prompt"]',
+    await fill(evaluate, signal, '[data-ui~="teams-prompt"]',
       `Read only README.md and independently review the delivery marker ${configuration.marker}. Do not write any files or perform external effects.`,
       'C14_WORK_CANCEL_TASK_INPUT_UNAVAILABLE')
-    await click(evaluate, signal, '[data-ui="teams-start"]', 'C14_WORK_CANCEL_RUN_START_UNAVAILABLE')
+    await click(evaluate, signal, '[data-ui~="teams-start"]', 'C14_WORK_CANCEL_RUN_START_UNAVAILABLE')
     const cancelInstance = await waitFor(signal, async () => (await snapshot()).instances.find((item) => !priorIds.has(item.id)),
       'C14_WORK_CANCEL_INSTANCE_UNAVAILABLE', 60000)
     const cancelSelector = { workspaceId: selected.workspaceId, teamInstanceId: cancelInstance.id }
     const cancelRead = () => ipc(evaluate, route('execution'), cancelSelector)
     const active = await waitFor(signal, async () => (await cancelRead()).attempts.find((item) => ['queued', 'running', 'yielded'].includes(item.status)),
       'C14_ACTIVE_CANCELLABLE_ATTEMPT_NOT_OBSERVED', 60000)
-    await fill(evaluate, signal, '[data-ui="teams-control-reason"]', 'Operator-requested bounded C14 cancellation',
+    await fill(evaluate, signal, '[data-ui~="teams-control-reason"]', 'Operator-requested bounded C14 cancellation',
       'C14_WORK_CANCEL_REASON_UNAVAILABLE')
-    await click(evaluate, signal, `[data-ui="teams-attempt"][data-attempt-id="${active.id}"] [data-ui="teams-cancel"]`,
+    await click(evaluate, signal, `[data-ui~="teams-attempt"][data-attempt-id="${active.id}"] [data-ui~="teams-cancel"]`,
       'C14_WORK_CANCEL_CONTROL_UNAVAILABLE')
     const cancelled = await waitFor(signal, async () => {
       const value = await cancelRead()

@@ -34,17 +34,17 @@ export async function selectOption(evaluate, signal, selector, optionExpression,
 }
 
 export async function chooseCodingTeam(evaluate, signal, preset, binding) {
-  await selectOption(evaluate, signal, '[data-ui="teams-definition"]',
+  await selectOption(evaluate, signal, '[data-ui~="teams-definition"]',
     `document.querySelector('[role="option"][data-definition-id="' + ${JSON.stringify(preset.id)} + '"][data-definition-digest="' + ${JSON.stringify(preset.digest)} + '"]')`,
     'C14_WORK_CODING_DEFINITION_UNAVAILABLE')
-  await selectOption(evaluate, signal, '[data-ui="teams-binding"]',
+  await selectOption(evaluate, signal, '[data-ui~="teams-binding"]',
     `[...document.querySelectorAll('[role="option"]')].find(node=>node.innerText.startsWith(${JSON.stringify(binding.id)} + ' ·'))`,
     'C14_WORK_SCOPED_CODING_BINDING_UNAVAILABLE')
 }
 
 export async function openCodingSetup(evaluate, signal) {
   await waitFor(signal, () => evaluate(`(() => {
-    const details=document.querySelector('[data-ui="teams-coding-preset"]')?.closest('details');
+    const details=document.querySelector('[data-ui~="teams-coding-preset"]')?.closest('details');
     if(!details)return false;if(!details.open)details.querySelector('summary').click();return true;
   })()`), 'C14_WORK_CODING_PRESET_SECTION_UNAVAILABLE')
 }
@@ -55,11 +55,11 @@ export async function openWork(evaluate, signal) {
     if(later)later.click();return Boolean(document.querySelector('#app-sidebar'));
   })()`), 'C14_APPLICATION_ONBOARDING_UNAVAILABLE')
   await ipc(evaluate, 'navigation.open_route_in_main', { path: '/app/agents' })
-  await click(evaluate, signal, '[data-ui="work-mode-teams"]', 'C14_WORK_TEAMS_ENTRY_UNAVAILABLE')
+  await click(evaluate, signal, '[data-ui~="work-mode-teams"]', 'C14_WORK_TEAMS_ENTRY_UNAVAILABLE')
 }
 
 export async function selectWorkspace(evaluate, signal, workspaceId) {
-  await click(evaluate, signal, '[data-ui="teams-workspace"]', 'C14_WORK_WORKSPACE_MENU_UNAVAILABLE')
+  await click(evaluate, signal, '[data-ui~="teams-workspace"]', 'C14_WORK_WORKSPACE_MENU_UNAVAILABLE')
   await click(evaluate, signal, `[data-option-id="${workspaceId}"]`, 'C14_WORK_ISOLATED_WORKSPACE_UNAVAILABLE')
 }
 
@@ -68,7 +68,7 @@ export async function reopen(evaluate, signal, setup, instanceId) {
   await delay(750, undefined, { signal })
   await openWork(evaluate, signal)
   await selectWorkspace(evaluate, signal, setup.workspaceId)
-  await selectOption(evaluate, signal, '[data-ui="teams-instance"]',
+  await selectOption(evaluate, signal, '[data-ui~="teams-instance"]',
     `document.querySelector('[role="option"][data-team-id="' + ${JSON.stringify(instanceId)} + '"]')`,
     'C14_WORK_PERSISTED_INSTANCE_UNAVAILABLE')
 }
