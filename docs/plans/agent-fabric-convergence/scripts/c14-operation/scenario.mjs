@@ -101,10 +101,16 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     stage = 'real-worker-and-reviewer-execution'
     const completed = await waitFor(signal, async () => {
       const value = await execution()
+      const unsuccessful = value.attempts.filter((item) =>
+        ['failed', 'cancelled', 'uncertain'].includes(item.status) && item.executionOutcome !== 'succeeded')
+      if (unsuccessful.length) {
+        evidence.failedAttempts = unsuccessful.map((item) => ({ id: item.id, memberId: item.memberId,
+          status: item.status, stateReason: /^[A-Za-z][A-Za-z0-9_]{0,255}$/.test(item.stateReason ?? '')
+            ? item.stateReason : null }))
+        throw new Unavailable('C14_REAL_CODING_ATTEMPT_DID_NOT_SUCCEED')
+      }
       await approveFixtureRequests(evaluate, signal, configuration, value, roles, evidence.approvals)
       const involved = value.attempts.filter((item) => ['worker', 'reviewer'].includes(roles[item.memberId]))
-      if (involved.some((item) => ['failed', 'cancelled', 'uncertain'].includes(item.status) && item.executionOutcome !== 'succeeded'))
-        throw new Unavailable('C14_REAL_CODING_ATTEMPT_DID_NOT_SUCCEED')
       const finished = involved.filter((item) => item.status === 'succeeded' || item.executionOutcome === 'succeeded')
       const current = (await snapshot()).instances.find((item) => item.id === instance.id)
       const coordinatorFinished = current?.tasks.some((task) => task.role === 'coordinator' && task.status === 'succeeded')
