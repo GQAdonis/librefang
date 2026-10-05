@@ -17,14 +17,16 @@
     "openSpecLabel": "1.1"
   },
   "cadence": {
+    "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "index": 8,
+    "profileRevision": 7,
+    "minutes": 120,
     "profile": ".prometheus/cadence-profile.json",
     "stateRoot": ".prometheus/cadence",
-    "iteration": null,
-    "minutes": 120,
     "build": "pnpm build:mac:arm64",
-    "functionalOperation": "Declare Teams in Work procedure and candidate-specific receipts at start; implement it within C14.1 before freeze.",
     "publicationEvery": 2,
-    "publicationDebtPreserved": true
+    "publicationDebtPreserved": true,
+    "functionalOperation": "scripts/c14-operation/operate.mjs: actual packaged Work coding task, approval, worker/reviewer artifacts, cancellation and durable reopen"
   },
   "assignments": [
     {
@@ -45,12 +47,47 @@
     }
   ],
   "sourceBaselines": {
-    "status": "refresh exact product baseline at delivery start",
+    "boss": "de9de96acb",
+    "uar": "4c141dfedfb253fb7f66fc628f0fec7dbb005edc",
+    "uarPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
     "previousDispatch": "execute-dispatch-before-priority-r8.json"
   },
-  "status": "planned-handoff",
-  "updatedAt": "2026-10-05T07:31:02.705Z",
+  "status": "implementation-running",
+  "updatedAt": "2026-10-05T08:21:02.582Z",
   "planRevision": 8,
   "deliveryOrder": "customer-delivery-map.json",
-  "modelAssignment": "model-dispatch.json tasks.C14.1; no model or worker launched by this handoff"
+  "modelAssignment": "model-dispatch.json tasks.C14.1; actual native Codex implementer assignments recorded below",
+  "dispatchedAt": "2026-10-05T07:59:44.157Z",
+  "state": "implementation-running",
+  "actualAssignments": [
+    {
+      "agent": "teams_runtime",
+      "role": "boss-runtime",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "Boss main UAR adapters/team IPC/shared DTOs",
+        "UAR workspace/host-tool propagation at /Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work"
+      ],
+      "status": "production-in-progress"
+    },
+    {
+      "agent": "teams_work_ui",
+      "role": "boss-renderer",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "Boss Work UI/shared team renderer components/all renderer locales"
+      ],
+      "status": "renderer-complete-error-ux-finishing"
+    },
+    {
+      "agent": "teams_operation",
+      "role": "delivery-operation-author",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "initiative scripts/c14-operation/**"
+      ],
+      "status": "operation-authored-not-run"
+    }
+  ],
+  "observedPrerequisite": "Team-member kernel request lacked working directory/host-tool admission; required for approved coding operation. Fix within C14.1 delivery through existing trusted context, not generic-only substitute."
 }

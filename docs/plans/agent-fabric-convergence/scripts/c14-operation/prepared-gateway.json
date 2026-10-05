@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "creationTaskRef": "C14.1",
+  "status": "preparation-only",
+  "observedAt": "2026-10-05 08:20:50 UTC",
+  "gateway": {
+    "endpoint": "http://localhost:4000/v1",
+    "alias": "gpt-6.1-sol",
+    "providerId": "openai",
+    "modelId": "gpt-6.1-sol",
+    "providerBaseUrl": "http://localhost:8181/v1"
+  },
+  "credentialEnv": "LITER_LLM_MASTER_KEY",
+  "evidence": "Declared selected local gateway configuration; authenticated read-only alias catalog returned HTTP 200.",
+  "inferencePerformed": false,
+  "packagedAcceptance": "unverified",
+  "limitations": [
+    "The openai provider identity is the proxy's declared route; underlying localhost:8181 billing/provider identity is unverified.",
+    "UAR catalog pricing and real coding/tool execution remain unverified until the complete packaged delivery gate."
+  ]
+}
