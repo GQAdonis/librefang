@@ -72,17 +72,70 @@ BossFang is opened through its actual Apps tile and isolated dashboard. Dedicate
 settings controls exercise an occupied socket at port 4545, fixed-mode feedback,
 automatic selection, independent managed-local UAR binding, a real configured
 model, admitted full-harness completion and cancellation, saved/effective port
-changes, reopening, and stopping BossFang without stopping UAR. Grant renewal is
-observed through the production renewal behavior. An alternate instance is
-operated only when an actual authenticated compatible instance is available.
+changes, reopening, and stopping BossFang without stopping UAR. It then requests
+`prometheus.integration.start({action: 'uar-restart'})` only after the prior runs
+settle and while the application-owned managed UAR is selected. The authoritative
+operation must succeed, the UAR process/start identity must change, and BossFang
+must automatically follow the new generation with a replacement grant without
+receiving a connect or restart command. A fresh actual diagnostic must complete
+on that generation; the earlier diagnostic receipt must remain unchanged. Later
+ownership checks compare against the new UAR process, rather than incorrectly
+claiming the deliberately restarted process stayed unchanged.
+
+Grant renewal is observed through production behavior. An alternate instance
+qualifies only if it is already configured with separate protected runtime and
+administration credentials. Its supported instance test must authenticate and
+report actual compatible identity. The operation selects it through BossFang's
+settings, submits a real diagnostic with an actually advertised configured model,
+and verifies the admitted runtime identity and unchanged Work/global UAR
+selection. It restores managed selection and the original model afterward.
 
 `bossfang-operation.json` retains separately passed and pending coverage. A
-missing alternate instance, external dashboard or private expired-grant refusal
+missing alternate instance, selected alternate model, external dashboard or private expired-grant refusal
 receipt remains pending; health cannot substitute for those scenarios. The
 combined delivery receipt requires both Teams and BossFang's core operated
 behavior. It does not certify all-platform installed acceptance or every pending
 failure scenario. The maximum combined launcher duration is 40 minutes, including
 real model work and production grant renewal waiting.
+
+### Optional real fixture references
+
+The ordinary runner creates a fresh profile. These references do not create an
+external UAR registry row or start an external dashboard; the delivery owner must
+supply actual compatible services and provision the alternate row through the
+existing protected `prometheus.uar.instances.save` interface in the same isolated
+profile before that check. No registry entry, authentication result or model
+identity is synthesized.
+
+| Reference | Meaning |
+| --- | --- |
+| `BOSS_C14_ALTERNATE_UAR_INSTANCE_ID` | Optional exact ID of an already configured authenticated external UAR; otherwise use an existing credential-configured inventory row. |
+| `BOSS_C14_ALTERNATE_UAR_MODEL_ID` | Optional exact `providerId/modelId` advertised by that instance; otherwise the original selected model must really exist there. |
+| `BOSS_C14_EXTERNAL_BOSSFANG_ENDPOINT` | Actual already running external BossFang origin, HTTPS or loopback HTTP, with no embedded credentials, query or fragment. |
+| `BOSS_C14_EXTERNAL_BOSSFANG_USERNAME_ENV` | Name of an existing environment variable holding that dashboard's real username. |
+| `BOSS_C14_EXTERNAL_BOSSFANG_PASSWORD_ENV` | Name of an existing environment variable holding its real password. |
+
+External credentials are handed only to the existing protected credential IPC;
+values never enter source, wrapper configuration, reports or credential URLs.
+With a real external fixture, settings switch ownership and authenticate its
+actual isolated dashboard. The operation connects it to the same selected UAR,
+asserts that supported BossFang stop is refused, disconnects through the actual
+settings control, and reopens the authenticated dashboard with nondecreasing
+native uptime. It verifies the shared UAR stayed running and restores the managed
+BossFang configuration. It never starts, stops or signals the externally owned
+process. Missing fixture references remain pending; provided but refused
+credentials or incompatible services fail the actual check.
+
+### Expired grant refusal remains a separate pending boundary
+
+The supported public IPC exposes grant expiry, never its private credential.
+Production renews before the 900-second expiry. Waiting for renewal or restarting
+UAR proves replacement behavior; neither proves a rejected expired request.
+The receipt therefore records `expiredGrantRefusal` as pending with
+`C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE` and an explicit reason.
+A separately owned, real private-boundary expired-token request and authoritative
+401/403 receipt are still required. This runner does not disable refresh, change
+clocks, read credentials out of main memory or add an authentication bypass.
 
 The procedure returns success only when both the launcher confirms the scenario and the full named behavior is observed.
 Otherwise it writes a bounded `C14_*` failure code and a blocked outcome: missing package/source pin, unsupported native launcher, missing gateway credential/configuration, unavailable normal qualification/coding/tools, refused scope, failed inference, absent actual repository change, missing provenance, unresolved approval, failed reopening or incomplete cancellation are not feature acceptance.

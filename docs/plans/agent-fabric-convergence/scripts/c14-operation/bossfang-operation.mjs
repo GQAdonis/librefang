@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { click } from './controls.mjs'
+import { alternateUar, externalBossFang, restartAndFollow } from './bossfang-boundaries.mjs'
 import { ipc } from './setup.mjs'
 import { digest, requireFact, waitFor, write } from './io.mjs'
 import {
@@ -21,7 +22,7 @@ const visible = token => `[...document.querySelectorAll(${JSON.stringify(selecto
  */
 export default async function operateBossFang({evaluate, signal, targets}, configuration, selection) {
   const evidencePath = configuration.bossfang?.evidence ?? path.join(path.dirname(configuration.evidence), 'bossfang-operation.json')
-  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs'].map(name => {
+  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs', 'bossfang-boundaries.mjs'].map(name => {
     const source = fileURLToPath(new URL(name, import.meta.url))
     return {name, sha256: digest(fs.readFileSync(source))}
   })
@@ -45,7 +46,7 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     const workspaceId = selection.workspaceId
     const modelId = selection.selectedModel.providerId + '/' + selection.selectedModel.modelId
     const config = {port: 4545, portPolicy: 'automatic', instanceId: 'managed-local', workspaceId}
-    const baselineUar = await uarState(evaluate)
+    let baselineUar = await uarState(evaluate)
     requireFact(baselineUar.state === 'running' && baselineUar.processId, 'C14_BOSSFANG_TEAMS_UAR_NOT_RUNNING')
 
     activeCheck = 'appsMascot'
@@ -169,6 +170,12 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     await action(evaluate, signal, 'connect', value => value.connection === 'connected')
     passed(activeCheck, {beforePort: 4545, afterPort: nextPort, uarUnchanged: true, explicitReconnect: true})
 
+    activeCheck = 'uarRestartAndGenerationFollow'
+    const followed = await restartAndFollow(evaluate, signal, {workspaceId, modelId}, completed)
+    baselineUar = followed.uar
+    evidence.diagnostics.push(followed.diagnostic)
+    passed(activeCheck, followed.observation)
+
     activeCheck = 'grantRenewal'
     const renewalBefore = await status(evaluate)
     if (configuration.bossfang?.waitForRenewal !== false) {
@@ -180,21 +187,18 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       passed(activeCheck, {generation: renewed.effective.uarGeneration,
         previousExpiresAt: renewalBefore.effective.grantExpiresAt, renewedExpiresAt: renewed.effective.grantExpiresAt})
     } else pending(activeCheck, 'C14_BOSSFANG_RENEWAL_WAIT_NOT_OPERATED')
-    pending('staleGrantRefusal', 'C14_BOSSFANG_PRIVATE_HOST_REFUSAL_RECEIPT_REQUIRED')
-    pending('externalBossFang', 'C14_BOSSFANG_NO_ACTUAL_EXTERNAL_DASHBOARD_OPERATION_RECEIPT')
+    pending('expiredGrantRefusal', 'C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE')
+    evidence.pending.expiredGrantRefusal.reason = 'Public supported controls never expose the private grant and production renews it before expiry; no expired-token request was made. Renewal or generation replacement is not refusal evidence.'
 
     activeCheck = 'alternateConfiguredUar'
-    const inventory = await ipc(evaluate, 'prometheus.uar.instances.read', {})
-    const alternate = inventory.instances.find(item => item.id !== 'managed-local' && item.enabled &&
-      item.compatibility === 'operational' && item.runtimeCredentialConfigured)
-    if (alternate) {
-      await managedConfig(evaluate, signal, {...config, port: nextPort, instanceId: alternate.id})
-      const alternateConnected = await action(evaluate, signal, 'connect', value => value.connection === 'connected')
-      requireFact(alternateConnected.effective?.uarInstanceId === alternate.id, 'C14_BOSSFANG_ALTERNATE_UAR_IDENTITY_MISMATCH')
-      passed(activeCheck, {instanceId: alternate.id, ownership: alternate.ownership, authenticatedConnection: true})
-      await managedConfig(evaluate, signal, {...config, port: nextPort})
-      await action(evaluate, signal, 'connect', value => value.connection === 'connected')
-    } else pending(activeCheck, 'C14_BOSSFANG_NO_ACTUAL_CONFIGURED_ALTERNATE_UAR')
+    const alternate = await alternateUar(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
+    if(alternate.pending)pending(activeCheck, alternate.pending)
+    else {evidence.diagnostics.push(alternate.diagnostic);passed(activeCheck, alternate.observation)}
+
+    activeCheck = 'externalBossFangPreservation'
+    const external = await externalBossFang(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
+    if(external.pending)pending(activeCheck, external.pending)
+    else passed(activeCheck, external.observation)
 
     activeCheck = 'stopPreservesUar'
     await action(evaluate, signal, 'stop', value => value.status === 'stopped' && value.connection === 'disconnected')
