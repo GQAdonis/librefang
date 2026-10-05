@@ -334,6 +334,11 @@ impl ChannelActionStore {
         prepared: &PreparedAction,
         observer: Option<&ObserverAppend>,
     ) -> StorageResult<()> {
+        let transaction_label = if observer.is_some() {
+            "observer_action_commit"
+        } else {
+            "causal_action_commit"
+        };
         let root_id = &prepared.receipt.root_occurrence_id;
         let action_id = &prepared.receipt.action_id;
         let mut sql = String::from("BEGIN TRANSACTION; ");
@@ -405,8 +410,45 @@ impl ChannelActionStore {
                     observer.subscription_before.next_sequence as i64,
                 ));
         }
-        query.await.map_err(db_error)?.check().map_err(db_error)?;
+        let mut response = query.await.map_err(db_error)?;
+        let mut errors = response.take_errors().into_iter().collect::<Vec<_>>();
+        if !errors.is_empty() {
+            errors.sort_by_key(|(index, _)| *index);
+            let (index, error) = errors
+                .iter()
+                .find(|(_, error)| {
+                    !matches!(
+                        error.query_details(),
+                        Some(surrealdb::types::QueryError::NotExecuted)
+                    )
+                })
+                .unwrap_or(&errors[0]);
+            return Err(StorageError::Backend(format!(
+                "{transaction_label} statement {index} failed ({})",
+                redacted_error_class(error)
+            )));
+        }
         Ok(())
+    }
+}
+
+fn redacted_error_class(error: &surrealdb::Error) -> &'static str {
+    match error.query_details() {
+        Some(surrealdb::types::QueryError::NotExecuted) => "query_not_executed",
+        Some(surrealdb::types::QueryError::TimedOut { .. }) => "query_timed_out",
+        Some(surrealdb::types::QueryError::Cancelled) => "query_cancelled",
+        Some(surrealdb::types::QueryError::TransactionConflict) => "transaction_conflict",
+        Some(_) => "query_other",
+        None if error.is_validation() => "validation",
+        None if error.is_configuration() => "configuration",
+        None if error.is_serialization() => "serialization",
+        None if error.is_not_allowed() => "not_allowed",
+        None if error.is_not_found() => "not_found",
+        None if error.is_already_exists() => "already_exists",
+        None if error.is_connection() => "connection",
+        None if error.is_thrown() => "thrown",
+        None if error.is_context() => "context",
+        None => "internal",
     }
 }
 

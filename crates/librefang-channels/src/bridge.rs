@@ -4284,24 +4284,7 @@ async fn admit_durable_dispatch(
         }
     } else if !resolution.addressed && !resolution.retained {
         let ctx = binding_context(message);
-        let specific = router.top_binding_names(&ctx, true);
-        let mut candidates = if !specific.is_empty() {
-            specific
-        } else if let Some(instance) = message
-            .metadata
-            .get("account_id")
-            .and_then(serde_json::Value::as_str)
-            .filter(|instance| !instance.is_empty())
-        {
-            if handle.resolve_instance_default(instance).await.is_some() {
-                // The configured instance default outranks channel-only rules.
-                Vec::new()
-            } else {
-                router.top_binding_names(&ctx, false)
-            }
-        } else {
-            router.top_binding_names(&ctx, false)
-        };
+        let mut candidates = router.top_binding_names(&ctx, false);
         let mut eligible = Vec::new();
         for name in candidates.drain(..) {
             if let Ok(Some(id)) = handle.find_agent_by_name(&name).await {
@@ -4459,13 +4442,7 @@ async fn claim_causal_handler_action(
     let Some(dispatch) = dispatch else {
         return true;
     };
-    if dispatch.source.scope.provider != "discord"
-        || !message.is_group
-        || message
-            .metadata
-            .get("guild_id")
-            .and_then(serde_json::Value::as_str)
-            .is_none()
+    if !dispatch.source.governed_profile(message)
     {
         return true;
     }
@@ -4515,13 +4492,7 @@ async fn publish_durable_observers(
     message: &ChannelMessage,
 ) {
     let Some(dispatch) = dispatch else { return };
-    if dispatch.source.scope.provider != "discord"
-        || !message.is_group
-        || message
-            .metadata
-            .get("guild_id")
-            .and_then(serde_json::Value::as_str)
-            .is_none()
+    if !dispatch.source.governed_profile(message)
     {
         return;
     }
@@ -4547,15 +4518,8 @@ async fn authorize_durable_handler_execution(
     let Some(dispatch) = dispatch else {
         return true;
     };
-    // C08 governed source profile is Discord guild only. DMs and other
-    // adapters retain their local route behavior without claiming Gate support.
-    if dispatch.source.scope.provider != "discord"
-        || !message.is_group
-        || message
-            .metadata
-            .get("guild_id")
-            .and_then(serde_json::Value::as_str)
-            .is_none()
+    // Gate governs Discord guilds and explicitly qualified signed webhooks.
+    if !dispatch.source.governed_profile(message)
     {
         return true;
     }
@@ -4838,6 +4802,40 @@ async fn resolve_or_fallback(
             Ok(None) => {}
             Err(reason) => return RouteResolution::unavailable(reason),
         }
+    }
+
+    // Durable sources use the declared binding > direct > user > channel/system
+    // default order; process-local sticky claims cannot precede that contract.
+    if SourceOccurrence::from_message(message).is_some() {
+        let ctx = binding_context(message);
+        if let Some(id) = router.resolve_before_defaults(
+            &message.channel, &message.sender.platform_id,
+            message.sender.librefang_user.as_deref(), &ctx,
+        ) {
+            return if agent_allows_channel(handle, id, ct).await {
+                RouteResolution::plain(id)
+            } else {
+                RouteResolution::unavailable("Configured channel handler is ineligible".into())
+            };
+        }
+        if let Some((instance, _)) = binding_keys {
+            if let Some(id) = handle.resolve_instance_default(instance).await {
+                return if agent_allows_channel(handle, id, ct).await {
+                    RouteResolution::plain(id)
+                } else {
+                    RouteResolution::unavailable("Channel instance default is ineligible".into())
+                };
+            }
+        }
+        let id = router.resolve_with_context(
+            &message.channel, &message.sender.platform_id,
+            message.sender.librefang_user.as_deref(), &ctx,
+        );
+        return match id {
+            Some(id) if agent_allows_channel(handle, id, ct).await => RouteResolution::plain(id),
+            Some(_) => RouteResolution::unavailable("Channel/system default is ineligible".into()),
+            None => RouteResolution::unavailable("No configured durable channel handler".into()),
+        };
     }
 
     // Sticky continuation (#5323): a live conversation-ownership claim for this

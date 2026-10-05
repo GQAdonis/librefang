@@ -994,7 +994,7 @@ fn wire_credential_reference(reference: &str) -> Result<String, LlmError> {
 impl LlmDriver for UarDriver {
     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, LlmError> {
         let endpoint = self.endpoint().await?;
-        let body = build_uar_request(&request, false);
+        let body = build_uar_request(&request, false)?;
         let response = self
             .send(
                 self.client
@@ -1040,7 +1040,7 @@ impl LlmDriver for UarDriver {
         tx: tokio::sync::mpsc::Sender<StreamEvent>,
     ) -> Result<CompletionResponse, LlmError> {
         let endpoint = self.endpoint().await?;
-        let body = build_uar_request(&request, true);
+        let body = build_uar_request(&request, true)?;
         let response = self
             .send(
                 self.client
@@ -1459,7 +1459,41 @@ async fn finish_streamed_tool_calls(
 ///
 /// Messages are serialized as OpenAI-format JSON values, which liter-llm
 /// then deserializes into its own typed `Message` enum inside the driver.
-fn build_uar_request(request: &CompletionRequest, stream: bool) -> serde_json::Value {
+fn build_uar_request(
+    request: &CompletionRequest,
+    stream: bool,
+) -> Result<serde_json::Value, LlmError> {
+    // BossFang appends canonical context and the current clock as user-role
+    // messages. UAR otherwise picks the last user message as the run input,
+    // which makes the clock replace the actual channel turn.
+    let message = request
+        .messages
+        .iter()
+        .rev()
+        .filter(|item| item.role == Role::User)
+        .filter_map(|item| match &item.content {
+            MessageContent::Text(text) => Some(text.clone()),
+            MessageContent::Blocks(blocks) => {
+                let text = blocks
+                    .iter()
+                    .filter_map(|block| match block {
+                        ContentBlock::Text { text, .. } => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (!text.trim().is_empty()).then_some(text)
+            }
+        })
+        .find(|text| {
+            let text = text.trim();
+            !text.is_empty()
+                && !(text.starts_with("[Current date/time: ") && text.ends_with(']'))
+                && !text.starts_with("[Previous conversation context]\n")
+        })
+        .ok_or_else(|| {
+            LlmError::Http("UAR request has no user turn after host context messages".into())
+        })?;
     let mut messages: Vec<serde_json::Value> = Vec::new();
 
     // Inject system prompt first when supplied via the dedicated field.
@@ -1586,6 +1620,7 @@ fn build_uar_request(request: &CompletionRequest, stream: bool) -> serde_json::V
 
     let mut body = serde_json::json!({
         "model": request.model,
+        "message": message,
         "messages": messages,
         "tools": tools_to_openai_json(&request.tools),
         "max_tokens": request.max_tokens,
@@ -1594,6 +1629,11 @@ fn build_uar_request(request: &CompletionRequest, stream: bool) -> serde_json::V
         "stream_mode": "openai",
         "memory_enabled": false,
         "prompt_caching_enabled": request.prompt_caching,
+        "run_policy": {
+            "skills": { "mode": "none" },
+            "tools": { "mode": "none" },
+            "mcp_servers": { "mode": "none" },
+        },
     });
     if let Some(session_id) = request.session_id.as_ref() {
         body["session_id"] = serde_json::Value::String(session_id.clone());
@@ -1608,7 +1648,7 @@ fn build_uar_request(request: &CompletionRequest, stream: bool) -> serde_json::V
             for (key, value) in extra_body {
                 if matches!(
                     key.as_str(),
-                    "model" | "messages" | "tools" | "stream" | "stream_mode" | "memory_enabled"
+                    "model" | "message" | "messages" | "tools" | "stream" | "stream_mode" | "memory_enabled" | "run_policy"
                 ) {
                     tracing::warn!(key, "ignoring reserved UAR extra_body field");
                     continue;
@@ -1617,7 +1657,7 @@ fn build_uar_request(request: &CompletionRequest, stream: bool) -> serde_json::V
             }
         }
     }
-    body
+    Ok(body)
 }
 
 /// Convert LibreFang [`ToolDefinition`]s to OpenAI function-calling JSON schema.
@@ -1808,7 +1848,7 @@ mod tests {
             ("model".to_string(), serde_json::json!("other/model")),
             ("max_tokens".to_string(), serde_json::json!(42)),
         ]));
-        let body = build_uar_request(&request, true);
+        let body = build_uar_request(&request, true).unwrap();
         assert_eq!(body["stream"], true);
         assert_eq!(body["stream_mode"], "openai");
         assert_eq!(body["model"], "openai/test-model");

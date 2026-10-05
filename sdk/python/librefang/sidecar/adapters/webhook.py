@@ -89,6 +89,18 @@ tree):
 
 * **Multi-bot ``account_id``** metadata injection (#5003).
 
+* **Qualified durable profile**: ``WEBHOOK_DURABLE_PROFILE=1`` requires
+  ``WEBHOOK_ACCOUNT_ID`` and a public ``WEBHOOK_CALLBACK_URL``. Signed
+  inbound bodies must supply nonempty ``message_id``, ``workspace_id``,
+  ``room_id`` and ``sender_id``, plus ``thread_id`` (null or a nonempty
+  string). These caller-native IDs must remain stable across redelivery.
+  A callback receives ``action_id``, ``chunk_index``, ``room_id`` and
+  ``thread_id`` and must deduplicate by action plus chunk index. It returns
+  JSON ``{"action_id": <same action>, "message_id": <native id>}``
+  for each posted chunk. Echoes reuse that native ID; reactions set
+  ``metadata.reply_to_native_message_id`` to preserve stored lineage.
+  Missing callback receipts are uncertain effects, never success.
+
 Improvements over the Rust adapter:
 
 1. **Inbound dedupe** on ``platform_message_id`` — Rust assigned
@@ -565,6 +577,9 @@ class WebhookAdapter(SidecarAdapter):
             Field("WEBHOOK_ACCOUNT_ID",
                   "Account ID (multi-bot routing)", "text",
                   advanced=True),
+            Field("WEBHOOK_DURABLE_PROFILE",
+                  "Require stable source IDs and action-bound callback receipts",
+                  "text", placeholder="1", advanced=True),
         ],
     )
 
@@ -624,6 +639,12 @@ class WebhookAdapter(SidecarAdapter):
 
         acct = os.environ.get("WEBHOOK_ACCOUNT_ID", "").strip()
         self.account_id: Optional[str] = acct or None
+        self.durable_profile = _env_bool("WEBHOOK_DURABLE_PROFILE", False)
+        if self.durable_profile:
+            if self.account_id is None or self.callback_url is None or self.deliver_only:
+                log.error("durable webhook requires account, callback and handler mode")
+                raise SystemExit(2)
+            self.capabilities = ["native_send_receipt"]
 
         self._seen = _SeenSet(
             max_size=SEEN_MESSAGES_MAX, evict=SEEN_MESSAGES_EVICT,
@@ -704,6 +725,17 @@ class WebhookAdapter(SidecarAdapter):
             # contract — return 200 so the caller doesn't retry.
             return 200
 
+        if self.durable_profile:
+            for key in ("message_id", "workspace_id", "room_id", "sender_id"):
+                value = payload.get(key)
+                if not isinstance(value, str) or not value.strip():
+                    return 400
+            if "thread_id" not in payload or (
+                payload["thread_id"] is not None
+                and (not isinstance(payload["thread_id"], str) or not payload["thread_id"].strip())
+            ):
+                return 400
+
         message = parsed["message"]
         if message.startswith("/"):
             head, _, rest = message[1:].partition(" ")
@@ -717,7 +749,7 @@ class WebhookAdapter(SidecarAdapter):
         # (webhook.rs:368-371); the 8-char body hash suffix
         # protects against millisecond-collision dupes that
         # Rust's ID would have flattened together.
-        inbound_id = parsed["metadata"].get("message_id")
+        inbound_id = payload["message_id"] if self.durable_profile else parsed["metadata"].get("message_id")
         if isinstance(inbound_id, str) and inbound_id:
             msg_id = inbound_id
         else:
@@ -726,12 +758,21 @@ class WebhookAdapter(SidecarAdapter):
             msg_id = f"wh-{ms}-{tail}"
 
         # Dedupe — improvement #1 over the Rust adapter.
-        if not self._seen.mark(msg_id):
+        dedupe_key = json.dumps([
+            self.account_id, payload["workspace_id"], payload["room_id"],
+            parsed["thread_id"], parsed["sender_id"], msg_id,
+        ]) if self.durable_profile else msg_id
+        if not self._seen.mark(dedupe_key):
             log.debug("webhook duplicate message_id, dropping",
                       message_id=msg_id)
             return 200
 
         metadata = dict(parsed["metadata"])
+        metadata.pop("__channel_profile__", None)
+        if self.durable_profile:
+            metadata["__channel_profile__"] = "signed_webhook_v1"
+            metadata["workspace_id"] = payload["workspace_id"]
+            metadata["sender_user_id"] = parsed["sender_id"]
         if self.account_id is not None:
             metadata["account_id"] = self.account_id
         if self.deliver_only:
@@ -750,7 +791,7 @@ class WebhookAdapter(SidecarAdapter):
             user_name=parsed["sender_name"],
             content=content,
             message_id=msg_id,
-            channel_id=parsed["sender_id"],
+            channel_id=payload["room_id"] if self.durable_profile else parsed["sender_id"],
             is_group=parsed["is_group"],
             thread_id=parsed["thread_id"],
             metadata=metadata,
@@ -843,7 +884,10 @@ class WebhookAdapter(SidecarAdapter):
 
     # ---- outbound POST to callback_url ------------------------------
 
-    def _post_chunk(self, chunk: str, user_id: str, user_name: str) -> None:
+    def _post_chunk(self, chunk: str, user_id: str, user_name: str,
+                    action_id: Optional[str] = None,
+                    thread_id: Optional[str] = None,
+                    chunk_index: int = 0) -> Optional[str]:
         """Sign + POST a single chunk to ``self.callback_url``. Honors
         429 with one retry (improvement #2 over Rust)."""
         if self.callback_url is None:
@@ -860,14 +904,18 @@ class WebhookAdapter(SidecarAdapter):
                 f"webhook send refused by SSRF guard: {reason}",
             )
 
-        body = json.dumps({
+        payload = {
             "sender_id": "librefang",
             "sender_name": "LibreFang",
             "recipient_id": user_id,
             "recipient_name": user_name,
             "message": chunk,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        }).encode("utf-8")
+        }
+        if action_id:
+            payload.update(action_id=action_id, room_id=user_id, thread_id=thread_id,
+                           account_id=self.account_id, chunk_index=chunk_index)
+        body = json.dumps(payload).encode("utf-8")
         signature = compute_signature(self._secret_bytes, body)
         headers = {
             "Content-Type": "application/json",
@@ -887,6 +935,8 @@ class WebhookAdapter(SidecarAdapter):
             log.warn("webhook callback 429; sleeping then retrying once",
                      retry_after=wait)
             if self._shutdown.wait(wait):
+                if action_id:
+                    raise RuntimeError("webhook send interrupted before callback receipt")
                 return
             status, _resp, raw, resp_hdrs = _http_request(
                 self.callback_url, method="POST", body=body, headers=headers,
@@ -894,15 +944,29 @@ class WebhookAdapter(SidecarAdapter):
                 resolved_addresses=resolved_addresses,
             )
         if status < 200 or status >= 300:
+            if action_id:
+                raise RuntimeError(f"webhook callback refused action with HTTP {status}")
             snippet = raw[:200].decode("utf-8", "replace") if raw else ""
             raise RuntimeError(
                 f"webhook callback error (status={status}): {snippet}",
             )
+        if action_id:
+            native_id = _resp.get("message_id") if isinstance(_resp, dict) else None
+            if (not isinstance(native_id, str) or not native_id.strip()
+                    or _resp.get("action_id") != action_id):
+                raise RuntimeError("webhook callback did not return an action-bound native receipt")
+            return native_id
+        return None
 
-    def _send_text(self, user_id: str, user_name: str, text: str) -> None:
+    def _send_text(self, user_id: str, user_name: str, text: str,
+                   action_id: Optional[str] = None,
+                   thread_id: Optional[str] = None) -> list[str]:
+        native_ids: list[str] = []
         if not text:
-            return
+            return native_ids
         if self.callback_url is None:
+            if action_id:
+                raise RuntimeError("webhook action has no configured callback")
             # Rust raises here ("no callback_url configured"); we
             # log + return so a deliver_only-mode setup (which has
             # no outbound callback) doesn't surface a noisy error
@@ -912,7 +976,7 @@ class WebhookAdapter(SidecarAdapter):
                 "outbound dropped",
                 to=user_id,
             )
-            return
+            return native_ids
         chunks = _split_message(text, MAX_MESSAGE_LEN)
         for i, chunk in enumerate(chunks):
             # Skip remaining chunks if shutdown was signalled — a
@@ -922,12 +986,24 @@ class WebhookAdapter(SidecarAdapter):
             # `_shutdown.wait()` already; this is the outer guard
             # for the path between chunks.
             if self._shutdown.is_set():
-                return
-            self._post_chunk(chunk, user_id, user_name)
+                if action_id:
+                    raise _PartialSendError("webhook action interrupted", native_ids)
+                return native_ids
+            try:
+                native_id = self._post_chunk(chunk, user_id, user_name, action_id, thread_id, i)
+            except Exception as exc:
+                if action_id:
+                    raise _PartialSendError(str(exc), native_ids) from exc
+                raise
+            if native_id is not None:
+                native_ids.append(native_id)
             if i + 1 < len(chunks):
                 # 100 ms inter-chunk delay matches webhook.rs:483-485.
                 if self._shutdown.wait(INTER_CHUNK_DELAY_SECS):
-                    return
+                    if action_id:
+                        raise _PartialSendError("webhook action interrupted", native_ids)
+                    return native_ids
+        return native_ids
 
     # ---- sidecar surface --------------------------------------------
 
@@ -970,7 +1046,7 @@ class WebhookAdapter(SidecarAdapter):
     async def on_shutdown(self) -> None:
         self._shutdown_server()
 
-    async def on_send(self, cmd) -> None:
+    async def on_send(self, cmd) -> Optional[list[str]]:
         user_id = (
             cmd.channel_id
             or (cmd.user.get("platform_id") if cmd.user else "")
@@ -997,12 +1073,26 @@ class WebhookAdapter(SidecarAdapter):
 
         loop = asyncio.get_event_loop()
         try:
-            await loop.run_in_executor(
-                None, lambda: self._send_text(user_id, user_name, text),
+            return await loop.run_in_executor(
+                None, lambda: self._send_text(user_id, user_name, text,
+                    getattr(cmd, "action_id", None), cmd.thread_id),
             )
         except Exception as e:  # noqa: BLE001
             log.error("webhook send failed", to=user_id, error=str(e))
             raise
+
+    async def on_command(self, cmd):
+        # The base dispatcher discards on_send's return value. Native receipts
+        # must reach runtime.py's existing action-bound send_result event.
+        if isinstance(cmd, protocol.Send):
+            return await self.on_send(cmd)
+        return await super().on_command(cmd)
+
+
+class _PartialSendError(RuntimeError):
+    def __init__(self, message: str, native_message_ids: list[str]):
+        super().__init__(message)
+        self.native_message_ids = list(native_message_ids)
 
 
 if __name__ == "__main__":

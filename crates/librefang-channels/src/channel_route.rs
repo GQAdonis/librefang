@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 pub const NATIVE_MESSAGE_ID_KEY: &str = "__native_message_id__";
 pub const ACCOUNT_KIND_KEY: &str = "__account_kind__";
+pub const WEBHOOK_PROFILE_KEY: &str = "__channel_profile__";
+pub const WEBHOOK_PROFILE: &str = "signed_webhook_v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -86,7 +88,27 @@ pub enum DispatchClaim {
 }
 
 impl SourceOccurrence {
+    /// Only the explicitly qualified webhook and Discord guild profiles may
+    /// invoke Gate effects and publish observer copies.
+    pub fn governed_profile(&self, message: &ChannelMessage) -> bool {
+        match self.scope.provider.as_str() {
+            "discord" => message.is_group
+                && message.metadata.get("guild_id").and_then(serde_json::Value::as_str).is_some(),
+            "webhook" => message.metadata.get(WEBHOOK_PROFILE_KEY)
+                .and_then(serde_json::Value::as_str) == Some(WEBHOOK_PROFILE),
+            _ => false,
+        }
+    }
+
     pub fn from_message(message: &ChannelMessage) -> Option<Self> {
+        // Legacy webhooks may carry a generated wh-* ID. Even complete caller
+        // metadata must not promote that ID into a durable provider identity.
+        if channel_type_to_str(&message.channel) == "webhook"
+            && message.metadata.get(WEBHOOK_PROFILE_KEY)
+                .and_then(serde_json::Value::as_str) != Some(WEBHOOK_PROFILE)
+        {
+            return None;
+        }
         if message
             .metadata
             .get(NATIVE_MESSAGE_ID_KEY)
@@ -118,6 +140,10 @@ impl SourceOccurrence {
             return None;
         }
         let account_kind = match field(ACCOUNT_KIND_KEY).as_deref() {
+            // This profile deliberately uses WEBHOOK_ACCOUNT_ID as the
+            // configured bridge account, not a provider-discovered bot ID.
+            Some("native" | "configured_instance")
+                if channel_type_to_str(&message.channel) == "webhook" => AccountKind::ConfiguredInstance,
             Some("native") => AccountKind::Native,
             Some("configured_instance") => AccountKind::ConfiguredInstance,
             _ => return None,

@@ -1263,6 +1263,13 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                 .route_revision
                 .ok_or_else(|| "scoped reply route revision is absent".to_string())?
                 .to_string();
+            let (current_route, predecessor_routes) = receipt
+                .visited_routes
+                .split_last()
+                .ok_or_else(|| "scoped reply causal path is empty".to_string())?;
+            if current_route != &receipt.route_identity {
+                return Err("scoped reply causal path does not end at its current route".into());
+            }
             let effect_key = format!("channel-scoped-reply-v1:{action_id}");
             let released = crate::channel_authority::release_channel_effect(
                 &crate::channel_authority::ChannelEffectInput {
@@ -1279,7 +1286,7 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
                     root_occurrence_id: &receipt.root_occurrence_id,
                     parent_action_id: parent_effect_id,
                     route_identity: &receipt.route_identity,
-                    visited_routes: &receipt.visited_routes,
+                    visited_routes: predecessor_routes,
                     remaining_depth: receipt.remaining_depth,
                     remaining_fanout: receipt.remaining_fanout,
                     grant_issuer: &grant_issuer,
