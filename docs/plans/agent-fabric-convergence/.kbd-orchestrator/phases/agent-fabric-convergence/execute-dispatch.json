@@ -53,8 +53,8 @@
     "previousDispatch": "execute-dispatch-before-priority-r8.json"
   },
   "status": "implementation-running",
-  "updatedAt": "2026-10-05T08:21:02.582Z",
-  "planRevision": 8,
+  "updatedAt": "2026-10-05T16:57:58.792Z",
+  "planRevision": 9,
   "deliveryOrder": "customer-delivery-map.json",
   "modelAssignment": "model-dispatch.json tasks.C14.1; actual native Codex implementer assignments recorded below",
   "dispatchedAt": "2026-10-05T07:59:44.157Z",
@@ -89,5 +89,37 @@
       "status": "operation-authored-not-run"
     }
   ],
-  "observedPrerequisite": "Team-member kernel request lacked working directory/host-tool admission; required for approved coding operation. Fix within C14.1 delivery through existing trusted context, not generic-only substitute."
+  "observedPrerequisite": "Team-member kernel request lacked working directory/host-tool admission; required for approved coding operation. Fix within C14.1 delivery through existing trusted context, not generic-only substitute.",
+  "approvedRepair": {
+    "taskRefs": [
+      "C14.4",
+      "C14.3"
+    ],
+    "retainedTaskRefs": [
+      "C14.1",
+      "C14.2"
+    ],
+    "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "authority": "operator-approved Make BossFang accessible and connect it to the existing UAR plan",
+    "scopeReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+    "wholeTaskCompletionRequiresOriginalAcceptance": true
+  },
+  "repairAssignments": [
+    {
+      "agent": "bossfang_grants",
+      "owns": "UAR scoped native delegation grants/auth/API/docs"
+    },
+    {
+      "agent": "teams_runtime",
+      "owns": "BossFang connection manager/native API/full-run driver/legacy migration/Docker UAR removal"
+    },
+    {
+      "agent": "team_authoring",
+      "owns": "The Boss Apps/Settings/BossFang supervisor/typed IPC/preferences/all locales/diagnostics"
+    },
+    {
+      "agent": "root",
+      "owns": "KBD/Cadence scope, native packaging/importer/release publication and final complete operation"
+    }
+  ]
 }

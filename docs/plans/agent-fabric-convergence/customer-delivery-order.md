@@ -83,3 +83,18 @@ The installed runtime rejects both InProgress → Pending and re-registration/re
 ### Shared-runtime packaging prerequisite
 
 C14.4 includes the pinned BossFang executable, functional dashboard assets, integrity records and main-process supervision needed to operate the packaged shared-runtime profile. C14.3 consumes that payload for Apps/settings embedding and isolated navigation; retain its original packaging acceptance by mapping exact C14.4 receipts.
+
+
+## Operator-approved BossFang accessibility repair — plan revision 9, 2026-10-05
+
+The operator explicitly approved completing C14.4 and C14.3 now inside current Cadence iteration 8, while retaining the unfinished C14.1/C14.2 Teams delivery and its clock/history. This urgent repair overrides the prior ordering hold on BossFang; Teams remain part of the combined final functional operation and no prior task completion is reopened or fabricated.
+
+BossFang must not bundle, install, spawn, restart, stop or supervise UAR. Replace its child supervisor with an authenticated selected-instance connection manager. The Boss alone supervises its packaged UAR and separately owns managed BossFang. Default BossFang loopback port 4545, automatic increments and explicit conflict errors, requested/effective port, save/restart, external ownership and native-executor compatibility are required. Existing runs retain admitted identities; new selection applies to new runs only.
+
+The Boss issues native in-memory UAR grants through host-authenticated POST /api/uar/delegation-grants and revokes through DELETE /api/uar/delegation-grants/{id}. Credentials expire in 900 seconds and bind verified principal, explicit workspaces and operation scopes (discovery, model_read, model_completion, full_harness_delegation). Completion scope permits only the existing actual completion route; full-run diagnostic uses real native admission and execution, not a health-only certification. Runtime restart, generation/binding change invalidate authorization. Never forward the host launch token or trust caller principal headers for delegated credentials. External identities use configured authentication.
+
+Apps automatically shows the actual orange BossFang mascot and embeds its actual /dashboard/ via the isolated MiniApp. Always-visible Settings /settings/bossfang provides managed/external configuration, protected credentials, lifecycle, logs, independent UAR instance selection default managed-local, applied/pending states and a streamed redacted diagnostic report. Typed IPC, preference sources/generation, settings search and every locale belong to the same increment.
+
+User-invoked diagnostics separately report listening, authenticated, compatible, and delegation operational; include bounded real model use in disposable workspace, correlated completion and cancellation. Missing models/credentials have actionable configuration links. Four target pinned executables include embedded functional dashboard manifests: Mac ARM64/x64 and Windows x64/ARM64. Preserve no Linux installer publication.
+
+Repository implementation ownership: UAR scoped change bossfang-scoped-delegation-grants; BossFang scoped selected-instance connection change; The Boss scoped accessibility/settings change. Root coordinates native payload manifests, importer and release pipeline. Three independent implementation writers; one build writer and one publisher. No intermediate checks or tests; complete all production wiring then pnpm build:mac:arm64, packaged Teams plus BossFang operation and failure/recovery scenarios. Native Windows installed acceptance remains separately pending.
