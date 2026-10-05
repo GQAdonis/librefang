@@ -16,7 +16,7 @@ const visible = token => `[...document.querySelectorAll(${JSON.stringify(selecto
 
 /**
  * Compose after Teams in the SAME launch/context. selection is the actual Teams
- * {workspaceId, selectedModel:{providerId,modelId}} receipt, not a new workspace.
+ * selectedModel preserves the Teams UI source; executionModel is its validated native route.
  * Caller may set configuration.bossfang.evidence and waitForRenewal=false; a
  * skipped renewal remains pending. No credential/environment secret is read here.
  */
@@ -31,6 +31,7 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     startedAt: new Date().toISOString(), completedAt: null, complete: false, status: 'blocked',
     sourceRefs: configuration.sourceRefs, operationModules: modules,
     context: {targetCount: targets.length}, workspaceId: selection?.workspaceId,
+    selectedModel: selection?.selectedModel, executionModel: selection?.executionModel,
     checks: {}, pending: {}, diagnostics: [], failureCode: null
   }
   const passed = (name, observation) => { evidence.checks[name] = {status: 'passed', ...observation} }
@@ -44,7 +45,11 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       'C14_BOSSFANG_ACTUAL_TEAMS_SELECTION_REQUIRED')
     passed(activeCheck, {samePackagedLaunch: true})
     const workspaceId = selection.workspaceId
-    const modelId = selection.selectedModel.providerId + '/' + selection.selectedModel.modelId
+    requireFact(selection.executionModel?.source === 'uar-team-effective-model-receipt' &&
+      selection.executionModel.workspaceId === workspaceId && selection.executionModel.providerId &&
+      selection.executionModel.modelId && selection.executionModel.receipts?.length,
+      selection.executionModelUnavailable ?? 'C14_BOSSFANG_TEAM_EXECUTION_MODEL_UNAVAILABLE')
+    const modelId = selection.executionModel.providerId + '/' + selection.executionModel.modelId
     const config = {port: 4545, portPolicy: 'automatic', instanceId: 'managed-local', workspaceId}
     let baselineUar = await uarState(evaluate)
     requireFact(baselineUar.state === 'running' && baselineUar.processId, 'C14_BOSSFANG_TEAMS_UAR_NOT_RUNNING')
@@ -119,7 +124,13 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     requireFact(lifetime > 0 && lifetime <= 900000, 'C14_BOSSFANG_GRANT_EXPIRY_CONTRACT_NOT_OBSERVED')
     sameUar(baselineUar, await uarState(evaluate))
     const models = await ipc(evaluate, 'bossfang.models')
-    requireFact(models.some(item => item.id === modelId), 'C14_BOSSFANG_SELECTED_REAL_MODEL_UNAVAILABLE')
+    // Only public registry identities; gateway source IDs differ from native configured provider IDs.
+    evidence.modelSelection = {requestedId: modelId, totalAvailable: models.length,
+      available: models.slice(0,64).map(item => ({id: item.id.slice(0,256),
+        provider: item.provider.slice(0,256), modelId: item.modelId.slice(0,256), name: item.name.slice(0,256)}))}
+    requireFact(models.some(item => item.id === modelId &&
+      item.provider === selection.executionModel.providerId && item.modelId === selection.executionModel.modelId),
+      'C14_BOSSFANG_SELECTED_REAL_MODEL_UNAVAILABLE')
     await choose(evaluate, signal, 'model', modelId)
     await saveDraft(evaluate, signal)
     passed(activeCheck, {instanceId: 'managed-local', workspaceId, modelId,
