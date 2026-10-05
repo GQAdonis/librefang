@@ -264,6 +264,7 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     const code = error?.code ?? error?.message
     evidence.failureCode = typeof code === 'string' && /^C14_[A-Z0-9_]+$/.test(code) ? code : 'C14_BOSSFANG_OPERATION_FAILED'
     evidence.checks[activeCheck] = {status: 'failed', code: evidence.failureCode}
+    if(error.dashboardObservation)evidence.checks[activeCheck].dashboardObservation = error.dashboardObservation
   } finally {
     if (releasePort) try {await releasePort()} catch {evidence.pending.portCleanup = {status: 'pending', code: 'C14_BOSSFANG_PORT_CLEANUP_FAILED'}}
     evidence.completedAt = new Date().toISOString()
