@@ -21,7 +21,7 @@ Provide the selected gateway's real configuration through these environment refe
 | Variable | Required value |
 | --- | --- |
 | `BOSS_C14_GATEWAY_CREDENTIAL_ENV` | Name of an existing environment variable containing the selected gateway credential; the reference name is recorded, the value is never recorded. |
-| `BOSS_C14_GATEWAY_ENDPOINT` | The selected gateway's real endpoint, with no embedded credential or query secret. |
+| `BOSS_C14_GATEWAY_ENDPOINT` | The selected gateway's service base, such as `http://localhost:4000`, without `/v1`, embedded credentials or query secrets; the application appends `/v1/models` for discovery. |
 | `BOSS_C14_GATEWAY_ALIAS` | The actual served alias selected for this coding run. |
 | `BOSS_C14_GATEWAY_PROVIDER_ID` | Its actual configured source provider identity, used by existing gateway pricing/model provenance. |
 | `BOSS_C14_GATEWAY_MODEL_ID` | Its actual configured source model identity. |
@@ -49,7 +49,7 @@ Reopening here proves a renderer reload and persisted selection, not an applicat
 
 Each invocation creates a fresh exclusive `c14-<uuid>` directory containing `operation.json`, `launch.json`, `evidence.json`, a trusted scenario wrapper and the synthetic repository.
 Receipts contain actual source/bundle/sidecar/launcher/scenario hashes, identity and artifact/output digests, checked behaviors and observed accounting; unknown usage stays unknown.
-Raw model outputs, prompts, approval arguments, gateway credential values and raw errors are omitted from receipts.
+Raw model outputs, prompts, approval arguments, gateway credential values and raw errors are omitted from receipts. Failed operation diagnostics retain only visible machine error codes and HTTP status numbers, never complete alert text.
 The generated scenario wrapper contains only environment-reference configuration and synthetic fixture contents; it is written with owner-only permissions where supported.
 The launcher preserves its isolated app data for inspection and stops only the application instance it started.
 Its fresh profile does not modify installed application data.

@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { ipc } from './setup.mjs'
 import { waitFor } from './io.mjs'
 
-const query = (selector) => `document.querySelector(${JSON.stringify(selector)})`
+const query = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].find(node => node.getClientRects().length)`
 
 export async function click(evaluate, signal, selector, code) {
   return waitFor(signal, () => evaluate(`(() => {
@@ -54,7 +54,8 @@ export async function openWork(evaluate, signal) {
     const later=[...document.querySelectorAll('button')].find(node=>node.innerText.trim()==='Set up later');
     if(later)later.click();return Boolean(document.querySelector('#app-sidebar'));
   })()`), 'C14_APPLICATION_ONBOARDING_UNAVAILABLE')
-  await ipc(evaluate, 'navigation.open_route_in_main', { path: '/app/agents' })
+  const workVisible = await evaluate(`[...document.querySelectorAll('[data-ui~="work-mode-teams"]')].some(node => node.getClientRects().length)`)
+  if (!workVisible) await ipc(evaluate, 'navigation.open_route_in_main', { path: '/app/agents' })
   await click(evaluate, signal, '[data-ui~="work-mode-teams"]', 'C14_WORK_TEAMS_ENTRY_UNAVAILABLE')
 }
 

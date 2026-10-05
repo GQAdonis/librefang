@@ -4,7 +4,7 @@
   "status": "preparation-only",
   "observedAt": "2026-10-05 08:20:50 UTC",
   "gateway": {
-    "endpoint": "http://localhost:4000/v1",
+    "endpoint": "http://localhost:4000",
     "alias": "gpt-6.1-sol",
     "providerId": "openai",
     "modelId": "gpt-6.1-sol",
@@ -16,6 +16,6 @@
   "packagedAcceptance": "unverified",
   "limitations": [
     "The openai provider identity is the proxy's declared route; underlying localhost:8181 billing/provider identity is unverified.",
-    "UAR catalog pricing and real coding/tool execution remain unverified until the complete packaged delivery gate."
+    "The packaged c72b0003 catalog lacks openai/gpt-6.1-sol pricing; the observed Work setup reports TEAM_MODEL_PRICING_UNAVAILABLE. Repair provenance and real coding/tool operation remain required."
   ]
 }

@@ -190,6 +190,10 @@ export default async function scenario({ evaluate, signal, targets }, configurat
   } catch (error) {
     evidence.failureStage = stage
     evidence.failureCode = safeCode(error, signal)
+    evidence.visibleFailure = await evaluate(`(() => {
+      const text=[...document.querySelectorAll('[role="alert"]')].filter(node=>node.getClientRects().length).map(node=>node.innerText).join(' ');
+      return {codes:[...new Set(text.match(/\\b(?:UAR_|TEAM_)[A-Z0-9_]+\\b/g)??[])],httpStatuses:text.match(/HTTP [0-9]{3}/g)??[],pricingUnavailable:text.includes('pricing is unavailable')};
+    })()`)
   } finally {
     evidence.finishedAt = new Date().toISOString()
     write(configuration.evidence, evidence)
