@@ -1,8 +1,12 @@
-# C14.1 Teams in Work packaged operation
+# C14 Teams and BossFang packaged operation
 
 Creation task: `C14.1`.
 Invoke only at the complete delivery boundary, after production UI, locales, runtime host context, coding preset, ordinary-profile qualification and the local Mac application build are complete.
 Creating this procedure supplies no runtime or acceptance evidence.
+
+The operator-approved BossFang repair is composed after the original Teams
+operation in the same packaged application. The two-hour delivery clock continues.
+BossFang success does not conceal a Teams failure or complete the broader C14 tasks.
 
 ```text
 node docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs --boss /absolute/path/to/boss-checkout --launcher /absolute/path/to/delivery-cadence/scripts/boss-launch.mjs --output /absolute/path/to/operation-evidence
@@ -56,6 +60,29 @@ Approval diagnostics record the exact failed fixture constraint without classify
 The generated scenario wrapper contains only environment-reference configuration and synthetic fixture contents; it is written with owner-only permissions where supported.
 The launcher preserves its isolated app data for inspection and stops only the application instance it started.
 Its fresh profile does not modify installed application data.
+
+## BossFang operation and coverage
+
+The combined runner provisions a disposable dashboard credential through the
+supported protected credential IPC when its fresh profile needs one. The random
+credential stays in process memory and the application's protected store; it
+never appears in the wrapper, reports, URLs or source files.
+
+BossFang is opened through its actual Apps tile and isolated dashboard. Dedicated
+settings controls exercise an occupied socket at port 4545, fixed-mode feedback,
+automatic selection, independent managed-local UAR binding, a real configured
+model, admitted full-harness completion and cancellation, saved/effective port
+changes, reopening, and stopping BossFang without stopping UAR. Grant renewal is
+observed through the production renewal behavior. An alternate instance is
+operated only when an actual authenticated compatible instance is available.
+
+`bossfang-operation.json` retains separately passed and pending coverage. A
+missing alternate instance, external dashboard or private expired-grant refusal
+receipt remains pending; health cannot substitute for those scenarios. The
+combined delivery receipt requires both Teams and BossFang's core operated
+behavior. It does not certify all-platform installed acceptance or every pending
+failure scenario. The maximum combined launcher duration is 40 minutes, including
+real model work and production grant renewal waiting.
 
 The procedure returns success only when both the launcher confirms the scenario and the full named behavior is observed.
 Otherwise it writes a bounded `C14_*` failure code and a blocked outcome: missing package/source pin, unsupported native launcher, missing gateway credential/configuration, unavailable normal qualification/coding/tools, refused scope, failed inference, absent actual repository change, missing provenance, unresolved approval, failed reopening or incomplete cancellation are not feature acceptance.

@@ -44,7 +44,7 @@ export async function operate(args = process.argv.slice(2)) {
       sourcePinSha256: digest(fs.readFileSync(pinFile)), launcherSha256: digest(fs.readFileSync(options.launcher)),
       appAsarSha256: digest(fs.readFileSync(path.join(resources, 'app.asar'))),
       sidecarSha256: digest(fs.readFileSync(path.join(payload, 'uar-sidecar'))),
-      scenarioFiles: Object.fromEntries(['operate.mjs', 'scenario.mjs', 'controls.mjs', 'setup.mjs', 'approvals.mjs', 'diagnostics.mjs', 'io.mjs']
+      scenarioFiles: Object.fromEntries(fs.readdirSync(here).filter((name) => name.endsWith('.mjs')).sort()
         .map((name) => [name, digest(fs.readFileSync(path.join(here, name)))])) }
     const marker = 'C14-' + runId
     const workspaceDirectory = path.join(output, 'workspace')
@@ -54,17 +54,20 @@ export async function operate(args = process.argv.slice(2)) {
     const configuration = { creationTaskRef: 'C14.1', sourceRefs, gateway, evidence,
       workspaceDirectory, workspaceLabel: marker, marker, repository }
     const scenario = path.join(output, 'packaged-scenario.mjs')
-    fs.writeFileSync(scenario, `import scenario from ${JSON.stringify(pathToFileURL(path.join(here, 'scenario.mjs')).href)}\n` +
+    fs.writeFileSync(scenario, `import scenario from ${JSON.stringify(pathToFileURL(path.join(here, 'combined-scenario.mjs')).href)}\n` +
       `export default context => scenario(context, ${JSON.stringify(configuration)})\n`, { flag: 'wx', mode: 0o600 })
     const { launchBoss } = await import(pathToFileURL(options.launcher).href)
     requireFact(typeof launchBoss === 'function', 'C14_LAUNCHER_CONTRACT_UNAVAILABLE')
     const launch = await launchBoss({ repository: options.boss, app, scenario, 'require-scenario': true,
-      'timeout-ms': 1200000, receipt: path.join(output, 'launch.json') })
+      'timeout-ms': 2400000, receipt: path.join(output, 'launch.json') })
     const observed = fs.existsSync(evidence) ? JSON.parse(fs.readFileSync(evidence, 'utf8')) : null
+    const combinedFile = path.join(output, 'combined-evidence.json')
+    const combined = fs.existsSync(combinedFile) ? JSON.parse(fs.readFileSync(combinedFile, 'utf8')) : null
     Object.assign(operation, { sourceRefs, launchReceipt: launch.receiptFile,
       functionalAcceptance: launch.functionalAcceptance, checks: observed?.checks ?? [],
-      ...(observed ? { evidence, evidenceSha256: digest(fs.readFileSync(evidence)) } : {}) })
-    if (launch.status === 'success' && launch.functionalAcceptance === 'scenario-confirmed' && observed?.complete) {
+      ...(observed ? { evidence, evidenceSha256: digest(fs.readFileSync(evidence)) } : {}),
+      ...(combined ? { combinedEvidence: combinedFile, combinedEvidenceSha256: digest(fs.readFileSync(combinedFile)) } : {}) })
+    if (launch.status === 'success' && launch.functionalAcceptance === 'scenario-confirmed' && combined?.complete) {
       operation.status = 'success'
     } else operation.failureCode = observed?.failureCode ?? 'C14_PACKAGED_LAUNCH_OR_SCENARIO_UNAVAILABLE'
   } catch (error) {
