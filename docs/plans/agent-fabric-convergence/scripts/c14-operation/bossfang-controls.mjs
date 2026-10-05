@@ -84,6 +84,7 @@ export async function diagnostic(evaluate, signal, id) {
   return {
     id: value.id, status: value.status, instanceId: value.instanceId, workspaceId: value.workspaceId,
     model: value.model, taskId: value.taskId, startedAt: value.startedAt, completedAt: value.completedAt,
+    checks: value.checks,
     stages: value.stages.map(item => ({stage: item.stage, status: item.status})),
     events: value.events.map(item => ({cursor: item.cursor, type: item.type, occurredAt: item.occurredAt})),
     usage: value.usage, cancellation: value.cancellation ?? null,

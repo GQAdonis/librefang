@@ -17,6 +17,7 @@ export async function completeDiagnostic(evaluate, signal, {workspaceId, instanc
   }, 'C14_BOSSFANG_BOUNDARY_DIAGNOSTIC_NOT_TERMINAL', 240000)
   requireFact(completed.status === 'succeeded' && completed.taskId && completed.workspaceId === workspaceId &&
     completed.instanceId === instanceId && completed.model === modelId && completed.events.length > 0 &&
+      ['listening','authenticated','compatible','delegationOperational'].every(name => completed.checks?.[name] === 'succeeded') &&
     completed.stages.length === 5 && completed.stages.every(stage => stage.status === 'succeeded'),
   'C14_BOSSFANG_BOUNDARY_REAL_DELEGATION_FAILED')
   return completed

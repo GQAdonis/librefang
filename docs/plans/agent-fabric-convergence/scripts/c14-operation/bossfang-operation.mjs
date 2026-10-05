@@ -134,11 +134,12 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     }, 'C14_BOSSFANG_REAL_FULL_RUN_DID_NOT_COMPLETE', 240000)
     evidence.diagnostics.push(completed)
     requireFact(completed.status === 'succeeded' && completed.taskId && completed.events.length > 0 &&
+      ['listening','authenticated','compatible','delegationOperational'].every(name => completed.checks?.[name] === 'succeeded') &&
       completed.workspaceId === workspaceId && completed.model === modelId &&
       completed.stages.length === 5 && completed.stages.every(item => item.status === 'succeeded'),
       'C14_BOSSFANG_REAL_FULL_RUN_NOT_SUCCESSFUL')
     passed(activeCheck, {id: completed.id, taskId: completed.taskId, stages: completed.stages,
-      eventCount: completed.events.length, usage: completed.usage})
+      eventCount: completed.events.length, usage: completed.usage, checks: completed.checks})
 
     activeCheck = 'nativeFullHarnessCancellation'
     await click(evaluate, signal, selector('diagnostic-start'), 'C14_BOSSFANG_CANCEL_RUN_START_UNAVAILABLE')
@@ -146,6 +147,16 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       const next = await diagnostic(evaluate, signal)
       return next.id !== completed.id && next.taskId && next.status === 'running' && next
     }, 'C14_BOSSFANG_ADMITTED_CANCELLABLE_RUN_NOT_OBSERVED')
+    activeCheck = 'originalRunTransportRetention'
+    const disconnected = await action(evaluate, signal, 'disconnect', value => value.connection === 'disconnected')
+    requireFact(disconnected.effective?.uarInstanceId === null &&
+      cancellable.workspaceId === workspaceId && cancellable.instanceId === completed.instanceId,
+      'C14_BOSSFANG_ORIGINAL_RUN_ATTRIBUTION_NOT_OBSERVED')
+    const originalAfterDisconnect = await diagnostic(evaluate, signal, cancellable.id)
+    if (terminal(originalAfterDisconnect)) {
+      pending(activeCheck, 'C14_BOSSFANG_ORIGINAL_SELECTION_RETENTION_NOT_DEMONSTRATED')
+      requireFact(false, 'C14_BOSSFANG_ORIGINAL_RUN_COMPLETED_BEFORE_CANCEL')
+    }
     await click(evaluate, signal, selector('diagnostic-cancel'), 'C14_BOSSFANG_CANCEL_CONTROL_UNAVAILABLE')
     const cancelled = await waitFor(signal, async () => {
       const next = await diagnostic(evaluate, signal, cancellable.id)
@@ -153,11 +164,17 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     }, 'C14_BOSSFANG_NATIVE_CANCEL_NOT_TERMINAL', 120000)
     evidence.diagnostics.push(cancelled)
     requireFact(cancelled.status === 'cancelled' && cancelled.taskId === cancellable.taskId &&
+      cancelled.workspaceId === cancellable.workspaceId && cancelled.instanceId === cancellable.instanceId &&
       cancelled.cancellation?.requested && cancelled.cancellation.acknowledged &&
       cancelled.cancellation.terminal && !cancelled.cancellation.cleanupUncertain,
       'C14_BOSSFANG_NATIVE_CANCEL_NOT_ACKNOWLEDGED')
-    passed(activeCheck, {id: cancelled.id, taskId: cancelled.taskId, status: cancelled.status,
-      cancellation: cancelled.cancellation})
+    const cancellationReceipt = {id: cancelled.id, taskId: cancelled.taskId, status: cancelled.status,
+      workspaceId: cancelled.workspaceId, instanceId: cancelled.instanceId, cancellation: cancelled.cancellation}
+    passed('nativeFullHarnessCancellation', cancellationReceipt)
+    passed(activeCheck, {...cancellationReceipt, selectedDisconnected: true, originalAttributionPreserved: true})
+    sameUar(baselineUar, await uarState(evaluate))
+    await action(evaluate, signal, 'connect', value => value.connection === 'connected')
+    pending('originalRunGrantRenewal', 'C14_BOSSFANG_LONG_LIVED_ORIGINAL_RUN_FIXTURE_UNAVAILABLE')
 
     activeCheck = 'endpointChangeAndRestart'
     const nextPort = automatic.effective.port

@@ -82,6 +82,26 @@ on that generation; the earlier diagnostic receipt must remain unchanged. Later
 ownership checks compare against the new UAR process, rather than incorrectly
 claiming the deliberately restarted process stayed unchanged.
 
+The cancellation operation first observes a real admitted running diagnostic,
+then disconnects the current BossFang UAR selection through the settings control.
+It cancels and observes that original run while selection remains disconnected,
+requiring the original task, workspace and instance identity plus native requested,
+acknowledged, terminal cancellation with no uncertain cleanup. It reconnects only
+after the original cancellation settles and verifies UAR remained running. If the
+model finishes before cancellation, the retained transport boundary is explicitly
+not demonstrated; that failed operation must be retried without repeating passed
+behavior. Renewal of an active original run across its own grant expiry remains
+pending without a genuinely long-lived active run; selected-connection renewal
+cannot stand in for that evidence.
+
+The diagnostic report preserves the original five stages and separately exposes
+listening, authenticated, compatible and delegation-operational checks. The
+operation requires all four actual check results to succeed. Listening comes from
+native health, authentication from the protected native identity endpoint,
+compatibility from the admitted full-harness binding, and operational success
+from a correlated completed run with actual streamed model text. Old reports
+without these checks remain unknown and cannot satisfy the new operation.
+
 Grant renewal is observed through production behavior. An alternate instance
 qualifies only if it is already configured with separate protected runtime and
 administration credentials. Its supported instance test must authenticate and
