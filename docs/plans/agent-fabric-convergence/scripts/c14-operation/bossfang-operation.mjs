@@ -20,9 +20,9 @@ const visible = token => `[...document.querySelectorAll(${JSON.stringify(selecto
  * Caller may set configuration.bossfang.evidence and waitForRenewal=false; a
  * skipped renewal remains pending. No credential/environment secret is read here.
  */
-export default async function operateBossFang({evaluate, signal, targets}, configuration, selection) {
+export default async function operateBossFang({evaluate, signal, targets}, configuration, selection, {externalBossFangCredentials, expiredGrantRefusal} = {}) {
   const evidencePath = configuration.bossfang?.evidence ?? path.join(path.dirname(configuration.evidence), 'bossfang-operation.json')
-  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs', 'bossfang-boundaries.mjs'].map(name => {
+  const modules = ['bossfang-scenario.mjs', 'bossfang-operation.mjs', 'bossfang-controls.mjs', 'bossfang-boundaries.mjs', 'alternate-uar.mjs', 'grant-expiry.mjs', 'external-bossfang.mjs'].map(name => {
     const source = fileURLToPath(new URL(name, import.meta.url))
     return {name, sha256: digest(fs.readFileSync(source))}
   })
@@ -204,8 +204,22 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       passed(activeCheck, {generation: renewed.effective.uarGeneration,
         previousExpiresAt: renewalBefore.effective.grantExpiresAt, renewedExpiresAt: renewed.effective.grantExpiresAt})
     } else pending(activeCheck, 'C14_BOSSFANG_RENEWAL_WAIT_NOT_OPERATED')
-    pending('expiredGrantRefusal', 'C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE')
-    evidence.pending.expiredGrantRefusal.reason = 'Public supported controls never expose the private grant and production renews it before expiry; no expired-token request was made. Renewal or generation replacement is not refusal evidence.'
+    activeCheck = 'expiredGrantRefusal'
+    if (expiredGrantRefusal) {
+      const refusal = await expiredGrantRefusal()
+      requireFact(refusal.initialAuthorizedStatus === 200 && refusal.expiredStatus === 401 &&
+        refusal.expiresInSeconds === 900 && refusal.elapsedMilliseconds >= 900000 &&
+        refusal.sameRuntimeConfirmed === true && refusal.runtimeEpoch &&
+        refusal.initialProcessId === refusal.observedProcessId &&
+        refusal.revoked === false && refusal.renewed === false &&
+        refusal.sourceRevision === '5a8fd22e1543ddbd7a182b2557fe94f631117c13',
+        'C14_BOSSFANG_ACTUAL_GRANT_EXPIRY_REFUSAL_UNCONFIRMED')
+      passed(activeCheck, refusal)
+    }
+    else {
+      pending(activeCheck, 'C14_BOSSFANG_PRIVATE_EXPIRED_GRANT_FIXTURE_UNAVAILABLE')
+      evidence.pending.expiredGrantRefusal.reason = 'Public supported controls never expose the private grant and production renews it before expiry; no expired-token request was made. Renewal or generation replacement is not refusal evidence.'
+    }
 
     activeCheck = 'alternateConfiguredUar'
     const alternate = await alternateUar(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
@@ -213,7 +227,7 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
     else {evidence.diagnostics.push(alternate.diagnostic);passed(activeCheck, alternate.observation)}
 
     activeCheck = 'externalBossFangPreservation'
-    const external = await externalBossFang(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar)
+    const external = await externalBossFang(evaluate, signal, configuration, {...config, port: nextPort}, modelId, baselineUar, externalBossFangCredentials)
     if(external.pending)pending(activeCheck, external.pending)
     else passed(activeCheck, external.observation)
 
