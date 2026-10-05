@@ -651,16 +651,6 @@ impl RestartPolicy {
         }
     }
 
-    pub(crate) fn from_uar_config(c: &librefang_types::config::UarSidecarConfig) -> Self {
-        Self {
-            enabled: c.restart,
-            initial_backoff_ms: c.restart_initial_backoff_ms,
-            max_backoff_ms: c.restart_max_backoff_ms,
-            max_retries: c.restart_max_retries,
-            reset_after_secs: c.restart_reset_after_secs,
-        }
-    }
-
     pub(crate) fn delay(self, attempt: u32) -> std::time::Duration {
         backoff_with_jitter(attempt, self.initial_backoff_ms, self.max_backoff_ms)
     }
@@ -677,15 +667,12 @@ pub(crate) enum SupervisionOutcome {
         /// attempt failed before readiness was established.
         ready_uptime: Option<std::time::Duration>,
     },
-    /// Restarting with unchanged configuration cannot recover.
-    Terminal(String),
 }
 
 /// Protocol hook surface for the shared spawn/restart/circuit-break engine.
 ///
-/// Channel adapters and UAR use different wire contracts (JSON-RPC ready
-/// notification versus `READY:{port}` plus HTTP), but lifecycle policy must
-/// remain identical. Implementations own one protocol-specific attempt; this
+/// Native exec channel adapters use JSON-RPC ready notifications.
+/// Implementations own one protocol-specific attempt; this
 /// engine owns retry counts, stable-uptime reset, backoff, and exhaustion.
 #[async_trait]
 pub(crate) trait SupervisionContract: Send {
@@ -705,10 +692,6 @@ pub(crate) async fn supervise_contract(contract: &mut impl SupervisionContract) 
     loop {
         let (error, ready_uptime) = match contract.run_once(attempt).await {
             SupervisionOutcome::Clean => return,
-            SupervisionOutcome::Terminal(error) => {
-                contract.retry_exhausted(attempt, Some(&error)).await;
-                return;
-            }
             SupervisionOutcome::Retryable {
                 error,
                 ready_uptime,
@@ -2729,23 +2712,6 @@ mod tests {
         assert_eq!(contract.attempts, [0, 1]);
         assert_eq!(contract.waits.len(), 1);
         assert_eq!(contract.exhausted, [(1, None)]);
-    }
-
-    #[tokio::test]
-    async fn terminal_failure_does_not_wait_or_retry() {
-        let mut contract = ScriptedContract::new(
-            restart_policy(3, 10),
-            [SupervisionOutcome::Terminal("invalid config".to_string())],
-        );
-
-        supervise_contract(&mut contract).await;
-
-        assert_eq!(contract.attempts, [0]);
-        assert!(contract.waits.is_empty());
-        assert_eq!(
-            contract.exhausted,
-            [(0, Some("invalid config".to_string()))]
-        );
     }
 
     #[tokio::test]
