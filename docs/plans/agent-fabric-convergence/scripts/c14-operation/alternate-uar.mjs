@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join, basename, dirname, isAbsolute, resolve } from 'node:path'
 import { createServer } from 'node:net'
 import { ipc } from './setup.mjs'
 
@@ -24,22 +24,45 @@ async function port() {
   return selected
 }
 
+async function packagedPolicies(policiesDirectory) {
+  if(typeof policiesDirectory!=='string'||!isAbsolute(policiesDirectory))fail('ALTERNATE_UAR_PACKAGED_POLICIES_REQUIRED')
+  const directory=resolve(policiesDirectory)
+  const manifest=JSON.parse(await readFile(join(dirname(directory),'payload-manifest.json'),'utf8'))
+  if(manifest.schema!==1||manifest.name!=='uar-sidecar'||manifest.source!==SOURCE||!Array.isArray(manifest.files))
+    fail('ALTERNATE_UAR_PACKAGED_POLICY_SOURCE_MISMATCH')
+  const policies=[]
+  for(const name of ['default.cedar','skill-mutation.cedar','tool-approval.cedar']) {
+    const entry=manifest.files.find(file=>file.path==='policies/'+name)
+    if(!entry||!Number.isInteger(entry.size)||entry.size<=0||!/^([a-f0-9]{64})$/.test(entry.sha256??''))
+      fail('ALTERNATE_UAR_PACKAGED_POLICY_MANIFEST_INCOMPLETE')
+    const bytes=await readFile(join(directory,name))
+    if(bytes.length!==entry.size||createHash('sha256').update(bytes).digest('hex')!==entry.sha256)
+      fail('ALTERNATE_UAR_PACKAGED_POLICY_DIGEST_MISMATCH')
+    policies.push({name,bytes})
+  }
+  return policies
+}
+
 /** Call only from the approved packaged operation composition, with its same evaluate context.
  * No API call selects Work's global instance, changes installed definitions, or starts inference.
  * Regular JWT server is required: uar-sidecar launch-token transport cannot be relabelled external JWT.
  */
-async function prepare({evaluate, signal, binary, binarySha256, sourceCommit, modelsDirectory, startupTimeoutMs=120000}) {
+async function prepare({evaluate, signal, binary, binarySha256, sourceCommit, modelsDirectory, policiesDirectory, startupTimeoutMs=120000}) {
   const active=()=>{if(signal?.aborted)fail('ALTERNATE_UAR_FIXTURE_CANCELLED')}
   active()
   if(sourceCommit!==SOURCE)fail('ALTERNATE_UAR_EXACT_SOURCE_REQUIRED')
   if(basename(binary).startsWith('uar-sidecar'))fail('ALTERNATE_UAR_REGULAR_JWT_SERVER_BINARY_REQUIRED')
   if(!/^[a-f0-9]{64}$/.test(binarySha256??''))fail('ALTERNATE_UAR_BUILD_CHECKSUM_REQUIRED')
   if(createHash('sha256').update(await readFile(binary)).digest('hex')!==binarySha256)fail('ALTERNATE_UAR_BUILD_CHECKSUM_MISMATCH')
+  const verifiedPolicies=await packagedPolicies(policiesDirectory)
   const gatewayCredential=process.env.LITER_LLM_MASTER_KEY
   if(!gatewayCredential?.trim())fail('ALTERNATE_UAR_DECLARED_GATEWAY_CREDENTIAL_UNAVAILABLE')
   const initial=await ipc(evaluate,'prometheus.uar.instances.read',{})
   const root=await mkdtemp(join(tmpdir(),'bossfang-alternate-uar-'))
   await mkdir(join(root,'home'));await mkdir(join(root,'data'));await mkdir(join(root,'empty-skills'))
+  // Native5a loads cwd/policies; copy only the verified packaged bytes, keeping governance enabled.
+  await mkdir(join(root,'policies'))
+  for(const policy of verifiedPolicies)await writeFile(join(root,'policies',policy.name),policy.bytes,{mode:0o600,flag:'wx'})
   const id='bossfang-alternate-'+randomUUID()
   const selectedPort=await port();const endpoint='http://127.0.0.1:'+selectedPort
   const jwtSecret=randomBytes(32).toString('hex'), admin=randomBytes(32).toString('hex')

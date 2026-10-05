@@ -26,7 +26,7 @@ export async function operateBossFang(context, configuration, selection) {
     ...(env.BOSS_C14_EXTERNAL_BOSSFANG_ENDPOINT?{external:{endpoint:env.BOSS_C14_EXTERNAL_BOSSFANG_ENDPOINT,
       usernameEnv:env.BOSS_C14_EXTERNAL_BOSSFANG_USERNAME_ENV,passwordEnv:env.BOSS_C14_EXTERNAL_BOSSFANG_PASSWORD_ENV}}:{})}
   const binary=env.BOSS_C14_ALTERNATE_UAR_BINARY
-  const fixtureReferences=[binary,env.BOSS_C14_ALTERNATE_UAR_BINARY_SHA256,env.BOSS_C14_ALTERNATE_UAR_SOURCE,env.BOSS_C14_ALTERNATE_UAR_MODELS_DIR]
+  const fixtureReferences=[binary,env.BOSS_C14_ALTERNATE_UAR_BINARY_SHA256,env.BOSS_C14_ALTERNATE_UAR_SOURCE,env.BOSS_C14_ALTERNATE_UAR_MODELS_DIR,env.BOSS_C14_ALTERNATE_UAR_POLICIES_DIR]
   if(fixtureReferences.some(Boolean)&&!fixtureReferences.every(Boolean))
     throw new Error('ALTERNATE_UAR_FIXTURE_BUILD_REFERENCES_INCOMPLETE')
   const externalBinary=env.BOSS_C14_EXTERNAL_BOSSFANG_BINARY
@@ -34,7 +34,7 @@ export async function operateBossFang(context, configuration, selection) {
   if(externalReferences.some(Boolean)&&!externalReferences.every(Boolean))
     throw new Error('EXTERNAL_BOSSFANG_FIXTURE_BUILD_REFERENCES_INCOMPLETE')
   const grantBinary=env.BOSS_C14_GRANT_EXPIRY_UAR_BINARY
-  const grantReferences=[grantBinary,env.BOSS_C14_GRANT_EXPIRY_UAR_BINARY_SHA256,env.BOSS_C14_GRANT_EXPIRY_UAR_SOURCE,env.BOSS_C14_GRANT_EXPIRY_UAR_MODELS_DIR]
+  const grantReferences=[grantBinary,env.BOSS_C14_GRANT_EXPIRY_UAR_BINARY_SHA256,env.BOSS_C14_GRANT_EXPIRY_UAR_SOURCE,env.BOSS_C14_GRANT_EXPIRY_UAR_MODELS_DIR,env.BOSS_C14_GRANT_EXPIRY_UAR_POLICIES_DIR]
   if(grantReferences.some(Boolean)&&!grantReferences.every(Boolean))
     throw new Error('C14_GRANT_EXPIRY_BUILD_REFERENCES_INCOMPLETE')
   let owned,ownedExternal,ownedGrant
@@ -44,12 +44,14 @@ export async function operateBossFang(context, configuration, selection) {
       ownedGrant=await prepareGrantExpiryFixture({binary:grantBinary,
         binarySha256:env.BOSS_C14_GRANT_EXPIRY_UAR_BINARY_SHA256,
         sourceCommit:env.BOSS_C14_GRANT_EXPIRY_UAR_SOURCE,
-        modelsDirectory:env.BOSS_C14_GRANT_EXPIRY_UAR_MODELS_DIR,signal:context.signal})
+        modelsDirectory:env.BOSS_C14_GRANT_EXPIRY_UAR_MODELS_DIR,
+        policiesDirectory:env.BOSS_C14_GRANT_EXPIRY_UAR_POLICIES_DIR,signal:context.signal})
     }
     if(binary){
       owned=await prepareAlternateUar({evaluate:context.evaluate,signal:context.signal,binary,
         binarySha256:env.BOSS_C14_ALTERNATE_UAR_BINARY_SHA256,sourceCommit:env.BOSS_C14_ALTERNATE_UAR_SOURCE,
-        modelsDirectory:env.BOSS_C14_ALTERNATE_UAR_MODELS_DIR})
+        modelsDirectory:env.BOSS_C14_ALTERNATE_UAR_MODELS_DIR,
+        policiesDirectory:env.BOSS_C14_ALTERNATE_UAR_POLICIES_DIR})
       Object.assign(fixture,owned.configuration)
     }
     if(externalBinary){
