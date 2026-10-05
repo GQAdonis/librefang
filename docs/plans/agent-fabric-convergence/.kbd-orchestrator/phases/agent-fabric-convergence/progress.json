@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 491,
-  "derivedRevision": 491,
+  "sourceRevision": 507,
+  "derivedRevision": 507,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 252
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 268
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-10-03T10:43:56.884984Z",
+  "last_updated": "2026-10-05T07:35:57.198676Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
   "changes_completed": 11,
@@ -24,7 +24,7 @@
     "implementation": {
       "completed": 11,
       "total": 20,
-      "status": "IN_PROGRESS"
+      "status": "BLOCKED"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -53,7 +53,7 @@
     "implementation": {
       "completed": 16,
       "total": 25,
-      "status": "IN_PROGRESS"
+      "status": "BLOCKED"
     },
     "evidence": {
       "status": "PENDING",
@@ -196,13 +196,15 @@
     {
       "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
       "title": "C10 — Feedback workflow and governed connector effects",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "BLOCKED",
+      "implementation_status": "BLOCKED",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
-      "blockers": []
+      "tasks_done": 1,
+      "last_task_completed": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+      "next_task_pending": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
+      "blockers": [
+        "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation."
+      ]
     },
     {
       "id": "afc-c11-authoritative-business-data-and-offline-commands",
@@ -240,9 +242,9 @@
     {
       "id": "afc-c14-studio-administration-and-isolated-service-consoles",
       "title": "C14 — Studio administration and isolated service consoles",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
-      "tasks_total": 3,
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
+      "tasks_total": 4,
       "tasks_done": 0,
       "last_task_completed": null,
       "next_task_pending": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",

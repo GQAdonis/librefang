@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "time": "2026-10-05T07:37:49.374Z",
+  "boundary": "completed documentation and canonical scheduling revision; no production build or test",
+  "status": "passed",
+  "planRevision": 8,
+  "canonicalRevision": 507,
+  "activePath": {
+    "phasePath": [
+      "agent-fabric-convergence"
+    ],
+    "phaseId": "agent-fabric-convergence",
+    "stageId": null,
+    "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+    "taskId": "C14.1",
+    "commit": "5e2bda28da10f8d8c4172568d46c688cf1f9d385"
+  },
+  "mainTasks": {
+    "complete": 33,
+    "cancelled": 1,
+    "blocked": 1,
+    "pending": 25,
+    "in_progress": 1
+  },
+  "totalMainTasks": 61,
+  "completion": {
+    "implementation": {
+      "completed": 16,
+      "total": 25,
+      "status": "blocked",
+      "summary": null,
+      "blockers": []
+    },
+    "evidence": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "certification": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    },
+    "publication": {
+      "completed": 0,
+      "total": 0,
+      "status": "pending",
+      "summary": null,
+      "blockers": []
+    }
+  },
+  "conflictCount": 0,
+  "cadence": {
+    "profileRevision": 6,
+    "iterationMinutes": 120,
+    "successfulDeliveries": 6,
+    "publicationDue": true,
+    "activeIterationId": null,
+    "obligations": [
+      {
+        "id": "3aa9f8fd-78d2-462f-9584-4f934cabd914",
+        "candidateId": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7"
+      }
+    ]
+  },
+  "errors": [],
+  "completionNote": "Canonical aggregate implementation status is blocked because C10.2 is on an explicit priority hold. Active C14.1 remains selected and executable; no technical blocker was added."
+}

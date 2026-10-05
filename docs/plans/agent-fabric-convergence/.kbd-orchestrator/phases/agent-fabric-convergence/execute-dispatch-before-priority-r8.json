@@ -1,0 +1,62 @@
+{
+  "dispatchedAt": "2026-09-24T18:47:53.658Z",
+  "backend": "openspec",
+  "executor": "current Codex task / boss-lead",
+  "modelClass": "medium",
+  "model": "GPT-6 family; current session retained",
+  "phase": "agent-fabric-convergence",
+  "assignedChanges": [
+    "afc-c08-bossfang-and-fabric-observer-routing"
+  ],
+  "activeTask": "C08.2",
+  "scope": "Qualified signed webhook routing, governed channel subscriptions, distinct detach/cancel controls, and bounded The Boss observation administration",
+  "pendingWork": [
+    "C08.2",
+    "C08.3"
+  ],
+  "phasePendingChanges": 10,
+  "taskMapping": {
+    "canonical": "C08.2",
+    "openSpecOrdinal": "2",
+    "openSpecLabel": "1.2"
+  },
+  "resumedAt": "2026-10-02T10:53:35.818Z",
+  "cadence": {
+    "profile": ".prometheus/cadence-profile.json",
+    "stateRoot": ".prometheus/cadence",
+    "iteration": 6,
+    "iterationId": "287674dc-c9d7-4c0b-aef8-991f33c5796d",
+    "minutes": 120,
+    "deadline": "2026-10-02T12:39:27.696Z",
+    "build": "pnpm build:mac:arm64",
+    "functionalOperation": "scripts/operate-c08-routing.mjs",
+    "publicationEvery": 2
+  },
+  "assignments": [
+    {
+      "agent": "c08_control_impl",
+      "role": "bossfang-feature-steward / UAR integration",
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c08-uar-delivery",
+      "owns": "C08 provider commits and required source conflict integration"
+    },
+    {
+      "agent": "c08_webhook_impl",
+      "role": "channel implementer / operation author",
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "owns": "scripts/operate-c08-routing.mjs, scripts/c08-operation, C08 runbook"
+    },
+    {
+      "agent": "release_2210_receipts",
+      "role": "boss-runtime / boss-renderer",
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c08-boss-delivery",
+      "owns": "bounded channel observer UI, typed IPC, UAR adapter and locale strings"
+    }
+  ],
+  "sourceBaselines": {
+    "bossfang": "a68fcc561d34831f7e267686a01806715388cbcc",
+    "bossfangCombined": "8c347f37f",
+    "boss": "61bc79e8ec039de31d524d2c8d2883dc7e47cce6",
+    "uar": "e73b5f67 (fresh origin/main; exact final revision captured on worker completion)"
+  },
+  "externalPublicationReceipt": ".prometheus/cadence/artifacts/release-2.2.10-external-publication-receipt.json"
+}

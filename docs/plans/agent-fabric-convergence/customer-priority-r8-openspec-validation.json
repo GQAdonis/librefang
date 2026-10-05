@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "boundary": "completed documentation revision",
+  "results": [
+    {
+      "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "exitCode": 0,
+      "output": "{\n  \"items\": [\n    {\n      \"id\": \"afc-c10-feedback-workflow-and-governed-connector-effects\",\n      \"type\": \"change\",\n      \"valid\": true,\n      \"issues\": [],\n      \"durationMs\": 29\n    }\n  ],\n  \"summary\": {\n    \"totals\": {\n      \"items\": 1,\n      \"passed\": 1,\n      \"failed\": 0\n    },\n    \"byType\": {\n      \"change\": {\n        \"items\": 1,\n        \"passed\": 1,\n        \"failed\": 0\n      }\n    }\n  },\n  \"version\": \"1.0\",\n  \"root\": {\n    \"path\": \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\n    \"source\": \"nearest\"\n  }\n}\n",
+      "diagnostics": "{\"code\":0,\"schemaVersion\":1,\"time\":\"2026-10-05T07:39:05.416Z\",\"operation\":\"run\",\"project\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\"status\":\"completed\",\"version\":\"1.14.0\",\"latestVerified\":false,\"policy\":\"selected-cache\",\"cliExitCode\":0,\"receipt\":\"/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791185945417-d3444803-dae5-4793-952d-e554e2b064a7.json\"}\n"
+    },
+    {
+      "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "exitCode": 0,
+      "output": "{\n  \"items\": [\n    {\n      \"id\": \"afc-c14-studio-administration-and-isolated-service-consoles\",\n      \"type\": \"change\",\n      \"valid\": true,\n      \"issues\": [],\n      \"durationMs\": 17\n    }\n  ],\n  \"summary\": {\n    \"totals\": {\n      \"items\": 1,\n      \"passed\": 1,\n      \"failed\": 0\n    },\n    \"byType\": {\n      \"change\": {\n        \"items\": 1,\n        \"passed\": 1,\n        \"failed\": 0\n      }\n    }\n  },\n  \"version\": \"1.0\",\n  \"root\": {\n    \"path\": \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\n    \"source\": \"nearest\"\n  }\n}\n",
+      "diagnostics": "{\"code\":0,\"schemaVersion\":1,\"time\":\"2026-10-05T07:39:05.797Z\",\"operation\":\"run\",\"project\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\"status\":\"completed\",\"version\":\"1.14.0\",\"latestVerified\":false,\"policy\":\"selected-cache\",\"cliExitCode\":0,\"receipt\":\"/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791185945797-ac41c5a8-9ce8-4ac8-8094-d91c3ff18903.json\"}\n"
+    },
+    {
+      "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "exitCode": 0,
+      "output": "{\n  \"items\": [\n    {\n      \"id\": \"afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff\",\n      \"type\": \"change\",\n      \"valid\": true,\n      \"issues\": [],\n      \"durationMs\": 19\n    }\n  ],\n  \"summary\": {\n    \"totals\": {\n      \"items\": 1,\n      \"passed\": 1,\n      \"failed\": 0\n    },\n    \"byType\": {\n      \"change\": {\n        \"items\": 1,\n        \"passed\": 1,\n        \"failed\": 0\n      }\n    }\n  },\n  \"version\": \"1.0\",\n  \"root\": {\n    \"path\": \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\n    \"source\": \"nearest\"\n  }\n}\n",
+      "diagnostics": "{\"code\":0,\"schemaVersion\":1,\"time\":\"2026-10-05T07:39:06.114Z\",\"operation\":\"run\",\"project\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\"status\":\"completed\",\"version\":\"1.14.0\",\"latestVerified\":false,\"policy\":\"selected-cache\",\"cliExitCode\":0,\"receipt\":\"/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791185946114-a0306d05-8d11-49ef-af5c-7d3d05b918ce.json\"}\n"
+    },
+    {
+      "change": "afc-c16-specialist-marketing-product-and-design-teams",
+      "exitCode": 0,
+      "output": "{\n  \"items\": [\n    {\n      \"id\": \"afc-c16-specialist-marketing-product-and-design-teams\",\n      \"type\": \"change\",\n      \"valid\": true,\n      \"issues\": [],\n      \"durationMs\": 16\n    }\n  ],\n  \"summary\": {\n    \"totals\": {\n      \"items\": 1,\n      \"passed\": 1,\n      \"failed\": 0\n    },\n    \"byType\": {\n      \"change\": {\n        \"items\": 1,\n        \"passed\": 1,\n        \"failed\": 0\n      }\n    }\n  },\n  \"version\": \"1.0\",\n  \"root\": {\n    \"path\": \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\n    \"source\": \"nearest\"\n  }\n}\n",
+      "diagnostics": "{\"code\":0,\"schemaVersion\":1,\"time\":\"2026-10-05T07:39:06.413Z\",\"operation\":\"run\",\"project\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\"status\":\"completed\",\"version\":\"1.14.0\",\"latestVerified\":false,\"policy\":\"selected-cache\",\"cliExitCode\":0,\"receipt\":\"/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791185946413-d059c008-b03d-4b16-9481-3d12437ef876.json\"}\n"
+    },
+    {
+      "change": "afc-c18-federated-compatibility-and-release-evidence",
+      "exitCode": 0,
+      "output": "{\n  \"items\": [\n    {\n      \"id\": \"afc-c18-federated-compatibility-and-release-evidence\",\n      \"type\": \"change\",\n      \"valid\": true,\n      \"issues\": [],\n      \"durationMs\": 16\n    }\n  ],\n  \"summary\": {\n    \"totals\": {\n      \"items\": 1,\n      \"passed\": 1,\n      \"failed\": 0\n    },\n    \"byType\": {\n      \"change\": {\n        \"items\": 1,\n        \"passed\": 1,\n        \"failed\": 0\n      }\n    }\n  },\n  \"version\": \"1.0\",\n  \"root\": {\n    \"path\": \"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\n    \"source\": \"nearest\"\n  }\n}\n",
+      "diagnostics": "{\"code\":0,\"schemaVersion\":1,\"time\":\"2026-10-05T07:39:06.701Z\",\"operation\":\"run\",\"project\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence\",\"status\":\"completed\",\"version\":\"1.14.0\",\"latestVerified\":false,\"policy\":\"selected-cache\",\"cliExitCode\":0,\"receipt\":\"/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791185946702-7a88f5aa-db34-417f-9a7e-0c4d2cfc501e.json\"}\n"
+    }
+  ],
+  "correctionValidation": {
+    "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+    "reason": "Independent review packaging ownership correction",
+    "valid": true,
+    "issues": [],
+    "exitCode": 0,
+    "receipt": "/Users/gqadonis/.prometheus/openspec/receipts/98649a6efe0e78cd3449943d/1791186244644-522d2026-d45f-4887-99a3-bd6bb1925db5.json"
+  }
+}

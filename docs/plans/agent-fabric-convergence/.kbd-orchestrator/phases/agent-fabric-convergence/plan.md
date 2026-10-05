@@ -4,35 +4,25 @@ Date: 2026-09-24. Scope: implement the report recommendations through coordinate
 
 OpenSpec artifact completeness is not permission to apply this cross-repository roadmap directly. The initiative root permits planning edits only. Product work requires repository-scoped child changes with single-session tasks and explicit file ownership. The 54 parent groups remain pending until their children pass; C01 is the first coordination step.
 
-## First action and execution contract
+## Approved customer delivery revision — 2026-10-05
 
-C01 source/ownership reconciliation was the original first action. The next **delivery** selector after the cadence child reflects is pending D01, registered canonically as `afc-d01-local-mac-durable-agent-delivery` with ordering before pending C08. `exactNextWork` prose alone cannot select it. For every slice, satisfy named dependency checkpoints, refresh source disposition, accept the contract and assign exact modules/files before dispatch. Split a multi-session task into child tasks through typed KBD changes before implementation; broad size estimates are not a one-session or one-hour promise.
+The controlling [customer order](../../../customer-delivery-order.md) and [coverage map](../../../customer-delivery-map.json) supersede the original scheduling and release policy. Next canonical work: C14.1 Teams in Work. C10.2 is held as canonical Blocked for priority ordering: the runtime does not permit InProgress → Pending. This is not an external technical blocker. Priority: teams in Work → reusable mixed-team configuration → C14.4 shared BossFang/UAR → C14.3 MiniApp → GitHub feedback. Teams do not depend on BossFang.
 
-The active UAR Working Agent task owns current P1 runtime/host/approval/history/release work. Convergence consumes its committed contract and accepted work. Do not change its phase or write into its worktrees. The existing integration-administration child is part of that reservation.
+Original task/recommendation identities remain. Baseline: 33 complete + 1 cancelled + 26 unfinished = 60; the earlier 34/60 was terminal, not all completed. New approved C14.4 adds one unfinished task (61 total). Completed children remain 32/32. Canonical generated projections are the completion authority; below checkbox mirrors are refreshed from revision500.
 
-## Delivery sequence
+Keep 120-minute autonomous cadence: finish complete production/UI/locales/persistence/payload, freeze inputs, build pnpm build:mac:arm64, launch and operate the new capability. No intermediate test suites. Publish all four Mac/Windows targets plus GitHub metadata and website every second successful delivery; no Linux. Installed acceptance and historical publication debt stay separate and explicit. One build writer/publisher with bounded isolated work-ahead. New operation evidence must be candidate-specific; do not reuse an earlier onboarding receipt.
 
-1. C01 establishes source and contract checkpoints; C02 closes governed action boundaries; C03 preserves definitions; C04 binds replaceable instances.
-2. C05 demonstrates full BossFang delegation; C06 adds durable logical instances; C07 adds local observers. **D01** first packages a functioning local Boss with these accepted C06/C07 capabilities and asks for the platform release decision. C08 separately bridges authorized channels/events and retains its observed compiler/gate blockers; it does not block independent D01 or C09 source work.
-3. C09 adds bounded teams under its C02/C03/C04/C06 prerequisites, including a reachable Boss experience in its whole first operational journey. C10 later delivers feedback → authorized issue → product/design review; its direct and BossFang paths are both required unless a separately approved amendment changes ordering without dropping scope.
-4. C11 business command/read replication and C12 personal peer sovereignty are independent data tracks after their prerequisites. C13 proves embedded/mobile/home profiles, adding C11/C12 only for modes that need them.
-5. D01 draws a bounded early C14.1 UAR lifecycle/observer surface into its own complete delivery; **C14.1 and C14 stay open** for definition/team/workflow distinction, task graph, budgets, approvals and isolated BossFang console. C15 extends the existing eight-harness skill and plugin contracts; C16 supplies specialist/product/marketing/design teams.
-6. C17 adds consented executive representation. C18 validates federation, compatibility, upgrades and quality across supported profiles.
+## Task model assignments
 
-Default execution is dependency-ordered. D01 and C09 may use separate owned worktrees and frozen contracts in parallel because C09 does not depend on C08; neither may edit the other's frozen snapshot. Parallel work requires explicit nonoverlapping file claims and isolated runtime resources. Dependency edges alone do not prove file independence. Reserve one heavy local Rust/Electron build writer; queue competing builds and Compass refresh behind it.
+[Model dispatch](../../../model-dispatch.md) and its JSON contain the canonical task-keyed assignments and native/gateway worker alternatives. All retained task assignments remain. C14.4 is architecture (preferred gpt-6-astra); C14.1/C14.2/C14.3 use their existing implementation routing. Resolve capabilities at dispatch; no agent or provider model is switched by editing this plan.
 
-## Common acceptance and release rules
+## Scoped dependency selection
 
-- One run executor, one process supervisor and one workflow owner per owned object; distinct task/run/attempt/effect IDs.
-- Typed source/recipient identity; current, restrictive policy; no privilege from a definition, role, signature, message or transport alone.
-- Exact dependency/skill/schema revisions and binding receipts; required unsupported semantics block execution.
-- Durable intent and uncertain-outcome reconciliation at actual effect boundaries. No exactly-once marketing claim.
-- Product histories, checkpoints, workflow state, domain data and shared memory retain explicit owners.
-- Implementation, evidence, certification and publication remain separate. A planned spec or source inspection cannot mark operational acceptance complete.
-- Finish **all planned production behavior for an independently shipping increment**, including Boss UI, typed IPC, persisted settings and locales, before its one real integration/build gate. Run applicable repository checks at that boundary and the broader supported-mode suite at release; a partial product task is not a phase-end test authorization.
-- Every completed local delivery uses exact `pnpm build:mac:arm64` and launches a functioning packaged UAR/Boss journey. Ask afterward whether to publish **all macOS and Windows targets now or wait**; absent answer leaves publication pending. The hourly local target measures elapsed start-to-working-app time including waits/build. Track publication and aggregate agent effort separately. A missed hour is an overrun, not a completed delivery.
-- Full publication means UAR-enabled darwin-arm64, darwin-x64, win32-x64 and win32-arm64 installers (no Linux), exact GitHub Release source/version/architecture/size/SHA-256/signing/URL rows, `RELEASES.md` and manifest committed/pushed, `Know-Me-Tools/boss-landing-spot` data committed/pushed, connected Lovable deployment at the-boss.know-me.tools, and live URL/download-byte evidence. One publisher prevents stale job regression; retain each prior working platform link until its replacement is valid. Installed acceptance remains a separate status.
-- Merge small provider/consumer slices with a documented compatibility window and immutable dependency pins. Migrate data append-only; rollback must account for already-migrated schemas and irreversible external effects.
+C14 Teams consumes C03/C04/C05/C07/C09 and C10.1; remove whole-C10 gating for that scope. C15 desktop authoring consumes C03/C09/D-MINI/D-UAR-P1, not unused Forge/KnowMe host qualification. C16 coding consumes the existing catalog/team kernel and Work surface, with only required C15 bindings. GitHub feedback consumes its connector and approval/workflow substrate, not Notion/Slack/Jira. C14.4 follows usable teams/configuration and precedes C14.3. Exact dependency and deferred criteria are in the coverage map.
+
+## Historical and retained requirement inventory
+
+The sections below retain original scope and historical acceptance; historical commands/priority statements in completed D01 and earlier amendments do not select current work or override revision8 cadence. The revised dependency edges and delivery map above control scoped admission; full task completion still requires all non-superseded criteria.
 
 ## Ordered change specifications
 
@@ -62,8 +52,8 @@ Rebind every REC item to current source or accepted dependency, with exact commi
 - Recommendation coverage: REC-007, REC-011, REC-012, REC-042.
 
 - [x] C01.1: Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.
-- [ ] C01.2: Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.
-- [ ] C01.3: Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.
+- [x] C01.2: Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.
+- [x] C01.3: Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.
 
 **Acceptance:** Every REC has a source disposition, owner and acceptance reference; all 11 baselines resolve; no unresolved ownership is labeled execution-ready.
 
@@ -81,9 +71,9 @@ Protected actions use verified identity, typed context and current policy before
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-010, REC-018, REC-019, REC-050, REC-051, REC-052.
 
-- [ ] C02.1: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.
-- [ ] C02.2: Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.
-- [ ] C02.3: Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.
+- [x] C02.1: Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.
+- [x] C02.2: Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.
+- [x] C02.3: Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.
 
 **Acceptance:** Exercise real direct/managed/embedded/proxied routes with forged identity, policy errors, revoked approval and changed payload; denied effects do not occur.
 
@@ -101,9 +91,9 @@ Authored required semantics survive compile, storage, binding and actual executi
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-054, REC-055.
 
-- [ ] C03.1: Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.
-- [ ] C03.2: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.
-- [ ] C03.3: Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.
+- [x] C03.1: Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.
+- [x] C03.2: Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.
+- [x] C03.3: Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.
 
 **Acceptance:** Round-trip legacy and new definitions through persisted runtime, prove required skills/policies effective, reject unknown mandatory fields and required-unsupported exports.
 
@@ -121,9 +111,9 @@ Choose local, managed, external or remote instances with explicit identity and o
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-002, REC-003, REC-004.
 
-- [ ] C04.1: Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.
-- [ ] C04.2: Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.
-- [ ] C04.3: Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.
+- [x] C04.1: Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.
+- [x] C04.2: Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.
+- [x] C04.3: Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.
 
 **Acceptance:** Select two UAR instances, refuse unsupported required capability and wrong identity, close a nonowner client without stopping service, distinguish new run from migration.
 
@@ -141,9 +131,9 @@ A BossFang task can delegate one complete run while retaining its own workflow.
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-001, REC-005, REC-013.
 
-- [ ] C05.1: Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.
-- [ ] C05.2: Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.
-- [ ] C05.3: Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.
+- [x] C05.1: Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.
+- [x] C05.2: Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.
+- [x] C05.3: Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.
 
 **Acceptance:** Trace direct versus delegated execution; lose responses and reconnect; one executor and one side effect remain, cancellation reaches UAR, unsupported recovery is explicit.
 
@@ -161,9 +151,9 @@ Stateful instances survive activation changes without becoming immortal model lo
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-006, REC-026, REC-027, REC-028, REC-035.
 
-- [ ] C06.1: Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.
-- [ ] C06.2: Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.
-- [ ] C06.3: Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.
+- [x] C06.1: Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.
+- [x] C06.2: Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.
+- [x] C06.3: Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.
 
 **Acceptance:** Two users instantiate one definition without leakage; crash/passivate/reactivate preserves admitted work; stale owner cannot commit; cancel remains responsive during a blocked tool.
 
@@ -179,9 +169,9 @@ An authorized observer watches selected agents/conversations and recovers missed
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-029, REC-030, REC-034.
 
-- [ ] C07.1: Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.
-- [ ] C07.2: Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.
-- [ ] C07.3: Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.
+- [x] C07.1: Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.
+- [x] C07.2: Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.
+- [x] C07.3: Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.
 
 **Acceptance:** Two monitors receive independent copies; producer/conversation filters prevent leakage; crash at publish/admit/ack boundaries recovers without silent loss; revocation blocks queued content.
 
@@ -199,9 +189,9 @@ Channel messages reach their declared handler and authorized observer copies acr
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-024, REC-031, REC-032, REC-033.
 
-- [ ] C08.1: Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.
-- [ ] C08.2: Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.
-- [ ] C08.3: Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.
+- [x] C08.1: Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.
+- [x] C08.2: Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.
+- [x] C08.3: Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.
 
 **Acceptance:** Restart each host while forwarding, match two handlers, replay and echo posts, revoke a queued subscription and test A-B-A reactions; no wrong recipient, duplicate action or hidden gap.
 
@@ -219,8 +209,8 @@ Reusable teams coordinate bounded tasks without sharing all authority or memory.
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-008, REC-043, REC-044, REC-045.
 
-- [ ] C09.1: Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.
-- [ ] C09.2: Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.
+- [x] C09.1: Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.
+- [x] C09.2: Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.
 - [ ] C09.3: Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.
 
 **Acceptance:** Competing workers cannot own one revision; stale worker/removal cannot cause new protected effect; parent cancel and independent peer lifetime remain distinct; team cap holds under concurrency.
@@ -237,7 +227,7 @@ A product-feedback team produces one authorized issue and reviewable product/des
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-039, REC-046, REC-053, REC-056, REC-059.
 
-- [ ] C10.1: Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.
+- [x] C10.1: Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.
 - [ ] C10.2: Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.
 - [ ] C10.3: Wire observe/classify/deduplicate/draft/standing-policy intake and product/design/reviewer outputs with durable approvals and explicit implementation admission.
 
@@ -311,7 +301,7 @@ Operators can understand ownership, placement, grants and observer behavior from
 
 - Repositories: the-boss, librefang, universal-agent-runtime.
 - Write scope: Existing Boss connection/run/approval views and site-view host; BossFang console API.
-- Depends on: C04, C05, C07, C09, C10. External checkpoints: D-UAR-P1.
+- Scoped prerequisites: C03, C04, C05, C07, C09 and C10.1 for Teams; C14.4 then C14.3 after reusable teams. Original full-scope C10 workflow coverage remains without gating early Teams. External checkpoint: D-UAR-P1.
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-009, REC-023.
 
@@ -353,7 +343,7 @@ A user can choose the smallest useful team and get accountable specialist output
 
 - Repositories: prometheus-skill-pack, prometheus-skills-mini, universal-agent-runtime, the-boss.
 - Write scope: Role/team templates, skill selection guidance and studio team creation.
-- Depends on: C10, C14, C15. External checkpoints: D-MINI.
+- Scoped prerequisites: C03/C09 and the Work surface for coding; C15.1/C15.3 for reusable authoring; C10 only for feedback-specific templates. BossFang console and all-harness qualification do not gate coding teams. External checkpoint: D-MINI.
 - Suggested executor: Codex; use an independent reviewer at acceptance. Size L; complexity High; model class frontier. Actual model/price/capability must be discovered at dispatch and recorded.
 - Recommendation coverage: REC-038, REC-047.
 
@@ -409,7 +399,7 @@ All 61 recommendation clusters appear in recommendations.json with source sectio
 
 ## Checkpoint and continuation
 
-The next implementation-planning checkpoint is C01. Before executing it, read the current independent KBD status and latest plan review disposition, then refresh D-UAR-P1 and all touched repository SHAs. The operator requested planning in this turn; leave execute and reflect incomplete until their actual lifecycle work occurs.
+Select C14.1 through canonical KBD for Teams in Work. Refresh touched source claims before product implementation. This revision updates planning only; it does not certify team operation, publish a release or complete the parent phase.
 
 ## Profile release gate
 
@@ -422,3 +412,13 @@ Plan review PASS with one warning: UAR dependency prose and the actual gitlink d
 ## Approved team execution architecture amendment — 2026-09-30
 
 The child `uar-team-execution-architecture` supplies the controlling [execution profile](children/uar-team-execution-architecture/execution-profile-contract.md), [migration](children/uar-team-execution-architecture/legacy-migration.md) and [repair handoff](children/uar-team-execution-architecture/parent-repair-handoff.md). Canonical C09.1/C09.2 completion history is preserved. Finish corrective C09.3 delivery A before additive C09.4 delivery B (governed cooperating pair). Both require complete UI/locales/payload and their named build-and-operate boundary. The child must reflect and return before parent execution; no runtime conformance or successful delivery is credited by this documentation. See the parent OpenSpec architecture-recovery-amendment.md for scope and deferred owners.
+
+## C14.4 — Shared BossFang/UAR desktop profile (new approved requirement)
+
+- [ ] C14.4: Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback.
+
+OpenSpec task 1.4; model architecture; comes after reusable teams and before C14.3 MiniApp. Existing standalone BossFang/native executor remains. The completed boundary must operate a delegated workflow using the exact same UAR identity as Work, with approvals/cancellation/restart behavior and no second UAR.
+
+### Shared-runtime packaging prerequisite
+
+C14.4 includes the pinned BossFang executable, functional dashboard assets, integrity records and main-process supervision needed to operate the packaged shared-runtime profile. C14.3 consumes that payload for Apps/settings embedding and isolated navigation; retain its original packaging acceptance by mapping exact C14.4 receipts.

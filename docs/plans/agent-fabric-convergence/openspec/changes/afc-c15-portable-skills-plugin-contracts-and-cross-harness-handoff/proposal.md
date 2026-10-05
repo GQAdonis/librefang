@@ -33,3 +33,9 @@ Acceptance: Full/mini parity fixtures plus actual harness smoke workflows prove 
 ## Model-discovery reuse checkpoint
 
 library: cand-010 (adapt: existing Rust liter-llm and gateway discovery). UAR baseline c29af47be3439c69e1a3c124fdcf09ce4cbb5cba pins vendor/git/liter-llm at e627af981bcb06c7fc5da027731c182b044e25d1; src/llm/liter_driver.rs imports liter_llm. This is not LiteLLM. D-UAR-P1 and D-MINI must verify exact library version, maintenance/license, gateway/catalog compatibility and observed model capabilities before adoption; no upgrade is authorized by this reuse decision.
+
+## Approved customer-priority revision — 2026-10-05
+
+Reuse the four merged skills and existing bindings for the initial coding preset; completing C15 is not a prerequisite for Teams in Work. Then deliver C15.1 and relevant C15.3 for reusable mixed-team configuration after the first team journey. C15.2 broad eight-harness qualification, including its authored-helper toolchain prerequisite, remains pending outside the customer milestone. Consume D-MINI/D-UAR-P1 for the selected desktop/skill scope; D-KNOWME and D-FORGE remain requirements for their later host scope, not blanket gates for local team configuration. UAR executes its teams; preserving Codex and Claude routes does not qualify either as a UAR member executor.
+
+Delivery evidence maps to the original task IDs; partial delivery is not whole-task completion. The parent phase plan and delivery coverage map select bounded repository-owned work. Complete production wiring, UI, strings, persistence and packaged inputs before the build-and-operate boundary; no per-edit verification loop.

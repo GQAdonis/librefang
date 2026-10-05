@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "executionPolicy": "Cross-repository execution requires repository-scoped OpenSpec/KBD changes, exact file claims and accepted dependency checkpoints. D01 is the first pending customer delivery after the cadence child reflects; it is a separate wrapper around original C04/C06/C07/C14/C18 obligations, not a replacement for them. All production wiring precedes one complete shipping gate and exact functioning local Mac build. C08 stays open with its owner; C09 can proceed under its independent original dependencies. This authored inventory does not itself register a canonical KBD change.",
+  "executionPolicy": "Operator-approved revision 8: customer-delivery-map.json selects scoped deliveries: Teams in Work, reusable mixed teams, shared BossFang/UAR, MiniApp, GitHub feedback. Original IDs/history remain; no whole-task credit from partial delivery. 120-minute cadence with local build+operate and four-platform/site publication every second successful delivery.",
   "changes": [
     {
       "id": "D01",
@@ -28,28 +28,28 @@
         {
           "id": "D01.1",
           "text": "Freeze clean Boss/UAR source and repair exact pnpm build:mac:arm64 to package a checksummed local-only arm64 UAR helper outside ASAR; reject overlay in CI and preserve canonical same-UAR-source public payloads.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "delivery-task"
         },
         {
           "id": "D01.2",
           "text": "Expose durable instance lifecycle and local observer recovery in existing Boss UAR settings with typed IPC, persistence, all locales, current governance and two-workspace isolation.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "delivery-task"
         },
         {
           "id": "D01.3",
           "text": "After all production code, run one real integration gate and exact local Mac build; launch bundled UAR without developer override, demonstrate the full journey, record hashes/timing and ask the four-platform now-or-wait question.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "delivery-task"
         },
         {
           "id": "D01.4",
           "text": "Record wait as pending publication, or on publish-now build all four UAR-enabled native targets and complete GitHub Releases, RELEASES.md, landing repository, Lovable deployment and live download-byte evidence without Linux or stale-link regression.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.4",
           "kind": "delivery-task"
         }
@@ -69,9 +69,10 @@
         "C14.1",
         "C18"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-d01-local-mac-durable-agent-delivery"
+      "kbdChangeId": "afc-d01-local-mac-durable-agent-delivery",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C01",
@@ -140,7 +141,8 @@
       ],
       "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c01-baseline-reconciliation-and-shared-contracts"
+      "kbdChangeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C02",
@@ -163,21 +165,21 @@
         {
           "id": "C02.1",
           "text": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C02.2",
           "text": "Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C02.3",
           "text": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -197,9 +199,10 @@
         "REC-051",
         "REC-052"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c02-governed-action-and-approval-boundary"
+      "kbdChangeId": "afc-c02-governed-action-and-approval-boundary",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C03",
@@ -224,21 +227,21 @@
         {
           "id": "C03.1",
           "text": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C03.2",
           "text": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C03.3",
           "text": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -254,9 +257,10 @@
         "REC-054",
         "REC-055"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c03-lossless-definitions-and-collaboration-document-profile"
+      "kbdChangeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C04",
@@ -281,21 +285,21 @@
         {
           "id": "C04.1",
           "text": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C04.2",
           "text": "Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C04.3",
           "text": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -312,9 +316,10 @@
         "REC-003",
         "REC-004"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c04-replaceable-service-instances-and-placement"
+      "kbdChangeId": "afc-c04-replaceable-service-instances-and-placement",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C05",
@@ -338,21 +343,21 @@
         {
           "id": "C05.1",
           "text": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C05.2",
           "text": "Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C05.3",
           "text": "Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -369,9 +374,10 @@
         "REC-005",
         "REC-013"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c05-bossfang-full-run-delegation"
+      "kbdChangeId": "afc-c05-bossfang-full-run-delegation",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C06",
@@ -396,21 +402,21 @@
         {
           "id": "C06.1",
           "text": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C06.2",
           "text": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C06.3",
           "text": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -429,9 +435,10 @@
         "REC-028",
         "REC-035"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c06-durable-addressable-instances-and-bounded-turns"
+      "kbdChangeId": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C07",
@@ -454,21 +461,21 @@
         {
           "id": "C07.1",
           "text": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C07.2",
           "text": "Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C07.3",
           "text": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -485,9 +492,10 @@
         "REC-030",
         "REC-034"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c07-local-scoped-observers-with-durable-delivery"
+      "kbdChangeId": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C08",
@@ -513,21 +521,21 @@
         {
           "id": "C08.1",
           "text": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C08.2",
           "text": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C08.3",
           "text": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -545,9 +553,10 @@
         "REC-032",
         "REC-033"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c08-bossfang-and-fabric-observer-routing"
+      "kbdChangeId": "afc-c08-bossfang-and-fabric-observer-routing",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C09",
@@ -573,21 +582,21 @@
         {
           "id": "C09.1",
           "text": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C09.2",
           "text": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C09.3",
           "text": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
         }
@@ -605,9 +614,10 @@
         "REC-044",
         "REC-045"
       ],
-      "status": "planned",
+      "status": "complete",
       "executionReady": false,
-      "kbdChangeId": "afc-c09-bounded-teams-and-shared-task-board"
+      "kbdChangeId": "afc-c09-bounded-teams-and-shared-task-board",
+      "customerDeliveryRefs": []
     },
     {
       "id": "C10",
@@ -640,14 +650,14 @@
         {
           "id": "C10.1",
           "text": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
-          "status": "pending",
+          "status": "complete",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
         {
           "id": "C10.2",
           "text": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
-          "status": "pending",
+          "status": "blocked",
           "openSpecTaskId": "1.2",
           "kind": "parent-delivery-group"
         },
@@ -673,9 +683,13 @@
         "REC-056",
         "REC-059"
       ],
-      "status": "planned",
+      "status": "blocked",
       "executionReady": false,
-      "kbdChangeId": "afc-c10-feedback-workflow-and-governed-connector-effects"
+      "kbdChangeId": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "customerDeliveryRefs": [
+        "feedback-to-github"
+      ],
+      "customerPriorityHold": "C10.2: canonical Blocked because InProgress->Pending unsupported; resume through typed transition when selected."
     },
     {
       "id": "C11",
@@ -736,9 +750,11 @@
         "REC-016",
         "REC-025"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c11-authoritative-business-data-and-offline-commands"
+      "kbdChangeId": "afc-c11-authoritative-business-data-and-offline-commands",
+      "customerDeliveryRefs": [],
+      "customerMilestoneDisposition": "deferred; canonical pending obligations retained"
     },
     {
       "id": "C12",
@@ -795,9 +811,11 @@
         "REC-014",
         "REC-017"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c12-personal-peer-sovereignty-and-consent"
+      "kbdChangeId": "afc-c12-personal-peer-sovereignty-and-consent",
+      "customerDeliveryRefs": [],
+      "customerMilestoneDisposition": "deferred; canonical pending obligations retained"
     },
     {
       "id": "C13",
@@ -854,7 +872,7 @@
         "REC-021",
         "REC-036"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
       "kbdChangeId": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
       "profileDependencies": {
@@ -892,7 +910,9 @@
         "combined-personal-and-business": [
           "C18"
         ]
-      }
+      },
+      "customerDeliveryRefs": [],
+      "customerMilestoneDisposition": "deferred; canonical pending obligations retained"
     },
     {
       "id": "C14",
@@ -904,23 +924,23 @@
         "universal-agent-runtime"
       ],
       "dependsOn": [
+        "C03",
         "C04",
         "C05",
         "C07",
-        "C09",
-        "C10"
+        "C09"
       ],
       "externalDependencies": [
         "D-UAR-P1"
       ],
       "scope": "Existing Boss connection/run/approval views and site-view host; BossFang console API",
       "outcome": "Operators can understand ownership, placement, grants and observer behavior from one studio.",
-      "earlyDeliveryRef": "D01 uses only C06 instance lifecycle and C07 local observer controls in existing Boss UAR settings. This does not complete C14.1 or change C14's original dependencies and acceptance.",
+      "earlyDeliveryRef": "D01 historical evidence remains bounded. Revision8 removes blanket C10 for Teams in Work; shared-runtime and console follow reusable teams.",
       "tasks": [
         {
           "id": "C14.1",
           "text": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
-          "status": "pending",
+          "status": "in_progress",
           "openSpecTaskId": "1.1",
           "kind": "parent-delivery-group"
         },
@@ -937,6 +957,14 @@
           "status": "pending",
           "openSpecTaskId": "1.3",
           "kind": "parent-delivery-group"
+        },
+        {
+          "id": "C14.4",
+          "text": "Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback.",
+          "status": "pending",
+          "openSpecTaskId": "1.4",
+          "kind": "parent-delivery-group",
+          "implementationPrerequisites": "C14.4 includes the pinned BossFang executable, functional dashboard assets, integrity records and main-process supervision needed to operate the packaged shared-runtime profile. C14.3 consumes that payload for Apps/settings embedding and isolated navigation; retain its original packaging acceptance by mapping exact C14.4 receipts."
         }
       ],
       "acceptance": "Two clients decide one challenge consistently; console account isolation/navigation and no generic privileged bridge are verified; unsupported controls and private data stay hidden.",
@@ -950,9 +978,45 @@
         "REC-009",
         "REC-023"
       ],
-      "status": "planned",
+      "status": "in_progress",
       "executionReady": false,
-      "kbdChangeId": "afc-c14-studio-administration-and-isolated-service-consoles"
+      "kbdChangeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "customerDeliveryRefs": [
+        "teams-in-work",
+        "reusable-mixed-teams",
+        "shared-bossfang-uar",
+        "bossfang-miniapp"
+      ],
+      "legacyPortfolioDependsOn": [
+        "C04",
+        "C05",
+        "C07",
+        "C09",
+        "C10"
+      ],
+      "taskDependencies": {
+        "C14.1": [
+          "C03",
+          "C04",
+          "C05",
+          "C07",
+          "C09",
+          "C10.1"
+        ],
+        "C14.2": [
+          "C14.1"
+        ],
+        "C14.4": [
+          "C04",
+          "C05",
+          "C08",
+          "C09",
+          "delivery:reusable-mixed-teams"
+        ],
+        "C14.3": [
+          "C14.4"
+        ]
+      }
     },
     {
       "id": "C15",
@@ -1015,9 +1079,25 @@
         "REC-040",
         "REC-041"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff"
+      "kbdChangeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "customerDeliveryRefs": [
+        "reusable-mixed-teams"
+      ],
+      "profileDependencies": {
+        "desktop": [
+          "C03",
+          "C09",
+          "D-MINI",
+          "D-UAR-P1"
+        ],
+        "broaderHosts": [
+          "D-KNOWME",
+          "D-FORGE",
+          "C15.2"
+        ]
+      }
     },
     {
       "id": "C16",
@@ -1030,9 +1110,8 @@
         "the-boss"
       ],
       "dependsOn": [
-        "C10",
-        "C14",
-        "C15"
+        "C03",
+        "C09"
       ],
       "externalDependencies": [
         "D-MINI"
@@ -1073,9 +1152,35 @@
         "REC-038",
         "REC-047"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c16-specialist-marketing-product-and-design-teams"
+      "kbdChangeId": "afc-c16-specialist-marketing-product-and-design-teams",
+      "customerDeliveryRefs": [
+        "teams-in-work",
+        "reusable-mixed-teams",
+        "feedback-to-github"
+      ],
+      "legacyPortfolioDependsOn": [
+        "C10",
+        "C14",
+        "C15"
+      ],
+      "profileDependencies": {
+        "coding": [
+          "C03",
+          "C09",
+          "C14.1"
+        ],
+        "authoring": [
+          "C15.1",
+          "C15.3"
+        ],
+        "feedback": [
+          "C10.1",
+          "C10.2",
+          "C10.3"
+        ]
+      }
     },
     {
       "id": "C17",
@@ -1135,9 +1240,11 @@
         "REC-048",
         "REC-049"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c17-executive-assistants-and-consented-human-representation"
+      "kbdChangeId": "afc-c17-executive-assistants-and-consented-human-representation",
+      "customerDeliveryRefs": [],
+      "customerMilestoneDisposition": "deferred; canonical pending obligations retained"
     },
     {
       "id": "C18",
@@ -1218,9 +1325,10 @@
         "REC-060",
         "REC-061"
       ],
-      "status": "planned",
+      "status": "pending",
       "executionReady": false,
-      "kbdChangeId": "afc-c18-federated-compatibility-and-release-evidence"
+      "kbdChangeId": "afc-c18-federated-compatibility-and-release-evidence",
+      "customerDeliveryRefs": []
     }
   ],
   "progressSource": {
@@ -1228,5 +1336,6 @@
     "activeChange": "afc-c02-governed-action-and-approval-boundary",
     "activeTask": "C02.1",
     "note": "Historical canonical snapshot from revision 203, not current selector. Canonical KBD is authoritative. The cadence child will request registration of pending D01 at sequence 0 after reflection so it is selectable before pending C08; this authored inventory alone does not register or activate it. Product work still requires repository-scoped changes and accepted dependencies."
-  }
+  },
+  "customerDeliveryMap": "customer-delivery-map.json"
 }

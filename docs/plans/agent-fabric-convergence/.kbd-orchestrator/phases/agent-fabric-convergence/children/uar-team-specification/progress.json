@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 389,
-  "derivedRevision": 389,
+  "sourceRevision": 504,
+  "derivedRevision": 504,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 150
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 265
   },
   "conflictCount": 0,
   "phase": "uar-team-specification",
   "phaseId": "agent-fabric-convergence::uar-team-specification",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-09-30T17:17:42.937989Z",
+  "last_updated": "2026-10-05T07:35:49.992939Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 1,
   "changes_completed": 1,
@@ -51,9 +51,9 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 13,
-      "total": 24,
-      "status": "IN_PROGRESS"
+      "completed": 16,
+      "total": 25,
+      "status": "BLOCKED"
     },
     "evidence": {
       "status": "PENDING",

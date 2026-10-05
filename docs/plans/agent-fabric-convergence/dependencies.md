@@ -14,7 +14,9 @@
 
 The C01 [compatibility matrix](.kbd-orchestrator/phases/agent-fabric-convergence/c01/dependency-compatibility-matrix-v1.md) records the exact source anchor, boundary type, accepted capability, unresolved incompatibility, owner and rollback anchor for every repository. The [adoption contract](.kbd-orchestrator/phases/agent-fabric-convergence/c01/adoption-rollback-checkpoints-v1.md) keeps unresolved external checkpoints blocked and orders provider adoption before consumer enforcement.
 
-## D01 delivery dependencies and portfolio relationship
+## Historical D01 delivery dependencies and portfolio relationship
+
+The following paragraphs preserve the 2026-09-28 planning snapshot; D01/C08/C09 have since completed. Revision8 customer order and 120-minute/every-second-delivery policy below supersede old selectors and manual publication instructions.
 
 `afc-d01-local-mac-durable-agent-delivery` is a **new pending delivery wrapper** to be registered canonically after the cadence child reflects. It depends on accepted C02, C03, C04, C06 and C07 plus D-UAR-P1 and D-MEMORY. C06/C07 receipts establish local UAR capability, not a current Boss installer. D01's first product task selects separately committed, clean Boss and UAR revisions and creates exact file/owner claims in their own repository-scoped changes. The local Mac artifact may use a checksummed arm64-only input, but canonical public CI retains the same-UAR-SHA Windows x64 and Mac ARM64 payload requirement and refuses the local overlay. No dirty source is mislabeled with HEAD.
 
@@ -43,3 +45,15 @@ Only this directory's independent KBD identity is activated. Product roots may c
 ## Initial ownership
 
 The convergence planner owns this planning directory and the 11 new branch/worktree registrations. No product implementation file is claimed yet. A future dispatch must name repository, change/task IDs, file/module write scope, dependency checkpoint, model/harness, output directory and review owner. Two sessions may read the same source; only one writes a given assigned surface.
+
+## Revision8 scoped customer dependencies — 2026-10-05
+
+The authoritative new scope map is [customer-delivery-map.json](customer-delivery-map.json). Teams in Work consumes completed C03/C04/C05/C07/C09 plus C10.1; C10 connectors and BossFang integration do not block it. Reusable team configuration follows, with D-MINI/D-UAR-P1 and relevant C15.1/C15.3 only. C14.4 shared desktop UAR consumes C04/C05/C08 contracts after reusable teams. C14.3 depends on C14.4; GitHub feedback follows the MiniApp. C16 coding templates have no whole-C10/C14/C15 gate. Remaining host-specific dependencies still govern their deferred modes.
+
+Defer C11/C12/C13/C17/C18.1, broad C15.2 and C10.2 non-GitHub connectors. C18.2/C18.3 desktop evidence stays in each relevant release without claiming the whole matrix/benchmark done. The Boss is the sole supervisor of its UAR; BossFang borrows the admitted instance and cannot relaunch/stop it or reuse its host token as authorization. Separate runtime state, namespaces, grants, and settlement ownership remain mandatory.
+
+120-minute autonomous iterations, local Mac build+launch+feature operation each delivery, all four Mac/Windows releases/site every second successful delivery, no Linux. Historical publication debt and independently pending installed acceptance survive the change. Bounded independent work-ahead is allowed after freeze; never mutate frozen release inputs.
+
+## Canonical scheduling constraint
+
+The installed runtime rejects both InProgress → Pending and re-registration/resequencing of an existing change. Preserve original canonical sequences. C10.2 uses a documented Blocked priority hold. Use kbd-apply begin-task to explicitly select each mapped scope at the next handoff; after C14.1/C14.2, select the mapped C15/C16 task before C14.4/C14.3. Do not drain a change or select blocked/deferred work merely because it sorts first. This is an approved execution instruction, not a claim that KBD gained an automatic dependency scheduler.

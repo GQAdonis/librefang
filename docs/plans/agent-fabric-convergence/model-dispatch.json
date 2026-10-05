@@ -62,6 +62,7 @@
     "C17.3": "implementation",
     "C18.1": "architecture",
     "C18.2": "implementation",
-    "C18.3": "architecture"
+    "C18.3": "architecture",
+    "C14.4": "architecture"
   }
 }

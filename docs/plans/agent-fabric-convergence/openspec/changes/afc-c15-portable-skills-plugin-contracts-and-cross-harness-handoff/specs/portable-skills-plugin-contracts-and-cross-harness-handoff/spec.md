@@ -37,3 +37,12 @@ The implementation MUST satisfy all assigned report acceptance clauses below; so
 
 - **WHEN** this capability is evaluated for a supported profile
 - **THEN** the acceptance evidence identifies each applicable clause above, the exact source/policy/dependency revisions and the observed outcome; any unproven mandatory clause keeps that profile unsupported.
+
+### Requirement: Scoped reusable team configuration
+
+The customer milestone MUST reuse the merged team skill family and UAR catalog for member roles, model/execution bindings, team-shared and member-specific instructions, scoped skills/tools/knowledge/memory, versioned deployment and maintenance. Portable definitions MUST NOT contain credentials or silently grant additional authority. Existing runs MUST retain their pinned definition. Broad eight-harness qualification remains required for C15.2 completion but MUST NOT block the selected local configuration profile. Existing Codex and Claude routes MUST NOT be represented as qualified UAR team executors merely because they are installed.
+
+#### Scenario: Update a reusable coding team
+
+- **WHEN** the operator changes a deployed team's role/model/skill configuration using the supported authoring flow
+- **THEN** a new version is available for future runs, existing runs retain their immutable bindings, unsupported required capabilities are reported, and the full/mini payload records exact source/skill identities without portable credentials.

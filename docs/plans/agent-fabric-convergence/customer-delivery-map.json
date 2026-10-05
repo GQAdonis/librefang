@@ -1,0 +1,245 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operator-approved customer-usefulness plan, 2026-10-05",
+  "phase": "agent-fabric-convergence",
+  "planRevision": 8,
+  "baseline": {
+    "revision": 500,
+    "planRevision": 7,
+    "main": {
+      "complete": 33,
+      "cancelled": 1,
+      "incomplete": 26,
+      "total": 60
+    },
+    "children": {
+      "complete": 32,
+      "total": 32
+    },
+    "note": "Previous 34/60 summarized terminal records, including one cancelled task. New C14.4 adds one pending task: 33 complete, 1 cancelled, 27 unfinished of 61; no completion credited."
+  },
+  "nextTask": "C14.1",
+  "deliveries": [
+    {
+      "id": "teams-in-work",
+      "priority": 1,
+      "outcome": "Select and operate a coding team in Work with a workspace, natural-language task, member output, artifacts, approvals, cancellation and persisted recovery.",
+      "taskRefs": [
+        "C14.1",
+        "C14.2",
+        "C16.1",
+        "C16.2"
+      ],
+      "completePrerequisites": [
+        "C03",
+        "C04",
+        "C05",
+        "C07",
+        "C09",
+        "C10.1"
+      ],
+      "coverage": "C14.1/C14.2 team UI and coding portions of C16.1/C16.2; partial evidence never completes broader criteria.",
+      "operation": "In the packaged normal profile, make a bounded repository change with worker/reviewer handoff, visible artifacts and authoritative approval; cancel and reopen a persisted run.",
+      "owners": [
+        "boss-runtime",
+        "boss-renderer",
+        "boss-ux"
+      ],
+      "dependsOn": []
+    },
+    {
+      "id": "reusable-mixed-teams",
+      "priority": 2,
+      "outcome": "Create, maintain, save and deploy versioned coding and product/design teams, followed by other practical templates, with shared instructions and scoped skills/tools/knowledge/model bindings.",
+      "taskRefs": [
+        "C15.1",
+        "C15.3",
+        "C16.1",
+        "C16.2",
+        "C16.3",
+        "C14.1"
+      ],
+      "completePrerequisites": [
+        "C03",
+        "C09"
+      ],
+      "dependsOn": [
+        "teams-in-work"
+      ],
+      "coverage": "Desktop UAR authoring and applicable full/mini adapters only; broad C15.2 harness qualification and connector-dependent templates remain outstanding.",
+      "operation": "Configure and deploy a team, operate it from Work, revise the definition, and observe existing runs retain their pinned definition.",
+      "owners": [
+        "boss-runtime",
+        "boss-renderer",
+        "boss-providers",
+        "boss-data"
+      ]
+    },
+    {
+      "id": "shared-bossfang-uar",
+      "priority": 3,
+      "outcome": "BossFang delegates to the UAR instance supervised by The Boss without installing or spawning a second UAR.",
+      "taskRefs": [
+        "C14.4"
+      ],
+      "completePrerequisites": [
+        "C04",
+        "C05",
+        "C08",
+        "C09"
+      ],
+      "dependsOn": [
+        "reusable-mixed-teams"
+      ],
+      "coverage": "New explicitly approved integrated-desktop profile; no reopening of completed C04/C05/C08. C14.4 includes the pinned BossFang executable, functional dashboard assets, integrity records and main-process supervision needed to operate the packaged shared-runtime profile. C14.3 consumes that payload for Apps/settings embedding and isolated navigation; retain its original packaging acceptance by mapping exact C14.4 receipts.",
+      "operation": "Start BossFang from The Boss, delegate a governed run to the same UAR identity, then observe approvals, cancellation and endpoint rebind after restart without duplicate sidecar/effect.",
+      "owners": [
+        "boss-runtime",
+        "boss-desktop",
+        "bossfang-feature-steward"
+      ]
+    },
+    {
+      "id": "bossfang-miniapp",
+      "priority": 4,
+      "outcome": "Open the actual BossFang dashboard from Apps and settings using isolated authenticated navigation.",
+      "taskRefs": [
+        "C14.3"
+      ],
+      "completePrerequisites": [
+        "C14.4"
+      ],
+      "dependsOn": [
+        "shared-bossfang-uar"
+      ],
+      "coverage": "Actual packaged dashboard and sidecar; no replacement dashboard.",
+      "operation": "Open the packaged MiniApp, change BossFang configuration, reopen it and operate a workflow delegated to the same UAR instance used in Work.",
+      "owners": [
+        "boss-desktop",
+        "boss-renderer",
+        "boss-ux"
+      ]
+    },
+    {
+      "id": "feedback-to-github",
+      "priority": 5,
+      "outcome": "Feedback becomes a reviewed, explicitly approved GitHub issue through direct Boss and BossFang intake.",
+      "taskRefs": [
+        "C10.2",
+        "C10.3",
+        "C16.2"
+      ],
+      "completePrerequisites": [
+        "C05",
+        "C07",
+        "C08",
+        "C09",
+        "C10.1"
+      ],
+      "dependsOn": [
+        "bossfang-miniapp"
+      ],
+      "coverage": "GitHub subset of C10.2; Notion/Slack/Jira remain pending. An issue never automatically authorizes implementation.",
+      "operation": "Classify and deduplicate feedback, review the draft, approve one GitHub issue and recover from an uncertain response without duplicate effects.",
+      "owners": [
+        "boss-runtime",
+        "boss-providers",
+        "boss-renderer"
+      ]
+    }
+  ],
+  "deferred": [
+    {
+      "taskRefs": [
+        "C10.2"
+      ],
+      "scope": "Notion, Slack and Jira adapters"
+    },
+    {
+      "taskRefs": [
+        "C11.1",
+        "C11.2",
+        "C11.3"
+      ],
+      "scope": "Business-data replication"
+    },
+    {
+      "taskRefs": [
+        "C12.1",
+        "C12.2",
+        "C12.3"
+      ],
+      "scope": "Personal peer sovereignty"
+    },
+    {
+      "taskRefs": [
+        "C13.1",
+        "C13.2",
+        "C13.3"
+      ],
+      "scope": "Mobile/home/cloud execution"
+    },
+    {
+      "taskRefs": [
+        "C17.1",
+        "C17.2",
+        "C17.3"
+      ],
+      "scope": "Executive human representation"
+    },
+    {
+      "taskRefs": [
+        "C18.1"
+      ],
+      "scope": "Federation adapters"
+    },
+    {
+      "taskRefs": [
+        "C15.2"
+      ],
+      "scope": "Broad eight-harness and shared toolchain qualification"
+    },
+    {
+      "taskRefs": [
+        "C18.2",
+        "C18.3"
+      ],
+      "scope": "Non-desktop operational matrices and broad controlled benchmarks; required desktop release/recovery evidence remains selected"
+    }
+  ],
+  "ongoingCoverage": [
+    {
+      "taskRefs": [
+        "C18.2"
+      ],
+      "scope": "Relevant desktop restart/recovery, upgrade, authority and compatibility evidence at completed deliveries."
+    },
+    {
+      "taskRefs": [
+        "C18.3"
+      ],
+      "scope": "Desktop artifact provenance, supported/unsupported status and release/site evidence; broader benchmark remains pending."
+    }
+  ],
+  "selection": "Use first unfinished applicable delivery scope. Explicit scoped KBD/kbd-apply selection switches changes at delivery handoff. Do not drain C14.3/C14.4 before reusable teams merely because C14 is active. Defer in authored policy; canonical statuses remain pending, not a fabricated deferred enum.",
+  "accounting": "Delivery IDs are coverage selectors, not additional canonical changes/tasks. Original task completion requires all original criteria. Count scope additions and cancellations separately.",
+  "cadence": {
+    "iterationMinutes": 120,
+    "publicationEvery": 2,
+    "localBuild": [
+      "pnpm",
+      "build:mac:arm64"
+    ],
+    "noLinux": true,
+    "sourceFreeze": "Materialize generated payload before candidate freeze; each start supplies candidate-specific launch and feature-operation receipts.",
+    "childClock": "Continuous parent elapsed time and publication obligations survive children."
+  },
+  "rescheduledTask": {
+    "id": "C10.2",
+    "requestedStatus": "pending",
+    "canonicalStatus": "blocked",
+    "reason": "KBD rejects InProgress -> Pending; supported priority hold preserves history without cancellation/completion.",
+    "resume": "Transition to in-progress when feedback-to-github is selected."
+  },
+  "canonicalScheduling": "Existing change registration is immutable and cannot reorder sequences; preserve canonical sequences. Select each mapped task explicitly with kbd-apply begin-task at delivery handoff. This map is authored delivery policy, not a new scheduler."
+}

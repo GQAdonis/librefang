@@ -2,19 +2,19 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 491,
-  "derivedRevision": 491,
+  "sourceRevision": 507,
+  "derivedRevision": 507,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 252
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 268
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-03T10:43:56.884984Z",
+  "updatedAt": "2026-10-05T07:35:57.198676Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c10-feedback-workflow-and-governed-connector-effects",
-    "C10.1"
+    "afc-c14-studio-administration-and-isolated-service-consoles",
+    "C14.1"
   ],
   "root": {
     "type": "phase",
@@ -247,9 +247,9 @@
           {
             "type": "change",
             "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
-            "status": "PENDING",
+            "status": "BLOCKED",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },
@@ -283,10 +283,10 @@
           {
             "type": "change",
             "id": "afc-c14-studio-administration-and-isolated-service-consoles",
-            "status": "PENDING",
+            "status": "IN_PROGRESS",
             "progress": {
               "done": 0,
-              "total": 3
+              "total": 4
             }
           },
           {

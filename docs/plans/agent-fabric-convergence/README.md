@@ -1,5 +1,9 @@
 # Agent Fabric Convergence
 
+## Current customer priority — 2026-10-05
+
+Read [approved delivery order](customer-delivery-order.md) and [machine-readable scope map](customer-delivery-map.json) first. Teams in Work → reusable mixed teams → shared BossFang/UAR → BossFang MiniApp → GitHub feedback. Next: C14.1. New C14.4 records shared desktop runtime explicitly. Earlier chronology below is historical, not current pending-work status. Cadence remains 120 minutes, local Mac build+operate each delivery, full Mac/Windows/site every second successful delivery.
+
 Planning initiative started 24 September 2026. Branch in every participating repository: `codex/agent-fabric-convergence`.
 
 This initiative turns five research reports and their proposed agent-document standard into coordinated work across 11 repositories. It preserves the active UAR Working Agent integration and records existing work as dependencies. It does not authorize starting product implementation merely by creating a branch.

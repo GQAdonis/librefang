@@ -4,7 +4,7 @@
 
 See proposal.md for motivation and repository scope, and the assessment/source-evidence.json for pinned current observations. Historical gaps are not assumed to persist. This is an initiative-level specification. The local OpenSpec root authorizes planning edits only. Before product implementation, create or link repository-scoped changes in each affected worktree with exact file ownership, existing-spec reconciliation, and this change ID. Do not apply sibling code edits from this planning root.
 
-Repositories: prometheus-skill-pack, prometheus-skills-mini, universal-agent-runtime, the-boss. Scope: Role/team templates, skill selection guidance and studio team creation. Dependencies: C10, C14, C15. External checkpoints: D-MINI (definitions in dependencies.md).
+Repositories: prometheus-skill-pack, prometheus-skills-mini, universal-agent-runtime, the-boss. Scope: Role/team templates, skill selection guidance and studio team creation. Full-backlog dependency envelope (historical change-wide scheduling; use the scoped dependencies below): C10, C14, C15. External checkpoints: D-MINI (definitions in dependencies.md).
 
 ## Goals / Non-Goals
 
@@ -34,3 +34,9 @@ Reconcile current source and existing product specs; record accepted dependency 
 Representative coding/design/marketing/documentation tasks produce accepted artifacts and independent findings; each generated team proposal contains a role-selection rationale, allowed-write scopes, estimated model/cost class and a complete operator-review checklist.
 
 Use repository-required checks and observable real-boundary scenarios; source inspection and planned checkboxes are not execution evidence. Recommendation coverage: REC-038, REC-047.
+
+## Approved customer-priority revision — 2026-10-05
+
+Contribute the coding worker/reviewer preset from C16.1/C16.2 to the first Teams in Work delivery using accepted catalog/team contracts and existing skill bindings. It does not wait for C10 connectors, the BossFang MiniApp, or all of C15. Deliver reusable coding and product/design configuration next with relevant C15.1/C15.3 and C14.1; then other practical presets. Only the customer-feedback preset depends on the GitHub workflow scope of C10.2/C10.3. Broader specialist, marketing, mobile/design, guidance and benchmark acceptance remains tracked; one preset cannot close these original tasks.
+
+Delivery evidence maps to the original task IDs; partial delivery is not whole-task completion. The parent phase plan and delivery coverage map select bounded repository-owned work. Complete production wiring, UI, strings, persistence and packaged inputs before the build-and-operate boundary; no per-edit verification loop.
