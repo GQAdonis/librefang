@@ -128,6 +128,7 @@ pub struct SourceOccurrenceReceipt {
     /// Immutable selected, conflicting, or unavailable route decision.
     pub decision: RouteDecision,
     /// Route revision pinned when admitted, if a handler was selected.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub route_revision: Option<u64>,
     /// RFC-3339 admission timestamp.
     pub recorded_at: String,
@@ -145,6 +146,7 @@ pub struct RouteAffinity {
     /// Monotonic revision, starting at one.
     pub revision: u64,
     /// Binding revision that selected the handler.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub binding_revision: Option<String>,
     /// RFC-3339 timestamp of this revision.
     pub recorded_at: String,
@@ -184,6 +186,7 @@ pub struct DispatchReceipt {
     /// Current dispatch state.
     pub state: DispatchState,
     /// Process-specific claimant when claimed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub claimant: Option<String>,
     /// RFC-3339 creation time.
     pub recorded_at: String,

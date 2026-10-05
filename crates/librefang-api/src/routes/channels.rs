@@ -86,10 +86,29 @@ use std::sync::{Arc, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::types::ApiErrorResponse;
 
+fn qualified_webhook_accounts(state: &AppState) -> Vec<String> {
+    state.kernel.config_ref().sidecar_channels.iter().filter_map(|channel| {
+        let enabled = channel.env.get("WEBHOOK_DURABLE_PROFILE")
+            .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"));
+        let callback = channel.env.get("WEBHOOK_CALLBACK_URL")
+            .is_some_and(|value| !value.trim().is_empty());
+        let deliver_only = channel.env.get("WEBHOOK_DELIVER_ONLY")
+            .is_some_and(|value| matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"));
+        if channel.channel_type.as_deref().unwrap_or(&channel.name) != "webhook"
+            || !enabled || !callback || deliver_only
+        {
+            return None;
+        }
+        channel.env.get("WEBHOOK_ACCOUNT_ID")
+            .map(|value| value.trim().to_string()).filter(|value| !value.is_empty())
+    }).collect()
+}
+
 /// Report the local channel route profile without implying cross-host
 /// observer authority. A remote SurrealDB transport is shared storage; it
 /// does not by itself grant Fabric delivery or Gate execution rights.
 pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+    let webhook_accounts = qualified_webhook_accounts(&state);
     #[cfg(feature = "surreal-backend")]
     {
         let cfg = state.kernel.config_ref().storage.clone();
@@ -129,12 +148,24 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             "gate_effects_configured": crate::channel_authority::configured_for_effects(),
             "fabric_transport_configured": fabric_configured,
             "uar_ingress_ready": uar_ingress_ready,
+            "control": crate::channel_observers::control_capability(),
+            "qualified_webhook": {
+                "profile": librefang_channels::channel_route::WEBHOOK_PROFILE,
+                "configured_accounts": webhook_accounts,
+                "prerequisites_configured": operational && crate::channel_authority::configured_for_effects() && !webhook_accounts.is_empty(),
+                "native_source_required": true,
+                "action_bound_callback_receipt_required": true,
+                "thread": "explicit_null_or_nonempty_native_id",
+                "acceptance": "composed_runtime_gate_pending",
+            },
+            "governed_source_profiles": ["discord_guild", "signed_webhook_v1"],
+            "unavailable_governed_source_policy": "withhold_execution_without_legacy_fallback",
             "governed_handler_profile": if operational && crate::channel_authority::configured_for_effects() {
-                "discord_guild"
+                if webhook_accounts.is_empty() { "discord_guild" } else { "discord_guild_and_signed_webhook_v1" }
             } else {
                 "unavailable"
             },
-            "legacy_local_profiles": ["discord_dm", "other_adapters", "batches", "incomplete_native_identity"],
+            "legacy_local_profiles": ["discord_dm", "unqualified_webhook", "other_adapters", "batches", "incomplete_native_identity"],
             "reason": if operational {
                 serde_json::Value::Null
             } else {
@@ -151,6 +182,8 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             "native_source_required": true,
             "cross_host_observers": false,
             "gate_effects_configured": crate::channel_authority::configured_for_effects(),
+            "control": crate::channel_observers::control_capability(),
+            "qualified_webhook": {"profile": "signed_webhook_v1", "configured_accounts": webhook_accounts, "prerequisites_configured": false},
             "governed_handler_profile": "unavailable",
             "legacy_local_profiles": ["sqlite", "discord_dm", "other_adapters", "batches", "incomplete_native_identity"],
             "reason": "This build does not include SurrealDB route storage.",
@@ -294,6 +327,8 @@ pub struct CreateChannelObserverRequest {
     recipient_grant_issuer: String,
     recipient_grant_id: String,
     recipient_grant_revision: String,
+    #[serde(default)]
+    source_profile: Option<String>,
 }
 
 /// Register the UAR subscription first, then bind its returned stable ID to
@@ -313,12 +348,22 @@ pub async fn create_channel_observer(
                 "error": "remote shared storage, Gate and Fabric must be configured for observers",
             })));
         }
-        if request.source.provider != "discord"
+        let qualified_webhook = request.source.provider == "webhook"
+            && request.source.account_kind == librefang_channels::channel_route::AccountKind::ConfiguredInstance
+            && request.source_profile.as_deref() == Some(librefang_channels::channel_route::WEBHOOK_PROFILE)
+            && qualified_webhook_accounts(&state).contains(&request.source.account);
+        let complete_scope = [
+            &request.source.account, &request.source.workspace,
+            &request.source.room, &request.source.sender,
+        ].iter().all(|value| !value.trim().is_empty())
+            && request.source.thread.as_ref().is_none_or(|value| !value.trim().is_empty());
+        if (request.source.provider != "discord" && !qualified_webhook)
+            || !complete_scope
             || request.observer_instance_id.trim().is_empty()
             || request.recipient_grant_revision.trim().is_empty()
         {
             return (StatusCode::BAD_REQUEST, Json(serde_json::json!({
-                "error": "Discord guild source, observer instance and recipient grant revision are required",
+                "error": "complete Discord guild or configured signed_webhook_v1 source, observer instance and recipient grant revision are required",
             })));
         }
         let session = match librefang_storage::shared_pool().open(&state.kernel.config_ref().storage).await {
@@ -2228,6 +2273,7 @@ pub async fn configure_sidecar_channel(
     };
     #[cfg(feature = "surreal-backend")]
     let surreal_config_path = config_path.clone();
+    let toml_agent = agent.clone();
     let shadowed_secrets = {
         let _config_guard = state.config_write_lock.lock().await;
         let write_instance_name = instance_name.clone();
@@ -2239,7 +2285,7 @@ pub async fn configure_sidecar_channel(
                 entry,
                 &schema,
                 &body.values,
-                agent.as_deref(),
+                toml_agent.as_deref(),
             )
         })
         .await
@@ -2312,6 +2358,7 @@ pub async fn configure_sidecar_channel(
             entry.args,
             &surreal_nonsecret_env,
             &managed_env_keys,
+            agent.as_deref(),
         )
         .map_err(|e| ApiErrorResponse::internal_scrub(e).into_json_tuple())?;
 
