@@ -1,7 +1,7 @@
 # Tasks
 ## 1. Install the approved recovery plan
-- [ ] 1.1 Install recovery repair contracts and parent coverage mapping; completion is an authored parent revision with R1-R3 ownership, unchanged canonical product IDs and explicit partial-coverage criteria.
-- [ ] 1.2 Apply the two-hour full/local/full cadence policy without losing history; completion is a supported configure receipt preserving the next-success publication anchor, failed iteration, active child and legacy obligation.
+- [x] 1.1 Install recovery repair contracts and parent coverage mapping; completion is an authored parent revision with R1-R3 ownership, unchanged canonical product IDs and explicit partial-coverage criteria.
+- [x] 1.2 Apply the two-hour full/local/full cadence policy without losing history; completion is a truthful supported-command receipt showing the effective policy matches and preserves the next-success anchor, failed iteration, active child and legacy obligation; a frozen-profile rejection defers cosmetic configuration until after child return.
 - [ ] 1.3 Complete dispatch handoff and planning closeout; completion is one consistent artifact set, Karpathy record and scoped planning commit/push, with parent C14.1 selected for post-Reflect execution.
 
 Assignments: full phase agent-fabric-convergence::six-hour-convergence-recovery, change afc-six-hour-delivery-recovery, matching backend IDs in plan.md Task model assignments. No product code, builds or tests in these administration tasks. Read-only consistency at the completed change boundary; no per-task test loops.

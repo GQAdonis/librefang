@@ -80,7 +80,7 @@
       "phase": "agent-fabric-convergence",
       "taskOwner": "kbd-apply",
       "bossRepository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
-      "approval": "Operator 2026-10-05: 120-minute increments; first corrected usable delivery and every other thereafter publish all Mac/Windows through the website; each delivery builds and operates local Mac ARM64. Planning request only; apply after plan approval.",
+      "approval": "Operator-approved six-hour recovery execution, 2026-10-05: 120-minute increments; first corrected usable delivery and every other thereafter publish all Mac/Windows through GitHub Releases and the website; every delivery builds and operates local Mac ARM64. Child setup does not count as a successful product delivery; Reflect remains separately requested.",
       "canonicalCommand": {
         "command": "node",
         "args": [

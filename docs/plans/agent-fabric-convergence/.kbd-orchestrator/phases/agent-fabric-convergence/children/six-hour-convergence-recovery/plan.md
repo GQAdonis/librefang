@@ -107,3 +107,6 @@ Child completion means a usable recovery instruction set installed and reflected
 Prior lessons: freeze contracts with consumers; reuse matching receipts instead of rebuilding for bookkeeping. Analyze's local source findings answer the repair scope; no further broad research/library selection is needed. Missing prior-context recall is not filled with invented lessons.
 
 **Next command after reviewing this plan:** `/kbd-execute six-hour-convergence-recovery`. Stop after that installation for `/kbd-reflect six-hour-convergence-recovery`, then resume `/kbd-execute agent-fabric-convergence`.
+
+## Execute correction — observed frozen-profile precondition
+Cadence configure rejected the cosmetic authority-text update while failed iteration8 and its child remain active. The live profile already has the exact requested 120-minute, local Mac, successes7/9 full-publication policy. Task1.2 therefore records supported command rejection, matching effective policy and unchanged history; no configure success is claimed. Defer the explanatory request until Reflect/child return and failed-attempt finalization. This avoids manufacturing a child-completion/configuration cycle or rewriting the skill. Preserve taskID2 and all delivery requirements.

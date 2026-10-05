@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-05T23:54:05.857Z",
+  "outcome": "existing-effective-policy-retained",
+  "commandId": "recovery-cadence-configure-20261005",
+  "configureExitCode": 1,
+  "configureError": "Configure profiles between iterations; current checkpoint contracts are frozen",
+  "policyMatchesRequested": true,
+  "profileRevision": 7,
+  "minutes": 120,
+  "publicationEvery": 2,
+  "nextGlobalSuccess": 7,
+  "successfulDeliveries": 6,
+  "platforms": [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-x64",
+    "win32-arm64"
+  ],
+  "website": "https://the-boss.know-me.tools",
+  "preserved": {
+    "iterations": true,
+    "obligations": true,
+    "historicalChildren": true,
+    "workAhead": true
+  },
+  "activeIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "legacyObligationIds": [
+    "3aa9f8fd-78d2-462f-9584-4f934cabd914"
+  ],
+  "pending": "Explanatory approval text only: apply reviewed request after Reflect child return and failed-attempt finalization, before corrective start. No timing/build/publication behavior change needed.",
+  "notApplied": true
+}
