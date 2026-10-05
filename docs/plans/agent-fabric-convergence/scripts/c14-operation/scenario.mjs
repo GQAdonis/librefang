@@ -49,6 +49,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     stage = 'ordinary-prerequisites'
     await openWork(evaluate, signal)
     const selected = await setup(evaluate, configuration)
+    evidence.workspaceId = selected.workspaceId
     evidence.credentialReference = selected.credentialReference
     evidence.selectedModel = selected.model
     await selectWorkspace(evaluate, signal, selected.workspaceId)
