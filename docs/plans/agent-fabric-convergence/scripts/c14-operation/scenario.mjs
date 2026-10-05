@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 import { setup, ipc } from './setup.mjs'
-import { approveFixtureRequests } from './approvals.mjs'
+import { approveFixtureRequests, fixturePeerTexts } from './approvals.mjs'
 import { chooseCodingTeam, click, fill, openCodingSetup, openWork, reopen, selectOption, selectWorkspace } from './controls.mjs'
 import { digest, requireFact, repositoryResult, Unavailable, waitFor, write } from './io.mjs'
 
@@ -81,7 +81,8 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     evidence.checks.push('work-selected-model-and-ordinary-coding-preset-deployment')
 
     stage = 'bounded-natural-language-change'
-    const prompt = `In this selected isolated repository, change only README.md: replace the exact text pending-${configuration.marker} with ${configuration.marker}. Preserve every other byte and file. Have the worker perform the edit using repository tools, then have the reviewer independently read the file and review the exact change. Both must report the exact delivery marker. Do not commit, push, publish, install dependencies, run tests, or write outside this workspace.`
+    const peerTexts = fixturePeerTexts(configuration.marker)
+    const prompt = `In this selected isolated repository, change only README.md: replace the exact text pending-${configuration.marker} with ${configuration.marker}. Preserve every other byte and file. Have the worker perform the edit using repository tools, then have the reviewer independently read the file and review the exact change. Both must report the exact delivery marker. Do not commit, push, publish, install dependencies, run tests, or write outside this workspace. For this operation fixture's exact approval inspection, use team_delegate with task.input and payload.text equal to the following exact role string without paraphrasing: ${JSON.stringify({ worker: peerTexts.worker, reviewer: peerTexts.reviewer })}. Use outputContract {"type":"string"}. Delegate worker first with no dependsOn or artifactIds; after worker success, delegate reviewer with dependsOn containing only the worker task ID and payload.artifactIds containing actual worker artifacts. Reserve at most 8192 tokens, 1000000 costMicrounits and 300 elapsedSeconds per delegation. Use team_wait for each handoff. If team_send is needed, coordinator sends the exact recipient role string above; worker or reviewer sends exactly ${JSON.stringify(peerTexts.message)} to coordinator, with only actual attributable artifactIds. Do not send unrelated messages or broadcasts.`
     const existingIds = new Set((await snapshot()).instances.map((item) => item.id))
     await fill(evaluate, signal, '[data-ui~="teams-prompt"]', prompt, 'C14_WORK_NATURAL_LANGUAGE_INPUT_UNAVAILABLE')
     await click(evaluate, signal, '[data-ui~="teams-start"]', 'C14_WORK_START_UNAVAILABLE')
@@ -109,7 +110,8 @@ export default async function scenario({ evaluate, signal, targets }, configurat
             ? item.stateReason : null }))
         throw new Unavailable('C14_REAL_CODING_ATTEMPT_DID_NOT_SUCCEED')
       }
-      await approveFixtureRequests(evaluate, signal, configuration, value, roles, evidence.approvals)
+      await approveFixtureRequests(evaluate, signal, configuration, value, roles, evidence.approvals,
+        { instance, texts: peerTexts, snapshot, artifacts })
       const involved = value.attempts.filter((item) => ['worker', 'reviewer'].includes(roles[item.memberId]))
       const finished = involved.filter((item) => item.status === 'succeeded' || item.executionOutcome === 'succeeded')
       const current = (await snapshot()).instances.find((item) => item.id === instance.id)
