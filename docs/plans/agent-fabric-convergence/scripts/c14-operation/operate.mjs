@@ -44,7 +44,7 @@ export async function operate(args = process.argv.slice(2)) {
       sourcePinSha256: digest(fs.readFileSync(pinFile)), launcherSha256: digest(fs.readFileSync(options.launcher)),
       appAsarSha256: digest(fs.readFileSync(path.join(resources, 'app.asar'))),
       sidecarSha256: digest(fs.readFileSync(path.join(payload, 'uar-sidecar'))),
-      scenarioFiles: Object.fromEntries(['operate.mjs', 'scenario.mjs', 'controls.mjs', 'setup.mjs', 'approvals.mjs', 'io.mjs']
+      scenarioFiles: Object.fromEntries(['operate.mjs', 'scenario.mjs', 'controls.mjs', 'setup.mjs', 'approvals.mjs', 'diagnostics.mjs', 'io.mjs']
         .map((name) => [name, digest(fs.readFileSync(path.join(here, name)))])) }
     const marker = 'C14-' + runId
     const workspaceDirectory = path.join(output, 'workspace')

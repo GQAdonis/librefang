@@ -50,6 +50,9 @@ Reopening here proves a renderer reload and persisted selection, not an applicat
 Each invocation creates a fresh exclusive `c14-<uuid>` directory containing `operation.json`, `launch.json`, `evidence.json`, a trusted scenario wrapper and the synthetic repository.
 Receipts contain actual source/bundle/sidecar/launcher/scenario hashes, identity and artifact/output digests, checked behaviors and observed accounting; unknown usage stays unknown.
 Raw model outputs, prompts, approval arguments, gateway credential values and raw errors are omitted from receipts. Failed operation diagnostics retain only visible machine error codes and HTTP status numbers, never complete alert text.
+While the owned application remains alive, the protected attempt-events API supplies bounded incremental tool diagnostics before terminal assertions and approval refusal.
+Evidence pairs tool arguments and results by the selected run, exact call ID and tool name; it retains argument types and hashes, fixture-text equality booleans, roster cursor shape, machine result codes, explicit trace-read failures and retention gaps.
+Approval diagnostics record the exact failed fixture constraint without classifying an unknown request as authorised or unauthorised, and the existing approval predicates remain unchanged.
 The generated scenario wrapper contains only environment-reference configuration and synthetic fixture contents; it is written with owner-only permissions where supported.
 The launcher preserves its isolated app data for inspection and stops only the application instance it started.
 Its fresh profile does not modify installed application data.

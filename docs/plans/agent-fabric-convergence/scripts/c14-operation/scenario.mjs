@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 import { setup, ipc } from './setup.mjs'
 import { approveFixtureRequests, fixturePeerTexts } from './approvals.mjs'
+import { captureAttemptEvents } from './diagnostics.mjs'
 import { chooseCodingTeam, click, fill, openCodingSetup, openWork, reopen, selectOption, selectWorkspace } from './controls.mjs'
 import { digest, requireFact, repositoryResult, Unavailable, waitFor, write } from './io.mjs'
 
@@ -102,6 +103,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     stage = 'real-worker-and-reviewer-execution'
     const completed = await waitFor(signal, async () => {
       const value = await execution()
+      await captureAttemptEvents(evaluate, value, { instance, texts: peerTexts }, evidence)
       const unsuccessful = value.attempts.filter((item) =>
         ['failed', 'cancelled', 'uncertain'].includes(item.status) && item.executionOutcome !== 'succeeded')
       if (unsuccessful.length) {
@@ -111,7 +113,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
         throw new Unavailable('C14_REAL_CODING_ATTEMPT_DID_NOT_SUCCEED')
       }
       await approveFixtureRequests(evaluate, signal, configuration, value, roles, evidence.approvals,
-        { instance, texts: peerTexts, snapshot, artifacts })
+        { instance, texts: peerTexts, snapshot, artifacts, evidence })
       const involved = value.attempts.filter((item) => ['worker', 'reviewer'].includes(roles[item.memberId]))
       const finished = involved.filter((item) => item.status === 'succeeded' || item.executionOutcome === 'succeeded')
       const current = (await snapshot()).instances.find((item) => item.id === instance.id)
@@ -163,6 +165,7 @@ export default async function scenario({ evaluate, signal, targets }, configurat
     requireFact(restored && same(identity, { definition: restored.definition, binding: restored.binding, package: restored.package }),
       'C14_REOPEN_CHANGED_DURABLE_IDENTITY')
     const reopened = await execution()
+    await captureAttemptEvents(evaluate, reopened, { instance, texts: peerTexts }, evidence)
     requireFact(same(reopened.attempts.map((item) => item.id), completed.attempts.map((item) => item.id)),
       'C14_REOPEN_REPEATED_MODEL_WORK')
     const restoredArtifacts = await artifacts()
@@ -182,14 +185,18 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       'C14_WORK_CANCEL_INSTANCE_UNAVAILABLE', 60000, 3000)
     const cancelSelector = { workspaceId: selected.workspaceId, teamInstanceId: cancelInstance.id }
     const cancelRead = () => ipc(evaluate, route('execution'), cancelSelector)
-    const active = await waitFor(signal, async () => (await cancelRead()).attempts.find((item) => ['queued', 'running', 'yielded'].includes(item.status)),
-      'C14_ACTIVE_CANCELLABLE_ATTEMPT_NOT_OBSERVED', 60000, 3000)
+    const active = await waitFor(signal, async () => {
+      const value = await cancelRead()
+      await captureAttemptEvents(evaluate, value, { instance: cancelInstance, texts: peerTexts }, evidence)
+      return value.attempts.find((item) => ['queued', 'running', 'yielded'].includes(item.status))
+    }, 'C14_ACTIVE_CANCELLABLE_ATTEMPT_NOT_OBSERVED', 60000, 3000)
     await fill(evaluate, signal, '[data-ui~="teams-control-reason"]', 'Operator-requested bounded C14 cancellation',
       'C14_WORK_CANCEL_REASON_UNAVAILABLE')
     await click(evaluate, signal, `[data-ui~="teams-attempt"][data-attempt-id="${active.id}"] [data-ui~="teams-cancel"]`,
       'C14_WORK_CANCEL_CONTROL_UNAVAILABLE')
     const cancelled = await waitFor(signal, async () => {
       const value = await cancelRead()
+      await captureAttemptEvents(evaluate, value, { instance: cancelInstance, texts: peerTexts }, evidence)
       const attempt = value.attempts.find((item) => item.id === active.id)
       if (attempt?.status === 'uncertain') throw new Unavailable('C14_CANCELLATION_OUTCOME_UNCERTAIN')
       if (attempt?.status === 'succeeded') throw new Unavailable('C14_CANCELLATION_RACED_COMPLETION')
@@ -199,7 +206,9 @@ export default async function scenario({ evaluate, signal, targets }, configurat
       status: cancelled.attempt.status, usage: cancelled.attempt.usage, accountingState: cancelled.attempt.accountingState,
       effectDisposition: cancelled.attempt.effectDisposition }
     await reopen(evaluate, signal, selected, cancelInstance.id)
-    requireFact((await cancelRead()).attempts.some((item) => item.id === active.id && item.status === 'cancelled'),
+    const reopenedCancellation = await cancelRead()
+    await captureAttemptEvents(evaluate, reopenedCancellation, { instance: cancelInstance, texts: peerTexts }, evidence)
+    requireFact(reopenedCancellation.attempts.some((item) => item.id === active.id && item.status === 'cancelled'),
       'C14_REOPEN_LOST_CANCELLATION_STATE')
     repositoryResult(configuration.workspaceDirectory, configuration.repository.after)
     evidence.checks.push('work-ui-cancel-and-reopen-preserve-authoritative-cancelled-attempt')
