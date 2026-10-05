@@ -1,0 +1,22 @@
+{
+  "audit_trail": {
+    "agent_did": null,
+    "executed_at": "2026-09-30T19:29:55.572442Z",
+    "hook_log": [],
+    "passes": 0,
+    "skill_id": "sycophancy.correction",
+    "strictness": "strict",
+    "version": "1.0.0"
+  },
+  "classifications": [
+    {
+      "location": null,
+      "pattern_id": "S-07",
+      "rationale": "Response is 2351 words — substantially exceeds typical task scope. Verify added content delivers analytical value rather than visible effort.",
+      "severity": "low"
+    }
+  ],
+  "correction_mandatory": false,
+  "sycophancy_score": 0.01785714365541935,
+  "disposition": "Length retained for explicit architecture/recovery decisions; no correctness claim follows from this screen."
+}

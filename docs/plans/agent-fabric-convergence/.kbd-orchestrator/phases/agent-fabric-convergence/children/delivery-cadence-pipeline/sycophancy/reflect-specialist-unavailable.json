@@ -1,0 +1,9 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "tool call error: tool call failed for `sycophancy-correction/analyze_reflect_phase`\n\nCaused by:\n    Mcp error: -32603: LLM invocation error: http://localhost:8181/v1/chat/completions returned HTTP 400 Bad Request: {\"error\":{\"message\":\"{\\\"detail\\\":\\\"The 'gpt-5.4-mini' model is not supported when using Codex with a ChatGPT account.\\\"}\",\"type\":\"upstream_error\",\"code\":400}}"
+    }
+  ],
+  "isError": true
+}

@@ -1,0 +1,39 @@
+{
+  "mode": "diff",
+  "verdict": "BLOCK",
+  "judge_model": "gpt-5.6-sol",
+  "isolation_mode": "harness-native",
+  "producer_model": "GPT-6 exact identity unavailable",
+  "cross_model_check": "unverified-producer-exact-identity",
+  "findings": [
+    {
+      "severity": "CRITICAL",
+      "file": "engine.mjs",
+      "line": 289,
+      "claim": "A retry after an interrupted command claim re-executes the mutation under the same command ID, so duplicate commands can duplicate work.",
+      "evidence": "The boundary requires that duplicate commands do not duplicate work and that interrupted execution resumes safely. Lines 289-290 return only when commandResults already exists; lines 305-306 durably save command.claimed before execute runs at line 307, while commandResults is not written until lines 309-310. A crash after command.claimed and before commandResults leaves a recognized signature with no result, and the same command ID proceeds through execute again.",
+      "suggested_fix": "Represent a claimed command without a terminal result as an explicit recoverable/unknown command state and reconcile that state instead of invoking execute again; only replay operations whose effect is proven absent."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "work-ahead.mjs",
+      "line": 101,
+      "claim": "Repaired-base reconciliation accepts arbitrary nonempty source references and can promote work that was never reconciled onto the repaired predecessor.",
+      "evidence": "The boundary requires repair of A, reconciliation of B's base, and preservation of exact source identity before promotion. Lines 104-106 only require the selected repair candidate to belong to the predecessor iteration; line 107 checks only that baseSourceRefs is a nonempty array; lines 108-109 then record those unverified refs as repairedBaseRef. Promotion at lines 118-121 uses repairedBaseRef.baseSourceRefs as the new iteration sources, without comparing them to the repaired candidate's sourceRefs or recording ancestry between the work-ahead checkout and that candidate.",
+      "suggested_fix": "Verify the supplied base refs against the repaired candidate's frozen source refs and require immutable ancestry/rebase evidence for each work-ahead checkout before setting repairedBaseRef or clearing the promotion blocker."
+    },
+    {
+      "severity": "CRITICAL",
+      "file": "children.mjs",
+      "line": 126,
+      "claim": "Child return evidence is accepted when only the child ID or only the phase ID matches, allowing evidence from a different child instance or phase to close the active child.",
+      "evidence": "The plan requires canonical child return evidence to preserve scope, approvals, unresolved criteria, time, and debt. Line 117 validates the request's childId, but the evidence document check at line 126 rejects only when both identifiers differ (`doc.childId !== child.id && doc.phaseId !== child.phaseId`). Therefore a document with the active phaseId and another childId, or the active childId and another phaseId, passes and is stored as the active child's evidence at lines 144-147.",
+      "suggested_fix": "Require both evidence identifiers to match the active child (`||` between mismatch predicates), then retain the existing canonical phase and return-criteria checks."
+    }
+  ],
+  "sycophancy_screen": {
+    "reject_cap": 2,
+    "cap_overridden": false,
+    "cap_default": 2
+  }
+}

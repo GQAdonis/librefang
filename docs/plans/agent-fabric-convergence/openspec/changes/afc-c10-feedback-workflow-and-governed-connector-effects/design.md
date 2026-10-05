@@ -14,11 +14,12 @@ Repositories: universal-agent-runtime, librefang, the-boss, prometheus-skill-pac
 
 ## Decisions
 
-- library: cand-007 — **reference** External durable workflow engine. C10 first produces workflow requirements and a measured comparison before any engine selection: recovery guarantees, embedding/mobile/offline constraints, idempotency and external-effect handling, scheduler ownership, throughput and operational cost. No engine is selected by this plan. Evidence: R5 §10; prior research/source evidence reused, no new registry verification Risks: Current runtime conformance and dependency compatibility require the assigned acceptance gate.
+- The operator selected UAR's existing durable team runtime as the C10 workflow owner on 3 October 2026 after the source comparison in `c10-workflow-substrate-decision.md`. Reuse its admission, dispatch, settlement, wait and recovery authority; add pinned workflow progression and the artifact-bound human decision. Measure recovery, embedding/offline behavior, ownership, throughput and cost only at the completed workflow integration gate. This supersedes the earlier pre-selection measurement sequence; source comparison does not certify runtime behavior.
+- library: cand-007 — **reference pattern**, not an instantiated engine. Its candidate record names no package, version or registry. Keep it unmeasured rather than inventing a benchmark or product selection. LibreFang's current workflow engine remains a source comparison candidate; neither becomes a second UAR executor.
 - Keep product conversation history in The Boss and execution context/checkpoints in the owning runtime. A delegated run has one executor; orchestration does not duplicate that loop.
 - Prefer additive provider capability before consumer enforcement; reject required unsupported semantics rather than dropping them. Alternative: an all-at-once multi-repository cutover; rejected because Git branches provide no atomic multi-repository release.
 - Use the sequential dependency order until exact file claims and resource isolation permit concurrency. Alternative: simultaneous writers on matching branches; rejected because matching names neither resolve semantic conflicts nor isolate shared resources.
-- First produce workload requirements and compare workflow substrates on recovery, embedding/mobile/offline constraints, idempotency/effect handling, scheduler ownership, throughput and cost. Implement against a selected adapter contract only after that decision; no external engine is presumed.
+- Historical pre-selection sequence, superseded by the 3 October decision above: first produce workload requirements and compare workflow substrates on recovery, embedding/mobile/offline constraints, idempotency/effect handling, scheduler ownership, throughput and cost. Implement against a selected adapter contract only after that decision; no external engine is presumed.
 
 ## Risks / Trade-offs
 
@@ -35,3 +36,9 @@ Reconcile current source and existing product specs; record accepted dependency 
 Real configured test accounts or controlled production-compatible endpoints demonstrate one issue after timeout/restart, no sensitive egress, no replay posts, no issue-to-implementation auto-authorization.
 
 Use repository-required checks and observable real-boundary scenarios; source inspection and planned checkboxes are not execution evidence. Recommendation coverage: REC-039, REC-046, REC-053, REC-056, REC-059.
+
+## Approved customer-priority revision — 2026-10-05
+
+C10.1 remains complete. The operator reschedules C10.2 before further connector work. GitHub issue effects and C10.3 feedback progression follow Teams in Work, reusable team configuration, shared BossFang/UAR integration and the MiniApp. Notion, Slack and Jira adapter coverage remains pending outside the customer milestone; shipping GitHub cannot complete all of C10.2. The first customer feedback profile requires explicit approval of the issue draft. Scoped standing authorization remains separate retained coverage. Reuse the selected UAR workflow owner; do not reopen substrate selection.
+
+Delivery evidence maps to the original task IDs; partial delivery is not whole-task completion. The parent phase plan and delivery coverage map select bounded repository-owned work. Complete production wiring, UI, strings, persistence and packaged inputs before the build-and-operate boundary; no per-edit verification loop.

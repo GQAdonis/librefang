@@ -1,0 +1,13 @@
+{
+  "version": "2.2.12",
+  "platform": "darwin-arm64",
+  "path": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/dist/The-Boss-2.2.12-mac-arm64.dmg",
+  "size": 705382195,
+  "sha256": "4fd115b1952bd5c5f090effae9fa90c0ca60d1d161d24de04182525056c7ce5d",
+  "source": "7d9c0633fba7eda047243afefcc0806f79abd17e",
+  "signed": true,
+  "notarized": false,
+  "buildAttempt": "12db2555-beb5-4e84-b506-922b1b65ba1a",
+  "publication": "pending",
+  "functionalAcceptance": "pending"
+}

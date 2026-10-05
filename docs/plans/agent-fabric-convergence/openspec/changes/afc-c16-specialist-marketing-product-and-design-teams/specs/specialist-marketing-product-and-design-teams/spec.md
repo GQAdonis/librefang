@@ -35,3 +35,12 @@ The implementation MUST satisfy all assigned report acceptance clauses below; so
 
 - **WHEN** this capability is evaluated for a supported profile
 - **THEN** the acceptance evidence identifies each applicable clause above, the exact source/policy/dependency revisions and the observed outcome; any unproven mandatory clause keeps that profile unsupported.
+
+### Requirement: Customer-priority preset delivery
+
+The first supported team preset MUST enable a coding worker/reviewer journey in Work through accepted C03/C09 contracts and existing skill bindings. Reusable coding and product/design configuration SHALL follow, with other practical presets delivered subsequently. Unused connectors, the BossFang MiniApp and completion of every C15 adapter MUST NOT be prerequisites for the initial coding journey. Customer-feedback presets retain their C10 GitHub workflow dependency. Partial preset evidence MUST NOT complete the broader original role/template tasks or comparative benchmark obligations.
+
+#### Scenario: Coding preset without connector configuration
+
+- **WHEN** a user with no Notion, Slack, Jira or BossFang configuration chooses the coding preset
+- **THEN** the supported local team journey remains usable with explicit workspace/write limits, selected models, output contracts and reviewer findings; absent unrelated integrations do not block it.

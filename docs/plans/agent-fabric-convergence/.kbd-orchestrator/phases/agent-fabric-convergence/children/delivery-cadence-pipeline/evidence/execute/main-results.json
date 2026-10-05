@@ -1,0 +1,11 @@
+[
+  {
+    "name": "repair-priority",
+    "status": "passed",
+    "state": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-state",
+    "oldCandidate": "9ddcd514-2831-43f3-a312-bac7e5f3934e",
+    "repairedCandidate": "0b8ac14f-297b-4d66-9756-5b786cc8c96d",
+    "detail": "Real operation failure, dependent start and promotion refused until repaired-base reconciliation; failed receipts retained. Harness corrected required build-reason and reconciliation ordering; production did not change.",
+    "observedAt": "2026-09-30T20:30:15.535Z"
+  }
+]

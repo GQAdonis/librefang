@@ -34,6 +34,14 @@ BossFang MUST distinguish the handler from observers. Explicit authorized recipi
 - **WHEN** the retained handler cannot be resolved or is no longer eligible
 - **THEN** the route reports a recoverable unavailable decision rather than silently falling through to a different agent.
 
+### Requirement: Shared routing storage preserves host-local daemon configuration
+
+BossFang hosts sharing durable route and channel state MUST resolve persisted daemon configuration overrides within a stable host-local scope. The primary scope input MUST be `BOSSFANG_CONFIG_STORE_SCOPE`, with `LIBREFANG_CONFIG_STORE_SCOPE` accepted as a compatibility fallback. Shared runtime state MUST NOT cause one host to load another host's sidecar endpoint or other daemon-local override.
+
+#### Scenario: Two BossFang hosts restart against one route database
+- **WHEN** two hosts with distinct config-store scopes share one SurrealDB route database and restart
+- **THEN** each host restores the sidecar configuration persisted for its own scope while continuing to share route and channel state.
+
 ### Requirement: Observer copies require independent current authority
 
 BossFang MUST authorize source disclosure before presenting an occurrence to a subscriber and MUST authorize recipient delivery before each queued copy is released. Observing MUST NOT confer handler execution or channel posting rights. A UAR recipient MUST additionally pass its own execution and binding authority. The initial C07 local observer capability MUST NOT be represented as supporting channel-source or cross-host observation until an explicit compatible extension is accepted.

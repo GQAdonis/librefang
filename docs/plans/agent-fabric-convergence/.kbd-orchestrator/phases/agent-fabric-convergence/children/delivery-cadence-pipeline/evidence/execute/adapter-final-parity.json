@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "scope": "Only final schema correction and six-way payload parity; no runtime repetition",
+  "files": 49,
+  "roots": [
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/claude/prometheus-skill-pack/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/codex/prometheus-skill-pack/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/dist/plugins/claude/prometheus-skills-mini/skills/delivery-cadence",
+    "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/dist/plugins/codex/prometheus-skills-mini/skills/delivery-cadence"
+  ],
+  "payloadDigest": "8b8d0e6424f070e62500d918dcc1ed9454d5c0a1efdcb8cbedbf9c04c1e98136",
+  "schemaFields": {
+    "firstWorkAt": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "creationTaskRef": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "observedAt": "2026-09-30T20:33:31.883Z"
+}

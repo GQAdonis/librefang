@@ -24,8 +24,14 @@ None in this initiative root. Product-level existing specifications are reconcil
 
 This is an initiative-level specification. The local OpenSpec root authorizes planning edits only. Before product implementation, create or link repository-scoped changes in each affected worktree with exact file ownership, existing-spec reconciliation, and this change ID. Do not apply sibling code edits from this planning root.
 
-Repositories: universal-agent-runtime, librefang, the-boss, know-me-system, know-me-app, flint-gate, flint-realtime-fabric, flint-forge, surreal-memory-server, prometheus-skill-pack, prometheus-skills-mini. Scope: Cross-repository manifests, conformance runners, scoped federation adapters and release documentation. Dependencies: C05, C06, C08, C09, C10, C11, C12, C13, C14, C15, C16, C17. External checkpoints: D-UAR-P1, D-FRF, D-FORGE, D-GATE, D-MINI, D-KNOWME, D-MEMORY (definitions in dependencies.md).
+Repositories: universal-agent-runtime, librefang, the-boss, know-me-system, know-me-app, flint-gate, flint-realtime-fabric, flint-forge, surreal-memory-server, prometheus-skill-pack, prometheus-skills-mini. Scope: Cross-repository manifests, conformance runners, scoped federation adapters and release documentation. Full-backlog dependency envelope (historical change-wide scheduling; use the scoped dependencies below): C05, C06, C08, C09, C10, C11, C12, C13, C14, C15, C16, C17. External checkpoints: D-UAR-P1, D-FRF, D-FORGE, D-GATE, D-MINI, D-KNOWME, D-MEMORY (definitions in dependencies.md).
 
 One local Rust build writer while sharing host; no single green unit suite substitutes for installed multi-product acceptance.
 
 Acceptance: Each advertised mode passes real boundary scenarios on named hosts/platforms; unsupported features remain disabled; immutable pins and rollback constraints are auditable.
+
+## Approved customer-priority revision — 2026-10-05
+
+C18.1 federation/trust adapters remain pending outside the next customer milestone. Relevant desktop recovery/upgrade/authority scenarios from C18.2 accompany each completed increment; the wider operational-mode matrix remains outstanding. C18.3 desktop source/artifact provenance and supported-feature reporting accompany releases; broader comparative benchmarks remain outstanding. Neither partial evidence nor a local build completes an original C18 task. Consume dependencies of the actual delivered desktop scope; the portfolio-wide dependency list applies only to full C18 completion.
+
+Delivery evidence maps to the original task IDs; partial delivery is not whole-task completion. The parent phase plan and delivery coverage map select bounded repository-owned work. Complete production wiring, UI, strings, persistence and packaged inputs before the build-and-operate boundary; no per-edit verification loop.

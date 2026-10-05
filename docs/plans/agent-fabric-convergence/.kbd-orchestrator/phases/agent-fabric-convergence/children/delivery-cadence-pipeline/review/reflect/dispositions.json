@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "verdict": "PASS",
+  "finding": "R1",
+  "resolution": "Final installation receipt attached at local-distribution.json; reflection wording updated to completed receipt.",
+  "evidence": {
+    "completedAt": "2026-09-30T21:24:46.071Z",
+    "sourceCommit": "057a774c9e2787a7bcb6785fbb80b386aa88549c",
+    "generation": "bdad67dcc943ca2112b2b9f0c030f8c983dcdb8ca2ed08d0f97b0bb34ab0751f",
+    "targets": 14,
+    "payloadDigest": "8fda63d5726490aa828a7d1317682343d7b474ad77f07489563c96870f211e91"
+  },
+  "runtimeRepeated": false
+}

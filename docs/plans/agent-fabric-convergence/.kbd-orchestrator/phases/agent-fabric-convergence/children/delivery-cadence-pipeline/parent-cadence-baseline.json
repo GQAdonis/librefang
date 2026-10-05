@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-30T18:39:50.351Z",
+  "source": ".prometheus/cadence/state.json",
+  "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+  "activeIterationId": null,
+  "successfulDeliveries": 5,
+  "publicationDue": true,
+  "nextPublicationDelivery": 5,
+  "finalizedAttempts": 5,
+  "policyChanged": false
+}

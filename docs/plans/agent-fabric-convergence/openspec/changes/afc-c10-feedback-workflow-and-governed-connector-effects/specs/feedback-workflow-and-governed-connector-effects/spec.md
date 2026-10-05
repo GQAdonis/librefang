@@ -38,3 +38,12 @@ The implementation MUST satisfy all assigned report acceptance clauses below; so
 
 - **WHEN** this capability is evaluated for a supported profile
 - **THEN** the acceptance evidence identifies each applicable clause above, the exact source/policy/dependency revisions and the observed outcome; any unproven mandatory clause keeps that profile unsupported.
+
+### Requirement: GitHub-first customer feedback
+
+After usable teams, reusable configuration and integrated BossFang/MiniApp delivery, the selected customer profile MUST classify and deduplicate feedback, prepare an issue draft and require explicit approval before GitHub issue creation. Existing workflow/effect identity, credential references, egress scope and unknown-outcome reconciliation MUST be preserved. Notion, Slack and Jira adapters remain pending backlog; their absence MUST NOT gate GitHub delivery and GitHub-only evidence MUST NOT complete C10.2 in full. Scoped standing authorization remains a separately qualified profile rather than the first customer default.
+
+#### Scenario: Explicitly approved issue after reconnect
+
+- **WHEN** the user reviews a team-produced issue draft, approves its exact target/content and reconnects after an uncertain creation response
+- **THEN** the workflow reconciles the same effect to one issue or a visible unresolved outcome, without blind resend or authorization to implement the issue.

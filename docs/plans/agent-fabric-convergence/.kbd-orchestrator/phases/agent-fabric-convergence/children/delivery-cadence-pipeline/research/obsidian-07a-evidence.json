@@ -1,0 +1,62 @@
+{
+  "observedAt": "2026-09-30T19:49:52.398Z",
+  "project": "/Users/gqadonis/obsidian/.ipfs-sync",
+  "inspection": "read-only; no program, test, node contact or state transition",
+  "kbdRevision": 616,
+  "currentChange": "mvp-07-encrypted-pull-second-device",
+  "activeIterationId": null,
+  "successfulDeliveries": 6,
+  "publicationDue": false,
+  "installedSkillVersion": "1.1.1",
+  "missingScript": true,
+  "files": [
+    {
+      "path": ".kbd-orchestrator/current-waypoint.json",
+      "sha256": "0af1098a8176917202d30105bd9b801c4abcba0af2e101de1643c4b85e1e3777"
+    },
+    {
+      "path": ".kbd-orchestrator/phases/mvp/progress.json",
+      "sha256": "ab3785dc8f0513d572492ef2b2a3c9a5a78ed66f01e9fd5dd74e2a4ec574dde6"
+    },
+    {
+      "path": ".kbd-orchestrator/phases/mvp/plan.md",
+      "sha256": "c6d765760216907fe8a65eba19b686aaef2006ae0c5e09b1b85d5cb9e965254c"
+    },
+    {
+      "path": ".prometheus/cadence/state.json",
+      "sha256": "f5fa7738444039d628d697c9ad967f8fda50421b387f118131773fcc48d1a25b"
+    },
+    {
+      "path": "openspec/changes/mvp-07-encrypted-pull-second-device/proposal.md",
+      "sha256": "726606afa4b17a60277ffe444a6b73dc4354bba1c079feca2bee9227d852609e"
+    },
+    {
+      "path": "openspec/changes/mvp-07-encrypted-pull-second-device/design.md",
+      "sha256": "32d6517eff3ad751f33f84924d718674d6e686349ef160ececd19e07eb280539"
+    },
+    {
+      "path": "openspec/changes/mvp-07-encrypted-pull-second-device/tasks.md",
+      "sha256": "300689b55229260ee25734e96eb8f6fac2e59b678cf106b55e6e37cd0760068e"
+    },
+    {
+      "path": "openspec/changes/mvp-07b-keys-history-guard-release-2/tasks.md",
+      "sha256": "dd65bdc24798d91b301bcff331ae5f2c646ddb74d951bf6a851236161db34d47"
+    },
+    {
+      "path": ".claude/skills/delivery-cadence/scripts/lib/delivery-contract.mjs",
+      "sha256": "66e5f5c67f6c1809a135b33444dc7ab12e61bfd390ca701007b5633cd1321756"
+    },
+    {
+      "path": ".claude/skills/delivery-cadence/scripts/lib/engine.mjs",
+      "sha256": "ff77cb93bb255719dab62cd09ce5d098e1050f471a3455f92971456e7678c6df"
+    },
+    {
+      "path": "tools/feature-op-mvp-06.mjs",
+      "sha256": "08b91982937c021be2c0672be4f6b83aef4c691496db15a1ce692c62727e9c02"
+    },
+    {
+      "path": "tools/feature-op-mvp-06/constants.mjs",
+      "sha256": "d85971439e1b0988e2ca4fcda95aa2680c6e7493a2d372f9ced62088ea61ff89"
+    }
+  ]
+}

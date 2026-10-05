@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "scope": "C10.1 internal draft decision",
+  "complete": true,
+  "sourceRefs": {
+    "boss": "7d9c0633fba7eda047243afefcc0806f79abd17e",
+    "uar": "bb6ea8ba10378732db5647c6957ba88788626ff9",
+    "uarFixture": "bb6ea8ba10378732db5647c6957ba88788626ff9",
+    "fixtureOnlyPaths": [],
+    "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sourcePinSha256": "926e2d67c086a56962021900217c6233b0922ba3d8f5672f7a2b91c4da29803d",
+    "launcherSha256": "b65e29fed109107809706caee3dba99504a196870321d1951591978f8acb99ea",
+    "appAsarSha256": "4e0181f00efd796429f220298239215711b1eedea0a70af240215fe4f8c74725",
+    "sidecarSha256": "07d4478f3a14bc7aaaf7b63a368b29760be9e79fe5f936f21c31e04535187be3",
+    "scenarioFiles": {
+      "operate.mjs": "0530266b29c2cb2e273ee69a508b438e6a9d1c3fced090fcb9ac9c456832e1de",
+      "scenario.mjs": "43c6bfe25bc7dd937d6c22d5c8c88ca8833b39a20b8b95a4076a20f2ebcac8f0",
+      "fixture.mjs": "458edab7918b71944026b439b5ed088f12979fb0214938ff024742a7eab11f90",
+      "controls.mjs": "c50193e9fddd1a2be99a79d41298524272fd79bb014d71e82a06e8cb05fcfca6"
+    }
+  },
+  "checks": [
+    "fresh-feedback-two-model-attempts",
+    "schema-artifacts-and-durable-wait",
+    "foreign-workspace-read-and-decision-denied",
+    "uar-runtime-restart-and-renderer-remount",
+    "new-version-installed-original-plan-pinned",
+    "ui-exact-accept-receipt",
+    "identical-command-idempotent-no-new-attempt"
+  ],
+  "runId": "5e5bc022-8bd2-4e82-97a9-3369f502e48c",
+  "definition": {
+    "id": "urn:uar:workflow-feedback:classify-draft",
+    "version": "1.0.0",
+    "digest": "sha256:fb51362d6c9bce91ffa7f8d03b2d5c519d103b9b913e148f3f00cf83e50bfac0"
+  },
+  "planDigest": "sha256:94aff16a44f9f6ec68f5a49f7e1e14b17f8bd63a4f80355f7fc2e11aab90a718",
+  "fixtureDigest": "67a8e44ffc2e3351782505a1631c6191491ac33965a964a33c36f28cff9d083f",
+  "feedbackDigest": "ed047a68c12e278e1b40a49b64cd4073a73f83d6b619d90ecc9ba15d79e6946f",
+  "model": {
+    "source": "gateway",
+    "providerId": "the-boss-gateway",
+    "modelId": "kimi-for-coding"
+  },
+  "artifact": {
+    "id": "artifact-22718cda-fe8c-4327-bba1-8ee14bcbb19e",
+    "digest": "sha256:1192bda8f82547dc974ee9aa216dfd0c487f90e7280f2c27a04b43f834fe55c8"
+  },
+  "decision": {
+    "id": "ff9c4a9a-cab0-48ec-b208-fa69a0d51f65",
+    "commandId": "6e91616f-9401-41cc-9ac5-d354369894dc",
+    "waitId": "workflow-wait-5e5bc022-8bd2-4e82-97a9-3369f502e48c",
+    "decision": "accept",
+    "artifactId": "artifact-22718cda-fe8c-4327-bba1-8ee14bcbb19e",
+    "artifactDigest": "sha256:1192bda8f82547dc974ee9aa216dfd0c487f90e7280f2c27a04b43f834fe55c8",
+    "runRevision": 6,
+    "committedAt": "2026-10-05T06:35:04.394188Z"
+  },
+  "attempts": [
+    {
+      "id": "819b5e0d-d469-4ccc-9874-e341306eeecf",
+      "status": "succeeded",
+      "usage": null,
+      "models": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-2e4c57bf203fcaea",
+            "modelId": "kimi-for-coding"
+          },
+          "wireModelAlias": "kimi-for-coding",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "pricingIdentity": {
+            "providerId": "kimi-code-plan-cn",
+            "modelId": "kimi-for-coding",
+            "catalogRevision": "sha256:3bf77d676613454e115a3e5b281e91d3909c8061416b6b94f607f9f32d5f2e1e"
+          }
+        }
+      ]
+    },
+    {
+      "id": "22718cda-fe8c-4327-bba1-8ee14bcbb19e",
+      "status": "succeeded",
+      "usage": {
+        "tokens": 1665,
+        "costMicrounits": 0,
+        "elapsedSeconds": 13
+      },
+      "models": [
+        {
+          "route": {
+            "providerId": "boss-team-gateway-2e4c57bf203fcaea",
+            "modelId": "kimi-for-coding"
+          },
+          "wireModelAlias": "kimi-for-coding",
+          "profile": {
+            "id": "uar.openai-compatible-chat.settings-v1",
+            "revision": 1
+          },
+          "settingsRevision": 1,
+          "pricingIdentity": {
+            "providerId": "kimi-code-plan-cn",
+            "modelId": "kimi-for-coding",
+            "catalogRevision": "sha256:3bf77d676613454e115a3e5b281e91d3909c8061416b6b94f607f9f32d5f2e1e"
+          }
+        }
+      ]
+    }
+  ],
+  "accounting": {
+    "committed": {
+      "tokens": 1665,
+      "costMicrounits": 0,
+      "elapsedSeconds": 13
+    },
+    "reserved": {
+      "tokens": 32000,
+      "costMicrounits": 2000000,
+      "elapsedSeconds": 400
+    },
+    "unresolvedAttemptIds": [
+      "819b5e0d-d469-4ccc-9874-e341306eeecf"
+    ]
+  },
+  "restartScope": "UAR process and Boss renderer remount; Boss process remains running",
+  "externalIssueWrite": false
+}

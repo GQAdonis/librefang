@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "at": "2026-09-30T20:06:52.416Z",
+  "approval": "Operator /kbd-execute delivery-cadence-pipeline",
+  "full": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full",
+    "base": "6101896",
+    "preserved": "Audited 1.1.2 timeout/reason behavior from 1ddcc8b"
+  },
+  "mini": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini",
+    "base": "aaf7377"
+  },
+  "oldWorktrees": "Preserved; original dirty checkouts untouched",
+  "boundary": "One complete production CLI operation after tasks 1-11; no intermediate suites",
+  "interfaces": {
+    "state": 3,
+    "contract": 3,
+    "collections": [
+      "candidates",
+      "jobs",
+      "workAhead",
+      "obligations",
+      "releaseAttempts",
+      "opportunities",
+      "adoptedReceipts"
+    ],
+    "lead": [
+      "engine.mjs",
+      "lifecycle.mjs",
+      "cadence.mjs",
+      "schemas",
+      "candidates.mjs",
+      "children.mjs"
+    ],
+    "runtime": [
+      "storage.mjs",
+      "checkpoints.mjs",
+      "process.mjs",
+      "hooks.mjs",
+      "hook-runner.mjs",
+      "jobs.mjs",
+      "resources.mjs",
+      "checkpoint-receipts.mjs"
+    ],
+    "data": [
+      "profile.mjs",
+      "delivery-contract.mjs",
+      "report.mjs",
+      "activity.mjs",
+      "work-ahead.mjs",
+      "publication.mjs",
+      "opportunities.mjs"
+    ]
+  }
+}

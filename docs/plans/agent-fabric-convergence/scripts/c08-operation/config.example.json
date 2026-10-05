@@ -1,0 +1,89 @@
+{
+  "schema": "c08-routing-operation/1",
+  "disposable": true,
+  "services": {
+    "bossA": {"url":"http://127.0.0.1:18789","tokenEnv":"C08_BOSS_A_OWNER"},
+    "bossB": {"url":"http://127.0.0.1:18790","tokenEnv":"C08_BOSS_B_OWNER"},
+    "gate": {"url":"http://127.0.0.1:4457","tokenEnv":"C08_GATE_ADMIN_EFFECT"},
+    "fabric": {"url":"http://127.0.0.1:18880"},
+    "uar": {"url":"http://127.0.0.1:1906","tokenEnv":"C08_UAR_OWNER","workspace":"c08-disposable"}
+  },
+  "surreal": {"url":"http://127.0.0.1:18000","namespace":"c08","database":"c08","userEnv":"C08_SURREAL_USER","passwordEnv":"C08_SURREAL_PASSWORD"},
+  "ingress": {
+    "bossA": {"url":"http://127.0.0.1:18453/webhook","secretEnv":"C08_WEBHOOK_SECRET","account":"c08-account"},
+    "bossB": {"url":"http://127.0.0.1:18454/webhook","secretEnv":"C08_WEBHOOK_SECRET","account":"c08-account"}
+  },
+  "callback": {"secretEnv":"C08_WEBHOOK_SECRET","port":18455,"tunnelCommand":"/opt/homebrew/bin/cloudflared","urlEnv":"C08_CALLBACK_URL"},
+  "realm": {
+    "issuer":"http://127.0.0.1:18456","port":18456,"webhookSecretEnv":"C08_WEBHOOK_SECRET",
+    "tokens": [
+      {"tokenEnv":"C08_GATE_ADMIN_EFFECT","claims":{"sub":"c08-host","aud":"c08-gate","scope":"afc.channel.grants.write afc.channel.effects.execute","roles":["admin"]}},
+      {"tokenEnv":"C08_FABRIC_TOKEN","claims":{"sub":"c08-host","aud":"c08-fabric","tenant_id":"00000000-0000-4000-8000-000000000008"}},
+      {"tokenEnv":"C08_UAR_OWNER","claims":{"sub":"c08-owner","aud":"c08-uar","roles":["owner","operator"]}}
+    ]
+  },
+  "gateIdentity": {"issuer":"http://127.0.0.1:18456","subject":"c08-host","subject_kind":"service","identity_revision":"1","verified":true,"revoked":false},
+  "producerFiles": [
+    {"name":"surreal","path":"/opt/homebrew/bin/surreal","version":"3.3.0"},
+    {"name":"webhook_adapter","path":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-delivery/sdk/python/librefang/sidecar/adapters/webhook.py","sourceRevision":"8c347f37f75f4720d885622a01d966f8e41d1094"},
+    {"name":"sidecar_runtime","path":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-delivery/sdk/python/librefang/sidecar/runtime.py","sourceRevision":"8c347f37f75f4720d885622a01d966f8e41d1094"}
+  ],
+  "processes": {
+    "bossA": {"command":"/private/c08/bin/librefang","args":["start","--foreground"],"cwd":"/private/c08/boss-a","sourceRevision":"8c347f37f75f4720d885622a01d966f8e41d1094","sourceRepository":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-delivery","sourceMetadataFile":"/private/c08/build/bossfang.json","envRefs":{"LIBREFANG_CHANNEL_GATE_TOKEN":"C08_GATE_ADMIN_EFFECT","LIBREFANG_CHANNEL_FABRIC_BEARER":"C08_FABRIC_TOKEN","OPENAI_API_KEY":"OPENAI_API_KEY"},"environment":{"LIBREFANG_CHANNEL_GATE_URL":"http://127.0.0.1:4457","LIBREFANG_CHANNEL_GATE_IDENTITY_ISSUER":"http://127.0.0.1:18456","LIBREFANG_CHANNEL_GATE_IDENTITY_SUBJECT":"c08-host","LIBREFANG_CHANNEL_GATE_IDENTITY_REVISION":"1","LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER":"c08","LIBREFANG_CHANNEL_HANDLER_GRANT_ID":"handler-a","LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER":"c08","LIBREFANG_CHANNEL_REPLY_GRANT_ID":"reply-a","LIBREFANG_CHANNEL_REPLY_GRANT_REVISION":"1"}},
+    "bossB": {"command":"/private/c08/bin/librefang","args":["start","--foreground"],"cwd":"/private/c08/boss-b","sourceRevision":"8c347f37f75f4720d885622a01d966f8e41d1094","sourceRepository":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-delivery","sourceMetadataFile":"/private/c08/build/bossfang.json","envRefs":{"LIBREFANG_CHANNEL_GATE_TOKEN":"C08_GATE_ADMIN_EFFECT","LIBREFANG_CHANNEL_FABRIC_BEARER":"C08_FABRIC_TOKEN","OPENAI_API_KEY":"OPENAI_API_KEY"},"environment":{"LIBREFANG_CHANNEL_GATE_URL":"http://127.0.0.1:4457","LIBREFANG_CHANNEL_GATE_IDENTITY_ISSUER":"http://127.0.0.1:18456","LIBREFANG_CHANNEL_GATE_IDENTITY_SUBJECT":"c08-host","LIBREFANG_CHANNEL_GATE_IDENTITY_REVISION":"1","LIBREFANG_CHANNEL_HANDLER_GRANT_ISSUER":"c08","LIBREFANG_CHANNEL_HANDLER_GRANT_ID":"handler-b","LIBREFANG_CHANNEL_REPLY_GRANT_ISSUER":"c08","LIBREFANG_CHANNEL_REPLY_GRANT_ID":"reply-b","LIBREFANG_CHANNEL_REPLY_GRANT_REVISION":"1"}},
+    "gate": {"command":"/private/c08/bin/flint-gate","args":[],"cwd":"/private/c08/gate","sourceRevision":"52ce545b1ed67adef3f8ff6bd9211e42065cc410","sourceRepository":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-gate-delivery","sourceMetadataFile":"/private/c08/build/gate.json","envRefs":{},"environment":{}},
+    "fabric": {"command":"/private/c08/bin/frf-gateway","args":[],"cwd":"/private/c08/fabric","sourceRevision":"8966d6b1fef002a663d98f762955b2d273f8c07d","sourceRepository":"/Users/gqadonis/Projects/prometheus/worktrees/afc-c08-fabric-delivery","sourceMetadataFile":"/private/c08/build/fabric.json","envRefs":{},"environment":{}},
+    "uar": {"command":"/private/c08/bin/uar-sidecar","args":["--port","1906"],"cwd":"/private/c08/uar","stdinEnv":"C08_UAR_LAUNCH_TOKEN","sourceRevision":"6d3ccce07bbfbdf32b01d4db140192e39c1355d7","sourceRepository":"/Users/gqadonis/.claude/worktrees/afc-c08-uar-delivery","sourceMetadataFile":"/private/c08/build/uar.json","envRefs":{"OPENAI_API_KEY":"OPENAI_API_KEY"},"environment":{}},
+    "bufferHold": {"command":"/private/c08/bin/ACTUAL_OWNER_BUFFER_CONTROL_REQUIRED","args":["hold"],"sourceRevision":"0000000000000000000000000000000000000000"},
+    "bufferRelease": {"command":"/private/c08/bin/ACTUAL_OWNER_BUFFER_CONTROL_REQUIRED","args":["release"],"sourceRevision":"0000000000000000000000000000000000000000"}
+  },
+  "constants": {
+    "handlerA":"c08-a","handlerB":"c08-b",
+    "gateScope":{"provider":"webhook","account":"c08-account","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},
+    "sourceScope":{"provider":"webhook","account":"c08-account","account_kind":"configured_instance","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},
+    "native":{"workspace_id":"c08-disposable","room_id":"c08-room","thread_id":null,"sender_id":"c08-sender","message":"C08 disposable message. Reply briefly.","metadata":{"mention_names":["c08-a"]}},
+    "handlerGrantA":{"issuer":"c08","grant_id":"handler-a","action":"handler_execution","scope":{"provider":"webhook","account":"c08-account","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},"recipient":"c08-a","handler":"c08-a","classification":"handler_payload","max_remaining_depth":4,"max_remaining_fanout":8},
+    "replyGrantA":{"issuer":"c08","grant_id":"reply-a","action":"scoped_reply","scope":{"provider":"webhook","account":"c08-account","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},"recipient":"c08-room","handler":"c08-a","classification":"scoped_reply","max_remaining_depth":4,"max_remaining_fanout":8},
+    "observerA":{"observer_instance_id":"REPLACE_BOUND_DISPOSABLE_UAR_INSTANCE_A","source":{"provider":"webhook","account":"c08-account","account_kind":"configured_instance","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},"source_profile":"signed_webhook_v1","source_grant_issuer":"c08","source_grant_id":"source-observer-a","recipient_grant_issuer":"c08","recipient_grant_id":"recipient-observer-a","recipient_grant_revision":"1"},
+    "observerB":{"observer_instance_id":"REPLACE_BOUND_DISPOSABLE_UAR_INSTANCE_B","source":{"provider":"webhook","account":"c08-account","account_kind":"configured_instance","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},"source_profile":"signed_webhook_v1","source_grant_issuer":"c08","source_grant_id":"source-observer-b","recipient_grant_issuer":"c08","recipient_grant_id":"recipient-observer-b","recipient_grant_revision":"1"},
+    "observerDenied":{"observer_instance_id":"REPLACE_BOUND_DISPOSABLE_UAR_INSTANCE_DENIED","source":{"provider":"webhook","account":"c08-account","account_kind":"configured_instance","workspace":"c08-disposable","room":"c08-room","thread":null,"sender":"c08-sender"},"source_profile":"signed_webhook_v1","source_grant_issuer":"c08","source_grant_id":"source-observer-denied-missing","recipient_grant_issuer":"c08","recipient_grant_id":"recipient-observer-denied","recipient_grant_revision":"1"}
+  },
+  "plan": [
+    {"id":"startUar","kind":"start_process","process":"uar"},
+    {"id":"startGate","kind":"start_process","process":"gate"},
+    {"id":"startFabric","kind":"start_process","process":"fabric"},
+    {"id":"startBossA","kind":"start_process","process":"bossA"},
+    {"id":"startBossB","kind":"start_process","process":"bossB"},
+    {"id":"probeGate","kind":"probe","service":"gate"},
+    {"id":"probeFabric","kind":"probe","service":"fabric"},
+    {"id":"probeUar","kind":"probe","service":"uar"},
+    {"id":"probeBossA","kind":"probe","service":"bossA"},
+    {"id":"probeBossB","kind":"probe","service":"bossB"},
+    {"id":"grantHandlerA","kind":"grant","specification":{"ref":"constants.handlerGrantA"}},
+    {"id":"grantReplyA","kind":"grant","specification":{"ref":"constants.replyGrantA"}},
+    {"id":"configureA","kind":"configure_webhook","host":"bossA","instanceName":"c08-account","handler":"REPLACE_CREATED_BOSS_AGENT_A_UUID","values":{"WEBHOOK_SECRET":{"env":"C08_WEBHOOK_SECRET"},"WEBHOOK_LISTEN_PORT":"18453","WEBHOOK_LISTEN_PATH":"/webhook","WEBHOOK_DURABLE_PROFILE":"1","WEBHOOK_ACCOUNT_ID":"c08-account"}},
+    {"id":"configureB","kind":"configure_webhook","host":"bossB","instanceName":"c08-account","handler":"REPLACE_CREATED_BOSS_AGENT_B_UUID","values":{"WEBHOOK_SECRET":{"env":"C08_WEBHOOK_SECRET"},"WEBHOOK_LISTEN_PORT":"18454","WEBHOOK_LISTEN_PATH":"/webhook","WEBHOOK_DURABLE_PROFILE":"1","WEBHOOK_ACCOUNT_ID":"c08-account"}},
+    {"id":"qualifiedA","kind":"probe","service":"bossA","requireQualified":true},
+    {"id":"qualifiedB","kind":"probe","service":"bossB","requireQualified":true},
+    {"id":"conflict","kind":"race_ingress","hosts":["bossA","bossB"],"input":{"workspace_id":"c08-disposable","room_id":"c08-conflict-room","thread_id":null,"sender_id":"c08-sender","message":"C08 disposable equal-priority mention.","metadata":{"mention_names":["c08-a","c08-b"]}}},
+    {"id":"selected","kind":"ingress","host":"bossA","input":{"ref":"constants.native"}},
+    {"id":"selectedObserved","kind":"wait","condition":"dispatch_completed","input":{"ref":"steps.selected.result.input"}},
+    {"id":"conflictFinal","kind":"snapshot"},
+    {"id":"callbackA","kind":"wait_callback","input":{"ref":"steps.selected.result.input"}},
+    {"id":"beforeEcho","kind":"snapshot"},
+    {"id":"echo","kind":"ingress","host":"bossA","echoAction":{"ref":"steps.callbackA.result.action.action_id"},"input":{"ref":"constants.native"}},
+    {"id":"replay","kind":"ingress","host":"bossB","input":{"ref":"steps.selected.result.input"}},
+    {"id":"echoQuiet","kind":"observe_no_repost","input":{"ref":"steps.selected.result.input"},"observationMs":3000},
+    {"id":"crossScopeSource","kind":"ingress","host":"bossA","input":{"workspace_id":"c08-disposable","room_id":"c08-other-room","thread_id":null,"sender_id":"c08-sender","message":"C08 disposable second-room reply attempt.","metadata":{"mention_names":["c08-a"]}}},
+    {"id":"crossScopeObserved","kind":"wait","condition":"reply_terminal","input":{"ref":"steps.crossScopeSource.result.input"}},
+    {"id":"scopeDenial","kind":"gate_evaluate","input":{"ref":"steps.crossScopeSource.result.input"},"action":"scoped_reply","recipient":"c08-other-room","handler":"c08-a","classification":"scoped_reply","grantIssuer":"c08","grantId":"reply-a"},
+    {"id":"crossScopeQuiet","kind":"observe_no_repost","input":{"ref":"steps.crossScopeSource.result.input"},"observationMs":3000},
+    {"id":"foreignReference","kind":"ingress","host":"bossA","referenceAction":{"ref":"steps.callbackA.result.action.action_id"},"input":{"workspace_id":"c08-disposable","room_id":"c08-other-room","thread_id":null,"sender_id":"c08-sender","message":"C08 disposable foreign native reply reference.","metadata":{"mention_names":["c08-a"]}}},
+    {"id":"foreignQuiet","kind":"observe_no_repost","input":{"ref":"steps.foreignReference.result.input"},"observationMs":3000},
+    {"id":"replyFinal","kind":"snapshot"}
+  ],
+  "scenarios": {
+    "handlerConflictAndRecipient":{"conflict":"conflict","selected":"selected","handler":"c08-a","final":"conflictFinal"},
+    "replyEchoAndScope":{"source":"selected","callback":"callbackA","beforeEcho":"beforeEcho","echo":"echo","quiet":"echoQuiet","crossScopeSource":"crossScopeSource","crossScopeQuiet":"crossScopeQuiet","scopeDenial":"scopeDenial","final":"replyFinal"}
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-09-30T20:42:10.214Z",
+  "status": "local-cutover-complete",
+  "migration": {
+    "schemaVersion": 3,
+    "migrated": true,
+    "backup": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/backups/v2-609-a28be451-a894-44a9-a587-0264275a8752",
+    "legacyEvidence": "preserved; missing observations remain unknown",
+    "commandId": "delivery-cadence-pipeline-migrate-v3-20260930"
+  },
+  "configurationBackup": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/backups/pipeline-cutover-1790800922981",
+  "runId": "adcf4ebd-9fa7-4880-99ae-7545b6bd6bdf",
+  "schemaVersionAfter": 3,
+  "successfulDeliveries": 5,
+  "activeIterationId": null,
+  "publicationDue": true,
+  "obligations": [
+    {
+      "id": "3aa9f8fd-78d2-462f-9584-4f934cabd914",
+      "candidateId": "legacy-34d31856-96c5-402f-a5d2-cada5b66c8e7",
+      "iterationId": "34d31856-96c5-402f-a5d2-cada5b66c8e7",
+      "dueAt": null,
+      "createdAt": "2026-09-30T20:42:06.439Z",
+      "dueOrdinal": 5,
+      "reasons": [
+        "legacy-publication-debt"
+      ],
+      "policy": {
+        "mode": "every",
+        "every": 2,
+        "platforms": [
+          "darwin-arm64",
+          "darwin-x64",
+          "win32-x64",
+          "win32-arm64"
+        ],
+        "websiteUrl": "https://the-boss.know-me.tools",
+        "procedure": {
+          "repository": "Prometheus-AGS/the-boss",
+          "workflow": "the-boss-release.yml",
+          "profile": "uar-enabled",
+          "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+          "requiredInputs": [
+            "release_version",
+            "release_profile",
+            "platforms",
+            "uar_win32_x64_record_url",
+            "uar_win32_arm64_record_url",
+            "uar_darwin_arm64_record_url",
+            "uar_darwin_x64_record_url"
+          ],
+          "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+          "landingRepository": "Know-Me-Tools/boss-landing-spot",
+          "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+        },
+        "requireMetadata": true,
+        "acceptancePlatforms": []
+      },
+      "policyDigest": "565c809a2bf04be8d8ac4a490c36da5ac9dd1c54a7f298a160f5aefd7cbd2ef0",
+      "opportunityId": null,
+      "requiredEffects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ],
+      "coveredScopes": {
+        "tasks": [
+          "C09.4"
+        ],
+        "changes": [
+          "afc-c09-bounded-teams-and-shared-task-board"
+        ],
+        "phases": [],
+        "outcomes": [
+          "A coordinator delegates to a worker at capacity one, yields safely, and resumes exactly once with the worker result in The Boss"
+        ],
+        "deliveryClass": "cooperating-team-runtime-and-settings",
+        "owners": [
+          "boss-runtime",
+          "boss-desktop",
+          "boss-provider",
+          "boss-lead"
+        ]
+      },
+      "attemptIds": [],
+      "receiptIds": [],
+      "disposition": "pending",
+      "provenance": {
+        "type": "legacy-publication-debt",
+        "sourceVersion": 2,
+        "previousSeq": 609
+      },
+      "missing": [
+        "reconcile-legacy-publication-evidence"
+      ]
+    }
+  ],
+  "nextCount": 7,
+  "profileSha256": "823653391dc49495d13f903735e55d96e201db7614dd61fb4e77da8f0d5a38f2",
+  "nativeWindows": "pending-no-runner",
+  "publisher": "blocked-capabilities; observed partial v2.2.9 publication does not clear debt",
+  "scope": "No new product delivery credited; no Boss code or Obsidian files changed"
+}

@@ -39,3 +39,12 @@ The implementation MUST satisfy all assigned report acceptance clauses below; so
 
 - **WHEN** this capability is evaluated for a supported profile
 - **THEN** the acceptance evidence identifies each applicable clause above, the exact source/policy/dependency revisions and the observed outcome; any unproven mandatory clause keeps that profile unsupported.
+
+### Requirement: Desktop delivery cadence and partial coverage
+
+Every completed desktop increment MUST include the local Mac ARM64 build, packaged launch and operation of its newly delivered function; a clock tick alone MUST NOT authorize unfinished functionality as a delivery. Full publication SHALL occur every second successful delivery for macOS ARM64/x64 and Windows x64/ARM64, excluding Linux. Ready platforms SHALL publish promptly with exact GitHub artifacts, metadata and website receipts; the four-platform obligation remains outstanding until all required receipts exist. Installed acceptance SHALL remain separately tracked and SHALL NOT itself block publication scheduling or independent development. Historical publication debt and prior evidence MUST survive rescheduling. C18.1 remains deferred; relevant C18.2 recovery and C18.3 provenance/reporting accompany increments without completing the broader mode matrix or benchmarks.
+
+#### Scenario: Partial platform publication while work continues
+
+- **WHEN** a completed local delivery makes full publication due and some platform artifacts finish before others
+- **THEN** ready artifacts and matching website links publish without replacing pending platforms with unsupported links, outstanding platform receipts and installed acceptance remain visible, and independent work continues only within the approved frozen-input pipeline limits.

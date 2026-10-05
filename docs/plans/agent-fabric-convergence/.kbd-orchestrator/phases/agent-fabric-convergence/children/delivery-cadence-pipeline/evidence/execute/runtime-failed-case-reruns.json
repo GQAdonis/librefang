@@ -1,0 +1,246 @@
+[
+  {
+    "name": "cancel-and-physical-collision",
+    "status": "passed",
+    "args": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/dist/plugins/codex/prometheus-skill-pack/skills/delivery-cadence/scripts/cadence.mjs",
+      "checkpoint",
+      "--root",
+      "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-cancel-a",
+      "--input",
+      "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/requests/cancel-build-corrected.json",
+      "--command-id",
+      "cancel-build-corrected"
+    ],
+    "exitCode": 1,
+    "result": {
+      "id": "build",
+      "attemptId": "aba18912-1365-4e23-8456-0b970f8c2d2f",
+      "candidateId": "8e381818-84f4-4113-b087-8caafea30e1d",
+      "commandId": "cancel-build-corrected",
+      "kind": "build",
+      "purpose": "build",
+      "status": "cancelled",
+      "startedAt": "2026-09-30T20:30:04.349Z",
+      "sourceRefs": [
+        {
+          "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel",
+          "revision": "4ebdc72a964df9eb549a67f625abddbe701cc276",
+          "fingerprint": "2ced74d362fbd0d503f6bff21c392ed3acf59d0296f9baa206e6917857178533"
+        }
+      ],
+      "contentManifestDigest": "fa7cc800bc840a45b3fae2b93bf770218eff3d280b6b3f80fad97444569595a7",
+      "reason": "Exercise owned process cancellation after expected-failure harness correction",
+      "configuredTimeoutMs": 14400000,
+      "requestedTimeoutMs": 14400000,
+      "command": "node",
+      "args": [
+        "build.mjs"
+      ],
+      "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel",
+      "hostname": "Traviss-MacBook-Pro-4.local",
+      "processStopped": true,
+      "exitCode": null,
+      "signal": "SIGKILL",
+      "finishedAt": "2026-09-30T20:30:05.205Z",
+      "logPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-cancel-a/attempts/aba18912-1365-4e23-8456-0b970f8c2d2f/output.log",
+      "operationToken": "[REDACTED]"
+    },
+    "collision": {
+      "id": "build",
+      "attemptId": "0bcb1047-53e7-40d6-b2ca-9d305e811e97",
+      "candidateId": "e053674e-bd02-48e3-922f-22722f2df078",
+      "commandId": "9b95d27a-7ed8-4a3a-b9dc-0a2aeeb0c5f7",
+      "kind": "build",
+      "purpose": "build",
+      "status": "failed",
+      "startedAt": "2026-09-30T20:30:04.593Z",
+      "sourceRefs": [
+        {
+          "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel",
+          "revision": "4ebdc72a964df9eb549a67f625abddbe701cc276",
+          "fingerprint": "2ced74d362fbd0d503f6bff21c392ed3acf59d0296f9baa206e6917857178533"
+        }
+      ],
+      "contentManifestDigest": "fa7cc800bc840a45b3fae2b93bf770218eff3d280b6b3f80fad97444569595a7",
+      "reason": "Physical output /private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-cancel is reserved by b7cb4059-a44c-4a55-b90f-c2dfd04af64e/aba18912-1365-4e23-8456-0b970f8c2d2f; reconcile that owner before reuse",
+      "configuredTimeoutMs": 14400000,
+      "requestedTimeoutMs": 14400000,
+      "command": "node",
+      "args": [
+        "build.mjs"
+      ],
+      "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel",
+      "hostname": "Traviss-MacBook-Pro-4.local",
+      "finishedAt": "2026-09-30T20:30:04.837Z",
+      "processStopped": true,
+      "operationToken": "[REDACTED]"
+    },
+    "resourceReleased": true,
+    "observedAt": "2026-09-30T20:30:05.480Z"
+  },
+  {
+    "name": "interrupted-owner-unknown-and-explicit-recovery",
+    "status": "passed",
+    "duplicate": {
+      "id": "5650fec6-3712-4c38-9ed7-34559b78661a",
+      "commandId": "runtime-interrupted",
+      "candidateId": "6badadaa-e9c8-4d7c-b2a1-5a90f6fc7d75",
+      "iterationId": "bbe57ee9-4e48-44e3-9cee-0f8732b0da71",
+      "kind": "build",
+      "operationToken": "[REDACTED]",
+      "state": "unknown",
+      "claimedAt": "2026-09-30T20:29:10.287Z",
+      "owner": {
+        "pid": 29849,
+        "hostname": "Traviss-MacBook-Pro-4.local"
+      },
+      "contractDigest": "3442daebdc885f5aa426026e906062c1b540abf0e7129040265104e1faf0e850",
+      "contentManifestDigest": "e5d049e65e4ad7bfb5981e99ba3a7831db8b56521bc258b5d96e93b0b2c5e9a4",
+      "command": {
+        "id": "build",
+        "kind": "build",
+        "command": "node",
+        "args": [
+          "build.mjs"
+        ],
+        "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+        "outputRoots": [
+          "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist"
+        ],
+        "timeoutMs": 14400000
+      },
+      "sourceRefs": [
+        {
+          "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+          "revision": "4cf365661c075b3425643289ce992cb16e3e0611",
+          "fingerprint": "c0f50e8ca0ca6534067212265ba995bb3f74a3ff59d7091f994797c1087e455d"
+        }
+      ],
+      "resourcePaths": [
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist"
+      ],
+      "registry": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/resources",
+      "requestedTimeoutMs": 14400000,
+      "resourceClaims": [
+        {
+          "schemaVersion": 1,
+          "key": "[REDACTED]",
+          "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt",
+          "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
+          "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
+          "operationToken": "[REDACTED]",
+          "owner": {
+            "pid": 29849,
+            "hostname": "Traviss-MacBook-Pro-4.local"
+          },
+          "hostname": "Traviss-MacBook-Pro-4.local",
+          "registry": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources",
+          "claimedAt": "2026-09-30T20:29:10.645Z"
+        },
+        {
+          "schemaVersion": 1,
+          "key": "[REDACTED]",
+          "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt/dist",
+          "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
+          "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
+          "operationToken": "[REDACTED]",
+          "owner": {
+            "pid": 29849,
+            "hostname": "Traviss-MacBook-Pro-4.local"
+          },
+          "hostname": "Traviss-MacBook-Pro-4.local",
+          "registry": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources",
+          "claimedAt": "2026-09-30T20:29:10.665Z"
+        }
+      ],
+      "pid": 30384,
+      "startedAt": "2026-09-30T20:29:10.766Z"
+    },
+    "recovered": {
+      "id": "5650fec6-3712-4c38-9ed7-34559b78661a",
+      "commandId": "runtime-interrupted",
+      "candidateId": "6badadaa-e9c8-4d7c-b2a1-5a90f6fc7d75",
+      "iterationId": "bbe57ee9-4e48-44e3-9cee-0f8732b0da71",
+      "kind": "build",
+      "operationToken": "[REDACTED]",
+      "state": "failed",
+      "claimedAt": "2026-09-30T20:29:10.287Z",
+      "owner": {
+        "pid": 29849,
+        "hostname": "Traviss-MacBook-Pro-4.local"
+      },
+      "contractDigest": "3442daebdc885f5aa426026e906062c1b540abf0e7129040265104e1faf0e850",
+      "contentManifestDigest": "e5d049e65e4ad7bfb5981e99ba3a7831db8b56521bc258b5d96e93b0b2c5e9a4",
+      "command": {
+        "id": "build",
+        "kind": "build",
+        "command": "node",
+        "args": [
+          "build.mjs"
+        ],
+        "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+        "outputRoots": [
+          "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist"
+        ],
+        "timeoutMs": 14400000
+      },
+      "sourceRefs": [
+        {
+          "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+          "revision": "4cf365661c075b3425643289ce992cb16e3e0611",
+          "fingerprint": "c0f50e8ca0ca6534067212265ba995bb3f74a3ff59d7091f994797c1087e455d"
+        }
+      ],
+      "resourcePaths": [
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt",
+        "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist"
+      ],
+      "registry": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/resources",
+      "requestedTimeoutMs": 14400000,
+      "resourceClaims": [
+        {
+          "schemaVersion": 1,
+          "key": "[REDACTED]",
+          "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt",
+          "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
+          "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
+          "operationToken": "[REDACTED]",
+          "owner": {
+            "pid": 29849,
+            "hostname": "Traviss-MacBook-Pro-4.local"
+          },
+          "hostname": "Traviss-MacBook-Pro-4.local",
+          "registry": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources",
+          "claimedAt": "2026-09-30T20:29:10.645Z"
+        },
+        {
+          "schemaVersion": 1,
+          "key": "[REDACTED]",
+          "physicalPath": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt/dist",
+          "runId": "be71d6ba-ef62-4b36-a93d-49171c451e88",
+          "attemptId": "5650fec6-3712-4c38-9ed7-34559b78661a",
+          "operationToken": "[REDACTED]",
+          "owner": {
+            "pid": 29849,
+            "hostname": "Traviss-MacBook-Pro-4.local"
+          },
+          "hostname": "Traviss-MacBook-Pro-4.local",
+          "registry": "/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources",
+          "claimedAt": "2026-09-30T20:29:10.665Z"
+        }
+      ],
+      "pid": 30384,
+      "startedAt": "2026-09-30T20:29:10.766Z",
+      "recovery": {
+        "path": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-stop-evidence.json",
+        "sha256": "8c9e1daa7d81f341e60e64244be323b627ecb7f085994f192181c8347fbd6e40",
+        "at": "2026-09-30T20:30:06.072Z"
+      }
+    },
+    "evidence": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-stop-evidence.json",
+    "redispatchCount": 0,
+    "observedAt": "2026-09-30T20:30:06.106Z"
+  }
+]

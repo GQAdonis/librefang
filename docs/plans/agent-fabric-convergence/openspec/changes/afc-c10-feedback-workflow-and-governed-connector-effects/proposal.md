@@ -29,3 +29,9 @@ Repositories: universal-agent-runtime, librefang, the-boss, prometheus-skill-pac
 Connector-specific idempotency and regulated-data eligibility are prerequisite evidence; no financial action in first slice.
 
 Acceptance: Real configured test accounts or controlled production-compatible endpoints demonstrate one issue after timeout/restart, no sensitive egress, no replay posts, no issue-to-implementation auto-authorization.
+
+## Approved customer-priority revision — 2026-10-05
+
+C10.1 remains complete. The operator reschedules C10.2 before further connector work. GitHub issue effects and C10.3 feedback progression follow Teams in Work, reusable team configuration, shared BossFang/UAR integration and the MiniApp. Notion, Slack and Jira adapter coverage remains pending outside the customer milestone; shipping GitHub cannot complete all of C10.2. The first customer feedback profile requires explicit approval of the issue draft. Scoped standing authorization remains separate retained coverage. Reuse the selected UAR workflow owner; do not reopen substrate selection.
+
+Delivery evidence maps to the original task IDs; partial delivery is not whole-task completion. The parent phase plan and delivery coverage map select bounded repository-owned work. Complete production wiring, UI, strings, persistence and packaged inputs before the build-and-operate boundary; no per-edit verification loop.

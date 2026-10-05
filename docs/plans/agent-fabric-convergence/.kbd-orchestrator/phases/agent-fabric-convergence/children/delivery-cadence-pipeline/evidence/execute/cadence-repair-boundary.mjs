@@ -1,0 +1,15 @@
+import path from 'node:path';import fs from 'node:fs/promises';
+import {root,full,fixture,init,prepare,command,write,assert,receipt,complete} from './cadence-pipeline-operations.mjs';
+const a=await fixture('repair-a'),b=await fixture('repair-b'),state=path.join(root,'repair-state');
+const read=()=>fs.readFile(path.join(state,'state.json'),'utf8').then(JSON.parse);
+await init(state,a);await command(full,state,'start',{scope:a.scope,featureOperation:a.featureOperation,sourceRefs:a.sourceRefs});await write(path.join(a.repo,'data.json'),{value:0});await command(full,state,'ready',{codeComplete:true});let s=await read(),old=s.candidates.at(-1);
+await command(full,state,'work-ahead admit',{id:'dependent',predecessorCandidateId:old.id,authorityRefs:['operator:boundary'],canonicalScopeRefs:['fixture:dependent'],owner:'lead',ownedPaths:[b.repo],scope:b.scope,featureOperation:b.featureOperation,baseSourceRefs:b.sourceRefs,checkoutRoots:[b.repo],outputRoots:[path.join(b.repo,'dist')],checkpoints:b.checkpoints,dependencyClass:'depends-on-predecessor'});
+await command(full,state,'checkpoint',{id:'build'});await command(full,state,'checkpoint',{id:'launch'});await command(full,state,'checkpoint',{id:'feature'},'expected-operation-failure',false);
+await command(full,state,'work-ahead start',{id:'dependent'},'refuse-dependent',false);
+await write(path.join(a.repo,'data.json'),{value:5});await command(full,state,'ready',{codeComplete:true});await complete(state,a);
+await command(full,state,'work-ahead start',{id:'dependent'});await command(full,state,'work-ahead promote',{id:'dependent'},'unreconciled-promote',false);
+s=await read();const repaired=s.candidates.at(-1);assert(old.id!==repaired.id,'repair did not freeze new candidate');
+await command(full,state,'work-ahead reconcile',{id:'dependent',candidateId:repaired.id,baseSourceRefs:b.sourceRefs,authorityRefs:['operator:repair'],evidenceRef:'fixture:actual-repaired-operation'});
+await command(full,state,'work-ahead promote',{id:'dependent'});
+s=await read();assert(s.iterations[0].checkpoints.some(c=>c.status==='failed'&&c.invalidatedAt),'failed history lost');
+await receipt('repair-priority',{status:'passed',state,oldCandidate:old.id,repairedCandidate:repaired.id,detail:'Real failed operation, dependent start refused, changed-source repair, explicit base reconciliation before promotion'});

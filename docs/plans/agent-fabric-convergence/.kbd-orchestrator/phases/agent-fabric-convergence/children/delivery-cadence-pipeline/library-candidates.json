@@ -1,0 +1,258 @@
+{
+  "phase": "delivery-cadence-pipeline",
+  "generated_at": "2026-09-30T19:23:51.664Z",
+  "research_budget": {
+    "max_queries_per_tier": 8,
+    "max_minutes": 20,
+    "queries_used": {
+      "tier_1": 7,
+      "tier_2": 7,
+      "tier_3": 3,
+      "tier_4": 0
+    }
+  },
+  "gaps_addressed": [
+    "Admission during local build",
+    "Full-platform build lifecycle",
+    "Publication attribution",
+    "External successful build adoption",
+    "Work-ahead authorization",
+    "Scheduled publication opportunities",
+    "Recovery and children",
+    "Full/mini distribution"
+  ],
+  "candidates": [
+    {
+      "id": "cand-001",
+      "name": "Existing Delivery Cadence engine and shared full/mini payload",
+      "kind": "skeleton",
+      "repo_url": "https://github.com/Prometheus-AGS/prometheus-skill-system",
+      "registry": "none",
+      "fit_for_gap": "Preserve current durable events, fingerprints, gates, hooks and distribution while repairing long transaction locks, work-ahead and publication obligations.",
+      "verdict": "adapt",
+      "license": "MIT",
+      "maintenance": {
+        "baseline_commit": "1ddcc8b21b05f26aa89aa5e19776c86e5b854c96",
+        "skill_version": "1.1.2",
+        "last_release": "Not established; local source baseline only"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/blob/1ddcc8b21b05f26aa89aa5e19776c86e5b854c96/skills/process/delivery-cadence/scripts/lib/storage.mjs",
+          "claim": "Local source at the linked baseline has exclusive run.lock ownership, sequenced events, snapshot writes and explicit interrupted-tail recovery; withLock awaits the entire supplied action."
+        },
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/blob/1ddcc8b21b05f26aa89aa5e19776c86e5b854c96/skills/process/delivery-cadence/scripts/lib/engine.mjs",
+          "claim": "Assessment source audit locates global publication admission, one active iteration, long checkpoint ownership, and publication attributed to the newest successful iteration."
+        },
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/prometheus-skill-system/blob/1ddcc8b21b05f26aa89aa5e19776c86e5b854c96/skills/process/delivery-cadence/scripts/sync-mini.mjs",
+          "claim": "Assessment source audit identifies ownership-digest checks for shared payload copying; retain this distribution seam."
+        }
+      ],
+      "risks": [
+        "Removing publicationDue alone does not solve local-build locking or preserve debt attribution.",
+        "A fingerprint does not isolate a mutable checkout.",
+        "Shortening transactions requires reload/revision checks before reconciliation; never overwrite concurrent state from an old snapshot.",
+        "Full, mini and installed copies differ; do not overwrite user changes."
+      ],
+      "decision_rationale": "Closest fit to the observed problem, no new daemon or runtime dependency. Extend the existing domain contract rather than replace its persistence or lifecycle."
+    },
+    {
+      "id": "cand-002",
+      "name": "Existing The Boss GitHub Actions release workflow",
+      "kind": "skeleton",
+      "repo_url": "https://github.com/Prometheus-AGS/the-boss",
+      "registry": "none",
+      "fit_for_gap": "Reuse existing native platform jobs and per-platform publication machinery as externally reconciled attempts.",
+      "verdict": "adapt",
+      "maintenance": {
+        "baseline_commit": "e2ae2ce21245030293c0bea96ed02ae853b820a7",
+        "runtime_status": "Source inspected; no workflow dispatched or verified"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/Prometheus-AGS/the-boss/blob/e2ae2ce21245030293c0bea96ed02ae853b820a7/.github/workflows/the-boss-release.yml",
+          "claim": "Clean local file defines platform matrix build jobs, immutable sidecar-record inputs, installer manifests, repository_dispatch callbacks and serialized metadata/site publication."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency",
+          "claim": "Default concurrency retains only one pending run; queue:max increases pending capacity, but wait order is not dispatch order."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://docs.github.com/en/actions/tutorials/store-and-share-data",
+          "claim": "Workflow artifacts can be transferred between jobs and version-4 artifacts are immutable; automatic digest mismatch validation produces a warning, not a mandatory failing gate."
+        }
+      ],
+      "risks": [
+        "Current publication group omits queue:max; do not treat received callbacks as a durable accounting of all platforms.",
+        "Publisher checks the current branch application version; protect version-changing promotion while its prior release is owed.",
+        "Workflow availability does not prove candidate identity, platform acceptance, website freshness or successful dispatch recovery.",
+        "Remote jobs do not satisfy the mandatory actual local Mac package and new-function operation."
+      ],
+      "decision_rationale": "Wrap execution references and immutable manifest results into Cadence attempts and obligations. Preserve per-platform incremental publication, one full release at a time and existing publisher-branch contract; no workflow replacement."
+    },
+    {
+      "id": "cand-003",
+      "name": "p-queue",
+      "kind": "library",
+      "repo_url": "https://github.com/sindresorhus/p-queue",
+      "registry": "npm",
+      "fit_for_gap": "Optional promise concurrency and admission backpressure inside one already-running Node process.",
+      "verdict": "reference",
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "2026-07-22T12:15:04.757Z",
+        "open_issues": 7,
+        "stable_version": "9.3.3",
+        "node_engine": ">=20",
+        "module_type": "module",
+        "observed_on": "2026-09-30",
+        "downloads": "Not queried"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/sindresorhus/p-queue",
+          "claim": "Repository search identifies a promise-concurrency queue."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://github.com/sindresorhus/p-queue/blob/main/readme.md",
+          "claim": "Native ESM queue exposes saturation and queue-size backpressure; its documented unit is an in-process promise task."
+        },
+        {
+          "tier": 3,
+          "source_url": "https://registry.npmjs.org/p-queue/9.3.3",
+          "claim": "Registry reports stable 9.3.3, MIT, ESM and Node >=20, compatible with the declared Node 22+ floor."
+        }
+      ],
+      "risks": [
+        "Does not itself supply durable cross-process attempt ownership or restart reconciliation.",
+        "Adding a long-lived queue owner would conflict with the no-new-daemon requirement.",
+        "Would not resolve the currently observed transaction/candidate/publication domain coupling."
+      ],
+      "decision_rationale": "Useful reference for bounded admission; do not install for this repair. Reconsider only if implementation exposes a concrete within-process queue requirement not already served by the existing harness."
+    },
+    {
+      "id": "cand-004",
+      "name": "proper-lockfile",
+      "kind": "library",
+      "repo_url": "https://github.com/moxystudio/node-proper-lockfile",
+      "registry": "npm",
+      "fit_for_gap": "Filesystem mutual exclusion and stale-lock detection as a primitive, not durable build ownership.",
+      "verdict": "reference",
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "2021-01-25T18:55:18.544Z",
+        "open_issues": 21,
+        "stable_version": "4.1.2",
+        "node_engine": "No engines constraint published in inspected npm metadata",
+        "observed_on": "2026-09-30",
+        "downloads": "Not queried"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/moxystudio/node-proper-lockfile/blob/v4.1.2/README.md",
+          "claim": "Tagged documentation describes mkdir locks, mtime renewal, compromised callbacks, and limitations when locks are manually removed or contenders use inconsistent stale/update settings."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://github.com/moxystudio/node-proper-lockfile/blob/master/lib/lockfile.js",
+          "claim": "Context7 exposes heartbeat implementation and compromised detection, but reported numeric defaults differ between code and README; no timing setting is adopted here."
+        },
+        {
+          "tier": 3,
+          "source_url": "https://registry.npmjs.org/proper-lockfile/4.1.2",
+          "claim": "Latest published version is 4.1.2, MIT, released in January 2021; runtime compatibility with this project's Windows/Node 22+ path remains unexercised."
+        }
+      ],
+      "risks": [
+        "A stalled coordinator heartbeat does not prove its compiler or publisher child process stopped.",
+        "Lock expiry alone cannot fence stale operation results or prevent an external publication side effect.",
+        "Old latest release is a maintenance signal, not proof of abandonment or incompatibility."
+      ],
+      "decision_rationale": "Retain existing lock primitive for the bounded repair unless an observed deficiency requires replacement. Use the documented failure cases to distinguish transaction locks from operation/resource ownership; no new dependency is justified."
+    },
+    {
+      "id": "cand-005",
+      "name": "BullMQ",
+      "kind": "framework",
+      "repo_url": "https://github.com/taskforcesh/bullmq",
+      "registry": "npm",
+      "fit_for_gap": "Durable external job queue with workers, completion events and retries.",
+      "verdict": "reject",
+      "license": "MIT",
+      "maintenance": {
+        "last_release": "2026-09-29T10:34:16.916Z",
+        "open_issues": 388,
+        "stable_version": "6.3.10",
+        "node_engine": ">=14.17.0",
+        "observed_on": "2026-09-30",
+        "downloads": "Not queried"
+      },
+      "evidence": [
+        {
+          "tier": 1,
+          "source_url": "https://github.com/taskforcesh/bullmq/blob/v6.3.10/README.md",
+          "claim": "Current tag documents Redis-backed queue/worker operation and persistence; live repository description also mentions PostgreSQL, which was not evaluated."
+        },
+        {
+          "tier": 2,
+          "source_url": "https://github.com/taskforcesh/bullmq/blob/master/docs/gitbook/guide/connections.md",
+          "claim": "Context7 documents Redis connections for queues and workers; this is not evidence of a daemon-free queue."
+        },
+        {
+          "tier": 3,
+          "source_url": "https://registry.npmjs.org/bullmq/6.3.10",
+          "claim": "Registry stable 6.3.10 is MIT and declares Node >=14.17.0; package compatibility does not satisfy the architecture constraint."
+        }
+      ],
+      "risks": [
+        "Introduces an unapproved external storage service and worker infrastructure.",
+        "Generic job retries cannot establish the safety of replaying uncertain publication effects.",
+        "Replacing Cadence still leaves candidate evidence, KBD authorization and obligation semantics to implement."
+      ],
+      "decision_rationale": "Reject on the no-new-daemon/service boundary, independent of maintenance health. Alternative storage backends do not remove that mismatch."
+    }
+  ],
+  "build_required": [
+    {
+      "need": "Candidate-bound work-ahead authorization and immutable multi-repository input manifest",
+      "why_no_candidate": "Generic queues do not know the approved KBD parent/change, owned files, dependency classification, real start time or complete production boundary.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Short claim/execute/reconcile transactions for local and per-platform operations",
+      "why_no_candidate": "Existing storage is reusable, but stable attempt identity, result ownership/revision checks and reconciliation of unknown external outcomes are Cadence-specific. A queue or lock library alone cannot establish that a previous process stopped.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Candidate-specific publication obligations and monotonic per-platform promotion",
+      "why_no_candidate": "CI serialization is not business release ordering or debt coverage. Preserve incremental platform publication, reconcile missed callbacks and protect the existing publisher branch until owed work finishes.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "External successful build/operation receipt adoption",
+      "why_no_candidate": "Artifact transfer does not prove command, frozen inputs, exit outcome, artifact identity and actual feature operation. Add an import seam satisfying the same candidate gate; retain unknowns and prevent duplicate dispatch.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Combined count-based obligations and scheduled meaningful-release opportunities",
+      "why_no_candidate": "The existing every-two-successful-deliveries policy must remain; session/CI evaluation needs explicit cutoff, eligible delta, skip/hold and debt semantics. No new calendar daemon is needed or permitted.",
+      "capability_gap_id": null
+    },
+    {
+      "need": "Compatible state migration, full/mini parity and overlap/backlog reporting",
+      "why_no_candidate": "Existing distribution and event primitives can be adapted, but library installation cannot preserve this project's historical evidence, installed-copy ownership or explain unaccepted/pending delivery states.",
+      "capability_gap_id": null
+    }
+  ]
+}

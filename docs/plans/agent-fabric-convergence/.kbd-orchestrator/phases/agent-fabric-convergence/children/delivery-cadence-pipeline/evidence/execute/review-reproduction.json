@@ -1,0 +1,12 @@
+{
+  "claimedCommand": {
+    "reproduced": true,
+    "effects": 2,
+    "state": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/claim-review-state"
+  },
+  "childEvidence": {
+    "reproduced": true,
+    "wrongPhaseAccepted": true,
+    "state": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/child-review-state"
+  }
+}

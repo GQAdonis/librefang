@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "reviewType": "scoped-correction-disposition",
+  "initialFindings": "findings.json",
+  "verdict": "PASS",
+  "judge_model": "gpt-5.6-sol",
+  "isolation_mode": "harness-native",
+  "producer_model": "GPT-6 exact identity unavailable",
+  "cross_model_check": "unverified-producer-exact-identity",
+  "scope": "Corrections for the three original CRITICAL findings only; no full re-review",
+  "dispositions": [
+    {
+      "finding": 1,
+      "originalFile": "engine.mjs",
+      "status": "RESOLVED",
+      "evidence": "engine.mjs now calls assertCommandReplay before mutation. command-recovery.mjs refuses a claimed command with no terminal result as unknown, permits one retry only after resume records revision-bound evidence that all effects were absent, and changes the recovery to replay-claimed before re-execution. engine.mjs also persists command.failed for observed execution errors. The packaged CLI correction evidence records the formerly duplicating operation as refused/reconciled, and the final 52-file parity receipt confirms the corrected bytes across full and mini source plus Claude and Codex packages.",
+      "residualLimit": "The disposition verifies the corrected interrupted-command contract for the affected operation; it is not a new broad runtime review."
+    },
+    {
+      "finding": 2,
+      "originalFile": "work-ahead.mjs",
+      "status": "RESOLVED",
+      "evidence": "work-ahead.mjs now captures every admitted future checkout root, reconciles only the current repaired candidate through verifyRepairedBase, and rechecks immutable proof and exact checkout fingerprints before promotion. work-ahead-repair.mjs binds the proof to the work-ahead ID, candidate ID/digest, predecessor refs, actual future refs, and one explicit mapping per checkout; ancestor mappings execute git merge-base --is-ancestor and reject dirty or nested predecessor content unless exact-snapshot proof is used. repair-proof-fixed-results.json records rejection of missing evidence, wrong roots, unrelated history, and post-proof drift, followed by successful promotion of the actual repaired descendant while preserving firstWorkAt. The final parity receipt confirms the module and caller across all six payload roots.",
+      "residualLimit": "Dirty or nested repaired sources require exact-snapshot proof or explicit follow-up; ancestry-only proof is intentionally refused."
+    },
+    {
+      "finding": 3,
+      "originalFile": "children.mjs",
+      "status": "RESOLVED",
+      "evidence": "children.mjs now rejects return evidence when either doc.childId or doc.phaseId differs from the active child, so both identities must match before criteria, completion, and return state are accepted. The packaged CLI correction evidence records mismatched child evidence as refused, and the final parity receipt confirms the corrected predicate across all six payload roots.",
+      "residualLimit": "The disposition covers the original evidence-identity bypass only."
+    }
+  ],
+  "verification": {
+    "reviewMethod": "Source and supplied affected-operation evidence inspection only",
+    "testsRunByReviewer": false,
+    "affectedOperationEvidence": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/repair-proof-fixed-results.json",
+    "distributionParityReceipt": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/adapter-final-review-parity.json",
+    "distributionPayloadDigest": "8fda63d5726490aa828a7d1317682343d7b474ad77f07489563c96870f211e91"
+  }
+}

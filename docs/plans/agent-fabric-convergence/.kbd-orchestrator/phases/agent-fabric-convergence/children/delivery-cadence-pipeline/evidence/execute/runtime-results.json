@@ -1,0 +1,161 @@
+[
+  {
+    "name": "cancel-and-physical-collision",
+    "status": "failed",
+    "error": "Error: checkpoint: {\n  \"id\": \"build\",\n  \"attemptId\": \"c7d6b7cd-b0f3-424e-b451-867520f3bcc5\",\n  \"candidateId\": \"e053674e-bd02-48e3-922f-22722f2df078\",\n  \"commandId\": \"4df4de65-3500-4762-84db-ebd2e77d07b5\",\n  \"kind\": \"build\",\n  \"purpose\": \"build\",\n  \"status\": \"failed\",\n  \"startedAt\": \"2026-09-30T20:29:06.308Z\",\n  \"sourceRefs\": [\n    {\n      \"repository\": \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel\",\n      \"revision\": \"4ebdc72a964df9eb549a67f625abddbe701cc276\",\n      \"fingerprint\": \"2ced74d362fbd0d503f6bff21c392ed3acf59d0296f9baa206e6917857178533\"\n    }\n  ],\n  \"contentManifestDigest\": \"fa7cc800bc840a45b3fae2b93bf770218eff3d280b6b3f80fad97444569595a7\",\n  \"reason\": \"Physical output /private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-cancel is reserved by b7cb4059-a44c-4a55-b90f-c2dfd04af64e/fc9e619b-bcc8-4a2f-b3b8-92a23d121c49; reconcile that owner before reuse\",\n  \"configuredTimeoutMs\": 14400000,\n  \"requestedTimeoutMs\": 14400000,\n  \"command\": \"node\",\n  \"args\": [\n    \"build.mjs\"\n  ],\n  \"cwd\": \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-cancel\",\n  \"hostname\": \"Traviss-MacBook-Pro-4.local\",\n  \"finishedAt\": \"2026-09-30T20:29:06.718Z\",\n  \"processStopped\": true,\n  \"operationToken\": \"1dc0e91d-a451-464e-9ccc-2dc3a22c3ba4\"\n}\n\n    at command (file:///private/tmp/cadence-pipeline-operations.mjs:12:296)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n    at async file:///private/tmp/cadence-runtime-boundary.mjs:11:468\n    at async scenario (file:///private/tmp/cadence-runtime-boundary.mjs:10:76)\n    at async file:///private/tmp/cadence-runtime-boundary.mjs:11:1",
+    "observedAt": "2026-09-30T20:29:06.844Z"
+  },
+  {
+    "name": "interrupted-owner-unknown-and-explicit-recovery",
+    "status": "failed",
+    "error": "Error: checkpoint: {\n  \"id\": \"5650fec6-3712-4c38-9ed7-34559b78661a\",\n  \"commandId\": \"runtime-interrupted\",\n  \"candidateId\": \"6badadaa-e9c8-4d7c-b2a1-5a90f6fc7d75\",\n  \"iterationId\": \"bbe57ee9-4e48-44e3-9cee-0f8732b0da71\",\n  \"kind\": \"build\",\n  \"operationToken\": \"9ced905d-7827-4cdb-bd18-407c7aec1668\",\n  \"state\": \"unknown\",\n  \"claimedAt\": \"2026-09-30T20:29:10.287Z\",\n  \"owner\": {\n    \"pid\": 29849,\n    \"hostname\": \"Traviss-MacBook-Pro-4.local\"\n  },\n  \"contractDigest\": \"3442daebdc885f5aa426026e906062c1b540abf0e7129040265104e1faf0e850\",\n  \"contentManifestDigest\": \"e5d049e65e4ad7bfb5981e99ba3a7831db8b56521bc258b5d96e93b0b2c5e9a4\",\n  \"command\": {\n    \"id\": \"build\",\n    \"kind\": \"build\",\n    \"command\": \"node\",\n    \"args\": [\n      \"build.mjs\"\n    ],\n    \"cwd\": \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt\",\n    \"outputRoots\": [\n      \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist\"\n    ],\n    \"timeoutMs\": 14400000\n  },\n  \"sourceRefs\": [\n    {\n      \"repository\": \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt\",\n      \"revision\": \"4cf365661c075b3425643289ce992cb16e3e0611\",\n      \"fingerprint\": \"c0f50e8ca0ca6534067212265ba995bb3f74a3ff59d7091f994797c1087e455d\"\n    }\n  ],\n  \"resourcePaths\": [\n    \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt\",\n    \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-interrupt/dist\"\n  ],\n  \"registry\": \"/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/resources\",\n  \"requestedTimeoutMs\": 14400000,\n  \"resourceClaims\": [\n    {\n      \"schemaVersion\": 1,\n      \"key\": \"3e360de21957ed72c1d56f4377852f5951306a3a42e45f747cb1245f3ff08db0\",\n      \"physicalPath\": \"/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt\",\n      \"runId\": \"be71d6ba-ef62-4b36-a93d-49171c451e88\",\n      \"attemptId\": \"5650fec6-3712-4c38-9ed7-34559b78661a\",\n      \"operationToken\": \"9ced905d-7827-4cdb-bd18-407c7aec1668\",\n      \"owner\": {\n        \"pid\": 29849,\n        \"hostname\": \"Traviss-MacBook-Pro-4.local\"\n      },\n      \"hostname\": \"Traviss-MacBook-Pro-4.local\",\n      \"registry\": \"/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources\",\n      \"claimedAt\": \"2026-09-30T20:29:10.645Z\"\n    },\n    {\n      \"schemaVersion\": 1,\n      \"key\": \"b87d39f8b0609a2f17fd22c23002665627f5f74966380caaf48674ce0b839930\",\n      \"physicalPath\": \"/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/runtime-interrupt/dist\",\n      \"runId\": \"be71d6ba-ef62-4b36-a93d-49171c451e88\",\n      \"attemptId\": \"5650fec6-3712-4c38-9ed7-34559b78661a\",\n      \"operationToken\": \"9ced905d-7827-4cdb-bd18-407c7aec1668\",\n      \"owner\": {\n        \"pid\": 29849,\n        \"hostname\": \"Traviss-MacBook-Pro-4.local\"\n      },\n      \"hostname\": \"Traviss-MacBook-Pro-4.local\",\n      \"registry\": \"/private/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/t/cadence-pipeline-boundary-yul4ts/resources\",\n      \"claimedAt\": \"2026-09-30T20:29:10.665Z\"\n    }\n  ],\n  \"pid\": 30384,\n  \"startedAt\": \"2026-09-30T20:29:10.766Z\"\n}\n\n    at command (file:///private/tmp/cadence-pipeline-operations.mjs:12:296)\n    at async file:///private/tmp/cadence-runtime-boundary.mjs:12:612\n    at async scenario (file:///private/tmp/cadence-runtime-boundary.mjs:10:76)\n    at async file:///private/tmp/cadence-runtime-boundary.mjs:12:1",
+    "observedAt": "2026-09-30T20:29:11.382Z"
+  },
+  {
+    "name": "external-adoption-and-source-refusal",
+    "status": "passed",
+    "receipts": [
+      {
+        "receiptId": "external-build",
+        "producer": "Actual standalone Node CLI",
+        "candidateId": "fd135219-1a98-4a25-9238-0289dfcf9f95",
+        "contentManifestDigest": "20b0dca48c0bd6af1b7645f62b24368f11dd3ca3c02d1e6ba45f27299fec15fb",
+        "sourceRefs": [
+          {
+            "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt",
+            "revision": "3d6b6d6289d4083c48438fff53682f5870a50e10",
+            "fingerprint": "c25e72fcdb15f0817c198be185984f7e783e48bb3533e573d16ba3440daf7a37"
+          }
+        ],
+        "checkpointId": "build",
+        "status": "success",
+        "exitCode": 0,
+        "command": {
+          "command": "node",
+          "args": [
+            "build.mjs"
+          ],
+          "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt"
+        },
+        "recipeDigest": "a6e67e1bc205652047692cb893ff937dd3ff58e683f51f3c2aafa1badd4fa6e7",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt-build.log",
+        "logSha256": "56f6e6304d02d413bb7d5d463ac5cdc58551266dc7269b467fc385815f39b913",
+        "startedAt": "2026-09-30T20:29:14.285Z",
+        "finishedAt": "2026-09-30T20:29:14.354Z",
+        "artifacts": [
+          {
+            "path": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt/dist/app.mjs",
+            "sha256": "e4f5557d6ce3abb8dbf660da36bb44130ed4189db45654ffcc4e4831bd3702ca",
+            "size": 281
+          }
+        ],
+        "id": "build",
+        "attemptId": "625e0f1b-a4a0-4700-a048-b5847b7af54c",
+        "kind": "build",
+        "purpose": "build",
+        "receiptDigest": "1d096abca03c1c18d1c1a97d7a55725337c1c8ba9e64e804f6e3d689134dba79",
+        "receiptPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-adopt/adopted-receipts/1d096abca03c1c18d1c1a97d7a55725337c1c8ba9e64e804f6e3d689134dba79.json",
+        "adoptedAt": "2026-09-30T20:29:14.444Z",
+        "commandId": "734d5f29-270f-46ad-9d67-31c40c2717a6"
+      },
+      {
+        "receiptId": "external-launch",
+        "producer": "Actual standalone Node CLI",
+        "candidateId": "fd135219-1a98-4a25-9238-0289dfcf9f95",
+        "contentManifestDigest": "20b0dca48c0bd6af1b7645f62b24368f11dd3ca3c02d1e6ba45f27299fec15fb",
+        "sourceRefs": [
+          {
+            "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt",
+            "revision": "3d6b6d6289d4083c48438fff53682f5870a50e10",
+            "fingerprint": "c25e72fcdb15f0817c198be185984f7e783e48bb3533e573d16ba3440daf7a37"
+          }
+        ],
+        "checkpointId": "launch",
+        "status": "success",
+        "exitCode": 0,
+        "command": {
+          "command": "node",
+          "args": [
+            "dist/app.mjs"
+          ],
+          "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt"
+        },
+        "recipeDigest": "bc760fea973b8edffae329f190903eee2dafb7fa98370101573fbeb1e5a0b759",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt-launch.log",
+        "logSha256": "46ef88e17c41da5cc0cd057b46d6167f549c0762c12fcc6729537bee72a7733a",
+        "startedAt": "2026-09-30T20:29:14.664Z",
+        "finishedAt": "2026-09-30T20:29:14.715Z",
+        "artifacts": [],
+        "id": "launch",
+        "attemptId": "4061b4d0-9af3-40f2-a12b-ba2cefef8351",
+        "kind": "run",
+        "purpose": "launch",
+        "receiptDigest": "d0f21f49f87b92e36d93dcf3ae0e9133dc622652d734ff5fd6b5b5c29e8eca9e",
+        "receiptPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-adopt/adopted-receipts/d0f21f49f87b92e36d93dcf3ae0e9133dc622652d734ff5fd6b5b5c29e8eca9e.json",
+        "adoptedAt": "2026-09-30T20:29:14.800Z",
+        "commandId": "97aa3627-dd1f-4869-9e5c-3129cadb6cf3"
+      },
+      {
+        "receiptId": "external-feature",
+        "producer": "Actual standalone Node CLI",
+        "candidateId": "fd135219-1a98-4a25-9238-0289dfcf9f95",
+        "contentManifestDigest": "20b0dca48c0bd6af1b7645f62b24368f11dd3ca3c02d1e6ba45f27299fec15fb",
+        "sourceRefs": [
+          {
+            "repository": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt",
+            "revision": "3d6b6d6289d4083c48438fff53682f5870a50e10",
+            "fingerprint": "c25e72fcdb15f0817c198be185984f7e783e48bb3533e573d16ba3440daf7a37"
+          }
+        ],
+        "checkpointId": "feature",
+        "status": "success",
+        "exitCode": 0,
+        "command": {
+          "command": "node",
+          "args": [
+            "dist/app.mjs",
+            "operate"
+          ],
+          "cwd": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt"
+        },
+        "recipeDigest": "7657c7aef17a8979bbf0ac031ef5d0b966e14fe9fabbd3cc0c247bc0ea8b9866",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-adopt-feature.log",
+        "logSha256": "1116cc7ed3b35161d211879f9011422fe987eb35688b764462fe09bf299468d6",
+        "startedAt": "2026-09-30T20:29:14.851Z",
+        "finishedAt": "2026-09-30T20:29:14.911Z",
+        "artifacts": [],
+        "featureOperation": {
+          "id": "runtime-adopt-sum",
+          "operated": true,
+          "evidenceLevel": "local",
+          "targetClassification": "local"
+        },
+        "id": "feature",
+        "attemptId": "c67f85dc-ffb7-4ac5-985e-6080af38686a",
+        "kind": "run",
+        "purpose": "feature",
+        "featureOperationId": "runtime-adopt-sum",
+        "receiptDigest": "4bf9e4914769fb7e184c581b2491e7e20aac78d7727c94258f645fafa26f4db9",
+        "receiptPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-adopt/adopted-receipts/4bf9e4914769fb7e184c581b2491e7e20aac78d7727c94258f645fafa26f4db9.json",
+        "adoptedAt": "2026-09-30T20:29:14.996Z",
+        "commandId": "36f8f718-20c2-4d6d-83d7-cdbfd7f2cfba"
+      }
+    ],
+    "checkpointJobs": 0,
+    "observedAt": "2026-09-30T20:29:15.760Z"
+  },
+  {
+    "name": "actual-v2-migration",
+    "status": "passed",
+    "oldCli": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c03-full-pack/skills/process/delivery-cadence/scripts/cadence.mjs",
+    "backup": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/runtime-state-legacy/backups/v2-2-1aa00904-3d2a-494a-9633-8075cc7fba40",
+    "runId": "715d0937-db30-4457-9f63-2b93691e5db5",
+    "observedAt": "2026-09-30T20:29:16.480Z"
+  }
+]

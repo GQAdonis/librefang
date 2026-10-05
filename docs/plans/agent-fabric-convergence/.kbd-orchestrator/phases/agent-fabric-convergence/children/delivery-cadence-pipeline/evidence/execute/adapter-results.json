@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "platform": "darwin",
+  "node": "v24.21.0",
+  "startedAt": "2026-09-30T20:29:03.952Z",
+  "cases": [
+    {
+      "name": "missing source operation refused",
+      "status": "passed",
+      "message": "{\"error\":\"Operation entrypoint file missing at ready: /var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-pipeline-boundary-yUL4TS/mini-child-operation/absent-operation.mjs\"}\n"
+    },
+    {
+      "name": "nested return and approval waiting preserve parent clock",
+      "status": "passed"
+    },
+    {
+      "name": "copied mini builds launches operates feature and dispatches hooks",
+      "status": "passed",
+      "iterationId": "d58bdfd6-b0ef-4d99-9d0e-f75fd8eec5c7",
+      "successfulDeliveries": 1,
+      "hookResults": [
+        {
+          "receiptId": "593b906bdf28e71e43309cf5956c58da5c1b6d04627ea880848d339084b0febd",
+          "handlerId": "local-receipt",
+          "revision": 1,
+          "status": "succeeded",
+          "reason": "handler-completed"
+        },
+        {
+          "receiptId": "1922ac189e6e16878fe402674c86c75724c8e84d57dd2946ce396b27fbd70c93",
+          "handlerId": "warn-receipt",
+          "revision": 1,
+          "status": "failed",
+          "reason": "handler-reported-no-effects"
+        }
+      ]
+    },
+    {
+      "name": "required hook failure blocks delivery credit",
+      "status": "passed"
+    },
+    {
+      "name": "copied KBD adapter preserves full operation against read-only canonical snapshot",
+      "status": "passed",
+      "phaseId": "agent-fabric-convergence::delivery-cadence-pipeline",
+      "revision": 464
+    }
+  ],
+  "status": "passed",
+  "finishedAt": "2026-09-30T20:29:19.738Z"
+}
