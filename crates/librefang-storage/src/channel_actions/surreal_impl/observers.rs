@@ -231,7 +231,7 @@ impl ChannelActionStore {
                 action_id: action_id.clone(),
                 sequence: subscription.next_sequence,
                 grant_revision: request.grant_revision.clone(),
-                projection_sha256,
+                projection_sha256: projection_sha256.clone(),
                 classification: request.projection.classification.clone(),
                 state: ObserverDeliveryState::Pending,
                 claimant: None,
