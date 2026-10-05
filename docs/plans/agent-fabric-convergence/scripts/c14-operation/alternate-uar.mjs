@@ -8,7 +8,7 @@ import { createServer } from 'node:net'
 import { ipc } from './setup.mjs'
 
 const SOURCE = '5a8fd22e1543ddbd7a182b2557fe94f631117c13'
-const fail = code => { throw new Error(code) }
+const fail = (code,cause) => { throw new Error(code,cause?{cause}:undefined) }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 function jwt(secret, principal) {
   const header = Buffer.from(JSON.stringify({alg:'HS256',typ:'JWT'})).toString('base64url')
@@ -65,15 +65,32 @@ async function prepare({evaluate, signal, binary, binarySha256, sourceCommit, mo
   for(const policy of verifiedPolicies)await writeFile(join(root,'policies',policy.name),policy.bytes,{mode:0o600,flag:'wx'})
   const id='bossfang-alternate-'+randomUUID()
   const selectedPort=await port();const endpoint='http://127.0.0.1:'+selectedPort
+  let grpcPort
+  do{grpcPort=await port()}while(grpcPort===selectedPort)
   const jwtSecret=randomBytes(32).toString('hex'), admin=randomBytes(32).toString('hex')
   const principal='fixture.'+randomUUID();let bearer=jwt(jwtSecret,principal)
   const configFile=join(root,'config.yaml')
   // JSON is valid YAML; this file contains no credential values.
-  await writeFile(configFile,JSON.stringify({server:{host:'127.0.0.1',port:selectedPort},security:{jwt_required:true,settings_mutation_auth_required:true},service_instance:{instance_id:id,ownership:'external',workspace_location:'local',runtime_endpoint:endpoint,administration_endpoint:endpoint,models_endpoint:endpoint},a2a:{instance_id:id},persistence:{provider:'surreal',database_url:'surrealkv://'+join(root,'data','runtime.db')},memory:{enabled:false},skill_evolution:{enabled:false}}))
-  const env={PATH:process.env.PATH,HOME:join(root,'home'),TMPDIR:root,RUST_LOG:'warn',UAR_SERVER__LOG_FORMAT:'json',UAR_SECURITY__JWT_REQUIRED:'true',UAR_SECURITY__JWT_SECRET:jwtSecret,UAR_SECURITY__SETTINGS_ADMIN_KEY:admin,CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('hex'),UAR_BUILTIN_SKILLS_DIR:join(root,'empty-skills'),UAR_NATIVE_TOOLS__FILE_TOOLS_ENABLED:'false',UAR_NATIVE_TOOLS__WEB_FETCH_ENABLED:'false',UAR_NATIVE_TOOLS__TERMINAL_EXEC_ENABLED:'false',...(modelsDirectory?{UAR_MODELS_DIR:modelsDirectory}:{})}
-  const child=spawn(binary,['--config',configFile,'--port',String(selectedPort)],{cwd:root,env,stdio:['ignore','ignore','ignore']})
-  let spawnFailed=false,exited=false,registered=false
-  child.on('error',()=>{spawnFailed=true});child.on('exit',()=>{exited=true})
+  // Regular native servers also bind A2A gRPC; settings require a nonzero port, distinct from HTTP.
+  await writeFile(configFile,JSON.stringify({server:{host:'127.0.0.1',port:selectedPort,grpc_port:grpcPort},security:{jwt_required:true,settings_mutation_auth_required:true},service_instance:{instance_id:id,ownership:'external',workspace_location:'local',runtime_endpoint:endpoint,administration_endpoint:endpoint,models_endpoint:endpoint},a2a:{instance_id:id},persistence:{provider:'surreal',database_url:'surrealkv://'+join(root,'data','runtime.db')},memory:{enabled:false},skill_evolution:{enabled:false}}))
+  // Regular startup constructs its default LLM before provider administration becomes reachable.
+  const env={PATH:process.env.PATH,HOME:join(root,'home'),TMPDIR:root,RUST_LOG:'warn',UAR_SERVER__LOG_FORMAT:'json',UAR_SECURITY__JWT_REQUIRED:'true',UAR_SECURITY__JWT_SECRET:jwtSecret,UAR_SECURITY__SETTINGS_ADMIN_KEY:admin,CREDENTIAL_ENCRYPTION_KEY:randomBytes(32).toString('hex'),LLM_MODEL:'openai/gpt-6.1-sol',LLM_BASE_URL:'http://localhost:4000/v1',LLM_PROTOCOL:'chat',LLM_API_KEY:gatewayCredential,UAR_BUILTIN_SKILLS_DIR:join(root,'empty-skills'),UAR_NATIVE_TOOLS__FILE_TOOLS_ENABLED:'false',UAR_NATIVE_TOOLS__WEB_FETCH_ENABLED:'false',UAR_NATIVE_TOOLS__TERMINAL_EXEC_ENABLED:'false',...(modelsDirectory?{UAR_MODELS_DIR:modelsDirectory}:{})}
+  const startup={kind:'alternate-uar-startup',exitCode:null,exitSignal:null,spawnCode:null,stdoutTail:'',stderrTail:''}
+  const privateValues=[jwtSecret,admin,bearer,env.CREDENTIAL_ENCRYPTION_KEY,gatewayCredential]
+  const redact=value=>{
+    let text=String(value)
+    for(const secret of privateValues)text=text.replaceAll(secret,'[redacted]')
+    return text.replace(/\bBearer\s+[^\s"']+/gi,'Bearer [redacted]')
+      .replace(/\b[a-f0-9]{32,}\b/gi,'[redacted]')
+      .replaceAll(root,'[fixture]').replaceAll(binary,'[binary]')
+      .replaceAll(modelsDirectory,'[models]').replaceAll(policiesDirectory,'[policies]')
+  }
+  const child=spawn(binary,['--config',configFile,'--port',String(selectedPort)],{cwd:root,env,stdio:['ignore','pipe','pipe']})
+  let spawnFailed=false,exited=false,registered=false,startupComplete=false
+  const capture=(field,data)=>{if(!startupComplete)startup[field]=redact(startup[field]+data.toString()).slice(-8192)}
+  child.stdout.on('data',data=>capture('stdoutTail',data));child.stderr.on('data',data=>capture('stderrTail',data))
+  child.on('error',error=>{spawnFailed=true;startup.spawnCode=/^[A-Z][A-Z0-9_]+$/.test(error?.code??'')?error.code:'UNKNOWN'})
+  child.on('exit',(code,signal)=>{exited=true;startup.exitCode=code;startup.exitSignal=signal})
   const onAbort=()=>{if(!exited)child.kill('SIGTERM')}
   signal?.addEventListener('abort',onAbort,{once:true})
   if(signal?.aborted)onAbort()
@@ -99,8 +116,9 @@ async function prepare({evaluate, signal, binary, binarySha256, sourceCommit, mo
   }
   try {
     const deadline=Date.now()+startupTimeoutMs;let capabilities
-    while(Date.now()<deadline){active();if(spawnFailed||exited)fail('ALTERNATE_UAR_NATIVE_STARTUP_FAILED');try{capabilities=await request('/api/uar/capabilities');break}catch{}await sleep(250)}
-    if(!capabilities)fail('ALTERNATE_UAR_NATIVE_READINESS_UNCONFIRMED')
+    while(Date.now()<deadline){active();if(spawnFailed||exited)fail('ALTERNATE_UAR_NATIVE_STARTUP_FAILED',{...startup});try{capabilities=await request('/api/uar/capabilities');break}catch{}await sleep(250)}
+    if(!capabilities)fail('ALTERNATE_UAR_NATIVE_READINESS_UNCONFIRMED',{...startup})
+    startupComplete=true
     if(capabilities.instance?.id!==id||capabilities.ownership!=='external'||capabilities.authentication?.principalMode!=='token-subject')fail('ALTERNATE_UAR_REAL_IDENTITY_AUTH_MISMATCH')
     const providerId='bossfang-fixture-gateway'
     await request('/api/uar/providers',{id:providerId,display_name:'C14 real configured gateway',base_url:'http://localhost:4000/v1',protocol:'chat',default_model:'gpt-6.1-sol',models:[{id:'gpt-6.1-sol',enabled:true,execution_profile:{profile:{id:'uar.openai-compatible-chat.settings-v1',revision:1},settingsRevision:1,reasoning:{mode:'off'}},pricing_identity:{provider_id:'openai',model_id:'gpt-6.1-sol'}}],enabled:true,api_key:gatewayCredential})
@@ -121,7 +139,7 @@ async function prepare({evaluate, signal, binary, binarySha256, sourceCommit, mo
 export async function prepareAlternateUar(input) {
   try{return await prepare(input)}catch(error){
     const message=error instanceof Error?error.message:''
-    fail(/^ALTERNATE_UAR_[A-Z0-9_]+$/.test(message)?message:'ALTERNATE_UAR_FIXTURE_SETUP_FAILED')
+    fail(/^ALTERNATE_UAR_[A-Z0-9_]+$/.test(message)?message:'ALTERNATE_UAR_FIXTURE_SETUP_FAILED',
+      error?.cause?.kind==='alternate-uar-startup'?error.cause:undefined)
   }
 }
-
