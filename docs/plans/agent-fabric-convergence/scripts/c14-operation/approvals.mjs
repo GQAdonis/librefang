@@ -56,6 +56,10 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
   ]), 'C14_PEER_APPROVAL_TEAM_UNAVAILABLE')
   const senderRole = scope.roles[attempt.memberId]
   const recipientId = request.tool === 'team_delegate' ? args.recipientMemberId : args.recipient?.memberId
+  diagnostic.peerResolver = { schema: 'native-team-tool-canonical-arguments',
+    resolver: 'exact-member-id-and-authorized-context-roster',
+    members: team.members.slice(0, 50).map((item) => ({ id: item.id, status: item.status, role: item.role })),
+    roster: context.roster.slice(0, 50).map((item) => ({ memberId: item.memberId, role: item.role })) }
   const recipient = team.members.find((item) => item.id === recipientId &&
     !['revoked', 'stopped', 'cancelled'].includes(item.status))
   const rosterPeer = context.roster.find((item) => item.memberId === recipientId)
@@ -146,6 +150,15 @@ export async function approveFixtureRequests(evaluate, signal, configuration, su
       requireFact(constraints(diagnostic, [['APPROVAL_TOOL_OWNER_MATCH',
         peer ? pending.admissionOwner === 'uar-runtime' : pending.admissionOwner === 'paired-host' &&
         ['worker', 'reviewer'].includes(roles[attempt.memberId])]]), 'C14_APPROVAL_TOOL_OWNER_UNAVAILABLE')
+      if (peer) {
+        // Native pending approvals carry the trusted action display, not bare tool arguments.
+        requireFact(constraints(diagnostic, [
+          ['PEER_ACTION_DISPLAY_FIELDS_EXACT', fields(args, ['operation', 'arguments'])],
+          ['PEER_ACTION_DISPLAY_OPERATION_MATCH', args.operation === request.tool],
+          ['PEER_ACTION_DISPLAY_ARGUMENTS_OBJECT', record(args.arguments)]
+        ]), 'C14_PEER_APPROVAL_ACTION_DISPLAY_UNAVAILABLE')
+        args = args.arguments
+      }
       const file = path.join(configuration.workspaceDirectory, 'README.md')
       let allowed = peer && await peerEffectAllowed(evaluate, request, args, attempt, summary, { ...scope, roles }, diagnostic)
       const atFile = typeof args.file_path === 'string' && path.resolve(configuration.workspaceDirectory, args.file_path) === file &&
