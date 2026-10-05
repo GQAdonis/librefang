@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "authority": "prometheus kbd status",
+    "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+    "runId": "project-20260924T180329Z",
+    "revision": 498,
+    "lastEventHash": "b777ff2d7328ad713e60c1beaba1f913f17568b23b22b1918c0fdb3ad0a75f74"
+  },
+  "completion": {
+    "tasks": [
+      "C10.1"
+    ],
+    "changes": [],
+    "phases": []
+  },
+  "task": {
+    "id": "C10.1",
+    "title": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+    "sequence": 1,
+    "status": "complete",
+    "summary": "Select UAR workflow owner and demonstrate immutable definitions through packaged restart; evidence c10-substrate-operation-receipt-20261005.md"
+  }
+}
