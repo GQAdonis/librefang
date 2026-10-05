@@ -98,7 +98,11 @@ export async function dashboard(evaluate, signal, expectedOrigin) {
         const guest=${visible('webview[data-mini-app-id="bossfang-dashboard"]')};
         if(!guest||!guest.getURL().startsWith(${JSON.stringify(expectedOrigin + '/dashboard')}))return false;
         const content=await guest.executeJavaScript(${JSON.stringify(`(async()=>{
-          const response=await fetch('/api/authz/whoami',{credentials:'include',redirect:'error'});
+          // Match the native dashboard client's existing sessionStorage/header
+          // contract. The credential stays inside the isolated guest; only the
+          // HTTP status and rendered auth state leave this evaluation.
+          const response=await fetch('/api/authz/whoami',{credentials:'include',redirect:'error',
+            headers:{Authorization:'Bearer '+(sessionStorage.getItem('bossfang-api-key')||'')}});
           return {authenticatedStatus:response.status,loginDialog:Boolean(document.querySelector('#auth-dialog-title')),
             shellVisible:Boolean(document.querySelector('nav')),hostIpcExposed:Boolean(window.api?.ipcApi),
             mascotVisible:[...document.images].some(node=>node.currentSrc.includes('boss-libre.png')&&node.naturalWidth>0)};
