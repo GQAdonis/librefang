@@ -1,6 +1,7 @@
 //! BossFang correlation and control for UAR-owned complete runs.
 use super::AppState;
 use std::sync::Arc;
+mod diagnostic;
 #[cfg(feature = "uar-driver")]
 mod errors;
 #[cfg(feature = "uar-driver")]
@@ -33,6 +34,10 @@ mod enabled {
     pub fn router() -> axum::Router<Arc<AppState>> {
         axum::Router::new()
             .route("/uar/delegations", axum::routing::post(admit))
+            .route(
+                "/uar/diagnostics/delegation",
+                axum::routing::post(super::diagnostic_route),
+            )
             .route("/uar/delegations/{task_id}", axum::routing::get(lookup))
             .route(
                 "/uar/delegations/{task_id}/events",
@@ -84,7 +89,16 @@ mod enabled {
     async fn admit(
         State(state): State<Arc<AppState>>,
         api_user: Option<Extension<AuthenticatedApiUser>>,
-        Json(mut admission): Json<UarRunAdmission>,
+        Json(admission): Json<UarRunAdmission>,
+    ) -> Response {
+        admit_source(state, api_user, admission, false).await
+    }
+
+    pub(super) async fn admit_source(
+        state: Arc<AppState>,
+        api_user: Option<Extension<AuthenticatedApiUser>>,
+        mut admission: UarRunAdmission,
+        inline_diagnostic: bool,
     ) -> Response {
         let Some(verified_user) = api_user.as_ref() else {
             return api_error(
@@ -106,7 +120,11 @@ mod enabled {
             admission.delegation_id = uuid::Uuid::new_v4().to_string();
             admission.admission_key = uuid::Uuid::new_v4().to_string();
         }
-        let prepared = match UarRunClient::prepare(&admission) {
+        let prepared = match if inline_diagnostic {
+            UarRunClient::prepare_diagnostic(&admission)
+        } else {
+            UarRunClient::prepare(&admission)
+        } {
             Ok(prepared) => prepared,
             Err(error) => return client_error(error),
         };
@@ -446,3 +464,5 @@ mod enabled {
 }
 #[cfg(feature = "uar-driver")]
 pub use enabled::router;
+
+pub(crate) use diagnostic::{__path_diagnostic_route, diagnostic_route};

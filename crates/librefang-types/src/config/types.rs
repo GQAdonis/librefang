@@ -3755,18 +3755,14 @@ impl UarConfig {
         let sidecar = self.effective_sidecar();
         vec![UarServiceInstanceConfig {
             id: "legacy-default".to_string(),
-            ownership: if sidecar.endpoint.is_some() {
-                UarServiceOwnership::External
-            } else {
-                UarServiceOwnership::Managed
-            },
+            ownership: UarServiceOwnership::External,
             endpoints: UarServiceEndpoints {
-                model_provider: self.base_url.clone(),
+                model_provider: None,
                 runtime: sidecar.endpoint.clone(),
                 ..UarServiceEndpoints::default()
             },
             workspace_locality: UarWorkspaceLocality::Local,
-            workspace: self.surreal_data_dir.clone(),
+            workspace: None,
             credential_ref: None,
             credential_refs: UarServiceCredentialRefs::default(),
             profile: "uar.service-instance/1".to_string(),
@@ -3781,7 +3777,7 @@ impl UarConfig {
         }]
     }
 
-    /// Select the one instance controlled by the process-wide supervisor.
+    /// Select the independently owned instance for new connections.
     pub fn selected_instance(&self) -> Result<UarServiceInstanceConfig, String> {
         let instances = self.effective_instances();
         let mut identities = std::collections::BTreeSet::new();
@@ -3805,20 +3801,12 @@ impl UarConfig {
             .into_iter()
             .find(|item| item.id == selected_id)
             .ok_or_else(|| format!("selected UAR instance '{selected_id}' is not configured"))?;
-        if selected.endpoints.model_provider.is_none() {
-            selected.endpoints.model_provider.clone_from(&self.base_url);
-        }
-        if selected.workspace.is_none() {
-            selected.workspace.clone_from(&self.surreal_data_dir);
-        }
-        if selected.endpoints.runtime.is_some() || selected.sidecar.endpoint.is_some() {
-            selected.ownership = UarServiceOwnership::External;
-        }
+        selected.ownership = UarServiceOwnership::External;
         Ok(selected)
     }
 }
 
-/// Whether BossFang owns the UAR service process or only attaches to it.
+/// Historical ownership vocabulary. BossFang connections always borrow UAR.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
 )]
@@ -3922,19 +3910,15 @@ impl UarServiceInstanceConfig {
         references
     }
 
-    /// Process configuration consumed by the one supervisor. Runtime endpoint
-    /// presence always wins over managed-process enablement.
+    /// Read legacy connection settings. Process enablement is always disabled.
     #[must_use]
     pub fn effective_sidecar(&self) -> UarSidecarConfig {
         let mut sidecar = self.sidecar.clone();
         if self.endpoints.runtime.is_some() {
             sidecar.endpoint.clone_from(&self.endpoints.runtime);
         }
-        if self.ownership == UarServiceOwnership::External {
-            sidecar.enabled = false;
-        } else if self.id != "legacy-default" {
-            sidecar.enabled = true;
-        }
+        // Legacy process fields are retained for migration, never acted on.
+        sidecar.enabled = false;
         sidecar
     }
 }
@@ -3985,45 +3969,22 @@ pub struct UarEffectiveBinding {
     pub placement: UarPlacementSupport,
 }
 
-/// Supervision settings for UAR running as an out-of-process sidecar.
-///
-/// UAR ships a purpose-built `uar-sidecar` binary that binds `127.0.0.1:0`, prints
-/// one `READY:{port}` line to stdout once its listener is bound, and exits cleanly
-/// on stdin EOF. When [`Self::enabled`] is set, the daemon spawns and supervises
-/// that binary; the driver then talks to it over loopback HTTP.
-///
-/// Field names deliberately mirror [`SidecarChannelConfig`] so operators learn one
-/// vocabulary for every supervised child process, not two.
+/// Historical sidecar fields retained for config migration. Only endpoint and
+/// readiness timeout participate in BossFang connections; no UAR process is owned.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct UarSidecarConfig {
-    /// Spawn and supervise the UAR sidecar. Defaults to `false` — UAR is opt-in,
-    /// matching the `uar-driver` cargo feature it pairs with.
+    /// Migration-only historical process flag; never starts a UAR process.
     pub enabled: bool,
 
-    /// Program to execute.
-    ///
-    /// Empty (the default) or the bare stem `uar-sidecar` is *implicit*: the daemon
-    /// resolves the bundled binary next to its own executable, then in
-    /// `<home>/bin/`, and only then falls back to `PATH`. An absolute or relative
-    /// path is *explicit* and is used verbatim — operator intent always wins.
-    ///
-    /// Leave this empty unless you are running a custom build. Pointing it at a
-    /// binary that does not exist is the one way to reintroduce a `PATH` dependency.
+    /// Migration-only historical executable selection; preserved, never executed.
     pub command: String,
 
-    /// Connect to an already-running UAR at this base URL instead of spawning one
-    /// (e.g. `"http://uar-svc.uar.svc.cluster.local:1906"`).
-    ///
-    /// **Takes precedence over spawning.** When set, no child process is started and
-    /// [`Self::command`] is ignored — the daemon health-checks the remote and uses
-    /// it. This is how an existing standalone UAR deployment stays usable.
-    ///
-    /// Not to be confused with [`UarConfig::base_url`], which overrides the *LLM
-    /// provider* endpoint passed through to liter-llm. This one addresses UAR itself.
+    /// Existing UAR runtime endpoint, distinct from legacy upstream base_url.
+    /// Only loopback HTTP or HTTPS connections are admitted.
     pub endpoint: Option<String>,
 
-    /// Restart the sidecar when it exits unexpectedly.
+    /// Migration-only historical restart flag; BossFang never restarts UAR.
     pub restart: bool,
 
     /// Initial reconnect backoff, in milliseconds.
@@ -4040,8 +4001,7 @@ pub struct UarSidecarConfig {
     /// long, so an occasional fault does not eventually exhaust the retry budget.
     pub restart_reset_after_secs: u64,
 
-    /// How long to wait for the child's `READY:{port}` line before declaring the
-    /// spawn failed. A child that never announces itself must not hang boot.
+    /// Readiness request timeout for the selected existing endpoint.
     #[serde(default = "default_uar_ready_timeout_ms")]
     pub ready_timeout_ms: u64,
 
@@ -4098,7 +4058,7 @@ impl UarSidecarConfig {
     /// exclusive by construction rather than by operator discipline.
     #[must_use]
     pub fn should_spawn(&self) -> bool {
-        self.enabled && self.endpoint.is_none()
+        false
     }
 }
 

@@ -318,6 +318,9 @@ export {
   updateAgentModelRouting,
   // providers
   testProvider,
+  connectUar,
+  disconnectUar,
+  reconnectUar,
   startUar,
   stopUar,
   restartUar,

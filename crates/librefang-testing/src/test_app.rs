@@ -347,18 +347,15 @@ impl TestAppState {
         master_key.set_blocking(master_plaintext.clone(), master_hash);
 
         Arc::new(AppState {
-            uar_supervisor: Arc::new(
-                librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
-                    kernel
-                        .config_ref()
-                        .uar
-                        .as_ref()
-                        .map(librefang_types::config::UarConfig::effective_sidecar)
-                        .unwrap_or_default(),
-                    tmp.path().to_path_buf(),
-                )
-                .with_runtime_config(kernel.config_ref().uar.as_ref()),
-            ),
+            uar_supervisor: Arc::new(librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+                kernel
+                    .config_ref()
+                    .uar
+                    .as_ref()
+                    .map(librefang_types::config::UarConfig::effective_sidecar)
+                    .unwrap_or_default(),
+                tmp.path().to_path_buf(),
+            )),
             kernel,
             started_at: Instant::now(),
             // The mock kernel pins no embedding provider, so readiness never

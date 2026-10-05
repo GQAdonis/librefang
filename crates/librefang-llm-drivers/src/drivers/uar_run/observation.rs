@@ -22,8 +22,7 @@ impl UarRunClient {
         let mut request = self
             .client
             .get(endpoint(&transport.base, &suffix))
-            .header("x-uar-workspace-id", &projection.workspace_id)
-            .header("x-uar-principal", &transport.verified_principal);
+            .header("x-uar-workspace-id", &projection.workspace_id);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }

@@ -1,4 +1,4 @@
-- [ ] Replace process supervision with connection manager and legacy migration diagnostics.
-- [ ] Wire Owner APIs, private credential renewal, discovery and full-run transport.
-- [ ] Remove UAR package/provision paths; update native dashboard actions.
+- [x] Replace process supervision with connection manager and legacy migration diagnostics.
+- [x] Wire Owner APIs, private credential replacement, discovery, full-run transport and real inline diagnostic.
+- [x] Remove UAR native process provisioning/package paths; update native dashboard actions.
 - [ ] Parent completed-delivery native/package and real operation boundary (deferred).

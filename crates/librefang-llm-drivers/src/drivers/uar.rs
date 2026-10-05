@@ -53,6 +53,7 @@ struct PublishedBinding {
     admitted: Option<UarEffectiveBinding>,
     diagnostic: Option<UarCompatibilityDiagnostic>,
     generation: u64,
+    workspace_id: Option<String>,
 }
 
 /// Resolved bearer credentials kept only in process memory. Configuration and
@@ -66,6 +67,17 @@ pub struct UarResolvedCredentials {
 }
 
 impl UarResolvedCredentials {
+    /// One scoped delegated credential covers only its permitted runtime/model roles.
+    #[must_use]
+    pub fn delegated(value: String) -> Self {
+        let value = Zeroizing::new(value);
+        Self {
+            runtime: Some(value.clone()),
+            models: Some(value),
+            administration: None,
+            console: None,
+        }
+    }
     #[must_use]
     pub fn uniform(value: String) -> Self {
         let value = Zeroizing::new(value);
@@ -81,7 +93,6 @@ impl UarResolvedCredentials {
 #[derive(Clone, Copy)]
 enum EndpointRole {
     Runtime,
-    Administration,
     Models,
 }
 
@@ -113,7 +124,8 @@ struct PlacementCapabilities {
 struct CapabilitiesDocument {
     instance: CapabilitiesInstance,
     endpoints: CompatibilityEndpoints,
-    ownership: UarServiceOwnership,
+    #[serde(rename = "ownership")]
+    _ownership: UarServiceOwnership,
     placement: PlacementCapabilities,
     capabilities: Vec<String>,
 }
@@ -223,6 +235,17 @@ pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentia
     guard.generation = guard.generation.wrapping_add(1);
 }
 
+/// Set the authenticated workspace attached to private connection credentials.
+/// It is sent as scope context, never as a caller-asserted principal.
+pub fn configure_connection_workspace(workspace_id: Option<String>) {
+    let mut guard = binding_cell()
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.workspace_id = workspace_id;
+    guard.admitted = None;
+    guard.generation = guard.generation.wrapping_add(1);
+}
+
 /// Publish the endpoint selected by the UAR supervisor.
 ///
 /// The port is ephemeral, so it cannot be stored in `DriverConfig` at kernel
@@ -232,7 +255,7 @@ pub fn set_supervised_endpoint(endpoint: Option<String>) {
     set_supervised_endpoint_with_bearer(endpoint, None);
 }
 
-/// Publish a supervised endpoint together with its ephemeral launch bearer.
+/// Publish a selected connection endpoint with its private delegated bearer.
 /// The bearer stays in private driver state and is never included in snapshots.
 pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Option<String>) {
     let mut guard = binding_cell()
@@ -240,7 +263,7 @@ pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Opt
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.endpoint = endpoint.map(|value| value.trim_end_matches('/').to_string());
     if let Some(bearer) = bearer {
-        guard.credentials = UarResolvedCredentials::uniform(bearer);
+        guard.credentials = UarResolvedCredentials::delegated(bearer);
         guard.credential_error = None;
     } else if guard.endpoint.is_none()
         && guard
@@ -292,7 +315,6 @@ fn role_credential(role: EndpointRole) -> Option<Zeroizing<String>> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     match role {
         EndpointRole::Runtime => guard.credentials.runtime.clone(),
-        EndpointRole::Administration => guard.credentials.administration.clone(),
         EndpointRole::Models => guard.credentials.models.clone(),
     }
 }
@@ -333,12 +355,37 @@ fn supervised_candidate() -> Result<(UarServiceInstanceConfig, String, u64), Llm
     }
     let endpoint = published.endpoint.ok_or_else(|| {
         LlmError::Http(
-            "UAR sidecar is not available; start it in the dashboard or configure \
-             a selected UAR instance runtime endpoint"
-                .to_string(),
+            "UAR is disconnected; connect a selected UAR instance runtime endpoint".to_string(),
         )
     })?;
     Ok((candidate, endpoint, published.generation))
+}
+
+/// Fetch the catalog with the selected models-role credential.
+pub async fn selected_model_catalog() -> Result<serde_json::Value, LlmError> {
+    let binding = admit_supervised_binding().await?;
+    let models = binding
+        .endpoints
+        .models
+        .ok_or_else(|| LlmError::Http("selected UAR has no models endpoint".to_string()))?;
+    let driver = UarDriver::new(&DriverConfig::default())?;
+    let response = driver
+        .send(
+            driver.client.get(append_role_path(&models, "models")),
+            EndpointRole::Models,
+            "model catalog",
+        )
+        .await?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(LlmError::Http(format!(
+            "UAR model catalog returned HTTP {status}"
+        )));
+    }
+    response
+        .json()
+        .await
+        .map_err(|_| LlmError::Http("UAR model catalog returned invalid JSON".to_string()))
 }
 
 /// Stable identity segment included in UAR driver cache keys.
@@ -400,6 +447,7 @@ impl UarDriver {
         validate_provider_overrides(config)?;
         Ok(Self {
             client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(Duration::from_secs(5))
                 .build()
                 .map_err(|error| {
@@ -429,7 +477,19 @@ impl UarDriver {
         if let Some(credential) = role_credential(role) {
             request = request.bearer_auth(credential.as_str());
         }
-        tokio::time::timeout(self.request_timeout, request.send())
+        let workspace_id = binding_cell()
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .workspace_id
+            .clone();
+        if let Some(workspace_id) = workspace_id {
+            request = request.header("x-uar-workspace-id", workspace_id);
+        }
+        let request = request
+            .build()
+            .map_err(|_| LlmError::Http("UAR request could not be constructed".to_string()))?;
+        validate_transport_url(request.url())?;
+        tokio::time::timeout(self.request_timeout, self.client.execute(request))
             .await
             .map_err(|_| {
                 LlmError::Http(format!(
@@ -517,7 +577,7 @@ impl UarDriver {
             .send(
                 self.client
                     .get(append_role_path(&administration_endpoint, "capabilities")),
-                EndpointRole::Administration,
+                EndpointRole::Runtime,
                 "service capability check",
             )
             .await?
@@ -569,15 +629,6 @@ impl UarDriver {
                 "UAR workspace locality does not match the selected service instance".to_string(),
                 Some(workspace_locality_name(candidate.workspace_locality).to_string()),
                 Some(workspace_locality_name(observed.instance.workspace_location).to_string()),
-                Vec::new(),
-            ));
-        }
-        if observed.ownership != candidate.ownership {
-            return Err(compatibility_refusal(
-                "ownership_mismatch",
-                "UAR ownership mode does not match the selected service instance".to_string(),
-                Some(ownership_name(candidate.ownership).to_string()),
-                Some(ownership_name(observed.ownership).to_string()),
                 Vec::new(),
             ));
         }
@@ -663,7 +714,7 @@ impl UarDriver {
                 self.client
                     .post(append_role_path(&administration_endpoint, "compatibility"))
                     .json(&expectation),
-                EndpointRole::Administration,
+                EndpointRole::Runtime,
                 "service compatibility admission",
             )
             .await?
@@ -772,16 +823,16 @@ impl UarDriver {
 
         Ok(UarEffectiveBinding {
             instance_id: binding.instance_id,
-            ownership: observed.ownership,
+            ownership: UarServiceOwnership::External,
             endpoints: UarServiceEndpoints {
-                model_provider: None,
+                model_provider: candidate.endpoints.model_provider.clone(),
                 runtime: Some(binding.endpoints.runtime),
                 administration: Some(binding.endpoints.administration),
                 models: Some(binding.endpoints.models),
                 console: binding.endpoints.console,
             },
             workspace_locality: binding.workspace_location,
-            workspace: None,
+            workspace: candidate.workspace.clone(),
             credential_ref: binding.credential_ref,
             profile: binding.profile,
             capabilities: binding.capabilities,
@@ -826,6 +877,28 @@ fn compatibility_refusal(
         missing_capabilities,
     });
     LlmError::Http(message)
+}
+
+/// Do not leak bearer credentials to plaintext remote roles or redirects.
+fn validate_transport_url(url: &reqwest::Url) -> Result<(), LlmError> {
+    let loopback = url.host_str().is_some_and(|host| {
+        host == "localhost"
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback())
+    });
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
+    {
+        return Err(LlmError::Http(
+            "UAR role endpoint requires loopback HTTP or HTTPS without URL credentials".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn append_role_path(endpoint: &str, suffix: &str) -> String {
@@ -880,13 +953,6 @@ fn workspace_locality_name(locality: UarWorkspaceLocality) -> &'static str {
     match locality {
         UarWorkspaceLocality::Local => "local",
         UarWorkspaceLocality::Remote => "remote",
-    }
-}
-
-fn ownership_name(ownership: UarServiceOwnership) -> &'static str {
-    match ownership {
-        UarServiceOwnership::Managed => "managed",
-        UarServiceOwnership::External => "external",
     }
 }
 

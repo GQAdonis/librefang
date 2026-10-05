@@ -111,6 +111,7 @@ export interface UarStatus {
   endpoint?: string | null;
   port?: number | null;
   restart_count: number;
+  migration_required?: boolean;
   last_error?: string | null;
   instances: UarInstance[];
   selected_instance_id?: string | null;
@@ -2477,17 +2478,20 @@ export async function getUarModels(): Promise<UarModels> {
   return get<UarModels>("/api/uar/models");
 }
 
-export async function startUar(): Promise<UarStatus> {
-  return post<UarStatus>("/api/uar/start", {});
+export async function connectUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/connect", {});
 }
+export const startUar = connectUar;
 
-export async function stopUar(): Promise<UarStatus> {
-  return post<UarStatus>("/api/uar/stop", {});
+export async function disconnectUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/disconnect", {});
 }
+export const stopUar = disconnectUar;
 
-export async function restartUar(): Promise<UarStatus> {
-  return post<UarStatus>("/api/uar/restart", {});
+export async function reconnectUar(): Promise<UarStatus> {
+  return post<UarStatus>("/api/uar/reconnect", {});
 }
+export const restartUar = reconnectUar;
 
 export async function testUar(input: {
   model?: string;

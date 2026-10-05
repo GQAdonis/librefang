@@ -195,7 +195,7 @@ fn resolve_uar_role_credential(
 }
 
 #[cfg(feature = "uar-driver")]
-fn resolve_uar_credentials(
+pub(crate) fn resolve_uar_credentials(
     kernel: &dyn KernelApi,
     instance: &librefang_types::config::UarServiceInstanceConfig,
 ) -> Result<librefang_llm_drivers::drivers::uar::UarResolvedCredentials, String> {
@@ -212,21 +212,6 @@ fn resolve_uar_credentials(
             console: resolve_uar_role_credential(kernel, "console", references.console.as_deref())?,
         },
     )
-}
-
-/// Resolve only the reference named by `[uar.remote]`; the value stays in the
-/// main process and supervised child environment, never in config or status.
-fn resolve_uar_remote_password(kernel: &dyn KernelApi, reference: &str) -> Option<String> {
-    let value = if let Some(key) = reference
-        .strip_prefix("vault://")
-        .or_else(|| reference.strip_prefix("vault:"))
-    {
-        kernel.vault_get(key)
-    } else {
-        let name = reference.strip_prefix("env://").unwrap_or(reference);
-        std::env::var(name).ok()
-    };
-    value.filter(|value| !value.is_empty())
 }
 
 /// Env var that overrides `KernelConfig.api_key`. Also read at boot by
@@ -1899,45 +1884,13 @@ pub async fn build_router(
         .map(|credential| credential.to_string());
     #[cfg(not(feature = "uar-driver"))]
     let uar_probe_bearer = None;
-    let should_start_uar = uar_sidecar_config.enabled || uar_sidecar_config.endpoint.is_some();
-    let managed_uar = uar_sidecar_config.endpoint.is_none();
-    let mut uar_supervisor = librefang_channels::uar_sidecar::UarSidecarSupervisor::new(
+    let should_connect_uar = uar_config.is_some();
+    let uar_supervisor = librefang_channels::uar_sidecar::UarConnectionManager::new(
         uar_sidecar_config,
         kernel.home_dir().to_path_buf(),
     )
-    .with_runtime_config(uar_config.as_ref())
     .with_instance_config(selected_uar_instance.as_ref().ok())
-    .with_probe_bearer(uar_probe_bearer)
-    .with_channel_gate_from_host();
-    if managed_uar {
-        if let Some(config) = uar_config.as_ref() {
-            let remote = config.remote.clone().or_else(|| {
-                if !config.share_librefang_storage {
-                    return None;
-                }
-                match &kernel.config_ref().storage.backend {
-                    librefang_types::config::StorageBackendKind::Remote(remote) => {
-                        Some(remote.clone())
-                    }
-                    _ => None,
-                }
-            });
-            if let Some(remote) = remote.as_ref() {
-                let password = resolve_uar_remote_password(kernel.as_ref(), &remote.password_env);
-                uar_supervisor = uar_supervisor.with_remote_storage(
-                    remote,
-                    password,
-                    config.remote_auth_level.as_deref(),
-                    config.remote_durability_attested,
-                );
-            } else if config.share_librefang_storage {
-                uar_supervisor = uar_supervisor.with_startup_error(
-                    "UAR requested shared remote SurrealDB, but The Boss storage is not remote"
-                        .to_string(),
-                );
-            }
-        }
-    }
+    .with_probe_bearer(uar_probe_bearer);
     #[cfg(feature = "uar-driver")]
     let uar_supervisor = {
         librefang_llm_drivers::drivers::uar::configure_supervised_instance(
@@ -1951,11 +1904,11 @@ pub async fn build_router(
         )
     };
     let uar_supervisor = Arc::new(uar_supervisor);
-    if should_start_uar {
-        match uar_supervisor.start().await {
+    if should_connect_uar {
+        match uar_supervisor.connect().await {
             Ok(status) => drop(status),
             Err(error) => {
-                tracing::error!(error = %error, "UAR sidecar failed to start");
+                tracing::error!(error = %error, "UAR connection failed");
             }
         }
     }
@@ -3043,8 +2996,8 @@ pub async fn run_daemon(
         }
     }
 
-    if let Err(error) = state.uar_supervisor.stop().await {
-        tracing::warn!(error = %error, "UAR sidecar did not stop cleanly");
+    if let Err(error) = state.uar_supervisor.disconnect().await {
+        tracing::warn!(error = %error, "UAR connection did not detach cleanly");
     }
     #[cfg(feature = "uar-driver")]
     librefang_llm_drivers::drivers::uar::set_supervised_endpoint(None);

@@ -1,5 +1,4 @@
 use librefang_types::uar_run::UarDelegatedRunProjection;
-use librefang_types::config::{UarServiceOwnership, UarWorkspaceLocality};
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::Value;
@@ -10,39 +9,39 @@ use super::{Transport, UarRunClient, UarRunClientError};
 impl UarRunClient {
     pub(super) async fn transport(
         &self,
-        verified_principal: &str,
+        _verified_principal: &str,
     ) -> Result<Transport, UarRunClientError> {
         let (base, credential, binding) = super::super::uar::full_run_transport()
             .await
             .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
-        if binding.ownership != UarServiceOwnership::Managed
-            || binding.workspace_locality != UarWorkspaceLocality::Local
-        {
-            return Err(UarRunClientError::Binding(
-                "full-run delegation requires the selected managed local UAR sidecar".to_string(),
-            ));
-        }
         let url = reqwest::Url::parse(&base)
             .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
-        if url.scheme() != "http"
-            || !url
-                .host_str()
-                .and_then(|host| host.parse::<std::net::IpAddr>().ok())
-                .is_some_and(|host| host.is_loopback())
+        let loopback = url.host_str().is_some_and(|host| {
+            host == "localhost"
+                || host
+                    .trim_matches(['[', ']'])
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|ip| ip.is_loopback())
+        });
+        if !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+            || url.fragment().is_some()
+            || !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
         {
             return Err(UarRunClientError::Binding(
-                "managed full-run endpoint must use loopback HTTP".to_string(),
+                "full-run endpoint requires loopback HTTP or HTTPS without URL credentials"
+                    .to_string(),
             ));
         }
         if credential.is_none() {
             return Err(UarRunClientError::Binding(
-                "managed full-run endpoint has no launch-token credential".to_string(),
+                "selected full-run endpoint has no authenticated runtime credential".to_string(),
             ));
         }
         Ok(Transport {
             base: endpoint(&base, "api/uar/full-harness/v1"),
             credential,
-            verified_principal: verified_principal.to_string(),
             binding,
         })
     }
@@ -62,8 +61,7 @@ impl UarRunClient {
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))
-            .header("x-uar-workspace-id", workspace_id)
-            .header("x-uar-principal", &transport.verified_principal);
+            .header("x-uar-workspace-id", workspace_id);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }
@@ -125,8 +123,7 @@ impl UarRunClient {
         let mut request = self
             .client
             .request(method, endpoint(&transport.base, suffix))
-            .header("x-uar-workspace-id", workspace_id)
-            .header("x-uar-principal", &transport.verified_principal);
+            .header("x-uar-workspace-id", workspace_id);
         if let Some(credential) = &transport.credential {
             request = request.bearer_auth(credential.as_str());
         }
@@ -176,9 +173,10 @@ impl UarRunClient {
         }
         let status = response.status();
         let payload = response.text().await.unwrap_or_default();
-        let refusal: Option<librefang_types::uar_run::UarRunRefusal> = serde_json::from_str::<WireErrorEnvelope>(&payload)
-            .ok()
-            .map(|item| item.error.into());
+        let refusal: Option<librefang_types::uar_run::UarRunRefusal> =
+            serde_json::from_str::<WireErrorEnvelope>(&payload)
+                .ok()
+                .map(|item| item.error.into());
         let message = refusal
             .as_ref()
             .map_or_else(|| payload.clone(), |item| item.message.clone());

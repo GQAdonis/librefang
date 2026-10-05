@@ -955,6 +955,10 @@
     }
   },
   "providers": {
+    "uar_connect": "Połącz",
+    "uar_disconnect": "Rozłącz",
+    "uar_reconnect": "Połącz ponownie",
+    "uar_connection_description": "Połącz z niezależnie zarządzaną instancją UAR. Rozłączenie nie zatrzymuje UAR ani jego zadań.",
     "title": "Dostawcy",
     "subtitle": "Zarządzaj połączeniami API LLM i ich stanem.",
     "configured_count": "{{configured}} / {{total}} Skonfigurowano",

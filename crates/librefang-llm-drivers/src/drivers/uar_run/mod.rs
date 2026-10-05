@@ -10,8 +10,8 @@ use std::time::Duration;
 use librefang_types::{
     config::UarEffectiveBinding,
     uar_run::{
-        UarDelegatedRunProjection, UarProjectionRetention, UarRunAdmission, UarRunCancellation,
-        UarRunRefusal, UarSteerOutcome,
+        UarDefinitionMode, UarDelegatedRunProjection, UarProjectionRetention, UarRunAdmission,
+        UarRunCancellation, UarRunRefusal, UarSteerOutcome,
     },
 };
 use reqwest::{Method, StatusCode};
@@ -20,6 +20,7 @@ use zeroize::Zeroizing;
 
 mod binding;
 mod canonical;
+mod diagnostic;
 mod http;
 mod observation;
 mod wire;
@@ -83,6 +84,7 @@ impl UarRunClientError {
 #[derive(Debug, Clone)]
 pub struct PreparedAdmission {
     pub request_digest: String,
+    definition_mode: UarDefinitionMode,
     body: Value,
 }
 
@@ -90,7 +92,6 @@ pub struct PreparedAdmission {
 struct Transport {
     base: String,
     credential: Option<Zeroizing<String>>,
-    verified_principal: String,
     binding: UarEffectiveBinding,
 }
 
@@ -114,6 +115,7 @@ impl UarRunClient {
     #[must_use]
     pub fn new(request_timeout: Duration) -> Self {
         let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(5))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
@@ -169,6 +171,7 @@ impl UarRunClient {
         let digest = canonical_digest(&Value::Object(body.clone()));
         Ok(PreparedAdmission {
             request_digest: digest,
+            definition_mode: UarDefinitionMode::Bound,
             body: Value::Object(body),
         })
     }
@@ -227,6 +230,7 @@ impl UarRunClient {
             &prepared.body,
             &transport.binding,
             &admission.target_binding_id,
+            prepared.definition_mode,
         )?;
         let descriptor = self
             .runtime_descriptor(&transport, &admission.workspace_id)
@@ -243,6 +247,7 @@ impl UarRunClient {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: transport.binding.instance_id.clone(),
             effective_binding: transport.binding,
@@ -294,7 +299,12 @@ impl UarRunClient {
                 true,
             )
             .await?;
-        receipt.into_projection(admission, prepared, transport.binding, &pending.verified_principal)
+        receipt.into_projection(
+            admission,
+            prepared,
+            transport.binding,
+            &pending.verified_principal,
+        )
     }
 
     pub async fn resolve(

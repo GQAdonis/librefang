@@ -1,8 +1,8 @@
 use librefang_types::{
     config::UarEffectiveBinding,
     uar_run::{
-        UarDelegatedRunProjection, UarProjectionRetention, UarRunAdmission, UarRunCancellation,
-        UarRunRetention,
+        UarDefinitionMode, UarDelegatedRunProjection, UarProjectionRetention, UarRunAdmission,
+        UarRunCancellation, UarRunRetention,
     },
 };
 use serde::Deserialize;
@@ -151,6 +151,7 @@ impl WireReceipt {
                 &self.effective_service_binding,
                 &binding,
                 &admission.target_binding_id,
+                prepared.definition_mode,
             )?;
         } else if state != "rejected" {
             return Err(UarRunClientError::InvalidResponse {
@@ -166,6 +167,7 @@ impl WireReceipt {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: binding.instance_id.clone(),
             effective_binding: binding,
@@ -207,6 +209,7 @@ impl WireReceipt {
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
         let prepared = PreparedAdmission {
             request_digest: projection.request_digest.clone(),
+            definition_mode: projection.definition_mode,
             body: Value::Null,
         };
         let admission = UarRunAdmission {
@@ -247,6 +250,7 @@ fn validate_effective_binding(
     observed: &Value,
     expected: &UarEffectiveBinding,
     target_binding_id: &str,
+    definition_mode: UarDefinitionMode,
 ) -> Result<(), UarRunClientError> {
     let Some(observed) = observed.as_object() else {
         return Err(UarRunClientError::InvalidResponse {
@@ -257,7 +261,15 @@ fn validate_effective_binding(
     require_equal(observed, "instanceId", &expected.instance_id)?;
     require_equal(observed, "profile", &expected.profile)?;
     require_equal(observed, "intent", "new")?;
-    require_equal(observed, "bindingId", target_binding_id)?;
+    match definition_mode {
+        UarDefinitionMode::Bound => require_equal(observed, "bindingId", target_binding_id)?,
+        UarDefinitionMode::InlineDiagnostic
+            if observed.get("bindingId").is_some_and(|id| !id.is_null()) =>
+        {
+            return binding_mismatch("bindingId");
+        }
+        UarDefinitionMode::InlineDiagnostic => {}
+    }
     require_equal(
         observed,
         "workspaceLocation",
