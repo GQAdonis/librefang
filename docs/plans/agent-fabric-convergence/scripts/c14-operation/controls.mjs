@@ -1,4 +1,3 @@
-import { setTimeout as delay } from 'node:timers/promises'
 import { ipc } from './setup.mjs'
 import { waitFor } from './io.mjs'
 
@@ -65,11 +64,16 @@ export async function selectWorkspace(evaluate, signal, workspaceId) {
 }
 
 export async function reopen(evaluate, signal, setup, instanceId) {
+  const previousTimeOrigin = await evaluate('performance.timeOrigin')
   await evaluate('setTimeout(() => location.reload(), 50); true')
-  await delay(750, undefined, { signal })
+  const reloaded = await waitFor(signal, () => evaluate(`(() => {
+    const timeOrigin=performance.timeOrigin;
+    return timeOrigin!==${JSON.stringify(previousTimeOrigin)} && document.readyState==='complete' && {timeOrigin};
+  })()`).catch(() => false), 'C14_RENDERER_DOCUMENT_RELOAD_NOT_OBSERVED')
   await openWork(evaluate, signal)
   await selectWorkspace(evaluate, signal, setup.workspaceId)
   await selectOption(evaluate, signal, '[data-ui~="teams-instance"]',
     `document.querySelector('[role="option"][data-team-id="' + ${JSON.stringify(instanceId)} + '"]')`,
     'C14_WORK_PERSISTED_INSTANCE_UNAVAILABLE')
+  return { previousTimeOrigin, reloadedTimeOrigin: reloaded.timeOrigin }
 }
