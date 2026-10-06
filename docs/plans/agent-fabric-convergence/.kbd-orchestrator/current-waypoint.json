@@ -2,42 +2,40 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 546,
-  "derivedRevision": 546,
+  "sourceRevision": 551,
+  "derivedRevision": 551,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 307
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 312
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
   "runId": "project-20260924T180329Z",
   "path": [
-    "agent-fabric-convergence",
-    "six-hour-convergence-recovery"
+    "agent-fabric-convergence"
   ],
   "phaseIds": [
-    "agent-fabric-convergence",
-    "agent-fabric-convergence::six-hour-convergence-recovery"
+    "agent-fabric-convergence"
   ],
-  "activePhaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
-  "activePhase": "six-hour-convergence-recovery",
+  "activePhaseId": "agent-fabric-convergence",
+  "activePhase": "agent-fabric-convergence",
   "phase": "agent-fabric-convergence",
-  "parentPhase": "agent-fabric-convergence",
-  "childPointer": "six-hour-convergence-recovery",
-  "change": null,
-  "currentTask": null,
+  "parentPhase": null,
+  "childPointer": null,
+  "change": "afc-c14-studio-administration-and-isolated-service-consoles",
+  "currentTask": "C14.1",
   "status": "running",
   "lifecycle": "running",
-  "stageId": "execute",
-  "stageStatus": "COMPLETE",
+  "stageId": null,
+  "stageStatus": null,
   "completionMetric": "implementation",
   "implementationCompleted": 17,
   "implementationTotal": 26,
   "planRevision": 10,
-  "revision": 546,
-  "exactNextCommand": "Complete recovery child installation; operator-requested Reflect restores parent C14.1 for combined product repair.",
-  "nextChange": null,
-  "nextTask": null,
-  "updatedAt": "2026-10-06T00:01:49.326575Z"
+  "revision": 551,
+  "exactNextCommand": "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence",
+  "nextChange": "afc-c14-studio-administration-and-isolated-service-consoles",
+  "nextTask": "C14.1",
+  "updatedAt": "2026-10-06T00:18:27.473385Z"
 }

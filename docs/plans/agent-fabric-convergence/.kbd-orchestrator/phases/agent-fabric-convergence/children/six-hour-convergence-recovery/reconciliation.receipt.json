@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-06T00:13:09.638Z",
+  "canonicalRevision": 546,
+  "phaseId": "agent-fabric-convergence::six-hour-convergence-recovery",
+  "changeId": "afc-six-hour-delivery-recovery",
+  "driverAttempt": {
+    "command": "kbd-apply reconcile",
+    "exitCode": 1,
+    "error": "Portable mini driver does not expose reconcile"
+  },
+  "fallback": "Read-only comparison using existing OpenSpec adapter osList and canonical KBD export; no mutation or implementation of a new reconciler",
+  "observed": [
+    {
+      "id": "1",
+      "backendDone": true,
+      "canonicalStatus": "complete"
+    },
+    {
+      "id": "2",
+      "backendDone": true,
+      "canonicalStatus": "complete"
+    },
+    {
+      "id": "3",
+      "backendDone": true,
+      "canonicalStatus": "complete"
+    }
+  ],
+  "pass": true
+}

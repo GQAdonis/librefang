@@ -1,0 +1,248 @@
+{
+  "successfulDeliveries": 6,
+  "profileRevision": 7,
+  "activeIterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "iterationStatus": "checkpoint-failed",
+  "checkpoints": [
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "cancelled"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "cancelled"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    },
+    {
+      "id": "mac-arm64-build",
+      "status": "success"
+    },
+    {
+      "id": "mac-functional-launch",
+      "status": "success"
+    },
+    {
+      "id": "c14-work-operation",
+      "status": "failed"
+    }
+  ]
+}
