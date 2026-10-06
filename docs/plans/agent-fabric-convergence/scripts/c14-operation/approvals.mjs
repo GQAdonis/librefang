@@ -55,20 +55,20 @@ function fixtureEditAllowed(edit, current, expected, diagnostic) {
 async function peerEffectAllowed(evaluate, request, args, attempt, summary, scope, diagnostic) {
   const selector = { workspaceId: scope.instance.workspaceId, teamInstanceId: scope.instance.id }
   const context = await ipc(evaluate, 'prometheus.uar.teams.context', { ...selector, attemptId: attempt.id })
-  const root = summary.attempts.find((item) => scope.roles[item.memberId] === 'coordinator' && !item.continuationOfWaitId)
+  const coordinator = summary.attempts.find((item) => scope.roles[item.memberId] === 'coordinator' && !item.continuationOfWaitId)
   const authority = context.authority
   requireFact(constraints(diagnostic, [
-    ['PEER_ROOT_ID_PRESENT', root?.rootId], ['PEER_APPROVAL_SCOPE_PRESENT', root?.approvalScopeId],
-    ['PEER_ATTEMPT_ROOT_MATCH', attempt.rootId === root?.rootId],
-    ['PEER_ATTEMPT_APPROVAL_SCOPE_MATCH', attempt.approvalScopeId === root?.approvalScopeId],
-    ['PEER_CONTEXT_ROOT_MATCH', context.rootId === root?.rootId],
-    ['PEER_CONTEXT_APPROVAL_SCOPE_MATCH', context.approvalScopeId === root?.approvalScopeId],
+    ['PEER_ROOT_ID_PRESENT', id(attempt.rootId)], ['PEER_APPROVAL_SCOPE_PRESENT', id(attempt.approvalScopeId)],
+    ['PEER_ATTEMPT_ROOT_MATCH', attempt.rootId === context.rootId],
+    ['PEER_ATTEMPT_APPROVAL_SCOPE_MATCH', attempt.approvalScopeId === attempt.rootId],
+    ['PEER_CONTEXT_ROOT_MATCH', context.rootId === attempt.rootId],
+    ['PEER_CONTEXT_APPROVAL_SCOPE_MATCH', context.approvalScopeId === attempt.approvalScopeId],
     ['PEER_OWNER_MATCH', authority.ownerId === scope.instance.ownerId],
     ['PEER_WORKSPACE_MATCH', authority.workspaceId === selector.workspaceId],
     ['PEER_TEAM_MATCH', authority.teamId === selector.teamInstanceId],
     ['PEER_ATTEMPT_MATCH', authority.attemptId === attempt.id], ['PEER_RUN_MATCH', authority.runId === attempt.runId],
     ['PEER_MEMBER_MATCH', authority.memberId === attempt.memberId], ['PEER_TASK_MATCH', authority.taskId === attempt.taskId],
-    ['PEER_COORDINATOR_MATCH', context.coordinatorMemberId === root?.memberId],
+    ['PEER_COORDINATOR_MATCH', context.coordinatorMemberId === coordinator?.memberId],
     ['PEER_SELF_MEMBER_MATCH', context.self.memberId === attempt.memberId],
     ['PEER_SELF_ROLE_MATCH', context.self.role === scope.roles[attempt.memberId]],
     ['PEER_BINDING_MATCH', authority.binding.id === scope.instance.binding.id],
@@ -96,9 +96,14 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
     ['PEER_RECIPIENT_ROSTER_ROLE_MATCH', recipient && rosterPeer?.role === recipient.role],
     ['PEER_AUTHORIZED_EDGE', authorizedEdge]])) return false
   const page = await scope.artifacts()
-  const rootedAttempts = summary.attempts.filter((item) => item.rootId === root.rootId &&
-    item.approvalScopeId === root.approvalScopeId)
-  const workerAttempts = rootedAttempts.filter((item) => scope.roles[item.memberId] === 'worker' &&
+  const attributedAttempts = summary.attempts.filter((item) => item.ownerId === authority.ownerId &&
+    item.workspaceId === authority.workspaceId && item.teamId === authority.teamId &&
+    (item.id === attempt.id || context.targetOutcomes.some((outcome) => outcome.attemptId === item.id &&
+      outcome.taskId === item.taskId && outcome.memberId === item.memberId &&
+      outcome.executionOutcome === item.executionOutcome && outcome.effectDisposition === 'confirmed' &&
+      item.effectDisposition === 'confirmed')))
+  const workerAttempts = attributedAttempts.filter((item) => scope.roles[item.memberId] === 'worker' &&
+    item.effectDisposition === 'confirmed' &&
     (item.status === 'succeeded' || item.executionOutcome === 'succeeded'))
   const workerArtifacts = page.artifacts.filter((item) => workerAttempts.some((worker) =>
     worker.id === item.attemptId && worker.taskId === item.taskId && worker.memberId === item.memberId))
@@ -132,7 +137,7 @@ async function peerEffectAllowed(evaluate, request, args, attempt, summary, scop
     ['SEND_PAYLOAD_FIXTURE_EXACT', args.payload?.text === (senderRole === 'coordinator' ? scope.texts[recipient.role] : scope.texts.message)],
     ['SEND_RECIPIENT_TASK_MATCH', args.recipient?.taskId === undefined || team.tasks.some((task) => task.id === args.recipient.taskId &&
       task.role === recipient.role && task.assigneeMemberId === recipientId)]])) return false
-  const attributable = page.artifacts.filter((item) => rootedAttempts.some((source) => source.id === item.attemptId &&
+  const attributable = page.artifacts.filter((item) => attributedAttempts.some((source) => source.id === item.attemptId &&
     source.taskId === item.taskId && source.memberId === item.memberId &&
     (source.memberId === attempt.memberId || context.targetOutcomes.some((outcome) => outcome.attemptId === source.id &&
       outcome.artifactIds.includes(item.id)))))
