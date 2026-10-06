@@ -5,7 +5,7 @@ import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 
-export const sourceRevision = 'bafa21e8d469a41104c07c7281a4e3f97cb16009'
+export const sourceRevision = 'bac04cb6b2c144520e28234ad77f00d4cf0f5b23'
 
 function requireFact(value, code) {
   if (!value) throw new Error(code)
