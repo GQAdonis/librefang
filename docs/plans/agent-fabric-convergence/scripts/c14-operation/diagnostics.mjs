@@ -98,6 +98,7 @@ export async function captureAttemptEvents(evaluate, summary, scope, evidence) {
       trace = { attemptId: attempt.id, runId: attempt.runId, memberId: attempt.memberId, cursor: 0, calls: [], gaps: [] }
       evidence.executionTraces.push(trace)
     }
+    if (trace.complete && trace.runId === attempt.runId) continue
     try {
       const page = await ipc(evaluate, 'prometheus.uar.teams.events', { workspaceId: scope.instance.workspaceId,
         teamInstanceId: scope.instance.id, attemptId: attempt.id, after: trace.cursor })
@@ -114,6 +115,8 @@ export async function captureAttemptEvents(evaluate, summary, scope, evidence) {
       if (page.gapReason && trace.gaps.length < 16) trace.gaps.push({ after: page.after, cursor: page.cursor, reason: page.gapReason })
       for (const event of page.events) {
         const data = event.data
+        if (['agui.done', 'agui.cancelled'].includes(event.eventName) && data?.request_id === attempt.runId &&
+            Number.isSafeInteger(event.eventId) && event.eventId > 0) trace.terminalEventId = event.eventId
         if (!['agui.tool_call.complete', 'agui.tool_call.approval_required', 'agui.tool_result'].includes(event.eventName) ||
             data?.request_id !== attempt.runId || !tools.includes(data.name) || !identifier(data.id) ||
             !Number.isSafeInteger(event.eventId) || event.eventId <= 0) continue
@@ -141,6 +144,10 @@ export async function captureAttemptEvents(evaluate, summary, scope, evidence) {
         }
       }
       trace.cursor = page.cursor
+      // The snapshot includes the entire retained tail, including events after the terminal marker.
+      if (['succeeded', 'failed', 'cancelled', 'yielded'].includes(attempt.status) &&
+          attempt.effectDisposition === 'confirmed' && trace.terminalEventId &&
+          page.gapReason === null && trace.gaps.length === 0 && !trace.omittedCallEventCount) trace.complete = true
     } catch {
       trace.readFailureCode = 'C14_PROTECTED_ATTEMPT_EVENTS_UNAVAILABLE'
     }
