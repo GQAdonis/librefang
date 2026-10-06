@@ -3,7 +3,7 @@
 **Project:** Agent Fabric Convergence  
 **Date:** 2026-10-05 (America/Chicago)  
 **Recovery implementation:** 3/3 setup tasks and 1/1 change complete. OpenSpec archived at `openspec/changes/archive/2026-10-05-afc-six-hour-delivery-recovery`. Canonical lifecycle restoration is recorded separately in `reflect-closeout.receipt.json`.  
-**Parent:** 33 COMPLETE + 1 SKIPPED / 61; 11/20 changes. No software delivered by this child.
+**Parent:** 33 COMPLETE + 1 CANCELLED / 61 (legacy mirror: SKIPPED); 11/20 changes. No software delivered by this child.
 
 ## Delta
 

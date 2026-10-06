@@ -67,7 +67,12 @@
   "parentTasks": {
     "complete": 33,
     "skipped": 0,
-    "total": 61
+    "total": 61,
+    "cancelled": 1,
+    "cancelledIds": [
+      "C09.3"
+    ],
+    "accountingNote": "33 canonical completions; C09.3 is cancelled (reported as skipped in the legacy task mirror), not a product completion."
   },
   "parentChanges": {
     "complete": 11,
