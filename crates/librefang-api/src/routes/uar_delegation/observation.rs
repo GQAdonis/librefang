@@ -6,26 +6,10 @@ pub(super) async fn observe(
     projection: &UarDelegatedRunProjection,
     after: u64,
 ) -> Result<(UarDelegatedRunProjection, Vec<UarRunEvent>), UarRunClientError> {
-    let mut events = client.observe(projection, after).await?;
     let mut current = client.lookup(projection).await?;
-    let mut cursor = events
-        .iter()
-        .map(|event| event.cursor)
-        .max()
-        .unwrap_or(after);
-
-    // A terminal receipt can arrive before every unread output frame has been
-    // returned by the paged observer. Drain through its authoritative cursor.
-    while current.terminal_at.is_some() && cursor < current.cursor {
-        let unread = client.observe(&current, cursor).await?;
-        if unread.is_empty() {
-            break;
-        }
-        if let Some(next_cursor) = unread.iter().map(|event| event.cursor).max() {
-            cursor = next_cursor;
-        }
-        events.extend(unread);
-    }
+    // Lookup establishes terminal authority before observation. A terminal
+    // observer drains its single replay response, without reconnecting per page.
+    let events = client.observe(&current, after).await?;
     // The observation cursor acknowledges returned events, not merely events
     // advertised by the lookup receipt while execution is still active.
     current.cursor = projection.cursor;
