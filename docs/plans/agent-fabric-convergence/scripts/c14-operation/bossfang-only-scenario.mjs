@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { operateBossFang } from './bossfang-scenario.mjs'
+import { openWork } from './controls.mjs'
 import { digest, requireFact, write } from './io.mjs'
 import { ipc, setup } from './setup.mjs'
 
@@ -9,6 +10,7 @@ import { ipc, setup } from './setup.mjs'
 export default async function bossfangOnlyScenario(context, configuration) {
   const startedAt = new Date().toISOString()
   requireFact(configuration.priorTeams?.evidenceSha256, 'C14_PRIOR_TEAMS_EVIDENCE_NOT_REUSABLE')
+  await openWork(context.evaluate, context.signal)
   const selected = await setup(context.evaluate, configuration)
   await ipc(context.evaluate, 'prometheus.uar.teams.setup_coding', {
     workspaceId: selected.workspaceId, model: selected.model
