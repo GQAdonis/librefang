@@ -956,6 +956,10 @@
     }
   },
   "providers": {
+    "uar_connect": "Підключити",
+    "uar_disconnect": "Відключити",
+    "uar_reconnect": "Підключити знову",
+    "uar_connection_description": "Підключіться до незалежно керованого екземпляра UAR. Відключення не зупиняє UAR або його завдання.",
     "title": "Провайдери",
     "uar_title": "Universal Agent Runtime",
     "uar_description": "Supervised provider gateway for UAR-backed agents.",

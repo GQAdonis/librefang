@@ -953,6 +953,10 @@
     }
   },
   "providers": {
+    "uar_connect": "연결",
+    "uar_disconnect": "연결 해제",
+    "uar_reconnect": "다시 연결",
+    "uar_connection_description": "독립적으로 관리되는 UAR 인스턴스에 연결합니다. 연결을 해제해도 UAR 또는 실행 중인 작업은 중지되지 않습니다.",
     "title": "공급자",
     "uar_title": "Universal Agent Runtime",
     "uar_description": "Supervised provider gateway for UAR-backed agents.",

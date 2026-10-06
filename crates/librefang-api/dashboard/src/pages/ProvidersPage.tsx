@@ -1678,8 +1678,6 @@ function UarControlPanel() {
   const statusQuery = useUarStatus();
   const status = statusQuery.data;
   const healthy = status?.state === "healthy";
-  const selectedInstance = status?.instances?.find(instance => instance.selected);
-  const externallyOwned = selectedInstance?.ownership === "external";
   const modelsQuery = useUarModels(healthy);
   const startMutation = useStartUar();
   const stopMutation = useStopUar();
@@ -1742,10 +1740,10 @@ function UarControlPanel() {
             <Badge variant={badgeVariant}>{status?.state?.replace("_", " ") || t("common.loading")}</Badge>
           </div>
           <p className="text-xs text-text-dim">
-            {t("providers.uar_description", "Supervised provider gateway for UAR-backed agents.")}
+            {t("providers.uar_connection_description", "Connect to an independently owned UAR instance. Disconnecting never stops UAR or its runs.")}
           </p>
           {status?.endpoint && <p className="font-mono text-[10px] text-text-dim">{status.endpoint}</p>}
-          {status?.resolved_path && <p className="font-mono text-[10px] text-text-dim break-all">{status.resolved_path}</p>}
+          
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -1755,9 +1753,7 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("start")}
             leftIcon={startMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
           >
-            {externallyOwned
-              ? t("providers.uar_connect", "Connect")
-              : t("providers.uar_start", "Start")}
+            {t("providers.uar_connect", "Connect")}
           </Button>
           <Button
             size="sm"
@@ -1766,9 +1762,7 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("stop")}
             leftIcon={<Square className="h-3.5 w-3.5" />}
           >
-            {externallyOwned
-              ? t("providers.uar_detach", "Detach")
-              : t("providers.uar_stop", "Stop")}
+            {t("providers.uar_disconnect", "Disconnect")}
           </Button>
           <Button
             size="sm"
@@ -1777,9 +1771,7 @@ function UarControlPanel() {
             onClick={() => void runLifecycle("restart")}
             leftIcon={restartMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
           >
-            {externallyOwned
-              ? t("providers.uar_reconnect", "Reconnect")
-              : t("providers.uar_restart", "Restart")}
+            {t("providers.uar_reconnect", "Reconnect")}
           </Button>
         </div>
       </div>

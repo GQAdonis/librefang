@@ -23,6 +23,7 @@ pub(super) fn client_error(error: UarRunClientError) -> Response {
                 .map_or("uar_remote_refusal", |item| item.code.as_str());
             api_error(status, code, message)
         }
+        UarRunClientError::ConnectionReattachmentRequired => api_error(StatusCode::SERVICE_UNAVAILABLE,"uar_connection_reattachment_required","Renew the original admitted instance and workspace credential; this run cannot move or replay"),
         UarRunClientError::Binding(error) => {
             tracing::warn!(error = %error, "UAR delegation binding unavailable");
             api_error(

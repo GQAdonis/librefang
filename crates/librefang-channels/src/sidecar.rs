@@ -651,16 +651,6 @@ impl RestartPolicy {
         }
     }
 
-    pub(crate) fn from_uar_config(c: &librefang_types::config::UarSidecarConfig) -> Self {
-        Self {
-            enabled: c.restart,
-            initial_backoff_ms: c.restart_initial_backoff_ms,
-            max_backoff_ms: c.restart_max_backoff_ms,
-            max_retries: c.restart_max_retries,
-            reset_after_secs: c.restart_reset_after_secs,
-        }
-    }
-
     pub(crate) fn delay(self, attempt: u32) -> std::time::Duration {
         backoff_with_jitter(attempt, self.initial_backoff_ms, self.max_backoff_ms)
     }
@@ -677,15 +667,12 @@ pub(crate) enum SupervisionOutcome {
         /// attempt failed before readiness was established.
         ready_uptime: Option<std::time::Duration>,
     },
-    /// Restarting with unchanged configuration cannot recover.
-    Terminal(String),
 }
 
 /// Protocol hook surface for the shared spawn/restart/circuit-break engine.
 ///
-/// Channel adapters and UAR use different wire contracts (JSON-RPC ready
-/// notification versus `READY:{port}` plus HTTP), but lifecycle policy must
-/// remain identical. Implementations own one protocol-specific attempt; this
+/// Native exec channel adapters use JSON-RPC ready notifications.
+/// Implementations own one protocol-specific attempt; this
 /// engine owns retry counts, stable-uptime reset, backoff, and exhaustion.
 #[async_trait]
 pub(crate) trait SupervisionContract: Send {
@@ -705,10 +692,6 @@ pub(crate) async fn supervise_contract(contract: &mut impl SupervisionContract) 
     loop {
         let (error, ready_uptime) = match contract.run_once(attempt).await {
             SupervisionOutcome::Clean => return,
-            SupervisionOutcome::Terminal(error) => {
-                contract.retry_exhausted(attempt, Some(&error)).await;
-                return;
-            }
             SupervisionOutcome::Retryable {
                 error,
                 ready_uptime,
@@ -1212,17 +1195,10 @@ async fn build_spawn_env(
 /// any platform extension.
 const TELEGRAM_SIDECAR_STEM: &str = "librefang-sidecar-telegram";
 
-/// Bare program name of the bundled Universal Agent Runtime sidecar binary.
-///
-/// UAR ships a purpose-built `uar-sidecar` target (distinct from its
-/// `universal-agent-runtime` server binary) that binds `127.0.0.1:0`, prints one
-/// `READY:{port}` line to stdout, and exits on stdin EOF.
-const UAR_SIDECAR_STEM: &str = "uar-sidecar";
-
 /// Bare program names of every sidecar binary LibreFang bundles beside its own
 /// executable. A command that is exactly one of these — with no path component —
 /// is resolved against the bundled locations rather than `PATH`.
-const BUNDLED_SIDECAR_STEMS: [&str; 2] = [TELEGRAM_SIDECAR_STEM, UAR_SIDECAR_STEM];
+const BUNDLED_SIDECAR_STEMS: [&str; 1] = [TELEGRAM_SIDECAR_STEM];
 
 /// Platform-correct file name for a bundled sidecar stem (`.exe` on Windows).
 fn bundled_sidecar_file_name(stem: &str) -> String {
@@ -2739,23 +2715,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn terminal_failure_does_not_wait_or_retry() {
-        let mut contract = ScriptedContract::new(
-            restart_policy(3, 10),
-            [SupervisionOutcome::Terminal("invalid config".to_string())],
-        );
-
-        supervise_contract(&mut contract).await;
-
-        assert_eq!(contract.attempts, [0]);
-        assert!(contract.waits.is_empty());
-        assert_eq!(
-            contract.exhausted,
-            [(0, Some("invalid config".to_string()))]
-        );
-    }
-
-    #[tokio::test]
     async fn shutdown_during_backoff_stops_without_another_attempt() {
         let mut contract = ScriptedContract::new(restart_policy(3, 10), [retryable(None)]);
         contract.continue_waiting = false;
@@ -2864,57 +2823,6 @@ mod tests {
                 resolve_sidecar_command(explicit, home.path()),
                 explicit,
                 "explicit command must pass through: {explicit}"
-            );
-        }
-    }
-
-    #[test]
-    fn resolve_sidecar_command_resolves_the_uar_sidecar_stem() {
-        // The UAR sidecar is bundled exactly like the Telegram one, and must go
-        // through the same current_exe() -> <home>/bin -> PATH search. Before this
-        // was generalized, `uar-sidecar` fell straight through to a bare PATH
-        // lookup — the root cause of the "UAR cannot be found in PATH" report.
-        let home = tempfile::tempdir().expect("tempdir");
-        let bin_dir = home.path().join("bin");
-        std::fs::create_dir_all(&bin_dir).expect("mkdir bin");
-        let bundled = bin_dir.join(bundled_sidecar_file_name(UAR_SIDECAR_STEM));
-        std::fs::write(&bundled, b"#!/bin/sh\n").expect("write bundled binary");
-
-        assert_eq!(
-            resolve_sidecar_command(UAR_SIDECAR_STEM, home.path()),
-            bundled.to_string_lossy(),
-            "the bare `uar-sidecar` stem must resolve to the bundled binary"
-        );
-    }
-
-    #[test]
-    fn bundled_binary_hint_names_every_searched_path_for_a_missing_binary() {
-        // THE regression test for the reported bug. With no binary installed
-        // anywhere, spawning `uar-sidecar` used to surface only the OS error
-        // ("No such file or directory (os error 2)"), which sends operators off
-        // editing PATH when the binary was simply never shipped. The diagnostic
-        // must name every location searched.
-        //
-        // Deliberately resolves against a nonexistent temp path rather than
-        // relying on any host path existing, so this is platform-independent
-        // (see #5716).
-        let home = tempfile::tempdir().expect("tempdir");
-        let hint = bundled_binary_hint(UAR_SIDECAR_STEM, home.path())
-            .expect("an implicit bundled stem must produce a hint");
-
-        assert!(
-            hint.contains(UAR_SIDECAR_STEM),
-            "hint must name the binary: {hint}"
-        );
-        assert!(
-            hint.contains("$PATH"),
-            "hint must disclose that PATH was the last resort: {hint}"
-        );
-        for searched in bundled_search_paths(UAR_SIDECAR_STEM, home.path()) {
-            assert!(
-                hint.contains(&searched.display().to_string()),
-                "hint must name every searched path; missing {}: {hint}",
-                searched.display()
             );
         }
     }

@@ -1,4 +1,4 @@
-//! Operator-only UAR sidecar lifecycle and diagnostics.
+//! Owner-controlled connections to independently owned UAR instances.
 
 use super::AppState;
 use axum::extract::State;
@@ -8,7 +8,7 @@ use axum::Json;
 use librefang_channels::uar_sidecar::UarSidecarStatus;
 use librefang_types::config::{
     UarCompatibilityDiagnostic, UarEffectiveBinding, UarPlacementSupport, UarServiceCredentialRefs,
-    UarServiceEndpoints, UarServiceOwnership, UarWorkspaceLocality,
+    UarServiceEndpoints, UarServiceInstanceConfig, UarServiceOwnership, UarWorkspaceLocality,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -18,8 +18,11 @@ use std::time::Instant;
 pub fn router() -> axum::Router<Arc<AppState>> {
     axum::Router::new()
         .route("/uar/status", axum::routing::get(uar_status))
+        .route("/uar/connect", axum::routing::post(uar_connect))
         .route("/uar/start", axum::routing::post(uar_start))
+        .route("/uar/disconnect", axum::routing::post(uar_disconnect))
         .route("/uar/stop", axum::routing::post(uar_stop))
+        .route("/uar/reconnect", axum::routing::post(uar_reconnect))
         .route("/uar/restart", axum::routing::post(uar_restart))
         .route("/uar/test", axum::routing::post(uar_test_completion))
         .route("/uar/models", axum::routing::get(uar_models))
@@ -67,13 +70,23 @@ async fn operator_status(state: &AppState) -> UarOperatorStatus {
     // `config_ref()` hands back an `arc_swap::Guard`; take an owned snapshot so the borrow outlives this statement and no guard is held across the `.await` below.
     let kernel_config = std::sync::Arc::clone(&state.kernel.config_ref());
     let configured = kernel_config.uar.as_ref();
-    let selected_instance = configured.and_then(|config| config.selected_instance().ok());
+    let selected_instance = state
+        .uar_supervisor
+        .selected_instance()
+        .await
+        .or_else(|| configured.and_then(|config| config.selected_instance().ok()));
     let selected_instance_id = selected_instance
         .as_ref()
         .map(|instance| instance.id.clone());
-    let instances = configured
+    let mut inventory = configured
         .map(librefang_types::config::UarConfig::effective_instances)
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Some(selected) = &selected_instance {
+        if !inventory.iter().any(|item| item.id == selected.id) {
+            inventory.push(selected.clone());
+        }
+    }
+    let instances = inventory
         .into_iter()
         .map(|instance| {
             let instance = selected_instance
@@ -132,68 +145,164 @@ async fn admit_binding() -> Result<UarEffectiveBinding, String> {
         .map_err(|error| error.to_string())
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/uar/start",
-    tag = "uar",
-    responses(
-        (status = 200, description = "UAR started and ready"),
-        (status = 503, description = "UAR failed to start")
-    )
-)]
-pub(crate) async fn uar_start(State(state): State<Arc<AppState>>) -> Response {
-    match state.uar_supervisor.start().await {
+/// Optional Owner-only private handoff. Bearer is never persisted or returned.
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ConnectRequest {
+    instance: Option<UarServiceInstanceConfig>,
+    bearer: Option<String>,
+    workspace_id: Option<String>,
+}
+
+#[utoipa::path(post, path = "/api/uar/connect", tag = "uar", request_body = crate::types::JsonObject,
+    responses((status = 200, description = "Selected UAR connected and compatibility admitted; optional body instance uses native snake_case config, bearer is private, workspaceId scopes it"),
+    (status = 503, description = "Selected UAR connection or migration failed")))]
+pub(crate) async fn uar_connect(
+    State(state): State<Arc<AppState>>,
+    request: Option<Json<ConnectRequest>>,
+) -> Response {
+    let _command = state.uar_supervisor.command_guard().await;
+    let request = request.map(|Json(body)| body).unwrap_or_default();
+    if request.bearer.is_some()
+        && request
+            .workspace_id
+            .as_deref()
+            .is_none_or(|id| id.trim().is_empty())
+    {
+        return operator_error(
+            StatusCode::BAD_REQUEST,
+            "UAR_WORKSPACE_REQUIRED: scoped bearer requires workspaceId".to_string(),
+        );
+    }
+    if request
+        .bearer
+        .as_ref()
+        .is_some_and(|bearer| bearer.trim().is_empty())
+    {
+        return operator_error(
+            StatusCode::BAD_REQUEST,
+            "UAR_CREDENTIAL_REQUIRED: bearer must not be empty".to_string(),
+        );
+    }
+    let replacement = request.instance.is_some() || request.bearer.is_some();
+    if replacement {
+        let instance = request
+            .instance
+            .or(state.uar_supervisor.selected_instance().await)
+            .or_else(|| {
+                state
+                    .kernel
+                    .config_ref()
+                    .uar
+                    .as_ref()
+                    .and_then(|config| config.selected_instance().ok())
+            });
+        let Some(instance) = instance else {
+            return operator_error(
+                StatusCode::BAD_REQUEST,
+                "UAR_INSTANCE_REQUIRED: select an existing UAR instance".to_string(),
+            );
+        };
+        let instance = match (librefang_types::config::UarConfig {
+            instances: vec![instance],
+            ..Default::default()
+        })
+        .selected_instance()
+        {
+            Ok(instance) => instance,
+            Err(error) => return operator_error(StatusCode::BAD_REQUEST, error),
+        };
+        for endpoint in [
+            &instance.endpoints.runtime,
+            &instance.endpoints.administration,
+            &instance.endpoints.models,
+            &instance.endpoints.console,
+            &instance.endpoints.model_provider,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Err(error) = librefang_channels::uar_sidecar::validate_endpoint(endpoint) {
+                return operator_error(StatusCode::BAD_REQUEST, error);
+            }
+        }
+        #[cfg(feature = "uar-driver")]
+        let probe_bearer = {
+            let credentials = if let Some(bearer) = request.bearer.as_ref() {
+                Ok(
+                    librefang_llm_drivers::drivers::uar::UarResolvedCredentials::delegated(
+                        bearer.clone(),
+                    ),
+                )
+            } else {
+                crate::server::resolve_uar_credentials(state.kernel.as_ref(), &instance)
+            };
+            let probe = credentials
+                .as_ref()
+                .ok()
+                .and_then(|credentials| credentials.runtime.as_ref())
+                .map(|bearer| bearer.to_string());
+            librefang_llm_drivers::drivers::uar::configure_supervised_instance(
+                Ok(instance.clone()),
+            );
+            librefang_llm_drivers::drivers::uar::configure_supervised_credentials(credentials);
+            librefang_llm_drivers::drivers::uar::configure_connection_workspace(
+                request.workspace_id.clone(),
+            );
+            probe
+        };
+        #[cfg(not(feature = "uar-driver"))]
+        let probe_bearer = request.bearer;
+        state.uar_supervisor.configure(instance, probe_bearer).await;
+    } else if request.workspace_id.is_some() {
+        #[cfg(feature = "uar-driver")]
+        librefang_llm_drivers::drivers::uar::configure_connection_workspace(request.workspace_id);
+    }
+    match state.uar_supervisor.connect().await {
         Ok(status) => {
-            publish_driver_endpoint(status.endpoint.clone());
+            publish_driver_endpoint(status.endpoint);
             #[cfg(feature = "uar-driver")]
             if let Err(error) = admit_binding().await {
+                let _ = state.uar_supervisor.disconnect().await;
+                state.uar_supervisor.admission_failed(&error).await;
                 return operator_error(StatusCode::BAD_GATEWAY, error);
             }
             Json(operator_status(&state).await).into_response()
         }
-        Err(error) => operator_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
+        Err(error) => operator_error(StatusCode::SERVICE_UNAVAILABLE, error),
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/uar/stop",
-    tag = "uar",
-    responses((status = 200, description = "UAR stopped"))
-)]
-pub(crate) async fn uar_stop(State(state): State<Arc<AppState>>) -> Response {
-    match state.uar_supervisor.stop().await {
-        Ok(status) => {
+#[utoipa::path(post, path = "/api/uar/disconnect", tag = "uar",
+    responses((status = 200, description = "Detached locally; UAR and its tasks are not stopped")))]
+pub(crate) async fn uar_disconnect(State(state): State<Arc<AppState>>) -> Response {
+    let _command = state.uar_supervisor.command_guard().await;
+    match state.uar_supervisor.disconnect().await {
+        Ok(_) => {
             publish_driver_endpoint(None);
-            drop(status);
             Json(operator_status(&state).await).into_response()
         }
-        Err(error) => operator_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+        Err(error) => operator_error(StatusCode::INTERNAL_SERVER_ERROR, error),
     }
 }
+#[utoipa::path(post, path = "/api/uar/reconnect", tag = "uar",
+    responses((status = 200, description = "Revalidated selected connection; never restarts UAR")))]
+pub(crate) async fn uar_reconnect(state: State<Arc<AppState>>) -> Response {
+    uar_connect(state, None).await
+}
 
-#[utoipa::path(
-    post,
-    path = "/api/uar/restart",
-    tag = "uar",
-    responses(
-        (status = 200, description = "UAR restarted and ready"),
-        (status = 503, description = "UAR failed to restart")
-    )
-)]
-pub(crate) async fn uar_restart(State(state): State<Arc<AppState>>) -> Response {
-    publish_driver_endpoint(None);
-    match state.uar_supervisor.restart().await {
-        Ok(status) => {
-            publish_driver_endpoint(status.endpoint.clone());
-            #[cfg(feature = "uar-driver")]
-            if let Err(error) = admit_binding().await {
-                return operator_error(StatusCode::BAD_GATEWAY, error);
-            }
-            Json(operator_status(&state).await).into_response()
-        }
-        Err(error) => operator_error(StatusCode::SERVICE_UNAVAILABLE, error.to_string()),
-    }
+// Legacy aliases deliberately have only connection effects, never process effects.
+#[utoipa::path(post, path = "/api/uar/start", tag = "uar", responses((status = 200, description = "Deprecated connection-only alias for connect")))]
+pub(crate) async fn uar_start(state: State<Arc<AppState>>) -> Response {
+    uar_connect(state, None).await
+}
+#[utoipa::path(post, path = "/api/uar/stop", tag = "uar", responses((status = 200, description = "Deprecated connection-only alias for disconnect")))]
+pub(crate) async fn uar_stop(state: State<Arc<AppState>>) -> Response {
+    uar_disconnect(state).await
+}
+#[utoipa::path(post, path = "/api/uar/restart", tag = "uar", responses((status = 200, description = "Deprecated connection-only alias for reconnect")))]
+pub(crate) async fn uar_restart(state: State<Arc<AppState>>) -> Response {
+    uar_reconnect(state).await
 }
 
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
@@ -315,46 +424,19 @@ pub(crate) async fn uar_test_completion(
         (status = 503, description = "UAR is not running")
     )
 )]
-pub(crate) async fn uar_models(State(state): State<Arc<AppState>>) -> Response {
-    let Some(endpoint) = state.uar_supervisor.endpoint().await else {
-        return operator_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "UAR is not running".to_string(),
-        );
-    };
+pub(crate) async fn uar_models(State(_state): State<Arc<AppState>>) -> Response {
     #[cfg(feature = "uar-driver")]
-    let model_catalog_url = match admit_binding().await {
-        Ok(binding) => binding
-            .endpoints
-            .models
-            .unwrap_or_else(|| format!("{endpoint}/api/models")),
-        Err(error) => return operator_error(StatusCode::BAD_GATEWAY, error),
-    };
+    match librefang_llm_drivers::drivers::uar::selected_model_catalog().await {
+        Ok(models) => Json(models).into_response(),
+        Err(error) => operator_error(StatusCode::BAD_GATEWAY, error.to_string()),
+    }
     #[cfg(not(feature = "uar-driver"))]
-    let model_catalog_url = format!("{endpoint}/api/models");
-    match librefang_http::new_client()
-        .get(model_catalog_url)
-        .send()
-        .await
     {
-        Ok(response) => {
-            let status = response.status();
-            match response.json::<serde_json::Value>().await {
-                Ok(body) if status.is_success() => Json(body).into_response(),
-                Ok(body) => operator_error(
-                    StatusCode::BAD_GATEWAY,
-                    format!("UAR /api/models returned HTTP {status}: {body}"),
-                ),
-                Err(error) => operator_error(
-                    StatusCode::BAD_GATEWAY,
-                    format!("UAR /api/models returned invalid JSON: {error}"),
-                ),
-            }
-        }
-        Err(error) => operator_error(
-            StatusCode::BAD_GATEWAY,
-            format!("UAR /api/models request failed: {error}"),
-        ),
+        let _ = _state;
+        operator_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "BossFang was built without the uar-driver feature".to_string(),
+        )
     }
 }
 

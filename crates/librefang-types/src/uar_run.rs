@@ -53,17 +53,29 @@ pub enum UarProjectionRetention {
     ProcessEphemeral,
 }
 
+/// Definition source, persisted independently of the provider wire selector.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UarDefinitionMode {
+    #[default]
+    Bound,
+    InlineDiagnostic,
+}
+
 /// BossFang's correlation-only projection of one UAR-owned execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UarDelegatedRunProjection {
     pub boss_task_id: String,
-    /// Original authenticated BossFang user asserted to the managed sidecar.
+    /// Original authenticated BossFang user owning this local projection.
     pub verified_principal: String,
     pub delegation_id: String,
     pub admission_key: String,
     pub request_digest: String,
+    /// Empty only for the explicitly authored inline diagnostic.
     pub target_binding_id: String,
+    #[serde(default)]
+    pub definition_mode: UarDefinitionMode,
     pub workspace_id: String,
     pub selected_instance_id: String,
     pub effective_binding: UarEffectiveBinding,

@@ -60,11 +60,11 @@
       "purpose": "launch",
       "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
       "args": [
-        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
         "--repository",
         "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
         "--scenario",
-        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
         "--require-scenario",
         "--receipt",
         "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c10-mac-launch-20261004.json"
@@ -83,15 +83,15 @@
     "canonicalCommand": {
       "command": "node",
       "args": [
-        "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-kbd-adapter.mjs",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/scripts/cadence-kbd-adapter.mjs",
         "snapshot",
         "--project",
         "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
       ],
       "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
     },
-    "cadenceVersion": "1.2.0",
-    "publisherCapabilityAssessment": "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-full/skills/process/delivery-cadence/examples/boss-consumer-capabilities.json"
+    "cadenceVersion": "1.2.3",
+    "publisherCapabilityAssessment": "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/examples/boss-consumer-capabilities.json"
   },
   "team": {
     "maxImplementers": 3,
@@ -128,15 +128,15 @@
   "learning": {
     "command": "node",
     "args": [
-      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/cadence-karpathy-adapter.mjs",
+      "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/scripts/cadence-karpathy-adapter.mjs",
       "--project",
       "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
       "--input",
       "{report}",
       "--recorder",
-      "/Users/gqadonis/Projects/prometheus/worktrees/cadence-pipeline-mini/scripts/record-progress.mjs"
+      "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini/scripts/record-progress.mjs"
     ],
-    "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+    "cwd": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini"
   },
   "pipeline": {
     "workAheadLimit": 1,

@@ -1,6 +1,6 @@
 use librefang_types::{
     config::{UarEffectiveBinding, UarServiceEndpoints, UarWorkspaceLocality},
-    uar_run::UarDelegatedRunProjection,
+    uar_run::{UarDefinitionMode, UarDelegatedRunProjection},
 };
 use serde_json::Value;
 
@@ -54,7 +54,7 @@ pub(super) fn ensure_same_binding(
     };
     if let Some(field) = mismatch {
         Err(UarRunClientError::Binding(format!(
-            "delegation's admitted UAR {field} no longer matches the selected binding"
+            "delegation's admitted UAR {field} no longer matches its original connection binding"
         )))
     } else {
         Ok(())
@@ -65,6 +65,7 @@ pub(super) fn validate_service_placement(
     body: &Value,
     binding: &UarEffectiveBinding,
     target_binding_id: &str,
+    definition_mode: UarDefinitionMode,
 ) -> Result<(), UarRunClientError> {
     let placement = body
         .get("service_placement")
@@ -85,7 +86,13 @@ pub(super) fn validate_service_placement(
             UarWorkspaceLocality::Remote => "remote",
         },
     )?;
-    require_placement(placement, "bindingId", target_binding_id)?;
+    match definition_mode {
+        UarDefinitionMode::Bound => require_placement(placement, "bindingId", target_binding_id)?,
+        UarDefinitionMode::InlineDiagnostic if placement.get("bindingId").is_some() => {
+            return placement_mismatch("bindingId");
+        }
+        UarDefinitionMode::InlineDiagnostic => {}
+    }
     if placement.get("credentialRef").and_then(Value::as_str) != binding.credential_ref.as_deref() {
         return placement_mismatch("credentialRef");
     }

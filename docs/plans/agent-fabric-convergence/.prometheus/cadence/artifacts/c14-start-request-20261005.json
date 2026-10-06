@@ -1,0 +1,113 @@
+{
+  "scope": {
+    "tasks": [
+      "C14.1",
+      "C14.2"
+    ],
+    "changes": [
+      "afc-c14-studio-administration-and-isolated-service-consoles"
+    ],
+    "phases": [],
+    "outcomes": [
+      "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile"
+    ],
+    "deliveryClass": "teams-in-work",
+    "owners": [
+      "boss-runtime",
+      "boss-renderer",
+      "boss-lead"
+    ]
+  },
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss"
+    },
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence"
+    }
+  ],
+  "featureOperation": {
+    "id": "c14-work-team",
+    "outcome": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile",
+    "procedure": "Open packaged Work, choose coding team and workspace, submit bounded change, inspect members and artifacts, handle authoritative approval, cancel supported work and reopen durable team.",
+    "checkpointId": "c14-work-operation",
+    "promisedCapability": "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile",
+    "creationTaskRef": "C14.1",
+    "entrypoint": {
+      "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+        "--boss",
+        "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+        "--launcher",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--output",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "sourcePaths": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs"
+      ],
+      "buildProducedPaths": []
+    },
+    "target": {
+      "kind": "real",
+      "description": "Packaged The Boss on macOS with its normal UAR sidecar and configured inference"
+    },
+    "evidenceLevel": "real-service",
+    "expectedResult": "Team produces repository change and visible worker/reviewer artifacts, with supported cancellation and durable reopening",
+    "prerequisites": [],
+    "isolatedResources": [
+      "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-disposable-workspace"
+    ],
+    "externalEffects": [],
+    "authorityRefs": [
+      "operator-approved-teams-first-plan-20261005"
+    ],
+    "limitations": [
+      "Native Windows execution remains pending; no claim of whole C14 completion"
+    ]
+  },
+  "checkpoints": [
+    {
+      "id": "mac-functional-launch",
+      "kind": "run",
+      "purpose": "launch",
+      "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--repository",
+        "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+        "--scenario",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/assets/boss-provider-setup.mjs",
+        "--require-scenario",
+        "--receipt",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-mac-launch-20261005.json"
+      ],
+      "cwd": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+      "required": true,
+      "timeoutMs": 180000
+    },
+    {
+      "id": "c14-work-operation",
+      "kind": "run",
+      "command": "/Users/gqadonis/.local/share/fnm/node-versions/v24.21.0/installation/bin/node",
+      "args": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs",
+        "--boss",
+        "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+        "--launcher",
+        "/Users/gqadonis/Projects/prometheus/prometheus-skill-pack/skills/process/delivery-cadence/scripts/boss-launch.mjs",
+        "--output",
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts"
+      ],
+      "cwd": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+      "sourcePaths": [
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/scripts/c14-operation/operate.mjs"
+      ],
+      "buildProducedPaths": [],
+      "required": true,
+      "timeoutMs": 1500000
+    }
+  ]
+}

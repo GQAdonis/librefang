@@ -954,6 +954,10 @@
     }
   },
   "providers": {
+    "uar_connect": "连接",
+    "uar_disconnect": "断开连接",
+    "uar_reconnect": "重新连接",
+    "uar_connection_description": "连接到独立管理的 UAR 实例。断开连接不会停止 UAR 或其运行任务。",
     "title": "供应商",
     "uar_title": "Universal Agent Runtime",
     "uar_description": "Supervised provider gateway for UAR-backed agents.",

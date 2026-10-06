@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-05T08:18:40.981Z",
+  "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "status": "prepared-not-executed",
+  "productionReadinessRequired": true,
+  "sourceRepository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+  "build": {
+    "command": "cargo",
+    "args": [
+      "build",
+      "--release",
+      "--locked",
+      "--no-default-features",
+      "--features",
+      "server-full",
+      "--bin",
+      "uar-sidecar",
+      "--target",
+      "aarch64-apple-darwin",
+      "--jobs",
+      "4"
+    ],
+    "environment": {
+      "CARGO_BUILD_BUILD_DIR": "/Users/gqadonis/.cargo-build/88/40363890800d24",
+      "RUSTC_WRAPPER": ""
+    },
+    "intermediateCacheEvidence": "Existing afc-c10-uar native release dependency file identifies this cache; Cargo documentation confirms build-dir override keeps final target output in the new worktree.",
+    "singleWriter": true
+  },
+  "package": {
+    "command": "node",
+    "args": [
+      "scripts/package-boss-sidecar.mjs",
+      "darwin-arm64",
+      "aarch64-apple-darwin"
+    ],
+    "requires": "Clean committed UAR source, exact Boss build/local-uar-source.json pin and resulting checksummed payload"
+  },
+  "desktop": {
+    "command": "pnpm",
+    "args": [
+      "build:mac:arm64"
+    ],
+    "cwd": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+    "environment": {
+      "THE_BOSS_LOCAL_UAR_SOURCE_DIR": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work"
+    }
+  },
+  "observedResources": {
+    "diskFreeGiB": 95,
+    "memoryFreePercent": 52,
+    "otherRustWorkingDirectory": "/Users/gqadonis/Projects/prometheus/worktrees/uar-usage",
+    "otherProcessesUntouched": true
+  },
+  "testSuitesRun": false,
+  "buildsRun": false
+}

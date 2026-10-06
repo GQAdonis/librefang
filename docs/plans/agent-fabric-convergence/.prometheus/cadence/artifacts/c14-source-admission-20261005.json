@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-05T08:01:23.976Z",
+  "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+  "reason": "Approved coding operation requires team workspace and host admission propagation; observed source gap from runtime owner",
+  "repositories": [
+    {
+      "path": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+      "role": "desktop-ui-and-trusted-team-adapter"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+      "baseline": "4c141dfedfb253fb7f66fc628f0fec7dbb005edc",
+      "role": "team-execution-host-context"
+    }
+  ],
+  "completionCredit": false,
+  "freezePolicy": "Include both source refs at ready after full production wiring and pin the built UAR payload to its resulting commit."
+}

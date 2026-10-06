@@ -954,6 +954,10 @@
     }
   },
   "providers": {
+    "uar_connect": "Connect",
+    "uar_disconnect": "Disconnect",
+    "uar_reconnect": "Reconnect",
+    "uar_connection_description": "Connect to an independently owned UAR instance. Disconnecting never stops UAR or its runs.",
     "title": "Providers",
     "subtitle": "Manage LLM API connections and health.",
     "configured_count": "{{configured}} / {{total}} Configured",

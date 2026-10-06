@@ -17,14 +17,16 @@
     "openSpecLabel": "1.1"
   },
   "cadence": {
+    "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "index": 8,
+    "profileRevision": 7,
+    "minutes": 120,
     "profile": ".prometheus/cadence-profile.json",
     "stateRoot": ".prometheus/cadence",
-    "iteration": null,
-    "minutes": 120,
     "build": "pnpm build:mac:arm64",
-    "functionalOperation": "Declare Teams in Work procedure and candidate-specific receipts at start; implement it within C14.1 before freeze.",
     "publicationEvery": 2,
-    "publicationDebtPreserved": true
+    "publicationDebtPreserved": true,
+    "functionalOperation": "scripts/c14-operation/operate.mjs: actual packaged Work coding task, approval, worker/reviewer artifacts, cancellation and durable reopen"
   },
   "assignments": [
     {
@@ -45,12 +47,79 @@
     }
   ],
   "sourceBaselines": {
-    "status": "refresh exact product baseline at delivery start",
+    "boss": "de9de96acb",
+    "uar": "4c141dfedfb253fb7f66fc628f0fec7dbb005edc",
+    "uarPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
     "previousDispatch": "execute-dispatch-before-priority-r8.json"
   },
-  "status": "planned-handoff",
-  "updatedAt": "2026-10-05T07:31:02.705Z",
-  "planRevision": 8,
+  "status": "implementation-running",
+  "updatedAt": "2026-10-05T16:57:58.792Z",
+  "planRevision": 9,
   "deliveryOrder": "customer-delivery-map.json",
-  "modelAssignment": "model-dispatch.json tasks.C14.1; no model or worker launched by this handoff"
+  "modelAssignment": "model-dispatch.json tasks.C14.1; actual native Codex implementer assignments recorded below",
+  "dispatchedAt": "2026-10-05T07:59:44.157Z",
+  "state": "implementation-running",
+  "actualAssignments": [
+    {
+      "agent": "teams_runtime",
+      "role": "boss-runtime",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "Boss main UAR adapters/team IPC/shared DTOs",
+        "UAR workspace/host-tool propagation at /Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work"
+      ],
+      "status": "production-in-progress"
+    },
+    {
+      "agent": "teams_work_ui",
+      "role": "boss-renderer",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "Boss Work UI/shared team renderer components/all renderer locales"
+      ],
+      "status": "renderer-complete-error-ux-finishing"
+    },
+    {
+      "agent": "teams_operation",
+      "role": "delivery-operation-author",
+      "model": "gpt-6.1-sol",
+      "owns": [
+        "initiative scripts/c14-operation/**"
+      ],
+      "status": "operation-authored-not-run"
+    }
+  ],
+  "observedPrerequisite": "Team-member kernel request lacked working directory/host-tool admission; required for approved coding operation. Fix within C14.1 delivery through existing trusted context, not generic-only substitute.",
+  "approvedRepair": {
+    "taskRefs": [
+      "C14.4",
+      "C14.3"
+    ],
+    "retainedTaskRefs": [
+      "C14.1",
+      "C14.2"
+    ],
+    "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "authority": "operator-approved Make BossFang accessible and connect it to the existing UAR plan",
+    "scopeReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+    "wholeTaskCompletionRequiresOriginalAcceptance": true
+  },
+  "repairAssignments": [
+    {
+      "agent": "bossfang_grants",
+      "owns": "UAR scoped native delegation grants/auth/API/docs"
+    },
+    {
+      "agent": "teams_runtime",
+      "owns": "BossFang connection manager/native API/full-run driver/legacy migration/Docker UAR removal"
+    },
+    {
+      "agent": "team_authoring",
+      "owns": "The Boss Apps/Settings/BossFang supervisor/typed IPC/preferences/all locales/diagnostics"
+    },
+    {
+      "agent": "root",
+      "owns": "KBD/Cadence scope, native packaging/importer/release publication and final complete operation"
+    }
+  ]
 }

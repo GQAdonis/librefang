@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "authority": "Operator-approved customer-usefulness plan, 2026-10-05",
   "phase": "agent-fabric-convergence",
-  "planRevision": 8,
+  "planRevision": 9,
   "baseline": {
     "revision": 500,
     "planRevision": 7,
@@ -241,5 +241,19 @@
     "reason": "KBD rejects InProgress -> Pending; supported priority hold preserves history without cancellation/completion.",
     "resume": "Transition to in-progress when feedback-to-github is selected."
   },
-  "canonicalScheduling": "Existing change registration is immutable and cannot reorder sequences; preserve canonical sequences. Select each mapped task explicitly with kbd-apply begin-task at delivery handoff. This map is authored delivery policy, not a new scheduler."
+  "canonicalScheduling": "Existing change registration is immutable and cannot reorder sequences; preserve canonical sequences. Select each mapped task explicitly with kbd-apply begin-task at delivery handoff. This map is authored delivery policy, not a new scheduler.",
+  "immediateRepair": {
+    "taskRefs": [
+      "C14.4",
+      "C14.3"
+    ],
+    "retainedTaskRefs": [
+      "C14.1",
+      "C14.2"
+    ],
+    "iterationId": "ecfc73f2-6872-4534-a91a-da461fc45531",
+    "authority": "operator-approved Make BossFang accessible and connect it to the existing UAR plan",
+    "scopeReference": "openspec/changes/afc-c14-studio-administration-and-isolated-service-consoles/design.md",
+    "wholeTaskCompletionRequiresOriginalAcceptance": true
+  }
 }

@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { restartUar, startUar, stopUar, testUar } from "../http/client";
+import { reconnectUar, connectUar, disconnectUar, testUar } from "../http/client";
 import { uarKeys } from "../queries/keys";
 
-function useLifecycleMutation(mutationFn: () => ReturnType<typeof startUar>) {
+function useLifecycleMutation(mutationFn: () => ReturnType<typeof connectUar>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
@@ -13,15 +13,15 @@ function useLifecycleMutation(mutationFn: () => ReturnType<typeof startUar>) {
 }
 
 export function useStartUar() {
-  return useLifecycleMutation(startUar);
+  return useLifecycleMutation(connectUar);
 }
 
 export function useStopUar() {
-  return useLifecycleMutation(stopUar);
+  return useLifecycleMutation(disconnectUar);
 }
 
 export function useRestartUar() {
-  return useLifecycleMutation(restartUar);
+  return useLifecycleMutation(reconnectUar);
 }
 
 export function useTestUar() {
