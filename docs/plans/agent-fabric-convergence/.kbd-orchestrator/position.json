@@ -2,27 +2,27 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 513,
-  "derivedRevision": 513,
+  "sourceRevision": 546,
+  "derivedRevision": 546,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 274
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 307
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-05T16:59:00.537665Z",
+  "updatedAt": "2026-10-06T00:01:49.326575Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c14-studio-administration-and-isolated-service-consoles",
-    "C14.1"
+    "six-hour-convergence-recovery",
+    "execute"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 16,
-      "total": 25
+      "done": 17,
+      "total": 26
     },
     "children": [
       {
@@ -74,6 +74,28 @@
                 "progress": {
                   "done": 4,
                   "total": 4
+                }
+              }
+            ],
+            "annotations": []
+          },
+          {
+            "type": "phase",
+            "id": "six-hour-convergence-recovery",
+            "canonicalId": "agent-fabric-convergence::six-hour-convergence-recovery",
+            "status": "IN_PROGRESS",
+            "progress": {
+              "done": 1,
+              "total": 1
+            },
+            "children": [
+              {
+                "type": "change",
+                "id": "afc-six-hour-delivery-recovery",
+                "status": "COMPLETE",
+                "progress": {
+                  "done": 3,
+                  "total": 3
                 }
               }
             ],
