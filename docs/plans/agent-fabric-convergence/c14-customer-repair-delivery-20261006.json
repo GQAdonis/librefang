@@ -1,0 +1,383 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-customer-increment-receipt",
+  "recordedAt": "2026-10-06T20:17:53.626Z",
+  "version": "2.2.12",
+  "source": {
+    "boss": "b3d55f0633124d557035d8d58cdaf858511c0941",
+    "uar": "035678b6290353a5988a5a96668d08a9781b1471",
+    "bossfang": "295ff50201fbb09a6e22390de85d9b374c3d9edd",
+    "mini": "e3fed05944e6b365ad74af30926b875e6857190f"
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationId": "ba9712c7-7be4-4cfd-bad2-421dd65a23f9",
+    "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+    "outcome": "success",
+    "finishedAt": "2026-10-06T20:15:37.077Z",
+    "completion": {
+      "tasks": [],
+      "changes": [],
+      "phases": []
+    },
+    "rebaselineAuthority": "Operator approved rebaseline with old six-delivery history preserved",
+    "continuousRepairStartedAt": "2026-10-06T07:50:51.975Z"
+  },
+  "build": {
+    "command": "pnpm build:mac:arm64",
+    "startedAt": "2026-10-06T19:00:51.910Z",
+    "finishedAt": "2026-10-06T19:08:37.271Z",
+    "exitCode": 0,
+    "artifact": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/dist/The-Boss-2.2.12-mac-arm64.dmg",
+    "size": 771305573,
+    "sha256": "236632149f1dfbce5e8bdc308b27fb01fdaea026b2d2864f320c6e0b73a560c7",
+    "signing": "Developer ID signed; local notarization skipped; distributable notarization pending"
+  },
+  "operation": {
+    "schemaVersion": 1,
+    "kind": "c14-redacted-composite-failed-boundary-recovery",
+    "recordedAt": "2026-10-06T20:12:41.074Z",
+    "complete": false,
+    "wholeC14Complete": false,
+    "observedBossFangRecoveryChecksComplete": true,
+    "boundary": "Composite of actual same-package completed checks in separate owned launches; not a new full C14 operation, phase completion, installer acceptance, or durable cadence certificate.",
+    "application": {
+      "sourceCommit": "b3d55f0633124d557035d8d58cdaf858511c0941",
+      "appAsarSha256": "645526497709fb98f45949838110c3e00e6b43ae781d48c73895e22c1aeeffe7",
+      "samePackageAsOriginal": true
+    },
+    "originalFullOperation": {
+      "combinedEvidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-62230284-b070-410b-aa77-f8f420760ea1/combined-evidence.json",
+        "sha256": "f38956e0da86523c65c0bb6e5aded61170624f6b2ea32836534898d5b32e3c7f",
+        "startedAt": "2026-10-06T19:09:35.653Z",
+        "finishedAt": "2026-10-06T19:30:15.624Z"
+      },
+      "bossFangEvidence": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-62230284-b070-410b-aa77-f8f420760ea1/bossfang-operation.json",
+        "sha256": "a23721d6884043177e46cdee2342a64a91e650381b8114b9f39872fbf87f7611",
+        "startedAt": "2026-10-06T19:12:42.628Z",
+        "finishedAt": "2026-10-06T19:30:15.113Z"
+      },
+      "complete": false,
+      "teams": {
+        "passed": true,
+        "evidence": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-62230284-b070-410b-aa77-f8f420760ea1/evidence.json",
+          "sha256": "7d123229c37c84da1991f101837a6ce442fd4f454e5cdcda59cadcbf97ca8cb2",
+          "startedAt": "2026-10-06T19:09:36.652Z",
+          "finishedAt": "2026-10-06T19:12:23.982Z"
+        }
+      },
+      "retainedBossFangChecks": {
+        "packagedContext": {
+          "status": "passed"
+        },
+        "appsMascot": {
+          "status": "passed"
+        },
+        "dedicatedSettings": {
+          "status": "passed"
+        },
+        "fixedPortConflict": {
+          "status": "passed"
+        },
+        "automaticPortConflict": {
+          "status": "passed"
+        },
+        "managedDefaultAndOwnership": {
+          "status": "passed"
+        },
+        "appsDashboardAuthentication": {
+          "status": "passed"
+        },
+        "scopedSameUarConnection": {
+          "status": "passed"
+        },
+        "nativeFullHarnessDiagnostic": {
+          "status": "passed"
+        },
+        "nativeFullHarnessCancellation": {
+          "status": "cancelled"
+        },
+        "originalRunTransportRetention": {
+          "status": "cancelled"
+        },
+        "endpointChangeAndRestart": {
+          "status": "passed"
+        },
+        "uarRestartAndGenerationFollow": {
+          "status": "passed"
+        },
+        "grantRenewal": {
+          "status": "passed"
+        },
+        "expiredGrantRefusal": {
+          "status": "passed"
+        }
+      },
+      "failedCheckPreserved": {
+        "name": "alternateConfiguredUar",
+        "status": "failed",
+        "code": "C14_BOSSFANG_CONNECT_NOT_OBSERVED"
+      }
+    },
+    "alternateRecovery": {
+      "operation": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/operation.json",
+        "sha256": "d52f6444a2485edd529227b43fc98efac9f40787992cdd3e3998b049aa80a111",
+        "startedAt": "2026-10-06T20:03:40.179Z",
+        "finishedAt": "2026-10-06T20:06:39.962Z"
+      },
+      "launch": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/launch.json",
+        "sha256": "19fa5e24a9f3952db79e59986bd20ab32c31cb05bf93234be383dde66b9f131f",
+        "startedAt": "2026-10-06T20:03:35.437Z",
+        "finishedAt": "2026-10-06T20:06:40.268Z"
+      },
+      "wholeRunComplete": false,
+      "completedCheck": {
+        "status": "passed",
+        "configuredInstanceId": "bossfang-alternate-a4b0fc03-16ea-467f-b665-4ac8bb03a173",
+        "admittedInstanceId": "bossfang-alternate-a4b0fc03-16ea-467f-b665-4ac8bb03a173",
+        "workspaceId": "c31d72bf-f1e3-408a-82e3-b3b5129447ab",
+        "modelId": "bossfang-fixture-gateway/gpt-6.1-sol",
+        "taskId": "7047c6ed-5575-4818-8c49-ac974d59a37c",
+        "authenticatedProbe": true,
+        "realDelegationSucceeded": true,
+        "workSelectionUnchanged": true,
+        "diagnostic": {
+          "id": "7047c6ed-5575-4818-8c49-ac974d59a37c",
+          "status": "succeeded",
+          "instanceId": "bossfang-alternate-a4b0fc03-16ea-467f-b665-4ac8bb03a173",
+          "workspaceId": "c31d72bf-f1e3-408a-82e3-b3b5129447ab",
+          "model": "bossfang-fixture-gateway/gpt-6.1-sol",
+          "taskId": "7047c6ed-5575-4818-8c49-ac974d59a37c",
+          "startedAt": "2026-10-06T20:04:50.482Z",
+          "completedAt": "2026-10-06T20:04:52.992Z",
+          "checks": {
+            "listening": "succeeded",
+            "authenticated": "succeeded",
+            "compatible": "succeeded",
+            "delegationOperational": "succeeded"
+          },
+          "stages": [
+            {
+              "stage": "connection",
+              "status": "succeeded"
+            },
+            {
+              "stage": "models",
+              "status": "succeeded"
+            },
+            {
+              "stage": "admission",
+              "status": "succeeded"
+            },
+            {
+              "stage": "delegation",
+              "status": "succeeded"
+            },
+            {
+              "stage": "completion",
+              "status": "succeeded"
+            }
+          ],
+          "events": [
+            {
+              "cursor": 1,
+              "type": "agui.artifact"
+            },
+            {
+              "cursor": 2,
+              "type": "agui.state.patch"
+            },
+            {
+              "cursor": 3,
+              "type": "agui.artifact"
+            },
+            {
+              "cursor": 4,
+              "type": "agui.stream.start"
+            },
+            {
+              "cursor": 5,
+              "type": "agui.state.patch"
+            },
+            {
+              "cursor": 7,
+              "type": "agui.artifact"
+            },
+            {
+              "cursor": 8,
+              "type": "agui.artifact"
+            },
+            {
+              "cursor": 9,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 10,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 11,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 12,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 13,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 14,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 15,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 16,
+              "type": "agui.message.delta"
+            },
+            {
+              "cursor": 17,
+              "type": "agui.state.patch"
+            },
+            {
+              "cursor": 18,
+              "type": "agui.done"
+            }
+          ],
+          "usage": null,
+          "cancellation": {
+            "requested": false,
+            "acknowledged": false,
+            "terminal": false,
+            "cleanupUncertain": false
+          },
+          "hasError": false,
+          "action": null
+        }
+      },
+      "preservedLaterFailure": {
+        "stage": "externalBossFangPreservation",
+        "code": "C14_BOSSFANG_AUTHENTICATED_DASHBOARD_UNAVAILABLE"
+      }
+    },
+    "remainingRecovery": {
+      "operation": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/operation.json",
+        "sha256": "09b8739a16c6e6e4aeec4cd39b0b94d5eb2abe921717e5306543f9e87e1ea9a8",
+        "startedAt": "2026-10-06T20:07:42.673Z",
+        "finishedAt": "2026-10-06T20:10:04.655Z"
+      },
+      "launch": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/launch.json",
+        "sha256": "cb1cbbba0305cd2f3129b59ff421dbbe7f46860d79fb439f87302b7d5781d8ad",
+        "startedAt": "2026-10-06T20:07:38.372Z",
+        "finishedAt": "2026-10-06T20:10:04.957Z"
+      },
+      "complete": true,
+      "checks": {
+        "externalBossFangPreservation": {
+          "status": "passed",
+          "authenticatedDashboard": true,
+          "stopRefused": true,
+          "disconnectPreservedExternal": true,
+          "beforeUptimeSeconds": 5,
+          "afterUptimeSeconds": 50,
+          "uarUnchanged": true,
+          "endpointSha256": "76bab99425a6825040711f571ba3c0e46c9eccdbf66a966272e0f7411cf35457"
+        },
+        "stopPreservesUar": {
+          "status": "passed",
+          "bossfangStopped": true,
+          "uarUnchanged": true
+        },
+        "settingsReopen": {
+          "status": "passed",
+          "selectedWorkspaceRetained": true,
+          "selectedModelRetained": true
+        }
+      }
+    },
+    "actualRecoveryCommands": [
+      {
+        "executable": "/Users/gqadonis/.local/share/fnm/node-versions/v26.5.0/installation/bin/node",
+        "args": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/run.mjs"
+        ],
+        "cwd": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini",
+        "shellLogin": false,
+        "toolSession": 78943,
+        "runnerSource": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/run.mjs",
+          "sha256": "eafd3c53f9d47ec8d7a532e0cbcb05b3bfae3f48095ba823c7b4ec3211808438"
+        },
+        "scenario": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v9/scenario.mjs",
+          "sha256": "2634c4a03a129037608799fd08c32ad9ff819c4636d339446e4731cdfaa1005e"
+        }
+      },
+      {
+        "executable": "/Users/gqadonis/.local/share/fnm/node-versions/v26.5.0/installation/bin/node",
+        "args": [
+          "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/run.mjs"
+        ],
+        "cwd": "/Users/gqadonis/Projects/prometheus/prometheus-skills-mini",
+        "shellLogin": false,
+        "toolSession": 54905,
+        "runnerSource": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/run.mjs",
+          "sha256": "eafd3c53f9d47ec8d7a532e0cbcb05b3bfae3f48095ba823c7b4ec3211808438"
+        },
+        "scenario": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/scenario.mjs",
+          "sha256": "6424f644763053dd9b57568a9f6173d34177282ac3470b717ed0ac73c06ea7f9"
+        }
+      }
+    ],
+    "commandProvenance": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/execution-provenance.json",
+      "sha256": "fc1801fa5cbbb574f483090a3b80015dc82ca6584d0f5327b53cbd7e6fd5ffef"
+    },
+    "preservation": {
+      "priorReceiptsUnmodified": true,
+      "failedV5ThroughV9Preserved": true,
+      "passingTeamsExpiryNotRepeated": true,
+      "noProductionSourceChangeForRecovery": true,
+      "noBuildOrTestSuiteRunByThisProducer": true,
+      "consoleLogFileCaptured": false
+    },
+    "limitations": [
+      "Original full operation remains incomplete and v9 remains incomplete; their retained passing fields are not relabelled whole-run success.",
+      "v9 external dashboard failure did not retain dashboardObservation; v10 failed-external-only rerun passed, so exact intermittent cause is unresolved and no production defect is asserted.",
+      "Native streaming event detail/model text, credentials and raw errors are omitted.",
+      "Root owns canonical Cadence adoption and remaining C14 delivery status."
+    ]
+  },
+  "publication": {
+    "status": "in-progress",
+    "workflowRun": 37522462034,
+    "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37522462034",
+    "platforms": [
+      "win32-x64",
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-arm64"
+    ],
+    "metadataAndWebsite": "pending actual publication",
+    "installedAcceptance": "pending and separate"
+  },
+  "learning": {
+    "observed": "Repeated recovery wrappers initially failed on model endpoint normalization, missing diagnostic workspace and restore order; preserved original successful operations avoided another full build/expiry run.",
+    "recommendation": "Reuse canonical scenario setup and its safe failure observation when narrowing a failed operation; retain prior passes and immutable app identity.",
+    "velocity": "No comparable complete measurements establish a velocity increase.",
+    "taskAccounting": "Usable increment is complete; broader C14 task requirements remain incomplete, so no whole-task/change/phase credits."
+  }
+}
