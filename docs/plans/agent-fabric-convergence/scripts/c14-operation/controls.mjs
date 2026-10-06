@@ -1,5 +1,5 @@
 import { ipc } from './setup.mjs'
-import { waitFor } from './io.mjs'
+import { requireFact, waitFor } from './io.mjs'
 
 const query = (selector) => `[...document.querySelectorAll(${JSON.stringify(selector)})].find(node => node.getClientRects().length)`
 
@@ -61,6 +61,42 @@ export async function openWork(evaluate, signal) {
 export async function selectWorkspace(evaluate, signal, workspaceId) {
   await click(evaluate, signal, '[data-ui~="teams-workspace"]', 'C14_WORK_WORKSPACE_MENU_UNAVAILABLE')
   await click(evaluate, signal, `[data-option-id="${workspaceId}"]`, 'C14_WORK_ISOLATED_WORKSPACE_UNAVAILABLE')
+}
+
+/** Exercise recovery only for an actual missing native registration, before Teams reloads. */
+export async function recoverInitialDashboard(evaluate, signal, evidence) {
+  await waitFor(signal, () => evaluate(`(() => {
+    const later=[...document.querySelectorAll('button')].find(node=>node.innerText.trim()==='Set up later');
+    if(later)later.click();return document.readyState==='complete' && Boolean(document.querySelector('#app-sidebar'));
+  })()`), 'C14_APPLICATION_ONBOARDING_UNAVAILABLE')
+  evidence.initialRegistered = await evaluate("Boolean(customElements.get('webview'))")
+  evidence.required = !evidence.initialRegistered
+  evidence.exercised = false
+  if (!evidence.required) return
+  evidence.previousTimeOrigin = await evaluate('performance.timeOrigin')
+  await ipc(evaluate, 'navigation.open_route_in_main', { path: '/app/launchpad' })
+  await click(evaluate, signal, '[data-ui~="bossfang-app"]', 'C14_BOSSFANG_APPS_ENTRY_UNAVAILABLE')
+  await waitFor(signal, () => evaluate(`(() => {
+    const dialog=document.querySelector('[data-confirm-popup="true"]');
+    return Boolean(dialog?.getClientRects().length && dialog.innerText.includes('BossFang needs a window reload'));
+  })()`), 'C14_BOSSFANG_RELOAD_CONFIRMATION_UNAVAILABLE')
+  evidence.confirmationObserved = true
+  await waitFor(signal, () => evaluate(`(() => {
+    const button=[...document.querySelectorAll('[data-confirm-popup="true"] button')]
+      .find(node=>node.innerText.trim()==='Reload window' && node.getClientRects().length);
+    if(!button||button.disabled)return false;button.click();return true;
+  })()`), 'C14_BOSSFANG_RELOAD_ACTION_UNAVAILABLE')
+  const reloaded = await waitFor(signal, () => evaluate(`(() => {
+    const timeOrigin=performance.timeOrigin;
+    if(timeOrigin===${JSON.stringify(evidence.previousTimeOrigin)}||document.readyState!=='complete')return false;
+    return {timeOrigin,registered:Boolean(customElements.get('webview')),
+      nativeGetUrl:typeof document.createElement('webview').getURL==='function'};
+  })()`).catch(() => false), 'C14_RENDERER_DOCUMENT_RELOAD_NOT_OBSERVED')
+  evidence.reloadedTimeOrigin = reloaded.timeOrigin
+  evidence.reloadedRegistered = reloaded.registered
+  evidence.nativeGetUrl = reloaded.nativeGetUrl
+  requireFact(reloaded.registered && reloaded.nativeGetUrl, 'C14_BOSSFANG_NATIVE_REGISTRATION_NOT_RECOVERED')
+  evidence.exercised = true
 }
 
 export async function reopen(evaluate, signal, setup, instanceId) {

@@ -5,6 +5,7 @@ import teams from './scenario.mjs'
 import { operateBossFang } from './bossfang-scenario.mjs'
 import { digest, requireFact, write } from './io.mjs'
 import { ipc } from './setup.mjs'
+import { recoverInitialDashboard } from './controls.mjs'
 
 /** Resolve the native route from the exact admitted team's validated execution receipts. */
 async function teamExecutionModel(evaluate, evidence) {
@@ -40,9 +41,6 @@ async function teamExecutionModel(evaluate, evidence) {
 /** Operate both completed capabilities in the same real packaged application. */
 export default async function combinedScenario(context, configuration) {
   const startedAt = new Date().toISOString()
-  const teamResult = await teams(context, configuration)
-  const teamEvidence = fs.existsSync(configuration.evidence)
-    ? JSON.parse(fs.readFileSync(configuration.evidence, 'utf8')) : null
   const bossStatus = await ipc(context.evaluate, 'bossfang.status')
   if (!bossStatus.configured) {
     // This launcher uses a disposable application profile. The credential lives
@@ -51,6 +49,21 @@ export default async function combinedScenario(context, configuration) {
       username: 'c14-disposable-operator', password: randomBytes(32).toString('base64url')
     })
   }
+  const initialDashboardRecovery = {}
+  try { await recoverInitialDashboard(context.evaluate, context.signal, initialDashboardRecovery) }
+  catch(error) {
+    const receipt = {schemaVersion: 1, kind: 'combined-teams-bossfang-packaged-operation',
+      sourceRefs: configuration.sourceRefs, startedAt, finishedAt: new Date().toISOString(), complete: false,
+      failureStage: 'initial-apps-dashboard-recovery',
+      failureCode: /^C14_[A-Z0-9_]+$/.test(error.code ?? '') ? error.code : 'C14_APPLICATION_OPERATION_UNAVAILABLE',
+      initialDashboardRecovery, teams: {passed: false, exercised: false}, bossfang: {passed: false, exercised: false}}
+    write(path.join(path.dirname(configuration.evidence), 'combined-evidence.json'), receipt)
+    return {passed: false, observedBehavior: JSON.stringify({complete: false, failureCode: receipt.failureCode,
+      evidencePath: path.join(path.dirname(configuration.evidence), 'combined-evidence.json')})}
+  }
+  const teamResult = await teams(context, configuration)
+  const teamEvidence = fs.existsSync(configuration.evidence)
+    ? JSON.parse(fs.readFileSync(configuration.evidence, 'utf8')) : null
   let executionModel, executionModelUnavailable
   try { executionModel = await teamExecutionModel(context.evaluate,teamEvidence) }
   catch(error) { executionModelUnavailable = /^C14_[A-Z0-9_]+$/.test(error.code ?? '')
@@ -62,6 +75,7 @@ export default async function combinedScenario(context, configuration) {
   const receipt = {
     schemaVersion: 1, kind: 'combined-teams-bossfang-packaged-operation',
     sourceRefs: configuration.sourceRefs, startedAt, finishedAt: new Date().toISOString(),
+    initialDashboardRecovery,
     complete: teamResult.passed === true && bossfang.passed === true,
     teams: { passed: teamResult.passed, evidence: configuration.evidence,
       ...(teamEvidence ? { evidenceSha256: digest(fs.readFileSync(configuration.evidence)) } : {}) },
