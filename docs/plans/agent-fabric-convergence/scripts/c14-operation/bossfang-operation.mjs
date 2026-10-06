@@ -47,9 +47,11 @@ export default async function operateBossFang({evaluate, signal, targets}, confi
       'C14_BOSSFANG_ACTUAL_TEAMS_SELECTION_REQUIRED')
     passed(activeCheck, {samePackagedLaunch: true})
     const workspaceId = selection.workspaceId
-    requireFact(selection.executionModel?.source === 'uar-team-effective-model-receipt' &&
+    requireFact(['uar-team-effective-model-receipt', 'ordinary-uar-model-catalog-after-coding-setup']
+      .includes(selection.executionModel?.source) &&
       selection.executionModel.workspaceId === workspaceId && selection.executionModel.providerId &&
-      selection.executionModel.modelId && selection.executionModel.receipts?.length,
+      selection.executionModel.modelId &&
+      (selection.executionModel.receipts?.length || selection.executionModel.pricingIdentity?.providerId),
       selection.executionModelUnavailable ?? 'C14_BOSSFANG_TEAM_EXECUTION_MODEL_UNAVAILABLE')
     const modelId = selection.executionModel.providerId + '/' + selection.executionModel.modelId
     const config = {port: 4545, portPolicy: 'automatic', instanceId: 'managed-local', workspaceId}
