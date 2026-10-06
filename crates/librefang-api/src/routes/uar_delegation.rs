@@ -6,6 +6,8 @@ mod diagnostic;
 #[cfg(feature = "uar-driver")]
 mod errors;
 #[cfg(feature = "uar-driver")]
+mod observation;
+#[cfg(feature = "uar-driver")]
 mod storage;
 #[cfg(not(feature = "uar-driver"))]
 pub fn router() -> axum::Router<Arc<AppState>> {
@@ -273,16 +275,18 @@ mod enabled {
         Path(task_id): Path<String>,
         Query(query): Query<ObserveQuery>,
     ) -> Response {
-        let (_, mut projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
+        let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
             Err(response) => return response,
         };
-        let events = match state
-            .uar_run_control
-            .observe(&projection, query.after)
-            .await
+        let (projection, events) = match super::observation::observe(
+            state.uar_run_control.as_ref(),
+            &projection,
+            query.after,
+        )
+        .await
         {
-            Ok(events) => events,
+            Ok(observation) => observation,
             Err(error) => {
                 if let Some(recovered) = UarRunClient::recovery_projection(&projection, &error) {
                     return saved_view(&state, recovered, StatusCode::GONE);
@@ -290,9 +294,6 @@ mod enabled {
                 return client_error(error);
             }
         };
-        if let Some(cursor) = events.iter().map(|event| event.cursor).max() {
-            projection.cursor = projection.cursor.max(cursor);
-        }
         let projection = match persist_and_sync(&state, projection) {
             Ok(projection) => projection,
             Err(response) => return response,
