@@ -730,6 +730,7 @@ export interface WorkflowStep {
   name: string;
   agent_id?: string;
   agent_name?: string;
+  agent?: { agent_id?: string; agent_name?: string; agent_type?: string; uar_bound?: UarWorkflowTarget };
   prompt_template: string;
   timeout_secs?: number;
   inherit_context?: boolean;
@@ -3317,6 +3318,7 @@ export async function createWorkflow(payload: {
     name: string;
     agent_name?: string;
     agent_id?: string;
+    uar_bound?: UarWorkflowTarget;
     prompt: string;
     timeout_secs?: number;
   }>;
@@ -3358,6 +3360,7 @@ export async function updateWorkflow(workflowId: string, payload: {
     name: string;
     agent_name?: string;
     agent_id?: string;
+    uar_bound?: UarWorkflowTarget;
     prompt: string;
     timeout_secs?: number;
   }>;
@@ -3423,6 +3426,7 @@ export interface WorkflowRunDetail {
   completed_at?: string | null;
   step_results: WorkflowStepResult[];
   total_steps?: number;
+  uar_delegations?: Array<{ step_name: string; delegation: UarDelegatedRunProjection }>;
 }
 
 /** Per-step preview returned by dry-run. */
@@ -6780,4 +6784,67 @@ export async function setKnowledgeHolders(
     { agents },
   );
   return data.agents ?? [];
+}
+
+/** Immutable bound target; runtime credentials and principal remain server-owned. */
+export interface UarWorkflowTarget {
+  targetBindingId: string;
+  workspaceId: string;
+  definition: { id: string; version: string; digest: string };
+  run: Record<string, unknown>;
+}
+
+export interface UarRunEvent {
+  taskId: string;
+  cursor: number;
+  revision: number;
+  type: string;
+  occurredAt?: string;
+  data: Record<string, unknown>;
+}
+
+export interface UarDelegatedRunProjection {
+  bossTaskId: string;
+  delegationId: string;
+  targetBindingId: string;
+  workspaceId: string;
+  selectedInstanceId: string;
+  effectiveBinding: UarEffectiveBinding;
+  definition: UarWorkflowTarget["definition"];
+  workflow?: { workflowId: string; workflowRunId: string; stepName: string };
+  uarTaskId?: string;
+  uarThreadId?: string;
+  uarRootRunId?: string;
+  uarRunId?: string;
+  admissionState: string;
+  executionState: string;
+  cancellationState: string;
+  effectState: string;
+  recoveryState: string;
+  bossProjectionRetention: "durable" | "process_ephemeral";
+  revision: number;
+  cursor: number;
+  runtimeEpoch?: string;
+  cancellation: { requested: boolean; acknowledged: boolean; terminal: boolean; cleanupUncertain: boolean };
+  retention: { mode: string; terminalTtlSeconds: number; terminalRecordCap: number };
+  output?: string;
+  pendingApproval?: UarRunEvent;
+  unsupportedSemantics?: string[];
+  definitionDiagnostics?: Array<{ code: string; message: string; path?: string }>;
+  expiresAt?: string;
+  terminalAt?: string;
+}
+
+export function getUarDelegation(bossTaskId: string): Promise<UarDelegatedRunProjection> {
+  return get(`/api/uar/delegations/${encodeURIComponent(bossTaskId)}`);
+}
+
+export function approveUarDelegation(input: { bossTaskId: string; approvalId: string; approved: boolean }): Promise<UarDelegatedRunProjection> {
+  return post(`/api/uar/delegations/${encodeURIComponent(input.bossTaskId)}/approve`, {
+    approvalId: input.approvalId, approved: input.approved,
+  });
+}
+
+export function cancelUarDelegation(bossTaskId: string): Promise<UarDelegatedRunProjection> {
+  return post(`/api/uar/delegations/${encodeURIComponent(bossTaskId)}/cancel`, {});
 }

@@ -5,6 +5,8 @@
  * without spinning up the ~2600-line CanvasPage component / xyflow runtime.
  */
 import type { Edge, Node } from "@xyflow/react";
+import type { UarWorkflowTarget } from "../api";
+import { isUarWorkflowTarget, isUarWorkflowTargetBound } from "./uarWorkflowTarget";
 
 export type CanvasNodeData = {
   nodeType?: string;
@@ -23,7 +25,8 @@ export type CanvasNodeData = {
    *  Stored explicitly rather than inferred from which field happens to be
    *  set, so switching between any two of the three is reversible in both
    *  directions. */
-  agentSource?: "instance" | "name" | "type";
+  agentSource?: "instance" | "name" | "type" | "uar_bound";
+  uarBound?: UarWorkflowTarget;
   /** Per-step `session_mode` override sent to the API: `"persistent"`,
    *  `"new"`, or absent to defer to the target agent's manifest. */
   sessionMode?: "persistent" | "new";
@@ -81,6 +84,8 @@ function isCanvasNodeData(value: unknown, depth: number): value is CanvasNodeDat
     "_origSource", "_origTarget",
   ];
   if (stringFields.some((field) => value[field] !== undefined && typeof value[field] !== "string")) return false;
+
+  if (value.uarBound !== undefined && !isUarWorkflowTarget(value.uarBound)) return false;
 
   const numberFields = ["timeoutSecs", "maxRetries", "maxIterations", "_childCount"];
   if (numberFields.some((field) => value[field] !== undefined
@@ -258,7 +263,8 @@ export function parseCanvasImport(value: unknown): CanvasImport {
 export type StepAgentPayload =
   | { agent_id: string }
   | { agent_type: string }
-  | { agent_name: string };
+  | { agent_name: string }
+  | { uar_bound: UarWorkflowTarget };
 
 /** A binding field's usable value: the trimmed string, or `""` when the field
  *  is absent, blank, or a non-string smuggled in through a hand-edited layout. */
@@ -289,6 +295,7 @@ function bindingField(value: unknown): string {
  * than send a step the API will refuse.
  */
 export function stepAgentPayload(data: CanvasNodeData): StepAgentPayload | null {
+  if (data.agentSource === "uar_bound") return isUarWorkflowTargetBound(data.uarBound) ? { uar_bound: data.uarBound } : null;
   const agentId = bindingField(data.agentId);
   const agentType = bindingField(data.agentType);
   const agentName = bindingField(data.agentName);
