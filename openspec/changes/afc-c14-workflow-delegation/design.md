@@ -14,11 +14,15 @@ Non-goals: another execution loop, budget/effect settlement, definition catalog,
 
 HTTP step target is mutually exclusive `uar_bound: {targetBindingId, workspaceId, definition:{id,version,digest}, run:{...native CreateRun fields}}`. Version is a string. Rendered prompt supplies `run.input`; binding admission supplies deployment_binding_id. Caller principal and private runtime credentials are never authored in a workflow. Existing native selectors remain unchanged.
 
+Public authored run extras are limited to `working_directory`, `reasoning_effort` and `skill_attachments`; default `{}` is sufficient. The API derives `service_placement` from the selected admitted service binding, or the retained original binding for reconciliation. UAR-bound step names must be unique. Native session/required-skill overrides, loop/operator targets and native template export are explicitly unsupported for the new target; they cannot silently discard its admitted binding. Sequential, conditional, collect, fan-out and dependency-driven ordinary dispatch continue using the existing engine.
+
 The StepAgent UAR variant retains the step key. The existing engine resolves a per-step dispatch handle; its sender invokes existing admission with a stable workflow-run/step task identity. Retries reconcile that same admission rather than creating another remote run. Existing dependencies and modes remain engine-owned; UAR executes the full delegated step and owns its effects, approvals and spend.
 
 GET ordinary workflow run adds `uar_delegations: [{step_name,delegation}]`. The existing camelCase delegation projection adds optional `workflow:{workflowId,workflowRunId,stepName}`, `output` and `pendingApproval` (an existing UarRunEvent). Output comes from `agui.message.delta` data.delta.text; pending approval is the host-issued `agui.tool_call.approval_required` event while executionState is input_required. Existing `/events`, `/approve` and `/cancel` endpoints remain the control boundary. Ordinary cancellation forwards to each admitted UAR task before local cancellation; unresolved cleanup stays visible.
 
 The API sender waits for authoritative terminal receipt and drains events. Completion events alone cannot finish the step. Correlation and event-derived display state are persisted in the existing projection store, preserving process-ephemeral/durable retention and recovery refusals. Native-only synchronous behavior stays unchanged; UAR-bound requests use the background driver even for timed/synchronous waits.
+
+Workflow projection cursors acknowledge consumed events. A status receipt's advertised high-water does not advance that cursor and skip unread output. An authoritative UAR terminal cancellation also settles the enclosing local workflow cancellation; the local engine does not convert it into successful completion.
 
 ## Risks / Trade-offs
 
@@ -27,6 +31,8 @@ UAR full-harness retention remains process-ephemeral → expose existing epoch/r
 Definition identity is authored alongside an admitted binding → retain existing native admission checks and exact immutable identity; no new runtime authority or catalog is invented.
 
 An engine timeout drops a delegated observation future → the background driver settles any nonterminal delegated steps through existing cancellation before returning failure; cleanup uncertainty remains in the projection.
+
+Scoped hosted-tool effect operation is currently blocked: native UAR rejects authored `tool_admission` unless host-authenticated, and managed native file tools are disabled. The existing Boss team host-context path attaches a private filesystem/MCP bridge with team/member-attempt correlation; no equivalent trusted ordinary-workflow resource attachment is present. This increment never forwards the host launch bearer or authors private callback grants. Ordinary bound output/identity/cancellation can operate independently; original approval/effect acceptance cannot be credited until that existing authority has an explicitly admitted resource handoff.
 
 ## Migration Plan
 

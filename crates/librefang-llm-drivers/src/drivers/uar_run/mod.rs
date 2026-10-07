@@ -283,6 +283,9 @@ impl UarRunClient {
             created_at: None,
             terminal_at: None,
             links: Map::new(),
+            workflow: None,
+            output: None,
+            pending_approval: None,
         })
     }
 

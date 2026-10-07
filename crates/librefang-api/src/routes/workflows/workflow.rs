@@ -522,46 +522,23 @@ pub struct RunWorkflowQuery {
 fn spawn_background_run(
     state: Arc<AppState>,
     run_id: WorkflowRunId,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
 ) -> tokio::task::JoinHandle<Result<String, String>> {
-    // Separate Arc clones for the resolver closure (Fn) and the sender closure (Fn) so neither moves out of the other.
-    let state_for_resolver = state.clone();
-    let state_for_sender = state.clone();
     tokio::spawn(async move {
-        let result = state
-            .kernel
-            .workflow_engine()
-            .execute_run(
-                run_id,
-                move |agent_ref| state_for_resolver.kernel.resolve_step_agent(agent_ref),
-                move |agent_id: librefang_types::agent::AgentId,
-                      message: String,
-                      session_mode_override: Option<librefang_types::agent::SessionMode>| {
-                    let sc = state_for_sender.clone();
-                    async move {
-                        // NOTE (refs #6659): unlike the kernel's own workflow driver, this one does not enter `tool_runner::with_agent_call_depth` around the step's agent turn — `librefang-runtime` is only a dev-dependency of this crate.
-                        // It is safe today because `spawn_background_run` always starts from a fresh `tokio::spawn`, so the depth task-local is unset and every step here runs at depth 0; a step target that nests another workflow still goes through `LibreFangKernel::run_workflow`, which does check and increment.
-                        // If this driver ever gains a caller that is already inside an agent turn, its steps must be wrapped the same way the kernel's are.
-                        sc.kernel
-                            .send_message_with_session_mode(
-                                agent_id,
-                                &message,
-                                session_mode_override,
-                            )
-                            .await
-                            .map(|r| {
-                                (
-                                    r.response,
-                                    r.total_usage.input_tokens,
-                                    r.total_usage.output_tokens,
-                                )
-                            })
-                            .map_err(|e| format!("{e}"))
-                    }
-                },
-            )
-            .await;
-        if let Err(ref e) = result {
-            tracing::warn!(run_id = %run_id, error = %e, "Background workflow run failed");
+        let dispatch = uar_dispatch::Dispatch::new(state.clone(), run_id, api_user).await?;
+        let resolver = dispatch.clone();
+        let sender = dispatch.clone();
+        let result = state.kernel.workflow_engine().execute_run(
+            run_id,
+            move |agent_ref| resolver.resolve(agent_ref),
+            move |agent_id, message, session| {
+                let sender = sender.clone();
+                async move { sender.send(agent_id, message, session).await }
+            },
+        ).await;
+        let result = dispatch.finish(result).await;
+        if let Err(ref error) = result {
+            tracing::warn!(run_id = %run_id, %error, "Background workflow run failed");
         }
         result
     })
@@ -653,6 +630,7 @@ async fn workflow_wait_response(
 #[utoipa::path(post, path = "/api/workflows/{id}/run", tag = "workflows", params(("id" = String, Path, description = "Workflow ID")), request_body(content = crate::types::JsonObject, description = "Workflow input variables (free-form key/value object)"), responses((status = 200, description = "Workflow run completed (wait=true)"), (status = 202, description = "Workflow run started asynchronously")))]
 pub async fn run_workflow(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(id): Path<String>,
     Query(query): Query<RunWorkflowQuery>,
     Json(req): Json<serde_json::Value>,
@@ -666,7 +644,12 @@ pub async fn run_workflow(
 
     let input = workflow_run_input_string(&req);
 
-    if query.wait && query.timeout_ms.is_none() {
+    let has_uar_targets = uar_dispatch::has_targets(&state, workflow_id).await;
+    if has_uar_targets && api_user.is_none() {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"authenticated_owner_required"})));
+    }
+
+    if query.wait && query.timeout_ms.is_none() && !has_uar_targets {
         // Preserve the original fully synchronous kernel runner, including
         // its global execution timeout and nested-agent depth accounting.
         match state.kernel.run_workflow_typed(workflow_id, input).await {
@@ -694,7 +677,7 @@ pub async fn run_workflow(
                     .into_json_tuple();
             }
         };
-        let mut run_task = spawn_background_run(state.clone(), run_id);
+        let mut run_task = spawn_background_run(state.clone(), run_id, api_user.clone());
 
         if query.wait {
             let timeout_ms = query.timeout_ms.unwrap_or_default();
@@ -800,6 +783,7 @@ pub async fn dry_run_workflow(
 )]
 pub async fn get_workflow_run(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
 ) -> impl IntoResponse {
     let run_id = WorkflowRunId(match run_id.parse() {
@@ -829,6 +813,7 @@ pub async fn get_workflow_run(
                 // something can read it back, and this is the one endpoint
                 // that renders a single run in full.
                 "owner_agent_id": run.owner_agent_id.map(|a| a.to_string()),
+                "uar_delegations": uar_dispatch::projections(&state, run_id, api_user.as_ref()),
                 "step_results": run.step_results.iter().map(|s| serde_json::json!({
                     "step_name": s.step_name,
                     "agent_id": s.agent_id,
@@ -865,6 +850,7 @@ pub async fn get_workflow_run(
 )]
 pub async fn rerun_workflow_run(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
 ) -> impl IntoResponse {
     let run_id = WorkflowRunId(match run_id.parse() {
@@ -888,6 +874,9 @@ pub async fn rerun_workflow_run(
     };
 
     // `create_run` returns None when the workflow definition is gone (e.g. it was deleted after the original run); surface that as a 404.
+    if uar_dispatch::has_targets(&state, workflow_id).await && api_user.is_none() {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error":"authenticated_owner_required"})));
+    }
     let new_run_id = match engine.create_run_owned(workflow_id, input, owner).await {
         Some(rid) => rid,
         None => {
@@ -898,7 +887,7 @@ pub async fn rerun_workflow_run(
         }
     };
     let new_run_id_str = new_run_id.to_string();
-    drop(spawn_background_run(state.clone(), new_run_id));
+    drop(spawn_background_run(state.clone(), new_run_id, api_user));
     (
         StatusCode::ACCEPTED,
         Json(serde_json::json!({ "run_id": new_run_id_str })),
@@ -942,6 +931,7 @@ mod run_response_tests {
 )]
 pub async fn cancel_workflow_run(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
 ) -> impl IntoResponse {
     let run_id = WorkflowRunId(match run_id.parse() {
@@ -951,11 +941,18 @@ pub async fn cancel_workflow_run(
         }
     });
 
+    let delegations = match uar_dispatch::cancel(&state, run_id, api_user.as_ref()).await {
+        Ok(outcomes) => outcomes,
+        Err(error) => return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({
+            "error":"uar_workflow_control_failed", "detail":error
+        }))),
+    };
     match state.kernel.workflow_engine().cancel_run(run_id).await {
         Ok(()) => (
             StatusCode::OK,
             Json(serde_json::json!({
                 "run_id": run_id.to_string(),
+                "uar_delegations": delegations,
                 "state": "cancelled",
             })),
         ),
@@ -1090,6 +1087,7 @@ pub struct ResumeRunRequest {
 )]
 pub async fn resume_workflow_run(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
     Json(req): Json<serde_json::Value>,
 ) -> impl IntoResponse {
@@ -1117,12 +1115,12 @@ pub async fn resume_workflow_run(
     };
 
     // Build agent resolver and send_message for the resume execution.
-    let state_for_resolver = state.clone();
-    let state_for_sender = state.clone();
-
-    let agent_resolver = move |agent_ref: &librefang_kernel::workflow::StepAgent| {
-        state_for_resolver.kernel.resolve_step_agent(agent_ref)
+    let dispatch = match uar_dispatch::Dispatch::new(state.clone(), run_id, api_user).await {
+        Ok(dispatch) => dispatch,
+        Err(error) => return ApiErrorResponse::bad_request(error).into_json_tuple(),
     };
+    let resolver = dispatch.clone();
+    let agent_resolver = move |agent_ref: &StepAgent| resolver.resolve(agent_ref);
 
     // Validate the token synchronously (quick state check) before spawning.
     // The actual resume_run call drives the workflow; we spawn it so the
@@ -1190,8 +1188,8 @@ pub async fn resume_workflow_run(
     // `state_for_sender` is an `Arc<AppState>` — clone it once more so the
     // `Fn` send_message closure can clone-per-call without conflicting with
     // the borrow held by `.workflow_engine().resume_run(...)`.
-    let state_for_engine = state_for_sender.clone();
-    let state_for_send_fn = state_for_sender;
+    let state_for_engine = state.clone();
+    let state_for_send_fn = dispatch.clone();
     tokio::spawn(async move {
         let result = state_for_engine
             .kernel
@@ -1205,27 +1203,14 @@ pub async fn resume_workflow_run(
                       session_mode_override: Option<
                     librefang_types::agent::SessionMode,
                 >| {
-                    let sc = state_for_send_fn.clone();
+                    let sender = state_for_send_fn.clone();
                     async move {
-                        sc.kernel
-                            .send_message_with_session_mode(
-                                agent_id,
-                                &message,
-                                session_mode_override,
-                            )
-                            .await
-                            .map(|r| {
-                                (
-                                    r.response,
-                                    r.total_usage.input_tokens,
-                                    r.total_usage.output_tokens,
-                                )
-                            })
-                            .map_err(|e| format!("{e}"))
+                        sender.send(agent_id, message, session_mode_override).await
                     }
                 },
             )
             .await;
+        let result = dispatch.finish(result).await;
         if let Err(e) = result {
             tracing::warn!(run_id = %run_id, error = %e, "Background workflow resume failed");
         }
@@ -1268,6 +1253,7 @@ pub async fn resume_workflow_run(
 )]
 pub async fn operator_action_workflow_run(
     State(state): State<Arc<AppState>>,
+    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
     // Optional so the handler still compiles / works on installs that
     // disable auth entirely; when auth is on, the middleware layer
@@ -1363,17 +1349,19 @@ pub async fn operator_action_workflow_run(
     }
 
     let payload = payload_opt.clone();
-    let state_for_resolver = state.clone();
-    let agent_resolver = move |agent_ref: &librefang_kernel::workflow::StepAgent| {
-        state_for_resolver.kernel.resolve_step_agent(agent_ref)
+    let dispatch = match uar_dispatch::Dispatch::new(state.clone(), run_id, api_user).await {
+        Ok(dispatch) => dispatch,
+        Err(error) => return ApiErrorResponse::bad_request(error).into_json_tuple(),
     };
+    let resolver = dispatch.clone();
+    let agent_resolver = move |agent_ref: &StepAgent| resolver.resolve(agent_ref);
 
     // Drive the resolution in the background; respond 200 immediately.
     // Reject resolves synchronously inside `resolve_operator_step` (no
     // subsequent steps), but spawning keeps the response shape uniform
     // with `/resume` and avoids blocking the request on a long pipeline.
     let state_for_engine = state.clone();
-    let state_for_send = state.clone();
+    let state_for_send = dispatch.clone();
     let audit_action = action_str.clone();
     let audit_operator = operator_name.clone();
     tokio::spawn(async move {
@@ -1390,27 +1378,14 @@ pub async fn operator_action_workflow_run(
                       session_mode_override: Option<
                     librefang_types::agent::SessionMode,
                 >| {
-                    let sc = state_for_send.clone();
+                    let sender = state_for_send.clone();
                     async move {
-                        sc.kernel
-                            .send_message_with_session_mode(
-                                agent_id,
-                                &message,
-                                session_mode_override,
-                            )
-                            .await
-                            .map(|r| {
-                                (
-                                    r.response,
-                                    r.total_usage.input_tokens,
-                                    r.total_usage.output_tokens,
-                                )
-                            })
-                            .map_err(|e| format!("{e}"))
+                        sender.send(agent_id, message, session_mode_override).await
                     }
                 },
             )
             .await;
+        let result = dispatch.finish(result).await;
         // Emit one structured event regardless of outcome so the audit
         // trail records WHO did WHAT against WHICH run, not just the
         // failures. Previously only `Err` produced a log line, which
@@ -1597,6 +1572,9 @@ pub async fn save_workflow_as_template(
         }
     };
 
+    if workflow.steps.iter().any(|step| matches!(&step.agent, StepAgent::UarBound { .. })) {
+        return ApiErrorResponse::bad_request("UAR-bound targets cannot be represented by the native workflow template format; retain this workflow definition").into_json_tuple();
+    }
     let template = workflow.to_template();
 
     // Persist template to TOML file under the active kernel home directory.

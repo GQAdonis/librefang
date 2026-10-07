@@ -199,6 +199,9 @@ impl WireReceipt {
             created_at: self.created_at,
             terminal_at: self.terminal_at,
             links: self.links,
+            workflow: None,
+            output: None,
+            pending_approval: None,
         })
     }
 
@@ -229,6 +232,14 @@ impl WireReceipt {
             &projection.verified_principal,
         )?;
         merged.boss_projection_retention = projection.boss_projection_retention;
+        merged.workflow.clone_from(&projection.workflow);
+        merged.output.clone_from(&projection.output);
+        // Workflow output advances only with consumed events. A status receipt's
+        // advertised high-water must not skip unread output on a UI lookup.
+        if projection.workflow.is_some() { merged.cursor = projection.cursor; }
+        if merged.execution_state == "input_required" {
+            merged.pending_approval.clone_from(&projection.pending_approval);
+        }
         // UAR's execution receipt has no evidence that a previously uncertain
         // external effect or BossFang recovery outcome has been settled.
         merged.effect_state.clone_from(&projection.effect_state);
