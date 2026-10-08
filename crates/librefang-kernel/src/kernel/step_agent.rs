@@ -102,6 +102,7 @@ impl LibreFangKernel {
     /// the run-visible message and the daemon log carries the specific cause.
     pub fn resolve_step_agent(&self, agent_ref: &StepAgent) -> Option<(AgentId, String, bool)> {
         match agent_ref {
+            StepAgent::UarBound { .. } => None,
             StepAgent::ById { id } => self.registry_agent_by_id(id),
             StepAgent::ByName { name } => self.registry_agent_by_name(name),
             StepAgent::ByType { template } => match self.find_or_spawn_agent_type(template) {
@@ -129,6 +130,10 @@ impl LibreFangKernel {
     /// reported, without registering anything.
     pub fn preview_step_agent(&self, agent_ref: &StepAgent) -> Option<(AgentId, String, bool)> {
         match agent_ref {
+            StepAgent::UarBound { uar_bound, step_key } => Some((
+                AgentId::from_name(&format!("uar-workflow-step:{step_key}")),
+                uar_bound.definition.id.clone(), false,
+            )),
             StepAgent::ById { id } => self.registry_agent_by_id(id),
             StepAgent::ByName { name } => self.registry_agent_by_name(name),
             StepAgent::ByType { template } => {

@@ -91,6 +91,7 @@ export {
   listProviders,
   getUarStatus,
   getUarModels,
+  getUarDelegation,
   // credential pools (#4965)
   listCredentialPools,
   // network / peers / a2a
@@ -319,6 +320,8 @@ export {
   // providers
   testProvider,
   connectUar,
+  approveUarDelegation,
+  cancelUarDelegation,
   disconnectUar,
   reconnectUar,
   startUar,

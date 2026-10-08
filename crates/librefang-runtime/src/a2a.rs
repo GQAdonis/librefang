@@ -773,6 +773,34 @@ impl A2aTaskStore {
             } else {
                 projection.clone()
             };
+            if selected.workflow.is_some() {
+                // Status/control receipts and the retained workflow stream can
+                // commit concurrently. Receipt revision owns terminal/cancel
+                // state; delivered cursor owns accumulated output/challenge.
+                let observed = if projection.cursor > stored.cursor { &projection } else { &stored };
+                selected.output.clone_from(&observed.output);
+                if selected.execution_state == "input_required" && selected.terminal_at.is_none() {
+                    selected.pending_approval.clone_from(&observed.pending_approval);
+                } else {
+                    selected.pending_approval = None;
+                }
+                if selected.uar_root_run_id.is_none() {
+                    selected.uar_root_run_id.clone_from(&observed.uar_root_run_id);
+                }
+                if observed.recovery_state == "recovery_unsupported" {
+                    selected.recovery_state.clone_from(&observed.recovery_state);
+                }
+                for diagnostic in &observed.remote_diagnostics {
+                    // Delivered native error codes remain evidence when a
+                    // newer authority receipt omits stream diagnostics.
+                    if (observed.recovery_state == "recovery_unsupported"
+                        || diagnostic.get("eventType").and_then(serde_json::Value::as_str) == Some("agui.error"))
+                        && !selected.remote_diagnostics.contains(diagnostic)
+                    {
+                        selected.remote_diagnostics.push(diagnostic.clone());
+                    }
+                }
+            }
             selected.cursor = selected.cursor.max(stored.cursor).max(projection.cursor);
             // BossFang's uncertain effect is local evidence, not part of the
             // UAR revision. A concurrent receipt cannot settle it by omission.

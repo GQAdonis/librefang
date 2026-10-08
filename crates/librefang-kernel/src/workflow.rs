@@ -349,6 +349,11 @@ fn clamp_timeout_duration(timeout_secs: u64) -> std::time::Duration {
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum StepAgent {
+    /// Complete execution delegated by the authenticated API workflow driver.
+    UarBound {
+        uar_bound: librefang_types::uar_run::UarWorkflowStepTarget,
+        step_key: String,
+    },
     /// Reference an agent by UUID.
     ById { id: String },
     /// Reference an agent by name (first match).
@@ -380,7 +385,7 @@ pub enum StepAgent {
 ///
 /// Ordered as they are reported in the "exactly one of" error so the
 /// message reads the same on every host.
-pub(crate) const STEP_AGENT_ROUTING_KEYS: [&str; 3] = ["id", "name", "type"];
+pub(crate) const STEP_AGENT_ROUTING_KEYS: [&str; 4] = ["id", "name", "type", "uar_bound"];
 
 /// Select the [`StepAgent`] variant for one tagged-object payload.
 ///
@@ -419,6 +424,14 @@ fn step_agent_from_object(
         }
     };
 
+    if key == "uar_bound" {
+        let target: librefang_types::uar_run::UarWorkflowStepTarget =
+            serde_json::from_value(map[key].clone()).map_err(|error| error.to_string())?;
+        target.validate()?;
+        let step_key = map.get("step_key").and_then(serde_json::Value::as_str)
+            .filter(|value| !value.is_empty()).ok_or("UAR workflow target requires a step_key")?;
+        return Ok(StepAgent::UarBound { uar_bound: target, step_key: step_key.to_string() });
+    }
     let value = map[key]
         .as_str()
         .ok_or_else(|| format!("StepAgent: `{key}` must be a string"))?;
@@ -1679,6 +1692,9 @@ fn lock_workflow_persistence(lock: &std::sync::Mutex<()>) -> std::sync::MutexGua
 /// which spelling / id mismatch caused it (#4834).
 fn format_missing_agent_error(step_name: &str, agent: &StepAgent) -> String {
     match agent {
+        StepAgent::UarBound { .. } => format!(
+            "UAR-bound workflow step '{step_name}' requires the authenticated workflow API driver"
+        ),
         StepAgent::ByName { name } => format!(
             "Registry agent '{name}' not found for workflow step '{step_name}' \
              (referenced by name; ensure the agent is registered in the kernel)"
@@ -6861,6 +6877,7 @@ impl Workflow {
 
                 // Map agent to optional string name
                 let agent = match &step.agent {
+                    StepAgent::UarBound { .. } => None,
                     StepAgent::ByName { name } => Some(name.clone()),
                     StepAgent::ById { id } => Some(id.clone()),
                     // `WorkflowTemplateStep::agent` is a single `Option<String>`
@@ -6949,6 +6966,18 @@ impl Workflow {
     pub fn validate(&self) -> Vec<(String, String)> {
         let mut errs = Vec::new();
         for step in &self.steps {
+            if let StepAgent::UarBound { uar_bound, step_key } = &step.agent {
+                if let Err(error) = uar_bound.validate() { errs.push((step.name.clone(), error)); }
+                if step_key != &step.name || self.steps.iter().filter(|other| other.name == step.name).count() != 1 {
+                    errs.push((step.name.clone(), "UAR targets require a unique matching workflow step key".into()));
+                }
+                if step.session_mode.is_some() || !step.required_skills.is_empty() {
+                    errs.push((step.name.clone(), "UAR session and skills are owned by the admitted definition; native overrides are unsupported".into()));
+                }
+                if matches!(step.mode, StepMode::Loop { .. }) || is_operator_step_mode(&step.mode) {
+                    errs.push((step.name.clone(), "UAR targets support ordinary dispatch steps; loop and operator targets are unsupported".into()));
+                }
+            }
             // #7721: a blank or whitespace-only entry can never match a
             // loaded skill, so it would fail every run of the workflow with
             // a confusing "no skill by that name" message. Reject it where

@@ -27,14 +27,17 @@
  * source, and returning to `instance` re-selects the live agent that
  * carries that name when one exists.
  */
-import type { AgentItem } from "../api";
+import type { AgentItem, UarWorkflowTarget } from "../api";
 import type { CanvasNodeData } from "../lib/canvas";
 import { CANVAS_INPUT_CLASS, CANVAS_LABEL_CLASS, stepAgentPayload } from "../lib/canvas";
 
-/** Which field of the step's `agent` binding the operator is authoring. */
-export type StepAgentSource = "instance" | "name" | "type";
+import { UarWorkflowStepTarget } from "./UarWorkflowStepTarget";
+import { emptyUarWorkflowTarget, isUarWorkflowTargetBound } from "../lib/uarWorkflowTarget";
 
-const AGENT_SOURCES: readonly StepAgentSource[] = ["instance", "name", "type"];
+/** Which field of the step's `agent` binding the operator is authoring. */
+export type StepAgentSource = "instance" | "name" | "type" | "uar_bound";
+
+const AGENT_SOURCES: readonly StepAgentSource[] = ["instance", "name", "type", "uar_bound"];
 
 /** Narrow a stored or user-supplied source; anything else reads as "not recorded". */
 function asAgentSource(raw: unknown): StepAgentSource | null {
@@ -59,6 +62,7 @@ export type StepAgentBindingValue = {
    *  Kept as text rather than a parsed array so a half-typed name — the moment after a comma, a trailing space — survives a re-render instead of being normalised out from under the cursor.
    *  Parsed on projection. */
   requiredSkills: string;
+  uarBound: UarWorkflowTarget;
 };
 
 /**
@@ -107,7 +111,7 @@ export function bindingFromNodeData(data: CanvasNodeData): StepAgentBindingValue
   const agentType = typeof data.agentType === "string" ? data.agentType : "";
   const stored = asAgentSource(data.agentSource);
   const source: StepAgentSource =
-    stored ?? (agentId ? "instance" : agentType ? "type" : agentName ? "name" : "instance");
+    stored ?? (data.uarBound ? "uar_bound" : agentId ? "instance" : agentType ? "type" : agentName ? "name" : "instance");
   return {
     source,
     agentId,
@@ -115,6 +119,7 @@ export function bindingFromNodeData(data: CanvasNodeData): StepAgentBindingValue
     agentType,
     sessionMode: normalizeSessionMode(data.sessionMode),
     requiredSkills: formatRequiredSkills(data.requiredSkills),
+    uarBound: data.uarBound ?? emptyUarWorkflowTarget(),
   };
 }
 
@@ -131,8 +136,12 @@ export function bindingToNodeData(
   agents: AgentItem[],
 ): Pick<
   CanvasNodeData,
-  "agentSource" | "agentId" | "agentName" | "agentType" | "sessionMode" | "requiredSkills"
+  "agentSource" | "agentId" | "agentName" | "agentType" | "sessionMode" | "requiredSkills" | "uarBound"
 > {
+  if (value.source === "uar_bound") return {
+    agentSource: "uar_bound", uarBound: value.uarBound, agentId: undefined, agentName: undefined,
+    agentType: undefined, sessionMode: undefined, requiredSkills: undefined,
+  };
   const sessionMode = value.sessionMode === "" ? undefined : value.sessionMode;
   // An empty requirement list is stored as absent rather than `[]`: the two mean the same thing to the API, and absent is what every step authored before this control existed already looks like.
   const parsedSkills = parseRequiredSkills(value.requiredSkills);
@@ -140,6 +149,7 @@ export function bindingToNodeData(
   if (value.source === "name") {
     const name = value.agentName.trim();
     return {
+      uarBound: undefined,
       agentSource: "name",
       agentId: undefined,
       agentName: name || undefined,
@@ -151,6 +161,7 @@ export function bindingToNodeData(
   if (value.source === "type") {
     const type = value.agentType.trim();
     return {
+      uarBound: undefined,
       agentSource: "type",
       agentId: undefined,
       agentName: undefined,
@@ -161,6 +172,7 @@ export function bindingToNodeData(
   }
   const agent = agents.find(a => a.id === value.agentId);
   return {
+    uarBound: undefined,
     agentSource: "instance",
     agentId: value.agentId || undefined,
     agentName: agent?.name || undefined,
@@ -183,12 +195,14 @@ export function bindingToNodeData(
  * `required_skills` is omitted when empty for the same reason, and because the API's parser for it is strict rather than lenient (#7721): a blank entry is a 400 naming the step, not a silently dropped requirement.
  */
 export function stepAgentFields(data: CanvasNodeData): {
+  uar_bound?: UarWorkflowTarget;
   agent_id?: string;
   agent_name?: string;
   agent_type?: string;
   session_mode?: "persistent" | "new";
   required_skills?: string[];
 } {
+  if (data.agentSource === "uar_bound") return { uar_bound: data.uarBound };
   const sessionMode = normalizeSessionMode(data.sessionMode);
   const requiredSkills = formatRequiredSkills(data.requiredSkills);
   const parsedSkills = parseRequiredSkills(requiredSkills);
@@ -203,7 +217,8 @@ export function stepAgentFields(data: CanvasNodeData): {
  *  type-only binding counts: `agent_name` is resolved at run time and
  *  `agent_type` is find-or-spawn, so neither is an unassigned step. */
 export function isStepBound(data: CanvasNodeData): boolean {
-  return stepAgentPayload(data) !== null;
+  return data.agentSource === "uar_bound"
+    ? isUarWorkflowTargetBound(data.uarBound) : stepAgentPayload(data) !== null;
 }
 
 /** Move the binding to another source without losing the operator's work. */
@@ -213,6 +228,7 @@ export function switchAgentSource(
   agents: AgentItem[],
 ): StepAgentBindingValue {
   if (next === value.source) return value;
+  if (next === "uar_bound" || value.source === "uar_bound") return { ...value, source: next };
   // The human-readable handle for whatever is bound right now: the selected
   // instance's name, the typed agent name, or the template name. Carrying it
   // across is what makes every direction of the switch lossless.
@@ -259,6 +275,7 @@ export function StepAgentBinding({
       </label>
       <select
         id="step-agent-source"
+        data-ui="uar-workflow-target"
         value={value.source}
         onChange={e =>
           onChange(switchAgentSource(value, asAgentSource(e.target.value) ?? "instance", agents))
@@ -268,7 +285,10 @@ export function StepAgentBinding({
         <option value="instance">{t("canvas.agent_source_instance")}</option>
         <option value="name">{t("canvas.agent_source_name")}</option>
         <option value="type">{t("canvas.agent_source_type")}</option>
+        <option value="uar_bound">{t("uar_workflow.target")}</option>
       </select>
+
+      {value.source === "uar_bound" && <UarWorkflowStepTarget value={value.uarBound} onChange={uarBound => onChange({ ...value, uarBound })} />}
 
       {value.source === "instance" && (
         <>
@@ -343,6 +363,7 @@ export function StepAgentBinding({
         </>
       )}
 
+      {value.source !== "uar_bound" && <>
       <label className={CANVAS_LABEL_CLASS} htmlFor="step-session-mode">
         {t("canvas.session_mode_label")}
       </label>
@@ -382,6 +403,7 @@ export function StepAgentBinding({
       <p className="mt-1 text-[10px] leading-snug text-text-dim/70">
         {t("canvas.required_skills_hint")}
       </p>
+      </>}
     </div>
   );
 }
