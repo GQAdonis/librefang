@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 561,
-  "derivedRevision": 561,
+  "sourceRevision": 569,
+  "derivedRevision": 569,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 322
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 330
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,19 +23,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "currentTask": "C14.3",
+  "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+  "currentTask": "C15.1",
   "status": "running",
   "lifecycle": "running",
   "stageId": null,
   "stageStatus": null,
   "completionMetric": "implementation",
-  "implementationCompleted": 17,
+  "implementationCompleted": 18,
   "implementationTotal": 26,
   "planRevision": 10,
-  "revision": 561,
+  "revision": 569,
   "exactNextCommand": "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence",
-  "nextChange": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "nextTask": "C14.3",
-  "updatedAt": "2026-10-08T00:08:12.566988Z"
+  "nextChange": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+  "nextTask": "C15.1",
+  "updatedAt": "2026-10-08T09:43:03.693105Z"
 }

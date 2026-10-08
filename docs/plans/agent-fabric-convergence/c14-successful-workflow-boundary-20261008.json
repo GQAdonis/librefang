@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-packaged-bossfang-workflow-boundary",
+  "recordedAt": "2026-10-08T09:42:56.479Z",
+  "implementationTasks": [
+    "C14.4",
+    "C14.3"
+  ],
+  "iteration": {
+    "id": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "index": 7,
+    "originalStartedAt": "2026-10-07T23:24:33.943Z",
+    "candidateId": "e4444615-c45d-4d4c-ab6e-a00118159d2b"
+  },
+  "sources": {
+    "boss": "997247b431593e4339d73398ac1409fdf4332e50",
+    "bossfang": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+    "uar": "3daa3ef89aaebe0da379ca42b1582172d21f127a",
+    "appAsarSha256": "8600d80941ddee1fbb1a3dd76a8720875e69f62663304019f37db9bd5da4b90b"
+  },
+  "build": {
+    "status": "success",
+    "startedAt": "2026-10-08T09:30:44.067Z",
+    "finishedAt": "2026-10-08T09:37:45.188Z",
+    "exitCode": 0,
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-approval-observation-mac-arm64-build-20261008-r9.json",
+      "sha256": "0368cb37b36b6c10be065f5bb68f0cf453aafab57814fe1545f2b07f7c8da0c6"
+    }
+  },
+  "launch": {
+    "status": "success",
+    "startedAt": "2026-10-08T09:37:51.051Z",
+    "finishedAt": "2026-10-08T09:37:56.043Z",
+    "exitCode": 0,
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-approval-observation-mac-functional-launch-20261008-r9.json",
+      "sha256": "c4de494dd3e0df0ba30a85e75d607ca49e46c73b817271542869ee489358b4c8"
+    }
+  },
+  "featureOperation": {
+    "status": "success",
+    "startedAt": "2026-10-08T09:38:01.652Z",
+    "finishedAt": "2026-10-08T09:39:13.515Z",
+    "exitCode": 0,
+    "receipt": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-approval-observation-c14-bossfang-workflow-operation-20261008-r9.json",
+      "sha256": "175e5f179b2ea8ae9ebe870dc9f2b839cd402f0bb0a1a6b745788ecdf3512cbf"
+    },
+    "complete": true,
+    "evidence": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-bossfang-workflow-1817740f-9311-4ddf-be92-2b0ac4c95151/evidence.json",
+      "sha256": "164532c060e2c8365e3b0fac76ddaabd481fdbfb4a7db28e6ea70c72faeedb70"
+    },
+    "checks": [
+      "actual-compiled-authenticated-embedded-dashboard",
+      "visible-canvas-bound-target-authoring-and-native-persistence",
+      "visible-ordinary-run-admission-to-original-bound-uar",
+      "native-workflow-step-delegation-task-thread-root-run-correlations",
+      "actual-native-message-output-visible-and-settled-by-ordinary-engine",
+      "visible-original-pending-approval-exact-prepared-write",
+      "canonical-durable-host-human-approval-before-exact-disposable-effect",
+      "visible-original-authoritative-denial-canonical-durable-history-without-effect",
+      "visible-two-step-confirmed-cancel-forwarded-to-original-native-run",
+      "native-cancellation-request-acknowledgment-terminal-cleanup-settled",
+      "pending-approval-cancelled-canonical-history-and-ordinary-engine-without-effect",
+      "work-global-selection-and-original-uar-pid-start-port-preserved"
+    ],
+    "finalEffects": {
+      "createdFiles": [
+        "approved.txt"
+      ],
+      "approvedContentSha256": "fe3db517743bbe88af18a288dca5dd89736ed247f252001587a1455e0afeec1b",
+      "deniedFileAbsent": true,
+      "cancelledFileAbsent": true,
+      "readmeSha256": "2f13ab88255b19ac41bfef24ae5df10fa9b619fd497d2334e7f7d0621a723f52"
+    },
+    "ownedBossFangStopped": true,
+    "identityResourceDisabled": true
+  },
+  "artifact": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c14-bossfang-workflow/dist/The-Boss-2.2.15-mac-arm64.dmg",
+    "sha256": "b94f8d20df455220dfab25dcc25eaedbece1fd4ad26577253f0a5494e4b4330d",
+    "bytes": 699653955,
+    "version": "2.2.15",
+    "platform": "darwin-arm64",
+    "signing": "Developer ID signed; local build not notarized"
+  },
+  "limitations": [
+    "Host resources remain private to the original registered context; opaque context inventory is not effect authority.",
+    "Context expiry/revocation and cross-platform behavior are not operated by this bounded workflow procedure.",
+    "Earlier passing dashboard, ports and ownership scopes retain only their exact original receipts and package identities.",
+    "Native Windows installed acceptance and publication remain independent and unclaimed."
+  ],
+  "previousCoverage": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/composite-operation-evidence.json",
+    "scope": "Original ports, ownership, dashboard configuration and isolation evidence retained only for exact observed sources"
+  },
+  "publication": {
+    "status": "pending",
+    "obligationId": "99a9d56d-7212-46da-98dd-de2854ff6420",
+    "customerSiteVersion": "2.2.14"
+  },
+  "installedAcceptance": {
+    "darwin-arm64": "packaged bounded workflow operated locally; operator acceptance of customer installer pending",
+    "win32-x64": "pending; native payload built successfully",
+    "darwin-x64": "pending; native payload built successfully",
+    "win32-arm64": "pending; native payload built successfully"
+  },
+  "testSuitesRun": false
+}

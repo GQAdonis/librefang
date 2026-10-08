@@ -2,27 +2,27 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 560,
-  "derivedRevision": 560,
+  "sourceRevision": 569,
+  "derivedRevision": 569,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 321
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 330
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-10-08T00:08:00.484606Z",
+  "last_updated": "2026-10-08T09:43:03.693105Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
-  "changes_completed": 11,
+  "changes_completed": 12,
   "implementation_total": 20,
-  "implementation_completed": 11,
+  "implementation_completed": 12,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 11,
+      "completed": 12,
       "total": 20,
       "status": "BLOCKED"
     },
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 17,
+      "completed": 18,
       "total": 26,
       "status": "BLOCKED"
     },
@@ -242,19 +242,19 @@
     {
       "id": "afc-c14-studio-administration-and-isolated-service-consoles",
       "title": "C14 — Studio administration and isolated service consoles",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 4,
-      "tasks_done": 2,
-      "last_task_completed": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs.",
-      "next_task_pending": "Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback.",
+      "tasks_done": 4,
+      "last_task_completed": "Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback.",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
       "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,

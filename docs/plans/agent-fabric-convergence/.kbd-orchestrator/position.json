@@ -2,26 +2,26 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 561,
-  "derivedRevision": 561,
+  "sourceRevision": 569,
+  "derivedRevision": 569,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 322
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 330
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-08T00:08:12.566988Z",
+  "updatedAt": "2026-10-08T09:43:03.693105Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c14-studio-administration-and-isolated-service-consoles",
-    "C14.3"
+    "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+    "C15.1"
   ],
   "root": {
     "type": "phase",
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 17,
+      "done": 18,
       "total": 26
     },
     "children": [
@@ -31,7 +31,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 11,
+          "done": 12,
           "total": 20
         },
         "children": [
@@ -305,16 +305,16 @@
           {
             "type": "change",
             "id": "afc-c14-studio-administration-and-isolated-service-consoles",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 2,
+              "done": 4,
               "total": 4
             }
           },
           {
             "type": "change",
             "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-            "status": "PENDING",
+            "status": "IN_PROGRESS",
             "progress": {
               "done": 0,
               "total": 3
