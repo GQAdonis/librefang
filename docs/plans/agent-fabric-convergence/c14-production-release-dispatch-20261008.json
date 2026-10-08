@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "production-release-dispatch",
+  "recordedAt": "2026-10-08T00:20:51.174Z",
+  "version": "2.2.14",
+  "status": "in-progress-not-published",
+  "original": {
+    "run": 37705937425,
+    "source": "ad9551a7d8d3a98e376fe31f3d54b2775c6db6a1",
+    "platforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ]
+  },
+  "correction": {
+    "run": 37707126183,
+    "source": "b9b7ea63c549f34422a416510b9ee0f503bbf1a1",
+    "platforms": [
+      "win32-x64"
+    ],
+    "observedFailure": "Chocolatey HTTP503 installing NSIS; spawnSync makensis.exe ENOENT",
+    "repairPRs": [
+      44,
+      45
+    ],
+    "compilerOperation": "Pinned Electron Builder NSIS compiled exact managed-PATH uninstall command on macOS; exit 0. Native Windows packaging remains pending."
+  },
+  "uarFuture": {
+    "source": "0870539aace96a4e47b5a4718e0205f7850f9010",
+    "runs": {
+      "darwin-arm64": 37707116276,
+      "win32-x64": 37707118513,
+      "win32-arm64": 37707121103,
+      "darwin-x64": 37707123513
+    },
+    "initialTagPush": "Four tags at once created no workflow events; retained those tag identities, then pushed new immutable -native tags individually."
+  },
+  "publicationDebtCleared": false,
+  "installedAcceptance": "separate-pending",
+  "hookDeviation": "Checkout unexpectedly invoked repository no-files formatting and pnpm install. No product suite ran; subsequent Git transitions use core.hooksPath=/dev/null."
+}

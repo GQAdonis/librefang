@@ -2,15 +2,15 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 558,
-  "derivedRevision": 558,
+  "sourceRevision": 561,
+  "derivedRevision": 561,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 319
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 322
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-08T00:02:55.301Z",
+  "updatedAt": "2026-10-08T00:08:12.566988Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c14-studio-administration-and-isolated-service-consoles",
