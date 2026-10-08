@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-website-publication",
+  "recordedAt": "2026-10-08T01:10:51.997Z",
+  "version": "2.2.14",
+  "websiteUrl": "https://the-boss.know-me.tools/",
+  "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+  "landingSource": "5bce6510a906530bee342eb8b508e1f059692778",
+  "method": "Existing authenticated BrowserOS Lovable Publish changes; original custom domain preserved",
+  "siteStatus": 200,
+  "bundleUrl": "https://the-boss.know-me.tools/assets/index-DeW5taA2.js",
+  "bundleSha256": "5a47fe1765991f7a47a28e5b870468f35a778e69524e0fdf34a54831094eba1c",
+  "bundleStatus": 200,
+  "installerLinks": [
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.14/The-Boss-2.2.14-mac-arm64.dmg",
+      "status": 200,
+      "contentLength": 708075504,
+      "resolvedHost": "release-assets.githubusercontent.com"
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.14/The-Boss-2.2.14-mac-x64.dmg",
+      "status": 200,
+      "contentLength": 733731738,
+      "resolvedHost": "release-assets.githubusercontent.com"
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.14/The-Boss-2.2.14-win-x64-setup.exe",
+      "status": 200,
+      "contentLength": 528991644,
+      "resolvedHost": "release-assets.githubusercontent.com"
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.14/The-Boss-2.2.14-win-arm64-setup.exe",
+      "status": 200,
+      "contentLength": 492261015,
+      "resolvedHost": "release-assets.githubusercontent.com"
+    }
+  ],
+  "artifactByteEvidence": "Existing serialized platform publishers downloaded and checked complete bytes; this receipt checks exact live advertised links without repeating passing downloads",
+  "publicationDebtCleared": false,
+  "limitations": [
+    "This publishes completed 2.2.14 controls, not unfinished 2.2.15 BossFang workflow delivery.",
+    "Windows installed acceptance remains separate."
+  ]
+}
