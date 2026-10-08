@@ -9,12 +9,13 @@
     "restore": "No cache found at2026-10-08T03:58:51.771Z",
     "existingCache": {
       "id": 8654619723,
-      "createdAt": "2026-10-08T01:24:56Z",
-      "ref": "refs/heads/refs/tags/boss-sidecar-darwin-arm64-v1.0.0-c14-root-identity-0870539-native"
+      "createdAt": "2026-10-08T01:24:56.240645Z",
+      "ref": "refs/heads/refs/tags/boss-sidecar-darwin-arm64-v1.0.0-c14-host-context-0870539-native",
+      "bytes": 1530776147
     },
     "savedCache": {
       "id": 8660119649,
-      "createdAt": "2026-10-08T04:50:12Z",
+      "createdAt": "2026-10-08T04:50:12.374460Z",
       "bytes": 1530735496,
       "ref": "refs/heads/refs/tags/boss-sidecar-darwin-arm64-v1.0.0-c14-root-identity-d519915-native"
     },
@@ -29,5 +30,6 @@
     "status": "recorded for follow-up; current runtime correction builds continue unchanged"
   },
   "current49ffaCacheOutcome": "unobserved",
-  "taskCompletionCredit": 0
+  "taskCompletionCredit": 0,
+  "cacheInventoryInspectedAt": "2026-10-08T05:34:35.809Z"
 }
