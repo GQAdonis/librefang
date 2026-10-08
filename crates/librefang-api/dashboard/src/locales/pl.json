@@ -4531,6 +4531,9 @@
     "no_agents": "Nie ma jeszcze agentów do udostępnienia."
   },
   "uar_workflow": {
+    "host_context": "Kontekst narzędzi hosta",
+    "host_context_unavailable": "Brak jednego niewygasłego kontekstu hosta dokładnie zgodnego z tym obszarem roboczym, powiązaniem i definicją. Po zainstalowaniu powiązania połącz się ponownie w The Boss. Istniejące wykonanie zachowuje pierwotny kontekst.",
+    "host_context_select": "Użyj bieżącego kontekstu dla przyszłych wykonań",
     "target": "Definicja powiązana z UAR",
     "target_hint": "Przekaż cały krok do istniejącego powiązania UAR. Prompt kroku dostarcza dane wejściowe; model wybiera powiązanie.",
     "selected_connection": "Wybrane połączenie UAR",

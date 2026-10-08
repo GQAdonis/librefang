@@ -24,6 +24,8 @@ pub struct UarWorkflowStepTarget {
     pub target_binding_id: String,
     pub workspace_id: String,
     pub definition: UarDefinitionIdentity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
     #[serde(default)]
     pub run: serde_json::Map<String, serde_json::Value>,
 }
@@ -37,6 +39,9 @@ impl UarWorkflowStepTarget {
         {
             return Err("UAR target requires binding, workspace and exact definition identity".into());
         }
+        if self.delegated_host_context_id.as_ref().is_some_and(|id| id.trim().is_empty()) {
+            return Err("UAR delegated host context identity must not be empty".into());
+        }
         for (key, value) in &self.run {
             let valid = match key.as_str() {
                 "working_directory" | "reasoning_effort" => value.as_str().is_some(),
@@ -47,6 +52,27 @@ impl UarWorkflowStepTarget {
         }
         Ok(())
     }
+}
+
+/// Public identity of a host-registered context. Callback resources stay private.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContext {
+    pub context_id: String,
+    pub workspace_id: String,
+    pub runtime_epoch: String,
+    pub definition: UarDefinitionIdentity,
+    pub binding: UarDelegatedHostContextBinding,
+    pub expires_at: String,
+}
+
+/// Binding revision captured by the host context's original admission authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContextBinding {
+    pub id: String,
+    pub revision: u64,
+    pub digest: String,
 }
 
 /// Correlation only: the workflow engine and UAR keep their original authorities.
@@ -116,6 +142,9 @@ pub struct UarDelegatedRunProjection {
     pub request_digest: String,
     /// Empty only for the explicitly authored inline diagnostic.
     pub target_binding_id: String,
+    /// Original context reference, retained independently of new-run selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
     #[serde(default)]
     pub definition_mode: UarDefinitionMode,
     pub workspace_id: String,

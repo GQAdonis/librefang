@@ -153,6 +153,11 @@ impl UarRunClient {
         }
 
         let mut body = admission.run.clone();
+        if body.get("delegated_host_context_id").is_some_and(|value| {
+            value.as_str().is_none_or(|id| id.trim().is_empty())
+        }) {
+            return Err(UarRunClientError::InvalidAdmission("delegated_host_context_id must be a non-empty opaque identity".into()));
+        }
         body.insert(
             "admission_id".into(),
             Value::String(admission.admission_key.clone()),
@@ -242,6 +247,9 @@ impl UarRunClient {
             .runtime_descriptor(&transport, &admission.workspace_id)
             .await?;
         descriptor.validate()?;
+        if prepared.body.get("delegated_host_context_id").is_some() && !descriptor.delegated_host_context_v1 {
+            return Err(UarRunClientError::InvalidAdmission("UAR does not advertise delegated_host_context_v1".into()));
+        }
         self.retain_connection(admission, verified_principal, transport.clone())
             .await;
         let unsupported_semantics = (!descriptor.steer_supported)
@@ -255,6 +263,7 @@ impl UarRunClient {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            delegated_host_context_id: admission.run.get("delegated_host_context_id").and_then(Value::as_str).map(str::to_owned),
             definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: transport.binding.instance_id.clone(),

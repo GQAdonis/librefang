@@ -59,6 +59,8 @@ pub(super) struct WireRuntimeDescriptor {
     pub(super) recovery: String,
     pub(super) retention: WireRetention,
     pub(super) steer_supported: bool,
+    #[serde(default)]
+    pub(super) delegated_host_context_v1: bool,
 }
 
 impl WireRuntimeDescriptor {
@@ -167,6 +169,7 @@ impl WireReceipt {
             admission_key: admission.admission_key.clone(),
             request_digest: prepared.request_digest.clone(),
             target_binding_id: admission.target_binding_id.clone(),
+            delegated_host_context_id: admission.run.get("delegated_host_context_id").and_then(Value::as_str).map(str::to_owned),
             definition_mode: prepared.definition_mode,
             workspace_id: admission.workspace_id.clone(),
             selected_instance_id: binding.instance_id.clone(),
@@ -232,6 +235,7 @@ impl WireReceipt {
             &projection.verified_principal,
         )?;
         merged.boss_projection_retention = projection.boss_projection_retention;
+        merged.delegated_host_context_id.clone_from(&projection.delegated_host_context_id);
         merged.workflow.clone_from(&projection.workflow);
         merged.output.clone_from(&projection.output);
         // Workflow output advances only with consumed events. A status receipt's

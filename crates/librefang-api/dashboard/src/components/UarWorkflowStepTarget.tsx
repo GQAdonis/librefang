@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { UarWorkflowTarget } from "../api";
 import { useUarStatus } from "../lib/queries/uar";
 import { CANVAS_INPUT_CLASS } from "../lib/canvas";
 import { Button } from "./ui/Button";
+import { matchesUarHostContext } from "../lib/uarWorkflowTarget";
 
 export function UarWorkflowStepTarget({ value, onChange }: {
   value: UarWorkflowTarget; onChange: (value: UarWorkflowTarget) => void;
@@ -10,6 +12,13 @@ export function UarWorkflowStepTarget({ value, onChange }: {
   const { t } = useTranslation();
   const status = useUarStatus();
   const binding = status.data?.effective_binding;
+  const contexts = (status.data?.delegatedHostContexts ?? []).filter(context => matchesUarHostContext(value, context));
+  const selectedContext = contexts.find(context => context.contextId === value.delegatedHostContextId);
+  const exactContext = contexts.length === 1 ? contexts[0] : undefined;
+  useEffect(() => {
+    // Existing authored references remain fixed across grant renewal or connection changes.
+    if (!value.delegatedHostContextId && exactContext) onChange({ ...value, delegatedHostContextId: exactContext.contextId });
+  }, [value, exactContext, onChange]);
   const fields = [
     ["binding", value.targetBindingId, (text: string) => onChange({ ...value, targetBindingId: text })],
     ["workspace", value.workspaceId, (text: string) => onChange({ ...value, workspaceId: text })],
@@ -37,6 +46,17 @@ export function UarWorkflowStepTarget({ value, onChange }: {
             data-ui={`uar-workflow-${key.replaceAll("_", "-")}`} className={CANVAS_INPUT_CLASS} />
         </label>
       ))}
+      <section className="rounded-lg border border-border-subtle bg-main p-3 space-y-2"
+        data-ui="uar-workflow-host-context" data-context-id={value.delegatedHostContextId}
+        data-context-available={Boolean(selectedContext)}>
+        <h4 className="text-xs font-semibold">{t("uar_workflow.host_context")}</h4>
+        {selectedContext ? <p className="text-xs font-mono break-all">{selectedContext.contextId} · {t("uar_workflow.expires", { at: selectedContext.expiresAt })}</p>
+          : <p className="text-xs text-warning">{t("uar_workflow.host_context_unavailable")}</p>}
+        {!selectedContext && value.delegatedHostContextId && exactContext && <Button variant="secondary" size="sm"
+          data-ui="uar-workflow-host-context-select" onClick={() => onChange({ ...value, delegatedHostContextId: exactContext.contextId })}>
+          {t("uar_workflow.host_context_select")}
+        </Button>}
+      </section>
       <p className="text-xs text-text-dim leading-relaxed">{t("uar_workflow.identity_hint")}</p>
     </section>
   );

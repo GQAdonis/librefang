@@ -4553,6 +4553,9 @@
     "no_agents": "No agents to share with yet."
   },
   "uar_workflow": {
+    "host_context": "Host tool context",
+    "host_context_unavailable": "No unique, unexpired host context matches this exact workspace, binding and definition. Reconnect in The Boss after installing the binding. An existing run keeps its original context.",
+    "host_context_select": "Use current context for future runs",
     "target": "UAR bound definition",
     "target_hint": "Delegate the complete step to an existing UAR binding. The step prompt supplies its input; the binding owns model selection.",
     "selected_connection": "Selected UAR connection",

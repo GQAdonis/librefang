@@ -54,6 +54,9 @@ impl Dispatch {
         use librefang_types::uar_run::{UarRunAdmission, UarWorkflowCorrelation};
         target.validate()?;
         let mut run = target.run.clone();
+        if let Some(context_id) = &target.delegated_host_context_id {
+            run.insert("delegated_host_context_id".into(), serde_json::Value::String(context_id.clone()));
+        }
         run.insert("input".into(), serde_json::Value::String(input));
         let task_id = format!("workflow:{}:{}", self.run_id, step_name);
         let binding = match self.state.kernel.a2a_tasks().get_uar_delegation(&task_id) {

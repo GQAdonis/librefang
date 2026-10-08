@@ -40,6 +40,10 @@ use crate::llm_driver::{
     CompletionRequest, CompletionResponse, DriverConfig, LlmDriver, LlmError, StreamEvent,
 };
 
+#[path = "uar_delegated_host_context.rs"]
+mod delegated_host_context;
+pub use delegated_host_context::{configure_delegated_host_contexts, delegated_host_contexts};
+
 // ---------------------------------------------------------------------------
 // Driver struct
 // ---------------------------------------------------------------------------
@@ -54,6 +58,7 @@ struct PublishedBinding {
     diagnostic: Option<UarCompatibilityDiagnostic>,
     generation: u64,
     workspace_id: Option<String>,
+    delegated_host_contexts: Vec<librefang_types::uar_run::UarDelegatedHostContext>,
 }
 
 /// Resolved bearer credentials kept only in process memory. Configuration and
@@ -184,6 +189,7 @@ pub fn configure_supervised_instance(instance: Result<UarServiceInstanceConfig, 
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.credentials = UarResolvedCredentials::default();
+    guard.delegated_host_contexts.clear();
     guard.credential_error = None;
     match instance {
         Ok(instance) => {
@@ -211,6 +217,7 @@ pub fn configure_supervised_credentials(credentials: Result<UarResolvedCredentia
     let mut guard = binding_cell()
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    guard.delegated_host_contexts.clear();
     match credentials {
         Ok(credentials) => {
             guard.credentials = credentials;
@@ -242,6 +249,7 @@ pub fn configure_connection_workspace(workspace_id: Option<String>) {
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.workspace_id = workspace_id;
+    guard.delegated_host_contexts.clear();
     guard.admitted = None;
     guard.generation = guard.generation.wrapping_add(1);
 }
@@ -262,6 +270,9 @@ pub fn set_supervised_endpoint_with_bearer(endpoint: Option<String>, bearer: Opt
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.endpoint = endpoint.map(|value| value.trim_end_matches('/').to_string());
+    if guard.endpoint.is_none() || bearer.is_some() {
+        guard.delegated_host_contexts.clear();
+    }
     if let Some(bearer) = bearer {
         guard.credentials = UarResolvedCredentials::delegated(bearer);
         guard.credential_error = None;

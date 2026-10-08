@@ -4550,6 +4550,9 @@
     "no_agents": "아직 공유할 에이전트가 없습니다."
   },
   "uar_workflow": {
+    "host_context": "호스트 도구 컨텍스트",
+    "host_context_unavailable": "이 작업 공간, 바인딩 및 정의와 정확히 일치하는 유일한 유효 호스트 컨텍스트가 없습니다. 바인딩을 설치한 후 The Boss에서 다시 연결하세요. 기존 실행은 원래 컨텍스트를 유지합니다.",
+    "host_context_select": "이후 실행에 현재 컨텍스트 사용",
     "target": "UAR 바인딩 정의",
     "target_hint": "전체 단계를 기존 UAR 바인딩에 위임합니다. 단계 프롬프트가 입력을 제공하고 바인딩이 모델을 선택합니다.",
     "selected_connection": "선택된 UAR 연결",

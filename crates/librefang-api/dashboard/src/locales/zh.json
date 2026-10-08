@@ -4551,6 +4551,9 @@
     "no_agents": "尚无可共享的代理。"
   },
   "uar_workflow": {
+    "host_context": "主机工具上下文",
+    "host_context_unavailable": "没有唯一且未过期的主机上下文与此工作区、绑定和定义完全匹配。安装绑定后，请在 The Boss 中重新连接。已有运行保留原始上下文。",
+    "host_context_select": "为后续运行使用当前上下文",
     "target": "UAR 绑定定义",
     "target_hint": "将整个步骤委派给现有 UAR 绑定。步骤提示提供输入；模型由绑定选择。",
     "selected_connection": "已选 UAR 连接",

@@ -118,6 +118,7 @@ export interface UarStatus {
   effective_binding?: UarEffectiveBinding | null;
   compatibility?: UarCompatibilityDiagnostic | null;
   placement: UarPlacementSupport;
+  delegatedHostContexts?: UarDelegatedHostContext[];
 }
 
 export type UarOwnership = "managed" | "external";
@@ -6791,7 +6792,17 @@ export interface UarWorkflowTarget {
   targetBindingId: string;
   workspaceId: string;
   definition: { id: string; version: string; digest: string };
+  delegatedHostContextId?: string;
   run: Record<string, unknown>;
+}
+
+export interface UarDelegatedHostContext {
+  contextId: string;
+  workspaceId: string;
+  runtimeEpoch: string;
+  definition: UarWorkflowTarget["definition"];
+  binding: { id: string; revision: number; digest: string };
+  expiresAt: string;
 }
 
 export interface UarRunEvent {
@@ -6807,6 +6818,7 @@ export interface UarDelegatedRunProjection {
   bossTaskId: string;
   delegationId: string;
   targetBindingId: string;
+  delegatedHostContextId?: string;
   workspaceId: string;
   selectedInstanceId: string;
   effectiveBinding: UarEffectiveBinding;
