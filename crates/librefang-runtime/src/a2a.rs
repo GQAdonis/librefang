@@ -789,10 +789,15 @@ impl A2aTaskStore {
                 }
                 if observed.recovery_state == "recovery_unsupported" {
                     selected.recovery_state.clone_from(&observed.recovery_state);
-                    for diagnostic in &observed.remote_diagnostics {
-                        if !selected.remote_diagnostics.contains(diagnostic) {
-                            selected.remote_diagnostics.push(diagnostic.clone());
-                        }
+                }
+                for diagnostic in &observed.remote_diagnostics {
+                    // Delivered native error codes remain evidence when a
+                    // newer authority receipt omits stream diagnostics.
+                    if (observed.recovery_state == "recovery_unsupported"
+                        || diagnostic.get("eventType").and_then(serde_json::Value::as_str) == Some("agui.error"))
+                        && !selected.remote_diagnostics.contains(diagnostic)
+                    {
+                        selected.remote_diagnostics.push(diagnostic.clone());
                     }
                 }
             }

@@ -74,7 +74,21 @@ pub(super) fn apply_workflow_event(
         "agui.tool_call.approval_required" if current.execution_state == "input_required" => {
             current.pending_approval = Some(event.clone());
         }
-        "agui.done" | "agui.cancelled" | "agui.error" => current.pending_approval = None,
+        "agui.error" => {
+            current.pending_approval = None;
+            // The remote event is a disclosure boundary: retain its bounded
+            // machine code, never the message or arbitrary payload fields.
+            if let Some(code) = event.data.get("code").and_then(serde_json::Value::as_str)
+                .filter(|code| !code.is_empty() && code.len() <= 128
+                    && code.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'))
+            {
+                let diagnostic = serde_json::json!({"code":code,"eventType":"agui.error"});
+                if !current.remote_diagnostics.contains(&diagnostic) {
+                    current.remote_diagnostics.push(diagnostic);
+                }
+            }
+        }
+        "agui.done" | "agui.cancelled" => current.pending_approval = None,
         _ => {}
     }
     current.cursor = event.cursor;

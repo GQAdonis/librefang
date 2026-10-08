@@ -83,10 +83,10 @@ impl Dispatch {
         }, correlation).await?;
         let projection = workflow::consume(&self.state, &projection).await?;
         if projection.recovery_state != "available" {
-            return Err(format!("UAR delegation {}", projection.recovery_state));
+            return Err(workflow::failure_reason(&projection, &format!("UAR delegation {}", projection.recovery_state)));
         }
         if projection.terminal_at.is_none() {
-            return Err("UAR task stream closed without an authoritative terminal receipt".into());
+            return Err(workflow::failure_reason(&projection, "UAR task stream closed without an authoritative terminal receipt"));
         }
         if projection.execution_state == "cancelled" {
             if let Some(run) = self.state.kernel.workflow_engine().get_run(self.run_id).await {
@@ -99,7 +99,7 @@ impl Dispatch {
             // The engine's numeric token fields are local-driver usage.
             // UAR owns its budget; zero here never settles remote spend.
             "completed" => Ok((projection.output.unwrap_or_default(), 0, 0)),
-            state => Err(format!("UAR delegated step is {state}")),
+            state => Err(workflow::failure_reason(&projection, &format!("UAR delegated step is {state}"))),
         }
     }
 
@@ -110,10 +110,11 @@ impl Dispatch {
     }
 
     pub(super) async fn finish(&self, result: Result<String, String>) -> Result<String, String> {
-        if result.is_err() {
-            let cleanup = cancel(&self.state, self.run_id, self.user.as_ref()).await?;
+        if let Err(failure) = &result {
+            let cleanup = cancel(&self.state, self.run_id, self.user.as_ref()).await
+                .map_err(|error| format!("{failure}; UAR cancellation cleanup failed: {error}"))?;
             if cleanup.iter().any(|value| value["cancellation"]["cleanupUncertain"] == true) {
-                return Err("workflow failed; UAR cancellation cleanup remains unconfirmed".into());
+                return Err(format!("{failure}; UAR cancellation cleanup remains unconfirmed"));
             }
         }
         result

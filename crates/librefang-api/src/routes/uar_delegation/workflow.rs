@@ -74,10 +74,20 @@ pub(crate) async fn consume(
         Ok(current) => current,
         Err(error) => match UarRunClient::recovery_projection(&latest, &error) {
             Some(recovered) => recovered,
-            None => return Err(error.to_string()),
+            None => return Err(failure_reason(&latest, &error.to_string())),
         },
     };
     persist_observation(state, current).map_err(|error| error.to_string())
+}
+
+pub(crate) fn failure_reason(projection: &UarDelegatedRunProjection, reason: &str) -> String {
+    match projection.remote_diagnostics.iter().rev().find_map(|diagnostic| {
+        (diagnostic.get("eventType").and_then(serde_json::Value::as_str) == Some("agui.error"))
+            .then(|| diagnostic.get("code").and_then(serde_json::Value::as_str)).flatten()
+    }) {
+        Some(code) => format!("UAR native error {code}; {reason}"),
+        None => reason.to_owned(),
+    }
 }
 
 fn retained_projection(
