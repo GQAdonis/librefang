@@ -76,33 +76,30 @@ impl Dispatch {
         let correlation = UarWorkflowCorrelation {
             workflow_id: self.workflow_id.to_string(), workflow_run_id: self.run_id.to_string(), step_name: step_name.into(),
         };
-        let mut projection = workflow::admit(self.state.clone(), self.user.clone(), UarRunAdmission {
+        let projection = workflow::admit(self.state.clone(), self.user.clone(), UarRunAdmission {
             boss_task_id: task_id.clone(), delegation_id: String::new(), admission_key: String::new(),
             target_binding_id: target.target_binding_id.clone(), workspace_id: target.workspace_id.clone(),
             definition: target.definition.clone(), definition_diagnostics: Vec::new(), run,
         }, correlation).await?;
-        loop {
-            // Another owning surface may have advanced this exact projection.
-            if let Some(saved) = self.state.kernel.a2a_tasks().get_uar_delegation(&task_id) { projection = saved; }
-            projection = workflow::observe(&self.state, &projection).await?;
-            if projection.recovery_state != "available" {
-                return Err(format!("UAR delegation {}", projection.recovery_state));
-            }
-            if projection.terminal_at.is_some() {
-                if projection.execution_state == "cancelled" {
-                    if let Some(run) = self.state.kernel.workflow_engine().get_run(self.run_id).await {
-                        if matches!(run.state, WorkflowRunState::Pending | WorkflowRunState::Running | WorkflowRunState::Paused { .. }) {
-                            self.state.kernel.workflow_engine().cancel_run(self.run_id).await.map_err(|error| error.to_string())?;
-                        }
-                    }
+        let projection = workflow::consume(&self.state, &projection).await?;
+        if projection.recovery_state != "available" {
+            return Err(format!("UAR delegation {}", projection.recovery_state));
+        }
+        if projection.terminal_at.is_none() {
+            return Err("UAR task stream closed without an authoritative terminal receipt".into());
+        }
+        if projection.execution_state == "cancelled" {
+            if let Some(run) = self.state.kernel.workflow_engine().get_run(self.run_id).await {
+                if matches!(run.state, WorkflowRunState::Pending | WorkflowRunState::Running | WorkflowRunState::Paused { .. }) {
+                    self.state.kernel.workflow_engine().cancel_run(self.run_id).await.map_err(|error| error.to_string())?;
                 }
-                return match projection.execution_state.as_str() {
-                    // The engine's numeric token fields are local-driver usage.
-                    // UAR owns its budget; zero here never settles remote spend.
-                    "completed" => Ok((projection.output.unwrap_or_default(), 0, 0)),
-                    state => Err(format!("UAR delegated step is {state}")),
-                };
             }
+        }
+        match projection.execution_state.as_str() {
+            // The engine's numeric token fields are local-driver usage.
+            // UAR owns its budget; zero here never settles remote spend.
+            "completed" => Ok((projection.output.unwrap_or_default(), 0, 0)),
+            state => Err(format!("UAR delegated step is {state}")),
         }
     }
 

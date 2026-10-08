@@ -22,6 +22,8 @@ pub(super) struct WireReceipt {
     #[serde(default)]
     run_id: Option<String>,
     #[serde(default)]
+    root_run_id: Option<String>,
+    #[serde(default)]
     runtime_epoch: Option<String>,
     #[serde(default)]
     workspace_id: Option<String>,
@@ -179,7 +181,7 @@ impl WireReceipt {
             remote_diagnostics: self.diagnostics,
             uar_task_id: self.task_id,
             uar_thread_id: None,
-            uar_root_run_id: None,
+            uar_root_run_id: self.root_run_id,
             uar_run_id: self.run_id,
             admission_state: if state == "rejected" {
                 "refused".into()
@@ -213,6 +215,27 @@ impl WireReceipt {
         projection: &UarDelegatedRunProjection,
         binding: UarEffectiveBinding,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
+        // A receipt may advance state, never replace the admitted authority.
+        for (field, known, observed) in [
+            ("task_id", projection.uar_task_id.as_deref(), self.task_id.as_deref()),
+            ("run_id", projection.uar_run_id.as_deref(), self.run_id.as_deref()),
+            ("runtime_epoch", projection.runtime_epoch.as_deref(), self.runtime_epoch.as_deref()),
+        ] {
+            if known.is_some() && known != observed {
+                return Err(UarRunClientError::InvalidResponse {
+                    operation: "task lookup",
+                    message: format!("receipt original {field} identity changed"),
+                });
+            }
+        }
+        if let (Some(known), Some(observed)) = (&projection.uar_root_run_id, &self.root_run_id) {
+            if known != observed {
+                return Err(UarRunClientError::InvalidResponse {
+                    operation: "task lookup",
+                    message: "receipt original root_run_id identity changed".into(),
+                });
+            }
+        }
         let prepared = PreparedAdmission {
             request_digest: projection.request_digest.clone(),
             definition_mode: projection.definition_mode,
@@ -254,9 +277,9 @@ impl WireReceipt {
             }
         }
         merged.uar_thread_id.clone_from(&projection.uar_thread_id);
-        merged
-            .uar_root_run_id
-            .clone_from(&projection.uar_root_run_id);
+        if merged.uar_root_run_id.is_none() {
+            merged.uar_root_run_id.clone_from(&projection.uar_root_run_id);
+        }
         Ok(merged)
     }
 }

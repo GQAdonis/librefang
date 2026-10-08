@@ -35,23 +35,69 @@ pub(crate) fn projections(
         .collect()
 }
 
-pub(crate) async fn observe(
+pub(crate) async fn consume(
     state: &Arc<AppState>, projection: &UarDelegatedRunProjection,
 ) -> Result<UarDelegatedRunProjection, String> {
-    let observed = if projection.uar_task_id.is_none() {
-        state.uar_run_control.resolve(projection).await
+    use librefang_llm_drivers::drivers::uar_run::UarRunClient;
+    let client = state.uar_run_control.as_ref();
+    let current = if projection.uar_task_id.is_none() {
+        client.resolve(projection).await.map_err(|error| error.to_string())?
     } else {
-        super::observation::observe(state.uar_run_control.as_ref(), projection, projection.cursor)
-            .await.map(|(current, _)| current)
+        projection.clone()
+    };
+    let current = persist_observation(state, current).map_err(|error| error.to_string())?;
+    let task_id = current.boss_task_id.clone();
+    let observed = client.observe_retained(&current, current.cursor, |event| {
+        let state = Arc::clone(state);
+        let task_id = task_id.clone();
+        async move {
+            let mut latest = retained_projection(&state, &task_id)?;
+            if event.event_type == "agui.tool_call.approval_required" && event.cursor > latest.cursor {
+                // One receipt read at a pending challenge establishes the
+                // authoritative input-required state/revision for controls.
+                latest = state.uar_run_control.lookup(&latest).await?;
+                latest = persist_observation(&state, latest)?;
+            }
+            super::observation::apply_workflow_event(&mut latest, &event)?;
+            persist_observation(&state, latest)?;
+            Ok(())
+        }
+    }).await;
+    let latest = retained_projection(state, &task_id).map_err(|error| error.to_string())?;
+    // Complete-frame delivery is not terminal authority. Confirm the exact
+    // original task/binding/epoch once the retained response has drained.
+    let observed = match observed {
+        Ok(()) => client.lookup(&latest).await,
+        Err(error) => Err(error),
     };
     let current = match observed {
         Ok(current) => current,
-        Err(error) => match librefang_llm_drivers::drivers::uar_run::UarRunClient::recovery_projection(projection, &error) {
+        Err(error) => match UarRunClient::recovery_projection(&latest, &error) {
             Some(recovered) => recovered,
             None => return Err(error.to_string()),
         },
     };
-    super::storage::persist_and_sync(state, current).map_err(|response| format!("delegation persistence HTTP {}", response.status()))
+    persist_observation(state, current).map_err(|error| error.to_string())
+}
+
+fn retained_projection(
+    state: &Arc<AppState>, task_id: &str,
+) -> Result<UarDelegatedRunProjection, librefang_llm_drivers::drivers::uar_run::UarRunClientError> {
+    state.kernel.a2a_tasks().get_uar_delegation(task_id).ok_or_else(||
+        librefang_llm_drivers::drivers::uar_run::UarRunClientError::InvalidResponse {
+            operation: "workflow event persistence",
+            message: "original delegation projection is unavailable".into(),
+        })
+}
+
+fn persist_observation(
+    state: &Arc<AppState>, projection: UarDelegatedRunProjection,
+) -> Result<UarDelegatedRunProjection, librefang_llm_drivers::drivers::uar_run::UarRunClientError> {
+    super::storage::persist_and_sync(state, projection).map_err(|response|
+        librefang_llm_drivers::drivers::uar_run::UarRunClientError::InvalidResponse {
+            operation: "workflow event persistence",
+            message: format!("delegation persistence HTTP {}", response.status()),
+        })
 }
 
 pub(crate) async fn cancel(
