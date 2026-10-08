@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-10-08T10:36:39.120Z",
+  "recordedAt": "2026-10-08T11:22:58.166Z",
   "version": "2.2.15",
   "sourceCommit": "997247b431593e4339d73398ac1409fdf4332e50",
   "implementation": {
@@ -31,24 +31,30 @@
         "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-win32-arm64-github-byte-verification-20261008.json",
         "status": "passed",
         "installedAcceptance": "pending"
-      }
-    ],
-    "pendingPlatforms": [
+      },
       {
         "platform": "darwin-x64",
-        "reason": "Only failed installer job retried after observed network request timeout",
-        "runId": 37759737653,
-        "jobId": 113253112113
+        "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-darwin-x64-github-byte-verification-20261008.json",
+        "status": "passed",
+        "installedAcceptance": "pending"
       }
     ],
+    "pendingPlatforms": [],
     "website": {
       "repository": "Know-Me-Tools/boss-landing-spot",
-      "sourceCommit": "8a431e8822435af94edaad4b668c53f8e51601f5",
-      "syncRun": 37764026068,
-      "status": "repository-synced-live-deployment-pending",
+      "sourceCommit": "0e3cdf255e504324e76643a4f9694125f4c344f3",
+      "syncRun": 37768314382,
+      "status": "published-live-verified",
       "url": "https://the-boss.know-me.tools/#download",
-      "observedLiveVersion": "2.2.14",
-      "reason": "Lovable API INVALID_ARGUMENT; signed-in editor remains loading"
+      "observedLiveVersion": "2.2.15",
+      "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-live-four-platform-website-20261008.json",
+      "publicationMethod": "existing signed-in Lovable project Publish changes"
+    },
+    "publicationRepair": {
+      "pullRequest": "https://github.com/Prometheus-AGS/the-boss/pull/48",
+      "mergeCommit": "aa6a1c8bb70ad84db827e6b3a9d1c7b7b0cd86c7",
+      "metadataCommit": "4cf75a581efdd7840b7cc25de877df26828defbb",
+      "reason": "Explicit immutable release version allows Intel backfill after package advances to 2.2.16; unrelated release identities still refused."
     }
   },
   "cadence": {
@@ -62,8 +68,9 @@
     "sourceCommit": "4160744ffcb07fd4780e1c0347f8d4577846148f",
     "build": "success",
     "launch": "success",
-    "featureOperation": "in-progress",
+    "featureOperation": "passed",
     "parentTask": "C15.1 remains in-progress",
-    "limitation": "Manual role guidance delivery does not certify automatic model strength-policy compliance."
+    "limitation": "Manual role guidance delivery does not certify automatic model strength-policy compliance.",
+    "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-13701628-54c0-485e-abb7-f258bf16594d/evidence.json"
   }
 }

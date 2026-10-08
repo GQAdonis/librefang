@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-10-08T10:50:34.598Z",
+  "recordedAt": "2026-10-08T11:23:25.115Z",
   "parentTask": "C15.1",
   "parentTaskStatus": "in-progress",
   "version": "2.2.16",
@@ -28,9 +28,15 @@
     "clockReset": false,
     "historyRetained": true,
     "publicationDebtRetained": true,
-    "canonicalFeatureReceiptReconciliation": "pending",
-    "reason": "External operation driver corrections were excluded from the unchanged packaged app; Cadence full-repository source fingerprints still differ. Real completed operation evidence is recorded without rewriting failed receipts or fabricating source equality."
+    "canonicalFeatureReceiptReconciliation": "completed",
+    "reason": "Original frozen application, build/launch and corrected excluded driver are bound by an immutable reconciliation; newer checked-out packaged metadata is separately recorded and is not certified as built.",
+    "reconciliationDigest": "9d7cfd82ec07df132ed686982bd6e7d448fc6f293219df072a9e37c02a2a871e",
+    "iterationOutcome": "success",
+    "iterationStatus": "finished",
+    "canonicalTaskCredit": 0
   },
-  "nextIndependentScope": "C15.3 plugin-manifest coverage in existing skill deployment/host binding contract",
-  "websiteBlocker": "Lovable connector missing projects:write; repository sync complete, live deployment pending."
+  "nextIndependentScope": "C15.1 authenticate main-issued reviewed model selections and reject altered target provenance; C15.3 coverage remains subsequent work.",
+  "websiteBlocker": null,
+  "pullRequestMergeCommit": "85159ac2ac8fd123ea6ad4fe87f6206432b56762",
+  "publicRelease": "2.2.15: all four Mac/Windows artifacts and live site verified"
 }
