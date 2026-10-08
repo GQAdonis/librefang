@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 556,
-  "derivedRevision": 556,
+  "sourceRevision": 558,
+  "derivedRevision": 558,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 317
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 319
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -24,7 +24,7 @@
   "parentPhase": null,
   "childPointer": null,
   "change": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "currentTask": "C14.2",
+  "currentTask": "C14.3",
   "status": "running",
   "lifecycle": "running",
   "stageId": null,
@@ -33,9 +33,9 @@
   "implementationCompleted": 17,
   "implementationTotal": 26,
   "planRevision": 10,
-  "revision": 556,
+  "revision": 558,
   "exactNextCommand": "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence",
   "nextChange": "afc-c14-studio-administration-and-isolated-service-consoles",
-  "nextTask": "C14.2",
-  "updatedAt": "2026-10-07T23:16:36.132292Z"
+  "nextTask": "C14.3",
+  "updatedAt": "2026-10-08T00:02:55.301Z"
 }
