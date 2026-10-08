@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-08T10:36:39.120Z",
+  "version": "2.2.15",
+  "sourceCommit": "997247b431593e4339d73398ac1409fdf4332e50",
+  "implementation": {
+    "tasksCompleted": 37,
+    "tasksCancelled": 1,
+    "tasksTotal": 61,
+    "changesCompleted": 12,
+    "changesTotal": 20
+  },
+  "release": {
+    "repository": "Prometheus-AGS/the-boss",
+    "url": "https://github.com/Prometheus-AGS/the-boss/releases/tag/v2.2.15",
+    "publishedPlatforms": [
+      {
+        "platform": "win32-x64",
+        "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-win32-x64-github-byte-verification-20261008.json",
+        "status": "passed",
+        "installedAcceptance": "pending"
+      },
+      {
+        "platform": "darwin-arm64",
+        "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-darwin-arm64-github-byte-verification-20261008.json",
+        "status": "passed",
+        "installedAcceptance": "pending"
+      },
+      {
+        "platform": "win32-arm64",
+        "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c14-win32-arm64-github-byte-verification-20261008.json",
+        "status": "passed",
+        "installedAcceptance": "pending"
+      }
+    ],
+    "pendingPlatforms": [
+      {
+        "platform": "darwin-x64",
+        "reason": "Only failed installer job retried after observed network request timeout",
+        "runId": 37759737653,
+        "jobId": 113253112113
+      }
+    ],
+    "website": {
+      "repository": "Know-Me-Tools/boss-landing-spot",
+      "sourceCommit": "8a431e8822435af94edaad4b668c53f8e51601f5",
+      "syncRun": 37764026068,
+      "status": "repository-synced-live-deployment-pending",
+      "url": "https://the-boss.know-me.tools/#download",
+      "observedLiveVersion": "2.2.14",
+      "reason": "Lovable API INVALID_ARGUMENT; signed-in editor remains loading"
+    }
+  },
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "completedDeliveryCandidate": "e4444615-c45d-4d4c-ab6e-a00118159d2b",
+    "publicationDebt": "preserved-pending-canonical-reconciliation",
+    "reason": "Immutable current candidate lacks earlier C14.1/C14.2 coverage required by historical obligation; no external-job adoption command. No debt cleared or history rewritten."
+  },
+  "localNextDelivery": {
+    "version": "2.2.16",
+    "sourceCommit": "4160744ffcb07fd4780e1c0347f8d4577846148f",
+    "build": "success",
+    "launch": "success",
+    "featureOperation": "in-progress",
+    "parentTask": "C15.1 remains in-progress",
+    "limitation": "Manual role guidance delivery does not certify automatic model strength-policy compliance."
+  }
+}
