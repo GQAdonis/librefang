@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "website": "https://the-boss.know-me.tools",
+  "checkedAt": "2026-10-08T13:05:25.395Z",
+  "entrypoint": "https://the-boss.know-me.tools/assets/index-DYd6aARw.js",
+  "httpStatus": 200,
+  "bundleStatus": 200,
+  "version": "2.2.16",
+  "landingCommit": "69cb70e4788ed0b4808a30f1d0e12204f027b728",
+  "publication": {
+    "method": "existing Lovable Publish changes button",
+    "browserPage": 123,
+    "result": "Your website was updated"
+  },
+  "complete": true,
+  "urls": [
+    "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-mac-arm64.dmg",
+    "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-mac-x64.dmg",
+    "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-win-x64-setup.exe",
+    "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.16/The-Boss-2.2.16-win-arm64-setup.exe"
+  ]
+}
