@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "kind": "c14-host-context-native-production-dispatch",
+  "recordedAt": "2026-10-08T00:28:23.023Z",
+  "cadence": {
+    "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+    "iterationId": "c6f04cd3-9bdd-4269-9f21-69bc536ee774",
+    "startedAt": "2026-10-07T23:24:33.943Z",
+    "firstWorkAt": "2026-10-07T23:24:33.943Z",
+    "publicationDue": true,
+    "successfulDeliveries": 6
+  },
+  "bossfang": {
+    "source": "bc3699c60e5ca34e9fd3557722ee3a2d9611d2ad",
+    "runId": 37707410573,
+    "previousCancelledRun": {
+      "runId": 37707389496,
+      "reason": "Mistyped source SHA; cancelled and redispatched from actual git rev-parse output"
+    },
+    "platforms": [
+      "darwin-arm64",
+      "darwin-x64",
+      "win32-x64",
+      "win32-arm64"
+    ],
+    "status": "building-not-operational"
+  },
+  "uar": {
+    "source": "0870539aace96a4e47b5a4718e0205f7850f9010",
+    "runs": {
+      "darwin-arm64": 37707116276,
+      "win32-x64": 37707118513,
+      "win32-arm64": 37707121103,
+      "darwin-x64": 37707123513
+    },
+    "status": "building-not-operational"
+  },
+  "publication": {
+    "completed": false,
+    "debtCleared": false
+  },
+  "localDependencies": {
+    "procedure": "pnpm install --frozen-lockfile",
+    "node": "24.21.0",
+    "outcome": "success",
+    "verificationEvidence": false
+  }
+}
