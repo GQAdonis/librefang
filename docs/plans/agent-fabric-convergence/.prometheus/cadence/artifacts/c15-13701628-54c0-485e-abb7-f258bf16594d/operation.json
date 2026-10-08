@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-feature-operation",
+  "creationTaskRef": "C15.1",
+  "status": "success",
+  "startedAt": "2026-10-08T10:43:08.030Z",
+  "evidenceLevel": "real-packaged-authoring-and-work-ui",
+  "normalProfile": true,
+  "experimentalOptIn": false,
+  "sourceRefs": {
+    "boss": "4160744ffcb07fd4780e1c0347f8d4577846148f",
+    "uar": "3daa3ef89aaebe0da379ca42b1582172d21f127a",
+    "bossDiffSha256": "4d593d69743842061c0de7ee8bcf17f27fb824ea704307a8720366b6b1843a82",
+    "sourcePinSha256": "cffa80e41b0a260048567c44ce47f3fb253d4b18776710883ecf4c1983330321",
+    "appAsarSha256": "1068ccb0e8c5a7728cb5681d4113f8cb67bca5a64c78f4370c4d930c7f641606",
+    "sidecarSha256": "d39738d9cb7c6ad4c8b9b7b2a2c0fb69899e200935ab392a8180c2720d4e6c2a",
+    "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+    "selectedScenarioSha256": "18bfe71f31ae3374ec8ed297660a4c725cd140fa9bb4388798399d61271f6fa1",
+    "scenarioFiles": {
+      "operate-reusable-team.mjs": "629e5ebabda9c76f36bd7281b6c7ee2a418d39432fa477c91e72cfd122095423",
+      "reusable-team-operation/scenario.mjs": "1289649125273f728e5e6844ab9aa57b9b880d3dd376bef81dde1ad7326c6f56",
+      "reusable-team-operation/io.mjs": "ab924d06c1dbb9418b9043dea8905063f50184aec8fbde2df3f4e4e751e11a2d",
+      "reusable-team-operation/live-output.mjs": "34c81d4a3bcd5f651ceffbf6d7cd9c53838231a9fb3dff3ce30616f540e7d792",
+      "reusable-team-operation/attempt-diagnostics.mjs": "c5a7a6126dfaac215f466cacccb7f4051557bc95b68fbc0b60e365007e1112af",
+      "reusable-team-operation/approvals.mjs": "abcb2cc51c6a0fb649e8d6e8c20034953fc3a42625fa932be48c5a300fa13e11"
+    }
+  },
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-13701628-54c0-485e-abb7-f258bf16594d/launch.json",
+  "functionalAcceptance": "scenario-confirmed",
+  "checks": [
+    "visible-creator-import-and-explicit-mapping-preserve-native-authority",
+    "real-guided-team-runs-manually-selected-exact-model-with-read-only-approvals",
+    "named-team-reopen-retains-full-guide-source-and-all-immutable-definitions"
+  ],
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-13701628-54c0-485e-abb7-f258bf16594d/evidence.json",
+  "evidenceSha256": "4d32d5fee39a2ecac5003e18f15a819b8281066d48f1ba0c4f2aad6cb6d619be",
+  "finishedAt": "2026-10-08T10:45:40.104Z"
+}

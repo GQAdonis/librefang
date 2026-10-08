@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "boss-launch",
+  "startedAt": "2026-10-08T10:43:09.322Z",
+  "repository": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring",
+  "app": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/mac-arm64/The Boss.app",
+  "executable": "/Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
+  "executableModifiedAt": "2026-10-08T10:28:46.876Z",
+  "executableBytes": 52976,
+  "scenario": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-13701628-54c0-485e-abb7-f258bf16594d/packaged-scenario.mjs",
+  "scenarioDigest": "64a0bebdbfabca3b61d6276d39b83dc72a5d9a749b7e00861a853e8948785259",
+  "isolatedUserData": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-I2u3ZV",
+  "launch": "renderer-ready",
+  "functionalAcceptance": "scenario-confirmed",
+  "renderer": {
+    "readyState": "complete",
+    "title": "The Boss",
+    "url": "file:///Users/gqadonis/.claude/worktrees/afc-c15-team-authoring/dist/mac-arm64/The%20Boss.app/Contents/Resources/app.asar/out/renderer/windows/main/index.html",
+    "bodyTextLength": 214,
+    "visibleElementCount": 38,
+    "ready": true
+  },
+  "observedBehavior": "{\"complete\":true,\"checks\":[\"visible-creator-import-and-explicit-mapping-preserve-native-authority\",\"real-guided-team-runs-manually-selected-exact-model-with-read-only-approvals\",\"named-team-reopen-retains-full-guide-source-and-all-immutable-definitions\"],\"requestedPolicyCompliance\":\"unknown\",\"reviewedModelPolicyAcceptance\":\"not-exercised\",\"fullC15_1CompletionClaimed\":false,\"evidencePath\":\"/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-13701628-54c0-485e-abb7-f258bf16594d/evidence.json\",\"evidenceSha256\":\"4d32d5fee39a2ecac5003e18f15a819b8281066d48f1ba0c4f2aad6cb6d619be\"}",
+  "status": "success",
+  "keptOpen": false,
+  "pid": null,
+  "finishedAt": "2026-10-08T10:45:40.091Z"
+}
