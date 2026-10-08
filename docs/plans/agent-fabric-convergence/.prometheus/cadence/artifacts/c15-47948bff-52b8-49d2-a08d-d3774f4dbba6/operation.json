@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-feature-operation",
+  "creationTaskRef": "C16.1",
+  "status": "blocked",
+  "startedAt": "2026-10-08T19:38:47.213Z",
+  "evidenceLevel": "real-packaged-authoring-and-work-ui",
+  "normalProfile": true,
+  "experimentalOptIn": false,
+  "sourceRefs": {
+    "boss": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+    "uar": "b0070b42e7d39d06dca83094cd7868920760cbed",
+    "bossDiffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sourcePinSha256": "931688d595e15629c1c39bb1e23959cc41701b22bf6ae7060006ec15b5feb6a3",
+    "appAsarSha256": "fc729e323193e4934983579fc3201031caa2ef496c7875e89f74bd65d523497a",
+    "sidecarSha256": "16832a42f42972e0faa45c978fb90a44c25e937126a5b84c3b6d9161a02da445",
+    "launcherSha256": "1d7ae203035e956aa47c4ac44acdc6894a5eced2a0213f3291fef7213e82e3d2",
+    "selectedScenarioSha256": "b6016e27c377e0a6830085d6a8afcc98f21c180d824ec53c15460b2c967c9291",
+    "scenarioFiles": {
+      "operate-reusable-team.mjs": "72c68322a91ca00b2bb616249d1de38284a47387320ddd3adac458c5d1df46a0",
+      "reusable-team-operation/scenario.mjs": "1289649125273f728e5e6844ab9aa57b9b880d3dd376bef81dde1ad7326c6f56",
+      "reusable-team-operation/io.mjs": "ab924d06c1dbb9418b9043dea8905063f50184aec8fbde2df3f4e4e751e11a2d",
+      "reusable-team-operation/live-output.mjs": "34c81d4a3bcd5f651ceffbf6d7cd9c53838231a9fb3dff3ce30616f540e7d792",
+      "reusable-team-operation/attempt-diagnostics.mjs": "c5a7a6126dfaac215f466cacccb7f4051557bc95b68fbc0b60e365007e1112af",
+      "reusable-team-operation/approvals.mjs": "35036430337f91128955f310a723a60032e0bae76c83c4f3eac6c37cae3ecb84"
+    }
+  },
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/launch.json",
+  "functionalAcceptance": "not-performed",
+  "checks": [
+    "seven-specialist-editor-persists-delivery-fields-and-manual-models",
+    "each-delivery-field-changes-new-immutable-identity-and-preserves-prior-revisions-and-resources",
+    "all-six-specialists-have-real-successful-manual-model-attempts-and-correlated-artifacts"
+  ],
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/evidence.json",
+  "evidenceSha256": "7da2a5124b8fa54e1de90107331396d94c8361eacd5126da7731adb07c3e70b7",
+  "failureCode": "C15_VISIBLE_CONTROL_UNAVAILABLE",
+  "finishedAt": "2026-10-08T19:46:38.343Z"
+}

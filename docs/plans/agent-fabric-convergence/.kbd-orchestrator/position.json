@@ -2,15 +2,15 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 571,
-  "derivedRevision": 571,
+  "sourceRevision": 583,
+  "derivedRevision": 583,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 332
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 344
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-08T12:33:58.326777Z",
+  "updatedAt": "2026-10-08T20:06:22.729112Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
@@ -316,16 +316,16 @@
             "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
             "status": "IN_PROGRESS",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },
           {
             "type": "change",
             "id": "afc-c16-specialist-marketing-product-and-design-teams",
-            "status": "PENDING",
+            "status": "IN_PROGRESS",
             "progress": {
-              "done": 0,
+              "done": 1,
               "total": 3
             }
           },

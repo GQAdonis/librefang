@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-10-08T19:31:43.197Z",
+  "source": "fresh git fetch origin main; git merge-base --is-ancestor origin/main HEAD exit 0",
+  "latestMain": "7012649894d76f9fc9f3d2a30c2a11076fefe100",
+  "retainedPayload": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+  "latestMainIncluded": true,
+  "bossSource": "39b2c3a30b27418f0f9c3c9acf7659fee7914d51",
+  "candidateId": "55f113ea-09cd-424e-9e27-682b652805d5",
+  "notes": "No pin downgrade; latest main is included with later Teams additions. Packaging and actual feature operation are separate evidence."
+}

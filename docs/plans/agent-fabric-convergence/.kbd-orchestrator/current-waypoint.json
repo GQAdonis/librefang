@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 571,
-  "derivedRevision": 571,
+  "sourceRevision": 583,
+  "derivedRevision": 583,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 332
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 344
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -33,9 +33,9 @@
   "implementationCompleted": 18,
   "implementationTotal": 26,
   "planRevision": 10,
-  "revision": 571,
+  "revision": 583,
   "exactNextCommand": "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence",
   "nextChange": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
   "nextTask": "C15.1",
-  "updatedAt": "2026-10-08T12:33:58.326777Z"
+  "updatedAt": "2026-10-08T20:06:22.729112Z"
 }

@@ -1,0 +1,28 @@
+{
+  "outcome": "completed-operation-after-failed-procedure-recovery",
+  "originalProcessExitCode": 1,
+  "recoveryProcessExitCode": 0,
+  "originalEvidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/evidence.json",
+    "size": 51115,
+    "sha256": "7da2a5124b8fa54e1de90107331396d94c8361eacd5126da7731adb07c3e70b7"
+  },
+  "originalOperation": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/operation.json",
+    "size": 2607,
+    "sha256": "054aeffa66e021a88cd518a53a46b04c7e702e646f80617c3ff967bb64ad8a7b"
+  },
+  "recoveryEvidence": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-47948bff-52b8-49d2-a08d-d3774f4dbba6/reopen-recovery-evidence.json",
+    "size": 52561,
+    "sha256": "5fd104d6f5f66c112864a0754d82f0d0fb14e75f0f920f8402fffd6d691d5f59"
+  },
+  "recoveryCommand": {
+    "command": "/Users/gqadonis/Library/Application Support/TheBossBAUAR-Projection-1791330479405/commands/node",
+    "args": [
+      "/tmp/c16-resume-reopen-operation-20261008.mjs"
+    ]
+  },
+  "scope": "Only saved-team reopening; no new team activation or inference",
+  "statement": "The frozen procedure did not exit zero. Six specialists and coordinator succeeded before its saved-team reopening failure. The only failed reopening was repeated successfully with the repaired excluded driver. This receipt adopts the composed completed feature operation, not a successful rerun of the original process."
+}
