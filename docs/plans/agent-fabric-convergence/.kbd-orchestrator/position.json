@@ -2,15 +2,15 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 587,
-  "derivedRevision": 587,
+  "sourceRevision": 590,
+  "derivedRevision": 590,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 348
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 351
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-08T22:33:58.057656Z",
+  "updatedAt": "2026-10-08T22:55:35.554095Z",
   "cursor": [
     "agent-fabric-convergence",
     "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
@@ -21,7 +21,7 @@
     "id": "939f7f6c-8f47-4343-9a3d-934726697715",
     "status": "running",
     "progress": {
-      "done": 18,
+      "done": 19,
       "total": 26
     },
     "children": [
@@ -31,7 +31,7 @@
         "canonicalId": "agent-fabric-convergence",
         "status": "IN_PROGRESS",
         "progress": {
-          "done": 12,
+          "done": 13,
           "total": 20
         },
         "children": [
@@ -323,9 +323,9 @@
           {
             "type": "change",
             "id": "afc-c16-specialist-marketing-product-and-design-teams",
-            "status": "IN_PROGRESS",
+            "status": "COMPLETE",
             "progress": {
-              "done": 2,
+              "done": 3,
               "total": 3
             }
           },
