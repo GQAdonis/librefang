@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 583,
-  "derivedRevision": 583,
+  "sourceRevision": 587,
+  "derivedRevision": 587,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 344
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 348
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-10-08T20:06:22.729112Z",
+  "last_updated": "2026-10-08T22:33:58.057656Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
   "changes_completed": 12,
@@ -267,9 +267,9 @@
       "status": "IN_PROGRESS",
       "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
-      "tasks_done": 1,
-      "last_task_completed": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
-      "next_task_pending": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+      "tasks_done": 2,
+      "last_task_completed": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+      "next_task_pending": "Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims.",
       "blockers": []
     },
     {

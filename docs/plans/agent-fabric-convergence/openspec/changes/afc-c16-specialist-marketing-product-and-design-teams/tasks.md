@@ -5,7 +5,7 @@ These are delivery groups for the initiative, not ready-to-dispatch product assi
 ## 1. Specialist, marketing, product and design teams
 
 - [x] 1.1 Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments. Verify with a linked contract/source receipt and the applicable acceptance scenarios in design.md; record exact revisions and outcomes. Initiative task: C16.1.
-- [ ] 1.2 Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits. Verify with a linked contract/source receipt and the applicable acceptance scenarios in design.md; record exact revisions and outcomes. Initiative task: C16.2.
+- [x] 1.2 Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits. Verify with a linked contract/source receipt and the applicable acceptance scenarios in design.md; record exact revisions and outcomes. Initiative task: C16.2.
 - [ ] 1.3 Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims. Verify with a linked contract/source receipt and the applicable acceptance scenarios in design.md; record exact revisions and outcomes. Initiative task: C16.3.
 
 ## Approved customer-priority revision — 2026-10-05

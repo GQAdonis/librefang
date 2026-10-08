@@ -1,15 +1,23 @@
 {
-  "status": "degraded",
+  "status": "ok",
   "gateway": "http://localhost:4000/v1",
   "roles": {
     "judge": {
       "alias": "gpt-6.1-sol",
-      "identity": null,
+      "identity": {
+        "providerId": "openai",
+        "providerConnectionId": "openai-proxy-8181",
+        "modelId": "gpt-6.1-sol"
+      },
       "source": "models.toml"
     },
     "critic": {
       "alias": "MiniMax-M3",
-      "identity": null,
+      "identity": {
+        "providerId": "minimax",
+        "providerConnectionId": "minimax-direct",
+        "modelId": "MiniMax-M3"
+      },
       "source": "models.toml"
     },
     "backup": {
@@ -35,9 +43,9 @@
     "medium",
     "frontier"
   ],
-  "distinct_models": 0,
+  "distinct_models": 2,
   "config_path": "/Users/gqadonis/.config/liter-llm/liter-llm-proxy.toml",
   "config_exists": true,
   "config_defects": [],
-  "checked_at": "2026-09-30T18:44:13Z"
+  "checked_at": "2026-10-05T23:09:45Z"
 }

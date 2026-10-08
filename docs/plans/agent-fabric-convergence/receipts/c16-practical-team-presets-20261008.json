@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-delivery-contract",
+  "task": "C16.2",
+  "recordedAt": "2026-10-08T22:36:35.379Z",
+  "canonicalRevision": 585,
+  "cadence": {
+    "iterationId": "19a59322-b6a5-4b49-ab18-a56f02b784d6",
+    "index": 13,
+    "outcome": "success",
+    "startedAt": "2026-10-08T17:54:24.776Z",
+    "finishedAt": "2026-10-08T22:28:30.648Z",
+    "completion": {
+      "tasks": [
+        "C16.2"
+      ],
+      "changes": [],
+      "phases": []
+    }
+  },
+  "version": "2.2.20",
+  "applicationSource": "c743120c5c87b73cd14c3c704ccbdf91a60576bb",
+  "nativeUarSource": "e262e758cdbbe59604257d47db268e39c13a7ffd",
+  "operationDriverProof": {
+    "baseRevision": "c743120c5c87b73cd14c3c704ccbdf91a60576bb",
+    "proofCommit": "7f7b8df0298b9d769a57b3cf811261b5219adb14",
+    "diffScope": "scripts/practical-team-presets-operation/work.mjs",
+    "changedPackagingExcludedPaths": [
+      "scripts/practical-team-presets-operation/work.mjs",
+      "scripts/reusable-team-operation/scenario.mjs"
+    ],
+    "allChangedSources": [
+      {
+        "path": "scripts/practical-team-presets-operation/work.mjs",
+        "sha256": "e1b4c07ed5140714a7f79029ad76aa2853005e71414928a11410c5b31a3e127c",
+        "diffSha256": "1b18fecf817ab77b8398b72444cf8c96e8f0434e9614aafcab4cd90e28153f6f"
+      },
+      {
+        "path": "scripts/reusable-team-operation/scenario.mjs",
+        "sha256": "76089e273b339f90c2149953807ff3a83ac943901818d4afaa1a0ce5248ac914",
+        "diffSha256": "3c9dc79b219c78ce210ef5891634368b9ba492d948b38b6bfedcaf7767a02be1"
+      }
+    ],
+    "unchangedApplicationArchive": "cf5dea97a0cc82ad0b4a3e7e698d5c15e7503bfc1bbebb63bbcf081014d43872",
+    "originalEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-b68a7d49-5b3b-4430-a3f2-882ef83ce714/evidence.json",
+    "recoveredEvidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c15-b68a7d49-5b3b-4430-a3f2-882ef83ce714/recovery-evidence-v3-20261008.json",
+    "noRepeatedInference": true
+  },
+  "mini": {
+    "source": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+    "freshMain": "7012649894d76f9fc9f3d2a30c2a11076fefe100",
+    "mainIncluded": true,
+    "skills": 107,
+    "runtimeFiles": 3646
+  },
+  "artifacts": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-practical-team-presets/dist/The-Boss-2.2.20-mac-arm64.dmg",
+      "size": 702098464,
+      "sha256": "b1d49f4b3de038e089dd58214c1a4b6213a8c22ceeb8d0fa5596e4c8d6006980"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-practical-team-presets/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
+      "size": 346973001,
+      "sha256": "cf5dea97a0cc82ad0b4a3e7e698d5c15e7503bfc1bbebb63bbcf081014d43872"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-practical-team-presets/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/uar-sidecar",
+      "size": 302240736,
+      "sha256": "4082a0614d40dc44086db17f2e88d2d62ebdf4760a5f0308cd9368ce6b51302d"
+    }
+  ],
+  "signing": "Developer ID signed; local notarization explicitly disabled",
+  "featureOperation": {
+    "complete": true,
+    "checks": [
+      "five-practical-presets-authored-with-explicit-reviewed-skills-and-manual-models",
+      "product-research-marketing-brand-and-logo-design-have-real-correlated-artifacts",
+      "reopen-preserves-pinned-runs-and-artifacts-without-repeated-inference",
+      "read-only-workspace-and-feedback-connector-boundaries-preserved"
+    ],
+    "modelChoice": "explicit-manual-configured-gateway",
+    "artifactQualityAcceptance": {
+      "assessedBy": "root",
+      "scope": "All12 saved role artifact bodies inspected, not marker-only completion",
+      "findings": [
+        "Product research has source-attributed evidence, prioritized options, reviewer findings and synthesis",
+        "Marketing brand has positioning and bounded draft onboarding copy with explicit limitations",
+        "Logo design has three concepts, production handoff, reviewer findings and synthesis; rendered assets not claimed"
+      ],
+      "observations": [
+        "No real market research, campaign publication, issue creation, rendered assets, physical-device validation or Windows acceptance is claimed"
+      ]
+    },
+    "restartScope": "renderer reload; application process restart not claimed",
+    "externalEffects": "not-authorized-not-exercised"
+  },
+  "evidence": [
+    {
+      "path": ".prometheus/cadence/artifacts/c16-practical-complete-combined-operation-20261008.json",
+      "sha256": "de62bba4c5cf94070d8c6c8c950e5522930af2951cff52552f2d9f83f5f9c794"
+    },
+    {
+      "path": ".prometheus/cadence/artifacts/c16-practical-corrected-build-c743120c-20261008.json",
+      "sha256": "766ac86ac07875c7bfa5e22b901004efe88941edcb25f9d5357a520d04246426"
+    },
+    {
+      "path": ".prometheus/cadence/artifacts/c16-2-canonical-completion-20261008.json",
+      "sha256": "be1ded8557d76e5f1ad5290d58e380887091cd46e8452d25c749caf40ed6e2d2"
+    },
+    {
+      "path": ".prometheus/cadence/artifacts/c16-2-post-completion-canonical-20261008.json",
+      "sha256": "dc4d54178d37ecde67e04525e4a5cbf4788793a3c080adfe5cc93a8286c2b14d"
+    }
+  ],
+  "limitations": [
+    "Native Windows operation and installed acceptance pending.",
+    "Local notarization disabled; not claimed.",
+    "Mobile and feedback evidence is authoring/revision operation, not device execution or GitHub effect.",
+    "Supplied fixture evidence is not live market research or rendered design output.",
+    "Earlier failed operation and failed-only recovery retained, not rewritten.",
+    "No unit, mock-only, per-edit or broad verification suite run."
+  ],
+  "nextTask": "C16.3"
+}
