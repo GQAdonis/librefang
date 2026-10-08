@@ -1210,7 +1210,7 @@ pub async fn resume_workflow_run(
                 },
             )
             .await;
-        let result = dispatch.finish(result).await;
+        let result = dispatch.finish(result.map_err(|error| error.to_string())).await;
         if let Err(e) = result {
             tracing::warn!(run_id = %run_id, error = %e, "Background workflow resume failed");
         }
@@ -1253,7 +1253,6 @@ pub async fn resume_workflow_run(
 )]
 pub async fn operator_action_workflow_run(
     State(state): State<Arc<AppState>>,
-    api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(run_id): Path<String>,
     // Optional so the handler still compiles / works on installs that
     // disable auth entirely; when auth is on, the middleware layer
@@ -1385,7 +1384,7 @@ pub async fn operator_action_workflow_run(
                 },
             )
             .await;
-        let result = dispatch.finish(result).await;
+        let result = dispatch.finish(result.map_err(|error| error.to_string())).await;
         // Emit one structured event regardless of outcome so the audit
         // trail records WHO did WHAT against WHICH run, not just the
         // failures. Previously only `Err` produced a log line, which
