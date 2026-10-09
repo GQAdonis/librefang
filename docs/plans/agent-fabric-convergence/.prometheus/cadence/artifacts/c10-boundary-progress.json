@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T08:27:41.036Z",
+  "iteration": 15,
+  "startedAt": "2026-10-09T06:08:37.669Z",
+  "deadline": "2026-10-09T08:08:37.669Z",
+  "outcome": "unresolved",
+  "completedWholeKbdTasks": 0,
+  "code": [
+    "exact generated issue approval and durable controls",
+    "protected GitHub transport",
+    "Work customer feedback controls and 13 locales",
+    "compiled feedback preset and workflow"
+  ],
+  "localBuild": {
+    "status": "passed",
+    "source": "93a8e845e10172133a7928e9280f05c8aea7e52a",
+    "uar": "e936b91f53dd3cdcf67c1ec2dba17bb4e208d7a4"
+  },
+  "launch": {
+    "status": "passed",
+    "scope": "provider administration, not inference"
+  },
+  "featureOperation": {
+    "status": "blocked",
+    "lastFailure": "UAR sidecar readiness timed out",
+    "inference": "not-performed",
+    "issuePublication": "not-performed"
+  },
+  "publication": {
+    "version": "2.2.22",
+    "windowsArmInstaller": "uploaded to draft",
+    "metadata": "blocked until publication baseline includes release2.2.22",
+    "macIntelInstallerRun": 37905001236
+  },
+  "learning": {
+    "supportedFinding": "Opaque operation-driver failures obscured precise UI and startup causes, causing repeated failed operations without delivered capability.",
+    "correction": "Capture exact stage and redacted native error before rerun; inspect actual native startup rather than repeat the entire UI flow blindly.",
+    "velocityIncrease": "not-demonstrated",
+    "buildPolicy": "No broad/unit/mock/per-edit suites. Successful app build was not repeated for external driver changes."
+  }
+}
