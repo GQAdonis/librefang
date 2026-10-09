@@ -1,6 +1,6 @@
 # Customer qualification progress — 2.2.25
 
-The historical code-complete entry baseline is **61/61 tasks and 20/20 changes**. The public representation operation subsequently exposed a **C17.2 corrective implementation gap**, now under repair; the prior baseline is preserved rather than described as a currently defect-free implementation. Original portfolio qualification remains **43/61 terminal entries**, including one historical skipped duplicate. This report advances requirement evidence, not original qualification-task completion or Cadence delivery counts.
+The historical code-complete entry baseline is **61/61 tasks and 20/20 changes**. The public representation operation subsequently exposed a **C17.2 corrective implementation gap**. Its corrective code is now written and pushed, with packaged operation pending; the prior baseline is preserved rather than described as a currently defect-free implementation. Original portfolio qualification remains **43/61 terminal entries**, including one historical skipped duplicate. This report advances requirement evidence, not original qualification-task completion or Cadence delivery counts.
 
 Candidate: The Boss `35eff8c8c40555a4a464ee03b7305bcc4949666b`, UAR `60b5922e3e11dd73bfd8a47e5bc28f3c16332889`. Public Mac ARM64 archive SHA-256 `333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c`; installed UAR SHA-256 `31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716`. The local archive has different bytes; its passing operation is retained separately.
 
@@ -25,3 +25,13 @@ Candidate: The Boss `35eff8c8c40555a4a464ee03b7305bcc4949666b`, UAR `60b5922e3e1
 The first public team attempt failed during gateway model discovery, before authoring. A selective diagnostic then advertised the same alias with unchanged public bytes. Its cause remains unproven; the affected full retry above passed. The original failure and diagnostic remain preserved. No application source change, rebuild, unit suite or new Cadence delivery was performed to obtain this result.
 
 The active native qualification goal preserves the existing 120-minute policy and fifteen historical successful deliveries. Two earlier source-bound publication obligations remain unreconciled; current public 2.2.25 artifacts must not be assigned to those older frozen candidates. Mandatory installed acceptance and broader deferred portfolio criteria stay separate.
+
+## Corrective candidate — 2.2.26
+
+The Boss source `d092a9b4577ec3a07502c94e86bbe0cc8aa68039` on [PR65](https://github.com/Prometheus-AGS/the-boss/pull/65) contains typed durable turn submission, scoped run output, actual pending native approval controls and applied grant visibility. Added labels cover all thirteen locales. It pins UAR `1522f17944aec1e1a7db5eab3b647e732fc1a07f` on [PR367](https://github.com/Prometheus-AGS/universal-agent-runtime/pull/367).
+
+The UAR corrections separate authenticated issuer identity from its encoded storage partition, persist privately scoped grant bindings with current-authority checks, hydrate saved native-tool settings before startup registration, and resolve saved resilience policy for each admitted team turn. Existing timeout defaults are unchanged. Provider timeout evidence does not identify which deadline expired.
+
+Full and mini source pins include the one-line host `USER` preservation repair: full `bb8950b254825079ab382119a8c425d645a081ae` (merged PR178), mini `838371d3b597e785b1fe264377b3f55b9ca6333f` (merged PR54). Machine-wide installed redistribution remains pending because the narrow installer refused signed-generation ownership conflicts; no signed store was overwritten. See [redistribution receipt](cadence-machine-redistribution-2026-10-09.json).
+
+The final local native build and four native platform payload jobs are in progress. Superseded `7183a0af` builds were cancelled and are retained as unsuccessful historical attempts. No corrective installer, represented turn or new release publication is claimed yet. The actual local Mac ARM64 build follows successful native packaging; affected coding, reviewed-skill and representation operations follow that completed package. Existing passing 2.2.25 evidence retains its actual provenance.
