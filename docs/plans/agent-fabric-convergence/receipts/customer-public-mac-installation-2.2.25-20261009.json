@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-mac-installer-installation",
+  "version": "2.2.25",
+  "source": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+  "startedAt": "2026-10-09T21:48:32.130Z",
+  "installer": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-mac-arm64.dmg",
+  "status": "passed",
+  "functionalOperation": "not-performed",
+  "installedAcceptance": "pending",
+  "installerPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/The-Boss-2.2.25-mac-arm64.dmg",
+  "size": 711476975,
+  "sha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+  "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+  "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+  "signature": "codesign-deep-strict-passed",
+  "gatekeeper": "spctl-execute-accepted",
+  "installation": "copied-from-verified-public-DMG-into-isolated-directory",
+  "finishedAt": "2026-10-09T21:50:25.106Z"
+}
