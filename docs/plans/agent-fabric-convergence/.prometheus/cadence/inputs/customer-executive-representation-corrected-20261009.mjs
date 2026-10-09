@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import { openWork, setup } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/scenario.mjs'
 
 const digest = value => createHash('sha256').update(value).digest('hex')
 const delay = (ms, signal) => new Promise((resolve, reject) => {
@@ -90,10 +91,26 @@ export default async function run({ evaluate, signal, onObservation }, configura
       configuration.sourceRefs?.installedVersion !== '2.2.25', 'C17_REPAIRED_CANDIDATE_REQUIRED')
     requireFact(JSON.stringify(state.sourceRefs) === JSON.stringify(configuration.sourceRefs), 'C17_RESUME_SOURCE_CHANGED')
     if (!configuration.resumeState) {
+      stage = 'configure-isolated-gateway-and-native-model'
+      await openWork(evaluate, signal)
+      const prepared = await setup(evaluate, configuration)
+      await ipc('prometheus.uar.teams.setup_starter', { workspaceId: prepared.workspaceId, model: prepared.model })
+      state.workspaceId = prepared.workspaceId
+      state.checks.push({ name: 'isolated-gateway-and-native-model-prepared-through-typed-settings', passed: true,
+        workspaceId: state.workspaceId, model: prepared.model, credentialReference: configuration.gateway.credentialEnv,
+        interpretation: 'Configuration and native provider preparation only; inference operation remains required.' })
+      persist()
       const sources = await ipc('prometheus.uar.models.sources', {})
       const native = sources.sources.find(source => source.source === 'uar')
-      const choices = native?.providers.filter(provider => provider.enabled).flatMap(provider =>
-        provider.models.filter(model => model.enabled).map(model => ({ source: 'uar', providerId: provider.id, modelId: model.id }))) ?? []
+      const gatewayUrl = new URL(configuration.gateway.endpoint)
+      const gatewayPath = gatewayUrl.pathname.replace(/\/$/, '')
+      gatewayUrl.pathname = gatewayPath.endsWith('/v1') ? gatewayPath : gatewayPath + '/v1'
+      const gatewayBaseUrl = gatewayUrl.href.replace(/\/$/, '')
+      const choices = native?.providers.filter(provider => provider.enabled && provider.credentialConfigured &&
+        provider.baseUrl === gatewayBaseUrl).flatMap(provider => provider.models.filter(model => model.enabled &&
+          model.id === prepared.model.modelId && model.pricingIdentity?.providerId === configuration.gateway.providerId &&
+          model.pricingIdentity?.modelId === configuration.gateway.modelId).map(model =>
+          ({ source: 'uar', providerId: provider.id, modelId: model.id }))) ?? []
       const selected = choices.find(model => !process.env.BOSS_CUSTOMER_UAR_MODEL ||
         `${model.providerId}::${model.modelId}` === process.env.BOSS_CUSTOMER_UAR_MODEL)
       requireFact(native?.operational && selected, 'C17_CONFIGURED_NATIVE_UAR_MODEL_REQUIRED')
@@ -102,9 +119,6 @@ export default async function run({ evaluate, signal, onObservation }, configura
       state.file = path.join(state.directory, 'representation-synthetic.txt')
       state.content = `Synthetic advisory record only.\nMarker: ${randomUUID()}\nNo real person, authority, spending or organizational data.\n`
       fs.writeFileSync(state.file, state.content, { flag: 'wx', mode: 0o600 }); state.fileSha256 = digest(state.content)
-      const workspace = await evaluate(`window.api.dataApi.request({id:crypto.randomUUID(),method:'POST',path:'/agent-workspaces',body:${JSON.stringify({ path: state.directory })}})`)
-      requireFact(workspace?.data?.id && !workspace.error, 'C17_WORKSPACE_REGISTRATION_FAILED')
-      state.workspaceId = workspace.data.id
       stage = 'native-tool-settings-and-owned-restart'
       const settings = await ipc('prometheus.uar.settings.read', { namespace: 'native-tools' })
       const fields = ['file_tools_enabled', 'file_allowed_paths']
