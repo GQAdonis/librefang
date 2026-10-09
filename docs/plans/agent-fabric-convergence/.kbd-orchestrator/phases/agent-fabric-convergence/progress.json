@@ -2,18 +2,18 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 590,
-  "derivedRevision": 590,
+  "sourceRevision": 597,
+  "derivedRevision": 597,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 351
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 358
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-10-08T22:55:35.554095Z",
+  "last_updated": "2026-10-09T10:37:09.147640Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
   "changes_completed": 13,
@@ -24,7 +24,7 @@
     "implementation": {
       "completed": 13,
       "total": 20,
-      "status": "BLOCKED"
+      "status": "IN_PROGRESS"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -53,7 +53,7 @@
     "implementation": {
       "completed": 19,
       "total": 26,
-      "status": "BLOCKED"
+      "status": "IN_PROGRESS"
     },
     "evidence": {
       "status": "PENDING",
@@ -196,15 +196,13 @@
     {
       "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
       "title": "C10 — Feedback workflow and governed connector effects",
-      "status": "BLOCKED",
-      "implementation_status": "BLOCKED",
+      "status": "IN_PROGRESS",
+      "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
       "tasks_done": 1,
       "last_task_completed": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
       "next_task_pending": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
-      "blockers": [
-        "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation."
-      ]
+      "blockers": []
     },
     {
       "id": "afc-c11-authoritative-business-data-and-offline-commands",
@@ -253,12 +251,12 @@
     {
       "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
       "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "PENDING",
+      "implementation_status": "PENDING",
       "tasks_total": 3,
-      "tasks_done": 1,
+      "tasks_done": 2,
       "last_task_completed": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
-      "next_task_pending": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+      "next_task_pending": "Validate all eight harness adapters against pinned CLI schemas; preserve native options/extensions and report unsupported agent/plugin/marketplace features; use Node.js/TypeScript 7 for authored shared hooks/scripts. Before authoring helpers, pin the exact Node.js and TypeScript 7 distribution and prove full/mini and harness adapter compatibility at D-MINI; if unavailable, record a blocker rather than substituting another language/version.",
       "blockers": []
     },
     {

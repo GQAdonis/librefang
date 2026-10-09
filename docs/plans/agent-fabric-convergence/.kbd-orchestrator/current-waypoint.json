@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 590,
-  "derivedRevision": 590,
+  "sourceRevision": 597,
+  "derivedRevision": 597,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 351
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 358
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -23,8 +23,8 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": null,
   "childPointer": null,
-  "change": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-  "currentTask": "C15.1",
+  "change": "afc-c10-feedback-workflow-and-governed-connector-effects",
+  "currentTask": "C10.2",
   "status": "running",
   "lifecycle": "running",
   "stageId": null,
@@ -33,9 +33,9 @@
   "implementationCompleted": 19,
   "implementationTotal": 26,
   "planRevision": 10,
-  "revision": 590,
+  "revision": 597,
   "exactNextCommand": "C14.1 combined R1/R2 repairs, then R3 completed Mac build/operation/full publication; /kbd-execute agent-fabric-convergence",
-  "nextChange": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-  "nextTask": "C15.1",
-  "updatedAt": "2026-10-08T22:55:35.554095Z"
+  "nextChange": "afc-c10-feedback-workflow-and-governed-connector-effects",
+  "nextTask": "C10.2",
+  "updatedAt": "2026-10-09T10:37:09.147640Z"
 }

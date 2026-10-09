@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "slug": "agent-fabric-convergence-customer-milestone",
+  "status": "active",
+  "createdAt": "2026-10-09T05:57:14.469Z",
+  "phases": [
+    "creation"
+  ],
+  "existingPhase": "agent-fabric-convergence",
+  "scope": [
+    "C15.1",
+    "C10.2:GitHub-customer-subset",
+    "C10.3:customer-feedback",
+    "C18.2:desktop-recovery",
+    "C18.3:desktop-release-evidence"
+  ],
+  "deferredRequirementsRetained": true,
+  "stopCondition": "Approved customer milestone implemented, built, operated, committed, pushed and published; installed acceptance explicitly recorded.",
+  "loop_controller": {
+    "owner": "codex-native-goal",
+    "threadId": "01a0cb90-3993-7592-9779-f80c3f53be07",
+    "cadence": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence",
+      "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+      "iterationMinutes": 120,
+      "publicationEverySuccessfulDeliveries": 2,
+      "platforms": [
+        "darwin-arm64",
+        "darwin-x64",
+        "win32-x64",
+        "win32-arm64"
+      ]
+    }
+  },
+  "authority": "Operator /kbd-goal approval 2026-10-09; preserve existing architecture approvals and KBD completion authority",
+  "startingCanonicalRevision": 590,
+  "historyPreserved": true,
+  "installedAcceptanceSeparate": true
+}

@@ -2,19 +2,19 @@
   "schemaVersion": "1",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 590,
-  "derivedRevision": 590,
+  "sourceRevision": 597,
+  "derivedRevision": 597,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 351
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 358
   },
   "conflictCount": 0,
-  "updatedAt": "2026-10-08T22:55:35.554095Z",
+  "updatedAt": "2026-10-09T10:37:09.147640Z",
   "cursor": [
     "agent-fabric-convergence",
-    "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-    "C15.1"
+    "afc-c10-feedback-workflow-and-governed-connector-effects",
+    "C10.2"
   ],
   "root": {
     "type": "phase",
@@ -269,7 +269,7 @@
           {
             "type": "change",
             "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
-            "status": "BLOCKED",
+            "status": "IN_PROGRESS",
             "progress": {
               "done": 1,
               "total": 3
@@ -314,9 +314,9 @@
           {
             "type": "change",
             "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
-            "status": "IN_PROGRESS",
+            "status": "PENDING",
             "progress": {
-              "done": 1,
+              "done": 2,
               "total": 3
             }
           },
