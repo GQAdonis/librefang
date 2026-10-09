@@ -480,3 +480,7 @@ Increments 2–3 contribute C15.1/relevant C15.3, C16.1–C16.3 and supporting C
 
 ### Observed frozen-profile correction (Execute)
 The supported configure command refuses changes while failed iteration8 remains active. Live timing, local build and success7/9 publication policy already match this revision. Keep that effective policy and frozen history; defer only the reviewed explanatory profile request until after Reflect, child return and failed-attempt finalization. The rejection is recorded in the child cadence-configure.receipt.json; no successful reconfiguration is claimed.
+
+## Operator-approved implementation completion amendment — 2026-10-09T14:23:55.374Z
+
+Complete all remaining production implementation toward20/20; previous portfolio deferrals no longer block implementation admission. Qualification, evidence, certification and publication remain separate and truthful. Do not require per-task tests, intermediary100% gates or reviews to write the next dependency-eligible code. Existing trust and external-effect approvals remain in force. Keep120-minute delivery cadence and existing publication debt; local Mac build and operate each usable delivery, four Mac/Windows platforms and website every second successful delivery. Preserve original task identities/history and record remaining qualification separately; never credit absent production code.

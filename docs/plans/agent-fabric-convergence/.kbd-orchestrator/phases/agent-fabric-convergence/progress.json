@@ -2,29 +2,29 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 597,
-  "derivedRevision": 597,
+  "sourceRevision": 614,
+  "derivedRevision": 614,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 358
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 375
   },
   "conflictCount": 0,
   "phase": "agent-fabric-convergence",
   "phaseId": "agent-fabric-convergence",
   "parentPhase": null,
-  "last_updated": "2026-10-09T10:37:09.147640Z",
+  "last_updated": "2026-10-09T15:32:20.724860Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 20,
-  "changes_completed": 13,
+  "changes_completed": 20,
   "implementation_total": 20,
-  "implementation_completed": 13,
+  "implementation_completed": 20,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 13,
+      "completed": 20,
       "total": 20,
-      "status": "IN_PROGRESS"
+      "status": "COMPLETE"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -51,9 +51,9 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 19,
+      "completed": 26,
       "total": 26,
-      "status": "IN_PROGRESS"
+      "status": "COMPLETE"
     },
     "evidence": {
       "status": "PENDING",
@@ -196,8 +196,8 @@
     {
       "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
       "title": "C10 — Feedback workflow and governed connector effects",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 1,
       "last_task_completed": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
@@ -207,8 +207,8 @@
     {
       "id": "afc-c11-authoritative-business-data-and-offline-commands",
       "title": "C11 — Authoritative business data and offline commands",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
@@ -218,8 +218,8 @@
     {
       "id": "afc-c12-personal-peer-sovereignty-and-consent",
       "title": "C12 — Personal peer sovereignty and consent",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
@@ -229,8 +229,8 @@
     {
       "id": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
       "title": "C13 — Embedded mobile and home/cloud execution profiles",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
@@ -251,8 +251,8 @@
     {
       "id": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
       "title": "C15 — Portable skills, plugin contracts and cross-harness handoff",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 2,
       "last_task_completed": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
@@ -273,8 +273,8 @@
     {
       "id": "afc-c17-executive-assistants-and-consented-human-representation",
       "title": "C17 — Executive assistants and consented human representation",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
@@ -284,8 +284,8 @@
     {
       "id": "afc-c18-federated-compatibility-and-release-evidence",
       "title": "C18 — Federated compatibility and release evidence",
-      "status": "PENDING",
-      "implementation_status": "PENDING",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 3,
       "tasks_done": 0,
       "last_task_completed": null,
