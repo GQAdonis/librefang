@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-customer-work-inference",
+  "status": "pending",
+  "startedAt": "2026-10-09T22:12:48.643Z",
+  "stage": "ordinary-work-inference",
+  "isolatedProfile": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/cadence-boss-29WEuI",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "installedVersion": "2.2.25",
+    "publicApp": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "scenarioSha256": "1719167ff2ad73e0f98e20b228c024c44faeec3f75efb9bebbc1ef6af2f19095",
+    "operationDriverSha256": "92aa0ec36dda37540cd184ea7fd344754368bae1b33147905f2211d0fbdd7892",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0"
+  },
+  "credentialStaging": {
+    "literalDestinationConfirmed": true,
+    "sourceOwnerConfirmed": true,
+    "originalProfileExcluded": true,
+    "closedDestinationConfirmed": true,
+    "privateDestinationPermissionsApplied": true,
+    "sourceOpenedReadOnly": true,
+    "sourceOAuthPresent": true,
+    "sourceAccessPresent": true,
+    "sourceRefreshPresent": true,
+    "onlyAuthorizedProviderColumnsTransferred": true,
+    "credentialValueRecorded": false,
+    "wholeDatabaseCopied": false,
+    "rendererCredentialTransferUsed": false,
+    "supportedProductImportClaimed": false
+  },
+  "launched": true,
+  "functionalAcceptance": "pending",
+  "operatorAcceptance": "pending",
+  "newCadenceDelivery": false,
+  "qualificationLedgerMutated": false,
+  "results": [
+    {
+      "route": "codex",
+      "status": "pending",
+      "stage": "select-existing-native-catalog-model",
+      "auth": {
+        "kind": "app-pkce-oauth",
+        "presence": true
+      },
+      "failureCode": "NATIVE_CATALOG_MODEL_REQUIRED"
+    },
+    {
+      "route": "claude",
+      "status": "pending",
+      "stage": "select-existing-native-catalog-model",
+      "auth": {
+        "kind": "external-cli-subscription",
+        "presence": true
+      },
+      "failureCode": "NATIVE_CATALOG_MODEL_REQUIRED"
+    },
+    {
+      "route": "uar",
+      "status": "passed",
+      "stage": "complete",
+      "modelSource": "gateway",
+      "gatewayConfiguredThroughSupportedIPC": true,
+      "selectedAlias": "gpt-6.1-sol",
+      "marker": "CUSTOMER_UAR_B1AB7691",
+      "selectedModelId": "cherryai::qwen",
+      "expectedRuntime": "uar",
+      "expectedModel": {
+        "id": "gpt-6.1-sol",
+        "provider": "the-boss-gateway"
+      },
+      "assignment": {
+        "source": "gateway",
+        "modelId": "gpt-6.1-sol"
+      },
+      "agentId": "f2454650-64b8-4f11-bf9a-7e3b27894656",
+      "committedRuntime": "uar",
+      "workspaceId": "e2b69507-2a92-41f4-a75f-a7b07af2e623",
+      "sessionId": "64c7bd75-aab6-4121-b324-1b67a0fb5d97",
+      "admitted": true,
+      "admissionErrorCode": null,
+      "stream": {
+        "done": true,
+        "error": false,
+        "chunks": 6,
+        "errorCode": null,
+        "executionId": "cherryai::qwen"
+      },
+      "persisted": {
+        "assistantPresent": true,
+        "status": "success",
+        "exactReply": true,
+        "model": {
+          "id": "gpt-6.1-sol",
+          "provider": "the-boss-gateway"
+        },
+        "exactModel": true
+      }
+    }
+  ],
+  "shutdown": {
+    "ownedGroupCreated": true,
+    "groupStopped": true,
+    "pid": 51907
+  },
+  "finishedAt": "2026-10-09T22:13:30.924Z",
+  "evidence": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-9a197eed-660e-44b6-aebe-5d409ab79570/evidence.json",
+  "evidenceSha256": "2346b6e980edea6f61ee138ea62310b77ab6bffc99abee14467225395833b7b1",
+  "launchReceipt": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/work-inference-9a197eed-660e-44b6-aebe-5d409ab79570/launch.json"
+}
