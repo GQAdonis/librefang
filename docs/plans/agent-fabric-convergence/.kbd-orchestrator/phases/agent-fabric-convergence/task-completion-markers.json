@@ -1,0 +1,576 @@
+{
+  "schemaVersion": 1,
+  "phase": "agent-fabric-convergence",
+  "updatedAt": "2026-10-09T16:37:13.780Z",
+  "authority": "Operator2026-10-09: maintain separate code-done and fully-qualified task markers; qualification cannot block completing source",
+  "canonicalRevision": 614,
+  "codeDone": {
+    "completed": 61,
+    "total": 61,
+    "status": "COMPLETE",
+    "basis": "Each of the61 planned task slots is mapped below to its recorded completed production implementation. No qualification result is inferred.",
+    "changesCompleted": 20,
+    "changesTotal": 20
+  },
+  "fullyQualified": {
+    "completed": 43,
+    "total": 61,
+    "status": "PARTIAL",
+    "basis": "Preserved canonical task completion ledger",
+    "historicalSkippedDuplicates": 1,
+    "passedTasks": 42,
+    "qualificationPending": 18
+  },
+  "countingPolicy": "Preserve the existing61-slot denominator and historical skipped duplicate. Code completion, qualification, actual build, operation, publication and installed acceptance are independent. A discovered source defect reopens code; an unrun gate alone does not.",
+  "tasks": [
+    {
+      "taskId": "C09.3",
+      "changeId": "afc-c09-team-task-admission-context-and-membership",
+      "description": "Admit fenced team turns with aggregate reservations, selected context, membership revocation and canonical usage",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "SKIPPED_DUPLICATE",
+      "canonicalTaskStatus": "SKIPPED"
+    },
+    {
+      "taskId": "D01.1",
+      "changeId": "afc-d01-local-mac-durable-agent-delivery",
+      "description": "Freeze source and repair packaged UAR profile",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "D01.2",
+      "changeId": "afc-d01-local-mac-durable-agent-delivery",
+      "description": "Deliver durable-agent and observer UI through The Boss",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "D01.3",
+      "changeId": "afc-d01-local-mac-durable-agent-delivery",
+      "description": "Run complete local gate and deliver built app",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "D01.4",
+      "changeId": "afc-d01-local-mac-durable-agent-delivery",
+      "description": "Resolve publication choice including live website installer pointers",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C01.1",
+      "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "description": "Refresh source and lockfile/feature evidence; classify every historical gap as retained, superseded, externally owned or unresolved. Deliver baseline-ledger.json for all 11 repositories named in repository-manifest.json, recording baseline/current revision, owner, disposition, blocking dependency and acceptance reference.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C01.2",
+      "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "description": "Record accepted P1 conversation/execution/approval contract and per-module ownership; leave overlapping implementation blocked until checkpoint agreement.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C01.3",
+      "changeId": "afc-c01-baseline-reconciliation-and-shared-contracts",
+      "description": "Publish versioned identity/state/action vocabulary, dependency compatibility matrix and ordered adoption/rollback checkpoints.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C02.1",
+      "changeId": "afc-c02-governed-action-and-approval-boundary",
+      "description": "Inventory and converge real effect entry points; make governed-profile missing/invalid policy and required facts deny with visible posture.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C02.2",
+      "changeId": "afc-c02-governed-action-and-approval-boundary",
+      "description": "Bind active policy/grant revisions and exact action/resource/payload; preserve restrictive boundary composition, budget reservation and current lease checks.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C02.3",
+      "changeId": "afc-c02-governed-action-and-approval-boundary",
+      "description": "Integrate durable issuer-scoped approval identity, post-wait revocation/payload recheck and subject/actor/audience validation; retain explicit constrained local mode.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C03.1",
+      "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "description": "Specify exact versioned section headings and machine schemas for AgentDefinition, TeamDefinition, WorkflowDefinition, DeploymentBinding and private RepresentationGrant.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C03.2",
+      "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "description": "Preserve skill version/required/config and v2 fields; implement field-level conversion diagnostics and effective runtime binding checks.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C03.3",
+      "changeId": "afc-c03-lossless-definitions-and-collaboration-document-profile",
+      "description": "Add legacy migration/import/export fixtures and immutable dependency resolution; keep installed grants and secrets out of packages.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C04.1",
+      "changeId": "afc-c04-replaceable-service-instances-and-placement",
+      "description": "Extend accepted P1 binding with stable instance identity, API/profile capabilities, workspace location, endpoint and credential references.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C04.2",
+      "changeId": "afc-c04-replaceable-service-instances-and-placement",
+      "description": "Integrate managed versus externally owned lifecycle, new-session placement and reattachment; never silently spawn a fallback.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C04.3",
+      "changeId": "afc-c04-replaceable-service-instances-and-placement",
+      "description": "Expose effective binding and compatibility diagnostics with one supervisor and separate model/runtime/console endpoints.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C05.1",
+      "changeId": "afc-c05-bossfang-full-run-delegation",
+      "description": "Add a full-harness route distinct from the existing HTTP model provider; preserve native execution and translated definition diagnostics.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C05.2",
+      "changeId": "afc-c05-bossfang-full-run-delegation",
+      "description": "Map admission, steer, observe, approve, cancel, detach and native task IDs with durable or truthfully ephemeral retention metadata.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C05.3",
+      "changeId": "afc-c05-bossfang-full-run-delegation",
+      "description": "Reconcile unknown admission/effect outcomes and unify externally visible A2A task lookup authority without a second loop or tool replay.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C06.1",
+      "changeId": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "description": "Implement owner-scoped instance/deployment records and request/on-demand/resident profiles over existing thread execution; fresh context per turn.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C06.2",
+      "changeId": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "description": "Persist activation state and ownership epochs with bounded inbox/retention; serialize mutating turns and keep cancel/status outside the turn queue.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C06.3",
+      "changeId": "afc-c06-durable-addressable-instances-and-bounded-turns",
+      "description": "Implement activate/passivate/drain/disable/restart policies, repeat-safe hooks, durable reminders and bounded restart budgets.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C07.1",
+      "changeId": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "description": "Define stable semantic occurrence/provenance identities and source commit/outbox publication; separate ephemeral token streams.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C07.2",
+      "changeId": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "description": "Persist subscription revision, source/conversation intersection, projection grant, watermark, cursor, inbox admission and per-observer acknowledgement.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C07.3",
+      "changeId": "afc-c07-local-scoped-observers-with-durable-delivery",
+      "description": "Activate independent bounded monitor turns with current authority; expose pause/backlog/retention/dead-letter state and replay-as-observe default.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C08.1",
+      "changeId": "afc-c08-bossfang-and-fabric-observer-routing",
+      "description": "Normalize provider/account/workspace/room/thread/sender plus chosen recipient into durable mappings; specify addressing and handler precedence with conflict behavior.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C08.2",
+      "changeId": "afc-c08-bossfang-and-fabric-observer-routing",
+      "description": "Authorize source disclosure and recipient delivery/execution; retain source occurrence across forwarding and separate per-observer cursors from worker queue groups.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C08.3",
+      "changeId": "afc-c08-bossfang-and-fabric-observer-routing",
+      "description": "Preserve route affinity on restart, enforce reply scopes, echo/action deduplication and causal-depth/fanout budgets; make executor control distinct from stream detach.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C09.1",
+      "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+      "description": "Persist team instance/member revisions and task input/output/dependency contracts; support supervisor-worker, bounded map/reduce and peer board.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C09.2",
+      "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+      "description": "Implement atomic claim/reassign with fenced epochs, task-state transitions, narrowed child authority, team mailbox grants and independent reviewer assignment.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C09.3",
+      "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+      "description": "Enforce aggregate reservations, selected context/artifact namespaces, membership revocation and canonical usage deduplication.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C09.4",
+      "changeId": "afc-c09-bounded-teams-and-shared-task-board",
+      "description": "Deliver governed cooperating teams with durable yield and continuation",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C10.1",
+      "changeId": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "description": "Evaluate existing workflow substrate against durable waits/joins/retry/compensation requirements; choose one owner and pin definitions through restart.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c10-production-implementation-20261009.json",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C10.2",
+      "changeId": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "description": "Normalize GitHub issue action plus Notion/Slack/Jira read/draft/write adapters, target scopes, credential refs, trusted egress labels, intent/receipt and unknown-outcome reconciliation.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c10-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "IN_PROGRESS"
+    },
+    {
+      "taskId": "C10.3",
+      "changeId": "afc-c10-feedback-workflow-and-governed-connector-effects",
+      "description": "Wire observe/classify/deduplicate/draft/standing-policy intake and product/design/reviewer outputs with durable approvals and explicit implementation admission.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c10-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C11.1",
+      "changeId": "afc-c11-authoritative-business-data-and-offline-commands",
+      "description": "Adopt accepted production-readiness changes; document route-specific auth/RLS and cursor/tombstone semantics.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c11-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C11.2",
+      "changeId": "afc-c11-authoritative-business-data-and-offline-commands",
+      "description": "Persist pending command atomically with local state; preserve idempotency through Forge transaction and authoritative result lookup.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c11-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C11.3",
+      "changeId": "afc-c11-authoritative-business-data-and-offline-commands",
+      "description": "Publish committed outbox/CDC facts and rebuild scoped read models with deletion/revocation and explicit retention-gap resnapshot.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c11-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C12.1",
+      "changeId": "afc-c12-personal-peer-sovereignty-and-consent",
+      "description": "Define eligible personal data classes, peer identity/membership, key rotation/recovery and explicit offline grant validity; keep organization/runtime authority outside CRDT writes.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c12-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C12.2",
+      "changeId": "afc-c12-personal-peer-sovereignty-and-consent",
+      "description": "Compose durable authenticated peer transport and CRDT storage from existing modules; project personal context through consented scopes.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c12-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C12.3",
+      "changeId": "afc-c12-personal-peer-sovereignty-and-consent",
+      "description": "Implement removal/revocation/tombstone behavior, reconnection and inspectable consent history without claiming deletion of previously disclosed plaintext.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c12-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C13.1",
+      "changeId": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "description": "Reconcile local model/tool loop with embedded UAR route; pin SDK/features and preserve each product layer contract.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c13-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C13.2",
+      "changeId": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "description": "Specify offline/local, home, personal-cloud and enterprise profiles with required/optional services, inference availability and approved context placement.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c13-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C13.3",
+      "changeId": "afc-c13-embedded-mobile-and-home-cloud-execution-profiles",
+      "description": "Wire suspend/resume, pending/offline authority and persistent remote job observation; consume C11/C12 when enabling their data profiles.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c13-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C14.1",
+      "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "description": "Extend existing UAR UI with definition/instance/activation/run/team/workflow distinction, task graph, budgets, binding posture and subscription lag/failures.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C14.2",
+      "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "description": "Present correlated operation approvals with separate issuer challenges and authoritative decision state; expose cancel/detach/drain/stop as distinct supported verbs.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C14.3",
+      "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "description": "Launch BossFang domain console per instance/account with restricted origins, isolated partition and narrow auth handoff; retain browser fallback.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C14.4",
+      "changeId": "afc-c14-studio-administration-and-isolated-service-consoles",
+      "description": "Integrate BossFang with The Boss-owned UAR sidecar using admitted shared-instance bindings, distinct supervision and execution authority, correlated approvals/budgets/history, stable catalog references and restart/port-change recovery without duplicate sidecar or silent executor fallback.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C15.1",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "description": "Reuse four merged skills; extend task-guided role selection and model strength/cost/capability routing through liter-llm with exact selected model recorded.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c15-production-implementation-20261009.json",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C15.2",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "description": "Validate all eight harness adapters against pinned CLI schemas; preserve native options/extensions and report unsupported agent/plugin/marketplace features; use Node.js/TypeScript 7 for authored shared hooks/scripts. Before authoring helpers, pin the exact Node.js and TypeScript 7 distribution and prove full/mini and harness adapter compatibility at D-MINI; if unavailable, record a blocker rather than substituting another language/version.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c15-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C15.3",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "description": "Bind reviewed skill locks and plugin manifest coverage to host grants; handoffs preserve task/revision, source hashes, dirty state, evidence, Karpathy logs and scoped shared-memory references.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c15-production-implementation-20261009.json",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C16.1",
+      "changeId": "afc-c16-specialist-marketing-product-and-design-teams",
+      "description": "Add UI/UX, mobile, security, product, documentation and code-review roles with scope, outputs, evidence and separate evaluator assignments.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C16.2",
+      "changeId": "afc-c16-specialist-marketing-product-and-design-teams",
+      "description": "Compose coding, product research, marketing/brand, logo/mobile/design and customer-feedback teams with task-selected reviewed skills and connector action limits.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C16.3",
+      "changeId": "afc-c16-specialist-marketing-product-and-design-teams",
+      "description": "Add novice guidance, single-agent alternative, role combination rules and estimated model/cost classes; document regulated-profile applicability without certification claims.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": "Canonical change implementation COMPLETE at source revision614; existing source/evidence history retained",
+      "fullyQualified": "COMPLETE",
+      "canonicalTaskStatus": "COMPLETE"
+    },
+    {
+      "taskId": "C17.1",
+      "changeId": "afc-c17-executive-assistants-and-consented-human-representation",
+      "description": "Define CEO/CFO/CIO/Chief Intelligence/Security/Marketing/Product and configurable office roles separately from human profiles; identify trusted grant issuers.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c17-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C17.2",
+      "changeId": "afc-c17-executive-assistants-and-consented-human-representation",
+      "description": "Implement consent, organizational assignment, data-use/communication/action scopes, expiry/revocation, offboarding and disclosure with pinned evidence.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c17-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C17.3",
+      "changeId": "afc-c17-executive-assistants-and-consented-human-representation",
+      "description": "Evaluate person-specific behavior on approved held-out scenarios; enforce separation of duties and real-human approval requirements.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c17-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C18.1",
+      "changeId": "afc-c18-federated-compatibility-and-release-evidence",
+      "description": "Implement only required remaining federation/trust adapters with independent resource-side enforcement and capability refusal; prove state/effect fencing before optional takeover.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c18-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C18.2",
+      "changeId": "afc-c18-federated-compatibility-and-release-evidence",
+      "description": "Run operational-mode matrix on exact source/payload/policy combinations; test upgrade, rollback, outage, retention gaps, restart and revoked authority.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c18-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    },
+    {
+      "taskId": "C18.3",
+      "changeId": "afc-c18-federated-compatibility-and-release-evidence",
+      "description": "Benchmark task quality, human correction, cost/latency, duplicate/unknown effects and administration effort against controlled baselines; publish supported/unsupported matrix and release evidence after authorization.",
+      "codeWritten": "COMPLETE",
+      "codeBasis": ".kbd-orchestrator/phases/agent-fabric-convergence/receipts/c18-production-implementation-20261009.json",
+      "fullyQualified": "PENDING",
+      "canonicalTaskStatus": "PENDING"
+    }
+  ]
+}

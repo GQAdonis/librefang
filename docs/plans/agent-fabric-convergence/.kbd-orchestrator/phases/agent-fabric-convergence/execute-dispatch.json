@@ -8,12 +8,9 @@
     "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
     "afc-c17-executive-assistants-and-consented-human-representation"
   ],
-  "activeTask": "C10.2",
+  "activeTask": null,
   "scope": "Finish all remaining production implementation; qualification and certification are tracked separately under operator Revision 11.",
-  "pendingWork": [
-    "C14.1",
-    "C14.2"
-  ],
+  "pendingWork": [],
   "taskMapping": {
     "canonical": "C14.1",
     "openSpecOrdinal": "1",
@@ -58,13 +55,13 @@
     "uarPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
     "previousDispatch": "execute-dispatch-before-priority-r8.json"
   },
-  "status": "implementation-running",
-  "updatedAt": "2026-10-09T14:41:56.583Z",
+  "status": "code-complete-delivery-running",
+  "updatedAt": "2026-10-09T16:37:13.780Z",
   "planRevision": 11,
   "deliveryOrder": "customer-delivery-map.json",
   "modelAssignment": "model-dispatch.json tasks.C14.1; actual native Codex implementer assignments recorded below",
   "dispatchedAt": "2026-10-05T07:59:44.157Z",
-  "state": "implementation-running",
+  "state": "code-complete-delivery-running",
   "actualAssignments": [
     {
       "agent": "root",
@@ -156,9 +153,28 @@
     "kind": "completed-delivery-build",
     "version": "2.2.25",
     "uarSource": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
-    "bossSource": "d7465ae2c6",
+    "bossSource": "35eff8c8c4",
     "nativeWorkflow": "37952623096",
     "qualification": "separate; unrun gates not passed",
-    "originalTaskChecklists": "43/61 retained; mixed operational/qualification criteria not fabricated"
-  }
+    "originalTaskChecklists": "Code done61/61; qualification43/61 (one historical skipped duplicate retained),18 operational/comparative predicates pending.",
+    "installerWorkflow": "37959377921"
+  },
+  "codeDoneCounter": {
+    "completed": 61,
+    "total": 61,
+    "status": "COMPLETE",
+    "basis": "Each of the61 planned task slots is mapped below to its recorded completed production implementation. No qualification result is inferred.",
+    "changesCompleted": 20,
+    "changesTotal": 20
+  },
+  "fullyQualifiedCounter": {
+    "completed": 43,
+    "total": 61,
+    "status": "PARTIAL",
+    "basis": "Preserved canonical task completion ledger",
+    "historicalSkippedDuplicates": 1,
+    "passedTasks": 42,
+    "qualificationPending": 18
+  },
+  "completionMarkers": "task-completion-markers.json"
 }
