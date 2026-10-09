@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "live-customer-release-website",
+  "version": "2.2.25",
+  "checkedAt": "2026-10-09T21:18:13.198Z",
+  "website": "https://the-boss.know-me.tools/",
+  "asset": "/assets/index-wB3Kkb9N.js",
+  "source": "5e1550401cf1231f0c4aa389594e292f3c96a17e",
+  "publication": {
+    "method": "existing Lovable desktop project Publish changes",
+    "projectId": "c0ca344c-ebc5-4be2-9d02-46d3d9631118",
+    "uiResult": "Your website was updated",
+    "connectorAttempt": "INVALID_ARGUMENT; completed through existing signed-in application"
+  },
+  "checks": [
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-mac-arm64.dmg",
+      "status": 200,
+      "contentLength": 711476975
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-mac-x64.dmg",
+      "status": 200,
+      "contentLength": 747566816
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-win-x64-setup.exe",
+      "status": 200,
+      "contentLength": 531583670
+    },
+    {
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.25/The-Boss-2.2.25-win-arm64-setup.exe",
+      "status": 200,
+      "contentLength": 494878622
+    }
+  ],
+  "scope": "Live bundle contains all four exact installer links; HEAD confirms availability and sizes. Does not claim downloaded installer checksum or installed acceptance.",
+  "cadence": {
+    "newDelivery": false,
+    "successfulDeliveriesUnchanged": 15,
+    "publicationReconciliation": "pending immutable receipt reconciliation"
+  }
+}
