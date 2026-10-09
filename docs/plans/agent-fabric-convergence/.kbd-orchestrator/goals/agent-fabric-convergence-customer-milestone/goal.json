@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "slug": "agent-fabric-convergence-customer-milestone",
-  "status": "active",
+  "status": "complete",
   "createdAt": "2026-10-09T05:57:14.469Z",
   "phases": [
     "creation"
@@ -35,5 +35,35 @@
   "authority": "Operator /kbd-goal approval 2026-10-09; preserve existing architecture approvals and KBD completion authority",
   "startingCanonicalRevision": 590,
   "historyPreserved": true,
-  "installedAcceptanceSeparate": true
+  "installedAcceptanceSeparate": true,
+  "completedAt": "2026-10-09T13:44:28.154Z",
+  "evidenceRef": "receipts/c10-customer-release-2.2.24-20261009.json",
+  "releaseVersion": "2.2.24",
+  "installedAcceptance": {
+    "darwin-arm64": {
+      "status": "pending",
+      "note": "Owned local packaged feature operation passed; operator installation of public installer is not yet accepted"
+    },
+    "darwin-x64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    },
+    "win32-x64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    },
+    "win32-arm64": {
+      "status": "pending",
+      "note": "Published installer byte evidence is not installed operation evidence"
+    }
+  },
+  "parentPhaseStatus": "open",
+  "cadencePublicationLedger": {
+    "status": "pending",
+    "obligationIds": [
+      "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "4077df19-c67c-4059-9665-55988c70e012"
+    ],
+    "evidenceRef": "receipts/c10-customer-release-2.2.24-20261009.json"
+  }
 }
