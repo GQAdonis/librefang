@@ -1,0 +1,1090 @@
+{
+  "schemaVersion": 1,
+  "kind": "packaged-team-handoff-provenance-operation",
+  "creationTaskRef": "C15.3",
+  "complete": true,
+  "startedAt": "2026-10-09T22:56:18.752Z",
+  "sourceRefs": {
+    "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+    "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+    "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+    "installedVersion": "2.2.25",
+    "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+    "selectedScenarioSha256": "d5e9fdf86d2d0fa91d4c456ee86c779d28dd57b715760a86b6fc6f5dd520467f",
+    "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69",
+    "fullSkillSourceRevision": "fd1e2c2de05f67dcb773d4710d5457588d2fe39b",
+    "miniSkillSourceRevision": "3a7c0d245cb8a412b62e287872e23c694d20348b",
+    "bundledCreator": {
+      "cli": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/installed/The Boss.app/Contents/Resources/app.asar.unpacked/resources/prometheus-skills-mini/skills/agent-team-creator/scripts/cli.mjs",
+      "modules": {
+        "adapters-capabilities.mjs": "0b53de61b44433b588ee6356adbec8a1a12e3ef3a76d14b52e9a21c32dadd55b",
+        "adapters-codecs.mjs": "778e00a26485302ebbd6b21320485ff32527c6f4e21ed405b0438b3e325af731",
+        "adapters-local.mjs": "e31f41369628852c1963ace44d00e6cd80c2934629aa422082899d5a2fef07ff",
+        "adapters-services.mjs": "117a6bae4337fb6b1ab8dffe32f5462db590d5640caf09dc35bc2626f55ae2c6",
+        "adapters.mjs": "656aca2b1673ba638a8af20ca37e20f283c45af5a23c6780559108bffe0655c5",
+        "cli.mjs": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8",
+        "export-files.mjs": "9c5775adb080372618bb356efe882c8dc6f9449f338347a631318cf5208ff7f0",
+        "guidance.mjs": "9338adfef21690ee6e260d2dc1c97d7772b28208f97a70745324d7bbe32de756",
+        "handoff-provenance-validation.mjs": "7cde4e6964535bbe01e7d3fc253757fd7a46af2e8c22aa8a9de856bab5beeb91",
+        "handoff-provenance.mjs": "69ec9554be0ad787abcff96404b4e423a1d0025963cbf617a5dc7096895f4cf9",
+        "handoff.mjs": "b371b1c667d4d0da1985e7e3b634855fd6caf7c0a9188e974446821a8c32cb83",
+        "memory.mjs": "7a759a62c6af01a27901fc657609140ce983b781d3e51ea5b42ef50c3cf3e08e",
+        "models-http.mjs": "aea304aa515f8468446094ef3c5e140c78cffdbe63d4b54d414e3d1de709dc28",
+        "models.mjs": "8fbb72e7815e4f3e23d535679fae8a2deb73f013dfd40466952acf95d70f7b22",
+        "project-files.mjs": "607a5d9bd8b44ff99286960a3a0137d1f6b385ce0aff6191cebe78349bf5e8d0",
+        "project-install.mjs": "b3a0d61108d3a30f603c6670d913bf5259ed84ed06f5daaf020fe1341f220f91",
+        "project-instructions.mjs": "45736cc6602bc4bd971418ea0ad49a0dff479c848bf4b63520f094473e4b4f6c",
+        "state-kbd.mjs": "4504194bccbc005e6774eb26c5829aa0d0ef2b5236a37cc74dca47d22bb9dc40",
+        "state-tasks.mjs": "3ef330a0f3689da1bd74f8a1998f51877c2e4f0d79d0b1fd23ff3b593504120d",
+        "state-validation.mjs": "4860285b48243a6dab88334de86f6dc5a2dea643725fd91dd2f3f60b78c5695d",
+        "state.mjs": "90ef7e07aae91ef787245d384fdac1c5e99fc676fa40db7d34bc1044257c9928",
+        "types.mjs": "76c2cc2056adf8d5d5ee881bf07508d8d26100ce83360c37e561cf42bd87199a",
+        "uar-client.mjs": "13f0b36e40e549ef4b304afca5cedb2b3fb10ed87830d896eadf7836c62891b4",
+        "uar-package/binding.mjs": "4b3c8839da16d7547a36e4f4d5baadc6fe8b5480c42f29b08934325cdd018ca7",
+        "uar-package/canonical.mjs": "0f05afbd7c9d9e65146924f7de825448871966230659d3598129441bb2bf66fd",
+        "uar-package/commands.mjs": "990daaef6407273d381fd5d07360b5911e3a4e36c61fcc894100006c903ddc3b",
+        "uar-package/compiler.mjs": "095bcf71a455f191361cae3d6927dc51d7061d3b86d65b6b7db095fdc158254d",
+        "uar-package/graph-validation.mjs": "da13627077cb125edcf7e7f96bafd62c7a504d69f445335bd11e0946b3169c05",
+        "uar-package/maintenance.mjs": "7f698ebe33d8d3f98b31d6ae42d062e3a267c6a4907c7061e7fc638abe5fd827",
+        "uar-package/migration.mjs": "f3041068290fba7b3eafffa3fd97b67e78781b656bbef7d137376c6095300380",
+        "uar-package/package-files.mjs": "e6df13fdd969785a1c834ac74f6d031e41cab79b12fe6013ecba2649971a6acd",
+        "uar-package/private-authority.mjs": "78a28642c28f2b6b0a2b4441849cd4b181643ef9111788b7bf2f7ef23726dee6",
+        "uar-package/profile-validation.mjs": "02873529735152bc6ee344f3780fb33883d92a85d38a20cd69d5571c4524d44e",
+        "uar-package/workspace-questions.mjs": "bf504ade7776fc784637f9b0c80ec6188e1120dd4654d08a7f74ad38671e8175",
+        "uar-package/workspace.mjs": "4968bf0596ee8c84ec0626fdf18461b6e40daddc1b11af7400f6ae28ae0e257c",
+        "uar-package.mjs": "4ec40be5e4ab5ae8a5b19e92ef4d753504cb98a70e0bb28cb3e6afd5dafc4b07",
+        "ui-bindings.mjs": "0e2cc2e57600bf5b3bcedbf4a7926dff85ef8cf1ded90bd7f36f75b4b2b67159",
+        "validation.mjs": "8c792095a6dc10d08c19df962fdafa26c440d2ddaa27015cbdbd5f5899cf0b98"
+      }
+    },
+    "canonicalReader": {
+      "path": "/Users/gqadonis/.local/bin/prometheus",
+      "sha256": "f0c0faa294e2cc6296c0ed8798d11d78ba950b4b9e81a6c71decaa0cbbc071d3"
+    },
+    "selectedKarpathy": {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+      "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756",
+      "association": "existing-historical-C09.1-reference"
+    },
+    "publicScenarioSources": {
+      "handoff": "d5e9fdf86d2d0fa91d4c456ee86c779d28dd57b715760a86b6fc6f5dd520467f",
+      "packageIdentity": "dc1b490b05ca64d9aeafc679b11727caff9004657746270fc6f342c96d73e01d"
+    }
+  },
+  "checks": [
+    "actual-packaged-creator-captures-dirty-files-evidence-karpathy-and-local-scoped-memory",
+    "real-canonical-task-identity-status-read-without-transition",
+    "read-only-inspection-preserves-source-ownership",
+    "changed-and-missing-selected-source-reported-without-rewriting-capture",
+    "explicit-cross-harness-local-ownership-transfer-retains-provenance-and-queued-memory",
+    "stale-original-task-revision-refused-without-state-mutation",
+    "prior-packaged-producer-legacy-packet-readable-without-invented-provenance",
+    "canonical-parent-task-status-unchanged"
+  ],
+  "commands": [
+    {
+      "command": "init",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "bb00fdcc64622e415feb9e674429ed41251dc0ab246c66040a09b89df2d34095",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "task",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "9fc9ac73ea48343cf6c8993a9cd7797a84f0c9264b7abea48fb85932120c07ca",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "memory-queue",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "21e49cae3b4640862d42caf3799fda71212c34d16d9929d89365199f01ad6c2b",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-create",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "5163ab6ca3ad94379a7c6cc11fd77d41c5e2e486dbcca0b5875e9798e6191950",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-inspect",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "f226f6ee682708b521c68a1a35939e270e19fa6ac4c34e02db4a9a91b7fe90b9",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-inspect",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "2d3ba1f1117ea2b92d8af68c5bd1edd8b16e2194022ecb402063ec9c3e2b2ebd",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-accept",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "7f2d11e705f5934f1909163c6f12fe2caa563866a52ea37e19f87d17a9535ea6",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-inspect",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "e02e85cd33d362512268c1ed96d3da309cf6b690f77f730669906224efbe3b59",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "task",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "9128d5f29740ebed6413addcd63393d9caab15f5de8c09878f235d2086996345",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-create",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "595757db7b96243d7f563fff127a64fb175b1bda0ad258963b0db0b4b8b37935",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "task",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "661a14be629071dc52791f67f5a9a59bd311c0e1160d631467ce4e32f450d190",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-accept",
+      "exitCode": 1,
+      "errorCode": "C15H_TASK_REVISION_CONFLICT",
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "handoff-inspect",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "1a325d0f718a4953d98dc576471dc1c622015da60fac372d6c7dfb09b8fb02d2",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    },
+    {
+      "command": "init",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "bb00fdcc64622e415feb9e674429ed41251dc0ab246c66040a09b89df2d34095",
+      "producerCliSha256": "7fd04d3d6c8caf00932e4d37a7b92fe1a007b3bf6599184f129f700aadae5a4d"
+    },
+    {
+      "command": "task",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "d21346fe1dae489d75381c6c0dd72c0f4f458eb4d8334414072465dc5de44342",
+      "producerCliSha256": "7fd04d3d6c8caf00932e4d37a7b92fe1a007b3bf6599184f129f700aadae5a4d"
+    },
+    {
+      "command": "handoff-create",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "510d0ab06ad2d8a6d9ef7b7f3e0d7f89195e936eee685f5ef39d055f65d8ca45",
+      "producerCliSha256": "7fd04d3d6c8caf00932e4d37a7b92fe1a007b3bf6599184f129f700aadae5a4d"
+    },
+    {
+      "command": "handoff-inspect",
+      "exitCode": 0,
+      "errorCode": null,
+      "stdoutSha256": "96ab53f5bc824620a6ffb31e894ce047b3fc5643819af8a2852185c5986fc8f4",
+      "producerCliSha256": "573737a5525c2c9c39ed23560789b19c50bf291195440c9659ef7a7211ae12b8"
+    }
+  ],
+  "mutationSurface": "actual bundled agent-team-creator CLI; isolated local team state",
+  "canonicalSurface": "explicit read-only kbd status; no canonical task transition",
+  "memoryPublication": "not-invoked",
+  "nativeDestinationSession": "not-launched",
+  "nativeWindowsAcceptance": "pending",
+  "wholeC15_3Completion": "pending",
+  "rawContentRecorded": false,
+  "application": {
+    "timeOrigin": 1791586576526.1,
+    "readyState": "complete",
+    "ipcAvailable": true
+  },
+  "canonicalBefore": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "identity": {
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "runId": "project-20260924T180329Z",
+      "phaseId": "agent-fabric-convergence",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "taskId": "C15.3"
+    },
+    "observation": "observed",
+    "revision": 615,
+    "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+    "taskStatus": "complete",
+    "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b"
+  },
+  "packet": {
+    "schemaVersion": 1,
+    "id": "4fa258eb-caaf-42d8-85ce-4c50d458d5cd",
+    "taskId": "handoff-local-task",
+    "taskRevision": 0,
+    "createdAt": "2026-10-09T22:56:22.726Z",
+    "acceptedAt": null,
+    "from": {
+      "owner": "implementer",
+      "harness": "codex"
+    },
+    "to": {
+      "owner": "reviewer",
+      "harness": "claude"
+    },
+    "git": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace",
+      "head": null,
+      "branch": "main",
+      "dirty": true
+    }
+  },
+  "capturedProvenanceSha256": "88e0872641c8f06018c3e2b4862607e631b5403f1c49c4ec01e10a70d33f058a",
+  "initialInspection": {
+    "id": "4fa258eb-caaf-42d8-85ce-4c50d458d5cd",
+    "taskId": "handoff-local-task",
+    "taskRevision": 0,
+    "legacy": false,
+    "ownership": {
+      "owner": "implementer",
+      "harness": "codex",
+      "revision": 0,
+      "acceptedAt": null,
+      "stale": false
+    },
+    "captured": {
+      "schemaVersion": 1,
+      "capturedAt": "2026-10-09T22:56:22.727Z",
+      "canonical": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+        "observation": "observed",
+        "revision": 615,
+        "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+        "taskStatus": "complete",
+        "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+        "reason": null,
+        "identity": {
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "runId": "project-20260924T180329Z",
+          "phaseId": "agent-fabric-convergence",
+          "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+          "taskId": "C15.3"
+        }
+      },
+      "sources": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+          "observation": "observed",
+          "bytes": 50,
+          "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+          "observation": "observed",
+          "bytes": 51,
+          "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+          "observation": "observed",
+          "bytes": 242,
+          "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+        }
+      ],
+      "karpathy": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+          "observation": "observed",
+          "bytes": 1657,
+          "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+        }
+      ],
+      "memory": [
+        {
+          "id": "c15-handoff-operation-memory",
+          "status": "queued",
+          "observation": "observed",
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "teamId": "c15-handoff-operation",
+          "scope": "role:implementer",
+          "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+          "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+          "kbd": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          },
+          "publication": null
+        }
+      ]
+    },
+    "current": {
+      "sources": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+          },
+          "comparison": "matches"
+        },
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "observed",
+            "bytes": 51,
+            "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "observed",
+            "bytes": 51,
+            "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "evidence": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "karpathy": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "memory": [
+        {
+          "captured": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "current": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "comparison": "matches"
+        }
+      ],
+      "canonical": {
+        "captured": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "current": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "comparison": "matches"
+      }
+    }
+  },
+  "changedInspection": {
+    "id": "4fa258eb-caaf-42d8-85ce-4c50d458d5cd",
+    "taskId": "handoff-local-task",
+    "taskRevision": 0,
+    "legacy": false,
+    "ownership": {
+      "owner": "implementer",
+      "harness": "codex",
+      "revision": 0,
+      "acceptedAt": null,
+      "stale": false
+    },
+    "captured": {
+      "schemaVersion": 1,
+      "capturedAt": "2026-10-09T22:56:22.727Z",
+      "canonical": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+        "observation": "observed",
+        "revision": 615,
+        "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+        "taskStatus": "complete",
+        "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+        "reason": null,
+        "identity": {
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "runId": "project-20260924T180329Z",
+          "phaseId": "agent-fabric-convergence",
+          "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+          "taskId": "C15.3"
+        }
+      },
+      "sources": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+          "observation": "observed",
+          "bytes": 50,
+          "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+          "observation": "observed",
+          "bytes": 51,
+          "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+          "observation": "observed",
+          "bytes": 242,
+          "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+        }
+      ],
+      "karpathy": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+          "observation": "observed",
+          "bytes": 1657,
+          "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+        }
+      ],
+      "memory": [
+        {
+          "id": "c15-handoff-operation-memory",
+          "status": "queued",
+          "observation": "observed",
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "teamId": "c15-handoff-operation",
+          "scope": "role:implementer",
+          "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+          "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+          "kbd": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          },
+          "publication": null
+        }
+      ]
+    },
+    "current": {
+      "sources": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "26570ee1d9b9ec001e0d975c0b643f2a404742be7ea2494487b1a7c235fc8fd0"
+          },
+          "comparison": "changed"
+        },
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "observed",
+            "bytes": 51,
+            "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "missing",
+            "bytes": null,
+            "sha256": null
+          },
+          "comparison": "missing"
+        }
+      ],
+      "evidence": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "karpathy": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "memory": [
+        {
+          "captured": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "current": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "comparison": "matches"
+        }
+      ],
+      "canonical": {
+        "captured": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "current": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "comparison": "matches"
+      }
+    }
+  },
+  "acceptedInspection": {
+    "id": "4fa258eb-caaf-42d8-85ce-4c50d458d5cd",
+    "taskId": "handoff-local-task",
+    "taskRevision": 0,
+    "legacy": false,
+    "ownership": {
+      "owner": "reviewer",
+      "harness": "claude",
+      "revision": 1,
+      "acceptedAt": "2026-10-09T22:56:26.569Z",
+      "stale": false
+    },
+    "captured": {
+      "schemaVersion": 1,
+      "capturedAt": "2026-10-09T22:56:22.727Z",
+      "canonical": {
+        "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+        "observation": "observed",
+        "revision": 615,
+        "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+        "taskStatus": "complete",
+        "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+        "reason": null,
+        "identity": {
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "runId": "project-20260924T180329Z",
+          "phaseId": "agent-fabric-convergence",
+          "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+          "taskId": "C15.3"
+        }
+      },
+      "sources": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+          "observation": "observed",
+          "bytes": 50,
+          "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+        },
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+          "observation": "observed",
+          "bytes": 51,
+          "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+          "observation": "observed",
+          "bytes": 242,
+          "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+        }
+      ],
+      "karpathy": [
+        {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+          "observation": "observed",
+          "bytes": 1657,
+          "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+        }
+      ],
+      "memory": [
+        {
+          "id": "c15-handoff-operation-memory",
+          "status": "queued",
+          "observation": "observed",
+          "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+          "teamId": "c15-handoff-operation",
+          "scope": "role:implementer",
+          "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+          "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+          "kbd": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          },
+          "publication": null
+        }
+      ]
+    },
+    "current": {
+      "sources": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "adb13333fe122e00508292943cf76c360a2f4321ba737075727e53d04fe74489"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/changed.md",
+            "observation": "observed",
+            "bytes": 50,
+            "sha256": "26570ee1d9b9ec001e0d975c0b643f2a404742be7ea2494487b1a7c235fc8fd0"
+          },
+          "comparison": "changed"
+        },
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "observed",
+            "bytes": 51,
+            "sha256": "62f9c5bb37b04b236308036649aba1f55a3216ce003062c3ff0c2df9a806d298"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/source/missing.md",
+            "observation": "missing",
+            "bytes": null,
+            "sha256": null
+          },
+          "comparison": "missing"
+        }
+      ],
+      "evidence": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/application-ready.json",
+            "observation": "observed",
+            "bytes": 242,
+            "sha256": "007577b92ad3adbcf64eab99c4168e48afbdc03a20c378ddadcc0bcd6780aabf"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "karpathy": [
+        {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/c09-1-karpathy-event.json",
+            "observation": "observed",
+            "bytes": 1657,
+            "sha256": "785f79bec09eeebf0afedcd332171aaff248382619a9edc97244ce06937e5756"
+          },
+          "comparison": "matches"
+        }
+      ],
+      "memory": [
+        {
+          "captured": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "current": {
+            "id": "c15-handoff-operation-memory",
+            "status": "queued",
+            "observation": "observed",
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "teamId": "c15-handoff-operation",
+            "scope": "role:implementer",
+            "contentSha256": "a27307a5e438d8334d47bed7f90e998fb3b2e8c183f8e3ac54ece507d6628c40",
+            "provenanceSha256": "05ff509deb2c4beca3daf4227a452aced9a53a18b393e3f9d9245945febffa7b",
+            "kbd": {
+              "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+              "runId": "project-20260924T180329Z",
+              "phaseId": "agent-fabric-convergence",
+              "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+              "taskId": "C15.3"
+            },
+            "publication": null
+          },
+          "comparison": "matches"
+        }
+      ],
+      "canonical": {
+        "captured": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "current": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "observation": "observed",
+          "revision": 615,
+          "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+          "taskStatus": "complete",
+          "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b",
+          "reason": null,
+          "identity": {
+            "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+            "runId": "project-20260924T180329Z",
+            "phaseId": "agent-fabric-convergence",
+            "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+            "taskId": "C15.3"
+          }
+        },
+        "comparison": "matches"
+      }
+    }
+  },
+  "staleRefusal": {
+    "packet": {
+      "schemaVersion": 1,
+      "id": "9456f770-473f-4f43-a1e5-b6f353b19178",
+      "taskId": "stale-local-task",
+      "taskRevision": 0,
+      "createdAt": "2026-10-09T22:56:28.171Z",
+      "acceptedAt": null,
+      "from": {
+        "owner": "implementer",
+        "harness": "codex"
+      },
+      "to": {
+        "owner": "reviewer",
+        "harness": "claude"
+      },
+      "git": {
+        "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace",
+        "head": null,
+        "branch": "main",
+        "dirty": true
+      }
+    },
+    "errorCode": "C15H_TASK_REVISION_CONFLICT",
+    "exitCode": 1,
+    "beforeStateSha256": "661a14be629071dc52791f67f5a9a59bd311c0e1160d631467ce4e32f450d190",
+    "afterStateSha256": "661a14be629071dc52791f67f5a9a59bd311c0e1160d631467ce4e32f450d190",
+    "inspection": {
+      "id": "9456f770-473f-4f43-a1e5-b6f353b19178",
+      "taskId": "stale-local-task",
+      "taskRevision": 0,
+      "legacy": false,
+      "ownership": {
+        "owner": "implementer",
+        "harness": "codex",
+        "revision": 1,
+        "acceptedAt": null,
+        "stale": true
+      },
+      "captured": {
+        "schemaVersion": 1,
+        "capturedAt": "2026-10-09T22:56:28.172Z",
+        "canonical": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace",
+          "observation": "unknown",
+          "revision": null,
+          "eventId": null,
+          "taskStatus": null,
+          "receiptSha256": null,
+          "reason": "task-not-linked",
+          "identity": null
+        },
+        "sources": [],
+        "evidence": [],
+        "karpathy": [],
+        "memory": []
+      },
+      "current": {
+        "sources": [],
+        "evidence": [],
+        "karpathy": [],
+        "memory": [],
+        "canonical": {
+          "captured": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace",
+            "observation": "unknown",
+            "revision": null,
+            "eventId": null,
+            "taskStatus": null,
+            "receiptSha256": null,
+            "reason": "task-not-linked",
+            "identity": null
+          },
+          "current": {
+            "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+            "observation": "unknown",
+            "revision": null,
+            "eventId": null,
+            "taskStatus": null,
+            "receiptSha256": null,
+            "reason": "task-not-linked",
+            "identity": null
+          },
+          "comparison": "unobserved"
+        }
+      }
+    }
+  },
+  "legacy": {
+    "origin": "legacy packet generated at boundary by retained actual prior packaged producer",
+    "producer": {
+      "sourcePayloadRevision": "4e956c547b37f4a5d990c82f9c3bdfb40e213240",
+      "cliSha256": "7fd04d3d6c8caf00932e4d37a7b92fe1a007b3bf6599184f129f700aadae5a4d",
+      "handoffSha256": "1510e7cbcac0e685dd155fca0369fd08d20163b0d8aa104dc846da8e836c14ae",
+      "provenanceSha256": "4ac4ca5b19467f35e1e098a63fa0a1c963318f5381e563f02237c8245dc3506d"
+    },
+    "packet": {
+      "schemaVersion": 1,
+      "id": "0f6a86e3-f6e1-409c-b116-0c491d9293ff",
+      "taskId": "legacy-local-task",
+      "taskRevision": 0,
+      "createdAt": "2026-10-09T22:56:29.141Z",
+      "acceptedAt": null,
+      "from": {
+        "owner": "implementer",
+        "harness": "codex"
+      },
+      "to": {
+        "owner": "reviewer",
+        "harness": "claude"
+      },
+      "git": {
+        "root": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-public-mac-2.2.25/skills-handoff-6f218d1a-a6a2-4b1a-a179-c444997be66b/workspace/legacy-workspace",
+        "head": null,
+        "branch": "main",
+        "dirty": true
+      }
+    },
+    "inspection": {
+      "id": "0f6a86e3-f6e1-409c-b116-0c491d9293ff",
+      "taskId": "legacy-local-task",
+      "taskRevision": 0,
+      "legacy": true,
+      "ownership": {
+        "owner": "implementer",
+        "harness": "codex",
+        "revision": 0,
+        "acceptedAt": null,
+        "stale": false
+      },
+      "captured": null,
+      "current": null
+    },
+    "beforeStateSha256": "510d0ab06ad2d8a6d9ef7b7f3e0d7f89195e936eee685f5ef39d055f65d8ca45",
+    "afterStateSha256": "510d0ab06ad2d8a6d9ef7b7f3e0d7f89195e936eee685f5ef39d055f65d8ca45"
+  },
+  "canonicalAfter": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+    "identity": {
+      "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
+      "runId": "project-20260924T180329Z",
+      "phaseId": "agent-fabric-convergence",
+      "changeId": "afc-c15-portable-skills-plugin-contracts-and-cross-harness-handoff",
+      "taskId": "C15.3"
+    },
+    "observation": "observed",
+    "revision": 615,
+    "eventId": "a226a79f-b39d-4d1e-ba61-78132efbe3c3",
+    "taskStatus": "complete",
+    "receiptSha256": "26471ca42432d61ad83bb9a0d8f793fbf264c1ed1a28e4b5d0ea890a4c45e27b"
+  },
+  "finishedAt": "2026-10-09T22:56:29.953Z"
+}

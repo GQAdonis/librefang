@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-installed-representation-failed-attempts-safe-projection",
+  "recordedAt": "2026-10-09T22:56:19.038Z",
+  "projection": true,
+  "originalEvidencePreserved": true,
+  "privateProfileOrPrincipalRecorded": false,
+  "credentialsRecorded": false,
+  "fullFixtureStateRecorded": false,
+  "attempts": [
+    {
+      "operationReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-539e8a9b-bed0-4d43-9a05-b49ee1231222/operation.json",
+      "operationSha256": "0a3d76b072ad52746a2735b7ce0a011adb7dbdec13e7923e1264f1616de56144",
+      "evidenceReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-539e8a9b-bed0-4d43-9a05-b49ee1231222/evidence.json",
+      "evidenceSha256": "f12a9fee7aa5d16a71293c850bb6f3c1e6f88c0d5633e83784852180008da0a5",
+      "startedAt": "2026-10-09T22:14:11.404Z",
+      "finishedAt": "2026-10-09T22:15:45.588Z",
+      "status": "failed",
+      "failureStage": null,
+      "failureCode": "C15_SUPPORTED_APPLICATION_API_UNAVAILABLE",
+      "sourceRefs": {
+        "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+        "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+        "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+        "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+        "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+        "installedVersion": "2.2.25",
+        "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+        "selectedScenarioSha256": "0a7b4e3d1e91860d2e41c3cd7c95a107fc055005d79ebbf83691392110cf2546",
+        "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+      },
+      "successfulIpcRoutes": [],
+      "stages": [],
+      "representedTurn": {
+        "attempted": false,
+        "passed": false
+      },
+      "cleanup": null
+    },
+    {
+      "operationReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-diagnostic-68e355c9-e0ee-4544-a9fd-c331706f6bae/operation.json",
+      "operationSha256": "26b35cbf3aa8ea504ca699512af214bc921d20ce139418e8c432637601b0915f",
+      "evidenceReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-diagnostic-68e355c9-e0ee-4544-a9fd-c331706f6bae/evidence.json",
+      "evidenceSha256": "811d5827f6c8aec54100825c433cd0c7a92b3db852e365c80df2c8d956dff588",
+      "startedAt": "2026-10-09T22:32:47.900Z",
+      "finishedAt": "2026-10-09T22:32:59.901Z",
+      "status": "failed",
+      "failureStage": "configure-isolated-gateway",
+      "failureCode": "C15_SUPPORTED_APPLICATION_API_UNAVAILABLE",
+      "sourceRefs": {
+        "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+        "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+        "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+        "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+        "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+        "installedVersion": "2.2.25",
+        "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+        "selectedScenarioSha256": "c33d4937f1575cadc10b021dad9b16d24d7bb02c67996f19c3c1008836bad289",
+        "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+      },
+      "successfulIpcRoutes": [],
+      "stages": [],
+      "representedTurn": {
+        "attempted": false,
+        "passed": false
+      },
+      "cleanup": null
+    },
+    {
+      "operationReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-post-lock-c26a16f7-35ea-431e-a8af-d14c1266cc1a/operation.json",
+      "operationSha256": "d5b384605c0eca99d62f1737d5649794d4a3d0c9a2c79f3a3de8752d7ad83db2",
+      "evidenceReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-post-lock-c26a16f7-35ea-431e-a8af-d14c1266cc1a/evidence.json",
+      "evidenceSha256": "5f66cc45efdbbbacbe13da00da5336cb4e9cf22eee13675678c0f42cae66cc58",
+      "startedAt": "2026-10-09T22:37:13.748Z",
+      "finishedAt": "2026-10-09T22:37:40.084Z",
+      "status": "failed",
+      "failureStage": "configure-isolated-gateway",
+      "failureCode": "SETUP_FAILED",
+      "sourceRefs": {
+        "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+        "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+        "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+        "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+        "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+        "installedVersion": "2.2.25",
+        "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+        "selectedScenarioSha256": "c33d4937f1575cadc10b021dad9b16d24d7bb02c67996f19c3c1008836bad289",
+        "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+      },
+      "successfulIpcRoutes": [],
+      "stages": [],
+      "representedTurn": {
+        "attempted": false,
+        "passed": false
+      },
+      "cleanup": null
+    },
+    {
+      "operationReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-resume-88b1ef6d-a554-40bb-9f4b-47b8e723472a/operation.json",
+      "operationSha256": "690a679b4a8d91268859fd06d9639fc2d805583c4a7aef924daf4cd520b295ab",
+      "evidenceReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-resume-88b1ef6d-a554-40bb-9f4b-47b8e723472a/evidence.json",
+      "evidenceSha256": "e2afc7d22cb0acf7dc1a840c98083aa30aec42ae714aae322754ae15ff7e060c",
+      "startedAt": "2026-10-09T22:43:10.604Z",
+      "finishedAt": "2026-10-09T22:43:36.257Z",
+      "status": "failed",
+      "failureStage": "configure-isolated-gateway",
+      "failureCode": "C15_SELECTED_GATEWAY_UNAVAILABLE",
+      "sourceRefs": {
+        "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+        "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+        "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+        "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+        "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+        "installedVersion": "2.2.25",
+        "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+        "selectedScenarioSha256": "c33d4937f1575cadc10b021dad9b16d24d7bb02c67996f19c3c1008836bad289",
+        "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+      },
+      "successfulIpcRoutes": [],
+      "stages": [],
+      "representedTurn": {
+        "attempted": false,
+        "passed": false
+      },
+      "cleanup": null
+    },
+    {
+      "operationReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-service-recovered-0b3a9919-6b5f-4e22-9804-dee6b1a39826/operation.json",
+      "operationSha256": "6dcab45f12db3cc5a949e32ef2554345544c3602ad171d992792963c7a7f9b3b",
+      "evidenceReference": ".prometheus/cadence/artifacts/customer-public-mac-2.2.25/executive-representation-service-recovered-0b3a9919-6b5f-4e22-9804-dee6b1a39826/evidence.json",
+      "evidenceSha256": "e13ef3e1d88719fe9309829038b9308258c0fe0e0bbdf7d559372dedd150fa2a",
+      "startedAt": "2026-10-09T22:47:13.294Z",
+      "finishedAt": "2026-10-09T22:48:33.510Z",
+      "status": "failed",
+      "failureStage": null,
+      "failureCode": "INTERNAL",
+      "sourceRefs": {
+        "boss": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+        "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+        "appAsarSha256": "333d6396efd74fd3a9c0dabeaaa191d0b23ed53628a9e618338a055622bd2a1c",
+        "sidecarSha256": "31c2449c2c2d36a8335e406bf1dde67b28dc328e2560e3ce71f45985ef664716",
+        "installerSha256": "deb59913074f3644daf1c2b2ab54db8f2e4c83be3f4d13f2ee5bf4c054a4d721",
+        "installedVersion": "2.2.25",
+        "operationDriverRevision": "3cb9d7b90bb174ff2b19f362f94ce9f19123cee0",
+        "selectedScenarioSha256": "23feacd8f3a96cd4aada95873b305c7b431ef27e2ce45e03db9fd79bb6697dc1",
+        "installationReceiptSha256": "9bdf9246fb5faf72cc62c148c2ec9ea3e3a9582aea13c78fef1c6b01afb77e69"
+      },
+      "successfulIpcRoutes": [
+        "prometheus.uar.models.sources",
+        "prometheus.uar.representation.preview_role",
+        "prometheus.uar.representation.install_role",
+        "prometheus.uar.durable.create_instance",
+        "prometheus.uar.representation.snapshot",
+        "prometheus.uar.durable.instance_action",
+        "prometheus.uar.durable.read"
+      ],
+      "stages": [
+        {
+          "route": "prometheus.uar.models.sources",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.representation.preview_role",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.representation.install_role",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.durable.create_instance",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.representation.snapshot",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.representation.save",
+          "ok": false,
+          "errorCode": "INTERNAL"
+        },
+        {
+          "route": "prometheus.uar.durable.instance_action",
+          "ok": true
+        },
+        {
+          "route": "prometheus.uar.durable.read",
+          "ok": true
+        }
+      ],
+      "representedTurn": {
+        "attempted": false,
+        "passed": false
+      },
+      "cleanup": {
+        "instanceDisabled": false,
+        "state": null
+      }
+    }
+  ],
+  "interpretation": {
+    "observedFailure": "On the public2.2.25 candidate, role preview/install and durable instance creation succeeded after gateway setup recovery. representation.save returned INTERNAL. No represented turn ran.",
+    "sourceGap": "The existing typed customer path lacks grant attachment and represented durable-turn submission. Source diagnosis is distinct from the observed save failure; no inference result, disclosure, denied effect, expiry, revocation or offboarding operation is claimed.",
+    "taskMapping": {
+      "correctiveImplementation": "C17.2",
+      "basis": "Its retained predicate includes consent/scopes/expiry/revocation/offboarding/disclosure. A grant-save failure prevents the customer from using that implementation.",
+      "C17_3": "Person-specific behavior evaluation remains separately qualification-pending; this synthetic fixture does not establish or invalidate person-specific fidelity."
+    },
+    "priorCodeBaseline": "61/61 tasks and20/20 changes at entry; currentC17.2 corrective gap remains open until repaired.",
+    "portfolioQualification": "43/61 terminal entries,42qualified+1historicalskippedduplicate; unchanged.",
+    "newCadenceDelivery": false
+  }
+}
