@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-corrective-packaging-attempts",
+  "attempts": [
+    {
+      "receipt": ".prometheus/cadence/artifacts/customer-build-2.2.26-45245e8e-c020-4b76-979d-480030608704/build.json",
+      "source": "d092a9b4577ec3a07502c94e86bbe0cc8aa68039",
+      "startedAt": "2026-10-09T23:32:46.487Z",
+      "finishedAt": "2026-10-09T23:34:03.991Z",
+      "elapsedMs": 77504,
+      "status": "failed",
+      "exitCode": 1,
+      "repeatReason": "Current release 2.2.26 was missing from generated release history; regenerated from releaseInfo source in 938843a6.",
+      "nativeSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+      "nativeArchiveSha256": "604a59843acf5b4d142e53eb644e7809e007ddcf157b41784c23e1f5b4ca2249"
+    },
+    {
+      "receipt": ".prometheus/cadence/artifacts/customer-build-2.2.26-b76248d0-e81c-41fb-a727-27adc74f3e3c/build.json",
+      "source": "938843a6fcaf3cc5a50e11539adc9683337a1c84",
+      "startedAt": "2026-10-09T23:35:02.504Z",
+      "finishedAt": "2026-10-09T23:37:34.067Z",
+      "elapsedMs": 151563,
+      "status": "failed",
+      "exitCode": 1,
+      "repeatReason": "Copied mini source/gitlink were 838371d3 but artifact metadata remained 3a7c0d24; corrected only mini source metadata in e27bafa2.",
+      "nativeSource": "1522f17944aec1e1a7db5eab3b647e732fc1a07f",
+      "nativeArchiveSha256": "604a59843acf5b4d142e53eb644e7809e007ddcf157b41784c23e1f5b4ca2249"
+    }
+  ],
+  "currentSource": "e27bafa2135cd4244aff9dc1567facc538d6a1dd",
+  "currentBuild": "running",
+  "nativeRebuildForMetadataRepair": false,
+  "newCadenceDelivery": false
+}

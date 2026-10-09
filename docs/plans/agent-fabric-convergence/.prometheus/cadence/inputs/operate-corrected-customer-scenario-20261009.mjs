@@ -3,7 +3,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { launchBoss } from '/Users/gqadonis/.codex/skills/delivery-cadence/scripts/boss-launch.mjs'
+import { launchBoss } from '/Users/gqadonis/Projects/prometheus/worktrees/cadence-nested-source-full/skills/process/delivery-cadence/scripts/boss-launch.mjs'
 import { gatewayEnvironment } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/io.mjs'
 
 const [scenarioPath, operationId, configurationPath, candidateInstallationReceipt] = process.argv.slice(2)
