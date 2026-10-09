@@ -41,20 +41,24 @@
   "releaseVersion": "2.2.24",
   "installedAcceptance": {
     "darwin-arm64": {
-      "status": "pending",
-      "note": "Owned local packaged feature operation passed; operator installation of public installer is not yet accepted"
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
     },
     "darwin-x64": {
-      "status": "pending",
-      "note": "Published installer byte evidence is not installed operation evidence"
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
     },
     "win32-x64": {
-      "status": "pending",
-      "note": "Published installer byte evidence is not installed operation evidence"
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
     },
     "win32-arm64": {
-      "status": "pending",
-      "note": "Published installer byte evidence is not installed operation evidence"
+      "status": "accepted",
+      "note": "Operator accepts the published builds; no additional platform walkthrough claimed",
+      "evidenceRef": "receipts/operator-accepts-2.2.24-20261009.json"
     }
   },
   "parentPhaseStatus": "open",

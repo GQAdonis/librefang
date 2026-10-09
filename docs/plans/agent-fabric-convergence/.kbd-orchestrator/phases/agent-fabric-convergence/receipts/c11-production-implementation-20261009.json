@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:15:42.877Z",
+  "implementation": "complete",
+  "sources": [
+    {
+      "repository": "know-me-system",
+      "revision": "17976c158471015e5bc1d6796024142565bc6e02"
+    },
+    {
+      "repository": "know-me-system",
+      "revision": "29ec2cbf"
+    },
+    {
+      "repository": "know-me-app",
+      "revision": "64b1d0a"
+    }
+  ],
+  "capabilities": [
+    "Atomic local writes and durable offline intent",
+    "Cursor CAS and projection transaction",
+    "Production SDK reconciliation and settings/commands wiring"
+  ],
+  "testsRun": [],
+  "buildsRun": [],
+  "qualification": "pending actual offline/server operation",
+  "authority": "Operator implementation counter separated from qualification"
+}

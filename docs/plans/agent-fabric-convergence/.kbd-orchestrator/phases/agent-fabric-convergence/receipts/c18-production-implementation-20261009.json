@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:32:18.718Z",
+  "authority": "Operator implementation completion separated from intervening qualification gates",
+  "implementation": "complete",
+  "label": "C18",
+  "id": "afc-c18-federated-compatibility-and-release-evidence",
+  "sources": {
+    "uar": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "boss": "d7465ae2c6",
+    "app": "3700864"
+  },
+  "capabilities": [
+    "Authenticated selected-instance SDK admission with required capability refusal",
+    "Explicit discovery-versus-authority separation and current team resource fencing",
+    "Unsupported distributed membership and automatic takeover refused",
+    "Source-bound support profile packaged by real before-pack hook",
+    "Portable artifact hashing and operational/baseline measurement report with missing data unknown"
+  ],
+  "qualification": "Operational matrix and comparative benchmarks remain pending; this completion is production implementation, not certification or publication",
+  "testsRun": [],
+  "buildsRun": [],
+  "certification": "pending"
+}

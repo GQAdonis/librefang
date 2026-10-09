@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-09T15:14:59.782Z",
+  "authority": "Operator2026-10-09: implementation counter independent of qualification",
+  "implementation": "complete",
+  "id": "afc-c10-feedback-workflow-and-governed-connector-effects",
+  "label": "C10",
+  "sources": [
+    {
+      "repository": "universal-agent-runtime",
+      "revision": "dd7041e43148df25cf7239c335d448a6d7937628"
+    },
+    {
+      "repository": "the-boss",
+      "revision": "8261ee54a8",
+      "note": "Connector administration and reconciliation UI; production main wiring7c2f102def"
+    }
+  ],
+  "capabilities": [
+    "Host-mediated leased GitHub/Notion/Slack/Jira effects with scoped credentials and durable receipts",
+    "Unknown-outcome operator attestation without automatic POST replay",
+    "Standing GitHub intake policy opt-in and immutable review/implementation linkage"
+  ],
+  "qualification": "Native connector credentials/operation pending; GitHub2.2.24 accepted baseline is retained, not relabeled.",
+  "testsRun": [],
+  "buildsRun": [],
+  "certification": "pending"
+}
