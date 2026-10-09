@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "completed-boundary-operation-driver-correction",
+  "releaseVersion": "2.2.25",
+  "originalOperation": "../.prometheus/cadence/artifacts/customer-qualification-2.2.25/c15-943c40d3-96f6-4297-aad5-6493bfca50fe/operation.json",
+  "observedFailure": "C15_EXACT_SELECTED_SKILL_NOT_PERSISTED",
+  "cause": "The catalog defaults a skill reference to required. The editor intentionally makes an unreviewed selection optional. The operation compared the saved reference to the raw catalog default instead of the editor's normalized selection.",
+  "retainedObservation": {
+    "selectedSkillPresent": true,
+    "skillId": "agents::a11y-gate",
+    "savedRequired": false,
+    "catalogRequired": true,
+    "productionPersistenceDefect": false
+  },
+  "repair": {
+    "repository": "Prometheus-AGS/the-boss",
+    "commit": "0f6771c67cef921ca0c151f21d5a96f501cdd826",
+    "path": "scripts/reusable-team-operation/scenario.mjs",
+    "behavior": "Compare all fields of the UI-normalized skill reference structurally; record whether selection actually qualifies as required reviewed coverage.",
+    "applicationChanged": false,
+    "nativePayloadChanged": false,
+    "rebuildRequired": false
+  },
+  "frozenPackage": {
+    "source": "35eff8c8c40555a4a464ee03b7305bcc4949666b",
+    "uarSource": "60b5922e3e11dd73bfd8a47e5bc28f3c16332889",
+    "appAsarSha256": "fd68d22460a4de19f0c9ea117fc804ec9e3ad7c1fb5db8131f3d8b4ac489b4ad",
+    "sidecarSha256": "1d6f33798021debdd894a60b21d18a12a83ef2051708b0230089bdedfe7d2432",
+    "checkoutAtOriginalOperation": "9377b8e0267d13feaa5e46dc8c032f7efc27ad57",
+    "checkoutDiffFromFrozenSource": "Only generated OpenSpec authoring instructions and RELEASES.md/release-manifest.json changed; none are application runtime implementation. The operation driver is external and is not the built application."
+  },
+  "qualification": {
+    "newDelivery": false,
+    "taskCompletionCredit": [],
+    "originalFailureRetained": true,
+    "failedJourneyRerun": {
+      "status": "blocked",
+      "failureCode": "C15_VISIBLE_CONTROL_UNAVAILABLE",
+      "failureStage": "deploy-immutable-package-and-private-binding",
+      "originalSkillAssertionPassed": true,
+      "skillSelection": {
+        "catalogRequired": true,
+        "reviewedCoverageStatus": "unreviewed",
+        "requiredReviewedQualification": false
+      },
+      "applicationBytesUnchanged": true,
+      "records": [
+        {
+          "path": "../.prometheus/cadence/artifacts/customer-qualification-2.2.25-driver-repair/c15-04901c37-c504-457a-abe1-1625ee91efb7/operation.json",
+          "sha256": "40d802f406b8a3eb097b1de0250db45d9e7ef1d8ae1e2e452e00fcb36403b0e0"
+        },
+        {
+          "path": "../.prometheus/cadence/artifacts/customer-qualification-2.2.25-driver-repair/c15-04901c37-c504-457a-abe1-1625ee91efb7/evidence.json",
+          "sha256": "b57c1663e5ed7e561777e29659b067efbda968caa14d6f11d67abc65e8a77d5c"
+        },
+        {
+          "path": "../.prometheus/cadence/artifacts/customer-qualification-2.2.25-driver-repair/c15-04901c37-c504-457a-abe1-1625ee91efb7/launch.json",
+          "sha256": "4009f2ad36df28d97d8ee783b57bd3120b31851b454146fd6b2dc90c138a267a"
+        }
+      ],
+      "deploymentDiagnosis": {
+        "disabledBecause": "Only the coordinator model was persisted; product, designer and reviewer models were absent.",
+        "sourcePredicate": "UarTeamAuthoringPanel.tsx:306-312 requires a model on every member before deployment.",
+        "driverLimitation": "All four model-selection actions were attempted without observing their retained selections.",
+        "unresolved": "Why the three member selections did not persist is not established.",
+        "productionDefectClaimed": false,
+        "nextAction": "Establish all four assignments through the visible editor, retain their identities, then repeat the remaining deployment/run journey without bypassing admission."
+      }
+    },
+    "requiredReviewedSkillCoverage": "not established by an optional unreviewed selection",
+    "installedAcceptance": "pending"
+  }
+}
