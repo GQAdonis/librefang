@@ -250,6 +250,7 @@ pub mod extractors;
 pub mod idempotency;
 pub mod mcp_oauth;
 pub mod middleware;
+pub mod mcp_attribution;
 pub mod oauth;
 pub mod openai_compat;
 pub mod openapi;

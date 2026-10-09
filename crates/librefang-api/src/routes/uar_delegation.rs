@@ -2,6 +2,10 @@
 use super::AppState;
 use std::sync::Arc;
 mod connections;
+#[doc(hidden)]
+pub mod schema;
+#[cfg(feature = "uar-driver")]
+mod job_mapping;
 mod diagnostic;
 #[cfg(feature = "uar-driver")]
 mod errors;
@@ -11,7 +15,10 @@ mod observation;
 mod storage;
 #[cfg(not(feature = "uar-driver"))]
 pub fn router() -> axum::Router<Arc<AppState>> {
-    axum::Router::new()
+    axum::Router::new().route("/uar/jobs/{job_id}/admission", axum::routing::post(|| async {
+        crate::types::api_error(axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "uar_driver_disabled", "Selected jobs require the uar-driver feature")
+    }))
 }
 #[cfg(feature = "uar-driver")]
 mod enabled {
@@ -31,12 +38,13 @@ mod enabled {
     use librefang_kernel::a2a::A2aTask;
     use librefang_llm_drivers::drivers::uar_run::{UarRunClient, UarRunClientError};
     use librefang_types::uar_run::{
-        UarDelegatedRunProjection, UarRunAdmission, UarRunEvent, UarSteerOutcome,
+        UarDelegatedRunProjection, UarRunAdmission, UarSteerOutcome,
     };
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
     pub fn router() -> axum::Router<Arc<AppState>> {
         axum::Router::new()
             .route("/uar/delegations", axum::routing::post(admit))
+            .route("/uar/jobs/{job_id}/admission", axum::routing::post(super::job_mapping::admit))
             .route("/uar/connections", axum::routing::get(super::connections))
             .route(
                 "/uar/connections/refresh",
@@ -68,21 +76,16 @@ mod enabled {
                 axum::routing::post(steer),
             )
     }
-    #[derive(Serialize)]
-    #[serde(rename_all = "camelCase")]
-    struct ObservationView {
-        delegation: UarDelegatedRunProjection,
-        events: Vec<UarRunEvent>,
-    }
     #[derive(Deserialize)]
     struct ObserveQuery {
         #[serde(default)]
         after: u64,
     }
     #[derive(Deserialize)]
-    #[serde(rename_all = "camelCase")]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct ApprovalRequest {
         approval_id: String,
+        expected_revision: u64,
         approved: bool,
     }
     #[derive(Deserialize)]
@@ -118,6 +121,12 @@ mod enabled {
         let verified_principal = format!("user:{}", verified_user.0.user_id);
         if admission.boss_task_id.trim().is_empty() {
             admission.boss_task_id = uuid::Uuid::new_v4().to_string();
+        }
+        // Reserved selected namespace is rejected before legacy preparation,
+        // including after restart, completion or a missing retained projection.
+        if admission.boss_task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX) {
+            return api_error(StatusCode::CONFLICT, "selected_job_dispatch_required",
+                "Use the selected stored-job admission route for this identity");
         }
         let store = state.kernel.a2a_tasks();
         let existing = store.get_uar_delegation(&admission.boss_task_id);
@@ -253,6 +262,9 @@ mod enabled {
             Ok(value) => value,
             Err(response) => return response,
         };
+        if super::observation::is_selected(&projection) {
+            return super::observation::lookup_response(&state, projection).await;
+        }
         if projection.uar_task_id.is_none() {
             return (StatusCode::ACCEPTED, Json(projection)).into_response();
         }
@@ -279,30 +291,7 @@ mod enabled {
             Ok(value) => value,
             Err(response) => return response,
         };
-        let (projection, events) = match super::observation::observe(
-            state.uar_run_control.as_ref(),
-            &projection,
-            query.after,
-        )
-        .await
-        {
-            Ok(observation) => observation,
-            Err(error) => {
-                if let Some(recovered) = UarRunClient::recovery_projection(&projection, &error) {
-                    return saved_view(&state, recovered, StatusCode::GONE);
-                }
-                return client_error(error);
-            }
-        };
-        let projection = match persist_and_sync(&state, projection) {
-            Ok(projection) => projection,
-            Err(response) => return response,
-        };
-        Json(ObservationView {
-            delegation: projection,
-            events,
-        })
-        .into_response()
+        super::observation::response(&state, &projection, query.after).await
     }
     async fn approve(
         State(state): State<Arc<AppState>>,
@@ -316,7 +305,7 @@ mod enabled {
         };
         let result = state
             .uar_run_control
-            .approve(&projection, &request.approval_id, request.approved)
+            .approve(&projection, &request.approval_id, request.expected_revision, request.approved)
             .await;
         mutation_result(&state, projection, result, "tool_approval")
     }
@@ -324,12 +313,22 @@ mod enabled {
         State(state): State<Arc<AppState>>,
         api_user: Option<Extension<AuthenticatedApiUser>>,
         Path(task_id): Path<String>,
+        body: Option<Json<serde_json::Value>>,
     ) -> Response {
         let (_, projection) = match stored_delegation(&state, &task_id, api_user.as_ref()) {
             Ok(value) => value,
             Err(response) => return response,
         };
-        let result = state.uar_run_control.cancel(&projection).await;
+        let result = if super::observation::is_selected(&projection) {
+            let Some(revision) = body.as_ref().and_then(|Json(value)| value.get("expectedRevision"))
+                .and_then(serde_json::Value::as_u64) else {
+                return api_error(StatusCode::BAD_REQUEST, "selected_expected_revision_required", "selected_expected_revision_required");
+            };
+            if revision != projection.revision {
+                return api_error(StatusCode::CONFLICT, "selected_revision_conflict", "selected_revision_conflict");
+            }
+            state.uar_run_control.cancel_selected(&projection, revision).await
+        } else { state.uar_run_control.cancel(&projection).await };
         mutation_result(&state, projection, result, "cancel")
     }
     async fn detach(
@@ -358,16 +357,20 @@ mod enabled {
             Ok(value) => value,
             Err(response) => return response,
         };
+        if super::observation::is_selected(&projection) {
+            return api_error(StatusCode::UNPROCESSABLE_ENTITY, "selected_steer_unsupported", "Selected attempts do not support steer");
+        }
         match state
             .uar_run_control
             .steer(&projection, &request.input)
             .await
         {
             Ok(UarSteerOutcome::Accepted { projection }) => {
-                match persist_and_sync(&state, projection) {
-                    Ok(projection) => {
-                        Json(UarSteerOutcome::Accepted { projection }).into_response()
-                    }
+                match persist_and_sync(&state, *projection) {
+                    Ok(projection) => Json(UarSteerOutcome::Accepted {
+                        projection: Box::new(projection),
+                    })
+                    .into_response(),
                     Err(response) => response,
                 }
             }
@@ -386,6 +389,9 @@ mod enabled {
         result: Result<UarDelegatedRunProjection, UarRunClientError>,
         operation: &'static str,
     ) -> Response {
+        if super::observation::is_selected(&projection) {
+            return super::observation::control_result(state, projection, result, operation);
+        }
         match result {
             Ok(projection) => saved_view(state, projection, StatusCode::OK),
             Err(error) if UarRunClient::recovery_projection(&projection, &error).is_some() => {
@@ -439,6 +445,9 @@ mod enabled {
         let Some(projection) = store.get_uar_delegation(task_id) else {
             return Err(delegation_not_found(task_id));
         };
+        if super::observation::is_selected(&projection) && !super::observation::owns_selected(state, &projection, api_user) {
+            return Err(delegation_not_found(task_id));
+        }
         Ok((task, projection))
     }
     fn same_admission(
@@ -472,6 +481,10 @@ mod enabled {
 #[cfg(feature = "uar-driver")]
 pub use enabled::router;
 
-pub(crate) use diagnostic::{__path_diagnostic_route, diagnostic_route};
+pub(crate) use schema::__path_diagnostic_route;
+#[cfg(feature = "uar-driver")]
+pub(crate) use diagnostic::diagnostic_route;
 
-pub(crate) use connections::{__path_connections, __path_refresh, connections, refresh};
+pub(crate) use schema::{__path_connections, __path_refresh};
+#[cfg(feature = "uar-driver")]
+pub(crate) use connections::{connections, refresh};

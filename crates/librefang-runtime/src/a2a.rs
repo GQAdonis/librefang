@@ -9,6 +9,10 @@
 //! - `build_agent_card` — expose LibreFang agents via A2A
 //! - `A2aClient` — discover and interact with external A2A agents
 
+mod uar_delegation_store;
+#[cfg(test)]
+mod uar_delegation_store_tests;
+
 use librefang_types::agent::AgentManifest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -298,14 +302,16 @@ impl A2aTaskStore {
     ///
     /// The caller is responsible for providing a path in the daemon's data
     /// directory. The store creates the schema on first open, prunes rows
-    /// older than 7 days, and loads surviving tasks into memory so pollers
-    /// do not receive 404 after a restart.
+    /// older than 7 days except selected UAR attempt tasks, and loads survivors
+    /// so pollers do not receive 404 after a restart.
     ///
     /// Persistence is **best-effort**: every mutation that returns to the
     /// caller has been written to memory but the SQLite write only logs a
     /// `warn!` on failure. A full disk or read-only volume therefore
     /// degrades silently to in-memory-only behaviour for the affected
-    /// rows; tasks that have not yet been re-saved are lost on restart.
+    /// rows; tasks that have not yet been re-saved are lost on restart. Selected
+    /// UAR reservation/event methods instead require durable transactions and
+    /// return failures without publishing memory changes.
     pub fn with_persistence(max_tasks: usize, db_path: &Path) -> Self {
         match rusqlite::Connection::open(db_path) {
             Ok(conn) => {
@@ -340,6 +346,10 @@ impl A2aTaskStore {
                      );",
                 ) {
                     warn!("a2a_tasks: failed to create schema: {e}");
+                }
+
+                if let Err(error) = uar_delegation_store::initialize(&conn) {
+                    warn!("a2a_tasks: selected attempt schema unavailable: {error}");
                 }
 
                 let db = Arc::new(Mutex::new(conn));
@@ -381,7 +391,9 @@ impl A2aTaskStore {
         let conn = lock_a2a_recover(db_arc, "database");
         let cutoff = now_unix_secs() - DB_TASK_RETENTION_SECS;
         if let Err(e) = conn.execute(
-            "DELETE FROM a2a_tasks_v2 WHERE created_at < ?1",
+            "DELETE FROM a2a_tasks_v2 WHERE created_at < ?1
+             AND NOT EXISTS (SELECT 1 FROM uar_job_attempts_v1
+                 WHERE boss_task_id = a2a_tasks_v2.id)",
             rusqlite::params![cutoff],
         ) {
             warn!("a2a_tasks: failed to prune old tasks: {e}");
@@ -546,33 +558,6 @@ impl A2aTaskStore {
         for projection in projections {
             stored.insert(projection.boss_task_id.clone(), projection);
         }
-    }
-
-    fn db_upsert_uar_delegation(
-        &self,
-        projection: &librefang_types::uar_run::UarDelegatedRunProjection,
-    ) -> Result<librefang_types::uar_run::UarProjectionRetention, String> {
-        let Some(db_arc) = &self.db else {
-            return Ok(librefang_types::uar_run::UarProjectionRetention::ProcessEphemeral);
-        };
-        let projection_json = serde_json::to_string(projection)
-            .map_err(|error| format!("failed to encode UAR delegation: {error}"))?;
-        let conn = lock_a2a_recover(db_arc, "database");
-        conn.execute(
-            "INSERT INTO uar_delegations_v1 (boss_task_id, projection_json, updated_at)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(boss_task_id) DO UPDATE SET
-               projection_json = excluded.projection_json,
-               updated_at = excluded.updated_at",
-            rusqlite::params![projection.boss_task_id, projection_json, now_unix_secs()],
-        )
-        .map_err(|error| {
-            format!(
-                "failed to persist UAR delegation {}: {error}",
-                projection.boss_task_id
-            )
-        })?;
-        Ok(librefang_types::uar_run::UarProjectionRetention::Durable)
     }
 
     // ------------------------------------------------------------------
@@ -750,12 +735,15 @@ impl A2aTaskStore {
         self.update_status(task_id, A2aTaskStatus::Cancelled)
     }
 
-    /// Persist a correlation-only projection for one UAR-owned run.
+    /// Persist a correlation-only projection and A2A outcome atomically.
+    /// Selected attempts retain their last applied cursor here; only
+    /// apply_uar_attempt_event can advance it alongside a durable event.
     pub fn put_uar_delegation(
         &self,
         mut projection: librefang_types::uar_run::UarDelegatedRunProjection,
     ) -> Result<librefang_types::uar_run::UarProjectionRetention, String> {
         let _mutation_order = lock_a2a_recover(&self.mutation_order, "mutation order");
+        self.validate_uar_projection_update(&projection)?;
         let retention = if self.db.is_some() {
             librefang_types::uar_run::UarProjectionRetention::Durable
         } else {
@@ -797,17 +785,8 @@ impl A2aTaskStore {
             }
             projection = selected;
         }
-        let committed = self.db_upsert_uar_delegation(&projection)?;
-        lock_a2a_recover(&self.uar_delegations, "UAR delegations")
-            .insert(projection.boss_task_id.clone(), projection.clone());
-        if let Some(mut task) = self.get(&projection.boss_task_id) {
-            task.status = uar_projection_task_status(&projection).into();
-            self.db_upsert(&task);
-            if let Some(tracked) = lock_a2a_recover(&self.tasks, "tasks").get_mut(&task.id) {
-                tracked.task.status = task.status;
-                tracked.updated_at = Instant::now();
-            }
-        }
+        let committed = self.persist_uar_projection(&mut projection)?;
+        self.publish_uar_projection(projection);
         Ok(committed)
     }
 
@@ -2175,3 +2154,4 @@ mod tests {
         );
     }
 }
+

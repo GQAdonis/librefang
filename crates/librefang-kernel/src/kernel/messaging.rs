@@ -28,6 +28,62 @@ use crate::MeteringSubsystemApi;
 use super::*;
 
 impl LibreFangKernel {
+    /// Explicit durable-job entry. Selection occurs before native setup or
+    /// accounting. The mapper encodes selected message/context in admission;
+    /// the message argument applies only to Native.
+    pub async fn send_job_message(
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        dispatch: uar_harness::ResolvedDispatch,
+    ) -> Result<uar_harness::JobDispatchOutcome<AgentLoopResult>, uar_harness::JobDispatchError> {
+        match dispatch {
+            uar_harness::ResolvedDispatch::Native => self.send_message(agent_id, message)
+                .await.map(uar_harness::JobDispatchOutcome::Native)
+                .map_err(uar_harness::JobDispatchError::Native),
+            uar_harness::ResolvedDispatch::Uar(selected) =>
+                uar_harness::dispatch_selected(self, agent_id, *selected).await
+                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt))),
+        }
+    }
+
+    /// Selected streaming entry returns an admission receipt for the UAR
+    /// observer; it never fabricates a native stream or completion/usage result.
+    pub async fn send_job_message_streaming(
+        self: &Arc<Self>,
+        agent_id: AgentId,
+        message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>,
+        dispatch: uar_harness::ResolvedDispatch,
+    ) -> Result<uar_harness::JobDispatchOutcome<(
+        tokio::sync::mpsc::Receiver<StreamEvent>,
+        tokio::task::JoinHandle<KernelResult<AgentLoopResult>>,
+    )>, uar_harness::JobDispatchError> {
+        match dispatch {
+            uar_harness::ResolvedDispatch::Native =>
+                self.send_message_streaming(agent_id, message, kernel_handle)
+                    .map(uar_harness::JobDispatchOutcome::Native)
+                    .map_err(uar_harness::JobDispatchError::Native),
+            uar_harness::ResolvedDispatch::Uar(selected) =>
+                uar_harness::dispatch_selected(self, agent_id, *selected).await
+                    .map(|receipt| uar_harness::JobDispatchOutcome::Delegated(Box::new(receipt))),
+        }
+    }
+
+    /// Explicit ephemeral selection is refused before registry or loop setup.
+    pub async fn send_job_message_ephemeral(
+        &self,
+        agent_id: AgentId,
+        message: &str,
+        sender_context: Option<&SenderContext>,
+        owner: Option<UserId>,
+        dispatch: uar_harness::ResolvedDispatch,
+    ) -> Result<AgentLoopResult, uar_harness::JobDispatchError> {
+        dispatch.require_native_ephemeral()?;
+        self.send_message_ephemeral(agent_id, message, sender_context, owner)
+            .await.map_err(uar_harness::JobDispatchError::Native)
+    }
+
     /// Send a message to an agent and get a response.
     ///
     /// Automatically upgrades the kernel handle from `self_handle` so that

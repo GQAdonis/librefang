@@ -1,7 +1,5 @@
 //! UAR (Universal Agent Runtime) A2A protocol and discovery routes.
 //!
-//! Implements the A2A RC v1.0 endpoints required for inter-agent interoperability:
-//!
 //! - `GET  /.well-known/agent.json`  — AgentCard for this librefang instance
 //! - `POST /a2a`                     — JSON-RPC 2.0 message dispatcher (A2A tasks)
 //! - `GET  /api/uar/discovery/agents`— list all librefang agents as UAR AgentArtifacts
@@ -23,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub(crate) mod delegated_tasks;
+#[cfg(feature = "uar-driver")]
+mod delegated_view;
 
 /// Build the **root-level** A2A JSON-RPC route.
 ///
@@ -31,8 +31,6 @@ pub(crate) mod delegated_tasks;
 /// `GET /.well-known/agent.json` is served by [`crate::routes::network`]
 /// which already aggregates skills across all loaded agents — we do not
 /// re-register it here to avoid an overlapping-route panic at boot.
-///
-/// Mount this directly on the top-level [`axum::Router`] in `server.rs`.
 pub fn root_router() -> axum::Router<Arc<AppState>> {
     axum::Router::new().route("/a2a", axum::routing::post(handle_a2a_rpc))
 }
@@ -137,6 +135,8 @@ struct MessageSendParams {
 #[derive(Debug, Deserialize)]
 struct TaskRefParams {
     id: String,
+    #[serde(default, rename = "expectedRevision")]
+    expected_revision: Option<u64>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -368,6 +368,10 @@ async fn dispatch_message_send(
         .task_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+    // Selected identities never enter a native continuation, including after restart.
+    if task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX) {
+        return JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, "selected_job_control_required");
+    }
     let user_message = A2aMessage {
         role: "user".to_string(),
         parts: vec![A2aPart::Text {

@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Test infrastructure: mock kernel, mock LLM driver and API route test utilities"
 
+[features]
+# AppState has a run controller only when its API feature is enabled.
+uar-driver = ["librefang-api/uar-driver"]
+
 [dependencies]
 librefang-types = { path = "../librefang-types" }
 librefang-kernel = { path = "../librefang-kernel" }

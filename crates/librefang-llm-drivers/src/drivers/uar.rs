@@ -1487,9 +1487,9 @@ fn build_uar_request(
         })
         .find(|text| {
             let text = text.trim();
-            !text.is_empty()
-                && !(text.starts_with("[Current date/time: ") && text.ends_with(']'))
-                && !text.starts_with("[Previous conversation context]\n")
+            !(text.is_empty()
+                || (text.starts_with("[Current date/time: ") && text.ends_with(']'))
+                || text.starts_with("[Previous conversation context]\n"))
         })
         .ok_or_else(|| {
             LlmError::Http("UAR request has no user turn after host context messages".into())

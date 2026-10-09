@@ -108,6 +108,18 @@ fn new_ephemeral_session(agent_id: AgentId, label: String) -> librefang_memory::
 }
 
 impl LibreFangKernel {
+    /// The selected-job profile excludes ephemeral workers. Refuse before the
+    /// native method creates a workspace, loads tools or starts an LLM loop.
+    pub async fn spawn_job_ephemeral_worker(
+        &self,
+        request: EphemeralSpawnRequest,
+        dispatch: uar_harness::ResolvedDispatch,
+    ) -> Result<EphemeralSpawnResult, uar_harness::JobDispatchError> {
+        dispatch.require_native_ephemeral()?;
+        self.spawn_ephemeral_worker(request).await
+            .map_err(uar_harness::JobDispatchError::Native)
+    }
+
     /// The tool set an ephemeral worker spawned by `parent_id` both advertises and can execute.
     ///
     /// Three filters compose, all narrowing and never widening:

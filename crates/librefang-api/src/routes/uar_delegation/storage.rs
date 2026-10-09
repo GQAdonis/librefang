@@ -10,6 +10,9 @@ use librefang_types::uar_run::UarDelegatedRunProjection;
 
 use crate::{routes::AppState, types::api_error};
 
+/// Legacy/manual delegation persistence. Selected product jobs must first use
+/// A2aTaskStore::reserve_uar_job_attempt and reconcile Existing/unknown results;
+/// this helper does not grant selected-job network admission authority.
 pub(super) fn persist_initial(
     state: &Arc<AppState>,
     task: A2aTask,
@@ -91,8 +94,10 @@ pub(super) fn saved_view(
     }
 }
 
-fn persistence_error(task_id: &str, error: &str) -> Response {
-    tracing::error!(error, task_id, "failed to persist UAR delegation");
+fn persistence_error(task_id: &str, _error: &str) -> Response {
+    // Storage errors can include trigger diagnostics; keep credential material
+    // out of the HTTP/log projection even on interrupted writes.
+    tracing::error!(task_id, "failed to persist UAR delegation");
     api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "delegation_persistence_failed",

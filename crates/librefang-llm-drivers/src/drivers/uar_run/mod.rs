@@ -18,12 +18,16 @@ use reqwest::{Method, StatusCode};
 use serde_json::{Map, Value};
 use zeroize::Zeroizing;
 
+mod approval;
+mod presentation;
 mod binding;
 mod canonical;
 mod diagnostic;
 mod http;
 mod observation;
 mod retained;
+mod selection;
+pub use selection::PendingUarAdmission;
 mod wire;
 
 use binding::{ensure_same_binding, require_task_id, validate_service_placement};
@@ -41,7 +45,7 @@ pub enum UarRunClientError {
         operation: &'static str,
         status: StatusCode,
         message: String,
-        refusal: Option<UarRunRefusal>,
+        refusal: Option<Box<UarRunRefusal>>,
     },
     #[error("UAR full-run {operation} transport failed: {message}")]
     Transport {
@@ -78,7 +82,7 @@ impl UarRunClientError {
     #[must_use]
     pub fn refusal(&self) -> Option<&UarRunRefusal> {
         match self {
-            Self::Remote { refusal, .. } => refusal.as_ref(),
+            Self::Remote { refusal, .. } => refusal.as_deref(),
             _ => None,
         }
     }
@@ -223,67 +227,18 @@ impl UarRunClient {
         Some(recovered)
     }
 
-    /// Verify the selected C04 service binding and construct the correlation
-    /// record that must be persisted before the admission request is sent.
+    /// Legacy/manual preflight preserves its existing connection retention.
+    /// Selected durable jobs use prepare_selected_projection and install only
+    /// after a committed Created reservation.
     pub async fn prepare_projection(
         &self,
         admission: &UarRunAdmission,
         prepared: &PreparedAdmission,
         verified_principal: &str,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let transport = self.transport(verified_principal).await?;
-        validate_service_placement(
-            &prepared.body,
-            &transport.binding,
-            &admission.target_binding_id,
-            prepared.definition_mode,
-        )?;
-        let descriptor = self
-            .runtime_descriptor(&transport, &admission.workspace_id)
-            .await?;
-        descriptor.validate()?;
-        self.retain_connection(admission, verified_principal, transport.clone())
-            .await;
-        let unsupported_semantics = (!descriptor.steer_supported)
-            .then(|| "steer".to_string())
-            .into_iter()
-            .collect();
-        Ok(UarDelegatedRunProjection {
-            boss_task_id: admission.boss_task_id.clone(),
-            verified_principal: verified_principal.to_string(),
-            delegation_id: admission.delegation_id.clone(),
-            admission_key: admission.admission_key.clone(),
-            request_digest: prepared.request_digest.clone(),
-            target_binding_id: admission.target_binding_id.clone(),
-            definition_mode: prepared.definition_mode,
-            workspace_id: admission.workspace_id.clone(),
-            selected_instance_id: transport.binding.instance_id.clone(),
-            effective_binding: transport.binding,
-            definition: admission.definition.clone(),
-            definition_diagnostics: admission.definition_diagnostics.clone(),
-            remote_diagnostics: Vec::new(),
-            uar_task_id: None,
-            uar_thread_id: None,
-            uar_root_run_id: None,
-            uar_run_id: None,
-            admission_state: "pending".to_string(),
-            execution_state: "submitted".to_string(),
-            cancellation_state: "none".to_string(),
-            effect_state: "not_dispatched".to_string(),
-            recovery_state: "available".to_string(),
-            boss_projection_retention: UarProjectionRetention::ProcessEphemeral,
-            revision: 0,
-            cursor: 0,
-            runtime_epoch: Some(descriptor.runtime_epoch),
-            retention: descriptor.retention.into(),
-            cancellation: UarRunCancellation::default(),
-            detached: false,
-            unsupported_semantics,
-            expires_at: None,
-            created_at: None,
-            terminal_at: None,
-            links: Map::new(),
-        })
+        let pending = self.prepare_selected_projection(admission, prepared, verified_principal).await?;
+        self.retain_connection(admission, verified_principal, pending.transport, pending.secrets).await?;
+        Ok(pending.projection)
     }
 
     pub async fn admit(
@@ -352,36 +307,23 @@ impl UarRunClient {
         .await
     }
 
-    pub async fn approve(
-        &self,
-        projection: &UarDelegatedRunProjection,
-        approval_id: &str,
-        approved: bool,
-    ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
-        let current = self.lookup(projection).await?;
-        let task_id = require_task_id(&current)?;
-        let body = serde_json::json!({
-            "expected_revision": current.revision,
-            "approval_id": approval_id,
-            "approved": approved
-        });
-        self.receipt_request(
-            &current,
-            Method::POST,
-            &format!("tasks/{task_id}/tool-approval"),
-            Some(&body),
-            "tool approval",
-            true,
-        )
-        .await
-    }
-
     pub async fn cancel(
         &self,
         projection: &UarDelegatedRunProjection,
     ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
         self.mutate(projection, "cancel", serde_json::json!({}), "cancellation")
             .await
+    }
+
+    /// Selected cancellation preserves the original caller-observed revision.
+    /// Unlike ordinary manual mutation, this never looks up a replacement.
+    pub async fn cancel_selected(
+        &self, projection: &UarDelegatedRunProjection, expected_revision: u64,
+    ) -> Result<UarDelegatedRunProjection, UarRunClientError> {
+        let task_id = require_task_id(projection)?;
+        let body = serde_json::json!({"expected_revision": expected_revision});
+        self.receipt_request(projection, Method::POST, &format!("tasks/{task_id}/cancel"),
+            Some(&body), "selected cancellation", true).await
     }
 
     pub async fn detach(
@@ -412,7 +354,9 @@ impl UarRunClient {
             )
             .await
         {
-            Ok(projection) => Ok(UarSteerOutcome::Accepted { projection }),
+            Ok(projection) => Ok(UarSteerOutcome::Accepted {
+                projection: Box::new(projection),
+            }),
             Err(error)
                 if error
                     .refusal()

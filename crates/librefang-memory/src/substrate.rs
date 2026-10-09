@@ -3,6 +3,8 @@
 //! Composes the structured store, semantic store, knowledge store,
 //! session store, and consolidation engine behind a single async API.
 
+pub mod task_dispatch;
+
 use crate::channel_binding_store::ChannelBindingStore;
 use crate::chunker;
 use crate::consolidation::ConsolidationEngine;
@@ -1224,92 +1226,12 @@ impl MemorySubstrate {
         agent_id: &str,
         agent_name: Option<&str>,
     ) -> LibreFangResult<Option<serde_json::Value>> {
-        let conn = self.pool.clone();
-        // Derive the retry budget from the pool size instead of a magic number:
-        // at most `max_size` claimants can hold a connection (and thus contend
-        // on the CAS) at once — the rest block on `conn.get()` — so 2× that
-        // comfortably outlasts a full wave of rivals before yielding to the
-        // caller. Scales automatically when the pool is configured larger.
-        let max_claim_attempts = self.pool.max_size() as usize * 2;
-        let agent_id = agent_id.to_string();
-        let agent_name = agent_name.unwrap_or("").to_string();
-
-        tokio::task::spawn_blocking(move || {
-            let db = conn.get().map_err(LibreFangError::memory)?;
-            // Match tasks assigned to this agent by UUID *or* by name (tasks posted
-            // via the API or bridge tools may store the name rather than the UUID),
-            // plus any unassigned (empty assigned_to) pending tasks.
-            let mut stmt = db.prepare(
-                "SELECT id, title, description, assigned_to, created_by, created_at
-                 FROM task_queue
-                 WHERE status = 'pending'
-                   AND (assigned_to = ?1 OR assigned_to = ?2 OR assigned_to = '')
-                 ORDER BY priority DESC, created_at ASC
-                 LIMIT 1"
-            ).map_err(LibreFangError::memory)?;
-
-            // Claim the highest-priority pending task assignable to this agent.
-            // Each iteration re-SELECTs the current queue head (a fresh
-            // autocommit read snapshot) and tries to flip it via an atomic
-            // compare-and-swap. Losing the CAS to a concurrent claimant does
-            // NOT mean "no work": the lost row is now in_progress, so the next
-            // SELECT returns the following pending task and we retry instead of
-            // spuriously returning None while other claimable tasks remain. The
-            // bound caps the walk so pathological churn (claimants grabbing rows
-            // faster than we SELECT) can't spin this blocking task forever — the
-            // caller re-fires on its next invocation.
-            for _ in 0..max_claim_attempts {
-                let result = stmt.query_row(rusqlite::params![agent_id, agent_name], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                        row.get::<_, String>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, String>(5)?,
-                    ))
-                });
-
-                match result {
-                    Ok((id, title, description, _assigned, created_by, created_at)) => {
-                        // Stamp `claimed_at` so the stuck-task sweeper can
-                        // TTL-reset workers that never complete.
-                        let claimed_at = chrono::Utc::now().to_rfc3339();
-                        // Atomic compare-and-swap: only flip the row if it is
-                        // still 'pending'. A 0-row result means another claimant
-                        // won this row between our SELECT and UPDATE — loop to
-                        // try the next pending task instead of giving up.
-                        let rows = db.execute(
-                            "UPDATE task_queue SET status = 'in_progress', assigned_to = ?2, claimed_at = ?3 WHERE id = ?1 AND status = 'pending'",
-                            rusqlite::params![id, agent_id, claimed_at],
-                        ).map_err(LibreFangError::memory)?;
-                        if rows == 0 {
-                            continue;
-                        }
-
-                        return Ok(Some(serde_json::json!({
-                            "id": id,
-                            "title": title,
-                            "description": description,
-                            "status": "in_progress",
-                            "assigned_to": agent_id,
-                            "created_by": created_by,
-                            "created_at": created_at,
-                            "claimed_at": claimed_at,
-                        })));
-                    }
-                    // No pending task assignable to this agent remains.
-                    Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
-                    Err(e) => return Err(LibreFangError::memory(e)),
-                }
-            }
-
-            // Exhausted the attempt budget under heavy contention without
-            // claiming a row — report no task; the caller retries next time.
-            Ok(None)
-        })
-        .await
-        .map_err(|e| LibreFangError::Internal(e.to_string()))?
+        // Claiming also persists native classification. A selected or unknown
+        // payload is never returned, even after another caller resets status.
+        self.claim_native_jobs(None, agent_id, agent_name).await?
+            .into_iter().next().map(|job| serde_json::to_value(job)
+                .map_err(|_| LibreFangError::Internal("claimed task encoding failed".into())))
+            .transpose()
     }
 
     /// Mark a task as completed with a result string.
@@ -1323,10 +1245,12 @@ impl MemorySubstrate {
             let now = now_chrono.to_rfc3339();
             let now_unix = now_chrono.timestamp();
             let db = conn.get().map_err(LibreFangError::memory)?;
+            let payload = task_dispatch::native_payload(&db, &task_id)?
+                .ok_or_else(|| LibreFangError::InvalidInput("task requires its original harness control".into()))?;
             // `finished_at` is the unix-epoch column the retention sweep reads (#3466).
             let rows = db.execute(
-                "UPDATE task_queue SET status = 'completed', result = ?2, completed_at = ?3, finished_at = ?4, claimed_at = NULL WHERE id = ?1 AND status = 'in_progress'",
-                rusqlite::params![task_id, result, now, now_unix],
+                "UPDATE task_queue SET status = 'completed', result = ?2, completed_at = ?3, finished_at = ?4, claimed_at = NULL WHERE id = ?1 AND status = 'in_progress' AND payload = ?5",
+                rusqlite::params![task_id, result, now, now_unix, payload],
             ).map_err(LibreFangError::memory)?;
             if rows == 0 {
                 return Err(LibreFangError::Internal(format!("Task not active: {task_id}")));
@@ -1344,10 +1268,11 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
+            let Some(payload) = task_dispatch::native_payload(&db, &task_id)? else { return Ok(false); };
             let rows = db
                 .execute(
-                    "DELETE FROM task_queue WHERE id = ?1",
-                    rusqlite::params![task_id],
+                    "DELETE FROM task_queue WHERE id = ?1 AND payload = ?2",
+                    rusqlite::params![task_id, payload],
                 )
                 .map_err(LibreFangError::memory)?;
             Ok(rows > 0)
@@ -1365,13 +1290,14 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
+            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)? else { return Ok(false); };
             let rows = db
                 .execute(
                     "UPDATE task_queue \
                      SET status = 'pending', result = NULL, completed_at = NULL, \
-                         finished_at = NULL, claimed_at = NULL \
-                     WHERE id = ?1 AND status IN ('completed', 'failed')",
-                    rusqlite::params![task_id],
+                         finished_at = NULL, claimed_at = NULL, payload = ?3 \
+                     WHERE id = ?1 AND status IN ('completed', 'failed') AND payload = ?2",
+                    rusqlite::params![task_id, payload, native],
                 )
                 .map_err(LibreFangError::memory)?;
             Ok(rows > 0)
@@ -1549,29 +1475,30 @@ impl MemorySubstrate {
 
             let mut reset_ids = Vec::new();
             for (id, retries) in &stuck {
+                let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, id)? else { continue; };
                 let exhausted = max_retries > 0 && *retries >= max_retries;
-                if exhausted {
+                let changed = if exhausted {
                     let now_unix = chrono::Utc::now().timestamp();
                     db.execute(
                         "UPDATE task_queue \
                          SET status = 'failed', assigned_to = '', claimed_at = NULL, \
-                             finished_at = ?2, \
+                             finished_at = ?2, payload = ?5, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress'",
-                        rusqlite::params![id, now_unix],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?3 AND claimed_at < ?4",
+                        rusqlite::params![id, now_unix, payload, cutoff_str, native],
                     )
-                    .map_err(LibreFangError::memory)?;
+                    .map_err(LibreFangError::memory)?
                 } else {
                     db.execute(
                         "UPDATE task_queue \
-                         SET status = 'pending', assigned_to = '', claimed_at = NULL, \
+                         SET status = 'pending', assigned_to = '', claimed_at = NULL, payload = ?4, \
                              retry_count = retry_count + 1 \
-                         WHERE id = ?1 AND status = 'in_progress'",
-                        rusqlite::params![id],
+                         WHERE id = ?1 AND status = 'in_progress' AND payload = ?2 AND claimed_at < ?3",
+                        rusqlite::params![id, payload, cutoff_str, native],
                     )
-                    .map_err(LibreFangError::memory)?;
-                }
-                reset_ids.push(id.clone());
+                    .map_err(LibreFangError::memory)?
+                };
+                if changed == 1 { reset_ids.push(id.clone()); }
             }
             Ok(reset_ids)
         })
@@ -1638,6 +1565,7 @@ impl MemorySubstrate {
 
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
+            let Some((payload, native)) = task_dispatch::native_mutation_payload(&db, &task_id)? else { return Ok(false); };
             let now_unix = chrono::Utc::now().timestamp();
             let rows = match new_status.as_str() {
                 // Reset to pending: clear `finished_at` so a previous
@@ -1647,9 +1575,9 @@ impl MemorySubstrate {
                 "pending" => db.execute(
                     "UPDATE task_queue \
                      SET status = 'pending', claimed_at = NULL, assigned_to = '', \
-                         finished_at = NULL \
-                     WHERE id = ?1 AND status = 'failed'",
-                    rusqlite::params![task_id],
+                         finished_at = NULL, payload = ?3 \
+                     WHERE id = ?1 AND status = 'failed' AND payload = ?2",
+                    rusqlite::params![task_id, payload, native],
                 ),
                 // Cancellation is a terminal transition like complete/fail,
                 // so it MUST stamp `finished_at` — otherwise the retention
@@ -1659,8 +1587,8 @@ impl MemorySubstrate {
                 "cancelled" => db.execute(
                     "UPDATE task_queue \
                      SET status = 'cancelled', finished_at = ?2 \
-                     WHERE id = ?1 AND status NOT IN ('completed', 'cancelled')",
-                    rusqlite::params![task_id, now_unix],
+                     WHERE id = ?1 AND status NOT IN ('completed', 'cancelled') AND payload = ?3",
+                    rusqlite::params![task_id, now_unix, payload],
                 ),
                 _ => {
                     return Err(LibreFangError::InvalidInput(format!(
@@ -1692,14 +1620,14 @@ impl MemorySubstrate {
             let cutoff = (now - chrono::Duration::seconds(ttl_secs as i64)).to_rfc3339();
             let reason =
                 format!("expired: unclaimed for more than [queue] task_ttl_secs ({ttl_secs}s)");
-            let rows = db
-                .execute(
-                    "UPDATE task_queue \
-                     SET status = 'cancelled', finished_at = ?1, result = ?2 \
-                     WHERE status = 'pending' AND created_at < ?3",
-                    rusqlite::params![now.timestamp(), reason, cutoff],
-                )
-                .map_err(LibreFangError::memory)?;
+            let eligible = task_dispatch::native_rows(&db,
+                "status = 'pending' AND created_at < ?1", &[&cutoff])?;
+            let mut rows = 0;
+            for (id, payload) in eligible {
+                rows += db.execute("UPDATE task_queue SET status = 'cancelled', finished_at = ?1, result = ?2
+                    WHERE id = ?3 AND status = 'pending' AND created_at < ?4 AND payload = ?5",
+                    rusqlite::params![now.timestamp(), reason, id, cutoff, payload]).map_err(LibreFangError::memory)?;
+            }
             Ok(rows)
         })
         .await
@@ -1724,14 +1652,14 @@ impl MemorySubstrate {
         tokio::task::spawn_blocking(move || {
             let db = conn.get().map_err(LibreFangError::memory)?;
             let cutoff = chrono::Utc::now().timestamp() - (older_than_days as i64) * 86_400;
-            let rows = db
-                .execute(
-                    "DELETE FROM task_queue \
-                     WHERE status IN ('completed', 'failed', 'cancelled') \
-                       AND finished_at IS NOT NULL AND finished_at < ?1",
-                    rusqlite::params![cutoff],
-                )
-                .map_err(LibreFangError::memory)?;
+            let eligible = task_dispatch::native_rows(&db,
+                "status IN ('completed', 'failed', 'cancelled') AND finished_at IS NOT NULL AND finished_at < ?1", &[&cutoff])?;
+            let mut rows = 0;
+            for (id, payload) in eligible {
+                rows += db.execute("DELETE FROM task_queue WHERE id = ?1
+                    AND status IN ('completed', 'failed', 'cancelled') AND finished_at < ?2 AND payload = ?3",
+                    rusqlite::params![id, cutoff, payload]).map_err(LibreFangError::memory)?;
+            }
             Ok(rows)
         })
         .await

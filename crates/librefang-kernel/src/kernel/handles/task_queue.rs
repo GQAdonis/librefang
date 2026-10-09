@@ -123,6 +123,13 @@ impl kernel_handle::TaskQueue for LibreFangKernel {
                 }
             },
         };
+        match self.read_job_dispatch_intent(task_id).await {
+            Ok(Some(librefang_memory::task_dispatch::JobDispatchState::Selected(_))) =>
+                return Err(kernel_handle::KernelOpError::Internal("selected_job_original_control_required".into())),
+            Ok(Some(librefang_memory::task_dispatch::JobDispatchState::Unknown)) | Err(_) =>
+                return Err(kernel_handle::KernelOpError::Internal("job_dispatch_storage_unknown".into())),
+            _ => {}
+        }
         // Capture the original poster before completing so `TaskCompleted`
         // triggers can scope via `creator_match`. `task_complete` only flips
         // status/result, so reading the record first is equivalent to reading

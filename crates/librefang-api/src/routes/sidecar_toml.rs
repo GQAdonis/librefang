@@ -179,6 +179,15 @@ pub fn upsert_sidecar_block(
     Ok(())
 }
 
+/// Borrowed catalog command and arguments used for sidecar defaults.
+#[cfg(feature = "surreal-backend")]
+pub struct SidecarCommand<'a> {
+    /// Executable used when no operator command is already configured.
+    pub command: &'a str,
+    /// Catalog arguments paired with the executable.
+    pub args: &'a [&'a str],
+}
+
 /// In-memory counterpart of [`upsert_sidecar_block`] for the surreal config
 /// store (C-005d.3). Upserts one `SidecarChannelConfig` by `name` in a `Vec`,
 /// mirroring the toml_edit semantics: on update, catalog `command`/`args`
@@ -199,12 +208,12 @@ pub fn upsert_sidecar_in_vec(
     sidecars: &mut Vec<librefang_types::config::SidecarChannelConfig>,
     name: &str,
     channel_type: &str,
-    command: &str,
-    args: &[&str],
+    command: SidecarCommand<'_>,
     env: &BTreeMap<String, String>,
     managed_env_keys: &[&str],
     agent: Option<&str>,
 ) -> Result<(), String> {
+    let SidecarCommand { command, args } = command;
     let apply_managed = |env_map: &mut std::collections::HashMap<String, String>| {
         for key in managed_env_keys {
             match env.get(*key) {
@@ -263,8 +272,7 @@ mod config_store_tests {
             &mut sidecars,
             "telegram",
             "telegram",
-            "python3",
-            &["-m", "adapter"],
+            SidecarCommand { command: "python3", args: &["-m", "adapter"] },
             &env,
             &managed,
             Some("coder"),
@@ -301,8 +309,7 @@ mod config_store_tests {
             &mut sidecars,
             "telegram",
             "telegram",
-            "python3",
-            &["-m", "adapter"],
+            SidecarCommand { command: "python3", args: &["-m", "adapter"] },
             &env2,
             &managed,
             None,

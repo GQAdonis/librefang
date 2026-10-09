@@ -1,9 +1,13 @@
 //! Owner-triggered real no-effect full-harness diagnostic.
+#[cfg(feature = "uar-driver")]
 use crate::{middleware::AuthenticatedApiUser, routes::AppState, types::api_error};
+#[cfg(feature = "uar-driver")]
 use axum::{extract::State, http::StatusCode, response::Response, Extension, Json};
 #[cfg(feature = "uar-driver")]
 use librefang_llm_drivers::drivers::{uar, uar_run::UarRunClient};
+#[cfg(feature = "uar-driver")]
 use serde::Deserialize;
+#[cfg(feature = "uar-driver")]
 use std::sync::Arc;
 
 #[cfg(feature = "uar-driver")]
@@ -54,10 +58,7 @@ pub(super) async fn diagnostic(
 }
 
 /// Authenticated Owner-only full-run diagnostic; no catalog installation.
-#[utoipa::path(post, path="/api/uar/diagnostics/delegation", tag="uar", request_body=crate::types::JsonObject,
-    responses((status=201,description="Real inline diagnostic admission projection; body workspaceId/providerId/model and optional bossTaskId"),
-    (status=202,description="Admission outcome unresolved; retain task identity for reconciliation"),
-    (status=503,description="uar-driver feature unavailable")))]
+#[cfg(feature = "uar-driver")]
 pub(crate) async fn diagnostic_route(
     state: axum::extract::State<Arc<AppState>>,
     api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,

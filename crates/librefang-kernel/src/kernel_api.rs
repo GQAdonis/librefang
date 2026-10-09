@@ -62,6 +62,7 @@ use crate::triggers::{Trigger, TriggerId, TriggerMatch, TriggerPattern};
 use crate::workflow::WorkflowEngine;
 use crate::DeliveryTracker;
 use crate::LibreFangKernel;
+use crate::kernel::uar_harness::{ResolvedDispatch, JobDispatchOutcome, JobDispatchError, NativeJobStream};
 
 use librefang_kernel_metering::MeteringEngine;
 use librefang_memory::MemorySubstrate;
@@ -482,6 +483,36 @@ pub trait KernelApi: KernelHandle + Send + Sync {
     // ====================================================================
     // Messaging
     // ====================================================================
+
+    /// Explicit selected-job seam. Alternate kernels refuse selection unless
+    /// they implement its durable authority; native implementations stay usable.
+    /// Durable task-board classification; unavailable is never native authority.
+    async fn read_job_dispatch_intent(&self, _job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+        Err("job_dispatch_storage_unavailable".into())
+    }
+    async fn reconcile_selected_jobs(&self) -> Result<(), String> {
+        Err("selected_reconciliation_unavailable".into())
+    }
+
+    async fn send_job_message(
+        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        match dispatch {
+            ResolvedDispatch::Native => self.send_message(agent_id, message).await
+                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
+        }
+    }
+    async fn send_job_message_streaming(
+        self: Arc<Self>, agent_id: AgentId, message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
+        match dispatch {
+            ResolvedDispatch::Native => self.send_message_streaming_with_routing(agent_id, message, kernel_handle).await
+                .map(JobDispatchOutcome::Native).map_err(JobDispatchError::Native),
+            ResolvedDispatch::Uar(_) => Err(JobDispatchError::FeatureUnavailable),
+        }
+    }
 
     async fn send_message(
         &self,
@@ -1421,6 +1452,25 @@ impl KernelApi for LibreFangKernel {
         agent_id: AgentId,
     ) -> crate::kernel::PendingSkillMcpDeclarations {
         Self::pending_skill_and_mcp_declarations(self, agent_id).await
+    }
+
+    async fn read_job_dispatch_intent(&self, job_id: &str) -> Result<Option<librefang_memory::task_dispatch::JobDispatchState>, String> {
+        LibreFangKernel::read_job_dispatch_intent(self, job_id).await
+    }
+    async fn reconcile_selected_jobs(&self) -> Result<(), String> {
+        LibreFangKernel::reconcile_selected_jobs(self).await
+    }
+
+    async fn send_job_message(
+        &self, agent_id: AgentId, message: &str, dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<librefang_runtime::agent_loop::AgentLoopResult>, JobDispatchError> {
+        LibreFangKernel::send_job_message(self, agent_id, message, dispatch).await
+    }
+    async fn send_job_message_streaming(
+        self: Arc<Self>, agent_id: AgentId, message: &str,
+        kernel_handle: Option<Arc<dyn KernelHandle>>, dispatch: ResolvedDispatch,
+    ) -> Result<JobDispatchOutcome<NativeJobStream>, JobDispatchError> {
+        LibreFangKernel::send_job_message_streaming(&self, agent_id, message, kernel_handle, dispatch).await
     }
 
     async fn send_message(

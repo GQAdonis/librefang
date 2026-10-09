@@ -54,6 +54,8 @@ pub(super) struct WireReceipt {
 
 #[derive(Debug, Deserialize)]
 pub(super) struct WireRuntimeDescriptor {
+    #[serde(default)]
+    pub event_cursor_profile: Option<String>,
     pub(super) profile: String,
     pub(super) runtime_epoch: String,
     pub(super) recovery: String,
@@ -158,6 +160,14 @@ impl WireReceipt {
                 operation: "admission",
                 message: "receipt omitted its effective service binding".to_string(),
             });
+        }
+        // Selected service mapping pins the receiver's deployment revision in
+        // the real service_placement field. Keep that pin separate from the
+        // requested definition digest; this verifies only receiver evidence.
+        if let Some(expected) = prepared.body.pointer("/service_placement/bindingRevision").and_then(Value::as_u64) {
+            if state != "rejected" && self.effective_service_binding.get("bindingRevision").and_then(Value::as_u64) != Some(expected) {
+                return binding_mismatch("bindingRevision");
+            }
         }
         let cancellation: UarRunCancellation = self.cancellation.into();
         Ok(UarDelegatedRunProjection {
