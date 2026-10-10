@@ -25,3 +25,9 @@ Public 2.2.25 now has actual passing ordinary UAR, Codex and Claude responses, r
 Both native Codex and Claude routes operated saved-history follow-up, actual text streaming cancellation, persisted paused state, and a successful follow-up. Evidence remains bound to published 2.2.25; no fresh 2.2.26 acceptance is inferred. Safe receipts and corrective drivers are committed in `2345d1bff`.
 
 The corrected 2.2.26 native UAR archive is built locally. The actual Mac installer build is proceeding from The Boss `e27bafa2135cd4244aff9dc1567facc538d6a1dd`, after repairing two observed packaging metadata failures. Four native platform payload jobs are running. Corrected representation, coding and reviewed-skill operations remain pending that installer. Portfolio qualification remains 43/61 terminal entries; publication debt and exact-candidate installed acceptance are preserved.
+
+## Corrective local package — completed build
+
+`pnpm build:mac:arm64` completed successfully in 17.3 minutes from The Boss `e27bafa2135cd4244aff9dc1567facc538d6a1dd`, with UAR `1522f17944aec1e1a7db5eab3b647e732fc1a07f`. The actual 2.2.26 DMG is 702950923 bytes, SHA-256 `3be06ee7815d6760d27fcb5aaf1d65a8a29fc174e2ea98bf7544c21066ce4053`. Its image, deep bundle signature and isolated installation passed; Gatekeeper accepted the copied application. This receipt does not confirm notarization.
+
+The external staging driver now uses the existing production signature-aware payload validator: macOS signing changes native executable bytes, while source/archive identity and unchanged files remain checked. The original staging failure remains immutable. Build and installation receipts are committed in `d2aed2159`; coding-team operation is active in that exact installed package. Four remote native builds, corrected functional qualification, publication and candidate-specific acceptance remain pending. No test suites or fabricated Cadence delivery credit.

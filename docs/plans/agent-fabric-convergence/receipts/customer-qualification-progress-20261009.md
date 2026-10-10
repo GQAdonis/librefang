@@ -37,3 +37,11 @@ The UAR corrections separate authenticated issuer identity from its encoded stor
 Full and mini source pins include the one-line host `USER` preservation repair: full `bb8950b254825079ab382119a8c425d645a081ae` (merged PR178), mini `838371d3b597e785b1fe264377b3f55b9ca6333f` (merged PR54). Machine-wide installed redistribution remains pending because the narrow installer refused signed-generation ownership conflicts; no signed store was overwritten. See [redistribution receipt](cadence-machine-redistribution-2026-10-09.json).
 
 The final local native build and four native platform payload jobs are in progress. Superseded `7183a0af` builds were cancelled and are retained as unsuccessful historical attempts. No corrective installer, represented turn or new release publication is claimed yet. The actual local Mac ARM64 build follows successful native packaging; affected coding, reviewed-skill and representation operations follow that completed package. Existing passing 2.2.25 evidence retains its actual provenance.
+
+## Corrective boundary update — 2026-10-10
+
+The actual local `pnpm build:mac:arm64` succeeded from Boss `e27bafa2135cd4244aff9dc1567facc538d6a1dd` and UAR `1522f17944aec1e1a7db5eab3b647e732fc1a07f`. Its 2.2.26 DMG passed image, deep signature and isolated installation checks. Gatekeeper accepted the copied app; notarization is not established by this receipt. See [build provenance](customer-corrective-local-mac-2.2.26-build-20261009.json).
+
+The corrected coding operation progressed through real coordinator delegation, approved workspace read/edit/read and the bounded README change. Its reviewer then failed with `TEAM_PROVIDER_REQUEST_REJECTED`. The required complete coding/handoff/cancellation/isolation scenario remains pending; no whole-task or delivery credit is added. [Partial operation](customer-corrected-mac-2.2.26-coding-partial-20261010.json) preserves immutable original evidence. The exact upstream cause remains under investigation.
+
+The reviewed-skill operation is now being operated against the same installed package. Four remote native payload builds remain in progress. No new public release or exact-candidate installed acceptance is claimed.
