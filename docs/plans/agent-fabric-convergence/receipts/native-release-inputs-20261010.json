@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "kind": "native-release-input-preparation",
-  "recordedAt": "2026-10-10T14:51:06.565Z",
-  "status": "repaired-final-source-four-native-builds-launched",
+  "recordedAt": "2026-10-10T16:16:20.237Z",
+  "status": "mac-arm64-and-both-windows-published-mac-intel-build-pending",
   "ownership": "Root owns release coordination, manifests, final integration dispatch and local packaging. Native child was explicitly authorized to repair observed UAR checkout failure, update the final full-CLI gitlink, sign/push source and create four new immutable UAR tags. This receipt records those actions.",
   "releaseCandidate": {
     "version": "2.2.31",
@@ -405,9 +405,12 @@
         "databaseId": 38061063459,
         "headBranch": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7",
         "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
-        "status": "in_progress",
-        "conclusion": "",
-        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061063459"
+        "status": "completed",
+        "conclusion": "cancelled",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061063459",
+        "nativeJobConclusion": "success",
+        "publicationPending": false,
+        "publicationMode": "root-manual-publish-from-successful-native-job"
       },
       {
         "platform": "darwin-x64",
@@ -423,18 +426,22 @@
         "databaseId": 38061068831,
         "headBranch": "boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7",
         "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
-        "status": "queued",
-        "conclusion": "",
-        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061068831"
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061068831",
+        "nativeJobConclusion": "success",
+        "publicationPending": false
       },
       {
         "platform": "win32-arm64",
         "databaseId": 38061070759,
         "headBranch": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7",
         "headSha": "25c542c77f41abcec605dd8ae372b04f68a1801e",
-        "status": "in_progress",
-        "conclusion": "",
-        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061070759"
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38061070759",
+        "nativeJobConclusion": "success",
+        "publicationPending": false
       }
     ],
     "tagsCreatedAndPushed": true,
@@ -452,8 +459,64 @@
       "submodules": "All five submodules were uninitialized before and after checkout; none required updating for CI-payload import, and no local Rust build was run.",
       "oldPayloadSource": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
       "oldPayloadBackup": "dist/boss-sidecar/previous-6b2ad902-20261010",
-      "pending": "Root must place the same-source 25c542c7 darwin-arm64 CI archive and record into dist/boss-sidecar before the G local import gate can pass.",
-      "localBossCommand": "THE_BOSS_LOCAL_UAR_SOURCE_DIR=/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902 pnpm run build:mac:arm64"
+      "pending": "Same-source MacARM payload is staged and root-published. Root awaits all-platform native closure before mandated local G packaging.",
+      "localBossCommand": "THE_BOSS_LOCAL_UAR_SOURCE_DIR=/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902 pnpm run build:mac:arm64",
+      "payload": {
+        "record": {
+          "name": "uar-sidecar",
+          "version": "1.0.0",
+          "platform": "darwin-arm64",
+          "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+          "releaseTag": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7",
+          "features": [
+            "server-full"
+          ],
+          "asset": "uar-sidecar-darwin-arm64.tar.gz",
+          "sha256": "2e1470b59c8f12a563540b3a5d795f22d0ada7a2ceb8a7c2017a4a1d73d38eab",
+          "archive": "tar.gz",
+          "binaries": [
+            "libcrc_fast-c9544bfaf069c5bc.dylib",
+            "libsevenz_rust2-bcd9d32571c57b36.dylib",
+            "LICENSE",
+            "policies/default.cedar",
+            "policies/skill-mutation.cedar",
+            "policies/tool-approval.cedar",
+            "uar-models/bg-small-en-v1.5.onnx",
+            "uar-models/config.json",
+            "uar-models/MODEL-NOTICE.txt",
+            "uar-models/special_tokens_map.json",
+            "uar-models/tokenizer_config.json",
+            "uar-models/tokenizer.json",
+            "uar-sidecar",
+            "payload-manifest.json"
+          ]
+        },
+        "archivePath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+        "recordPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/uar-sidecar-darwin-arm64.json",
+        "archiveSize": 126371082,
+        "sha256Compared": true,
+        "artifactId": 11674064200,
+        "artifactDigest": "sha256:4138c8b1575a6a17407dfe12f4d2506ec342d78887c90753254e304c74906b97",
+        "workflowRun": 38061063459,
+        "nativeJobId": 114239254289,
+        "nativeJobConclusion": "success",
+        "publisherJobId": 114248045322,
+        "publisherStatus": "cancelled-while-queued-by-root",
+        "releaseRecordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-darwin-arm64.json",
+        "publication": {
+          "mode": "root-manual-publish-from-successful-native-job",
+          "releaseId": 409040161,
+          "publishedAt": "2026-10-10T15:42:58Z",
+          "archiveAssetId": 628332816,
+          "archiveSize": 126371082,
+          "archiveDigest": "sha256:2e1470b59c8f12a563540b3a5d795f22d0ada7a2ceb8a7c2017a4a1d73d38eab",
+          "recordAssetId": 628332822,
+          "recordSize": 886,
+          "recordDigest": "sha256:1472869eccb49d4d9aa9bbcb6d44015cc92e5b55ffb0e5da063518ec9cfc22cf",
+          "releaseUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/tag/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-25c542c7",
+          "rootReceipt": "docs/plans/agent-fabric-convergence/receipts/integrated-uar-darwin-arm64-published-20261010.json"
+        }
+      }
     },
     "observedFailures": [
       {
@@ -524,7 +587,191 @@
         "crates/prometheus-skill-system"
       ],
       "reason": "Observed Windows submodule checkout failure; final approved full-CLI pin coordinated by root"
-    }
+    },
+    "publishedPlatforms": [
+      {
+        "platform": "win32-x64",
+        "workflowRun": 38061068831,
+        "nativeJobId": 114239270117,
+        "publisherJobId": 114252564277,
+        "runConclusion": "success",
+        "record": {
+          "name": "uar-sidecar",
+          "version": "1.0.0",
+          "platform": "win32-x64",
+          "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+          "releaseTag": "boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7",
+          "features": [
+            "server-full"
+          ],
+          "asset": "uar-sidecar-win32-x64.tar.gz",
+          "sha256": "ec461312d2992705498bd28552ba41449e6601ba8c2c1997ee10fecebd8d8027",
+          "archive": "tar.gz",
+          "binaries": [
+            "crc_fast-c45996daf34d96b5.dll",
+            "LICENSE",
+            "policies/default.cedar",
+            "policies/skill-mutation.cedar",
+            "policies/tool-approval.cedar",
+            "sevenz_rust2-0296aedd6d6c479a.dll",
+            "uar-models/bg-small-en-v1.5.onnx",
+            "uar-models/config.json",
+            "uar-models/MODEL-NOTICE.txt",
+            "uar-models/special_tokens_map.json",
+            "uar-models/tokenizer_config.json",
+            "uar-models/tokenizer.json",
+            "uar-sidecar.exe",
+            "payload-manifest.json"
+          ]
+        },
+        "recordPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/published-win32-x64-25c542c7/uar-sidecar-win32-x64.json",
+        "archiveAssetId": 628362930,
+        "archiveSize": 130097881,
+        "archiveDigest": "sha256:ec461312d2992705498bd28552ba41449e6601ba8c2c1997ee10fecebd8d8027",
+        "recordAssetId": 628362929,
+        "recordSize": 871,
+        "recordDigest": "sha256:ba4fe70ced9158b9ae40cd283fbcda9d5b827974a8ec1e00150071389d20e479",
+        "publishedAt": "2026-10-10T15:56:53Z",
+        "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-x64.json",
+        "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-x64.tar.gz",
+        "qualification": "Archive downloaded once; actual bytes and SHA256 match produced record and published GitHub asset size/digest. No artifact binary execution.",
+        "downloadedArchive": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/published-win32-x64-25c542c7/uar-sidecar-win32-x64.tar.gz",
+          "size": 130097881,
+          "sha256": "ec461312d2992705498bd28552ba41449e6601ba8c2c1997ee10fecebd8d8027",
+          "comparedAgainstRecordAndGitHub": true,
+          "executed": false
+        }
+      },
+      {
+        "platform": "win32-arm64",
+        "workflowRun": 38061070759,
+        "nativeJobId": 114239275978,
+        "publisherJobId": 114256114307,
+        "runConclusion": "success",
+        "record": {
+          "name": "uar-sidecar",
+          "version": "1.0.0",
+          "platform": "win32-arm64",
+          "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+          "releaseTag": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7",
+          "features": [
+            "server-full"
+          ],
+          "asset": "uar-sidecar-win32-arm64.tar.gz",
+          "sha256": "f21627e01da84c1b9e26199bc3b458c29bc22dedab622e0fa8cc93251998bb3b",
+          "archive": "tar.gz",
+          "binaries": [
+            "crc_fast-ec816f13e81631da.dll",
+            "LICENSE",
+            "policies/default.cedar",
+            "policies/skill-mutation.cedar",
+            "policies/tool-approval.cedar",
+            "sevenz_rust2-74faf33cd846d44a.dll",
+            "uar-models/bg-small-en-v1.5.onnx",
+            "uar-models/config.json",
+            "uar-models/MODEL-NOTICE.txt",
+            "uar-models/special_tokens_map.json",
+            "uar-models/tokenizer_config.json",
+            "uar-models/tokenizer.json",
+            "uar-sidecar.exe",
+            "payload-manifest.json"
+          ]
+        },
+        "recordPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/published-win32-arm64-25c542c7/uar-sidecar-win32-arm64.json",
+        "archiveAsset": {
+          "apiUrl": "https://api.github.com/repos/Prometheus-AGS/universal-agent-runtime/releases/assets/628401999",
+          "contentType": "application/x-gtar",
+          "createdAt": "2026-10-10T16:14:38Z",
+          "digest": "sha256:f21627e01da84c1b9e26199bc3b458c29bc22dedab622e0fa8cc93251998bb3b",
+          "downloadCount": 0,
+          "id": "RA_kwDOQ815F84ldKdP",
+          "label": "",
+          "name": "uar-sidecar-win32-arm64.tar.gz",
+          "size": 121702155,
+          "state": "uploaded",
+          "updatedAt": "2026-10-10T16:14:43Z",
+          "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-arm64.tar.gz"
+        },
+        "recordAsset": {
+          "apiUrl": "https://api.github.com/repos/Prometheus-AGS/universal-agent-runtime/releases/assets/628401998",
+          "contentType": "application/json",
+          "createdAt": "2026-10-10T16:14:38Z",
+          "digest": "sha256:4760653b31edb931f6335a165a24c84d456e6a5dda1aef27625be2c6a3fad373",
+          "downloadCount": 0,
+          "id": "RA_kwDOQ815F84ldKdO",
+          "label": "",
+          "name": "uar-sidecar-win32-arm64.json",
+          "size": 877,
+          "state": "uploaded",
+          "updatedAt": "2026-10-10T16:14:38Z",
+          "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-arm64.json"
+        },
+        "publishedAt": "2026-10-10T16:14:43Z",
+        "releaseUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/tag/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7",
+        "recordUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-arm64.json",
+        "archiveUrl": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7/uar-sidecar-win32-arm64.tar.gz",
+        "downloadedArchive": {
+          "path": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/published-win32-arm64-25c542c7/uar-sidecar-win32-arm64.tar.gz",
+          "size": 121702155,
+          "sha256": "f21627e01da84c1b9e26199bc3b458c29bc22dedab622e0fa8cc93251998bb3b",
+          "comparedAgainstRecordAndGitHub": true,
+          "executed": false
+        },
+        "qualification": "Published archive and record downloaded once; actual bytes and SHA256 match record and GitHub asset metadata. No binary execution."
+      }
+    ],
+    "completedNativeArtifacts": [
+      {
+        "platform": "win32-arm64",
+        "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+        "workflowRun": 38061070759,
+        "nativeJobId": 114239275978,
+        "artifactId": 11674599964,
+        "artifactDigest": "sha256:64e857532c18ef1571ab10dcec1e4462ac263ad34476e8776d35ed4f3f8c54a1",
+        "record": {
+          "name": "uar-sidecar",
+          "version": "1.0.0",
+          "platform": "win32-arm64",
+          "source": "25c542c77f41abcec605dd8ae372b04f68a1801e",
+          "releaseTag": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-25c542c7",
+          "features": [
+            "server-full"
+          ],
+          "asset": "uar-sidecar-win32-arm64.tar.gz",
+          "sha256": "f21627e01da84c1b9e26199bc3b458c29bc22dedab622e0fa8cc93251998bb3b",
+          "archive": "tar.gz",
+          "binaries": [
+            "crc_fast-ec816f13e81631da.dll",
+            "LICENSE",
+            "policies/default.cedar",
+            "policies/skill-mutation.cedar",
+            "policies/tool-approval.cedar",
+            "sevenz_rust2-74faf33cd846d44a.dll",
+            "uar-models/bg-small-en-v1.5.onnx",
+            "uar-models/config.json",
+            "uar-models/MODEL-NOTICE.txt",
+            "uar-models/special_tokens_map.json",
+            "uar-models/tokenizer_config.json",
+            "uar-models/tokenizer.json",
+            "uar-sidecar.exe",
+            "payload-manifest.json"
+          ]
+        },
+        "recordPath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/ci-run-38061070759/uar-sidecar-win32-arm64.json",
+        "recordSize": 877,
+        "recordSha256": "4760653b31edb931f6335a165a24c84d456e6a5dda1aef27625be2c6a3fad373",
+        "archivePath": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902/dist/boss-sidecar/ci-run-38061070759/uar-sidecar-win32-arm64.tar.gz",
+        "archiveSize": 121702155,
+        "archiveSha256": "f21627e01da84c1b9e26199bc3b458c29bc22dedab622e0fa8cc93251998bb3b",
+        "archiveHashMatchesRecord": true,
+        "nativeJobStatus": "completed",
+        "buildAndPackageConclusion": "success",
+        "publicationPending": false,
+        "executed": false,
+        "nativeJobConclusion": "success"
+      }
+    ]
   },
   "verificationBoundary": {
     "actualActions": [
@@ -540,7 +787,9 @@
       "Cancelled both initial Mac packaging jobs by root authorization",
       "Signed and pushed the minimal longpaths checkout repair and coordinated final full-CLI gitlink at 25c542c7",
       "Created four additional immutable tags at 25c542c7 and observed four replacement deploy runs",
-      "Advanced the same eligible-clean detached local source stage to 25c542c7"
+      "Advanced the same eligible-clean detached local source stage to 25c542c7",
+      "Downloaded completed MacARM native artifact11674064200 from final-source run38061063459",
+      "Compared MacARM archive SHA256 to its produced record and staged both in final-source checkout dist/boss-sidecar; preserved prior payload backup"
     ],
     "notRun": [
       "local Rust builds",
@@ -563,5 +812,121 @@
         "qualification": "Static workflow policy check only; not production qualification. Already performed before root directed no validators; no further validator was run."
       }
     ]
+  },
+  "olderInstancePreparation": {
+    "status": "instructions-only-no-process-start",
+    "source": "308aea46ff26e7f61340281bb51f67ebe5351569",
+    "retainedBossVersion": "2.2.30",
+    "archive": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-source/uar/dist/boss-sidecar/uar-sidecar-darwin-arm64.tar.gz",
+    "record": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-source/uar/dist/boss-sidecar/uar-sidecar-darwin-arm64.json",
+    "extractedPayload": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-source/uar/dist/boss-sidecar/uar-sidecar-darwin-arm64",
+    "packagedAppBinary": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/uar-sidecar",
+    "archiveSha256": "2ad0b037d58e4a39607af4ef6507d3afebdb6ed96ee6999f7a92d4b5f712f893",
+    "binarySha256FromPayloadManifest": "ef43279c1dd81c2a0bcf1136b86caad4beeaab9b1ce8d81245cd2ba9659acf58",
+    "preferredPort": 49061,
+    "instanceId": "uar-admission-v1-20261010",
+    "ownership": "external",
+    "credentialRef": "uar-instance://uar-admission-v1-20261010",
+    "lifecycleOwnerRef": "supervisor://uar-admission-v1-20261010",
+    "steps": [
+      "At the completed boundary, copy the old archive and record to a fresh fs.mkdtempSync(path.join(os.tmpdir(), \"uar-v1-instance-20261010-\")) root before any G build overwrites retained build/dist output. Compare the copied archive SHA256 against the old record; extract its complete payload to a payload child directory.",
+      "Create separate state/tmp/uploads/skills directories in that disposable root and write an explicit config.json there. Do not use the existing UAR config, app profile, database or launch token.",
+      "Generate a fresh 32-byte lowercase hex launch token and separate fresh settings-admin key in the supervisor process; retain only in memory or the separately authorized credential store. Never print either value.",
+      "Spawn payload/uar-sidecar with argv [\"--port\", \"49061\", \"--config\", absoluteConfigPath], cwd = disposable state directory, and an explicit minimal child env assembled from the recorded environment map. Write launchToken + newline to stdin once; keep stdin open through the check.",
+      "Wait for the actual READY:<port>; use that port in the external selected-instance endpoint and credential binding, rather than assuming preferred port 49061. Query capabilities with Authorization: Bearer <freshLaunchToken>, matching Host authority and no Origin. Old source omits tool_admission_v2.",
+      "Do not let BossFang spawn the runtime. Root owns this independent disposable process. Closing its stdin requests graceful shutdown. Preserve result evidence before later cleanup."
+    ],
+    "config": {
+      "security": {
+        "jwt_required": false,
+        "settings_mutation_auth_required": true
+      },
+      "persistence": {
+        "provider": "surreal",
+        "database_url": "surrealkv://<disposableRoot>/state/runtime.db"
+      },
+      "models": {
+        "models_dir": "<disposableRoot>/payload/uar-models"
+      },
+      "llm": {
+        "embedding": {
+          "models_dir": "<disposableRoot>/payload/uar-models"
+        }
+      },
+      "file_processing": {
+        "upload_dir": "<disposableRoot>/uploads"
+      },
+      "service_instance": {
+        "instance_id": "uar-admission-v1-20261010",
+        "ownership": "external",
+        "workspace_location": "local",
+        "lifecycle_owner_ref": "supervisor://uar-admission-v1-20261010",
+        "credential_ref": "uar-instance://uar-admission-v1-20261010",
+        "workspace_ref": "workspace://uar-admission-v1-20261010"
+      },
+      "native_tools": {
+        "file_tools_enabled": false,
+        "web_fetch_enabled": false,
+        "terminal_exec_enabled": false
+      },
+      "memory": {
+        "enabled": false
+      },
+      "skill_evolution": {
+        "enabled": false
+      }
+    },
+    "childEnvironment": {
+      "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+      "TMPDIR": "<disposableRoot>/tmp",
+      "DYLD_LIBRARY_PATH": "<disposableRoot>/payload",
+      "UAR_SERVICE_INSTANCE__OWNERSHIP": "external",
+      "UAR_SECURITY__JWT_REQUIRED": "false",
+      "UAR_SECURITY__SETTINGS_ADMIN_KEY": "<fresh separate settings key in memory>",
+      "UAR_MODELS_DIR": "<disposableRoot>/payload/uar-models",
+      "UAR_BUILTIN_SKILLS_DIR": "<disposableRoot>/skills",
+      "UAR_SKILLS_WASM_BUILTIN_DIR": "<disposableRoot>/skills",
+      "UAR_SKILLS_USER_DIR": "<disposableRoot>/skills",
+      "UAR_STATIC_DIR": "<disposableRoot>/static"
+    },
+    "limitations": [
+      "No startup or old-instance operation was run during preparation; actual READY/capability response remains unverified.",
+      "Old server-full does not include in-memory-backend. Use the separately owned embedded SurrealKV database above; provider=memory would fail at startup.",
+      "Old runtime registers the standard agent skills source from the operator home as read-only; explicit --config prevents implicit home config loading. The supervisor must not inherit provider/host credentials.",
+      "Observed old surreal startup also attempts /data/ingest creation/watch. This is outside the disposable state path. If strict write containment is required, root should apply an OS write sandbox allowing the disposable root and denying shared /data writes; do not claim complete filesystem containment without that boundary."
+    ],
+    "binarySha256Actual": "ef43279c1dd81c2a0bcf1136b86caad4beeaab9b1ce8d81245cd2ba9659acf58",
+    "binaryHashMatchesManifest": true,
+    "desktopWrapper": {
+      "runtimeCredentialEnv": "BOSS_ADMISSION_V1_RUNTIME_TOKEN",
+      "adminCredentialEnv": "BOSS_ADMISSION_V1_ADMIN_KEY",
+      "instance": {
+        "id": "uar-admission-v1-20261010",
+        "name": "Owned admission v1 compatibility operation",
+        "enabled": true,
+        "ownership": "external",
+        "expectedRuntimeId": "uar-admission-v1-20261010",
+        "profile": "uar.service-instance/1",
+        "minimumVersion": "",
+        "workspaceLocation": "local",
+        "workspaceRoots": [
+          "<owned disposable native workspace>"
+        ],
+        "requiredCapabilities": [],
+        "runtimeCredentialRef": "uar-instance://uar-admission-v1-20261010",
+        "adminCredentialRef": "uar-instance://uar-admission-v1-20261010/admin",
+        "endpoints": {
+          "runtime": "http://127.0.0.1:<actual READY port>",
+          "administration": "http://127.0.0.1:<actual READY port>",
+          "models": "http://127.0.0.1:<actual READY port>",
+          "console": null
+        }
+      }
+    },
+    "archiveTopLevel": "uar-sidecar-darwin-arm64/",
+    "archiveEntryCountObserved": 17,
+    "copiedRoot": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/uar-v1-instance-20261010-JiyaBu",
+    "ingestDenial": "Startup tolerance is source inference only: old watcher task ignores create_dir_all errors and watches only if exists(). No actual sandboxed startup was run during this preparation.",
+    "copyReceipt": "docs/plans/agent-fabric-convergence/receipts/retained-v1-payload-copy-20261010.json"
   }
 }
