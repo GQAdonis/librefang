@@ -73,7 +73,7 @@ function UarWorkflowDelegation({ initial, stepName, workflowRunId }: {
           {[true, false].map(approved => <Button key={String(approved)} variant="secondary"
             className={approved ? "border-brand/50 text-brand" : ""} disabled={busy || query.isError}
             data-ui="uar-workflow-approval-decision" data-approved={approved}
-            onClick={() => approve.mutate({ bossTaskId: data.bossTaskId, approvalId, approved })}>
+            onClick={() => approve.mutate({ bossTaskId: data.bossTaskId, approvalId, expectedRevision: data.revision, approved })}>
             {t(approved ? "uar_workflow.approve" : "uar_workflow.deny")}
           </Button>)}
         </div>
