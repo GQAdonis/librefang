@@ -15,47 +15,60 @@ const repository = '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-g
 const save = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
 const safeCode = error => /^[A-Za-z0-9_.:-]{1,160}$/.test(error?.code ?? '') ? error.code : 'CUSTOMER_BOSSFANG_LIFECYCLE_UNAVAILABLE'
 
-function groupPresent(pid) {
-  try { process.kill(-pid, 0); return true } catch (error) {
-    if (error.code === 'ESRCH') return false
-    throw error
-  }
+function groupMembers(pid) {
+  return execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,uid=,state='], { encoding: 'utf8' }).split('\n')
+    .map(line => line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\S+)$/))
+    .filter(row => row && Number(row[3]) === pid)
+    .map(row => ({ pid: Number(row[1]), parentPid: Number(row[2]), processGroup: Number(row[3]),
+      uid: Number(row[4]), state: row[5] }))
 }
 
-// Only the spawned detached group is targeted; no process argv are inspected or printed.
+// Signal only this user's members of the spawned detached group; never its foreign-UID auxiliaries.
 async function ownedShutdown(child) {
-  if (!child?.pid) return { groupCreated: false, groupStopped: true, gracefulQuitConfirmed: false, forceUsed: false }
+  if (!child?.pid) return { groupCreated: false, groupStopped: true, ownedProcessesStopped: true,
+    foreignUidGroupMembers: [], gracefulQuitConfirmed: false, forceUsed: false }
   const receipt = { pid: child.pid, processGroup: child.pid, groupCreated: true,
     startedAt: new Date().toISOString(), gracefulQuitConfirmed: false, forceUsed: false, signals: [] }
+  const ownedMembers = () => groupMembers(child.pid).filter(row => row.uid === process.getuid())
+  const signalOwned = signal => {
+    for (const member of ownedMembers()) {
+      try {
+        process.kill(member.pid, signal)
+        receipt.signals.push({ target: 'owned-group-member', pid: member.pid, signal })
+      } catch (error) {
+        if (error.code !== 'ESRCH') throw error
+      }
+    }
+  }
   const untilStopped = async ms => {
     const deadline = Date.now() + ms
-    while (groupPresent(child.pid) && Date.now() < deadline) await delay(100)
-    return !groupPresent(child.pid)
+    while (ownedMembers().length && Date.now() < deadline) await delay(100)
+    return ownedMembers().length === 0
   }
-  if (groupPresent(child.pid)) {
+  if (ownedMembers().length) {
     // SIGTERM is a termination request, not evidence of a product-level graceful quit.
-    try { child.kill('SIGTERM'); receipt.signals.push({ target: 'owned-main', signal: 'SIGTERM' }) }
-    catch (error) { if (error.code !== 'ESRCH') throw error }
+    if (ownedMembers().some(member => member.pid === child.pid)) {
+      try { child.kill('SIGTERM'); receipt.signals.push({ target: 'owned-main', signal: 'SIGTERM' }) }
+      catch (error) { if (error.code !== 'ESRCH') throw error }
+    }
     if (!await untilStopped(15_000)) {
-      process.kill(-child.pid, 'SIGTERM')
-      receipt.signals.push({ target: 'owned-group', signal: 'SIGTERM' })
+      signalOwned('SIGTERM')
       if (!await untilStopped(5_000)) {
-        process.kill(-child.pid, 'SIGKILL')
-        receipt.signals.push({ target: 'owned-group', signal: 'SIGKILL' })
+        signalOwned('SIGKILL')
         receipt.forceUsed = true
         await untilStopped(3_000)
       }
     }
   }
-  receipt.groupStopped = !groupPresent(child.pid)
+  const remaining = groupMembers(child.pid)
+  receipt.groupStopped = remaining.length === 0
+  receipt.ownedProcessesStopped = remaining.every(member => member.uid !== process.getuid())
+  receipt.foreignUidGroupMembers = remaining.filter(member => member.uid !== process.getuid())
   receipt.mode = receipt.forceUsed ? 'forced-sigkill' : 'sigterm-without-forced-escalation'
   receipt.childExitCode = child.exitCode; receipt.childSignalCode = child.signalCode
   receipt.finishedAt = new Date().toISOString()
-  if (!receipt.groupStopped) receipt.remainingOwnedGroupMembers = execFileSync('/bin/ps',
-    ['-axo', 'pid=,ppid=,pgid=,state='], { encoding: 'utf8' }).split('\n')
-    .map(line => line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)$/))
-    .filter(row => row && Number(row[3]) === child.pid)
-    .map(row => ({ pid: Number(row[1]), parentPid: Number(row[2]), processGroup: Number(row[3]), state: row[4] }))
+  if (!receipt.ownedProcessesStopped)
+    receipt.remainingOwnedGroupMembers = remaining.filter(member => member.uid === process.getuid())
   return receipt
 }
 
@@ -156,7 +169,7 @@ export async function operate(installationPath, configurationPath) {
       operation.stage = phase + '-owned-app-shutdown'; persist()
       const shutdown = await ownedShutdown(child)
       operation.shutdowns.push({ phase, ...shutdown }); persist()
-      requireFact(shutdown.groupStopped, 'CUSTOMER_OWNED_GROUP_SHUTDOWN_UNCONFIRMED')
+      requireFact(shutdown.ownedProcessesStopped, 'CUSTOMER_OWNED_GROUP_SHUTDOWN_UNCONFIRMED')
       previousPid = child.pid; child = undefined; priorEvidence = evidencePath
     }
     operation.status = 'passed'; operation.functionalAcceptance = 'passed'
@@ -171,9 +184,10 @@ export async function operate(installationPath, configurationPath) {
     connection?.close()
     if (child) {
       try { operation.shutdowns.push({ phase: 'cleanup', ...await ownedShutdown(child) }) }
-      catch (error) { operation.shutdowns.push({ phase: 'cleanup', pid: child.pid, groupStopped: false, failureCode: safeCode(error) }) }
+      catch (error) { operation.shutdowns.push({ phase: 'cleanup', pid: child.pid, groupStopped: false,
+        ownedProcessesStopped: false, failureCode: safeCode(error) }) }
     }
-    if (operation.shutdowns.some(item => !item.groupStopped)) {
+    if (operation.shutdowns.some(item => !item.ownedProcessesStopped)) {
       operation.status = 'failed'; operation.failureCode = 'CUSTOMER_OWNED_GROUP_SHUTDOWN_UNCONFIRMED'
     }
     clearTimeout(budget); process.removeListener('SIGINT', abort); process.removeListener('SIGTERM', abort)

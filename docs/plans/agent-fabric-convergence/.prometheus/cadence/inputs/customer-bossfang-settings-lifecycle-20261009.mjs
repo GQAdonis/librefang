@@ -9,6 +9,7 @@ import { ipc } from '../../../scripts/c14-operation/setup.mjs'
 import { requireFact, waitFor } from '../../../scripts/c14-operation/io.mjs'
 import { action, managedConfig, openSettings, sameUar, selector, status, uarState } from '../../../scripts/c14-operation/bossfang-controls.mjs'
 import { alternateUar } from '../../../scripts/c14-operation/bossfang-boundaries.mjs'
+import { openWork } from '/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/reusable-team-operation/scenario.mjs'
 
 const save = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
 const code = error => /^[A-Za-z0-9_.:-]{1,160}$/.test(error?.code ?? '') ? error.code : 'CUSTOMER_BOSSFANG_OPERATION_FAILED'
@@ -93,6 +94,8 @@ export default async function scenario(context, configuration) {
     configuration = { ...configuration, applicationProcessId: applicationPid(context, configuration) }
     requireFact(['configure', 'reopen', 'alternate'].includes(phase), 'CUSTOMER_BOSSFANG_EXPLICIT_OPERATION_SCOPE_REQUIRED')
     signal.throwIfAborted()
+    stage = 'ordinary-onboarding'
+    await openWork(evaluate, signal)
     stage = 'managed-runtime-readiness'
     const inventory = await ipc(evaluate, 'prometheus.uar.instances.read', {})
     await ipc(evaluate, 'prometheus.uar.instances.test', { instanceId: 'managed-local' })
