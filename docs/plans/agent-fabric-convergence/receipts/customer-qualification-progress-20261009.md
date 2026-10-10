@@ -45,3 +45,11 @@ The actual local `pnpm build:mac:arm64` succeeded from Boss `e27bafa2135cd4244af
 The corrected coding operation progressed through real coordinator delegation, approved workspace read/edit/read and the bounded README change. Its reviewer then failed with `TEAM_PROVIDER_REQUEST_REJECTED`. The required complete coding/handoff/cancellation/isolation scenario remains pending; no whole-task or delivery credit is added. [Partial operation](customer-corrected-mac-2.2.26-coding-partial-20261010.json) preserves immutable original evidence. The exact upstream cause remains under investigation.
 
 The reviewed-skill operation is now being operated against the same installed package. Four remote native payload builds remain in progress. No new public release or exact-candidate installed acceptance is claimed.
+
+## Confirmed corrective causes — 2026-10-10
+
+The new synthetic representation attempt installed its exact role/grant, then failed before native HTTP: The Boss omitted the declared `agent-instances.turn` operation from its host allowlist. The one-entry repair is committed as `5b317b64c65928492f913fc41946d55ee099b472`; the actual replacement `pnpm build:mac:arm64` is running. [Observed gap and immutable provenance](customer-durable-turn-adapter-gap-20261010.json). No qualification credit is added before the affected packaged operation.
+
+The reviewer failures are separately traced to the OpenAI proxy dropping final-only tool arguments. A bounded real gateway stream reproduced empty arguments; a primary subscription Responses stream returned complete final arguments with no deltas. The isolated proxy repair preserves final arguments without duplicates and remains pending its actual binary build and operation. No UAR timeout/default widening is claimed.
+
+The Mac ARM64 native payload from UAR `1522f179...` is now published and its entire 127,899,814-byte archive matched the recorded SHA-256. [Native artifact receipt](customer-native-darwin-arm64-2.2.26-20261010.json). This is a sidecar payload, not an application installer or installed acceptance.
