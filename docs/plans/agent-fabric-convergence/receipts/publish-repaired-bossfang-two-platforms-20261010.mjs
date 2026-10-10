@@ -17,8 +17,12 @@ const receiptPath = path.join(receipts, 'repaired-bossfang-two-platform-publicat
 const gh = args => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const run = JSON.parse(gh(['run', 'view', runId, '--repo', repository, '--json', 'status,conclusion,headSha,jobs']));
-if (run.status !== 'completed' || run.conclusion !== 'success' || run.headSha !== producer)
-  throw new Error('The exact two-platform native run must finish successfully before publication.');
+const producedJobs = platforms.map(platform => run.jobs.find(job => job.name === `Native tools (${platform})`));
+if (run.headSha !== producer || producedJobs.some(job => !job ||
+  !job.steps.some(step => step.name === 'Build final native tool payload' && step.conclusion === 'success') ||
+  !job.steps.some(step => step.name.includes('upload-artifact') && step.conclusion === 'success')))
+  throw new Error('Both exact native compile and artifact-upload steps must succeed before publication.');
+// Post-build cache saving does not produce or change the uploaded native bytes.
 const output = path.join(stage, 'build', 'repaired-bossfang', runId);
 if (!fs.existsSync(output)) gh(['run', 'download', runId, '--repo', repository, '--pattern', 'native-tools-*', '--dir', output]);
 const manifest = JSON.parse(fs.readFileSync(path.join(boss, 'build/integration-artifacts.json'), 'utf8'));
@@ -49,7 +53,11 @@ fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 const receipt = { schemaVersion: 1, kind: 'repaired-bossfang-two-platform-publication',
   recordedAt: new Date().toISOString(), status: 'intent-recorded', runId, producer, source, tag,
   selected, manifestPath, manifestSha256: hash(fs.readFileSync(manifestPath)),
-  retainedOtherToolUrls: true, deferredPlatformsUploaded: false, installerPublication: false };
+  retainedOtherToolUrls: true, deferredPlatformsUploaded: false, installerPublication: false,
+  observedRun: { status: run.status, conclusion: run.conclusion,
+    jobs: producedJobs.map(job => ({ name: job.name, status: job.status, conclusion: job.conclusion,
+      successfulProductionSteps: job.steps.filter(step => step.name === 'Build final native tool payload' ||
+        step.name.includes('upload-artifact')).map(step => ({ name: step.name, conclusion: step.conclusion })) })) } }; 
 fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx' });
 try {
   gh(['release', 'create', tag, ...assets, manifestPath, '--repo', repository, '--latest=false',

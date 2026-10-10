@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "kind": "repaired-bossfang-two-platform-publication",
+  "recordedAt": "2026-10-10T21:51:11.977Z",
+  "status": "published",
+  "runId": "38084557578",
+  "producer": "0fa0b73a849b96494e1b891eeb7f461ec06476ee",
+  "source": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b",
+  "tag": "boss-tools-approval-repair-20261010-95719eae",
+  "selected": [
+    {
+      "platform": "darwin-arm64",
+      "asset": "bossfang-darwin-arm64",
+      "sha256": "e1690b6d5c389a9bddd4a04eeee71d3b626000ca2a11d920ccc732ca11cee95a",
+      "size": 176557456,
+      "source": {
+        "repository": "GQAdonis/librefang",
+        "revision": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b"
+      }
+    },
+    {
+      "platform": "win32-x64",
+      "asset": "bossfang-win32-x64.exe",
+      "sha256": "7ecb884cde42e7e9ed6b890d937300370237b24f855201217a04b3855abd7858",
+      "size": 163411968,
+      "source": {
+        "repository": "GQAdonis/librefang",
+        "revision": "95719eaefc491e6d19c84ed7bf0b7d62632d8d0b"
+      }
+    }
+  ],
+  "manifestPath": "/var/folders/ln/0wnpd96j26z2qhvx9m6hwt2r0000gn/T/boss-integrated-publisher-EkroF9/build/repaired-bossfang/38084557578/integration-artifacts.json",
+  "manifestSha256": "ffc015a53291236a82d3e3f5f4e72f53553c6c94f8af4d6b759f7aef5bd471d5",
+  "retainedOtherToolUrls": true,
+  "deferredPlatformsUploaded": false,
+  "installerPublication": false,
+  "observedRun": {
+    "status": "in_progress",
+    "conclusion": "",
+    "jobs": [
+      {
+        "name": "Native tools (darwin-arm64)",
+        "status": "completed",
+        "conclusion": "success",
+        "successfulProductionSteps": [
+          {
+            "name": "Build final native tool payload",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/upload-artifact@v5",
+            "conclusion": "success"
+          }
+        ]
+      },
+      {
+        "name": "Native tools (win32-x64)",
+        "status": "in_progress",
+        "conclusion": "",
+        "successfulProductionSteps": [
+          {
+            "name": "Build final native tool payload",
+            "conclusion": "success"
+          },
+          {
+            "name": "Run actions/upload-artifact@v5",
+            "conclusion": "success"
+          }
+        ]
+      }
+    ]
+  },
+  "releaseUrl": "https://github.com/Prometheus-AGS/the-boss/releases/tag/boss-tools-approval-repair-20261010-95719eae",
+  "assets": [
+    {
+      "name": "bossfang-darwin-arm64",
+      "size": 176557456,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-approval-repair-20261010-95719eae/bossfang-darwin-arm64",
+      "apiUrl": "https://api.github.com/repos/Prometheus-AGS/the-boss/releases/assets/629077442"
+    },
+    {
+      "name": "bossfang-win32-x64.exe",
+      "size": 163411968,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-approval-repair-20261010-95719eae/bossfang-win32-x64.exe",
+      "apiUrl": "https://api.github.com/repos/Prometheus-AGS/the-boss/releases/assets/629077441"
+    },
+    {
+      "name": "integration-artifacts.json",
+      "size": 137995,
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-approval-repair-20261010-95719eae/integration-artifacts.json",
+      "apiUrl": "https://api.github.com/repos/Prometheus-AGS/the-boss/releases/assets/629077450"
+    }
+  ],
+  "finishedAt": "2026-10-10T21:51:26.117Z"
+}
