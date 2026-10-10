@@ -19,7 +19,7 @@ pub(super) async fn dispatch_tasks_get(
 ) -> JsonRpcResponse {
     let params = match parse_task_ref(id.clone(), params) {
         Ok(params) => params,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     match refresh_task(state, &params.id, api_user.map(|user| &user.0)).await {
@@ -37,17 +37,17 @@ pub(super) async fn dispatch_tasks_cancel(
 ) -> JsonRpcResponse {
     let params = match parse_task_ref(id.clone(), params) {
         Ok(params) => params,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
-    match cancel_task(state, &params.id, api_user.map(|user| &user.0)).await {
+    match cancel_task(state, &params.id, api_user.map(|user| &user.0), params.expected_revision).await {
         Ok(Some(task)) => JsonRpcResponse::ok(id, task),
         Ok(None) => JsonRpcResponse::err(id, rpc_error::TASK_NOT_FOUND, "task not found"),
         Err(error) => JsonRpcResponse::err(id, rpc_error::TASK_CONTROL_FAILED, error),
     }
 }
 
-pub(crate) async fn refresh_task(
+async fn refresh_native_task(
     state: &AppState,
     task_id: &str,
     api_user: Option<&AuthenticatedApiUser>,
@@ -86,7 +86,7 @@ pub(crate) async fn refresh_task(
     }
 }
 
-pub(crate) async fn cancel_task(
+async fn cancel_native_task(
     state: &AppState,
     task_id: &str,
     api_user: Option<&AuthenticatedApiUser>,
@@ -129,11 +129,11 @@ pub(crate) async fn cancel_task(
 fn parse_task_ref(
     id: Option<serde_json::Value>,
     params: Option<serde_json::Value>,
-) -> Result<TaskRefParams, JsonRpcResponse> {
+) -> Result<TaskRefParams, Box<JsonRpcResponse>> {
     params
         .ok_or_else(|| "params required".to_string())
         .and_then(|value| serde_json::from_value(value).map_err(|error| error.to_string()))
-        .map_err(|error| JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, error))
+        .map_err(|error| Box::new(JsonRpcResponse::err(id, rpc_error::INVALID_PARAMS, error)))
 }
 
 #[cfg(feature = "uar-driver")]
@@ -161,4 +161,62 @@ fn can_access(task: &A2aTask, api_user: Option<&AuthenticatedApiUser>) -> bool {
     user.role >= UserRole::Admin
         || task.caller_a2a_agent_id.as_deref() == caller_scope(Some(user)).as_deref()
         || task.caller_a2a_agent_id.as_deref() == Some(&user.user_id.to_string())
+}
+
+/// Both transports share this producer; selected content is never converted
+/// into native messages, tool arguments or a replayable session.
+pub(crate) async fn refresh_task(state: &AppState, task_id: &str, user: Option<&AuthenticatedApiUser>) -> Result<Option<serde_json::Value>, String> {
+    if task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX) {
+        #[cfg(feature = "uar-driver")]
+        {
+            let Some(original) = super::delegated_view::original(state, task_id, user).await? else { return Ok(None); };
+            librefang_kernel::kernel::uar_harness::observation::observe_available(state.kernel.a2a_tasks(),
+                state.uar_run_control.as_ref(), &original.projection, original.projection.cursor).await
+                .map_err(|_| "selected_attempt_outcome_unknown".to_string())?;
+            state.kernel.reconcile_selected_jobs().await?;
+            let original = super::delegated_view::original(state, task_id, user).await?
+                .ok_or("selected_attempt_outcome_unknown")?;
+            return super::delegated_view::view(state, original).map(Some);
+        }
+        #[cfg(not(feature = "uar-driver"))]
+        return Err("selected_control_unavailable".into());
+    }
+    refresh_native_task(state, task_id, user).await?.map(serde_json::to_value)
+        .transpose().map_err(|_| "task_view_unavailable".into())
+}
+
+pub(crate) async fn cancel_task(state: &AppState, task_id: &str, user: Option<&AuthenticatedApiUser>, expected_revision: Option<u64>) -> Result<Option<serde_json::Value>, String> {
+    if task_id.starts_with(librefang_types::uar_run::UAR_SELECTED_JOB_PREFIX) {
+        #[cfg(feature = "uar-driver")]
+        {
+            // Original registered owner/intent/attempt is resolved BEFORE any
+            // control call. Native admin access never grants selected access.
+            let Some(original) = super::delegated_view::original(state, task_id, user).await? else { return Ok(None); };
+            let revision = super::delegated_view::cancel_revision(&original.projection, expected_revision)?;
+            use librefang_kernel::kernel::uar_harness::observation::{receipt, unknown};
+            let result = state.uar_run_control.cancel_selected(&original.projection, revision).await;
+            let current = match result {
+                Ok(current) => receipt(current),
+                Err(librefang_llm_drivers::drivers::uar_run::UarRunClientError::Remote { status, .. })
+                    if status == axum::http::StatusCode::CONFLICT => return Err("selected_revision_conflict".into()),
+                Err(_) => {
+                    let mut current = unknown(&original.projection);
+                    current.cancellation.requested = true;
+                    current.cancellation.cleanup_uncertain = true;
+                    current.cancellation_state = "cleanup_unconfirmed".into();
+                    current
+                }
+            };
+            persist_and_sync(state, current)?;
+            state.kernel.reconcile_selected_jobs().await?;
+            let saved = super::delegated_view::original(state, task_id, user).await?
+                .ok_or("selected_attempt_outcome_unknown")?;
+            return super::delegated_view::view(state, saved).map(Some);
+        }
+        #[cfg(not(feature = "uar-driver"))]
+        return Err("selected_control_unavailable".into());
+    }
+    let _ = expected_revision;
+    cancel_native_task(state, task_id, user).await?.map(serde_json::to_value)
+        .transpose().map_err(|_| "task_view_unavailable".into())
 }

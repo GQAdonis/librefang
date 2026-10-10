@@ -26,6 +26,7 @@ mod schedules;
 mod templates;
 mod triggers;
 mod workflow;
+mod uar_dispatch;
 
 pub use cron::*;
 pub use schedules::*;
@@ -195,6 +196,7 @@ fn workflow_to_json(
             serde_json::json!({
                 "name": s.name,
                 "agent": match &s.agent {
+                    StepAgent::UarBound { uar_bound, .. } => serde_json::json!({"uar_bound": uar_bound}),
                     StepAgent::ById { id } => serde_json::json!({"agent_id": id}),
                     StepAgent::ByName { name } => serde_json::json!({"agent_name": name}),
                     StepAgent::ByType { template } => serde_json::json!({"agent_type": template}),
@@ -231,7 +233,7 @@ fn workflow_to_json(
 ///
 /// Fixed order so the "exactly one of" rejection reads identically on every
 /// host and every request.
-const STEP_AGENT_KEYS: [&str; 3] = ["agent_id", "agent_name", "agent_type"];
+const STEP_AGENT_KEYS: [&str; 4] = ["agent_id", "agent_name", "agent_type", "uar_bound"];
 
 /// Parse the agent reference of one step in a `POST` / `PUT /api/workflows`
 /// payload, requiring **exactly one** routing key (#7712).
@@ -274,6 +276,12 @@ fn parse_step_agent(step: &serde_json::Value, step_name: &str) -> Result<StepAge
         }
     };
 
+    if key == "uar_bound" {
+        let target: librefang_types::uar_run::UarWorkflowStepTarget =
+            serde_json::from_value(step[key].clone()).map_err(|error| error.to_string())?;
+        target.validate()?;
+        return Ok(StepAgent::UarBound { uar_bound: target, step_key: step_name.to_string() });
+    }
     let value = step[key]
         .as_str()
         .ok_or_else(|| format!("Step '{step_name}': '{key}' must be a string"))?;

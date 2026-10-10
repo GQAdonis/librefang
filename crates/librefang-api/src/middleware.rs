@@ -706,6 +706,12 @@ fn apply_oidc_grant(
         role = %grant.role,
         "admitting request on an OIDC role claim mapped by external_auth.role_map"
     );
+    if let Some(provenance) = request.extensions().get::<crate::oauth::VerifiedOidcAuthentication>().cloned() {
+        // Preserve the actual configured provider and token subject, without
+        // claiming tenant/actor or issuer validation not supplied by this verifier.
+        crate::mcp_attribution::establish(request, crate::mcp_attribution::McpAuthnSource::Oidc,
+            Some(format!("oidc:{}:{}", provenance.provider_id, provenance.subject)));
+    }
     request.extensions_mut().insert(AuthenticatedApiUser {
         name: grant.name,
         role: grant.role,
@@ -2039,7 +2045,8 @@ pub async fn auth(
             .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
             .map(|ci| ci.0.ip().is_loopback())
             .unwrap_or(false);
-        if is_loopback || auth_state.allow_no_auth {
+        let local_mcp = crate::mcp_attribution::trusted_local(&request);
+        if if path == "/mcp" { local_mcp } else { is_loopback || auth_state.allow_no_auth } {
             // No auth configured + trusted origin (loopback, or explicit
             // LIBREFANG_ALLOW_NO_AUTH opt-in) means a fully-trusted local
             // operator — the same trust level as the root master credential.
@@ -2056,6 +2063,8 @@ pub async fn auth(
                 user_id: UserId(ROOT_API_KEY_USER_ID),
             });
             request.extensions_mut().insert(TrustedNoAuthCaller);
+            crate::mcp_attribution::establish(&mut request,
+                crate::mcp_attribution::McpAuthnSource::LocalTransport, None);
             return next.run(request).await;
         }
         // A deployment whose only configured credential is `[external_auth]`
@@ -2069,6 +2078,11 @@ pub async fn auth(
             OidcOutcome::Admitted => return next.run(request).await,
             OidcOutcome::Denied(resp) => return resp,
             OidcOutcome::NoGrant => {}
+        }
+        if path == "/mcp" {
+            return Response::builder().status(StatusCode::UNAUTHORIZED)
+                .header("www-authenticate", "Bearer").header("content-type", "application/json")
+                .body(Body::from("{\"error\":\"mcp_authentication_required\"}")).unwrap_or_default();
         }
         return Response::builder()
             .status(StatusCode::UNAUTHORIZED)
@@ -2144,6 +2158,11 @@ pub async fn auth(
     // credential" means.
     let mut header_auth =
         api_token.map(|token| crate::server::matches_master_token(api_key, token));
+    // The composite also carries a derived legacy dashboard credential. Only
+    // the actual plaintext/hash master match establishes MasterApiKey source.
+    let mut master_authenticated = if let Some(token) = api_token {
+        auth_state.master_key.is_master_plaintext(token).await
+    } else { false };
 
     // Master-key hash (#6613). Only reached when the constant-time comparison
     // above missed, so a plaintext-configured deployment does no hash work.
@@ -2157,6 +2176,7 @@ pub async fn auth(
         if let Some(token_str) = api_token {
             if crate::server::master_hash_matches(&master_key_hash, token_str).await {
                 header_auth = Some(true);
+                master_authenticated = true;
             }
         }
     }
@@ -2205,6 +2225,12 @@ pub async fn auth(
                     drop(write_api_key_upgrade_hint(&auth_state, token_str));
                 }
             }
+        }
+        if master_authenticated {
+            crate::mcp_attribution::establish(&mut request,
+                crate::mcp_attribution::McpAuthnSource::MasterApiKey, Some("service:master-api-key".into()));
+        } else {
+            crate::mcp_attribution::establish_legacy_dashboard(&mut request);
         }
         request.extensions_mut().insert(AuthenticatedApiUser {
             name: "root".to_string(),
@@ -2273,6 +2299,8 @@ pub async fn auth(
                     .unwrap_or(i18n::DEFAULT_LANGUAGE);
                 return rbac_denied_response(&auth_state, &method, path, role, user_id, lang);
             }
+            crate::mcp_attribution::establish(&mut request,
+                crate::mcp_attribution::McpAuthnSource::DashboardSession, Some(format!("user:{user_id}")));
             if let Some(name) = session.user_name {
                 request.extensions_mut().insert(AuthenticatedApiUser {
                     name,
@@ -2309,6 +2337,8 @@ pub async fn auth(
                 );
             }
 
+            crate::mcp_attribution::establish(&mut request,
+                crate::mcp_attribution::McpAuthnSource::UserApiKey, Some(format!("user:{}", user.user_id)));
             request.extensions_mut().insert(AuthenticatedApiUser {
                 name: user.name,
                 role: user.role,

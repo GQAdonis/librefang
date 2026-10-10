@@ -553,7 +553,7 @@ pub async fn a2a_get_task(
     {
         Ok(Some(task)) => (
             StatusCode::OK,
-            Json(serde_json::to_value(&task).unwrap_or_default()),
+            Json(task),
         ),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
@@ -578,21 +578,27 @@ pub async fn a2a_cancel_task(
     State(state): State<Arc<AppState>>,
     api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
     Path(task_id): Path<String>,
+    body: Option<Json<serde_json::Value>>,
 ) -> impl IntoResponse {
     match super::uar::delegated_tasks::cancel_task(
         &state,
         &task_id,
         api_user.as_ref().map(|user| &user.0),
+        body.as_ref().and_then(|Json(value)| value.get("expectedRevision")).and_then(serde_json::Value::as_u64),
     )
     .await
     {
         Ok(Some(task)) => (
             StatusCode::OK,
-            Json(serde_json::to_value(&task).unwrap_or_default()),
+            Json(task),
         ),
         Ok(None) => {
             ApiErrorResponse::not_found(format!("Task '{}' not found", task_id)).into_json_tuple()
         }
+        Err(error) if error == "selected_expected_revision_required" =>
+            (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": error}))),
+        Err(error) if error == "selected_revision_conflict" =>
+            (StatusCode::CONFLICT, Json(serde_json::json!({"error": error}))),
         Err(error) => ApiErrorResponse::internal(error).into_json_tuple(),
     }
 }
@@ -1389,9 +1395,22 @@ pub async fn a2a_approve_external(
 pub async fn mcp_http(
     State(state): State<Arc<AppState>>,
     api_user: Option<axum::Extension<crate::middleware::AuthenticatedApiUser>>,
+    attribution: Option<axum::Extension<crate::mcp_attribution::AuthenticatedMcpAttribution>>,
     headers: HeaderMap,
     Json(request): Json<serde_json::Value>,
 ) -> impl IntoResponse {
+    if let Some(error) = crate::mcp_attribution::requested_authority_error(&headers) {
+        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp", error, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+        return mcp_identity_error(&request, error);
+    }
+    let Some(axum::Extension(attribution)) = attribution else {
+        return mcp_identity_error(&request, "mcp_authenticated_attribution_required");
+    };
+    if api_user.as_ref().is_none_or(|user| user.0.role < crate::middleware::UserRole::Admin) {
+        return mcp_identity_error(&request, "mcp_role_not_authorized");
+    }
+    let mut attribution = attribution.0;
     // Gather all available tools (builtin + skills + MCP)
     let mut tools = builtin_tool_definitions();
     {
@@ -1456,9 +1475,18 @@ pub async fn mcp_http(
                     "Caller may not use the requested agent-scoped MCP context",
                 );
             }
-            state.kernel.agent_registry().get(requested_id)
+            let Some(entry) = state.kernel.agent_registry().get(requested_id) else {
+                return mcp_identity_error(&request, "Authorized agent context is unavailable");
+            };
+            Some(entry)
         }
     };
+
+    attribution.authorized_agent_id = caller_entry.as_ref().map(|entry| entry.id.to_string());
+    if let Ok(record) = serde_json::to_string(&attribution) {
+        state.kernel.audit().record_with_context("system", librefang_kernel::audit::AuditAction::AuthAttempt,
+            "mcp", record, api_user.as_ref().map(|user| user.0.user_id), Some("mcp".into()));
+    }
 
     // #6117: inbound peer scope of the turn that spawned the subprocess driver,
     // forwarded by `claude-code`'s `write_mcp_config` on the bridge connection.
@@ -1613,14 +1641,16 @@ pub async fn mcp_http(
         )
         .await;
 
-        return Json(serde_json::json!({
+        let mut response = serde_json::json!({
             "jsonrpc": "2.0",
             "id": request.get("id").cloned(),
             "result": {
                 "content": [{"type": "text", "text": result.content}],
                 "isError": result.is_error,
             }
-        }));
+        });
+        crate::mcp_attribution::attach(&mut response, &attribution);
+        return Json(response);
     }
 
     // For non-tools/call methods (initialize, tools/list, etc.), delegate
@@ -1640,7 +1670,8 @@ pub async fn mcp_http(
         }
         None => tools,
     };
-    let response = librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
+    let mut response = librefang_kernel::mcp_server::handle_mcp_request(&request, &tools_view).await;
+    crate::mcp_attribution::attach(&mut response, &attribution);
     Json(response)
 }
 

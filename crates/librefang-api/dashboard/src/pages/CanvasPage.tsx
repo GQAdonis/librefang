@@ -80,6 +80,7 @@ import {
   stepAgentFields,
   type StepAgentBindingValue,
 } from "../components/StepAgentBinding";
+import { UarWorkflowRunStatus } from "../components/UarWorkflowDelegations";
 import { useQueryClient } from "@tanstack/react-query";
 
 /** Shape of a node entry persisted into sessionStorage by the templates flow. */
@@ -100,7 +101,7 @@ type LoadedWorkflowStep = WorkflowStep & {
    *  assume. Reading the wrong keys left every hydrated node unbound, so a
    *  workflow without a saved layout round-tripped through the canvas as
    *  zero steps. */
-  agent?: { agent_id?: string; agent_name?: string; agent_type?: string };
+  agent?: { agent_id?: string; agent_name?: string; agent_type?: string; uar_bound?: import("../api").UarWorkflowTarget };
 };
 
 /**
@@ -915,7 +916,8 @@ function NodeConfigPanel({
           </>
         )}
 
-        <Button variant="primary" size="sm" className="w-full" onClick={handleSave}>
+        <Button variant="primary" size="sm" className="w-full" onClick={handleSave}
+          data-ui="uar-workflow-step-save" disabled={binding.source === "uar_bound" && !hasAgent}>
           {t("common.save")}
         </Button>
       </div>
@@ -1577,12 +1579,15 @@ function CanvasPageInner() {
           label: s.name,
           prompt: s.prompt_template || "",
           nodeType: "agent",
+          uarBound: s.agent?.uar_bound,
           agentId: s.agent?.agent_id,
           agentName: s.agent?.agent_name,
           agentType: s.agent?.agent_type,
           // Record which key the backend sent so the panel can leave the
           // binding again; precedence matches `stepAgentPayload`.
-          agentSource: s.agent?.agent_id
+          agentSource: s.agent?.uar_bound
+            ? "uar_bound"
+            : s.agent?.agent_id
             ? "instance"
             : s.agent?.agent_type
               ? "type"
@@ -2083,8 +2088,8 @@ function CanvasPageInner() {
         step_results?: WorkflowStepResult[];
       };
       setRunResult({
-        output: r.output || r.message || JSON.stringify(resp),
-        status: r.status || "completed",
+        output: r.output || r.message || (r.run_id ? t("uar_workflow.run_queued") : JSON.stringify(resp)),
+        status: r.status || (r.run_id ? "pending" : "completed"),
         run_id: r.run_id || "",
         step_results: r.step_results ?? [],
       });
@@ -2099,7 +2104,7 @@ function CanvasPageInner() {
     } finally {
       setRunningWorkflowId(null);
     }
-  }, [selectedWorkflow, nodes.length, ensureSavedWorkflow, toErrorMessage, showError, runInput, runWorkflowMutation, setEdges, setNodes]);
+  }, [selectedWorkflow, nodes.length, ensureSavedWorkflow, toErrorMessage, showError, runInput, t, runWorkflowMutation, setEdges, setNodes]);
 
   // Dry-run: resolve agents and expand prompts without calling any LLMs
   const handleDryRun = useCallback(async (id?: string) => {
@@ -2378,7 +2383,7 @@ function CanvasPageInner() {
                     ? t("canvas.dry_run_desc")
                     : t("canvas.run_input_hint")}
                 </p>
-                <textarea value={runInput} onChange={e => setRunInput(e.target.value)}
+                <textarea data-ui="uar-workflow-run-input" aria-label={t("canvas.run_input_hint")} value={runInput} onChange={e => setRunInput(e.target.value)}
                   placeholder={t("canvas.run_input_placeholder")}
                   rows={4} autoFocus
                   className="w-full rounded-lg border border-border-subtle bg-main px-3 py-2 text-xs outline-none focus:border-brand resize-none"
@@ -2398,7 +2403,7 @@ function CanvasPageInner() {
                     </Button>
                   ) : (
                     <>
-                      <Button variant="primary" size="sm" className="flex-1" onClick={() => handleRunConfirm()}
+                      <Button data-ui="uar-workflow-run" variant="primary" size="sm" className="flex-1" onClick={() => handleRunConfirm()}
                         disabled={!!runningWorkflowId}>
                         <Play className="w-3.5 h-3.5 mr-1" />
                         {t("canvas.run_now")}
@@ -2639,6 +2644,7 @@ function CanvasPageInner() {
               </div>
               <div className="overflow-y-auto flex-1">
                 <pre className="px-3 py-2 text-xs text-text whitespace-pre-wrap">{runResult.output}</pre>
+                {runResult.run_id && <UarWorkflowRunStatus runId={runResult.run_id} />}
                 {/* Step-level I/O */}
                 {runResult.step_results && runResult.step_results.length > 0 && (
                   <div className="px-3 pb-3 space-y-1.5 border-t border-border-subtle">

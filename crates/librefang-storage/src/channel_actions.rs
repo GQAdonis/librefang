@@ -415,7 +415,7 @@ pub enum ObserverDeliveryAdmission {
     /// The same subscription/occurrence delivery already exists.
     Replay(ObserverDeliveryReceipt),
     /// Causal policy or visited-route rule suppressed the copy.
-    Suppressed(ActionReceipt),
+    Suppressed(Box<ActionReceipt>),
 }
 
 /// Result of an observer release claim.

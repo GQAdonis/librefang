@@ -46,6 +46,7 @@ import { useCreateSchedule } from "../lib/mutations/schedules";
 import { useUIStore } from "../lib/store";
 import { extractImageRefs } from "../lib/workflowOutputImages";
 import { WorkflowStepImageGallery } from "../components/WorkflowStepImageGallery";
+import { UarWorkflowDelegations } from "../components/UarWorkflowDelegations";
 import { OperatorActionBar } from "../components/OperatorActionBar";
 import { PendingOperatorReviewsBanner } from "../components/PendingOperatorReviewsBanner";
 
@@ -151,6 +152,7 @@ const getRunOutputText = (data: ApiActionResponse | undefined): string => {
   const response = getRunMutationData(data);
   if (typeof response?.output === "string" && response.output) return response.output;
   if (typeof response?.message === "string" && response.message) return response.message;
+  if (typeof data?.run_id === "string") return data.run_id;
   return JSON.stringify(data);
 };
 
@@ -648,7 +650,8 @@ export function WorkflowsPage() {
     setDryRunResult(null);
     dryRunMutation.reset();
     try {
-      await runMutation.mutateAsync({ workflowId: selectedWorkflowId, input: buildRunInput() });
+      const result = await runMutation.mutateAsync({ workflowId: selectedWorkflowId, input: buildRunInput() });
+      if (typeof result.run_id === "string") setSelectedRunId(result.run_id);
       addToast(t("workflows.run_started", { defaultValue: "Run started" }), "success");
     } catch (err) {
       addToast(
@@ -1204,7 +1207,7 @@ export function WorkflowsPage() {
                     onChange={(v) => { paramTouchedRef.current = true; setParamValues(v); }}
                   />
                 )}
-                <textarea value={runInput} onChange={e => { paramTouchedRef.current = true; setRunInput(e.target.value); }}
+                <textarea data-ui="uar-workflow-run-input" aria-label={t("canvas.run_input_hint")} value={runInput} onChange={e => { paramTouchedRef.current = true; setRunInput(e.target.value); }}
                   placeholder={
                     detectedParams.length > 0
                       ? t("workflows.additional_context_placeholder", { defaultValue: "Additional context (optional)..." })
@@ -1213,7 +1216,7 @@ export function WorkflowsPage() {
                   rows={detectedParams.length > 0 ? 2 : 4}
                   className="w-full rounded-xl border border-border-subtle bg-main px-4 py-2.5 text-sm outline-none focus:border-brand resize-none" />
                 <div className="flex gap-2">
-                  <Button variant="primary" className="flex-1" disabled={runMutation.isPending || dryRunMutation.isPending} onClick={handleRun}>
+                  <Button data-ui="uar-workflow-run" variant="primary" className="flex-1" disabled={runMutation.isPending || dryRunMutation.isPending} onClick={handleRun}>
                     {runMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
                     {t("canvas.run_now")}
                   </Button>
@@ -1341,6 +1344,12 @@ export function WorkflowsPage() {
                 </Card>
               )}
 
+              {selectedRunId && runDetailQuery.error && <div role="alert" className="rounded-xl border border-error/30 bg-error/5 p-3 space-y-2">
+                <p className="text-xs text-error break-words">{runDetailQuery.error.message}</p>
+                <p className="text-xs text-text-dim">{t("uar_workflow.recovery_hint")}</p>
+                <Button variant="secondary" onClick={() => void runDetailQuery.refetch()}>{t("uar_workflow.refresh")}</Button>
+              </div>}
+
               {/* Run History */}
               {runsQuery.data && runsQuery.data.length > 0 && (
                 <Card padding="lg" className="space-y-3">
@@ -1383,6 +1392,7 @@ export function WorkflowsPage() {
                                 ? "border-brand bg-brand/5"
                                 : "border-border-subtle bg-main hover:bg-surface"
                             }`}
+                            data-ui="uar-workflow-run-row" data-run-id={runId}
                             onClick={() => {
                               setSelectedRunId(isSelected ? null : (runId ?? null));
                             }}>
@@ -1467,6 +1477,7 @@ export function WorkflowsPage() {
                             const fmtTokens = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
                             return (
                             <div className="ml-5 mt-1 space-y-2">
+                              <UarWorkflowDelegations run={rd} />
                               {/* Run timing header */}
                               <div className="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-surface/50 border border-border-subtle text-[10px]">
                                 <div className="flex items-center gap-1.5 text-text-dim">

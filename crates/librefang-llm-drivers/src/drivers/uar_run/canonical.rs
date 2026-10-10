@@ -50,69 +50,68 @@ fn write_canonical(value: &Value, output: &mut String) {
     }
 }
 
-pub(super) fn parse_sse_events(
-    task_id: &str,
-    revision: u64,
-    body: &str,
-) -> Result<Vec<UarRunEvent>, UarRunClientError> {
-    body.split("\n\n")
-        .filter_map(|frame| {
-            let mut cursor = None;
-            let mut event_type = None;
-            let mut data = None;
-            for line in frame.lines() {
-                if let Some(value) = line.strip_prefix("id:") {
-                    cursor = value.trim().parse::<u64>().ok();
-                } else if let Some(value) = line.strip_prefix("event:") {
-                    event_type = Some(value.trim().to_string());
-                } else if let Some(value) = line.strip_prefix("data:") {
-                    data = Some(value.trim().to_string());
-                }
-            }
-            data.map(|data| (cursor, event_type, data))
-        })
-        .filter(|(_, _, data)| !data.is_empty() && data != "[DONE]")
-        .map(|(cursor, event_type, data)| {
-            let cursor = cursor.ok_or_else(|| UarRunClientError::InvalidResponse {
-                operation: "event observation",
-                message: "SSE event omitted its monotonic id".to_string(),
-            })?;
-            let data = serde_json::from_str(&data).map_err(|error| {
-                UarRunClientError::InvalidResponse {
-                    operation: "event observation",
-                    message: error.to_string(),
-                }
-            })?;
-            Ok(UarRunEvent {
-                task_id: task_id.to_string(),
-                cursor,
-                revision,
-                event_type: event_type.unwrap_or_else(|| "message".to_string()),
-                occurred_at: None,
-                data,
-            })
-        })
-        .collect()
+// Selected policy also bounds complete frames, not only unfinished buffers.
+pub(super) const MAX_OBSERVATION_BYTES: usize = 1024 * 1024;
+pub(super) fn observation_error(message: &'static str) -> UarRunClientError {
+    UarRunClientError::InvalidResponse { operation: "event observation", message: message.into() }
 }
 
-pub(super) fn take_complete_sse_frames(
-    buffer: &mut Vec<u8>,
-) -> Result<Option<String>, UarRunClientError> {
-    const MAX_PENDING_FRAME_BYTES: usize = 1024 * 1024;
-    let Some(end) = buffer.windows(2).rposition(|bytes| bytes == b"\n\n") else {
-        if buffer.len() > MAX_PENDING_FRAME_BYTES {
-            return Err(UarRunClientError::InvalidResponse {
-                operation: "event observation",
-                message: "SSE frame exceeded the one-megabyte observation limit".to_string(),
-            });
+pub(super) fn parse_sse_events(
+    task_id: &str, revision: u64, body: &str,
+) -> Result<Vec<UarRunEvent>, UarRunClientError> {
+    let normalized = body.replace("\r\n", "\n");
+    let mut events = Vec::new();
+    for frame in normalized.split("\n\n") {
+        if frame.len() > MAX_OBSERVATION_BYTES { return Err(observation_error("observation frame exceeded limit")); }
+        let mut cursor = None;
+        let mut event_type = None;
+        let mut data = Vec::new();
+        for line in frame.lines() {
+            if let Some(value) = line.strip_prefix("id:") {
+                cursor = value.trim().parse::<u64>().ok();
+            } else if let Some(value) = line.strip_prefix("event:") {
+                event_type = Some(value.trim().to_string());
+            } else if let Some(value) = line.strip_prefix("data:") {
+                data.push(value.strip_prefix(' ').unwrap_or(value));
+            }
         }
-        return Ok(None);
-    };
-    let complete = buffer.drain(..end + 2).collect::<Vec<_>>();
-    String::from_utf8(complete)
-        .map(Some)
-        .map_err(|error| UarRunClientError::InvalidResponse {
-            operation: "event observation",
-            message: error.to_string(),
-        })
+        if data.is_empty() { continue; } // SSE keepalive only.
+        let data = data.join("\n");
+        let cursor = cursor.filter(|id| *id > 0)
+            .ok_or_else(|| observation_error("SSE event omitted its positive monotonic ID"))?;
+        let data = serde_json::from_str(&data)
+            .map_err(|_| observation_error("malformed observation JSON"))?;
+        let event = UarRunEvent { task_id: task_id.into(), cursor, revision,
+            event_type: event_type.ok_or_else(|| observation_error("missing observation type"))?,
+            occurred_at: None, data };
+        if serde_json::to_vec(&event).map_err(|_| observation_error("malformed decoded observation"))?.len() > MAX_OBSERVATION_BYTES {
+            return Err(observation_error("decoded observation exceeded limit"));
+        }
+        events.push(event);
+    }
+    Ok(events)
+}
+
+pub(super) fn take_complete_sse_frames(buffer: &mut Vec<u8>) -> Result<Option<String>, UarRunClientError> {
+    let mut start = 0;
+    let mut complete_end = 0;
+    while start < buffer.len() {
+        let delimiter = (start..buffer.len()).find_map(|index| {
+            if buffer[index..].starts_with(b"\r\n\r\n") { Some((index, 4)) }
+            else if buffer[index..].starts_with(b"\n\n") { Some((index, 2)) }
+            else { None }
+        });
+        let Some((end, width)) = delimiter else { break; };
+        if end + width - start > MAX_OBSERVATION_BYTES {
+            return Err(observation_error("observation frame exceeded limit"));
+        }
+        complete_end = end + width;
+        start = complete_end;
+    }
+    if buffer.len() - complete_end > MAX_OBSERVATION_BYTES {
+        return Err(observation_error("unfinished observation frame exceeded limit"));
+    }
+    if complete_end == 0 { return Ok(None); }
+    String::from_utf8(buffer.drain(..complete_end).collect()).map(Some)
+        .map_err(|_| observation_error("observation frame is not UTF-8"))
 }

@@ -140,7 +140,7 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
         if let Err(error) = result {
             tracing::warn!(%error, "channel route storage capability check failed");
         }
-        return Json(serde_json::json!({
+        Json(serde_json::json!({
             "profile": profile,
             "operational": operational,
             "native_source_required": true,
@@ -171,7 +171,7 @@ pub async fn channel_route_capability(State(state): State<Arc<AppState>>) -> imp
             } else {
                 serde_json::Value::String("Channel route storage could not be opened. Inspect server logs and the storage configuration.".into())
             },
-        }));
+        }))
     }
     #[cfg(not(feature = "surreal-backend"))]
     {
@@ -320,15 +320,48 @@ pub async fn reassign_channel_route(
 
 #[derive(serde::Deserialize)]
 pub struct CreateChannelObserverRequest {
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     observer_instance_id: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "observer_instance_id")]
+    _observer_instance_id: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     source: librefang_channels::channel_route::ChannelScope,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "source")]
+    _source: librefang_channels::channel_route::ChannelScope,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     source_grant_issuer: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "source_grant_issuer")]
+    _source_grant_issuer: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     source_grant_id: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "source_grant_id")]
+    _source_grant_id: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     recipient_grant_issuer: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "recipient_grant_issuer")]
+    _recipient_grant_issuer: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     recipient_grant_id: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "recipient_grant_id")]
+    _recipient_grant_id: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     recipient_grant_revision: String,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(rename = "recipient_grant_revision")]
+    _recipient_grant_revision: String,
+    #[cfg(all(feature = "surreal-backend", feature = "uar-driver"))]
     #[serde(default)]
     source_profile: Option<String>,
+    #[cfg(not(all(feature = "surreal-backend", feature = "uar-driver")))]
+    #[serde(default)]
+    #[serde(rename = "source_profile")]
+    _source_profile: Option<String>,
 }
 
 /// Register the UAR subscription first, then bind its returned stable ID to
@@ -2354,8 +2387,7 @@ pub async fn configure_sidecar_channel(
             &mut sidecars,
             &instance_name,
             entry.name, // channel_type defaults to the catalog name
-            entry.command,
-            entry.args,
+            super::sidecar_toml::SidecarCommand { command: entry.command, args: entry.args },
             &surreal_nonsecret_env,
             &managed_env_keys,
             agent.as_deref(),

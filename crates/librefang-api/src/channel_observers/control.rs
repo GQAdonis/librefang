@@ -46,7 +46,7 @@ fn require_owner(
             "An authenticated Owner credential is required for channel control",
         ));
     }
-    if !api_user.is_some_and(|user| user.role >= UserRole::Owner) {
+    if api_user.is_none_or(|user| user.role < UserRole::Owner) {
         return Err(error(
             StatusCode::FORBIDDEN,
             "channel_control_owner_required",

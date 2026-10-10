@@ -16,6 +16,74 @@ pub struct UarDefinitionIdentity {
     pub digest: String,
 }
 
+/// Public authored target for one ordinary workflow step. Private runtime
+/// credentials and host grants are attached by their existing trusted owner.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarWorkflowStepTarget {
+    pub target_binding_id: String,
+    pub workspace_id: String,
+    pub definition: UarDefinitionIdentity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
+    #[serde(default)]
+    pub run: serde_json::Map<String, serde_json::Value>,
+}
+
+impl UarWorkflowStepTarget {
+    /// Check the authored workflow persistence boundary, not UAR execution policy.
+    pub fn validate(&self) -> Result<(), String> {
+        if [&self.target_binding_id, &self.workspace_id, &self.definition.id,
+            &self.definition.version, &self.definition.digest]
+            .iter().any(|value| value.trim().is_empty())
+        {
+            return Err("UAR target requires binding, workspace and exact definition identity".into());
+        }
+        if self.delegated_host_context_id.as_ref().is_some_and(|id| id.trim().is_empty()) {
+            return Err("UAR delegated host context identity must not be empty".into());
+        }
+        for (key, value) in &self.run {
+            let valid = match key.as_str() {
+                "working_directory" | "reasoning_effort" => value.as_str().is_some(),
+                "skill_attachments" => value.as_array().is_some_and(|values| values.iter().all(serde_json::Value::is_string)),
+                _ => return Err(format!("UAR workflow run field '{key}' is not public authored configuration")),
+            };
+            if !valid { return Err(format!("UAR workflow run field '{key}' has an invalid public value type")); }
+        }
+        Ok(())
+    }
+}
+
+/// Public identity of a host-registered context. Callback resources stay private.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContext {
+    pub context_id: String,
+    pub workspace_id: String,
+    pub runtime_epoch: String,
+    pub definition: UarDefinitionIdentity,
+    pub binding: UarDelegatedHostContextBinding,
+    pub expires_at: String,
+}
+
+/// Binding revision captured by the host context's original admission authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarDelegatedHostContextBinding {
+    pub id: String,
+    pub revision: u64,
+    pub digest: String,
+}
+
+/// Correlation only: the workflow engine and UAR keep their original authorities.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UarWorkflowCorrelation {
+    pub workflow_id: String,
+    pub workflow_run_id: String,
+    pub step_name: String,
+}
+
 /// One non-secret compiler or activation diagnostic retained with a definition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -74,6 +142,9 @@ pub struct UarDelegatedRunProjection {
     pub request_digest: String,
     /// Empty only for the explicitly authored inline diagnostic.
     pub target_binding_id: String,
+    /// Original context reference, retained independently of new-run selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegated_host_context_id: Option<String>,
     #[serde(default)]
     pub definition_mode: UarDefinitionMode,
     pub workspace_id: String,
@@ -115,6 +186,14 @@ pub struct UarDelegatedRunProjection {
     pub terminal_at: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub links: serde_json::Map<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workflow: Option<UarWorkflowCorrelation>,
+    /// Actual UAR message deltas, retained for the owning ordinary workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// Existing host-issued event, never a locally generated approval request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_approval: Option<UarRunEvent>,
 }
 
 /// Admission input accepted by BossFang's control seam.
@@ -153,7 +232,7 @@ pub struct UarRunEvent {
 #[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum UarSteerOutcome {
     Accepted {
-        projection: UarDelegatedRunProjection,
+        projection: Box<UarDelegatedRunProjection>,
     },
     Unsupported {
         code: String,
@@ -171,4 +250,184 @@ pub struct UarRunRefusal {
     pub task_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub admission_id: Option<String>,
+}
+
+/// Durable product identity reused by every wake of a selected job attempt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct JobAttemptRef {
+    pub job_id: String,
+    pub attempt: u64,
+}
+
+/// Version-one, non-secret reservation metadata. No admission body is retained.
+/// Authentication must establish subject/tenant before this reaches storage.
+/// A missing tenant is valid only for an accepted single-tenant profile.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarJobAttemptReservation {
+    pub job: JobAttemptRef,
+    /// Verified local initiating principal. In service-scoped execution the
+    /// receiver authenticates the separate application credential; this value
+    /// is not a delegated remote subject or tenant assertion.
+    pub verified_subject: String,
+    pub verified_tenant: Option<String>,
+    pub workspace_id: String,
+    pub boss_task_id: String,
+    pub harness: String,
+    pub admission_id: String,
+    pub runtime_epoch: String,
+    pub request_digest: String,
+    pub definition: UarDefinitionIdentity,
+    pub credential_ref: Option<String>,
+    pub credential_revision: Option<String>,
+    pub required_capabilities: Vec<String>,
+}
+
+/// Only Created permits the caller's initial admission action. Existing means
+/// reconcile the original reservation, including after an uncertain submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UarReservationDisposition {
+    Created,
+    Existing,
+}
+
+/// A committed reservation and its current projection. A missing projection is
+/// an error/unknown outcome, never permission to reserve a replacement attempt.
+#[derive(Debug, Clone)]
+pub struct UarReservedJobAttempt {
+    pub disposition: UarReservationDisposition,
+    pub reservation: UarJobAttemptReservation,
+    pub projection: UarDelegatedRunProjection,
+}
+
+/// Non-executable durable presentation event. The observation owner must apply
+/// the accepted finite run-secret policy and message limits before construction.
+/// Raw envelopes, executable arguments and authentication headers have no field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UarAttemptPresentationEvent {
+    pub runtime_epoch: String,
+    pub task_id: String,
+    pub run_id: String,
+    pub event_id: u64,
+    pub kind: UarAttemptEventKind,
+    /// Ordered, secret-excluded human/model/tool presentation. Empty on older
+    /// metadata-only rows: historical text is unavailable, not an empty result.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<UarPresentationPart>,
+}
+
+/// Bounded event classification rather than arbitrary diagnostic/request text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UarAttemptEventKind {
+    State,
+    Output,
+    Tool,
+    Approval,
+    Usage,
+    Error,
+}
+
+/// Whether a presentation transaction advanced the persisted cursor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UarEventApplyOutcome {
+    Applied,
+    AlreadyApplied,
+}
+
+/// Text supplied after the producer applies the accepted secret-projection
+/// policy. This wrapper is NOT proof of sanitization and does not sanitize.
+/// Persisted deserialization reconstructs data only, never execution authority.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UarSecretExcludedText(String);
+
+impl UarSecretExcludedText {
+    /// The observation owner must remove the finite run's known secrets and
+    /// apply the accepted message limit first. Never pass a raw RPC envelope,
+    /// credential, authorization header or executable tool-argument object.
+    pub fn from_secret_excluded_text(text: String) -> Self {
+        Self(text)
+    }
+
+    /// Text for a non-executable downstream presentation view.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Ordered presentation only; there is deliberately no invocation/args variant.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum UarPresentationPart {
+    /// Exact observed provider values; absence is not zero and totals are never derived.
+    Usage {
+        input_tokens: Option<u64>,
+        output_tokens: Option<u64>,
+        total_tokens: Option<u64>,
+        model: Option<UarSecretExcludedText>,
+    },
+    Message {
+        speaker: UarPresentationSpeaker,
+        text: UarSecretExcludedText,
+    },
+    /// Original event decision identity paired with the explicitly observed
+    /// lookup receipt revision. This is display data, never execution authority.
+    ApprovalRequired {
+        approval_id: String,
+        admission_id: Option<String>,
+        tool_call_id: String,
+        observed_revision: u64,
+        tool_name: UarSecretExcludedText,
+        reason: UarSecretExcludedText,
+    },
+    ToolResult {
+        tool_name: UarSecretExcludedText,
+        outcome: UarPresentedToolOutcome,
+        text: UarSecretExcludedText,
+    },
+}
+
+/// A displayed conversation role, never an authenticated execution principal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UarPresentationSpeaker {
+    Human,
+    Assistant,
+}
+
+/// Observed tool outcome without arguments or executable recovery instructions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UarPresentedToolOutcome {
+    Succeeded,
+    Failed,
+    Unknown,
+}
+
+impl UarAttemptPresentationEvent {
+    /// None means historical text is unavailable (including old metadata-only
+    /// rows); callers must not fabricate output or replay an invocation.
+    pub fn retained_parts(&self) -> Option<&[UarPresentationPart]> {
+        if self.parts.is_empty() {
+            None
+        } else {
+            Some(&self.parts)
+        }
+    }
+}
+
+/// Reserved for selected durable jobs; manual admission may never claim it.
+pub const UAR_SELECTED_JOB_PREFIX: &str = "uar-job-v1-";
+
+impl JobAttemptRef {
+    /// First-release identity. Stored task IDs are UUIDs. Retry counters never
+    /// allocate new attempts; another terminal attempt requires a later policy.
+    pub fn selected_task_id(&self) -> Option<String> {
+        if self.attempt != 1 { return None; }
+        let job = uuid::Uuid::parse_str(&self.job_id).ok()?;
+        Some(format!("{UAR_SELECTED_JOB_PREFIX}{job}-1"))
+    }
 }

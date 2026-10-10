@@ -4168,7 +4168,7 @@ enum DurableRouteResult {
     Drop(String),
     Admitted {
         agent_id: AgentId,
-        dispatch: DurableDispatch,
+        dispatch: Box<DurableDispatch>,
     },
     Stop(String),
 }
@@ -4262,7 +4262,7 @@ async fn admit_durable_dispatch(
     };
 
     if resolution.addressed
-        && message.metadata.get("thread_route_agent").is_none()
+        && !message.metadata.contains_key("thread_route_agent")
         && message.target_agent.is_none()
     {
         let mut mentioned = Vec::new();
@@ -4361,13 +4361,13 @@ async fn admit_durable_dispatch(
     }
     DurableRouteResult::Admitted {
         agent_id: selected_id,
-        dispatch: DurableDispatch {
+        dispatch: Box::new(DurableDispatch {
             source,
             admission,
             handler_name,
             claimant: uuid::Uuid::new_v4().to_string(),
             causal_action_id: None,
-        },
+        }),
     }
 }
 
@@ -6006,7 +6006,7 @@ async fn dispatch_message(
             dispatch,
         } => {
             agent_id = selected;
-            Some(dispatch)
+            Some(*dispatch)
         }
         DurableRouteResult::Stop(reason) => {
             warn!(channel = ct_str, %reason, "Channel route not dispatched");
@@ -8065,7 +8065,7 @@ async fn dispatch_with_blocks(
             dispatch,
         } => {
             agent_id = selected;
-            Some(dispatch)
+            Some(*dispatch)
         }
         DurableRouteResult::Stop(reason) => {
             warn!(channel = ct_str, %reason, "Multimodal channel route not dispatched");

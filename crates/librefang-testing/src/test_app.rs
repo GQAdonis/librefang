@@ -356,6 +356,8 @@ impl TestAppState {
                     .unwrap_or_default(),
                 tmp.path().to_path_buf(),
             )),
+            #[cfg(feature = "uar-driver")]
+            uar_run_control: Default::default(),
             kernel,
             started_at: Instant::now(),
             // The mock kernel pins no embedding provider, so readiness never

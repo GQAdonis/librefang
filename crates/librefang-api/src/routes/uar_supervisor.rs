@@ -63,6 +63,8 @@ pub(crate) struct UarOperatorStatus {
     effective_binding: Option<UarEffectiveBinding>,
     compatibility: Option<UarCompatibilityDiagnostic>,
     placement: UarPlacementSupport,
+    #[serde(rename = "delegatedHostContexts")]
+    delegated_host_contexts: Vec<librefang_types::uar_run::UarDelegatedHostContext>,
 }
 
 async fn operator_status(state: &AppState) -> UarOperatorStatus {
@@ -135,6 +137,12 @@ async fn operator_status(state: &AppState) -> UarOperatorStatus {
         effective_binding,
         compatibility,
         placement: UarPlacementSupport::default(),
+        delegated_host_contexts: {
+            #[cfg(feature = "uar-driver")]
+            { librefang_llm_drivers::drivers::uar::delegated_host_contexts() }
+            #[cfg(not(feature = "uar-driver"))]
+            { Vec::new() }
+        },
     }
 }
 
@@ -152,6 +160,7 @@ pub(crate) struct ConnectRequest {
     instance: Option<UarServiceInstanceConfig>,
     bearer: Option<String>,
     workspace_id: Option<String>,
+    delegated_host_contexts: Option<Vec<librefang_types::uar_run::UarDelegatedHostContext>>,
 }
 
 #[utoipa::path(post, path = "/api/uar/connect", tag = "uar", request_body = crate::types::JsonObject,
@@ -266,6 +275,14 @@ pub(crate) async fn uar_connect(
                 let _ = state.uar_supervisor.disconnect().await;
                 state.uar_supervisor.admission_failed(&error).await;
                 return operator_error(StatusCode::BAD_GATEWAY, error);
+            }
+            if let Some(contexts) = request.delegated_host_contexts {
+                #[cfg(feature = "uar-driver")]
+                if let Err(error) = librefang_llm_drivers::drivers::uar::configure_delegated_host_contexts(contexts) {
+                    return operator_error(StatusCode::BAD_REQUEST, error);
+                }
+                #[cfg(not(feature = "uar-driver"))]
+                let _ = contexts;
             }
             Json(operator_status(&state).await).into_response()
         }
