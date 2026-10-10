@@ -86,7 +86,7 @@ impl UarRunClient {
             operation,
             status,
             message,
-            refusal,
+            refusal: refusal.map(Box::new),
         })
     }
 
@@ -165,7 +165,7 @@ impl UarRunClient {
             operation,
             status,
             message,
-            refusal,
+            refusal: refusal.map(Box::new),
         })
     }
 
@@ -242,7 +242,7 @@ pub(super) fn endpoint(base: &str, suffix: &str) -> String {
 }
 
 pub(super) fn validate_base(base: &str) -> Result<(), UarRunClientError> {
-    let url = reqwest::Url::parse(&base)
+    let url = reqwest::Url::parse(base)
         .map_err(|error| UarRunClientError::Binding(error.to_string()))?;
     let loopback = url.host_str().is_some_and(|host| {
         host == "localhost"

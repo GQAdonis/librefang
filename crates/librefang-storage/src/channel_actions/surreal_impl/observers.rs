@@ -170,7 +170,7 @@ impl ChannelActionStore {
             if let Some(existing) = self.read::<ActionReceipt>(ACTIONS, &action_id).await? {
                 match existing_admission(existing, &action_hash)? {
                     ActionAdmission::Suppressed(receipt) => {
-                        return Ok(ObserverDeliveryAdmission::Suppressed(receipt));
+                        return Ok(ObserverDeliveryAdmission::Suppressed(Box::new(receipt)));
                     }
                     _ => {
                         return Err(StorageError::Backend(
@@ -197,14 +197,20 @@ impl ChannelActionStore {
             let prepared = self.prepare_action(&action).await?;
             if !prepared.charge {
                 match self.commit_action(&prepared, None).await {
-                    Ok(()) => return Ok(ObserverDeliveryAdmission::Suppressed(prepared.receipt)),
+                    Ok(()) => {
+                        return Ok(ObserverDeliveryAdmission::Suppressed(Box::new(
+                            prepared.receipt,
+                        )));
+                    }
                     Err(error) => {
                         if let Some(existing) =
                             self.read::<ActionReceipt>(ACTIONS, &action_id).await?
                         {
                             match existing_admission(existing, &action_hash)? {
                                 ActionAdmission::Suppressed(receipt) => {
-                                    return Ok(ObserverDeliveryAdmission::Suppressed(receipt));
+                                    return Ok(ObserverDeliveryAdmission::Suppressed(Box::new(
+                                        receipt,
+                                    )));
                                 }
                                 _ => return Err(error),
                             }

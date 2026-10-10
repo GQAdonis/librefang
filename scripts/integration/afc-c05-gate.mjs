@@ -312,13 +312,14 @@ async function run() {
   check(steer.outcome === 'unsupported' && steer.code === 'capability_unsupported', 'steer was not typed unsupported');
   const pendingEvents = await eventsUntil(bossBase, admission.bossTaskId, bossAuth, events => Boolean(approvalId(events)));
   const pendingApprovalId = approvalId(pendingEvents);
+  const pendingApprovalView = await expected(bossBase, `${path}/${admission.bossTaskId}`, bossAuth, [200]);
   const wrongApproval = await request(bossBase, `${path}/${admission.bossTaskId}/approve`, {
-    ...bossAuth, method: 'POST', body: { approvalId: 'c05-wrong-approval', approved: true },
+    ...bossAuth, method: 'POST', body: { approvalId: 'c05-wrong-approval', expectedRevision: pendingApprovalView.revision, approved: true },
   });
   check(wrongApproval.status === 409, `wrong approval was not refused: ${wrongApproval.status}`);
   check((await readFile(marker, 'utf8').catch(() => '')).length === 0, 'effect ran before verified approval');
   const approved = await expected(bossBase, `${path}/${admission.bossTaskId}/approve`, {
-    ...bossAuth, method: 'POST', body: { approvalId: pendingApprovalId, approved: true },
+    ...bossAuth, method: 'POST', body: { approvalId: pendingApprovalId, expectedRevision: pendingApprovalView.revision, approved: true },
   }, [202]);
   check(approved.uarTaskId === replay.uarTaskId, 'approval changed UAR task identity');
   check(approved.effectState === 'effect_unconfirmed', 'lost approval response did not retain effect uncertainty');
@@ -383,8 +384,9 @@ async function run() {
     ...bossAuth, method: 'POST', body: { observerId: 'c05-gate-observer' },
   }, [200]);
   check(detached.detached && !detached.cancellation.requested, 'detach cancelled the UAR run');
+  const detachApprovalView = await expected(bossBase, `${path}/${detachAdmission.bossTaskId}`, bossAuth, [200]);
   await expected(bossBase, `${path}/${detachAdmission.bossTaskId}/approve`, {
-    ...bossAuth, method: 'POST', body: { approvalId: approvalId(detachEvents), approved: true },
+    ...bossAuth, method: 'POST', body: { approvalId: approvalId(detachEvents), expectedRevision: detachApprovalView.revision, approved: true },
   }, [200]);
   await until('detached run completion', async () => {
     const value = await expected(bossBase, `${path}/${detachAdmission.bossTaskId}`, bossAuth, [200]);

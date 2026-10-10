@@ -1,20 +1,25 @@
 //! Protected original-run connection recovery; never changes new-run selection.
+#[cfg(feature = "uar-driver")]
 use crate::{
     middleware::{AuthenticatedApiUser, UserRole},
     routes::AppState,
     types::api_error,
 };
+#[cfg(feature = "uar-driver")]
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
     Extension, Json,
 };
+#[cfg(feature = "uar-driver")]
 use librefang_types::config::UarServiceInstanceConfig;
+#[cfg(feature = "uar-driver")]
 use serde::Deserialize;
+#[cfg(feature = "uar-driver")]
 use std::sync::Arc;
 
-#[utoipa::path(get,path="/api/uar/connections",tag="uar",responses((status=200,description="Secret-free active original run bindings and private credential presence")))]
+#[cfg(feature = "uar-driver")]
 pub(crate) async fn connections(
     State(state): State<Arc<AppState>>,
     api_user: Option<Extension<AuthenticatedApiUser>>,
@@ -75,6 +80,7 @@ pub(crate) async fn connections(
     }
 }
 
+#[cfg(feature = "uar-driver")]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct RefreshRequest {
@@ -85,7 +91,7 @@ pub(crate) struct RefreshRequest {
     delegated_host_contexts: Option<Vec<librefang_types::uar_run::UarDelegatedHostContext>>,
 }
 
-#[utoipa::path(post,path="/api/uar/connections/refresh",tag="uar",request_body=crate::types::JsonObject,responses((status=200,description="Original connection credential replaced after exact identity, epoch and owned receipt validation"),(status=410,description="Original UAR runtime epoch no longer recoverable")))]
+#[cfg(feature = "uar-driver")]
 pub(crate) async fn refresh(
     State(state): State<Arc<AppState>>,
     api_user: Option<Extension<AuthenticatedApiUser>>,
@@ -128,7 +134,7 @@ pub(crate) async fn refresh(
                 )
             }
         };
-        match state
+        let result = state
             .uar_run_control
             .refresh_connection(
                 &projection,
@@ -136,8 +142,11 @@ pub(crate) async fn refresh(
                 &request.workspace_id,
                 request.bearer,
             )
-            .await
-        {
+            .await;
+        if super::observation::is_selected(&projection) {
+            return super::observation::control_result(&state, projection, result, "refresh");
+        }
+        match result {
             Ok(projection) => super::storage::saved_view(&state, projection, StatusCode::OK),
             Err(error) => {
                 if let Some(recovered) =

@@ -1632,6 +1632,15 @@ pub async fn auth_refresh(
 ///
 /// The grant is strictly additive. It is injected only when an operator wrote a `role_map`, and [`crate::middleware::auth`] consults it only where it was about to reject the request, so no request that succeeds today changes outcome or role.
 /// Axum runs the last-added layer first, and `server.rs` adds `middleware::auth` after this one, which is what puts the grant in extensions before the credential path looks for it.
+/// Provenance from the existing successful JWT verifier and role mapping.
+/// This does not certify issuer binding: the existing validator has no iss
+/// contract. It supplies neither a tenant nor a delegated actor mapping.
+#[derive(Clone)]
+pub(crate) struct VerifiedOidcAuthentication {
+    pub(crate) subject: String,
+    pub(crate) provider_id: String,
+}
+
 pub async fn oidc_auth_middleware(
     State(state): State<Arc<AppState>>,
     mut request: axum::http::Request<axum::body::Body>,
@@ -1699,6 +1708,9 @@ pub async fn oidc_auth_middleware(
                 if let Some(grant) =
                     role_grant_from_claims(&claims, provider, &config.role_map, &claim_values)
                 {
+                    request.extensions_mut().insert(VerifiedOidcAuthentication {
+                        subject: claims.sub.clone(), provider_id: provider.id.clone(),
+                    });
                     request.extensions_mut().insert(grant);
                 }
                 if let Some(membership) = group_membership_from_claims(

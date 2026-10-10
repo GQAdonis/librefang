@@ -96,11 +96,20 @@ impl SourceOccurrence {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RouteOutcome {
     /// One chosen handler.
-    Selected { handler: String },
+    Selected {
+        /// Identity of the chosen handler.
+        handler: String,
+    },
     /// Equal-precedence distinct handlers; no dispatch is allowed.
-    Conflict { handlers: Vec<String> },
+    Conflict {
+        /// Distinct handler identities with equal routing precedence.
+        handlers: Vec<String>,
+    },
     /// The source cannot be routed under the current capability or policy.
-    Unavailable { reason: String },
+    Unavailable {
+        /// Capability or policy reason routing is unavailable.
+        reason: String,
+    },
 }
 
 /// Auditable route proposal, excluding message content and credentials.

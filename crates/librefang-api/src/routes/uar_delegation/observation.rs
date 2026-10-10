@@ -38,6 +38,91 @@ pub(super) async fn observe(
     Ok((current, events))
 }
 
+use std::sync::Arc;
+use axum::{Extension, Json, http::StatusCode, response::{IntoResponse, Response}};
+use crate::{routes::AppState, middleware::{AuthenticatedApiUser, UserRole}, types::api_error};
+use librefang_kernel::kernel::uar_harness::{mapping, observation as selected};
+pub(super) use selected::is_selected;
+
+pub(super) fn owns_selected(
+    state: &Arc<AppState>, projection: &UarDelegatedRunProjection,
+    api_user: Option<&Extension<AuthenticatedApiUser>>,
+) -> bool {
+    api_user.is_some_and(|user| user.0.role == UserRole::Owner && user.0.owner_principal().is_some()
+        && mapping::service_initiator(state.kernel.auth_manager(), user.0.user_id)
+            .is_ok_and(|principal| principal == projection.verified_principal))
+}
+
+pub(super) async fn response(
+    state: &Arc<AppState>, projection: &UarDelegatedRunProjection, after: u64,
+) -> Response {
+    if is_selected(projection) {
+        return match selected::observe(state.kernel.a2a_tasks(), state.uar_run_control.as_ref(), projection, after).await {
+            Ok(view) => Json(view).into_response(),
+            Err(code) => api_error(StatusCode::SERVICE_UNAVAILABLE, code, code),
+        };
+    }
+    match observe(state.uar_run_control.as_ref(), projection, after).await {
+        Ok((current, events)) => match super::storage::persist_and_sync(state, current) {
+            Ok(delegation) => Json(serde_json::json!({"delegation":delegation,"events":events})).into_response(),
+            Err(response) => response,
+        },
+        Err(error) => {
+            if let Some(recovered) = UarRunClient::recovery_projection(projection, &error) {
+                return super::storage::saved_view(state, recovered, StatusCode::GONE);
+            }
+            super::errors::client_error(error)
+        }
+    }
+}
+
+pub(super) async fn lookup_response(state: &Arc<AppState>, projection: UarDelegatedRunProjection) -> Response {
+    let result = if projection.uar_task_id.is_some() {
+        state.uar_run_control.lookup(&projection).await
+    } else { state.uar_run_control.resolve(&projection).await };
+    control_result(state, projection, result, "lookup")
+}
+
+pub(super) fn control_result(
+    state: &Arc<AppState>, projection: UarDelegatedRunProjection,
+    result: Result<UarDelegatedRunProjection, UarRunClientError>, operation: &'static str,
+) -> Response {
+    match result {
+        Ok(current) => super::storage::saved_view(state, selected::receipt(current), StatusCode::OK),
+        // Exact approval/revision conflicts are definitive refusals: no new
+        // approval was resolved. Preserve the original durable outcome.
+        Err(UarRunClientError::Remote { operation: "tool approval", status, refusal: Some(ref refusal), .. })
+            if operation == "tool_approval" && status == StatusCode::CONFLICT
+                && matches!(refusal.code.as_str(), "revision_conflict" | "approval_unresolved")
+                && refusal.task_id == projection.uar_task_id
+                && refusal.admission_id.as_deref() == Some(projection.admission_key.as_str()) =>
+        {
+            api_error(StatusCode::CONFLICT, "selected_approval_conflict", "selected_approval_conflict")
+        }
+        Err(error) => {
+            // Raw remote refusal/error bodies never become selected HTTP or
+            // durable diagnostics. IDs/revisions are not rewritten or retried.
+            let status = match &error {
+                UarRunClientError::Remote { status, .. } if status.is_client_error() => *status,
+                UarRunClientError::InvalidAdmission(_) => StatusCode::BAD_REQUEST,
+                _ => StatusCode::ACCEPTED,
+            };
+            let mut unknown = selected::unknown(&projection);
+            if operation == "cancel" {
+                unknown.cancellation.requested = true;
+                unknown.cancellation.cleanup_uncertain = true;
+                unknown.cancellation_state = "cleanup_unconfirmed".into();
+            }
+            match super::storage::persist_and_sync(state, unknown) {
+                Ok(delegation) => (status, Json(serde_json::json!({
+                    "code":"selected_control_refused_or_unknown", "delegation":delegation
+                }))).into_response(),
+                Err(response) => response,
+            }
+        }
+    }
+}
+
 /// Merge a delivered workflow frame without claiming terminal receipt authority.
 pub(super) fn apply_workflow_event(
     current: &mut UarDelegatedRunProjection,

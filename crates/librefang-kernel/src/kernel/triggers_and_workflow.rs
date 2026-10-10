@@ -15,34 +15,9 @@
 
 use super::*;
 
-/// Prompt for the built-in Task Board assignee wake (issue #6728).
-///
-/// Compiled in rather than configurable: it is the fallback for an installation that declared nothing, so it has to work with no setup at all.
-/// An operator who wants different wording writes their own trigger, which then takes precedence.
-///
-/// The three-claim cap is deliberate and not arbitrary politeness.
-/// `task_claim` takes no arguments, so "drain until empty" issues byte-identical calls, and `librefang-runtime::loop_guard` blocks a tool after `block_threshold` (5) identical calls — or sooner, at `outcome_block_threshold` (3) identical results, which an empty board produces immediately.
-/// An unbounded drain therefore ends in blocked tool calls rather than an empty queue.
-/// Three claims stay clear of both limits, and since every post wakes the assignee again, a deeper backlog still drains — one wake per task, which is the accounting this fix is built on.
-const ASSIGNEE_WAKE_PROMPT: &str = "[TASK BOARD] Task {task_id} was assigned to you: \"{title}\".
-
-Claim it with `task_claim`, do the work, then record the outcome with `task_complete(task_id, result)`.
-
-`task_claim` returns the next task assigned to you, or nothing when there is none left.
-If it returns nothing, stop immediately — do not call it again.
-Claim at most 3 tasks in this activation; anything still queued is picked up on your next wake.";
-
-/// Prompt for the level-triggered reconcile wake (issue #6728).
-///
-/// Separate from `ASSIGNEE_WAKE_PROMPT` because the situation is different and saying so changes what a model does with it: this fires when work has been sitting rather than when it has just arrived, so it names the backlog instead of a single new task, and it does not imply the agent is seeing the task for the first time.
-const RECONCILE_WAKE_PROMPT: &str =
-    "[TASK BOARD] {count} task(s) assigned to you are still unclaimed, the oldest being {task_id}.
-
-Claim with `task_claim`, do the work, then record the outcome with `task_complete(task_id, result)`.
-
-`task_claim` returns the next task assigned to you, or nothing when there is none left.
-If it returns nothing, stop immediately — do not call it again.
-Claim at most 3 tasks in this activation; anything still queued is picked up on your next wake.";
+/// Scheduling description only. Dispatch replaces it with exact durable rows
+/// after claiming them; this string is never execution authority.
+const ASSIGNEE_WAKE_PROMPT: &str = "[TASK BOARD] Task {task_id} assigned: {title}";
 
 /// Whether `task_claim` actually reaches this agent, deciding whether waking it can accomplish anything.
 ///
@@ -368,6 +343,13 @@ impl LibreFangKernel {
         // `SessionId::for_trigger_fire`. audit: trigger-new-session-non-deterministic.
         let event_timestamp = event.timestamp;
 
+        let targeted_job = match &event.payload {
+            librefang_types::event::EventPayload::System(
+                librefang_types::event::SystemEvent::TaskPosted { task_id, .. }
+            ) => Some(task_id.clone()),
+            _ => None,
+        };
+
         // Publish to the event bus
         self.events.event_bus.publish(event).await;
 
@@ -403,7 +385,7 @@ impl LibreFangKernel {
         // concurrency limits — but triggers produced by the same event are
         // now guaranteed to reach agents in evaluation order, not in arbitrary
         // tokio scheduler order.
-        self.dispatch_trigger_matches(&triggered, event_timestamp);
+        self.dispatch_job_trigger_matches(&triggered, event_timestamp, targeted_job);
 
         triggered
     }
@@ -419,6 +401,13 @@ impl LibreFangKernel {
         &self,
         matches: &[crate::triggers::TriggerMatch],
         fire_time: chrono::DateTime<chrono::Utc>,
+    ) {
+        self.dispatch_job_trigger_matches(matches, fire_time, None);
+    }
+
+    fn dispatch_job_trigger_matches(
+        &self, matches: &[crate::triggers::TriggerMatch],
+        fire_time: chrono::DateTime<chrono::Utc>, targeted_job: Option<String>,
     ) {
         if let Some(weak) = self.self_handle.get() {
             // Pre-resolve per-trigger data before spawning so the spawned
@@ -438,6 +427,7 @@ impl LibreFangKernel {
                 /// What produced this dispatch — a stored trigger, or the
                 /// built-in Task Board assignee wake (#6728).
                 source: crate::triggers::TriggerMatchSource,
+                job: Option<String>,
             }
 
             let mut dispatches: Vec<TriggerDispatch> = Vec::with_capacity(matches.len());
@@ -451,6 +441,10 @@ impl LibreFangKernel {
                 let mode_override = trigger_match.session_mode_override;
                 let workflow_id = trigger_match.workflow_id.clone();
                 let source = trigger_match.source.clone();
+                let job = targeted_job.clone().or_else(|| match &source {
+                    crate::triggers::TriggerMatchSource::TaskBoardAssigneeWake { task_id } => Some(task_id.clone()),
+                    _ => None,
+                });
 
                 // For workflow-dispatch triggers, skip the agent-registry lookup —
                 // the agent_id on the TriggerMatch is the trigger owner and is not
@@ -514,6 +508,7 @@ impl LibreFangKernel {
                     agent_sem,
                     workflow_id,
                     source,
+                    job,
                 });
             }
 
@@ -560,6 +555,7 @@ impl LibreFangKernel {
                                 agent_sem,
                                 workflow_id,
                                 source,
+                                job,
                             } = d;
 
                             // (1) Global trigger lane permit.
@@ -576,6 +572,19 @@ impl LibreFangKernel {
                             } else {
                                 None
                             };
+
+                            let msg = if let Some(job) = job {
+                                let claimed = if workflow_id.is_some() {
+                                    kernel.claim_task_workflow_input(&job, &msg).await
+                                } else {
+                                    kernel.claim_native_job_prompt(aid, &[job]).await
+                                };
+                                match claimed {
+                                    Ok(Some(claimed)) => claimed,
+                                    Ok(None) => continue,
+                                    Err(_) => { warn!("Task dispatch authority unavailable; no model started"); continue; }
+                                }
+                            } else { msg };
 
                             if let Some(ref wid_str) = workflow_id {
                                 // Workflow dispatch path: resolve workflow by UUID, then by
@@ -788,6 +797,10 @@ impl LibreFangKernel {
         use crate::triggers::{TriggerMatch, TriggerMatchSource};
         use std::collections::{BTreeSet, HashMap};
 
+        // Selected outcome reconciliation is independent of native wake/TTL policy.
+        if self.reconcile_selected_jobs().await.is_err() {
+            warn!("Selected task reconciliation unavailable; original intents remain protected");
+        }
         let cfg = self.config.load();
         let grace_secs = cfg.task_board.pending_grace_secs;
         if grace_secs == 0 {
@@ -944,15 +957,15 @@ impl LibreFangKernel {
                  waking the assignee (an event-driven wake either never happened or \
                  did not result in a claim)"
             );
-            matches.push(TriggerMatch {
-                agent_id,
-                message: RECONCILE_WAKE_PROMPT
-                    .replace("{count}", &overdue.len().to_string())
-                    .replace("{task_id}", &oldest),
-                session_mode_override: None,
-                workflow_id: None,
-                source: TriggerMatchSource::TaskBoardAssigneeWake { task_id: oldest },
-            });
+            // Every dispatch carries an exact eligible ID. The dispatcher CAS
+            // returns the full already-claimed row before any model prompt.
+            for (_, task_id) in overdue {
+                matches.push(TriggerMatch {
+                    agent_id, message: String::new(), session_mode_override: None,
+                    workflow_id: None,
+                    source: TriggerMatchSource::TaskBoardAssigneeWake { task_id },
+                });
+            }
         }
 
         if !matches.is_empty() {

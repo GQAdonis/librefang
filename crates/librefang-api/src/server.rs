@@ -2374,7 +2374,10 @@ pub async fn build_router(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO)),
         )
-        .layer(cors);
+        .layer(cors)
+        .layer(axum::Extension(crate::mcp_attribution::McpDeploymentContext::from_listener(
+            listen_addr, external_auth_proxy,
+        )));
 
     // NOTE: HTTP metrics are recorded inside `request_logging` middleware via
     // `librefang_telemetry::metrics::record_http_request()`.  A separate metrics
