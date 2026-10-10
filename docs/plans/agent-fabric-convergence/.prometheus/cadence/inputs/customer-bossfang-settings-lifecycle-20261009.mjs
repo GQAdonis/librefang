@@ -96,6 +96,13 @@ export default async function scenario(context, configuration) {
     signal.throwIfAborted()
     stage = 'ordinary-onboarding'
     await openWork(evaluate, signal)
+    let workspace
+    if (phase === 'configure') {
+      stage = 'isolated-workspace-registration'
+      workspace = await evaluate(`window.api.dataApi.request(${JSON.stringify({ id: randomUUID(),
+        method: 'POST', path: '/agent-workspaces', body: { path: configuration.workspaceDirectory } })})`)
+      requireFact(!workspace?.error && workspace.data?.id, 'CUSTOMER_DISPOSABLE_WORKSPACE_REQUIRED')
+    }
     stage = 'managed-runtime-readiness'
     const inventory = await ipc(evaluate, 'prometheus.uar.instances.read', {})
     await ipc(evaluate, 'prometheus.uar.instances.test', { instanceId: 'managed-local' })
@@ -146,9 +153,6 @@ export default async function scenario(context, configuration) {
       if (!before.configured) await ipc(evaluate, 'bossfang.configure_credentials', {
         username: 'customer-disposable-operator', password: randomBytes(32).toString('base64url')
       })
-      const workspace = await evaluate(`window.api.dataApi.request(${JSON.stringify({ id: randomUUID(),
-        method: 'POST', path: '/agent-workspaces', body: { path: configuration.workspaceDirectory } })})`)
-      requireFact(!workspace?.error && workspace.data?.id, 'CUSTOMER_DISPOSABLE_WORKSPACE_REQUIRED')
       const config = { port: await freePort(), portPolicy: 'fixed', instanceId: 'managed-local',
         workspaceId: workspace.data.id }
       stage = 'first-explicit-listener'
