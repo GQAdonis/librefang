@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "integrated-post-repair-operation-configuration-binding",
+  "recordedAt": "2026-10-10T23:47:03.468Z",
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "iterationId": "7af6fe44-8007-452a-8485-25ec35204c90",
+  "candidateId": "e8d1035b-80b2-48d2-aab7-d1004e1d221d",
+  "contentManifestDigest": "584d5a6934c8c85ee13d93530e8d95b9fc3edbfa4001935c0fb59f989e158beb",
+  "releaseVersion": "2.2.31",
+  "configuration": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-operation-config-20261010.json",
+    "sha256": "eafd2a822f14b3ffeadd30f90f0af47d5eacd781acb9c946c8df70fd6698f881"
+  },
+  "evidenceRoot": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-callback-repair-2.2.31-workflow-delegation-20261010",
+  "candidate": {
+    "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "uar": "74194623b17e5db127534b0f0469f8557794d4bc",
+    "bossfang": "92bc005f3e7cc110715272b744830d2e3ccfe0d7",
+    "appAsarSha256": "f9ea1aa51a29b1cbc6e0839a54c5f071d0e5ca7b6c7ff619db337f14b500294d",
+    "uarSha256": "4e8629b6c4db5553cad3e2398290892718e208f651523eab86f67f542ba27995",
+    "bossfangSha256": "9eddb49c887b217139814c16d0d622e1325e49d5fff320417a78b29efb5ee1ec"
+  },
+  "builtSource": {
+    "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "candidateId": "e8d1035b-80b2-48d2-aab7-d1004e1d221d",
+    "contentManifestDigest": "584d5a6934c8c85ee13d93530e8d95b9fc3edbfa4001935c0fb59f989e158beb"
+  },
+  "operatedSource": {
+    "boss": "21b9c65931746056cc8913d8201716ba62893f6f",
+    "driverDiffPaths": []
+  },
+  "requiresFrozenBuildReconciliation": false,
+  "reconciliationAuthority": null,
+  "app": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app",
+  "inputRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/integrated-callback-repair-post-build-binding-request-20261010.json",
+      "sha256": "a424673febafd01eb2e266f61a509a5f0efbb9d2f556cd995f8966c38cef61b3"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-callback-repair-mac-source-record-ready-v3-input-20261010.json",
+      "sha256": "995bc1e00b3c872e31ee1725f6d98f53a9603682199a1452361c71905bfcd311"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/state.json",
+      "sha256": "3fc821c712acb72a71222f508b210ac9a1e1be2521117947836bbad858fbd0af"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-sources.json",
+      "sha256": "1d3c177c4f54c088d22dbdd7dcd5a38f04eed28a28a93ca60eefc9f9c68432ad"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-artifacts.json",
+      "sha256": "bb89f4e85cc1a6704dbb80b5adcf186efc2eb306dd882da9332c34cfccbe274e"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/local-uar-source.json",
+      "sha256": "36cb5daf462994b8624f4f428554af15534f63e65f574c1660a3b8e55bf1b3c5"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-mac-actual-build-external-receipt-20261010.json",
+      "sha256": "834b59560f323fe7e5903e7b3bf1a82ab178142bd398570fbf9df7a051f94062"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/inputs/c14-gpt-6.1-sol-context-declaration-20261008.json",
+      "sha256": "41ec0ddfec278c57d2bfd9af4c141b2fba2b524502679cbbae196a2b14e0f33b"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/bossfang-remaining-boundary-20261006-v10/composite-operation-evidence.json",
+      "sha256": "9d66552685c38b73fccb43d7c699e377de96db181d2a2b1ab4094603082d002d"
+    }
+  ],
+  "generatedOutputProvenance": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Info.plist",
+      "sha256": "862d6b494527464f12daf00fed52864880f57746c1233f2753d9863e9bce898e",
+      "classification": "Actual generated packaging output; hash is not a commit or operational acceptance"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/.uar-local-payload.json",
+      "sha256": "25c47cea7566a1c5a80966c6fe44c2aa9e91aadfe0f5dae9c020ce4fc382e99a",
+      "classification": "Actual generated packaging output; hash is not a commit or operational acceptance"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/payload-manifest.json",
+      "sha256": "b66002c45c7264a84d0f52fa756ec8da895112a880d7b0f3a0f31df1d702f03a",
+      "classification": "Actual generated packaging output; hash is not a commit or operational acceptance"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/convergence-supported-profile.json",
+      "sha256": "e23600074edafc18568fc63168467ffe16af2c901b746238ca644425f66925b1",
+      "classification": "Actual generated packaging output; hash is not a commit or operational acceptance"
+    }
+  ],
+  "buildReceipt": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-mac-actual-build-external-receipt-20261010.json",
+    "sha256": "834b59560f323fe7e5903e7b3bf1a82ab178142bd398570fbf9df7a051f94062",
+    "assertion": "Root supplied completed actual packaging receipt; writer only binds its retained bytes"
+  },
+  "operationRun": false,
+  "inferenceRun": false,
+  "authenticationProbeRun": false,
+  "candidateAcceptance": "pending",
+  "publicationScope": {
+    "required": [
+      "darwin-arm64",
+      "win32-x64"
+    ],
+    "deferred": [
+      "darwin-x64",
+      "win32-arm64"
+    ],
+    "linux": "excluded"
+  },
+  "limitations": [
+    "No launch, signing verification, native binary execution, feature qualification or installed acceptance is performed.",
+    "candidate.boss is the current driver checkout. builtSource.boss remains the actual frozen build source.",
+    "Scripts-only checkout differences require existing supported reconcile-frozen before receipt adoption; writer never performs it.",
+    "Generated resources are explicitly retained build outputs, never silently treated as clean committed source.",
+    "Prior operation receipts remain historical applicability context, never certification of this repaired candidate."
+  ]
+}

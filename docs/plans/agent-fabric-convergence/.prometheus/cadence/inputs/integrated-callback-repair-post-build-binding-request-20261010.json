@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "buildCompleted": true,
+  "boss": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+  "builtBossSource": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "operatedBossSource": "21b9c65931746056cc8913d8201716ba62893f6f",
+  "expectedHashes": {
+    "appAsarSha256": "f9ea1aa51a29b1cbc6e0839a54c5f071d0e5ca7b6c7ff619db337f14b500294d",
+    "uarSha256": "4e8629b6c4db5553cad3e2398290892718e208f651523eab86f67f542ba27995",
+    "bossfangSha256": "9eddb49c887b217139814c16d0d622e1325e49d5fff320417a78b29efb5ee1ec"
+  },
+  "buildReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-mac-actual-build-external-receipt-20261010.json",
+  "buildReceiptSha256": "834b59560f323fe7e5903e7b3bf1a82ab178142bd398570fbf9df7a051f94062",
+  "readyInputPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-callback-repair-mac-source-record-ready-v3-input-20261010.json",
+  "bindingReceiptPath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/integrated-callback-repair-operation-config-binding-20261010.json",
+  "allowScriptsOnlyDriverChanges": false,
+  "reconciliationAuthority": null
+}
