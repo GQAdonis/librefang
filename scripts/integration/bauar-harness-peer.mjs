@@ -1,4 +1,4 @@
-// Private controlled model/MCP and transparent transport faults for the HARNESS gate.
+// Private controlled model/MCP and supervisor transport faults for the HARNESS gate.
 // No UAR event, admission, approval or execution receipt is synthesized here.
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
@@ -236,17 +236,26 @@ export async function startPeer({ effectFile, mcpCredential, modelCredential }) 
 }
 
 export async function startFaultProxy() {
-  let target, fault;
+  let target, fault, supervisor;
   const observations = [], streams = new Set();
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     if (!target) { res.writeHead(503).end(); return; }
+    try {
     const pathname = new URL(req.url, target).pathname;
+    const headers = supervisor ? supervisor.headers(req, target) : req.headers;
+    if (!headers) { res.writeHead(401).end(); return; }
+    const admission = supervisor && req.method === 'POST' && pathname === '/api/uar/full-harness/v1/tasks'
+      ? await supervisor.admission(req) : undefined;
+    if (admission) {
+      headers['content-length'] = admission.length;
+      delete headers['transfer-encoding'];
+    }
     const selected = pathname.startsWith('/api/uar/full-harness/v1/');
     const item = { method: req.method, path: pathname, forwarded: false, completed: false, dropped: false };
     if (selected) observations.push(item);
     const selectedFault = fault && fault.method === req.method && fault.path.test(pathname) ? fault : undefined;
     if (selectedFault) fault = undefined;
-    const upstream = http.request(new URL(req.url, target), { method: req.method, headers: req.headers }, response => {
+    const upstream = http.request(new URL(req.url, target), { method: req.method, headers }, response => {
       item.forwarded = true;
       item.status = response.statusCode;
       if (req.method === 'POST' && pathname.endsWith('/full-harness/v1/tasks') && response.statusCode === 409) {
@@ -301,11 +310,19 @@ export async function startFaultProxy() {
       }
     });
     upstream.on('error', () => res.destroy());
-    req.pipe(upstream);
+    if (admission) upstream.end(admission);
+    else req.pipe(upstream);
+    } catch {
+      // Malformed selected input may not acquire host resources. Keep errors
+      // fixed and never copy private request bodies or credentials to output.
+      if (!res.headersSent) res.writeHead(400).end();
+      else res.destroy();
+    }
   });
   return {
     base: await listen(server), observations,
     setTarget: base => { target = base; },
+    setSupervisor: value => { supervisor = value; },
     get activeStreams() { return streams.size; },
     pauseNext(method, path) {
       assert.equal(fault, undefined);

@@ -135,8 +135,11 @@ try {
   peer = await startPeer({ effectFile: join(root, 'effects.jsonl'), mcpCredential, modelCredential });
   proxy = await startFaultProxy();
   provider = await providerFixture({ root, binary: uarBinary, source: uarSource, peer, proxy, mcpCredential, modelCredential });
+  stage = 'provider_start';
   await provider.start();
+  stage = 'provider_seed';
   selection = await provider.seed();
+  stage = 'host_start';
   await mkdir(hostRoot, { recursive: true });
   const config = { home_dir: join(hostRoot, 'home'), data_dir: join(hostRoot, 'data'), api_key: hash(master),
     task_board: { assignee_wake: false },
@@ -462,6 +465,7 @@ try {
   assert.equal(modelRequestClasses.unknown, 0, 'Unclassified physical requests cannot pass');
   assert.equal(Object.values(modelRequestClasses).reduce((sum, count) => sum + count, 0), peer.modelCalls.length);
   await writeFile(join(root, 'receipt.json'), JSON.stringify({ schemaVersion: 1, completed,
+    providerCoverage: provider.coverage(),
     executedCases: completed.length + kernelReceipt.executedCases, effects: peer.effects,
     realModelCalls: peer.modelCalls.length, modelRequestClasses, primaryAssigneeWake: false, primaryBackgroundSweep: false,
     raceAssigneeWake: true, raceTaskBoardSweep: true,
@@ -470,9 +474,13 @@ try {
 } catch (error) {
   if (stage === 'kernel_contract') await emitKernelStage(root);
   console.error(JSON.stringify({ peerMarkerlessInputShapes: peer?.modelInputShapes.filter(shape => shape.markerCount === 0) ?? [] }));
-  console.error(JSON.stringify({ harnessFailureCheckpoint: { stage, cancellationSurface, cancellationStep,
+  const checkpoint = { harnessFailureCheckpoint: { stage, cancellationSurface, cancellationStep,
     lastCompletedCase: completed.at(-1) ?? null, completedCaseCount: completed.length,
-    host: childStatus(host), provider: provider?.status() ?? null, kernel: childStatus(kernelChild) } }));
+    host: childStatus(host), provider: provider?.status() ?? null, kernel: childStatus(kernelChild) } };
+  // Persist only fixed stages and process classifications before cleanup changes
+  // their status; the coordinator intentionally discards raw stderr and errors.
+  await writeFile(join(root, 'failure-checkpoint.json'), JSON.stringify(checkpoint), { mode: 0o600, flag: 'wx' });
+  console.error(JSON.stringify(checkpoint));
   throw error;
 } finally {
   await stop(kernelChild);
