@@ -64,14 +64,18 @@
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-common.mjs",
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-bossfang.mjs",
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-native.mjs",
-        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-older-instance.mjs"
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/operations/admission-v2-older-instance.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/before-pack.js",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/scripts/convergence/report.mjs",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/build/integration-sources.json"
       ],
       "buildProducedPaths": [
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/MacOS/The Boss",
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar",
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/uar-sidecar",
         "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/dist/mac-arm64/The Boss.app/Contents/Resources/app.asar.unpacked/resources/binaries/darwin-arm64/bossfang",
-        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json"
+        "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/integrated-2.2.31-operation-config-20261010.json",
+        "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/convergence-supported-profile.json"
       ]
     },
     "target": {
