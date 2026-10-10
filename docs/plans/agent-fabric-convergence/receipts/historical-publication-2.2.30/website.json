@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "kind": "website",
+  "status": "success",
+  "releaseVersion": "2.2.30",
+  "sourceRefs": [
+    {
+      "repository": "Prometheus-AGS/the-boss",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "role": "desktop"
+    },
+    {
+      "repository": "GQAdonis/compass",
+      "revision": "d0b9e0fb3cc62a1985bd6a83c5b5ea7798d937f9",
+      "role": "compass"
+    },
+    {
+      "repository": "GQAdonis/rust-mcp-filesystem",
+      "revision": "3a8d18233aa666f7cf776d5d998a28e7b2b88d0d",
+      "role": "filesystem"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "3e8a891bcd472e18cc1c097c04b208cb93f7f78f",
+      "role": "prometheus"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+      "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+      "role": "pk"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skills-mini",
+      "revision": "838371d3b597e785b1fe264377b3f55b9ca6333f",
+      "role": "mini"
+    },
+    {
+      "repository": "Prometheus-AGS/universal-agent-runtime",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "role": "uar"
+    },
+    {
+      "repository": "Prometheus-AGS/surreal-memory-server",
+      "revision": "bfb6d49a7fe25d82ef4ad55f49c8f97e6e82c54a",
+      "role": "surreal-memory"
+    },
+    {
+      "repository": "GQAdonis/liter-llm",
+      "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+      "role": "liter-llm"
+    },
+    {
+      "repository": "GQAdonis/librefang",
+      "revision": "0899e4993ebfede3f91366b22cfe9310b2e58f69",
+      "role": "bossfang"
+    },
+    {
+      "repository": "Prometheus-AGS/prometheus-skill-system",
+      "revision": "bb8950b254825079ab382119a8c425d645a081ae",
+      "role": "skill-pack"
+    }
+  ],
+  "verifiedAt": "2026-10-10T05:49:28.142Z",
+  "evidenceRefs": [
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-release-all-four-2.2.30-live-website-2026-10-10T05-49-25-359Z-d8459430.json",
+      "sha256": "26c5136429132f82fc6d89fca30a8bfd0a72401f2ccad4d85fbbdd981e11ceef"
+    },
+    {
+      "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-release-metadata-2.2.30-2026-10-10T05-49-33-187Z-05573d3f.json",
+      "sha256": "14635d8f6c390c25172dfdd07f14907867c3d6acbc66e91a862d74e0ce45dcc2"
+    }
+  ],
+  "url": "https://the-boss.know-me.tools",
+  "deploymentId": "served-bundle:sha256:1c1265393e6451c2a5f4e257d8d31ba69efc52bc917c9d1cda7d5283f6acb284",
+  "deploymentIdentityBasis": "Observed deployed bundle content identity, not a hosting-provider deployment ID; raw live served URL/SHA and landing Git source preserved",
+  "landingSource": "326e1f19da9af19d484f5a419fe1ca1f0c4bb1d8",
+  "deployedBundle": {
+    "url": "https://the-boss.know-me.tools/assets/index-BzLm9yNP.js",
+    "startedAt": "2026-10-10T05:49:26.544Z",
+    "httpStatus": 200,
+    "completedAt": "2026-10-10T05:49:26.707Z",
+    "bytes": 344718,
+    "sha256": "1c1265393e6451c2a5f4e257d8d31ba69efc52bc917c9d1cda7d5283f6acb284"
+  },
+  "links": [
+    {
+      "platform": "darwin-arm64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-arm64.dmg",
+      "sha256": "3212dec9e296ccb5c27df1b2e862483f683716e8b3fd1a7596a63934f8398c2c",
+      "size": 711998188,
+      "version": "2.2.30"
+    },
+    {
+      "platform": "darwin-x64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-mac-x64.dmg",
+      "sha256": "08dca082b2d1ee7c59c2d784e90347fbe1c78f94149a6c6c9a4d8ca30418a7d5",
+      "size": 747847553,
+      "version": "2.2.30"
+    },
+    {
+      "platform": "win32-x64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-x64-setup.exe",
+      "sha256": "c3b4bec60df77b4a13e89562e380282b50aff21ab6176471bba288bad90cec6f",
+      "size": 531673845,
+      "version": "2.2.30"
+    },
+    {
+      "platform": "win32-arm64",
+      "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/v2.2.30/The-Boss-2.2.30-win-arm64-setup.exe",
+      "sha256": "62ad26e49dadc5f3979802d68ab4eb82234855d284bd8fb906a2ac3a159405fc",
+      "size": 494915696,
+      "version": "2.2.30"
+    }
+  ],
+  "limitations": "Static deployed release data and download availability only; no visual browser interaction, repeated full-installer download, native execution or installed acceptance. Other platforms may retain 2.2.26 unless scope is all-four."
+}

@@ -2,29 +2,29 @@
   "schemaVersion": "2",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 650,
-  "derivedRevision": 650,
+  "sourceRevision": 666,
+  "derivedRevision": 666,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 411
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 427
   },
   "conflictCount": 0,
   "phase": "integrated-runtime-release-reconciliation",
   "phaseId": "agent-fabric-convergence::integrated-runtime-release-reconciliation",
   "parentPhase": "agent-fabric-convergence",
-  "last_updated": "2026-10-10T14:29:06.192728Z",
+  "last_updated": "2026-10-10T14:49:02.015151Z",
   "last_updated_by": "kbd-runtime",
   "changes_total": 4,
-  "changes_completed": 0,
+  "changes_completed": 2,
   "implementation_total": 4,
-  "implementation_completed": 0,
+  "implementation_completed": 2,
   "completion": {
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 0,
+      "completed": 2,
       "total": 4,
-      "status": "PENDING"
+      "status": "IN_PROGRESS"
     },
     "evidence": {
       "status": "NOT_TRACKED",
@@ -51,7 +51,7 @@
     "runId": "project-20260924T180329Z",
     "primaryCounter": "implementation",
     "implementation": {
-      "completed": 26,
+      "completed": 28,
       "total": 30,
       "status": "IN_PROGRESS"
     },
@@ -75,23 +75,23 @@
     {
       "id": "afc-runtime-source-reconciliation",
       "title": "afc-runtime-source-reconciliation",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 1,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Capture and integrate latest connected fork revisions with preserved local work",
+      "tasks_done": 1,
+      "last_task_completed": "Capture and integrate latest connected fork revisions with preserved local work",
+      "next_task_pending": null,
       "blockers": []
     },
     {
       "id": "afc-cadence-historical-publication",
       "title": "afc-cadence-historical-publication",
-      "status": "IN_PROGRESS",
-      "implementation_status": "IN_PROGRESS",
+      "status": "DONE",
+      "implementation_status": "COMPLETE",
       "tasks_total": 2,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Implement and distribute historical publication adoption without delivery credit",
+      "tasks_done": 2,
+      "last_task_completed": "Operate completed Cadence repair and reconcile existing publication obligations",
+      "next_task_pending": null,
       "blockers": []
     },
     {
@@ -100,9 +100,9 @@
       "status": "IN_PROGRESS",
       "implementation_status": "IN_PROGRESS",
       "tasks_total": 3,
-      "tasks_done": 0,
-      "last_task_completed": null,
-      "next_task_pending": "Integrate UAR and BossFang admission-v2 capability and ownership contracts",
+      "tasks_done": 2,
+      "last_task_completed": "Integrate desktop capability admission, localization and dependency pointers",
+      "next_task_pending": "Produce source-matched native payloads for four supported targets",
       "blockers": []
     },
     {

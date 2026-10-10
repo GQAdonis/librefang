@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "kind": "read-only-cadence-publication-snapshot",
+  "observedAt": "2026-10-10T14:45:26.849Z",
+  "state": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/state.json",
+    "sha256": "e85bed3ec50c614ff3385e9fda7e23094a8376db203235a4baa45d091a459f3d"
+  },
+  "runId": "bce4a4a6-fccb-48f8-85d4-57ad0fb24d1f",
+  "eventsSeq": 1315,
+  "successfulDeliveries": 15,
+  "finalizedAttempts": 15,
+  "activeIterationId": null,
+  "publicationDue": true,
+  "publishedTargets": null,
+  "obligations": [
+    {
+      "id": "99a9d56d-7212-46da-98dd-de2854ff6420",
+      "candidateId": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+      "iterationId": "ba9712c7-7be4-4cfd-bad2-421dd65a23f9",
+      "contentManifestDigest": "78199275e55f42513e7b6743d2ce12559b930844e02c9ee0c0c1fbd5227cf5fe",
+      "dueAt": "2026-10-06T20:17:02.757Z",
+      "createdAt": "2026-10-06T20:17:02.811Z",
+      "dueOrdinal": 1,
+      "reasons": [
+        "manual"
+      ],
+      "policy": {
+        "mode": "manual",
+        "every": 2,
+        "platforms": [
+          "darwin-arm64",
+          "darwin-x64",
+          "win32-x64",
+          "win32-arm64"
+        ],
+        "websiteUrl": "https://the-boss.know-me.tools",
+        "procedure": {
+          "repository": "Prometheus-AGS/the-boss",
+          "workflow": "the-boss-release.yml",
+          "profile": "uar-enabled",
+          "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+          "requiredInputs": [
+            "release_version",
+            "release_profile",
+            "platforms",
+            "uar_win32_x64_record_url",
+            "uar_win32_arm64_record_url",
+            "uar_darwin_arm64_record_url",
+            "uar_darwin_x64_record_url"
+          ],
+          "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+          "landingRepository": "Know-Me-Tools/boss-landing-spot",
+          "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+        },
+        "requireMetadata": true,
+        "acceptancePlatforms": []
+      },
+      "policyDigest": "4be0d72027417bedf859a6a849dcba843b4a00bb5851716f06c00fc2486c1b70",
+      "opportunityId": "4dd807ed-2041-4e7a-88fd-afff5bc3553a",
+      "requiredEffects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ],
+      "coveredScopes": {
+        "tasks": [
+          "C14.1",
+          "C14.2",
+          "C14.3",
+          "C14.4"
+        ],
+        "changes": [
+          "afc-c14-studio-administration-and-isolated-service-consoles"
+        ],
+        "phases": [],
+        "outcomes": [
+          "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile"
+        ],
+        "deliveryClass": "teams-in-work-and-shared-bossfang-repair",
+        "owners": [
+          "boss-runtime",
+          "boss-desktop",
+          "boss-lead"
+        ],
+        "authorityRefs": [
+          "operator-approved-teams-first-plan-20261005",
+          "bossfang-selected-uar-repair-approved-20261005",
+          "operator-reply-20261006-cadence-rebaseline"
+        ]
+      },
+      "attemptIds": [],
+      "receiptIds": [],
+      "disposition": "pending"
+    },
+    {
+      "id": "4077df19-c67c-4059-9665-55988c70e012",
+      "candidateId": "af01868a-0ffa-48a1-80b2-18aefe9928fb",
+      "iterationId": "f9798578-e90d-4ccc-9c24-49128f41a96b",
+      "contentManifestDigest": "5b5cb4827c763da130f3a1d8a5ed679f5d779980d0a204254b5c0bdd970bcef7",
+      "dueAt": "2026-10-09T12:40:22.383Z",
+      "createdAt": "2026-10-09T12:40:22.383Z",
+      "dueOrdinal": 15,
+      "reasons": [
+        "count"
+      ],
+      "policy": {
+        "mode": "count",
+        "every": 2,
+        "platforms": [
+          "darwin-arm64",
+          "darwin-x64",
+          "win32-x64",
+          "win32-arm64"
+        ],
+        "websiteUrl": "https://the-boss.know-me.tools",
+        "procedure": {
+          "repository": "Prometheus-AGS/the-boss",
+          "workflow": "the-boss-release.yml",
+          "profile": "uar-enabled",
+          "sourcePolicy": "Freeze and push current release source before dispatch; derive version from that source.",
+          "requiredInputs": [
+            "release_version",
+            "release_profile",
+            "platforms",
+            "uar_win32_x64_record_url",
+            "uar_win32_arm64_record_url",
+            "uar_darwin_arm64_record_url",
+            "uar_darwin_x64_record_url"
+          ],
+          "platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+          "landingRepository": "Know-Me-Tools/boss-landing-spot",
+          "completion": "All four platform bytes published on GitHub Releases; metadata committed/pushed; landing deployed; publication-receipt.mjs confirms exact live URLs and bytes. Never record dispatch as complete."
+        },
+        "requireMetadata": true,
+        "acceptancePlatforms": []
+      },
+      "policyDigest": "166a92017f6f301b04d30d64e3af816085faafe8bee26bd5627702212ff0fa7b",
+      "opportunityId": "57bbe013-c074-4e3d-b387-4b54edfd40e5",
+      "requiredEffects": [
+        "artifact:darwin-arm64",
+        "artifact:darwin-x64",
+        "artifact:win32-x64",
+        "artifact:win32-arm64",
+        "metadata",
+        "website"
+      ],
+      "coveredScopes": {
+        "tasks": [
+          "C10.2",
+          "C10.3"
+        ],
+        "changes": [
+          "afc-c10-feedback-workflow-and-governed-connector-effects"
+        ],
+        "phases": [
+          "agent-fabric-convergence"
+        ],
+        "outcomes": [
+          "Operators run a feedback team in Work, approve its exact GitHub issue and retain the publication result across reopening."
+        ],
+        "deliveryClass": "github-feedback",
+        "owners": [
+          "boss-core.runtime",
+          "boss-core.desktop",
+          "boss-core.renderer",
+          "lead.packaging"
+        ]
+      },
+      "attemptIds": [],
+      "receiptIds": [],
+      "disposition": "pending"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "ee880ad8-722a-4f06-b7da-1b2a80f2d5d4",
+      "contentManifestDigest": "78199275e55f42513e7b6743d2ce12559b930844e02c9ee0c0c1fbd5227cf5fe",
+      "sourceRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss",
+          "revision": "b3d55f0633124d557035d8d58cdaf858511c0941",
+          "fingerprint": "144045312c1662103cee24273dd46707f7b1e74df9553366a4f811b27ab29e03",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini",
+              "revision": "e3fed05944e6b365ad74af30926b875e6857190f",
+              "fingerprint": "bd61c46c7270db96a34c2e82e76ea2fcb50c54a7c768accdafe6bb5bfde7c446",
+              "submoduleRefs": [
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/liter-llm",
+                  "name": "tools/liter-llm",
+                  "initialized": false,
+                  "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+                  "name": "tools/prometheus-knowledge",
+                  "initialized": false,
+                  "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/afc-c10-boss/resources/prometheus-skills-mini/tools/surreal-memory-server",
+                  "name": "tools/surreal-memory-server",
+                  "initialized": false,
+                  "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+                  "workingTree": "unobserved"
+                }
+              ],
+              "name": "resources/prometheus-skills-mini"
+            }
+          ]
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence",
+          "revision": "2be479bd63a80c7fc3bd2699aac936c759a320be",
+          "fingerprint": "71db06a61288d8da4efb2b592ea18064910c5a9c4378024864b80bc7751f7ca0"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/bossfang-selected-uar-release",
+          "revision": "295ff50201fbb09a6e22390de85d9b374c3d9edd",
+          "fingerprint": "d8108776e232bdb96e92b0694a300f049dac28f93711ac76d27bd9a9b28776e5"
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work",
+          "revision": "035678b6290353a5988a5a96668d08a9781b1471",
+          "fingerprint": "73f2b81a755be572080d3195bfade43aeb2fc49bc7d1100d38caa7c57f50bd93",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/crates/prometheus-skill-system",
+              "name": "crates/prometheus-skill-system",
+              "initialized": false,
+              "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/frontend/packages/prometheus-entity-management",
+              "name": "frontend/packages/prometheus-entity-management",
+              "initialized": false,
+              "revision": "959839a88e65704014bab0bdd055df17fb210298",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/models.dev",
+              "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+              "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+              "name": "models.dev"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+              "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+              "name": "vendor/git/liter-llm"
+            },
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c14-teams-work/vendor/git/rust-mcp-filesystem",
+              "name": "vendor/git/rust-mcp-filesystem",
+              "initialized": false,
+              "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+              "workingTree": "unobserved"
+            }
+          ]
+        }
+      ],
+      "scope": {
+        "tasks": [
+          "C14.1",
+          "C14.2",
+          "C14.3",
+          "C14.4"
+        ],
+        "changes": [
+          "afc-c14-studio-administration-and-isolated-service-consoles"
+        ],
+        "phases": [],
+        "outcomes": [
+          "Operate a coding team from Work with selected workspace, natural-language task, worker/reviewer handoff, artifacts, approvals and durable reopening using the packaged normal UAR profile"
+        ],
+        "deliveryClass": "teams-in-work-and-shared-bossfang-repair",
+        "owners": [
+          "boss-runtime",
+          "boss-desktop",
+          "boss-lead"
+        ],
+        "authorityRefs": [
+          "operator-approved-teams-first-plan-20261005",
+          "bossfang-selected-uar-repair-approved-20261005",
+          "operator-reply-20261006-cadence-rebaseline"
+        ]
+      }
+    },
+    {
+      "id": "af01868a-0ffa-48a1-80b2-18aefe9928fb",
+      "contentManifestDigest": "5b5cb4827c763da130f3a1d8a5ed679f5d779980d0a204254b5c0bdd970bcef7",
+      "sourceRefs": [
+        {
+          "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+          "revision": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
+          "fingerprint": "3b72f7e2f1a8bd9ced20bcc437fd1f16945688878d13a5aff8f8924cca662fbe",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system",
+              "revision": "e57421a86fae08ac4d1e3a625a213cf3f3eb98bc",
+              "fingerprint": "46df205b5a99a08b56b49bd2336e0eb497a3c3d0467cc318e3d6d7972df1b953",
+              "submoduleRefs": [
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/artifact-refiner",
+                  "name": "skills/imported/artifact-refiner",
+                  "initialized": false,
+                  "revision": "18d000f3e46952418f682159b227dbf71ce61dcb",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/prometheus-entity-management",
+                  "name": "skills/imported/prometheus-entity-management",
+                  "initialized": false,
+                  "revision": "d1588d8c93cc267774d1911e8bd53bd3918a7f12",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/skills/imported/sycophancy-correction",
+                  "name": "skills/imported/sycophancy-correction",
+                  "initialized": false,
+                  "revision": "bc348fffb4b622c142c1082b281dd2f44b74d37b",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/cowork-skills",
+                  "name": "tools/cowork-skills",
+                  "initialized": false,
+                  "revision": "77edcf8a49237dc9b8f6733e794c48fa4e6da832",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/disk-space-guardian",
+                  "name": "tools/disk-space-guardian",
+                  "initialized": false,
+                  "revision": "26487db64d5c44b00b57d19a649a82632dfe94d3",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/liter-llm",
+                  "name": "tools/liter-llm",
+                  "initialized": false,
+                  "revision": "c5c6caac617eb931cd5009146a70831422ec236c",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/openai-proxy",
+                  "name": "tools/openai-proxy",
+                  "initialized": false,
+                  "revision": "7833663d3b46f7467f2017f2cce392c09ec1b7ac",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/prometheus-knowledge",
+                  "name": "tools/prometheus-knowledge",
+                  "initialized": false,
+                  "revision": "01a1dbe0d97156b27c82ee0ec4a0a5b746f18df1",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/crates/prometheus-skill-system/tools/surreal-memory-server",
+                  "name": "tools/surreal-memory-server",
+                  "initialized": false,
+                  "revision": "4161fc4845d59fc06fc748f310410a0011353ec7",
+                  "workingTree": "unobserved"
+                }
+              ],
+              "name": "crates/prometheus-skill-system"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/frontend/packages/prometheus-entity-management",
+              "name": "frontend/packages/prometheus-entity-management",
+              "initialized": false,
+              "revision": "959839a88e65704014bab0bdd055df17fb210298",
+              "workingTree": "unobserved"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/models.dev",
+              "revision": "f97df19af40bc322ccbffc91138f360154940a63",
+              "fingerprint": "6c10241cdf7bad5421fad00002a82597ae241090a7227ce4aac9cb33ce08a202",
+              "name": "models.dev"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586",
+              "fingerprint": "4624fb39d06828acfa906ef8915ffd0c570fa173a3e1ae6a09a45be445e8a097",
+              "name": "vendor/git/liter-llm"
+            },
+            {
+              "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context/vendor/git/rust-mcp-filesystem",
+              "revision": "21f5f684c0a15a7536b947c5c02a8949e49d3062",
+              "fingerprint": "688a5731b5cee24dba036d8863de1ad3aac75a9213547e575625e96636a45774",
+              "name": "vendor/git/rust-mcp-filesystem"
+            }
+          ]
+        },
+        {
+          "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+          "revision": "e4addba828f4b0f67caef1bdd49925f1f9c767f2",
+          "fingerprint": "08adc9b9534195029ea927afcca867313f46906da1544cb5ad150f8ab4736de2",
+          "submoduleRefs": [
+            {
+              "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini",
+              "revision": "3a8a78c8a993401a67983c97bf9baac1835c1175",
+              "fingerprint": "021f05da782bfe974b09a45f15cefa410d7c5b0effacecf7b8d736bdc2284d4a",
+              "submoduleRefs": [
+                {
+                  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/liter-llm",
+                  "name": "tools/liter-llm",
+                  "initialized": false,
+                  "revision": "12a2fae9675e34b88e9373caa2bca9959f416493",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/prometheus-knowledge",
+                  "name": "tools/prometheus-knowledge",
+                  "initialized": false,
+                  "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef",
+                  "workingTree": "unobserved"
+                },
+                {
+                  "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance/resources/prometheus-skills-mini/tools/surreal-memory-server",
+                  "name": "tools/surreal-memory-server",
+                  "initialized": false,
+                  "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6",
+                  "workingTree": "unobserved"
+                }
+              ],
+              "name": "resources/prometheus-skills-mini"
+            }
+          ]
+        }
+      ],
+      "scope": {
+        "tasks": [
+          "C10.2",
+          "C10.3"
+        ],
+        "changes": [
+          "afc-c10-feedback-workflow-and-governed-connector-effects"
+        ],
+        "phases": [
+          "agent-fabric-convergence"
+        ],
+        "outcomes": [
+          "Operators run a feedback team in Work, approve its exact GitHub issue and retain the publication result across reopening."
+        ],
+        "deliveryClass": "github-feedback",
+        "owners": [
+          "boss-core.runtime",
+          "boss-core.desktop",
+          "boss-core.renderer",
+          "lead.packaging"
+        ]
+      }
+    }
+  ]
+}

@@ -2,12 +2,12 @@
   "schemaVersion": "5",
   "generatedBy": "kbd-runtime",
   "projectionContractVersion": 2,
-  "sourceRevision": 650,
-  "derivedRevision": 650,
+  "sourceRevision": 666,
+  "derivedRevision": 666,
   "frontier": {
     "0bfee1ee-c15e-4659-b39b-7aae7dbec89c": 5,
     "a23247c7-e278-4036-90b2-9536fe03e75f": 234,
-    "c67ff135-541a-40dd-9600-b528d8bccbc2": 411
+    "c67ff135-541a-40dd-9600-b528d8bccbc2": 427
   },
   "conflictCount": 0,
   "projectId": "939f7f6c-8f47-4343-9a3d-934726697715",
@@ -25,19 +25,19 @@
   "phase": "agent-fabric-convergence",
   "parentPhase": "agent-fabric-convergence",
   "childPointer": "integrated-runtime-release-reconciliation",
-  "change": "afc-runtime-source-reconciliation",
-  "currentTask": "1",
+  "change": "afc-runtime-admission-v2-release",
+  "currentTask": "3",
   "status": "running",
   "lifecycle": "running",
   "stageId": "execute",
   "stageStatus": "IN_PROGRESS",
   "completionMetric": "implementation",
-  "implementationCompleted": 26,
+  "implementationCompleted": 28,
   "implementationTotal": 30,
   "planRevision": 11,
-  "revision": 650,
+  "revision": 666,
   "exactNextCommand": "/kbd-assess agent-fabric-convergence > integrated-runtime-release-reconciliation",
-  "nextChange": "afc-runtime-source-reconciliation",
-  "nextTask": "1",
-  "updatedAt": "2026-10-10T14:29:06.192728Z"
+  "nextChange": "afc-runtime-admission-v2-release",
+  "nextTask": "3",
+  "updatedAt": "2026-10-10T14:49:02.015151Z"
 }

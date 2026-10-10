@@ -1,0 +1,491 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-release-input-preparation",
+  "recordedAt": "2026-10-10T14:39:46.013Z",
+  "status": "uar-native-builds-launched-integration-dispatch-still-planned",
+  "ownership": "Root owns final source pins, manifests, tags, workflow dispatch, builds and publication. This receipt is read-only release preparation.",
+  "releaseCandidate": {
+    "version": "2.2.31",
+    "availability": "GitHub tag and release queries both returned HTTP404 during this session; recheck before publication."
+  },
+  "platforms": [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-x64",
+    "win32-arm64"
+  ],
+  "nativeReuse": [
+    {
+      "runId": "37231316550",
+      "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37231316550",
+      "headSha": "e50f0bc81811887ed416d6a8c2f7075da3905237",
+      "status": "completed",
+      "conclusion": "failure",
+      "tool": "pk",
+      "frozenSource": {
+        "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+        "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+      },
+      "nativeJobs": [
+        {
+          "id": 111521376210,
+          "name": "Native tools (win32-arm64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111521376219,
+          "name": "Native tools (win32-x64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111521376227,
+          "name": "Native tools (darwin-x64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111521376263,
+          "name": "Native tools (darwin-arm64)",
+          "conclusion": "success"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 11314461057,
+          "name": "native-tools-win32-arm64",
+          "expired": false
+        },
+        {
+          "id": 11314291765,
+          "name": "native-tools-darwin-x64",
+          "expired": false
+        },
+        {
+          "id": 11314285622,
+          "name": "native-tools-win32-x64",
+          "expired": false
+        },
+        {
+          "id": 11313757400,
+          "name": "native-tools-darwin-arm64",
+          "expired": false
+        }
+      ],
+      "interpretation": "All four native jobs succeeded. The overall run failed in publication. Reuse retains actual recorded source and checksum; it does not certify rebuilt source or installer acceptance."
+    },
+    {
+      "runId": "37233059176",
+      "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37233059176",
+      "headSha": "a86a5690c11ae6b98b12af0b99f8ecf9b656c6d0",
+      "status": "completed",
+      "conclusion": "failure",
+      "tool": "liter-llm",
+      "frozenSource": {
+        "repository": "GQAdonis/liter-llm",
+        "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+      },
+      "nativeJobs": [
+        {
+          "id": 111526645207,
+          "name": "Native tools (win32-x64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111526645247,
+          "name": "Native tools (darwin-arm64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111526645283,
+          "name": "Native tools (darwin-x64)",
+          "conclusion": "success"
+        },
+        {
+          "id": 111526645284,
+          "name": "Native tools (win32-arm64)",
+          "conclusion": "success"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 11314851537,
+          "name": "native-tools-darwin-x64",
+          "expired": false
+        },
+        {
+          "id": 11314607753,
+          "name": "native-tools-win32-arm64",
+          "expired": false
+        },
+        {
+          "id": 11314532651,
+          "name": "native-tools-darwin-arm64",
+          "expired": false
+        },
+        {
+          "id": 11314499556,
+          "name": "native-tools-win32-x64",
+          "expired": false
+        }
+      ],
+      "interpretation": "All four native jobs succeeded. The overall run failed in publication. Reuse retains actual recorded source and checksum; it does not certify rebuilt source or installer acceptance."
+    }
+  ],
+  "immutablePublication": {
+    "tag": "boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2",
+    "releaseAssetId": 610655884,
+    "manifestUrl": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/integration-artifacts.json",
+    "packages": [
+      {
+        "name": "pk",
+        "version": "1.11.0",
+        "packages": {
+          "darwin-arm64": {
+            "source": {
+              "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+            },
+            "size": 8429968,
+            "sha256": "35516b69ea50ba5423e1946b0edebd9fae1c14cccd99216efaa9dc0507afb975",
+            "binaries": [
+              "pk"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/pk-darwin-arm64"
+          },
+          "darwin-x64": {
+            "source": {
+              "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+            },
+            "size": 8620796,
+            "sha256": "6d3677e70091caade1e639d5cc938ca4db7b366bcab26ced57bdaf3767513ebb",
+            "binaries": [
+              "pk"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/pk-darwin-x64"
+          },
+          "win32-arm64": {
+            "source": {
+              "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+            },
+            "size": 6351360,
+            "sha256": "2e8114c9d1dd37c986d9fa481ba917458567692c8bf6cb8742a7e6a5465ab31b",
+            "binaries": [
+              "pk.exe"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/pk-win32-arm64.exe"
+          },
+          "win32-x64": {
+            "source": {
+              "repository": "Prometheus-AGS/prometheus-knowledge-rs",
+              "revision": "4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef"
+            },
+            "size": 7420416,
+            "sha256": "6e9cc95306550332d64ceff0d5a4ad4dd1fcdc4b765ef4a53ea48d1145edb795",
+            "binaries": [
+              "pk.exe"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/pk-win32-x64.exe"
+          }
+        }
+      },
+      {
+        "name": "liter-llm",
+        "version": "2.1.1",
+        "packages": {
+          "darwin-arm64": {
+            "source": {
+              "repository": "GQAdonis/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+            },
+            "size": 27878024,
+            "sha256": "c75e4e37637a9c8bd41ad72fb0b1819e42b41f23c6cf0cb7aabb58c70639057c",
+            "binaries": [
+              "liter-llm"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/liter-llm-darwin-arm64"
+          },
+          "darwin-x64": {
+            "source": {
+              "repository": "GQAdonis/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+            },
+            "size": 29468928,
+            "sha256": "25bfbddc82a67cb5f0891b9aebbaa7a79b64f1d3455fb8f8dfa2cd3c17e74207",
+            "binaries": [
+              "liter-llm"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/liter-llm-darwin-x64"
+          },
+          "win32-arm64": {
+            "source": {
+              "repository": "GQAdonis/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+            },
+            "size": 27496448,
+            "sha256": "0a9615c0c0ebcbea2070de4b816e70c0750e63daa0bf842dfb1e00c5e6a1561c",
+            "binaries": [
+              "liter-llm.exe"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/liter-llm-win32-arm64.exe"
+          },
+          "win32-x64": {
+            "source": {
+              "repository": "GQAdonis/liter-llm",
+              "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+            },
+            "size": 30829056,
+            "sha256": "678831e3da7b9b2416078a0c7531fd0a9a4931c99801d09e4d3244988fdf0e96",
+            "binaries": [
+              "liter-llm.exe"
+            ],
+            "archive": "none",
+            "url": "https://github.com/Prometheus-AGS/the-boss/releases/download/boss-tools-2.2.12-pk1.11-memory1.10-20261004-r2/liter-llm-win32-x64.exe"
+          }
+        }
+      }
+    ]
+  },
+  "imageReuseEvidence": {
+    "runId": "37231990818",
+    "url": "https://github.com/Prometheus-AGS/the-boss/actions/runs/37231990818",
+    "headSha": "3f844e89b61c6055b210ea49e99763b38f222799",
+    "status": "completed",
+    "conclusion": "failure",
+    "completedImageJobs": [
+      {
+        "id": 111523516728,
+        "name": "Image (liter-llm, arm64)",
+        "conclusion": "success"
+      },
+      {
+        "id": 111523516752,
+        "name": "Image (surreal-memory, arm64)",
+        "conclusion": "success"
+      },
+      {
+        "id": 111523516772,
+        "name": "Image (surreal-memory, amd64)",
+        "conclusion": "success"
+      },
+      {
+        "id": 111523516773,
+        "name": "Image (liter-llm, amd64)",
+        "conclusion": "success"
+      },
+      {
+        "id": 111525507674,
+        "name": "image-manifests",
+        "conclusion": "success"
+      }
+    ],
+    "imageProvenance": {
+      "surreal-memory": {
+        "image": "ghcr.io/prometheus-ags/the-boss-surreal-memory",
+        "digest": "sha256:57ae574cd8c0e984a1eeb0f29e962844092890dad8baa507b9c54094445538bb",
+        "source": {
+          "repository": "Prometheus-AGS/surreal-memory-server",
+          "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6"
+        },
+        "recipeSource": {
+          "repository": "Prometheus-AGS/surreal-memory-server",
+          "revision": "0af8ae1f3c7486bf7128beff8ef83aaf1a832ea6"
+        },
+        "workflowRun": "37231990818"
+      },
+      "liter-llm": {
+        "image": "ghcr.io/prometheus-ags/the-boss-liter-llm",
+        "digest": "sha256:c0d1d45213bda07ce1eef39025c4796b365980218088051ee3ca1b4f2a20cf23",
+        "source": {
+          "repository": "GQAdonis/liter-llm",
+          "revision": "a6047386cc9fae4258b4a8577f6a016022095586"
+        },
+        "recipeSource": {
+          "repository": "Prometheus-AGS/prometheus-skills-mini",
+          "revision": "4ba9581cf013d28f4e70e08db9382a4dfad8cb1c"
+        },
+        "workflowRun": "37231990818"
+      }
+    },
+    "reuseForThisRelease": false,
+    "reason": "Memory source changed. Existing reuse_image_run imports both service-image manifests as one pair; no service-specific image reuse input exists. Omit reuse_image_run and build both images at final pins. Historical liter image source and mini recipe binding remain immutable evidence."
+  },
+  "freshIntegrationPayload": {
+    "repository": "Prometheus-AGS/the-boss",
+    "workflow": "integration-payload.yml",
+    "requiredPublishedSourceRef": "PUBLISHED_BOSS_REF must identify the final source-pinned The Boss commit containing four-platform Compass skills selection.",
+    "inputs": {
+      "payload_tag": "boss-tools-2.2.31-integrated-runtime-20261010",
+      "reuse_native_run": "37231316550,37233059176",
+      "native_tools": "compass,rust-mcp-filesystem,prometheus,bossfang",
+      "native_platforms": "darwin-arm64,darwin-x64,win32-x64,win32-arm64",
+      "images_only": "false",
+      "native_artifacts_only": "false"
+    },
+    "command": "gh workflow run integration-payload.yml --repo Prometheus-AGS/the-boss --ref \"$PUBLISHED_BOSS_REF\" -f payload_tag=boss-tools-2.2.31-integrated-runtime-20261010 -f reuse_native_run=37231316550,37233059176 -f native_tools=compass,rust-mcp-filesystem,prometheus,bossfang -f native_platforms=darwin-arm64,darwin-x64,win32-x64,win32-arm64 -f images_only=false -f native_artifacts_only=false",
+    "prerequisites": [
+      "Root must publish and freeze final Compass, filesystem, full CLI, BossFang, memory, UAR, mini and skill-pack sources before dispatch.",
+      "Root must ensure payload tag is unused and final integration-source pins preserve PK4b3a6744a4211512ff88a1cb96cf1e2a7db4c3ef and liter a6047386cc9fae4258b4a8577f6a016022095586.",
+      "Do not include uar-sidecar in native_tools: this integration builder copies a bare executable. Import independently published complete UAR archives after integration payload publication.",
+      "Retain each reused native package source, size and SHA256. Fresh per-tool records supersede reused records only for rebuilt tools.",
+      "Current four-platform workflow chooses darwin-arm64 to generate Compass skill archive; confirm that parent edit is in the dispatched ref."
+    ]
+  },
+  "uarPackaging": {
+    "repository": "Prometheus-AGS/universal-agent-runtime",
+    "workflow": "deploy.yml",
+    "trigger": "Push one unique boss-sidecar-<platform>-v1.0.0-2.2.31-<source8> tag per platform, each pointing to the same final UAR source SHA.",
+    "placeholders": {
+      "FINAL_UAR_SHA": "Final dependency-reconciled source descendant containing tool_admission_v2; not fixed by this receipt.",
+      "SOURCE8": "First eight characters of FINAL_UAR_SHA."
+    },
+    "targets": [
+      {
+        "platform": "darwin-arm64",
+        "runner": "macos-15",
+        "target": "aarch64-apple-darwin",
+        "features": "server-full",
+        "tagPattern": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-<source8>",
+        "localBuildRecipeFromWorkflow": "cargo build --release --locked --no-default-features --features server-full --bin uar-sidecar --target aarch64-apple-darwin",
+        "packageInvocation": "UAR_SIDECAR_FEATURES=server-full GITHUB_SHA=\"$FINAL_UAR_SHA\" GITHUB_REF_TYPE=tag GITHUB_REF_NAME=\"boss-sidecar-darwin-arm64-v1.0.0-2.2.31-$SOURCE8\" node scripts/package-boss-sidecar.mjs darwin-arm64 aarch64-apple-darwin",
+        "releaseRecordPattern": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-arm64-v1.0.0-2.2.31-<source8>/uar-sidecar-darwin-arm64.json"
+      },
+      {
+        "platform": "darwin-x64",
+        "runner": "macos-15-intel",
+        "target": "x86_64-apple-darwin",
+        "features": "server-full,tract-embeddings",
+        "tagPattern": "boss-sidecar-darwin-x64-v1.0.0-2.2.31-<source8>",
+        "localBuildRecipeFromWorkflow": "cargo build --release --locked --no-default-features --features server-full,tract-embeddings --bin uar-sidecar --target x86_64-apple-darwin",
+        "packageInvocation": "UAR_SIDECAR_FEATURES=server-full,tract-embeddings GITHUB_SHA=\"$FINAL_UAR_SHA\" GITHUB_REF_TYPE=tag GITHUB_REF_NAME=\"boss-sidecar-darwin-x64-v1.0.0-2.2.31-$SOURCE8\" node scripts/package-boss-sidecar.mjs darwin-x64 x86_64-apple-darwin",
+        "releaseRecordPattern": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-darwin-x64-v1.0.0-2.2.31-<source8>/uar-sidecar-darwin-x64.json"
+      },
+      {
+        "platform": "win32-x64",
+        "runner": "windows-2025",
+        "target": "x86_64-pc-windows-msvc",
+        "features": "server-full",
+        "tagPattern": "boss-sidecar-win32-x64-v1.0.0-2.2.31-<source8>",
+        "localBuildRecipeFromWorkflow": "cargo build --release --locked --no-default-features --features server-full --bin uar-sidecar --target x86_64-pc-windows-msvc",
+        "packageInvocation": "UAR_SIDECAR_FEATURES=server-full GITHUB_SHA=\"$FINAL_UAR_SHA\" GITHUB_REF_TYPE=tag GITHUB_REF_NAME=\"boss-sidecar-win32-x64-v1.0.0-2.2.31-$SOURCE8\" node scripts/package-boss-sidecar.mjs win32-x64 x86_64-pc-windows-msvc",
+        "releaseRecordPattern": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-x64-v1.0.0-2.2.31-<source8>/uar-sidecar-win32-x64.json"
+      },
+      {
+        "platform": "win32-arm64",
+        "runner": "windows-11-arm",
+        "target": "aarch64-pc-windows-msvc",
+        "features": "server-full",
+        "tagPattern": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-<source8>",
+        "localBuildRecipeFromWorkflow": "cargo build --release --locked --no-default-features --features server-full --bin uar-sidecar --target aarch64-pc-windows-msvc",
+        "packageInvocation": "UAR_SIDECAR_FEATURES=server-full GITHUB_SHA=\"$FINAL_UAR_SHA\" GITHUB_REF_TYPE=tag GITHUB_REF_NAME=\"boss-sidecar-win32-arm64-v1.0.0-2.2.31-$SOURCE8\" node scripts/package-boss-sidecar.mjs win32-arm64 aarch64-pc-windows-msvc",
+        "releaseRecordPattern": "https://github.com/Prometheus-AGS/universal-agent-runtime/releases/download/boss-sidecar-win32-arm64-v1.0.0-2.2.31-<source8>/uar-sidecar-win32-arm64.json"
+      }
+    ],
+    "observedPackageContents": [
+      "uar-sidecar executable",
+      "uar-models",
+      "three Cedar policies",
+      "LICENSE",
+      "runtime libraries found beside binary",
+      "checksummed payload-manifest.json"
+    ],
+    "importCommand": "node scripts/import-uar-sidecar-payloads.cjs \"$UAR_DARWIN_ARM64_RECORD_URL\" \"$UAR_DARWIN_X64_RECORD_URL\" \"$UAR_WIN32_X64_RECORD_URL\" \"$UAR_WIN32_ARM64_RECORD_URL\"",
+    "limitations": "The four unique tag refs were created only after remote HTTP404 and local ref-absence checks, then pushed individually to trigger native builds. No tag was replaced. Native source is final22848ff4. Package output and actual runtime portability remain unverified until the native jobs and required local packaged-app gate complete.",
+    "finalSource": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+    "nativeRuns": [
+      {
+        "conclusion": "",
+        "createdAt": "2026-10-10T14:42:43Z",
+        "databaseId": 38060697903,
+        "headBranch": "boss-sidecar-win32-arm64-v1.0.0-2.2.31-22848ff4",
+        "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+        "status": "in_progress",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060697903"
+      },
+      {
+        "conclusion": "failure",
+        "createdAt": "2026-10-10T14:42:42Z",
+        "databaseId": 38060696276,
+        "headBranch": "boss-sidecar-win32-x64-v1.0.0-2.2.31-22848ff4",
+        "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+        "status": "completed",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060696276"
+      },
+      {
+        "conclusion": "",
+        "createdAt": "2026-10-10T14:42:40Z",
+        "databaseId": 38060694176,
+        "headBranch": "boss-sidecar-darwin-x64-v1.0.0-2.2.31-22848ff4",
+        "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+        "status": "in_progress",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060694176"
+      },
+      {
+        "conclusion": "",
+        "createdAt": "2026-10-10T14:42:39Z",
+        "databaseId": 38060693113,
+        "headBranch": "boss-sidecar-darwin-arm64-v1.0.0-2.2.31-22848ff4",
+        "headSha": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+        "status": "in_progress",
+        "url": "https://github.com/Prometheus-AGS/universal-agent-runtime/actions/runs/38060693113"
+      }
+    ],
+    "tagsCreatedAndPushed": true,
+    "launchedAt": "2026-10-10T14:43:39.561Z",
+    "localPayloadCheckout": {
+      "root": "/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902",
+      "source": "22848ff4a27bcff4f902a40202d85ef1880dc9a5",
+      "detached": true,
+      "eligibleStatusClean": true,
+      "statusExclusions": [
+        "dist/boss-sidecar",
+        "tests/bauar_session_owner.rs",
+        "src/uar/mcp_server.rs"
+      ],
+      "submodules": "All five submodules were uninitialized before and after checkout; none required updating for CI-payload import, and no local Rust build was run.",
+      "oldPayloadSource": "6b2ad902c82a17c5f0b44759e1f7c38c90265e89",
+      "oldPayloadBackup": "dist/boss-sidecar/previous-6b2ad902-20261010",
+      "pending": "Root must replace the top-level darwin-arm64 archive and record with the same-source22848ff4 CI payload before the G local import gate can pass.",
+      "localBossCommand": "THE_BOSS_LOCAL_UAR_SOURCE_DIR=/Users/gqadonis/Projects/prometheus/worktrees/uar-c10-native-stage-6b2ad902 pnpm run build:mac:arm64"
+    },
+    "observedFailures": [
+      {
+        "runId": "38060696276",
+        "platform": "win32-x64",
+        "step": "Checkout Rust workspace submodules",
+        "message": "Filename too long while checking out the pinned skill-system .kbd-orchestrator evidence file",
+        "beforeCargo": true,
+        "proposedRepair": "Use git -c core.longpaths=true submodule update for the sidecar checkout step",
+        "repairStatus": "Awaiting root source/pin coordination; immutable tags are retained"
+      }
+    ]
+  },
+  "verificationBoundary": {
+    "actualActions": [
+      "Read existing workflow/package/publisher scripts",
+      "Read GitHub run jobs and artifact metadata",
+      "Read the existing published integration manifest in memory",
+      "Queried v2.2.31 tag and release availability",
+      "Created and individually pushed four authorized immutable sidecar tags at final22848ff4",
+      "Observed four deployment workflow runs start at final22848ff4",
+      "Preserved old6b2ad902 macOS archive and record within excluded dist/boss-sidecar backup",
+      "Checked out the existing eligible-clean detached local source checkout at final22848ff4"
+    ],
+    "notRun": [
+      "local Rust builds",
+      "tests",
+      "package commands",
+      "artifact binary execution",
+      "installer acceptance",
+      "The Boss integration-payload workflow"
+    ],
+    "f6": "Cancelled F6 source and test files were not inspected, searched, hashed, diffed or tested."
+  }
+}
