@@ -19,7 +19,9 @@ Corrective source was merged through [The Boss PR66](https://github.com/Promethe
 
 The historical represented synthetic read expired without a decision and remains incomplete. The fresh exact read on the public2.2.30 installer also expired without a decision; no approved-read, disclosure, expiry/revocation/offboarding or organizational-authority qualification is claimed.
 
-Final2.2.30 publication for Mac Intel/Windows x64/ARM64 remains in progress. Apple Silicon public packaging/notarization, full downloaded bytes and the deployed website link now have passing receipts. Candidate-specific Mac ARM64/Windows x64 installed/operator acceptance remains pending; package operations do not substitute for operator acceptance.
+Public2.2.30 Apple Silicon and Windows x64 installers now have complete downloaded-byte and deployed website receipts. Mac Intel and Windows ARM64 publication remains in progress. Candidate-specific Mac ARM64/Windows x64 installed/operator acceptance remains pending; package operations do not substitute for operator acceptance.
+
+The Boss [PR69](https://github.com/Prometheus-AGS/the-boss/pull/69) is merged as `2b5f308f963ed1cda980ae91ca79bab08590346d`: default native payloads now pin the same published UAR308aea46 archives already consumed by the frozen2.2.30 build jobs. It changes no installer provenance, API, preference, migration, UI or approval policy.
 
 The checked-in coverage, applicability, rollback limits, encrypted IPFS history index and restore instructions preserve exact provenance. The decryption key and private operation data remain outside Git/IPFS. Existing missing historical events are not reconstructed.
 
