@@ -87,6 +87,9 @@ export default async function scenario(context, configuration) {
     await openWork(evaluate, signal)
     const selected = await setup(evaluate, configuration)
     workspaceId = selected.workspaceId
+    await ipc(evaluate, 'prometheus.uar.teams.setup_coding', {
+      workspaceId, model: selected.model
+    })
     const initialInventory = await ipc(evaluate, 'prometheus.uar.instances.read', {})
     await ipc(evaluate, 'prometheus.uar.instances.test', { instanceId: 'managed-local' })
     primary = await uarState(evaluate)
@@ -224,8 +227,10 @@ export default async function scenario(context, configuration) {
         await managedConfig(evaluate, signal, { port: original.requested.port, portPolicy: original.requested.portPolicy,
           instanceId: 'managed-local', workspaceId })
         await action(evaluate, signal, 'connect', next => next.connection === 'connected')
-        await choose(evaluate, signal, 'model', original.requested.diagnosticModelId)
-        await saveDraft(evaluate, signal)
+        if (original.requested.diagnosticModelId) {
+          await choose(evaluate, signal, 'model', original.requested.diagnosticModelId)
+          await saveDraft(evaluate, signal)
+        }
         requireFact(!child || isAlive(child), 'CUSTOMER_BOSSFANG_TERMINATED_BORROWED_UAR')
         sameUar(primary, await uarState(evaluate))
         requireFact((await ipc(evaluate, 'prometheus.uar.instances.read', {})).selectedInstanceId === 'managed-local',
