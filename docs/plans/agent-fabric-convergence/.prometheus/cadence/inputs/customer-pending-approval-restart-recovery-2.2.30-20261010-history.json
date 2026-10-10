@@ -1,0 +1,17 @@
+{
+  "phaseId": "agent-fabric-convergence",
+  "reason": "Link the actual externally operated corrective2.2.30 evidence to the existing approved customer qualification phase. This records history only; no iteration, task, qualification, publication or acceptance credit is inferred.",
+  "evidencePath": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/receipts/customer-pending-approval-restart-recovery-2.2.30-20261010.json",
+  "sourceRefs": [
+    {
+      "repository": "/Users/gqadonis/Projects/prometheus/worktrees/afc-c16-team-guidance",
+      "revision": "aef2ec2cda68605efab9dddf33b46e726e752c2d",
+      "provenance": "historical actual frozen application build"
+    },
+    {
+      "repository": "/Users/gqadonis/.claude/worktrees/uar-c14-delegation-host-context",
+      "revision": "308aea46ff26e7f61340281bb51f67ebe5351569",
+      "provenance": "historical actual packaged native payload"
+    }
+  ]
+}
