@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "kind": "customer-required-reviewed-skill-core-operation",
+  "recordedAt": "2026-10-10T02:07:17.572Z",
+  "status": "passed-core",
+  "sourceRefs": {
+    "boss": "ff98af813c59e7c2733db74306ebfe087fec069a",
+    "uar": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+    "appAsarSha256": "02bbcd0945fdffb33de0c877b7b28d2464d4689887db1443eb391dd9cbe929ad",
+    "sidecarSha256": "e243b53eeafaa681433fb756ec631eddc1d9a9bbd4f12fd3d5db8ad93c2e64ef",
+    "installerSha256": "ccf278534a7854064bedc1dc190e1941c81768d462491bbd0099af2a434ff4da",
+    "installedVersion": "2.2.27",
+    "operationDriverRevision": "ff98af813c59e7c2733db74306ebfe087fec069a",
+    "selectedScenarioSha256": "793bb80a7445bb1e14684ab05bb9fed2dae78266d7d996ee374817508464f4fd",
+    "installationReceiptSha256": "4f1b11f5672859046711c85eb9624a177c4d2995ebe9989cd1b53468c82af171"
+  },
+  "operation": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/reviewed-skills-remaining-2-2-27-6a07e3ab-66b8-4b55-8514-ee8caa35996c/operation.json",
+    "sha256": "8f15d9ae40e34533b939b6a87a969d14519ca6b9822c72ff9d697ba0c5fc6570"
+  },
+  "evidence": {
+    "path": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/reviewed-skills-remaining-2-2-27-6a07e3ab-66b8-4b55-8514-ee8caa35996c/evidence.json",
+    "sha256": "fcb5f20e16d8b1a84ddb44b4abc420a687a8e6150086bcfc4f34fd75a8917230"
+  },
+  "retainedCoverage": {
+    "path": "/Users/gqadonis/Projects/prometheus/worktrees/agent-fabric-c06/librefang/docs/plans/agent-fabric-convergence/.prometheus/cadence/artifacts/customer-corrected-mac-2.2.26/reviewed-skills-proxy-repaired-2-2-26-e1d068fc-4df0-41b7-8b76-a6417883c434/evidence.json",
+    "sha256": "f2222ad4c2e9042c986462870a2d12fe8b77807978c3b1abaeca9a13e117c03e",
+    "negativeScenariosRepeated": false
+  },
+  "checks": [
+    "prelaunch-isolated-signed-full-generation-used-as-packaged-application-home",
+    "required-reviewed-mini-and-full-skills-selected-for-read-only-members-and-exact-revision-deployed",
+    "normal-coding-team-work-returns-marker-through-existing-read-only-filesystem-approval"
+  ],
+  "selectedSkills": {
+    "mini": {
+      "id": "builtin::adversarial-review",
+      "version": "1.0.0",
+      "digest": "sha256:fad04dc2eda85131d6db69b14b67b0ba48a9b8f8f926fbf555a841b290a19654",
+      "required": true,
+      "config": {},
+      "entrypoint": null,
+      "requiredTools": []
+    },
+    "full": {
+      "id": "agents::actor-model",
+      "version": "1.0.0",
+      "digest": "sha256:0965d46231f18f789c15a9bbd0d966325b54bc8b650a874c89e627dc64799acd",
+      "required": true,
+      "config": {},
+      "entrypoint": null,
+      "requiredTools": []
+    },
+    "fullInventoryDigest": "sha256:84cd765a3cf66c37e4cf6a6a4d10ebd59ce32887b38c39ce2ba2a43767caf027"
+  },
+  "approvals": [
+    {
+      "toolName": "team_delegate",
+      "decision": "allow"
+    },
+    {
+      "toolName": "filesystem__read",
+      "decision": "allow"
+    },
+    {
+      "toolName": "team_delegate",
+      "decision": "allow"
+    },
+    {
+      "toolName": "filesystem__read",
+      "decision": "allow"
+    }
+  ],
+  "attempts": [
+    {
+      "id": "5262f26c-667e-4ea0-9bdf-1c0359c3087c",
+      "memberId": "4990e1d9-d4cc-400a-8329-604d50734716",
+      "outputSha256": "2e29a3fe38286ad96e665f8813390610e02d5655c3d0fbf4c6929805ef7a53d8",
+      "deliveryMarkerReturned": true
+    },
+    {
+      "id": "789fc5d7-4d97-4ca3-b04e-bf7df57acbcc",
+      "memberId": "6c37ff2c-42c3-42be-a31d-4418073360d2",
+      "outputSha256": "107b1b37cb8af4300258c06b1fe3bcfed024c8818adcc1a8d3a0118124769c3b",
+      "deliveryMarkerReturned": true
+    }
+  ],
+  "coverageCoreComplete": true,
+  "coverageComplete": false,
+  "privatePreflight": "Unavailable trusted-native callback remains pending; no renderer authority added.",
+  "criteriaMapping": [
+    "C15.3-required-reviewed-skill-runtime-use",
+    "C14.1-fresh-coordinator-delegation-identities"
+  ],
+  "broaderHarnessQualification": "pending",
+  "newCadenceDelivery": false,
+  "successfulDeliveriesUnchanged": 15,
+  "installedAcceptance": "pending"
+}
