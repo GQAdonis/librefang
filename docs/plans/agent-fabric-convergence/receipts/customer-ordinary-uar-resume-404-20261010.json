@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "kind": "ordinary-uar-completed-source-resume-diagnosis",
+  "recordedAt": "2026-10-10T02:19:42.155Z",
+  "originalAttempt": {
+    "operation": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/ordinary-uar-lifecycle-e429426b-defd-446f-82b8-02d41473c884/operation.json",
+    "operationSha256": "925f736febe9d4b85f3adde58b2b597f7fd5de863fe713b1a11792c6a38ca77c",
+    "evidence": ".prometheus/cadence/artifacts/customer-corrected-mac-2.2.27/ordinary-uar-lifecycle-e429426b-defd-446f-82b8-02d41473c884/evidence.json",
+    "evidenceSha256": "d7f952b22ac1c15431b355ed26f7fc3da170c41c38052b3d761abd3b1058ce36",
+    "status": "failed",
+    "failureStage": "retained-history-followup",
+    "failureCode": "CUSTOMER_UAR_TURN_PROVIDER_ERROR",
+    "sourceRefs": {
+      "boss": "ff98af813c59e7c2733db74306ebfe087fec069a",
+      "uar": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+      "installedVersion": "2.2.27",
+      "installerSha256": "ccf278534a7854064bedc1dc190e1941c81768d462491bbd0099af2a434ff4da",
+      "appAsarSha256": "02bbcd0945fdffb33de0c877b7b28d2464d4689887db1443eb391dd9cbe929ad",
+      "sidecarSha256": "e243b53eeafaa681433fb756ec631eddc1d9a9bbd4f12fd3d5db8ad93c2e64ef",
+      "installationReceiptSha256": "4f1b11f5672859046711c85eb9624a177c4d2995ebe9989cd1b53468c82af171",
+      "scenarioSha256": "5970ed5eaef78e91fcea9e04e36d3e7945bcb7df6d4ed2e7b0f3f07725650882",
+      "operationDriverSha256": "cc06f4e9e5377b432d34bc1dbf4ebd79efc35f2597731265c9877803b8155ce6",
+      "operationDriverRevision": "ff98af813c59e7c2733db74306ebfe087fec069a"
+    },
+    "cleanupStatusPreserved": true
+  },
+  "observedFailure": {
+    "persistedAssistantId": "01a12393-0665-700e-a7fd-1277d5c9b311",
+    "persistedStatus": "error",
+    "originalReasonCode": "model_not_found",
+    "statusCode": 404,
+    "messageSha256": "97ce2b9bc3f84594e3355e89324264548ea0b0505b7b64497abebb81cc6071cb",
+    "safeStaticCategory": "UAR rejected the run",
+    "rawMessageRecorded": false,
+    "diagnosis": "Source run lookup failed before resumed admission; generic HTTP 404 classification does not establish missing model."
+  },
+  "retainedPlacement": {
+    "instanceId": "managed-local",
+    "sourceRunId": "feeef920-8daa-4086-859b-818c1682d4d8",
+    "successfulAssistantId": "01a122ba-5bd1-758d-919a-e7d03a58e5fb",
+    "successfulSourceTurnToolPartCount": 0
+  },
+  "sourceEvidence": [
+    {
+      "repository": "the-boss",
+      "path": "src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+      "baseline": "ff98af813c59e7c2733db74306ebfe087fec069a",
+      "finding": "Saved sourceRunId alone enabled reattachment; new user input was posted to /runs/{id}/resume, while cold history was omitted."
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "src/uar/api/routes.rs",
+      "baseline": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+      "finding": "resume_run first performs get_run_for_context; absent or unauthorized run returns empty404. Resume then creates a new run and rejects host history."
+    },
+    {
+      "repository": "universal-agent-runtime",
+      "path": "src/uar/runtime/manager.rs",
+      "baseline": "f55e6cf1dd0f2864b4426a614a2e8bc4dea42400",
+      "finding": "Run lookup reads owner-scoped ActiveRunMap only. The map initializes empty and terminal runs may be evicted; no ordinary source-run hydration occurs on startup."
+    }
+  ],
+  "fix": {
+    "repository": "the-boss",
+    "commit": "3b6859cb6b",
+    "path": "src/main/ai/runtime/uar/UarRuntimeConnection.ts",
+    "contract": "A new user turn with exact persisted successful source placement, terminal tool parts and no unsettled source-run admissions uses new-run admission and bounded trusted host history, preserving instance/session/catalog/binding. Unknown/interrupted placements retain resume. Already admitted stream reconnect is unchanged.",
+    "blind404Retry": false,
+    "oldInputOrToolEffectReplayed": false,
+    "providerOrModelChanged": false,
+    "publicApiOrSchemaAdded": false,
+    "buildOrOperationRun": false
+  },
+  "driverCapture": {
+    "path": ".prometheus/cadence/inputs/customer-uar-inference-lifecycle-20261010.mjs",
+    "allowedFields": [
+      "name",
+      "reasonCode",
+      "statusCode",
+      "sourceLayer"
+    ],
+    "rawMessages": false,
+    "secrets": false
+  },
+  "qualification": {
+    "passingResultClaimed": false,
+    "historicalCodeMarker": "61/61 tasks; 20/20 changes (historical baseline)",
+    "historicalQualification": "43/61",
+    "finalCandidateAcceptance": "pending affected corrected packaged operation"
+  },
+  "graph": {
+    "available": false,
+    "reason": "Compass graph.json missing; bounded source tracing used"
+  }
+}

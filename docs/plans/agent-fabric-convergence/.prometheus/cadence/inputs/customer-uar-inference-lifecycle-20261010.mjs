@@ -39,7 +39,7 @@ async function streamedTurn(context, { sessionId, parentAnchorId, modelId, promp
   try {
     await evaluate(`(()=>{
       const key=${JSON.stringify(key)},topicId=${JSON.stringify(topicId)};
-      const state=window[key]={chunks:0,textChunks:0,textCharacters:0,done:false,error:false,terminalStatus:null,anchorMessageId:null,unsubscribers:[]};
+      const state=window[key]={chunks:0,textChunks:0,textCharacters:0,done:false,error:false,failure:null,terminalStatus:null,anchorMessageId:null,unsubscribers:[]};
       for(const eventName of ['ai.stream.chunk','ai.stream.done','ai.stream.error']){
         const unsubscribe=window.api.ipcApi.on(eventName,event=>{
           if(event.topicId!==topicId)return;
@@ -51,7 +51,17 @@ async function streamedTurn(context, { sessionId, parentAnchorId, modelId, promp
             }
           }else if(event.isTopicDone){
             if(eventName==='ai.stream.done'){state.done=true;state.terminalStatus=event.status;}
-            else state.error=true;
+            else {
+              state.error=true;
+              const error=event.error,native=error?.executionFailure?.failure;
+              state.failure={
+                name:/^[A-Za-z][A-Za-z0-9_]{0,100}$/.test(error?.name??'')?error.name:null,
+                reasonCode:/^[A-Za-z0-9_.:-]{1,160}$/.test(native?.reasonCode??'')?native.reasonCode:null,
+                statusCode:Number.isInteger(native?.context?.statusCode)&&native.context.statusCode>=100&&native.context.statusCode<=599?native.context.statusCode:null,
+                sourceLayer:['provider','runtime','application','transport'].includes(native?.source?.layer)?native.source.layer:null,
+                rawMessageRecorded:false
+              };
+            }
           }
         });
         if(typeof unsubscribe==='function')state.unsubscribers.push(unsubscribe);
@@ -64,10 +74,11 @@ async function streamedTurn(context, { sessionId, parentAnchorId, modelId, promp
     result.admitted = true; result.parentAnchorId = parentAnchorId; save()
     const observed = () => evaluate(`(()=>{const s=window[${JSON.stringify(key)}];return {
       chunks:s.chunks,textChunks:s.textChunks,textCharacters:s.textCharacters,done:s.done,error:s.error,
-      terminalStatus:s.terminalStatus,anchorMessageId:s.anchorMessageId};})()`)
+      terminalStatus:s.terminalStatus,anchorMessageId:s.anchorMessageId,failure:s.failure};})()`)
     if (cancel) {
       result.beforeCancel = await wait(signal, async () => {
         const state = await observed()
+        if (state.error) { result.streamFailure = state.failure; save() }
         fact(!state.error, 'CUSTOMER_CANCEL_TURN_PROVIDER_ERROR')
         fact(!state.done, 'CUSTOMER_CANCEL_TURN_FINISHED_BEFORE_CANCEL')
         return state.textChunks > 0 && state
@@ -78,6 +89,7 @@ async function streamedTurn(context, { sessionId, parentAnchorId, modelId, promp
     }
     result.stream = await wait(signal, async () => {
       const state = await observed()
+      if (state.error) { result.streamFailure = state.failure; save() }
       fact(!state.error, 'CUSTOMER_UAR_TURN_PROVIDER_ERROR')
       return state.done && state
     }, 'CUSTOMER_UAR_TURN_NOT_TERMINAL')
