@@ -217,6 +217,7 @@ export default async function scenario(context, configuration) {
     requireFact((await ipc(evaluate, 'prometheus.uar.instances.read', {})).selectedInstanceId === initialInventory.selectedInstanceId,
       'CUSTOMER_EXTERNAL_SELECTION_CHANGED_WORK_RUNTIME')
     evidence.complete = true; evidence.passed = true
+    evidence.observedBehavior = 'BossFang discovered models and completed real delegation through the authenticated selected external UAR while preserving the managed Work instance and both runtime ownership boundaries.'
   } catch (error) {
     evidence.failureStage = stage
     evidence.failureCode = /^[A-Z0-9_]{1,160}$/.test(error?.code ?? '') ? error.code : 'CUSTOMER_EXTERNAL_OPERATION_FAILED'

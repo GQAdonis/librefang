@@ -181,6 +181,7 @@ export default async function run({ evaluate, signal }, configuration) {
     await turn('restored-fresh-followup', 'RECOVERED_GATEWAY_' + randomUUID().slice(0, 8), failedAnchor)
     evidence.checks.push('restored-same-agent-session-streams-and-persists-fresh-no-tools-response')
     evidence.complete = true; evidence.passed = true; evidence.status = 'passed'
+    evidence.observedBehavior = 'The packaged Work session displayed the actual classified gateway outage, restored its exact saved settings without changing secrets, and completed a fresh streamed response with its original gateway model.'
   } catch (error) { evidence.failureStage = stage; evidence.failureCode = safeCode(error) }
   finally {
     if (changed) {
